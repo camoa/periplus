@@ -126,7 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument(
         "pack",
         metavar="PACK",
-        help="the pack to check, by name",
+        help="the pack to check: NAME, or NAME@VERSION to name one of several copies",
     )
     check.add_argument(
         "--format",

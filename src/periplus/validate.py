@@ -71,6 +71,9 @@ __all__ = [
     "validate",
 ]
 
+#: The problem name for a bare pack name that two or more copies on the search path carry.
+PACK_AMBIGUOUS = "PACK_AMBIGUOUS"
+
 #: The shipped schema a ``pack.yaml`` is checked against, named by its path under ``contract/``.
 #: Read through ``spec.contract_root()`` rather than through a second reader.
 MANIFEST_SCHEMA = "schema/pack-manifest.schema.json"
@@ -120,6 +123,9 @@ class ValidationReport:
     carried rather than counted, because "no errors" and "no files" are different answers and a
     report that gave only the first could not tell them apart.
 
+    ``version`` is the version half of the directory name that was checked, ``None`` when no
+    directory was found; with ``directory`` it says which copy of the pack the run opened.
+
     ``problems`` are the resolution faults the run inherited — an unreadable settings file, a pin
     matching nothing — kept apart from ``errors`` because they are faults in a different file with
     a different owner.
@@ -130,6 +136,7 @@ class ValidationReport:
     checked: tuple[str, ...]
     errors: tuple[SchemaError, ...]
     problems: tuple[Problem, ...]
+    version: str | None = None
 
     @property
     def exit_code(self) -> ExitCode:
@@ -170,11 +177,14 @@ def validate(
     """
     resolution = resolve(start=start, env=env, dependencies=dependencies)
     problems: list[Problem] = list(resolution.problems)
-    directory, path = _locate(requested, resolution.candidates, problems)
+    pins = (
+        resolution.settings.packs.value if resolution.settings and resolution.settings.packs else ()
+    )
+    directory, path, version = _locate(requested, resolution.candidates, pins, problems)
     if directory is None:
         return _report(requested, None, (), (), problems)
     checked, errors = _check_directory(directory, problems)
-    return _report(requested, path, checked, errors, problems)
+    return _report(requested, path, checked, errors, problems, version)
 
 
 def _report(
@@ -183,6 +193,7 @@ def _report(
     checked: tuple[str, ...],
     errors: tuple[SchemaError, ...],
     problems: Sequence[Problem],
+    version: str | None = None,
 ) -> ValidationReport:
     """One report, with its problems sorted by code then message.
 
@@ -195,15 +206,22 @@ def _report(
         checked=checked,
         errors=errors,
         problems=tuple(sorted(problems, key=lambda problem: (int(problem.code), problem.message))),
+        version=version,
     )
 
 
 def _locate(
     requested: str,
     candidates: Sequence[PackCandidate],
+    pins: Sequence[str],
     problems: list[Problem],
-) -> tuple[Traversable | None, str | None]:
-    """One pack name resolved to the directory that carries it, or to nothing.
+) -> tuple[Traversable | None, str | None, str | None]:
+    """One pack name, or ``name@version``, resolved to the directory that carries it, or to nothing.
+
+    ``name@version`` names the copy. A bare name with one copy on the path names that copy. A bare
+    name with several copies takes the copy the project pins, and with no pin among them stops with
+    ``PACK_AMBIGUOUS`` listing every copy, rather than checking one and saying nothing about which.
+    A version no copy carries is ``PACK_UNKNOWN`` naming the versions that are on the path.
 
     The same three calls ``spec._describe_pack`` makes, in the same order and for the same reasons:
     every ``named`` candidate whose pack half equals the name becomes a pin, ``match_pins`` turns
@@ -219,28 +237,65 @@ def _locate(
     the walk could not produce the pack — a duplicated name, an unreadable manifest — has reported
     itself, and inventing a second would be describing one fault twice.
     """
-    entries = sorted(
-        {
-            candidate.entry
-            for candidate in candidates
-            if candidate.status == "named"
-            and candidate.name is not None
-            and candidate.name.pack == requested
-        }
-    )
+    name, _, version = requested.partition("@")
+    copies = [
+        candidate
+        for candidate in candidates
+        if candidate.status == "named"
+        and candidate.name is not None
+        and candidate.name.pack == name
+    ]
+    entries = sorted({candidate.entry for candidate in copies})
     if not entries:
-        problems.append(_unknown_pack(requested, candidates))
-        return None, None
+        problems.append(_unknown_pack(name, candidates))
+        return None, None, None
+    if version:
+        entries = [entry for entry in entries if entry == requested]
+        if not entries:
+            versions = ", ".join(sorted({c.name.version for c in copies if c.name}))
+            problems.append(
+                Problem(
+                    code=ExitCode.PACK_UNKNOWN,
+                    message=f"no copy of {name!r} on the pack search path is version {version!r}",
+                    detail={"pack": name, "version": version, "available": versions},
+                )
+            )
+            return None, None, None
+    elif len(entries) > 1:
+        pinned = [entry for entry in entries if entry in pins]
+        if not pinned:
+            problems.append(_ambiguous(name, copies))
+            return None, None, None
+        entries = pinned
 
     matches, pin_problems = match_pins(entries, candidates)
     order, walk_problems = resolve_pack_order(matches, candidates)
     problems.extend(pin_problems)
     problems.extend(walk_problems)
 
-    loaded = next((pack for pack in order if pack.name.pack == requested), None)
+    loaded = next((pack for pack in order if pack.name.pack == name), None)
     if loaded is None:
-        return None, None
-    return loaded.directory, loaded.path
+        return None, None, None
+    return loaded.directory, loaded.path, loaded.name.version
+
+
+def _ambiguous(name: str, copies: Sequence[PackCandidate]) -> Problem:
+    """Two or more copies of a name and nothing to choose between them, each copy listed.
+
+    ``PACK_AMBIGUOUS`` is the problem's own name, in ``detail``; its exit code is
+    ``PACK_UNKNOWN``'s, 15, because ``errors.ExitCode`` has no member of its own for it.
+    """
+    listed = sorted(
+        f"{c.entry} at {Path(c.root.display) / c.entry}" for c in copies if c.name is not None
+    )
+    return Problem(
+        code=ExitCode.PACK_UNKNOWN,
+        message=(
+            f"{PACK_AMBIGUOUS}: {len(listed)} copies of {name!r} are on the pack search path "
+            f"({'; '.join(listed)}); name one as {name}@<version>"
+        ),
+        detail={"problem": PACK_AMBIGUOUS, "pack": name, "copies": "; ".join(listed)},
+    )
 
 
 def _check_directory(
@@ -498,8 +553,9 @@ def _section(heading: str, rows: Sequence[str]) -> list[str]:
 def _pack_lines(report: ValidationReport) -> list[str]:
     """What was asked about and where it was found, with each label padded to a fixed width."""
     return [
-        f"{'requested':<12}{_escape(report.pack)}",
-        f"{'directory':<12}{_escape(report.directory or 'not found on the pack search path')}",
+        f"{'pack:':<12}{_escape(report.pack)}",
+        f"{'version:':<12}{_escape(report.version or 'not found')}",
+        f"{'directory:':<12}{_escape(report.directory or 'not found on the pack search path')}",
         f"{'files':<12}{len(report.checked)}",
     ]
 
@@ -559,6 +615,7 @@ def render_json(report: ValidationReport) -> str:
     payload = {
         "pack": report.pack,
         "directory": report.directory,
+        "version": report.version,
         "checked": list(report.checked),
         "errors": [_json_error(error) for error in report.errors],
         "problems": [
