@@ -27,7 +27,6 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   reads_config edge to the key x.y, unresolved when no config file declares it. A call inside a
 #   closure counts the function or method around it. The name matches in any letter case, as PHP's
 #   does: View('x.y') counts.
-# It has had no independent checker and no hand audit.
 #
 # False results:
 # - A route inside the array form, Route::group(['prefix' => 'admin', 'as' => 'admin.'], ...), or

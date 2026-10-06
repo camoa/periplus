@@ -327,7 +327,6 @@ lists the rest, each rutter's among them.
 - **One JSON file, and every run is a full run.** There is no split map and no incremental run.
 - **No query commands and no export.** There is no `find`, `show` or `path` command, and no
   GraphML, Mermaid or DOT output yet.
-- **Not yet verified:** identical maps on two machines or two operating systems.
 
 ## License
 
