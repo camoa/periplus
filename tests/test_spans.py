@@ -229,7 +229,7 @@ def test_a_declaration_and_a_reference_rule_list_the_end_they_cannot_make(tmp_pa
     pack = tmp_path / ".periplus" / "packs" / "probe@0.0.1"
     (pack / "rules").mkdir(parents=True)
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [php_basic@0.1.0, probe@0.0.1]\n"
+        "periplus_version: 0\npacks: [php_basic@0.2.0, probe@0.0.1]\n"
     )
     (pack / "pack.yaml").write_text(
         "pack: probe\nversion: 0.0.1\ndepends: [php_basic]\nfolders:\n  code: ./src\n"
@@ -346,7 +346,7 @@ def test_a_declaration_with_no_written_name_then_an_absent_id_source_still_maps(
     pack = tmp_path / ".periplus" / "packs" / "probe@0.0.1"
     (pack / "rules").mkdir(parents=True)
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [php_basic@0.1.0, probe@0.0.1]\n"
+        "periplus_version: 0\npacks: [php_basic@0.2.0, probe@0.0.1]\n"
     )
     (pack / "pack.yaml").write_text(
         "pack: probe\nversion: 0.0.1\ndepends: [php_basic]\nfolders:\n  code: ./src\n"

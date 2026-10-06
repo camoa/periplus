@@ -57,12 +57,12 @@ UV = shutil.which("uv")
 # deliberately rather than approximated here.
 BUNDLED_PACKS = {
     "drupal@0.1.0": 48,
-    "drupal_basic@0.1.0": 67,
+    "drupal_basic@0.2.0": 68,
     "go@0.0.2": 4,
     "go_basic@0.0.3": 5,
     "laravel_basic@0.0.5": 6,
     "php@0.1.0": 12,
-    "php_basic@0.1.0": 6,
+    "php_basic@0.2.0": 6,
     "twig@0.0.1": 2,
     "twig_basic@0.1.0": 1,
     "yaml@0.0.1": 3,

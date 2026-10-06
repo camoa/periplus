@@ -256,6 +256,12 @@ def _undeclared(
         rule_name = rule.get("rule")
         used = node_types(rule)
         used += [t for key in ("type", "role") for t in _strings(_emits(rule, key))]
+        used += [
+            edge[side]["declared"]
+            for edge in _emits(rule, "edge")
+            for side in ("from", "to")
+            if isinstance(edge, Mapping) and _has(edge.get(side), "declared")
+        ]
         problems.extend(
             Problem(
                 ExitCode.UNDECLARED_TYPE,
@@ -287,7 +293,8 @@ def _illegal_ends(
     rule_set: RuleSet,
 ) -> list[Problem]:
     """The edge rules whose ``this_node`` end has a twin of a type the kind does not allow there,
-    or whose to end names a type the kind does not allow there."""
+    or whose to end, or ``declared`` end at either side, names a type the kind does not allow
+    there."""
     problems: list[Problem] = []
     for rule in _rules(document):
         for edge in _emits(rule, "edge"):
@@ -301,6 +308,25 @@ def _illegal_ends(
                         ExitCode.EDGE_ILLEGAL,
                         f"{pack}/{file}: the rule {rule.get('rule')} names its to end a {named}, "
                         f"and the edge {kind.name} allows {', '.join(kind.to_types)} there",
+                        {"pack": pack, "file": file, "rule": str(rule.get("rule"))},
+                    )
+                )
+            for side, allowed in (("from", kind.from_types), ("to", kind.to_types)) if kind else ():
+                end = edge[side] if isinstance(edge.get(side), Mapping) else {}
+                named = end.get("declared")
+                # A type no pack declares is refused as undeclared instead.
+                if (
+                    not isinstance(named, str)
+                    or named not in rule_set.types
+                    or set(allowed) & set(type_chain(rule_set.types, named))
+                ):
+                    continue
+                problems.append(
+                    Problem(
+                        ExitCode.EDGE_ILLEGAL,
+                        f"{pack}/{file}: the rule {rule.get('rule')} names its {side} end "
+                        f"{{declared: {named}}}, and the edge {edge['kind']} allows "
+                        f"{', '.join(allowed)} there",
                         {"pack": pack, "file": file, "rule": str(rule.get("rule"))},
                     )
                 )

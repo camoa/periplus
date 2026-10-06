@@ -723,7 +723,7 @@ def test_every_bundled_pack_file_declares_the_schema_it_is_written_against() -> 
             wrong.append(f"{path.relative_to(BUNDLED_PACKS)}: declares {declared!r}")
 
     assert wrong == [], "\n".join(wrong)
-    assert len(_bundled_pack_files()) == 155, "the bundled pack file count changed"
+    assert len(_bundled_pack_files()) == 156, "the bundled pack file count changed"
 
 
 @pytest.mark.parametrize("pack", BUNDLED_PACK_NAMES)

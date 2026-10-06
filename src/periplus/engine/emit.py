@@ -42,7 +42,8 @@ def build_document(
     Nodes merge on id and the most specific type found wins. An attribute whose contributions
     differ is written as ``{"differs": [...]}``. Edges merge on kind, from and to, and an end no
     rule found becomes a referenced node, of the deepest type its edges claim, an edge's named
-    ``target_type`` among them. An end no rule found that an edge declared ``on_miss`` for is
+    ``target_type`` among them; an end written ``{declared: <type>}`` claims that type alone. An
+    end no rule found that an edge declared ``on_miss`` for is
     unresolved instead, with the first such edge's rule, by pack and rule, in its detail, and the
     types that edge's end tried, in order. An end that lists none tried its one declared type,
     else its kind's types at that end. An end with candidate ids lands on the first a rule
@@ -64,11 +65,19 @@ def build_document(
         group = merged_edges[(kind, source, target)]
         named = tuple(e.target_type for e in group if e.target_type)
         starts = tuple(e.source_type for e in group if e.source_type)
-        # An end with candidate types takes the type it names, not the kind's.
+        # An end with candidate types, or written {declared: <type>}, takes the type it names, not
+        # the kind's.
         listed = any(e.candidates for e in group)
+        alone = {side for e in group for side in e.declared_ends}
         for end, ends in (
-            (source, starts if listed and starts else allowed.from_types + starts),
-            (target, named if listed and named else allowed.to_types + named),
+            (
+                source,
+                starts if (listed or "source" in alone) and starts else allowed.from_types + starts,
+            ),
+            (
+                target,
+                named if (listed or "target" in alone) and named else allowed.to_types + named,
+            ),
         ):
             if end not in merged:
                 merged[end] = {"id": end, "type": "", "state": "referenced", "locations": []}

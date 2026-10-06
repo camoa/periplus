@@ -3,7 +3,7 @@
 # a route file with one closure route and two controller routes, one naming its class in full, a
 # base controller and a controller
 # whose method returns a view, a model, three Blade views (one extends a layout and includes a
-# partial), a config file and a migration. Its settings pin php_basic@0.1.0 and laravel_basic@0.0.5
+# partial), a config file and a migration. Its settings pin php_basic@0.2.0 and laravel_basic@0.0.5
 # and move no folder. The map exits 0 with no problems and nothing not executed, and holds exactly
 # the route, view, controller, model, config and migration nodes, the handled_by edge from the
 # controller route to its method, the Blade extends and include edges, and php_basic's own class
@@ -205,7 +205,7 @@ return new class extends Migration
     }
 };
 EOF
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - laravel_basic@0.0.5\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - laravel_basic@0.0.5\n' \
     >"$site/.periplus/settings.yml"
 
 moved="$work/moved"
@@ -223,14 +223,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/books', [BookController::class, 'index']);
 EOF
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - laravel_basic@0.0.5\nfolders:\n  routes: ./routing\n  views_root: ./frontend/resources/views\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - laravel_basic@0.0.5\nfolders:\n  routes: ./routing\n  views_root: ./frontend/resources/views\n' \
     >"$moved/.periplus/settings.yml"
 
 nested="$work/nested"
 mkdir -p "$nested/.periplus" "$nested/routes/admin"
 printf "<?php\nRoute::get('/x', fn () => 1);\n" >"$nested/routes/web.php"
 printf "<?php\nRoute::get('/x', fn () => 2);\n" >"$nested/routes/admin/web.php"
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - laravel_basic@0.0.5\nfolders:\n  routes: ./routes/**\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - laravel_basic@0.0.5\nfolders:\n  routes: ./routes/**\n' \
     >"$nested/.periplus/settings.yml"
 (cd "$nested" && "$PERIPLUS" map --output "$work/nested.json" --format json >"$work/nested-report.json")
 
@@ -486,14 +486,14 @@ rules:
   - edge: {kind: probe_second, from: this_node, to: {from: {capture: c}}}
   confidence: declared
 YAML
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - laravel_basic@0.0.5\n  - probe@0.0.1\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - laravel_basic@0.0.5\n  - probe@0.0.1\n' \
     >"$groups/.periplus/settings.yml"
 
 # The fifth site: the first site's templates under templates/, with views_root set there.
 viewsroot="$work/viewsroot"
 mkdir -p "$viewsroot/.periplus" "$viewsroot/templates"
 cp -r "$site/resources/views/." "$viewsroot/templates/"
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - laravel_basic@0.0.5\nfolders:\n  views_root: ./templates\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - laravel_basic@0.0.5\nfolders:\n  views_root: ./templates\n' \
     >"$viewsroot/.periplus/settings.yml"
 for run in one two; do
     (cd "$groups" && "$PERIPLUS" map --output "$work/groups-$run.json" --format json \
@@ -505,7 +505,7 @@ cmp "$work/groups-one.json" "$work/groups-two.json"
 cmp "$work/viewsroot-one.json" "$work/viewsroot-two.json"
 
 # views_root holding ** is refused before any file is read, and the message names the folder.
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - laravel_basic@0.0.5\nfolders:\n  views_root: ./templates/**\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - laravel_basic@0.0.5\nfolders:\n  views_root: ./templates/**\n' \
     >"$viewsroot/.periplus/settings.yml"
 code=0
 (cd "$viewsroot" && "$PERIPLUS" map --output "$work/deep.json" --format json >"$work/deep-report.json") \
@@ -672,7 +672,7 @@ rules:
   emits: [{node: {type: planted.route}}]
   confidence: declared
 YAML
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - laravel_basic@0.0.5\n  - planted@0.0.1\nfolders:\n  views: ./resources/**\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - laravel_basic@0.0.5\n  - planted@0.0.1\nfolders:\n  views: ./resources/**\n' \
     >"$calls/.periplus/settings.yml"
 (cd "$calls" && "$PERIPLUS" map --output "$work/calls.json" --format json >"$work/calls-report.json")
 
@@ -907,7 +907,7 @@ cat >"$configs/resources/views/reads.blade.php" <<'EOF'
 {{ config('bladefile.key') }}
 {{ config('keys') }}
 EOF
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - laravel_basic@0.0.5\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - laravel_basic@0.0.5\n' \
     >"$configs/.periplus/settings.yml"
 for run in one two; do
     (cd "$configs" && "$PERIPLUS" map --output "$work/configs-$run.json" --format json \

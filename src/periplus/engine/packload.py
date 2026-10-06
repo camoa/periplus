@@ -15,6 +15,7 @@ from periplus.manifest import MANIFEST_FILENAME, LoadedPack
 from periplus.validate import MANIFEST_SCHEMA, PACK_FILE_SCHEMA, _load, _schema, _yaml_files
 
 __all__ = [
+    "PATTERN_VALUE",
     "PLACEHOLDER",
     "TEXT",
     "Condition",
@@ -109,12 +110,12 @@ EXECUTED_KEYS = frozenset(
             f"{_RULE}match.where.*.{k}"
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
         ),
-        f"{_RULE}match.where.*.name_matches",
+        *(f"{_RULE}match.where.*.name_matches{k}" for k in ("", ".child", ".pattern")),
         *(
             f"{_RULE}id.{k}"
             for k in (
                 *("from", "from.capture", "from.attribute_argument", "from.annotation_key"),
-                "from.argument",
+                *("from.argument", "pattern"),
                 *("template", "must_be", "normalize", "normalize.*.replace", "normalize.*.with"),
             )
         ),
@@ -131,7 +132,7 @@ EXECUTED_KEYS = frozenset(
             for k in (
                 *("", ".from", ".template", ".type", ".each", ".pattern", ".where", ".on_miss"),
                 *(".where.*.matches", ".where.*.listed_at", ".from.key", ".from.capture"),
-                *(".from.*.key", ".from.*.each", ".types", *_RESOLVE),
+                *(".from.*.key", ".from.*.each", ".types", ".declared", *_RESOLVE),
             )
         ),
     }
@@ -211,8 +212,15 @@ _TREE_ENDS = {"this_node", "enclosing_class"}
 #: The edge ends of an attribute rule that name a node; the other kind is an argument's value.
 _ATTRIBUTE_ENDS = {"this_node", "enclosing_class", "enclosing_method"}
 
+#: The edge ends whose value is the whole id another rule minted, namespace and all.
+_WHOLE_ENDS = {"enclosing_declaration", "enclosing_class", "enclosing_method", "declared"}
+
 #: A ``{name}`` in an id or edge template.
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
+
+#: A ``{name}`` in an id pattern: a path or settings value, filled as literal text. A name starts
+#: with a letter, so a quantifier such as ``{2}`` stays one.
+PATTERN_VALUE = re.compile(r"\{([A-Za-z]\w*)\}")
 
 #: The key path an edge source ``text`` reads: an entry whose value is text holds it under this key
 #: alone, which no other key path reaches.
@@ -345,6 +353,10 @@ class Rule:
     twin_type: str = ""
     each: str | None = None
     id_template: str = "{file_stem}"
+    #: A declaration rule: the pattern searched in the text of the source ``id_source``, its named
+    #: captures joining the values ``id_template`` may name; ``""`` for none.
+    id_pattern: str = ""
+    id_source: str = ""
     declaration: str = ""
     name_child: str = ""
     body_child: str = ""
@@ -352,8 +364,9 @@ class Rule:
     #: fields of the matched node its id names.
     has_child: tuple[str, ...] = ()
     fields: tuple[str, ...] = ()
-    #: A declaration or reference rule: the patterns the whole text of its name child must match.
-    name_matches: tuple[re.Pattern[str], ...] = ()
+    #: A declaration or reference rule: each child, by field or node type, and the pattern its
+    #: whole text must match.
+    name_matches: tuple[tuple[str, re.Pattern[str]], ...] = ()
     attribute: str = ""
     applies_to: str = ""
     id_argument: str = ""
@@ -393,10 +406,11 @@ class EdgeSpec:
     without parts the end reads ``key``. A rule
     that reads data runs from ``this_node`` to that end, and ``finish`` is ``""``. A rule that
     reads a parse tree names each end in ``start`` and ``finish``: ``this_node``,
-    ``enclosing_class``, or, for ``finish``, ``qualified_name`` for each name written in the match.
-    An attribute rule also names ``enclosing_method``, and its ``finish`` may be
-    ``attribute_argument`` with the argument in ``key``. A reference rule's ``key`` is the position
-    of the call's argument its end reads, or ``""`` for the written name.
+    ``enclosing_class``, ``declared`` for the node of the type ``declared`` holds at that end, or,
+    for ``finish``, ``qualified_name`` for each name written in the match. An attribute rule also
+    names ``enclosing_method``, and its ``finish`` may be ``attribute_argument`` with the argument
+    in ``key``. A reference rule's ``key`` is the position of the call's argument its end reads,
+    or ``""`` for the written name.
     """
 
     kind: str
@@ -423,6 +437,8 @@ class EdgeSpec:
     #: The composed end's candidate types, in order, in place of ``to_type``; ``to_type`` is the
     #: first of them.
     types: tuple[str, ...] = ()
+    #: The node type of a ``declared`` end, at from and at to; ``""`` at an end that is not one.
+    declared: tuple[str, str] = ("", "")
 
 
 @dataclass(frozen=True, slots=True)
@@ -631,7 +647,20 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
     tree = rule.declaration or rule.attribute or rule.annotation or rule.reference
     known = {value.name for value in info.path_values} | set(values)
     if rule.supported and rule.declaration:
-        named = set(PLACEHOLDER.findall(rule.id_template)) - _TREE_FILLED - known
+        captures = set(compile_pattern(PATTERN_VALUE.sub("", rule.id_pattern)).groupindex)
+        clash = captures & (_TREE_FILLED | known)
+        unknown = set(PATTERN_VALUE.findall(rule.id_pattern)) - known
+        if clash or unknown:
+            reason = (
+                f"the id pattern captures {', '.join(sorted(clash))}, a name the engine, a path "
+                "value or a settings value gives"
+                if clash
+                else f"the id pattern names {', '.join(sorted(unknown))}, which is no path value "
+                "or settings value"
+            )
+            return replace(rule, supported=False, reason=reason)
+        named = {*PLACEHOLDER.findall(rule.id_template), rule.id_source} - {""}
+        named = named - _TREE_FILLED - known - captures
         return replace(rule, fields=tuple(sorted(named)))
     if not rule.supported or tree:
         return rule
@@ -971,10 +1000,10 @@ def _check_edges(rule: Rule, types: Mapping[str, TypeInfo], kinds: Mapping[str, 
         from_twin = bool(rule.twin_type) and edge.start == "this_node"
         to_twin = bool(rule.twin_type) and edge.finish == "this_node"
         # A composed end that is a full id, or that lists its types, needs no namespace of its
-        # kind's types; neither does an enclosing declaration's id.
+        # kind's types; neither does an end that takes the whole id of a node another rule found.
         composed_full = edge.full_id or bool(edge.types)
-        from_full = composed_full and not edge.start or edge.start == "enclosing_declaration"
-        to_full = composed_full and bool(edge.start)
+        from_full = composed_full and not edge.start or edge.start in _WHOLE_ENDS
+        to_full = composed_full and bool(edge.start) or edge.finish in _WHOLE_ENDS
         if any(namespace_of(types, name) is None for name in edge.types):
             reason = f"a type the end of {edge.kind} lists has no id namespace"
             return replace(rule, supported=False, reason=reason)
@@ -1057,6 +1086,12 @@ def _read_rule(pack: str, item: Any) -> Rule:
 
 
 def _build_rule(pack: str, item: Any) -> Rule:
+    if (
+        isinstance(item.get("id"), Mapping)
+        and "pattern" in item["id"]
+        and "declaration" not in item["match"]
+    ):
+        raise _Unsupported("only the id of a tree declaration rule takes a pattern")
     if "text" in item["match"]:
         return _build_text(pack, item)
     if isinstance(item.get("id"), Mapping) and {"resolve", "separator"} & set(item["id"]):
@@ -1339,7 +1374,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         isinstance(c, Mapping)
         and len(c) == 1
         and set(c) <= {"has_child", "name_matches"}
-        and isinstance(next(iter(c.values())), str)
+        and (isinstance(next(iter(c.values())), str) or "name_matches" in c)
         for c in where
     ):
         raise _Unsupported(
@@ -1360,12 +1395,15 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
     if argument is not None and "body_child" in match:
         raise _Unsupported("an id from a call's argument cannot be combined with match.body_child")
     template = _tree_id(item["id"]) if "id" in item and argument is None else ""
+    pattern = block.get("pattern", "") if template else ""
+    if pattern:
+        _regex(PATTERN_VALUE.sub("", pattern))
     if not (template or argument) and (
         nodes or any("this_node" in (e.start, e.finish) for e in edges)
     ):
         raise _Unsupported("a declaration rule that emits a node or names this_node needs an id")
     if "name_child" not in match and {"declared_name", "qualified_name"} & set(
-        PLACEHOLDER.findall(template)
+        PLACEHOLDER.findall(template + (f"{{{block['from']}}}" if pattern else ""))
     ):
         raise _Unsupported("an id from declared_name or qualified_name needs match.name_child")
     return Rule(
@@ -1379,13 +1417,15 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         confidence=item["confidence"],
         edges=tuple(edges),
         id_template=template,
+        id_pattern=pattern,
+        id_source=str(block["from"]) if pattern else "",
         normalize=_read_normalize(item["id"].get("normalize", [])) if "id" in item else (),
         declaration=match["declaration"],
         name_child=match.get("name_child", ""),
         body_child=match.get("body_child", ""),
         has_child=tuple(c["has_child"] for c in where if "has_child" in c),
         id_argument=argument or "",
-        name_matches=_name_matches(where, match),
+        name_matches=_name_matches(where, match.get("name_child")),
     )
 
 
@@ -1471,7 +1511,7 @@ def _build_reference(pack: str, item: Mapping[str, Any]) -> Rule:
         member_child=fields[1] if len(fields) > 1 else "",
         skip_names=frozenset(match.get("skip_names", ())),
         whole_written=match.get("whole_written") is True,
-        name_matches=_name_matches(where, match),
+        name_matches=_name_matches(where, fields[0]),
     )
 
 
@@ -1536,13 +1576,21 @@ def _build_attribute(pack: str, item: Mapping[str, Any]) -> Rule:
 
 
 def _name_matches(
-    where: list[Mapping[str, Any]], match: Mapping[str, Any]
-) -> tuple[re.Pattern[str], ...]:
-    """The patterns of the ``name_matches`` conditions; one needs ``name_child``."""
-    found = tuple(_regex(c["name_matches"]) for c in where if "name_matches" in c)
-    if found and "name_child" not in match:
-        raise _Unsupported("a name_matches condition needs match.name_child")
-    return found
+    where: list[Mapping[str, Any]], name_child: str | None
+) -> tuple[tuple[str, re.Pattern[str]], ...]:
+    """The child and pattern of each ``name_matches`` condition: a ``{child, pattern}`` mapping, or
+    a pattern alone, which tests ``name_child`` and so needs it."""
+    found = []
+    for condition in (c["name_matches"] for c in where if "name_matches" in c):
+        if isinstance(condition, Mapping):
+            if set(condition) != {"child", "pattern"} or not isinstance(condition["child"], str):
+                raise _Unsupported("a name_matches mapping is not a child and a pattern")
+            found.append((condition["child"], _regex(condition["pattern"])))
+        elif name_child is None:
+            raise _Unsupported("a name_matches condition needs match.name_child")
+        else:
+            found.append((name_child, _regex(condition)))
+    return tuple(found)
 
 
 def _argument(source: object, key: str = "attribute_argument") -> str | None:
@@ -1561,7 +1609,7 @@ def _read_attribute_edge(edge: Mapping[str, Any]) -> EdgeSpec:
     )
     if (
         set(edge) != {"kind", "from", "to"}
-        or start not in _ATTRIBUTE_ENDS
+        or not (isinstance(start, str) and start in _ATTRIBUTE_ENDS)
         or (argument is None and not (isinstance(end, str) and end in _ATTRIBUTE_ENDS))
     ):
         raise _Unsupported(
@@ -1579,6 +1627,16 @@ def _tree_id(block: Mapping[str, Any]) -> str:
     """The id block of a declaration rule as one template over its sources: a name the engine
     fills, a path value, a settings value or a field of the matched node."""
     source, template = block.get("from"), block.get("template")
+    if "pattern" in block and set(block) <= {"from", "pattern", "template", "normalize"}:
+        if not (isinstance(source, str) and PLACEHOLDER.fullmatch(f"{{{source}}}")):
+            raise _Unsupported(
+                "an id pattern reads one source, a name and not a list"
+                if isinstance(source, list)
+                else "an id pattern has no `from` naming the one source it reads"
+                if source is None
+                else "an id pattern reads one source, and its `from` is not a name"
+            )
+        return f"{{{source}}}" if template is None else str(template)
     if set(block) <= {"from", "template", "normalize"}:
         if isinstance(source, str) and PLACEHOLDER.fullmatch(f"{{{source}}}") and template is None:
             return f"{{{source}}}"
@@ -1595,21 +1653,31 @@ def _tree_id(block: Mapping[str, Any]) -> str:
 
 
 def _read_tree_edge(edge: Mapping[str, Any]) -> EdgeSpec:
-    """An edge of a declaration rule: from a node end to a node end or to the written names."""
+    """An edge of a declaration rule: from a node end to a node end or to the written names. A node
+    end ``{declared: <type>}`` is the node of that type another rule declares at the match."""
     start, end = edge["from"], edge["to"]
-    finish = end if isinstance(end, str) else ""
+    declared = (_declared(start), _declared(end))
+    start = "declared" if declared[0] else start
+    finish = "declared" if declared[1] else end if isinstance(end, str) else ""
     if end == {"from": "qualified_name"}:
         finish = "qualified_name"
     if (
         set(edge) != {"kind", "from", "to"}
-        or start not in _TREE_ENDS
-        or finish not in {*_TREE_ENDS, "qualified_name"}
+        or not (declared[0] or isinstance(start, str) and start in _TREE_ENDS)
+        or not (declared[1] or finish in {*_TREE_ENDS, "qualified_name"})
     ):
         raise _Unsupported(
-            "an edge of a declaration rule does not run from this_node or enclosing_class to "
-            "this_node, enclosing_class or {from: qualified_name}"
+            "an edge of a declaration rule does not run from this_node, enclosing_class or "
+            "{declared: <type>} to one of them or to {from: qualified_name}"
         )
-    return EdgeSpec(edge["kind"], "", False, None, None, None, (), start, finish)
+    return EdgeSpec(edge["kind"], "", False, None, None, None, (), start, finish, declared=declared)
+
+
+def _declared(end: object) -> str:
+    """The node type an end ``{declared: <type>}`` names; ``""`` for any other end."""
+    if isinstance(end, Mapping) and set(end) == {"declared"} and isinstance(end["declared"], str):
+        return end["declared"]
+    return ""
 
 
 def _read_each(path: object) -> str:

@@ -644,8 +644,28 @@
           "description": "FORCES reads: map. Set comparison against every node of a type. Go's implicit interface satisfaction, which is the case the map bucket exists for."
         },
         "name_matches": {
-          "type": "string",
-          "description": "RE2 over the declared name. Executed on a tree declaration or reference rule: the whole text of the first name_child field must match, or the match is passed and is no fire. The case that proves confidence belongs on the rule: `^[A-Z]` is `declared` in Go, where capitalisation is visibility the compiler enforces, and `inferred` in React, where it is a convention people can ignore. Same primitive, same character, and only the author knows which."
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["child", "pattern"],
+              "properties": {
+                "child": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The child whose text is tested: a field of the matched node, else its first named child of that node type."
+                },
+                "pattern": {
+                  "type": "string",
+                  "description": "RE2 over the whole text of that child."
+                }
+              }
+            }
+          ],
+          "description": "RE2 over the declared name. Executed on a tree declaration or reference rule: the whole text of the first name_child field must match, or the match is passed and is no fire. The mapping form {child, pattern} tests the named child instead, whatever its node type; a match without that child fails. The case that proves confidence belongs on the rule: `^[A-Z]` is `declared` in Go, where capitalisation is visibility the compiler enforces, and `inferred` in React, where it is a convention people can ignore. Same primitive, same character, and only the author knows which."
         }
       }
     },
@@ -671,7 +691,7 @@
         },
         "pattern": {
           "type": "string",
-          "description": "RE2, with named captures the template may use."
+          "description": "RE2, with named captures the template may use. Executed on a tree declaration rule with one source: searched in its text, and a source it does not fit makes nothing. {name} is a path or settings value, filled as literal text."
         },
         "template": {
           "type": "string",
@@ -963,6 +983,17 @@
             "matched_node",
             "enclosing_declaration"
           ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["declared"],
+          "properties": {
+            "declared": {
+              "$ref": "#/$defs/typeName",
+              "description": "On an edge of a tree declaration rule: the id of the node of this type that a rule of this pack or of a pack it depends on declares at the same match. When no such rule fires there, the edge is not made and the fire is listed as skipped."
+            }
+          }
         },
         {
           "type": "object",

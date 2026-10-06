@@ -90,5 +90,18 @@ def test_the_call_argument_and_name_matches_keys_are_executed() -> None:
         "file.rules.*.id.from.argument",
         "file.rules.*.emits.*.edge.to.from.argument",
         "file.rules.*.match.where.*.name_matches",
+        "file.rules.*.match.where.*.name_matches.child",
+        "file.rules.*.match.where.*.name_matches.pattern",
     }
+    assert keys <= EXECUTED_KEYS & _schema_paths()
+
+
+def test_the_id_pattern_key_is_executed() -> None:
+    """The id pattern of a tree declaration rule."""
+    assert "file.rules.*.id.pattern" in EXECUTED_KEYS & _schema_paths()
+
+
+def test_the_declared_end_keys_are_executed() -> None:
+    """The end ``{declared: <type>}`` of a tree declaration rule's edge, at from and at to."""
+    keys = {f"file.rules.*.emits.*.edge.{end}.declared" for end in ("from", "to")}
     assert keys <= EXECUTED_KEYS & _schema_paths()

@@ -6,7 +6,7 @@ A tree rutter states one with a reference rule. `php_basic` has two for PHP call
 [php.function, php.method] at each end; each block below is from the file its fence names, in
 src/periplus/packs. Check 67b-php-calls proves the two rules.
 
-```yaml php_basic@0.1.0/edges/find_structure.yaml
+```yaml php_basic@0.2.0/edges/find_structure.yaml
 - rule: calls_function
   reads: file
   in: [source]
@@ -116,6 +116,18 @@ exit 26, as a `where` other than `name_matches` on a reference rule does. `name_
 names only, so Go's package_identifier, which has none, cannot be one. A path value added alone to
 a parent's file type still needs the type declared again in full.
 
+`id: {from: declared_name, pattern: '^{module}_(?<hook>\w+)$', template: '{hook}'}` gives a
+declaration rule's id a pattern, searched in the text of its one source; anchor it with `^` and
+`$`. Its named captures join the names the template may use. With no template the id is the
+source text, and the pattern only filters. A match whose source the pattern does not fit makes no
+node, no edge and no `skipped` row, and is no fire. A source that is absent is skipped as before.
+`{module}` names a path value or a settings value whose name starts with a letter. It is filled
+with that value as literal text, so `my.mod` matches only `my.mod`. A capture named like a name
+the engine fills, a path value or a settings value refuses the map with exit 26. So does a pattern
+with a list of sources, an id from a call's argument, or a pattern on a text or attribute rule.
+A class whose name the pattern does not fit gives its members no enclosing type, and an enclosing
+declaration it does not fit is passed for the next one out.
+
 ## The grammar's node kinds
 
 No page lists a grammar's node types and fields. Print the tree of a sample file with the
@@ -162,6 +174,7 @@ file.rules.*.emits.*.edge.from.where.*: ancestor_reaches applies_to attribute_ar
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
     has_promoted_constructor_parameter id_matches in_method_with_attribute is_mapping key
     method_set_covers name name_matches on_service receiver
+file.rules.*.emits.*.edge.from.where.*.name_matches: child pattern
 file.rules.*.emits.*.edge.to.from: annotation_key argument_class argument_key array_key_class
     each each_key incoming_edges literal qualified value
 file.rules.*.emits.*.edge.to.from.*: annotation_key argument argument_class argument_key
@@ -170,8 +183,9 @@ file.rules.*.emits.*.edge.to.where.*: ancestor_reaches applies_to attribute_argu
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
     has_promoted_constructor_parameter id_matches in_method_with_attribute is_mapping key
     method_set_covers name name_matches on_service receiver
+file.rules.*.emits.*.edge.to.where.*.name_matches: child pattern
 file.rules.*.emits.*.node: state
-file.rules.*.id: on_miss pattern
+file.rules.*.id: on_miss
 file.rules.*.id.from: argument_class argument_key array_key_class each each_key incoming_edges
     key literal qualified value
 file.rules.*.id.from.*: annotation_key argument argument_class argument_key array_key_class

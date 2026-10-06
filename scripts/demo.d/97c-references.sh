@@ -129,7 +129,7 @@ PY
 site="$work/php"
 pack="$site/.periplus/packs/calls@0.0.1"
 mkdir -p "$pack/rules" "$site/src/App" "$site/src/Lib"
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - calls@0.0.1\n' >"$site/.periplus/settings.yml"
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - calls@0.0.1\n' >"$site/.periplus/settings.yml"
 cat >"$pack/pack.yaml" <<'YAML'
 pack: calls
 version: 0.0.1

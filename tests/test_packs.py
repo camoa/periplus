@@ -44,12 +44,12 @@ from periplus.settings import (
 # about its own copy: a list derived from the thing under test agrees with any edit to it.
 BUNDLED_PACK_NAMES = [
     "drupal@0.1.0",
-    "drupal_basic@0.1.0",
+    "drupal_basic@0.2.0",
     "go@0.0.2",
     "go_basic@0.0.3",
     "laravel_basic@0.0.5",
     "php@0.1.0",
-    "php_basic@0.1.0",
+    "php_basic@0.2.0",
     "twig@0.0.1",
     "twig_basic@0.1.0",
     "yaml@0.0.1",

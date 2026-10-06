@@ -122,9 +122,9 @@ map() {
     printf 'periplus_version: 0\npacks:\n%s' "$1" >"$site/.periplus/settings.yml"
     (cd "$site" && "$PERIPLUS" map --output "$work/$2.json" --format json >"$work/$2-report.json")
 }
-map $'  - php_basic@0.1.0\n' alone
-map $'  - php_basic@0.1.0\n  - notes@0.0.1\n' one
-map $'  - php_basic@0.1.0\n  - notes@0.0.1\n' two
+map $'  - php_basic@0.2.0\n' alone
+map $'  - php_basic@0.2.0\n  - notes@0.0.1\n' one
+map $'  - php_basic@0.2.0\n  - notes@0.0.1\n' two
 cmp "$work/one.json" "$work/two.json"
 map $'  - modules@0.0.1\n  - notes@0.0.1\n' own
 ledger="$site/.periplus/packs/ledger@0.0.1"
@@ -179,7 +179,7 @@ map $'  - modules@0.0.1\n  - notes@0.0.1\n' limit || limit=$?
 
 manifest $'    php_more:\n      endings: [php]\n      reader: text'
 code=0
-map $'  - php_basic@0.1.0\n  - notes@0.0.1\n' same || code=$?
+map $'  - php_basic@0.2.0\n  - notes@0.0.1\n' same || code=$?
 
 python3 - "$work" "$code" "$site" "$limit" <<'PY'
 import json

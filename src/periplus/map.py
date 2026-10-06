@@ -107,6 +107,12 @@ def run(
         )
     if problems or project is None or resolution.settings is None:
         return _failed(problems)
+    if not resolution.packs:
+        message = (
+            f"no rutter is pinned: list one under packs in {PROJECT_MARKER}/{SETTINGS_FILENAME}; "
+            "periplus status shows the bundled rutters"
+        )
+        return _failed([Problem(ExitCode.MAP_INVALID, message, {"setting": "packs"})])
 
     packs, pack_problems = resolve_pack_order(resolution.packs, resolution.candidates)
     if pack_problems:

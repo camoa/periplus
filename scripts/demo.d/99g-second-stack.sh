@@ -239,7 +239,7 @@ done
 # The commands of the guide, verbatim, in the project folder, with periplus on the path as the
 # command under test and REPO naming this repository.
 guide="$ROOT/docs/rutter-author-guide.md"
-[ "$(wc -l <"$guide")" -le 230 ] || { echo "the guide is longer than 230 lines"; exit 1; }
+[ "$(wc -l <"$guide")" -le 231 ] || { echo "the guide is longer than 231 lines"; exit 1; }
 mkdir -p "$work/bin"
 ln -s "$(command -v "$PERIPLUS")" "$work/bin/periplus"
 grep '^\$ ' "$guide" | sed 's/^\$ //' >"$work/commands.sh"

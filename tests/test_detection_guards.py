@@ -27,7 +27,7 @@ What is covered here, and why each earned a test rather than a note:
 * A pack directory name cannot forge a line into the settings file it is written to.
 * A repository-carried symlink cannot point a signal outside the checkout, which is the one
   containment case a lexical check passes.
-* The shipped docroot signal matches, so a typo in `drupal_basic@0.1.0/pack.yaml` fails something.
+* The shipped docroot signal matches, so a typo in `drupal_basic@0.2.0/pack.yaml` fails something.
 * The report names its evidence, escaped, and says nothing at all when nothing was detected.
 
 Four gaps the same runs turned up are deliberately left open: a non-string `path:` or `contains:`,
@@ -338,7 +338,7 @@ def test_the_shipped_docroot_signal_matches_a_checkout_with_no_composer_json(
     `test_detect.py` builds a repository holding a `composer.json` that requires Drupal core, which
     the first alternative answers. The second -- `web/core/lib/Drupal.php` -- is what recognises a
     checkout that has core in the tree and no `composer.json` at the root, and a typo in that path
-    inside `drupal_basic@0.1.0/pack.yaml` failed nothing.
+    inside `drupal_basic@0.2.0/pack.yaml` failed nothing.
 
     So the repository below has the docroot and no `composer.json` at all, which is the only fixture
     that can reach the second alternative: with both present the first one answers first and this

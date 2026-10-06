@@ -65,9 +65,9 @@ class User extends Base implements Shown
 }
 PHP
 
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n' >"$site/.periplus/settings.yml"
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n' >"$site/.periplus/settings.yml"
 (cd "$site" && "$PERIPLUS" map --output "$work/alone.json" >/dev/null)
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n  - models@0.0.1\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - models@0.0.1\n' \
     >"$site/.periplus/settings.yml"
 (cd "$site" && "$PERIPLUS" map --output "$work/both.json" >/dev/null)
 

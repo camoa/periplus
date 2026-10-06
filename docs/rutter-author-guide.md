@@ -10,6 +10,8 @@ Python modules, top-level classes and functions, and imports. `typer_text` depen
 Typer apps, commands and mounts. `speckitty` maps spec-kitty's missions and their templates.
 The PHP and Drupal rutters read a parse tree; [Reading the Drupal rutters](rutter-author-guide-drupal.md)
 walks through them. [Text spans](rutter-author-guide-text.md) covers nested regions of a text file.
+[Second children and id patterns](rutter-author-guide-abilities.md) tests a call's class and its
+method in one rule, and keeps an id only when its source fits a pattern.
 
 ## The files of a rutter, and how a project loads one
 
@@ -195,7 +197,8 @@ name. After `from shop.cli import Config`, `Config()` lands on the class. After 
 An edge kind is one name in every rutter a project loads. Two rutters giving one kind different ends
 refuse the map with exit 19, naming the kind and both files: `python_text` and `php_basic` each
 declare `calls` and `contains`, so one project cannot load both. Give the types at each end of a
-kind one id namespace, or a rule building that end from the kind's types is not executed.
+kind one id namespace, or a rule building that end from the kind's types is not executed. An end
+filled only by whole ids, such as `{declared: <type>}`, may list types of different id namespaces.
 
 ## What the format cannot say today
 

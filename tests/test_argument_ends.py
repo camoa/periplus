@@ -134,11 +134,12 @@ def _run(
     field: str = "  call_arguments: arguments\n",
     rules: str = RULES,
     source: str = SOURCE,
+    manifest: str = MANIFEST,
 ) -> MapReport:
     pack = root / ".periplus" / "packs" / "own@0.0.1"
     (pack / "rules").mkdir(parents=True)
     (root / ".periplus" / "settings.yml").write_text("periplus_version: 0\npacks: [own@0.0.1]\n")
-    (pack / "pack.yaml").write_text(MANIFEST.format(field=field))
+    (pack / "pack.yaml").write_text(manifest.format(field=field))
     (pack / "rules" / "own.yaml").write_text(rules)
     (root / "src").mkdir()
     (root / "src" / "a.php").write_text(source)
@@ -283,3 +284,36 @@ function hold()
     assert "own.entry::x" in {n["id"] for n in document["nodes"]}, document["nodes"]
     edges = {(e["kind"], e["from"], e["to"]) for e in document["edges"]}
     assert edges == {("shows", "own.fn::hold", "own.view::v")}, edges
+
+
+@pytest.mark.parametrize("declared", [True, False])
+def test_a_declared_delimiter_is_skipped_in_a_call_literal(tmp_path: Path, declared: bool) -> None:
+    """show("b\\n") holds an escape_sequence beside its text: declared in call_literal_delimiters it
+    is skipped and the literal is b; undeclared, argument 0 is not a text literal."""
+    field = "  call_arguments: arguments\n"
+    if declared:
+        field += "  call_literal_delimiters: [escape_sequence]\n"
+    source = '<?php\nnamespace App;\n\nfunction page()\n{\n    show("b\\n");\n}\n'
+    report = _run(tmp_path, field=field, source=source)
+    assert report.problems == () and report.not_executed == (), report
+    document = json.loads((tmp_path / "map.json").read_text())
+    edges = {(e["kind"], e["from"], e["to"]) for e in document["edges"]}
+    assert edges == ({("shows", "own.fn::page", "own.view::b")} if declared else set()), edges
+    assert _rows(report) == (
+        set() if declared else {(6, "show", "argument 0 is not a text literal")}
+    ), _rows(report)
+
+
+@pytest.mark.parametrize("declared", [True, False])
+def test_a_named_call_argument_is_not_at_its_position(tmp_path: Path, declared: bool) -> None:
+    """show(x: 'c') passes its argument by name: with call_argument_name it is not argument 0;
+    without the key, the same argument is read at position 0."""
+    manifest = MANIFEST if declared else MANIFEST.replace("  call_argument_name: name\n", "")
+    source = "<?php\nnamespace App;\n\nfunction page()\n{\n    show(x: 'c');\n}\n"
+    report = _run(tmp_path, source=source, manifest=manifest)
+    assert report.problems == () and report.not_executed == (), report
+    document = json.loads((tmp_path / "map.json").read_text())
+    edges = {(e["kind"], e["from"], e["to"]) for e in document["edges"]}
+    assert edges == (set() if declared else {("shows", "own.fn::page", "own.view::c")}), edges
+    missing = {(6, "show", "argument 0 is missing")}
+    assert _rows(report) == (missing if declared else set()), _rows(report)

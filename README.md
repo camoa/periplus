@@ -17,6 +17,9 @@ How it is meant to work: a person writes a rutter, often with help from an AI. P
 it with no AI. A person or an AI reads the map, where every node and edge carries its file and
 line. To improve a map, improve the rutters. The engine stays the same.
 
+[`docs/principles.md`](docs/principles.md) gives the reasons for this design: why a new mapper,
+and why rutters and not built-in support for each stack.
+
 ## Install
 
 Periplus needs Python 3.11 or later. It declares support for 3.11 to 3.14. The CI workflow
@@ -54,7 +57,7 @@ Run each command in the project folder.
 ```yaml
 periplus_version: 0
 packs:
-  - drupal_basic@0.1.0
+  - drupal_basic@0.2.0
 folders:
   config: ./config/default
 ```
@@ -62,7 +65,7 @@ folders:
 The `folders` line moves the config folder from `drupal_basic`'s default, `./config/sync`. Leave
 it out when your site uses the default.
 
-In a Drupal project, `periplus init` writes the `drupal_basic@0.1.0` pin for you. It looks for
+In a Drupal project, `periplus init` writes the `drupal_basic@0.2.0` pin for you. It looks for
 `drupal/core` in `composer.json`, or for `web/core/lib/Drupal.php`. The rutters that
 `drupal_basic` depends on load without a pin of their own.
 
@@ -254,24 +257,21 @@ compared two machines or two operating systems yet.
 
 Bundled rutters load by name. Example rutters are copied into a project's `.periplus/packs`.
 
-| Rutter | Version | What it finds | Status |
-|---|---|---|---|
-| `php_basic` | 0.1.0 | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interfaces, traits, containment, and plain and static calls. Reads a parse tree. | Checked by an independent checker on four Drupal code bases. Calls checked by hand only. |
-| `drupal_basic` | 0.1.0 | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays and plugins. Depends on `php_basic`, `yaml_basic` and `twig_basic`. | Checked by an independent checker and hand audits on four Drupal code bases. |
-| `yaml_basic` | 0.1.0 | Claims `.yml` and `.yaml` files for rutters that depend on it. No rules of its own. | Used by `drupal_basic`. |
-| `twig_basic` | 0.1.0 | Claims `.twig` files for rutters that depend on it. No rules of its own. | Used by `drupal_basic`. |
-| `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. Reads a parse tree. Needs the `go` extra. | Declarations checked by the pack's author's script. Calls into imported packages checked by an independent checker on two projects. |
-| `laravel_basic` | 0.0.5 | Laravel routes with the prefixes and names of `Route::prefix()->name()->group()` groups, their controller methods, controllers, models, migrations, Blade views with their includes and component tags, and configuration files with the text keys of the array each returns. The views and keys that `view('x')` and `config('x.y')` calls name in PHP functions and methods. Depends on `php_basic`. Reads text, and a parse tree for the calls. | Run on one application. Its configuration keys compared with PHP's own reading. No other checker and no hand audit. |
-| `python_text` (example) | 0.1.0 | Python modules, top-level classes and functions, imports and calls. Reads text. | Checked by an independent checker and hand audits on spec-kitty. |
-| `typer_text` (example) | 0.1.0 | Typer apps, commands and mounts. Depends on `python_text`. | Same as `python_text`. |
-| `speckitty` (example) | 0.1.0 | spec-kitty missions and their templates. | Same as `python_text`. |
-
-The independent checkers and hand audits in this table were runs on private code. They are not
-part of this repository.
+| Rutter | Version | What it finds |
+|---|---|---|
+| `php_basic` | 0.2.0 | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interfaces, traits, containment, and plain and static calls; a call to a PHP builtin function makes nothing. Reads a parse tree. |
+| `drupal_basic` | 0.2.0 | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays and plugins. The services and entity types that `\Drupal::service('x')`, `$container->get('x')`, `\Drupal::entityQuery('x')` and an entity type manager's `getStorage('x')` name in PHP functions and methods. Hooks from `Hook` attribute methods, and from procedural functions named by their file's name, such as `mymod_cron` in `mymod.module`. Depends on `php_basic`, `yaml_basic` and `twig_basic`. |
+| `yaml_basic` | 0.1.0 | Claims `.yml` and `.yaml` files for rutters that depend on it. No rules of its own. |
+| `twig_basic` | 0.1.0 | Claims `.twig` files for rutters that depend on it. No rules of its own. |
+| `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. Reads a parse tree. Needs the `go` extra. |
+| `laravel_basic` | 0.0.5 | Laravel routes with the prefixes and names of `Route::prefix()->name()->group()` groups, their controller methods, controllers, models, migrations, Blade views with their includes and component tags, and configuration files with the text keys of the array each returns. The views and keys that `view('x')` and `config('x.y')` calls name in PHP functions and methods. Depends on `php_basic`. Reads text, and a parse tree for the calls. |
+| `python_text` (example) | 0.1.0 | Python modules, top-level classes and functions, imports and calls. Reads text. |
+| `typer_text` (example) | 0.1.0 | Typer apps, commands and mounts. Depends on `python_text`. |
+| `speckitty` (example) | 0.1.0 | spec-kitty missions and their templates. |
 
 The bundled rutters are in `src/periplus/packs`. The examples are in
-`examples/second-stack/packs`. The manifests of `go_basic` and `laravel_basic` each open with a
-list of their known gaps.
+`examples/second-stack/packs`. The manifests of `php_basic`, `drupal_basic`, `go_basic` and
+`laravel_basic` each open with a list of their known gaps.
 
 To map a Go module, install the `go` extra and run Periplus at the module's root. Give the module
 path in the settings, because Periplus does not read `go.mod`:
@@ -284,7 +284,7 @@ values:
   module: example.com/app
 ```
 
-To map a Laravel application, pin `php_basic@0.1.0` and `laravel_basic@0.0.5` and run Periplus
+To map a Laravel application, pin `php_basic@0.2.0` and `laravel_basic@0.0.5` and run Periplus
 at the application's root. The default Laravel folders need no settings. To move the templates,
 set `views_root` under `folders`; a template is named by its path below `views_root`.
 
@@ -297,7 +297,7 @@ Settings `values` pass project facts, such as a Go module path, to a rutter.
 
 ## Tests and checks
 
-The pytest suite holds 230 tests. `scripts/demo.sh` runs the 28 end-to-end checks in
+The pytest suite holds 275 tests. `scripts/demo.sh` runs the 37 end-to-end checks in
 `scripts/demo.d` and stops at the first failure. Each check maps a small project and compares the
 result with what it expects.
 
@@ -319,7 +319,9 @@ lists the rest, each rutter's among them.
   Nothing settles two rutters that give one attribute two values.
 - **One edge kind name for all rutters.** `php_basic`, `go_basic` and `python_text` each declare
   `calls` with different ends. So one project cannot load `php_basic` beside either of the others.
-- **Patterns run on Python's `re`, not RE2.** Use the RE2 subset. A variable-width lookbehind is refused.
+- **Patterns run on Python's `re`, not RE2.** Nothing checks for the RE2 subset, and
+  `laravel_basic` uses backreferences and lookarounds. Python `re` refuses only what it cannot
+  compile, such as a variable-width lookbehind.
 - **An unresolved end takes its first candidate type.** For example, `pathlib.Path` becomes a
   `python.function`. The map states a type it cannot know.
 - **One JSON file, and every run is a full run.** There is no split map and no incremental run.

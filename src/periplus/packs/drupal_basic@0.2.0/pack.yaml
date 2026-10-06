@@ -1,0 +1,161 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The walking-skeleton Drupal pack: every exported or installed configuration file becomes one
+# node. It is renamed to drupal when the reference packs retire.
+#
+# Known gaps. The basic Drupal pack maps, beside php_basic's classes, functions and methods:
+# - configuration, modules, themes, services with their tags and classes, routes, permissions,
+#   libraries, templates, entity types, bundles, fields, displays, menu links, local actions,
+#   block placements and the plugin kinds whose folders are named under folders below;
+# - each service that \Drupal::service('x') names in a PHP function or method, as a uses_service
+#   edge; each service that get('x') names on an object written $container, $this->container or
+#   \Drupal::getContainer(), as a uses_service edge with confidence inferred; and each entity type
+#   that \Drupal::entityQuery('x'), \Drupal::entityQueryAggregate('x') or getStorage('x') on an
+#   object written ending in entityTypeManager names, as a uses_entity_type edge. A service or an
+#   entity type that no mapped file declares, such as config.factory or node, ends at a referenced
+#   node: Drupal core and contributed modules are outside the mapped code;
+# - each method that carries a Hook attribute, and each function in a module, install, inc, theme
+#   or profile file whose name starts with the first part of the file name and an underscore, as
+#   an implements_hook edge to the hook the rest of the name gives: mymod_cron in mymod.module
+#   implements cron. A hook found by a function's name has confidence inferred.
+#
+# False results:
+# - Any function whose name starts with the first part of the file name reads as a hook: the form
+#   callback mymod_settings_submit reads as the hook settings_submit, the helper mymod_build_list
+#   as build_list, and mymod_update_NEXT as update_NEXT.
+# - The prefix is the file name, not an installed module's name. If Drupal core were inside the
+#   mapped folders, its files such as form.inc would give false hooks, such as select_options from
+#   form_select_options.
+# - A procedural function kept beside a Hook attribute method for the same hook, a LegacyHook shim,
+#   reads as a second implementation of that hook, though Drupal skips the shim.
+# - A function below one that carries the ProceduralHookScanStop attribute, and every function of
+#   a module that sets skip_procedural_hook_scan, still reads as a hook, though Drupal does not
+#   scan them.
+# - A misspelled service or entity type name ends at a referenced node, as a real one from core
+#   does, and not at an unresolved one.
+# - A $container or $this->container that is not Drupal's service container gives a false
+#   service.
+#
+# Missing results:
+# - A function in a file named other than its module or theme, such as includes/content.theme
+#   holding mytheme_ functions, gives no hook. Nor does a function named with another module's
+#   name, such as othermod_cron in mymod.module, which Drupal counts as a hook of othermod.
+# - A hook with a variable part keeps that part in its name: mymod_form_user_login_form_alter
+#   implements form_user_login_form_alter, not form_FORM_ID_alter.
+# - A class that extends ContentEntityBase and carries no ContentEntityType attribute or
+#   annotation, such as an abstract base or a bundle class, is not marked as an entity class. The
+#   map holds only its plain inherits edge.
+# - A service or entity type named by a variable, a constant or a concatenation gives no edge and
+#   goes under skipped. getStorage('x') on an object with another name, get('x') on a container
+#   with another name, and other entity type manager methods such as getViewBuilder('x') give no
+#   edge. Nor do \Drupal::config('x'), \Drupal::messenger() and the other static shortcuts.
+# - $etm->getStorage('x'), \Drupal::service('entity_type.manager')->getStorage('x') and
+#   $container->get('entity_type.manager')->getStorage('x') give no entity type edge. The last
+#   two give a service edge to entity_type.manager.
+# - The container rule reads only $container, $this->container and \Drupal::getContainer() as
+#   written. $this->getContainer()->get('x'), static::getContainer()->get('x'), a receiver split
+#   over lines, $container?->get('x') and another letter case, such as ->GET('x'), give no edge
+#   and no skipped row.
+# - A top-level function in a plain .php file in the custom folders makes no hook, so a
+#   post-update function in mymod.post_update.php gives no hook. Each such function leaves two
+#   skipped rows in the report: seven in contributed code left fourteen rows.
+#
+# Settings to know:
+# - Only the custom modules and themes are read as PHP. Move them with custom_module and
+#   custom_theme under folders. A folder setting may not leave the project root, so a site is
+#   mapped from inside its own tree or from a copy.
+# - This pack repeats php_basic's PHP grammar pin, because a pack that reads a file type as a tree
+#   must pin the grammar itself. A grammar update must change both packs.
+pack: drupal_basic
+version: 0.2.0
+depends: [yaml_basic, php_basic, twig_basic]
+
+# ======================================================================================
+# DETECTION
+#
+# What makes a checkout a Drupal checkout, so `periplus init` can prefill this pin. The
+# answer is written here rather than in the engine: recognising a stack is pack data, and
+# a pack somebody else wrote is detected exactly the way this one is.
+#
+# Neither signal is "there is PHP here". php_basic, yaml_basic and twig_basic are reached
+# through `depends` and declare no detector of their own, because a repository having PHP
+# in it is not a stack anybody pins.
+#
+# What init writes is a suggestion in a file the person then edits. A missed detection
+# costs them one typed line; a spurious one costs a wrong pin in a committed artifact. So
+# both signals below are things only a Drupal repository has.
+# ======================================================================================
+detect:
+  any_of:
+    # The dependency, which is the claim the repository makes about itself. `drupal/core`
+    # rather than `drupal/core-recommended`: the substring covers core, core-recommended
+    # and core-composer-scaffold, and every Drupal site requires at least one of them.
+    # Verified against drupal-cms/composer.json on 2026-08-28, which requires
+    # drupal/core-composer-scaffold, drupal/core-project-message and
+    # drupal/core-recommended.
+    - path: composer.json
+      contains: "drupal/core"
+
+    # The docroot, for a checkout that has core in the tree and no composer.json at the
+    # root -- core's own repository, and a site vendored without Composer. The filename
+    # alone is the evidence, so this signal needs no `contains`.
+    - path: web/core/lib/Drupal.php
+
+folders:
+  config:        ./config/sync
+  custom_module: ./web/modules/custom
+  custom_theme: ./web/themes/custom
+  # An extension's shipped configuration: config/install and config/optional.
+  module_config:
+  - "{custom_module}/**/config/install"
+  - "{custom_module}/**/config/optional"
+  - "{custom_theme}/**/config/install"
+  - "{custom_theme}/**/config/optional"
+  module_root: "{custom_module}/**"
+  theme_root: "{custom_theme}/**"
+  # php_basic's source, narrowed to the custom modules and themes at any depth.
+  source:
+  - "{custom_module}/**"
+  - "{custom_theme}/**"
+  # The folder a plugin kind is discovered in: the sub-folder its manager names, below a module's
+  # src folder, and every folder below it. A class elsewhere is not discovered. An entity type is
+  # discovered in src/Entity.
+  action_classes: "{module_root}/src/Plugin/Action/**"
+  ai_agent_classes: "{module_root}/src/Plugin/AiAgent/**"
+  ai_function_call_classes: "{module_root}/src/Plugin/AiFunctionCall/**"
+  block_plugin_classes: "{module_root}/src/Plugin/Block/**"
+  constraint_classes: "{module_root}/src/Plugin/Validation/Constraint/**"
+  entity_type_classes: "{module_root}/src/Entity/**"
+  field_formatter_classes: "{module_root}/src/Plugin/Field/FieldFormatter/**"
+  field_type_classes: "{module_root}/src/Plugin/Field/FieldType/**"
+  field_widget_classes: "{module_root}/src/Plugin/Field/FieldWidget/**"
+  media_source_classes: "{module_root}/src/Plugin/media/Source/**"
+  queue_job_type_classes: "{module_root}/src/Plugin/AdvancedQueue/JobType/**"
+  rest_resource_classes: "{module_root}/src/Plugin/rest/resource/**"
+
+files:
+  # The Drupal endings that hold PHP, added to php_basic's list.
+  extends: php_basic
+  add_extensions: [module, install, inc, theme, profile, engine]
+  # The Group module's group.permissions files hold Group permissions, not Drupal permissions, and
+  # their stem also ends in .permissions.
+  exclude:
+  - '**/*.group.permissions.yml'
+  types:
+    # php_basic's type, given the path value extension: the first part of a module, install,
+    # include, theme or profile file's name, which its procedural hook functions start with.
+    # Absent for any other ending. A type read as a tree needs its pack to pin the grammar,
+    # php_basic's pin repeated.
+    php:
+      endings: [module, install, inc, theme, profile]
+      reader: tree
+      path_values:
+        extension:
+          pattern: '^(?:.*/)?(?<name>[^/.]+)\.(?:[^/]+\.)?(?:module|install|inc|theme|profile)$'
+          template: '{name}'
+
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.0"
+  language: php
+  grammar_version: "0.24.1"

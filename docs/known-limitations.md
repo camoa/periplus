@@ -1,8 +1,8 @@
 # Known limitations
 
 The README's Known limitations section lists the limits a new user meets first. This page lists
-the rest. `go_basic@0.0.3/pack.yaml` and
-`laravel_basic@0.0.5/pack.yaml` each open with a list of their known gaps.
+the rest. `php_basic@0.2.0/pack.yaml`, `drupal_basic@0.2.0/pack.yaml`, `go_basic@0.0.3/pack.yaml`
+and `laravel_basic@0.0.5/pack.yaml` each open with a list of their known gaps.
 
 ## The engine
 
@@ -10,12 +10,49 @@ the rest. `go_basic@0.0.3/pack.yaml` and
 
 ## The rutters
 
-- **PHP:** a method call on an object, `$x->m()`, is not stated. A built-in function called
-  inside a namespace gets the namespace's name, `App\strlen`. `use function` aliases do not bind.
+- **PHP:** a method call on an object, `$x->m()`, is not stated. `use function` aliases do not
+  bind. A call to a PHP built-in function makes nothing, but the names are compared as written:
+  `\strlen()` and `StrLen()` still give an unresolved function. A built-in of an extension that
+  was not loaded when the list was taken is not listed. A project's own function named like a
+  built-in, `function strlen()` in its namespace, gets no edge from an unqualified call. Drupal's
+  global functions, such as `t()`, are not built-ins and give an unresolved function.
   `skip_names` matches the exact case, so `ISSET(` still gives an unresolved function.
-- **Drupal:** hooks written as plain functions are nodes but are not marked as hooks. Template
-  `embed` and `include` give no edge. Plugin types that contributed modules define need their own rutter.
-  Things generated at run time, such as a route from a view, appear as `referenced`.
+- **Drupal:** template `embed` and `include` give no edge. Plugin types that contributed modules
+  define need their own rutter. Things generated at run time, such as a route from a view, appear
+  as `referenced`. A service or entity type that no mapped file declares, such as `config.factory`
+  or `node`, appears as `referenced`, and so does a misspelled name. A service that `get('x')`
+  names on an object written `$container`, `$this->container` or `\Drupal::getContainer()` gives
+  an edge with confidence `inferred`, so a `$container` or `$this->container` that is not Drupal's
+  service container gives a false service.
+- **Drupal, hooks:** a function in a module, install, include, theme or profile file is a hook
+  when its name starts with the first part of the file name and an underscore. So any function
+  that starts with the first part of the file name reads as a hook, such as the form callback
+  `mymod_settings_submit`, the helper `mymod_build_list` or `mymod_update_NEXT`. The prefix is
+  the file name, not an installed module, so Drupal core inside the mapped folders would give false
+  hooks from files such as `form.inc`. A procedural shim kept beside a `Hook` attribute method for
+  the same hook, a `LegacyHook` shim, reads as a second implementation. A function below one that
+  carries `ProceduralHookScanStop`, and every function of a module that sets
+  `skip_procedural_hook_scan`, still reads as a hook, though Drupal does not scan them. A file
+  named other than its module or theme gives no hook. Nor does a function named with another module's name, such
+  as `othermod_cron` in `mymod.module`. A hook with a variable part keeps it:
+  `mymod_form_user_login_form_alter` implements `form_user_login_form_alter`. A function in a plain
+  `.php` file gives no hook, so a post-update function in `mymod.post_update.php` gives no hook. It
+  leaves two skipped rows in the report.
+- **Drupal, missing results:** a class that extends `ContentEntityBase` with no entity type
+  attribute or annotation, such as an abstract base or a bundle class, is not marked as an entity
+  class. A service or entity type named by a variable gives no edge and goes under skipped.
+  `getStorage('x')` on an object not named `entityTypeManager`, `get('x')` on a container with
+  another name, other entity type manager methods such as `getViewBuilder('x')`, and static
+  shortcuts such as `\Drupal::config('x')` give no edge. `$etm->getStorage('x')`,
+  `\Drupal::service('entity_type.manager')->getStorage('x')` and
+  `$container->get('entity_type.manager')->getStorage('x')` give no entity type edge. The last two
+  give a service edge to `entity_type.manager`. The container rule reads only `$container`,
+  `$this->container` and `\Drupal::getContainer()` as written: `$this->getContainer()->get('x')`,
+  `static::getContainer()->get('x')`, a receiver split over lines, `$container?->get('x')` and
+  another letter case, such as `->GET('x')`, give no edge and no skipped row.
+- **Drupal, settings to know:** only the custom modules and themes are read as PHP. A folder
+  setting may not leave the project root, so a site is mapped from inside its own tree.
+  `drupal_basic` repeats `php_basic`'s grammar pin, so a grammar update must change both.
 - **Python:** text rules see no scopes. Every call starts at the module, and a local name that
   shadows an import gives a false edge. Method calls on objects and imports re-exported through
   another file are not followed. More forms are listed in the author guide.

@@ -3,8 +3,34 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # The basic PHP pack: every class, interface, trait, enum, function and method becomes a node
 # under its full name, and a class-like gets its inherits, implements, mixes_in and contains edges.
 # It sits beside the reference pack php and does not replace it.
+#
+# Known gaps. A call to a function PHP itself defines, such as strlen() or json_decode(), makes
+# nothing: the rule calls_function lists the 2150 names get_defined_functions()['internal']
+# returned in one run of PHP 8.5.11 (cli, NTS), beside PHP's language constructs; exit and die are
+# in both and listed once. That run loaded
+# these extensions: Core, date, lexbor, openssl, pcre, sqlite3, zlib, bcmath, bz2, calendar, ctype,
+# curl, dba, uri, json, mbstring, SPL, FFI, fileinfo, filter, ftp, gd, gettext, gmp, hash, iconv,
+# intl, session, ldap, standard, libxml, mysqlnd, mysqli, odbc, Zend OPcache, pcntl, PDO,
+# pdo_dblib, pdo_mysql, PDO_ODBC, pdo_pgsql, pdo_sqlite, pgsql, Phar, posix, random, readline,
+# Reflection, exif, shmop, SimpleXML, snmp, soap, sockets, sodium, sysvmsg, sysvsem, sysvshm, tidy,
+# tokenizer, dom, xml, xmlreader, xmlwriter, xsl, zip. A function of an extension not loaded there
+# is not listed.
+#
+# False results:
+# - The names are compared with the text as written. A builtin called with a leading backslash,
+#   \strlen(), or in another letter case, StrLen(), still gives an unresolved function node.
+# - A function the project declares under a builtin name, function strlen() in its namespace, gets
+#   no calls edge from an unqualified call to it: no rule can yet try the namespaced name and then
+#   the bare one in order.
+# - Drupal's global functions, such as t(), drupal_flush_all_caches() and theme_get_setting(), are
+#   not PHP builtins: a call to one still gives an unresolved function node.
+#
+# Missing results:
+# - A method call on an object, $x->m(), makes nothing: only plain function calls and static
+#   calls are read.
+# - A use function alias does not bind.
 pack: php_basic
-version: 0.1.0
+version: 0.2.0
 depends: []
 
 # Pinned exactly: the rules name tree node types, and those can change across grammar releases.

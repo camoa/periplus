@@ -5,8 +5,8 @@
 # the project holds no such function or method. A method call on an object, a call on self or
 # static, and a call outside any function give nothing; the last two are listed under skipped. A
 # function imported by `use function x as y` is not bound, so y() resolves under the namespace.
-# The constructs isset($x) and empty($y), which the grammar parses as calls, give no edge and no
-# node: php_basic's calls_function lists them under skip_names.
+# The constructs isset($x) and empty($y), which the grammar parses as calls, and the builtin
+# strlen('x') give no edge and no node: php_basic's calls_function lists them under skip_names.
 # Every call sits past line 256. Then a planted rutter on php_basic narrows php_basic's source to
 # src and reads an extra folder only with its reference rule: the call there is skipped and gets
 # no phantom source. That rule writes its end in the one-type form, to: {type: ...}.
@@ -16,7 +16,7 @@ trap 'rm -rf "$work"' EXIT
 python="$(head -1 "$(command -v "$PERIPLUS")" | sed 's/^#!//')"
 site="$work/site"
 mkdir -p "$site/.periplus" "$site/src/App" "$site/src/Lib"
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.1.0\n' >"$site/.periplus/settings.yml"
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n' >"$site/.periplus/settings.yml"
 cat >"$site/src/Lib/Util.php" <<'EOF'
 <?php
 
@@ -125,7 +125,6 @@ expected = {  # (from, to): (lines, searched_for when unresolved)
     (caller, M + "App\\Lib\\Util::make"): (at("main", r"    Util::make\(\);"), None),
     (caller, M + "Drupal::service"): (at("main", r"    \\Drupal::service\('x'\);"), "Drupal::service"),
     (caller, F + "App\\missing"): (at("main", r"    missing\(\);"), "App\\missing"),
-    (caller, F + "App\\strlen"): (at("main", r"    strlen\('x'\);"), "App\\strlen"),
     (caller, F + "App\\h"): (at("main", r"    h\(\);"), "App\\h"),
     (run, F + "App\\local"): ([method], None),
     (run, M + "App\\Lib\\Util::make"): (at("main", r"        Util::make\(\);"), None),
@@ -150,9 +149,9 @@ for (_, end), (_, searched) in expected.items():
         assert node["state"] == "unresolved" and node["type"] == end.split("::")[0], node
         assert node["unresolved_detail"]["searched_for"] == searched, node
 unresolved = sum(s is not None for _, s in expected.values())
-constructs = at("main", r"    isset\(\$x\);") + at("main", r"    empty\(\$y\);")
+constructs = at("main", r"    isset\(\$x\);") + at("main", r"    empty\(\$y\);") + at("main", r"    strlen\('x'\);")
 assert not [e for e in calls if any(loc["line"] in constructs for loc in e["locations"])]
-assert not [n for n in nodes if n.rsplit("\\", 1)[-1] in ("isset", "empty")], sorted(nodes)
+assert not [n for n in nodes if n.rsplit("\\", 1)[-1] in ("isset", "empty", "strlen")], sorted(nodes)
 # A method call on an object gives nothing: no edge sits on its line.
 objects = at("main", r"    \$obj->m\(\);") + at("main", r"        \$this->other\(\);")
 assert not [e for e in calls if any(loc["line"] in objects for loc in e["locations"])]
@@ -189,7 +188,7 @@ rules:
 - rule: call_function
   reads: file
   in: [code, extra]
-  match: {reference: function_call_expression, name_child: function, filetype: php, skip_names: [isset, empty]}
+  match: {reference: function_call_expression, name_child: function, filetype: php, skip_names: [isset, empty, strlen]}
   emits:
   - edge:
       kind: calls_planted

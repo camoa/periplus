@@ -679,7 +679,7 @@ def test_init_prefills_the_pack_it_detected_in_the_directory_it_ran_in(tmp_path:
     document = load_settings_document(project / ".periplus" / "settings.yml")
     packs = document.get("packs")
     assert packs is not None, "`periplus init` in a Drupal checkout declared no `packs:`"
-    assert list(packs) == ["drupal_basic@0.1.0"]
+    assert list(packs) == ["drupal_basic@0.2.0"]
 
 
 def test_init_in_a_directory_matching_no_pack_still_exits_zero(tmp_path: Path) -> None:

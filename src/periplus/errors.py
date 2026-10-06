@@ -215,7 +215,8 @@ class ExitCode(IntEnum):
     #: are separate fields because they are faults in different files with different owners.
     SCHEMA_INVALID = 16
 
-    #: ``periplus map`` built a document its own schema refuses: an engine defect, nothing written.
+    #: ``periplus map`` built a document its own schema refuses, an engine defect; or the project
+    #: pins no rutter, which stops the run before anything is built. Nothing is written.
     MAP_INVALID = 17
 
     #: A folder name is unknown, cyclic, in conflict between packs, or leaves the project root.

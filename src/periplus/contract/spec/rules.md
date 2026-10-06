@@ -74,10 +74,15 @@ Lose a complementary rule and the thing never appears.
 
 ```
 from        a named source: a file stem, a matched argument, a captured value
-pattern     optional. RE2 over that source
+pattern     optional. searched in that source; its named captures become parts
 template    optional. assembles the parts into the id
 normalize   optional. declared substitutions
 ```
+
+The steps run in that order: from, pattern, template, normalize. On a tree declaration rule,
+`pattern` reads one source and is searched in its text, not matched whole. A source it does not
+fit makes nothing: no node, no edge, no skipped row, and no fire. A `{name}` in the pattern is a
+path value or a settings value, filled in as literal text.
 
 This closed the sharpest question the design had open — whether id transformations are a
 closed set of engine functions, in which case a pack needing a new one needs a release. They
@@ -183,6 +188,16 @@ id block that already existed. What is left is `from`, `template`, `where` for f
 `each` for cardinality — three of which are the id block and one of which is not identity at
 all.
 
+A tree declaration rule's end may also be `{declared: <type>}`: the id of the node of that
+type that a rule of the same pack, or of a pack it depends on, declares at the same match; the
+first such rule that fires there and mints an id gives it. The type must be declared by one of
+those packs, or the map stops with exit 23, and must meet the kind's types at that end, or it
+stops with exit 22. When no such rule mints an id there, the edge is not made and one skipped row
+names the end; when no rule maps that id, the end is a referenced node of the named type alone.
+The end does not test the other rule's folders. It, `enclosing_class` and `enclosing_method` take
+another rule's whole id, so an end filled only by whole ids may list types with different id
+namespaces.
+
 ---
 
 ## 11. A match is one kind plus a `where` list
@@ -199,6 +214,11 @@ Everything else was a condition wearing the wrong shape — `in_method_with_attr
 
 Two conditions force `reads: map`, because they cannot be answered from one file:
 `ancestor_reaches` and `contained_by_type`.
+
+`name_matches` tests a child's whole text. Its string form tests the first `name_child`. Its
+mapping form, `{child: scope, pattern: Config}`, names the child: a field of the match, or else
+its first child of that node type. So one rule can test a call's class and its method. A match
+without that child, or whose child does not match, makes nothing and is not a fire.
 
 ---
 

@@ -15,6 +15,7 @@ from typing import Any
 from tree_sitter import Node
 
 from periplus.engine.packload import (
+    PATTERN_VALUE,
     PLACEHOLDER,
     TEXT,
     Condition,
@@ -113,6 +114,9 @@ class FoundEdge:
     candidates: tuple[str, ...] = ()
     #: The composed end's candidate types, in the order tried; empty when the spec lists none.
     types_tried: tuple[str, ...] = ()
+    #: The ends, ``source`` or ``target``, written ``{declared: <type>}``: when no rule finds such
+    #: an end, it takes its named type alone, not the kind's.
+    declared_ends: tuple[str, ...] = ()
 
 
 def run_file_rules(
@@ -510,8 +514,8 @@ def _declarations(
 ) -> int:
     """The nodes or edges of each tree node of the rule's declaration type; the number of fires.
 
-    A match without a direct child of each ``has_child`` type, or whose name child's text does not
-    match each ``name_matches`` pattern, is passed. A match whose name child is missing, or whose
+    A match without a direct child of each ``has_child`` type, or failing a ``name_matches``
+    condition, is passed. A match whose name child is missing, or whose
     id names a source it lacks, is skipped; a field or value it lacks is listed in ``skipped`` once
     per file, at the first match that lacks it. A match whose id argument is missing, empty or not
     a text literal is skipped and listed at each such match. A node sits at the line
@@ -533,19 +537,21 @@ def _declarations(
         holder_id = None
         if holder is not None:
             values["enclosing_type"], holder_id = holder
-        node_id = _fill(rule.id_template, values) or ""
+        node_id: str | None
         if rule.id_argument:
-            _, literal, row = _argument(match, rule.id_argument, grammar, call=True)
-            if not literal:
+            node_id, row = _call_id(match, rule, grammar)
+            if node_id is None:
                 skipped.append((file, line, rule.name, row))
                 continue
-            node_id = literal
-        if rule.id_template and not node_id:
-            for name in _lacking(rule.id_template, grammar, values) - absent:
-                absent.add(name)
-                skipped.append((file, line, rule.name, f"the id source {name} is absent"))
-            continue
-        node_id = _reshape(node_id, rule.normalize)
+        elif rule.id_template:
+            node_id = _node_id(rule, values)
+            if node_id is None:
+                for name in _lacking(rule, grammar, values) - absent:
+                    absent.add(name)
+                    skipped.append((file, line, rule.name, f"the id source {name} is absent"))
+                continue
+        else:
+            node_id = _reshape("", rule.normalize)
         fired += 1
         before, silent, written = len(nodes) + len(edges), 0, len(skipped)
         if rule.node_type:
@@ -563,7 +569,10 @@ def _declarations(
         for spec in rule.edges:
             kind = rule_set.edge_kinds[spec.kind]
             ends: list[list[tuple[str, int]]] = []
-            for end, allowed in ((spec.start, kind.from_types), (spec.finish, kind.to_types)):
+            for end, allowed, declared in (
+                (spec.start, kind.from_types, spec.declared[0]),
+                (spec.finish, kind.to_types, spec.declared[1]),
+            ):
                 namespace = next(iter(namespaces(types, allowed)), None)
                 unwritten = False
                 if end == "this_node":
@@ -571,6 +580,19 @@ def _declarations(
                     ends.append([(f"{twin}::{node_id}", line)])
                 elif end == "enclosing_class":
                     ends.append([(holder_id, line)] if holder_id else [])
+                elif declared:
+                    found = _minted(
+                        match,
+                        holder[0] if holder else None,
+                        rule.filetype,
+                        rule_set,
+                        within,
+                        grammar,
+                        parsed,
+                        declared,
+                    )
+                    ends.append([(found, line)] if found else [])
+                    end = f"{{declared: {declared}}}"
                 else:
                     ends.append(
                         [
@@ -588,7 +610,21 @@ def _declarations(
                     skipped.append((file, line, rule.name, lacking))
             edges.extend(
                 FoundEdge(
-                    spec.kind, source, target, file, at, rule.pack, rule.name, rule.confidence
+                    spec.kind,
+                    source,
+                    target,
+                    file,
+                    at,
+                    rule.pack,
+                    rule.name,
+                    rule.confidence,
+                    target_type=spec.declared[1],
+                    source_type=spec.declared[0],
+                    declared_ends=tuple(
+                        side
+                        for side, named in zip(("source", "target"), spec.declared, strict=True)
+                        if named
+                    ),
                 )
                 for (source, _), (target, at) in product(*ends)
             )
@@ -852,11 +888,11 @@ def _annotation(
 
 
 def _fires(rule: Rule, node: Node) -> bool:
-    """Whether the tree node has a direct child of each of the rule's ``has_child`` types, and the
-    whole text of its name child matches each of the rule's ``name_matches`` patterns."""
-    name = _child(node, rule.name_child) if rule.name_matches else None
+    """Whether the tree node has a direct child of each of the rule's ``has_child`` types, and has
+    each ``name_matches`` child, whose whole text matches that condition's pattern."""
     return all(any(c.type == kind for c in node.children) for kind in rule.has_child) and all(
-        name is not None and pattern.fullmatch(text_of(name)) for pattern in rule.name_matches
+        (found := _child(node, child)) is not None and pattern.fullmatch(text_of(found))
+        for child, pattern in rule.name_matches
     )
 
 
@@ -871,6 +907,13 @@ def _argument(
         "is missing" if value is None else "is empty" if literal == "" else "is not a text literal"
     )
     return value, literal, f"argument {key} {state}"
+
+
+def _call_id(node: Node, rule: Rule, grammar: Grammar) -> tuple[str | None, str]:
+    """The bare id the rule's call argument gives at the node, ``None`` when it holds no text;
+    and the skipped row for no text."""
+    _, literal, row = _argument(node, rule.id_argument, grammar, call=True)
+    return (_reshape(literal, rule.normalize) if literal else None), row
 
 
 def _holder_rules(
@@ -898,38 +941,43 @@ def _holder_rules(
 
 def _minted(
     node: Node,
-    holder: str,
+    holder: str | None,
     filetype: str,
     rule_set: RuleSet,
     within: frozenset[str],
     grammar: Grammar,
     parsed: ParsedFile,
+    node_type: str = "",
 ) -> str | None:
-    """The id the first node rule that fires on the tree node mints for it, inside the type
-    ``holder``.
+    """The id the first node rule that fires on the tree node and mints an id there gives it,
+    inside the type ``holder`` when there is one, of the type ``node_type`` when that is given.
 
-    Only rules of the packs in ``within`` count, as in ``_holder_rules``.
+    Only rules of the packs in ``within`` count, as in ``_holder_rules``. A rule that fires and
+    mints no id passes the node to the next, for ``enclosing_method`` as for ``{declared: <type>}``.
     """
-    rule = next(
-        (
-            other
-            for other in rule_set.rules
-            if other.supported
-            and other.node_type
-            and other.declaration == node.type
-            and other.filetype == filetype
-            and other.pack in within
-            and _fires(other, node)
-        ),
-        None,
-    )
-    values = _names(node, rule, grammar, parsed) if rule is not None else None
-    if rule is None or values is None:
-        return None
-    node_id = _fill(rule.id_template, {**values, "enclosing_type": holder})
-    if not node_id:
-        return None
-    return f"{namespace_of(rule_set.types, rule.node_type)}::{_reshape(node_id, rule.normalize)}"
+    for rule in rule_set.rules:
+        if not (
+            rule.supported
+            and rule.node_type
+            and rule.node_type == (node_type or rule.node_type)
+            and rule.declaration == node.type
+            and rule.filetype == filetype
+            and rule.pack in within
+            and _fires(rule, node)
+        ):
+            continue
+        values = _names(node, rule, grammar, parsed)
+        if values is None:
+            continue
+        if rule.id_argument:
+            node_id, _ = _call_id(node, rule, grammar)
+        else:
+            node_id = _node_id(
+                rule, values if holder is None else {**values, "enclosing_type": holder}
+            )
+        if node_id is not None:
+            return f"{namespace_of(rule_set.types, rule.node_type)}::{node_id}"
+    return None
 
 
 def _names(node: Node, rule: Rule, grammar: Grammar, parsed: ParsedFile) -> dict[str, Any] | None:
@@ -957,10 +1005,20 @@ def _names(node: Node, rule: Rule, grammar: Grammar, parsed: ParsedFile) -> dict
     return values
 
 
-def _lacking(template: str, grammar: Grammar, values: Mapping[str, Any]) -> set[str]:
-    """The fields and values the template names that are absent, a full name standing for its
-    absent parts; an absent enclosing type is not one, since no enclosing type is not a gap."""
-    names = set(PLACEHOLDER.findall(template)) - set(values) - {"enclosing_type"}
+def _lacking(rule: Rule, grammar: Grammar, values: Mapping[str, Any]) -> set[str]:
+    """The fields and values the id template names that are absent, a full name standing for its
+    absent parts; an absent enclosing type is not one, since no enclosing type is not a gap.
+
+    With an id pattern, its source and the values it names count too, and its captures do not; a
+    source the pattern does not fit lacks nothing."""
+    names = set(PLACEHOLDER.findall(rule.id_template)) - set(values) - {"enclosing_type"}
+    if rule.id_pattern:
+        pattern, source = _id_pattern(rule, values), values.get(rule.id_source)
+        if pattern is not None and source is not None and pattern.search(source) is None:
+            return set()
+        captures = set(compile_pattern(PATTERN_VALUE.sub("", rule.id_pattern)).groupindex)
+        named = {rule.id_source, *PATTERN_VALUE.findall(rule.id_pattern)}
+        names = names - captures | named - set(values)
     if "qualified_name" in names:
         names = names - {"qualified_name"} | {p for p in grammar.parts if p not in values}
     if "namespace" in names and grammar.namespace_value:
@@ -987,11 +1045,11 @@ def _holder(
         rule = next((r for r in holders.get(parent.type, ()) if _fires(r, parent)), None)
         if rule is not None:
             values = _names(parent, rule, grammar, parsed)
-            node_id = _fill(rule.id_template, values) if values is not None else None
+            node_id = _node_id(rule, values, empty_ok=True) if values is not None else None
             if values is None or node_id is None or "qualified_name" not in values:
                 return None
             namespace = namespace_of(rule_set.types, rule.node_type)
-            return values["qualified_name"], f"{namespace}::{_reshape(node_id, rule.normalize)}"
+            return values["qualified_name"], f"{namespace}::{node_id}"
         if any(child.type in bodies for child in parent.children):
             return None
         parent = parent.parent
@@ -1162,8 +1220,8 @@ def _references(
     steps then run on that name. A reference with no enclosing declaration, whose name child is not
     a written name, or holds a node that is not one under ``whole_written``, whose argument is
     missing, empty or not a text literal, or that no step gives a name, makes nothing and is listed
-    in ``skipped``. A name written exactly as one of the rule's ``skip_names``, or whose text does
-    not match each ``name_matches`` pattern, makes nothing, is not listed and is not a fire. An edge
+    in ``skipped``. A name written exactly as one of the rule's ``skip_names``, or a match failing a
+    ``name_matches`` condition, makes nothing, is not listed and is not a fire. An edge
     sits at the reference's line.
     """
     holders = _holder_rules(rule_set, rule.filetype, within)
@@ -1294,9 +1352,8 @@ def _enclosing(
             holder = _holder(parent, holders, rule_set, grammar, parsed)
             if holder is not None:
                 values["enclosing_type"] = holder[0]
-            node_id = _fill(rule.id_template, values)
-            if node_id:
-                node_id = _reshape(node_id, rule.normalize)
+            node_id = _node_id(rule, values)
+            if node_id is not None:
                 return f"{namespace_of(rule_set.types, rule.node_type)}::{node_id}"
         parent = parent.parent
     return None
@@ -1412,6 +1469,35 @@ def _fill(template: str | None, values: Mapping[str, str]) -> str | None:
     if template is None or any(name not in values for name in PLACEHOLDER.findall(template)):
         return None
     return PLACEHOLDER.sub(lambda found: values[found.group(1)], template)
+
+
+def _node_id(rule: Rule, values: Mapping[str, str], *, empty_ok: bool = False) -> str | None:
+    """The rule's bare id: its template filled from ``values``, then each normalize step applied.
+
+    ``None`` when the template names a key ``values`` lacks, or when the filled text is empty and
+    ``empty_ok`` is false; the empty test comes before any normalize step. An id pattern runs
+    first: searched in the text of its source, its named captures join ``values``; ``None`` when
+    the source or a value the pattern names is absent, or the pattern does not fit.
+    """
+    if rule.id_pattern:
+        pattern, source = _id_pattern(rule, values), values.get(rule.id_source)
+        found = pattern.search(source) if pattern is not None and source is not None else None
+        if found is None:
+            return None
+        values = {**values, **{k: v for k, v in found.groupdict().items() if v is not None}}
+    filled = _fill(rule.id_template, values)
+    if filled is None or not (filled or empty_ok):
+        return None
+    return _reshape(filled, rule.normalize)
+
+
+def _id_pattern(rule: Rule, values: Mapping[str, str]) -> re.Pattern[str] | None:
+    """The rule's id pattern, each ``{name}`` filled with that value as literal text; ``None`` when
+    a value it names is absent."""
+    if any(name not in values for name in PATTERN_VALUE.findall(rule.id_pattern)):
+        return None
+    filled = PATTERN_VALUE.sub(lambda found: re.escape(values[found.group(1)]), rule.id_pattern)
+    return compile_pattern(filled)
 
 
 def _matches(

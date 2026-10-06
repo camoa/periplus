@@ -12,7 +12,7 @@ on `yaml_basic`, `php_basic` and `twig_basic`, so its rules may name their types
 `grammar` pins the parser exactly, because the rules name tree node types and those change across
 releases. `folders` names where the rules read. `files` claims the endings and excludes folders.
 
-```yaml php_basic@0.1.0/pack.yaml
+```yaml php_basic@0.2.0/pack.yaml
 grammar:
   provider: tree-sitter
   provider_version: "0.26.0"
@@ -29,7 +29,7 @@ name. `namespace` names the tree node that declares one. `written_names` lists t
 written name. `resolve` turns a written name into a full one. The next two keys, `attribute` and
 `comment`, name the tree nodes of an attribute and a docblock; the plugin rules below read them.
 
-```yaml php_basic@0.1.0/pack.yaml
+```yaml php_basic@0.2.0/pack.yaml
 identity:
   qualified_name:
     parts: [namespace, declared_name]
@@ -54,7 +54,7 @@ which must be a field of the clause, else by its path's last segment; a grouped 
 prefix; a function or const use binds nothing. Segments split on the `qualified_name` separator only, so with Go's dot
 separator `"a/b"` binds whole; [`path` and `normalize`](rutter-author-guide-imports.md) bind b.
 
-```yaml php_basic@0.1.0/imports/imports.yaml
+```yaml php_basic@0.2.0/imports/imports.yaml
 imports:
 - ast: namespace_use_declaration
   group_ast: namespace_use_group
@@ -72,7 +72,7 @@ imports:
 A declaration rule fires once per tree node of the named type. `name_child` holds the name and
 `body_child` the methods; the id is the full name.
 
-```yaml php_basic@0.1.0/types/find_declarations.yaml
+```yaml php_basic@0.2.0/types/find_declarations.yaml
 - rule: find_class
   reads: file
   in: [source]
@@ -85,7 +85,7 @@ A declaration rule fires once per tree node of the named type. `name_child` hold
 A structure rule makes one edge per name written in a clause, from the enclosing class to the
 name's full form.
 
-```yaml php_basic@0.1.0/edges/find_structure.yaml
+```yaml php_basic@0.2.0/edges/find_structure.yaml
 - rule: inherits_from_base_clause
   reads: file
   in: [source]
@@ -102,7 +102,7 @@ contrib. `custom_module` is `./web/modules/custom`; `module_root` is each folder
 below it. Each plugin kind reads its own folder below a module's `src`: `block_plugin_classes` is
 `{module_root}/src/Plugin/Block/**`. A class outside that folder is not a plugin.
 
-```yaml drupal_basic@0.1.0/pack.yaml
+```yaml drupal_basic@0.2.0/pack.yaml
 # php_basic's source, narrowed to the custom modules and themes at any depth.
 source:
 - "{custom_module}/**"
@@ -114,7 +114,7 @@ source:
 An attribute rule matches a PHP attribute by its class name, on a class. `must_be` refuses a
 constant id, which goes under `skipped`.
 
-```yaml drupal_basic@0.1.0/block_plugin/block_plugin_attribute.yaml
+```yaml drupal_basic@0.2.0/block_plugin/block_plugin_attribute.yaml
 - rule: block_plugin_from_attribute
   reads: file
   in:
@@ -134,7 +134,7 @@ An annotation rule, `block_plugin_from_annotation`, reads the docblock before a 
 differs from the attribute rule in its match and id: it takes the id from the `id` key, and also
 records `admin_label` on the node.
 
-```yaml drupal_basic@0.1.0/block_plugin/block_plugin_annotation.yaml
+```yaml drupal_basic@0.2.0/block_plugin/block_plugin_annotation.yaml
 match:
   annotation: Block
   filetype: php
@@ -151,7 +151,7 @@ conditions that must all hold: `id_matches` tests that key against a pattern, he
 underscore, and `key` tests a value below it, here that `alias` is set. `id` with `from: key` takes
 the key itself, the service's name.
 
-```yaml drupal_basic@0.1.0/service/service_definition.yaml
+```yaml drupal_basic@0.2.0/service/service_definition.yaml
 - rule: service_alias_from_services_file
   reads: file
   in:

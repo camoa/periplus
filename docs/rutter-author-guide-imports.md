@@ -8,7 +8,9 @@ read a call's arguments.
 Some languages write an import as a path with another separator than their names use, and call
 through it with a dotted name. Check 97k-import-names-and-dotted-references proves each import key
 below on a planted PHP rutter read that way. Check 98d-laravel-pack, check
-97l-call-arguments-second-grammar and tests/test_argument_ends.py prove the call-argument keys.
+97l-call-arguments-second-grammar and tests/test_argument_ends.py prove the call-argument keys. Only
+tests/test_argument_ends.py proves `call_argument_name` and `call_literal_delimiters`, and only on
+PHP.
 
 An import's `bind.name` source `path` is the whole written path. `bind.normalize` runs its replace
 and with steps, in order, on the bound name, whichever source gave it; the binding's target stays
@@ -44,7 +46,10 @@ row under `skipped` names the other edge.
 ## A call's argument and its name
 
 `name_matches` in `where`, on a tree declaration or reference rule, passes over with no row or fire
-a match whose first `name_child` field's whole text does not match.
+a match whose first `name_child` field's whole text does not match. The mapping form names the
+child it tests, by field or else by node type, so one rule can test two parts of a call:
+`where: [{name_matches: {child: scope, pattern: Reg}}, {name_matches: {child: name, pattern: get}}]`
+fires on `Reg::get()` alone. A match without that child fails the condition, with no row.
 
 A reference end `from: {argument: 0}` takes the text literal of the call's first argument. The
 grammar's steps do not run on it, and the end's own steps do. A variable, missing or empty argument
@@ -81,7 +86,7 @@ Keys under `identity` say how the grammar writes a call's arguments. They are re
 
 `php_basic` wraps each argument and names it:
 
-```yaml php_basic@0.1.0/pack.yaml
+```yaml php_basic@0.2.0/pack.yaml
 # A call's arguments: their field, one argument and the field of its name, and the text
 # literals with the node of their text. view('a') holds 'a' at position 0.
 call_arguments: arguments
@@ -101,8 +106,10 @@ call_literals: [interpreted_string_literal, raw_string_literal]
 call_literal_content: [interpreted_string_literal_content, raw_string_literal_content]
 ```
 
-These keys are proven on these two grammars, by check 97l-call-arguments-second-grammar for Go. A
-grammar whose string node holds named delimiter children, such as a start and an end quote,
+These keys are proven on these two grammars, by check 97l-call-arguments-second-grammar for Go,
+except two. On PHP, tests/test_argument_ends.py maps `show(x: 'c')` and `show("b\n")` with each key
+and without it: a named argument is not read at its position, and a declared `escape_sequence` is
+skipped. No test plants either key on Go. A grammar whose string node holds named delimiter children, such as a start and an end quote,
 declares them in `call_literal_delimiters`; no bundled pack does yet.
 
 A declaration rule's id may come from an argument too, with an optional `normalize` and no other
