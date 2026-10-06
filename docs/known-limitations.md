@@ -119,21 +119,6 @@ and `laravel_basic@0.0.5/pack.yaml` each open with a list of their known gaps.
   `config_key_in_file`. A views folder set
   without a final `/**` reads only the files directly in it.
 
-## Not yet verified
-
-The independent checkers and hand audits named below were runs on private code. They are not part
-of this repository.
-
-- The Laravel map, against an independent checker or a hand audit. Only its configuration keys
-  were compared with PHP's own reading.
-- Go declarations and same-package calls, against an independent checker. Only the pack's
-  author's script has checked them, on 0.0.1, and it treats each function as one scope. Go calls
-  into imported packages are checked by an independent checker on two projects only. No hand
-  audit has read a Go map.
-- Drupal call edges, beyond the 43-edge hand audit. The Drupal checker does not read calls yet.
-- Whether an AI that reads a map explains the code better than one that searches the files.
-- The audits are samples, read by models, not a running Drupal site.
-
 ## Not yet built
 
 - Go method calls on a value. A call written `v.M()` is not mapped, because the rutter cannot know the
