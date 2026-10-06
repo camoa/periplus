@@ -1,0 +1,1320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://periplus.dev/schema/0/pack-file.schema.json",
+  "title": "Periplus pack file",
+  "description": "One file inside a pack directory. Derived from 48 worked rules across 13 Drupal concepts, not from design. Every key here appears in at least one of them; nothing here is speculative.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "description": "The contract this file is written against, by the `$id` of the schema above. Allowed here because the top level refuses every key it does not declare, so a file carrying the key an editor reads would otherwise be invalid for saying which rules it follows. What the key claims is which contract the file was authored against; it does not claim that anything resolves the URL today.",
+      "type": "string"
+    },
+    "needs": {
+      "description": "What this file contributes to but does not declare. Checked before any source file is opened, so a typo fails the build instead of minting a type nothing finds.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "types": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/typeName"
+          }
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/typeName"
+          }
+        }
+      }
+    },
+    "node_types": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nodeType"
+      }
+    },
+    "edge_kinds": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/edgeKind"
+      }
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/role"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/recommendation"
+      }
+    },
+    "imports": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/importRule"
+      },
+      "description": "Import statements are facts, not just a lookup table. why: an importer that kept only the last path segment claimed `render` as a class from `use function A\\{render};` and re-pointed a sibling's `extends Render`."
+    },
+    "resolution": {
+      "$ref": "#/$defs/resolution",
+      "description": "How a written name becomes a node. Most of the damage in the graphify record came from here rather than from extraction."
+    },
+    "excluded_tokens": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/excludedTokenGroup"
+      },
+      "description": "Strings that are never type names. why: treated as types, `self`, `static` and `parent` minted one global node each, wired to a large fraction of all classes — `parent::setUp()` alone fabricated 1,698 inbound calls onto a single method."
+    },
+    "embedded_regions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/embeddedRegion"
+      },
+      "description": "Where a file stops being one language and starts being another."
+    }
+  },
+  "$defs": {
+    "typeName": {
+      "description": "Namespaced by the pack that declares it. A pack may only name a type it declares or that a pack in its dependency graph declares.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+    },
+    "nodeType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/typeName"
+        },
+        "parent": {
+          "$ref": "#/$defs/typeName"
+        },
+        "abstract": {
+          "type": "boolean",
+          "description": "Nothing matches this directly; its descendants do."
+        },
+        "container": {
+          "type": "boolean"
+        },
+        "id_namespace": {
+          "type": "string",
+          "description": "Prefix for every id of this type. Required because machine names are not unique across kinds: two config files in one module carry the same internal id, a form display and a view display.",
+          "pattern": "^[a-z][a-z0-9_.]*$"
+        },
+        "synthetic": {
+          "type": "boolean",
+          "description": "A node the engine invents, with no construct behind it. why: top-level code has no enclosing callable, so a call from module scope had no caller and the function looked dead — 18 file-caller edges out of ~195 known sites."
+        }
+      }
+    },
+    "edgeKind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "from",
+        "to"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "from": {
+          "$ref": "#/$defs/endpoint"
+        },
+        "to": {
+          "$ref": "#/$defs/endpoint"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "source": {
+          "enum": [
+            "nearest_enclosing_container"
+          ],
+          "description": "Which end the from side attaches to. why: the containment source was hardcoded to the file node across 15 language configs, so a method's container was the file rather than its class."
+        }
+      }
+    },
+    "endpoint": {
+      "description": "One type, or a flat list of alternatives. A combination nested inside a list is deliberately not expressible: free alternation of intersection and union makes validation NP-complete in combined complexity, and a third-party pack may write whatever the grammar allows. It can be widened later without breaking any pack written against it.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/typeName"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/typeName"
+          },
+          "minItems": 1
+        }
+      ]
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/typeName"
+        }
+      },
+      "description": "A capability that accumulates. A node has exactly one type; a second matching type is a real collision and the build refuses. Roles never collide."
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule",
+        "reads",
+        "match",
+        "emits",
+        "confidence"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "The rule's own name. Recorded as provenance on every node and edge it produces, and referenced by accepted_unknowns in the project settings. Named `rule` and not `id` because `id` is the extraction block below, and two `id` keys in one mapping silently discard one of them."
+        },
+        "reads": {
+          "enum": [
+            "file",
+            "map"
+          ],
+          "description": "file: reads one source file, in any order, cannot see other rules. map: reads what source rules produced, runs repeatedly to a fixpoint. This is the whole of the supplementary/complementary distinction and the only ordering the engine needs."
+        },
+        "in": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Named folders declared by the pack and overridable in the project settings. A rule never writes a path. Required when reads is file; meaningless when reads is map."
+        },
+        "match": {
+          "$ref": "#/$defs/match"
+        },
+        "id": {
+          "$ref": "#/$defs/idBlock"
+        },
+        "emits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/emit"
+          },
+          "minItems": 1
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "values": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "oneOf": [
+                  {"$ref": "#/$defs/listedSource"},
+                  {"type": "object", "additionalProperties": false, "required": ["enclosing", "capture"], "properties": {"enclosing": {"type": "string"}, "capture": {"type": "string"}}}
+                ]
+              },
+              "join": {"type": "string", "description": "With from: {enclosing: ...}, the text between two spans' captures."},
+              "template": {"type": "string"},
+              "normalize": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["replace", "with"], "properties": {"replace": {"type": "string"}, "with": {"type": "string"}}}},
+              "case": {"enum": ["lower", "upper"]}
+            },
+            "oneOf": [{"required": ["from"]}, {"required": ["template"]}]
+          },
+          "description": "Named values of a text rule, in order: each from one capture, from {enclosing: <span>, capture: <capture>}, or a template over captures, path values and the values before it, then normalize, then case. An enclosing value is the capture of each span of its file type with that name holding the match's start, outermost first, joined with join; a span whose capture is absent or empty adds nothing, and no such span gives the empty value. A value whose capture did not take part, or whose template names an absent value, is absent. The id, an attribute and an edge end may name a value."
+        },
+        "line": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["capture"],
+          "properties": {"capture": {"type": "string"}},
+          "description": "On a text rule: the node, its values and what a template makes sit at the line this capture of match.text starts on, not the line the match starts on."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "reads": {
+                "const": "file"
+              }
+            },
+            "required": [
+              "reads"
+            ]
+          },
+          "then": {
+            "required": [
+              "in"
+            ]
+          }
+        },
+        {
+          "title": "A rule emits nodes or edges, never both",
+          "description": "The part of a file that makes a node is a different part from the part that makes an edge, and they sit on different lines. A rule doing both stamps one location on all of it, so an edge lands where its node was declared rather than where the relationship is written. In one real class the two `use` statements are on lines 96 and 97 and the class is on 94; a combined rule reports 94 for both traits. Separating them also lets each part carry its own confidence, and lets a pack add an edge to a node another pack found without editing that pack's rule.",
+          "if": {
+            "properties": {
+              "emits": {
+                "contains": {
+                  "required": [
+                    "edge"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "emits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "emits": {
+                "items": {
+                  "required": [
+                    "edge"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "required": [
+              "reads",
+              "emits"
+            ],
+            "properties": {
+              "reads": {
+                "const": "file"
+              },
+              "emits": {
+                "contains": {
+                  "type": "object",
+                  "required": [
+                    "edge"
+                  ],
+                  "properties": {
+                    "edge": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "const": "this_node"
+                            }
+                          },
+                          "required": [
+                            "from"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "to": {
+                              "const": "this_node"
+                            }
+                          },
+                          "required": [
+                            "to"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "id"
+            ]
+          },
+          "description": "A rule reading a file and naming this_node as an endpoint is naming the node its own id mints, so the id block is not optional there. A map rule is exempt: its this_node is a node already in the map. This is the constraint that would have caught the Phase 3 defect where split edge rules lost their id across 18 files."
+        },
+        {
+          "if": {
+            "required": ["match"],
+            "properties": {"match": {"required": ["declaration"]}}
+          },
+          "else": {
+            "properties": {
+              "id": {
+                "properties": {
+                  "from": {
+                    "oneOf": [
+                      {"$ref": "#/$defs/listedSource"},
+                      {"type": "array", "items": {"$ref": "#/$defs/listedSource"}, "minItems": 2}
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "description": "Only a declaration rule's id may name any source; the id of every other rule names a listed source."
+        }
+      ]
+    },
+    "confidence": {
+      "enum": [
+        "declared",
+        "inferred"
+      ],
+      "description": "Declared on the rule, never computed at runtime. The same regex on the same character is declared in Go, where capitalisation is visibility the compiler enforces, and inferred in React, where it is a convention people can ignore. Only the author knows which."
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Exactly one kind, plus qualifiers on it, plus a where list of conditions.",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "A glob, relative to each folder named in `in`."
+        },
+        "attribute": {
+          "type": "string",
+          "description": "Fully qualified attribute class."
+        },
+        "annotation": {
+          "type": "string",
+          "description": "Bare annotation name. It binds to a class the pack supplies, not one the file imports."
+        },
+        "static_call": {
+          "type": "string"
+        },
+        "method_call": {
+          "type": "string"
+        },
+        "array_entry": {
+          "type": "string"
+        },
+        "subscript_assignment": {
+          "type": "boolean"
+        },
+        "node_type": {
+          "$ref": "#/$defs/typeName",
+          "description": "Only with reads: map. Matches nodes already in the graph."
+        },
+        "grammar": {
+          "type": "string",
+          "description": "A second grammar nested inside the file's own. Needed for docblock annotations, which are not the file's language."
+        },
+        "argument": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Positional argument of the matched call."
+        },
+        "each": {
+          "type": "string",
+          "description": "A path expression addressing repeated entries inside a data file."
+        },
+        "where": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          },
+          "minItems": 1
+        },
+        "declaration": {
+          "type": "string",
+          "description": "A grammar node that declares a named thing. The kind a language pack uses; a domain pack matches attributes and calls instead."
+        },
+        "name_child": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2}
+          ],
+          "description": "Which child holds the declared name, by field name only: a child with no field name cannot be named here. On a reference rule, two fields: the first is the written name, and the second's text follows it once resolved."
+        },
+        "reference": {
+          "type": "string",
+          "description": "A grammar node that writes a reference to a name, such as a call. Each one is an edge from the node the nearest enclosing declaration was given, to the name its name_child writes."
+        },
+        "skip_names": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "description": "On a reference rule: names that make no edge, no unresolved node and no fire. Each is compared, case-exact and before any resolution, with the text of the first name_child field as written; with a two-field name_child that is the first field, so listing a scope skips every member written under it. A name written with a leading separator, such as \\isset, is another text and is not skipped unless listed so. For a language construct the grammar parses as a call."
+        },
+        "whole_written": {
+          "type": "boolean",
+          "description": "On a reference rule: true makes a name whose node holds any named node of a type not in the grammar's written_names, at any depth, make nothing and be listed as skipped, as a name_child that is not a written name is. A chained call written through a call is such a name."
+        },
+        "body_child": {
+          "type": "string",
+          "description": "Which child holds the body. Differs per construct, and getting it wrong makes a whole family of declarations invisible without an error."
+        },
+        "filetype": {
+          "type": "string",
+          "description": "What kind of file this rule reads, named explicitly rather than left as a suffix on the glob. Required with `file`. It says which pack's grammar or loader handles the contents, so `.yml` and `.yaml` are one rule rather than two, and a glob can never accidentally match a file of another type that happens to share a name."
+        },
+        "text": {
+          "type": "string",
+          "description": "RE2 over the text of the matched construct, or of the file when no construct is named. A file is text, and some facts are easier to read as text than as a tree — a normalised signature, a version string, a shape a grammar does not give a node for. Named captures are available to the id block and to attributes. Beside `file` and `filetype`, each match in the file is one fire, in order."
+        },
+        "reads_sections": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "description": "The sections of the file type, by name, in which a match of text still counts. A match that starts inside any other section is not a match."
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "file"
+          ],
+          "not": {
+            "required": [
+              "text"
+            ]
+          }
+        },
+        {
+          "required": [
+            "attribute"
+          ]
+        },
+        {
+          "required": [
+            "annotation"
+          ]
+        },
+        {
+          "required": [
+            "static_call"
+          ]
+        },
+        {
+          "required": [
+            "method_call"
+          ]
+        },
+        {
+          "required": [
+            "array_entry"
+          ]
+        },
+        {
+          "required": [
+            "subscript_assignment"
+          ]
+        },
+        {
+          "required": [
+            "node_type"
+          ]
+        },
+        {
+          "required": [
+            "declaration"
+          ]
+        },
+        {
+          "required": [
+            "reference"
+          ]
+        },
+        {
+          "required": [
+            "text"
+          ]
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "file"
+            ]
+          },
+          "then": {
+            "required": [
+              "filetype"
+            ]
+          }
+        }
+      ]
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "description": "One condition. Two of these force reads: map, because they cannot be answered from one file.",
+      "properties": {
+        "applies_to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where an attribute or annotation sits: the name of the tree node it is written on, as the rutter's grammar names it. In Drupal core attributes appear on classes about 3500 times, on methods about 2000, and on properties about 126, so this is not a class-only mechanism."
+        },
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "object"
+        },
+        "has_key": {
+          "type": "object"
+        },
+        "has_argument": {
+          "type": "string"
+        },
+        "id_matches": {
+          "type": "string",
+          "description": "RE2. Named captures are available to the id block."
+        },
+        "matches": {
+          "type": "string"
+        },
+        "is_mapping": {
+          "type": "boolean",
+          "description": "Whether the entry's value is a mapping, an empty value counting as an empty mapping. A whole file's root is a mapping."
+        },
+        "listed_at": {
+          "type": "string",
+          "minLength": 1,
+          "description": "On an edge end: a key path of the same file whose list must hold the end's composed value. An end that is not an item gives no edge and no node."
+        },
+        "attribute_argument": {
+          "type": "object"
+        },
+        "in_method_with_attribute": {
+          "type": "string"
+        },
+        "on_service": {
+          "type": "string"
+        },
+        "has_promoted_constructor_parameter": {
+          "type": "boolean"
+        },
+        "base_is_known_plugin": {
+          "type": "boolean"
+        },
+        "ancestor_reaches": {
+          "type": "string",
+          "description": "FORCES reads: map. Follows inherits and implements upward. Always a map condition, not sometimes: a class may extend a first-party base that is itself unclassified until another rule runs. Paths are always deduplicated, because a type reachable twice is not a type matched twice."
+        },
+        "contained_by_type": {
+          "$ref": "#/$defs/typeName",
+          "description": "FORCES reads: map. Follows contains backwards. Core has two methods called save, distinguished only by what their containing class is."
+        },
+        "receiver": {
+          "type": "string",
+          "description": "What the call is made on. A bare name() can never resolve to a method; a call on a typed property is a claim about runtime rather than an observation, which is why two rules with the same edge kind carry different confidence."
+        },
+        "has_child": {
+          "type": "string",
+          "description": "A required direct child of the matched node, by tree node type. Executed on a declaration rule: a match without such a child is passed. Go tells a struct from an interface this way: both are type_spec, and only the child differs."
+        },
+        "has_incoming_edge": {
+          "type": "string",
+          "description": "FORCES reads: map. An edge pointing at this node, of a declared kind."
+        },
+        "method_set_covers": {
+          "$ref": "#/$defs/typeName",
+          "description": "FORCES reads: map. Set comparison against every node of a type. Go's implicit interface satisfaction, which is the case the map bucket exists for."
+        },
+        "name_matches": {
+          "type": "string",
+          "description": "RE2 over the declared name. Executed on a tree declaration or reference rule: the whole text of the first name_child field must match, or the match is passed and is no fire. The case that proves confidence belongs on the rule: `^[A-Z]` is `declared` in Go, where capitalisation is visibility the compiler enforces, and `inferred` in React, where it is a convention people can ignore. Same primitive, same character, and only the author knows which."
+        }
+      }
+    },
+    "idBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the id comes from, and how it is reshaped. Absent on a rule that only refines a type or adds an edge to an existing node.",
+      "properties": {
+        "from": {
+          "description": "A named source, or several when the id is composed from more than one. FieldStorageConfig::create supplies entity_type and field_name as separate arguments.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/idSource"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/idSource"
+              },
+              "minItems": 2
+            }
+          ]
+        },
+        "pattern": {
+          "type": "string",
+          "description": "RE2, with named captures the template may use."
+        },
+        "template": {
+          "type": "string",
+          "description": "Assembles captures and sources into the final id, including its namespace prefix."
+        },
+        "must_be": {
+          "enum": [
+            "string_literal"
+          ]
+        },
+        "resolve": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/resolveStep"},
+          "minItems": 1,
+          "description": "The steps that turn the written name into a full one, in order; the first whose condition holds gives the name, and the name then takes on_miss. Without it the name is used as written."
+        },
+        "separator": {
+          "type": "string",
+          "description": "The separator bound_first_segment splits on and joins with, and prefix_with joins with."
+        },
+        "on_miss": {
+          "enum": [
+            "unresolved",
+            "out_of_reach"
+          ],
+          "description": "unresolved: a rule looked and failed, and the node records what it was doing. out_of_reach: the target is not code, is not in the repository, and no pack change will ever resolve it. Filing the second as the first invites somebody to fix what is not broken."
+        },
+        "normalize": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "replace",
+              "with"
+            ],
+            "properties": {
+              "replace": {
+                "type": "string"
+              },
+              "with": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code."
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "from"
+          ]
+        },
+        {
+          "required": [
+            "template"
+          ]
+        }
+      ]
+    },
+    "idSource": {
+      "description": "A source of a declaration rule's id: any name. declared_name, namespace, qualified_name and enclosing_type are filled by the engine, a path value of the rule's file type or a settings value by its name, and any other name is the field of the matched node of that name, read as name_child reads it. The four engine names, then path values and settings values, shadow a node field of the same name, so such a field cannot be named. A name that is none of these and no field of the grammar is refused at load. A source absent for a match makes nothing, and the rule's report lists it once per file under skipped. Every other rule kind, and every other place a source is named, takes a listed source only.",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        {"$ref": "#/$defs/listedSource"}
+      ]
+    },
+    "listedSource": {
+      "description": "A named source from the engine's list, or one of the object forms.",
+      "oneOf": [
+        {
+          "enum": [
+            "array_value",
+            "declared_name",
+            "enclosing_module",
+            "enclosing_type",
+            "file_stem",
+            "key",
+            "method_return_literal",
+            "module_path",
+            "namespace",
+            "package_dir",
+            "parameter_type",
+            "parent_directory",
+            "qualified_name",
+            "receiver_type",
+            "referenced_id",
+            "resolved_method",
+            "subscript_key",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "maxProperties": 2,
+          "additionalProperties": false,
+          "properties": {
+            "attribute_argument": {
+              "type": "string"
+            },
+            "annotation_key": {
+              "type": "string"
+            },
+            "argument_key": {
+              "type": "string"
+            },
+            "argument": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "argument_class": {
+              "type": "string"
+            },
+            "array_key_class": {
+              "type": "string"
+            },
+            "capture": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "each": {
+              "type": "string"
+            },
+            "literal": {
+              "type": "string"
+            },
+            "each_key": {
+              "type": "string"
+            },
+            "incoming_edges": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "qualified": {
+              "type": "string",
+              "description": "Compose a value into a full id using the pack's own identity rules. An edge target naming a type must produce the same string the node rule produced, and only the identity block knows which separators go where."
+            }
+          }
+        }
+      ]
+    },
+    "emit": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "description": "Five kinds. node and edge and attribute make things; type and role refine a node that already exists, which is what a map rule does.",
+      "properties": {
+        "node": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "$ref": "#/$defs/typeName"
+            },
+            "state": {
+              "enum": [
+                "mapped",
+                "declared",
+                "referenced",
+                "unresolved",
+                "out_of_reach"
+              ]
+            }
+          }
+        },
+        "edge": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "from": {
+              "$ref": "#/$defs/edgeEnd"
+            },
+            "to": {
+              "$ref": "#/$defs/edgeEnd"
+            },
+            "attributes": {
+              "type": "object",
+              "description": "Declared on the edge, not on either endpoint. map.schema.json's edge has carried an attributes field all along, so without this the output format had a field no input could legally produce. Each value is a declared extraction, not an open payload.",
+              "propertyNames": {
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/attributeValue"
+              }
+            }
+          }
+        },
+        "attribute": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "from": {
+              "type": [
+                "object",
+                "string"
+              ]
+            },
+            "target": {
+              "enum": [
+                "this_node",
+                "containing_node"
+              ]
+            },
+            "template": {
+              "type": "string",
+              "description": "The value, filled from captures, path values and values."
+            }
+          }
+        },
+        "binding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "target"],
+          "properties": {
+            "name": {"type": "string"},
+            "target": {"type": "string"}
+          },
+          "description": "A text rule binds a name in its file to a target, each a template over captures, path values and values; an empty or absent one binds nothing. A file's bindings are those of every binding rule on it, in file order, a later binding of a name winning. A rule with a binding emits only bindings and has no id. Bindings serve bound_first_segment and are not written to the map."
+        },
+        "type": {
+          "$ref": "#/$defs/typeName"
+        },
+        "role": {
+          "$ref": "#/$defs/typeName"
+        }
+      }
+    },
+    "resolveStep": {
+      "oneOf": [
+        {"enum": ["bound_first_segment", "as_written"]},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["full_if_prefixed"],
+          "properties": {"full_if_prefixed": {"type": "string", "minLength": 1}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prefix_with"],
+          "properties": {"prefix_with": {"type": "string", "minLength": 1}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prefix_bare_with"],
+          "properties": {"prefix_bare_with": {"type": "string", "minLength": 1}}
+        }
+      ],
+      "description": "full_if_prefixed: a name starting with the text is full without it. bound_first_segment: a name whose first segment the file binds takes the binding's target in its place. prefix_with: the named path value, value or namespace, the separator and the name. prefix_bare_with: as prefix_with, for a name that does not hold the separator only. as_written: the name. On a tree reference rule, a reference whose steps hold on no edge makes nothing, counts no fire and is listed as skipped. When the steps hold on one edge and fail on another, only the edge they hold on is made, the reference counts a fire, and no skipped row names the other edge."
+    },
+    "edgeEnd": {
+      "description": "A node the rule already has, or an id minted the same way any id is minted. There is no separate target language: from and template are the id block, where filters, each makes one edge per entry.",
+      "oneOf": [
+        {
+          "enum": [
+            "this_node",
+            "source_node",
+            "enclosing_class",
+            "enclosing_callable",
+            "enclosing_method",
+            "enclosing_file",
+            "matched_node",
+            "enclosing_declaration"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/listedSource"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/listedSource"
+                  }
+                }
+              ]
+            },
+            "template": {
+              "type": "string"
+            },
+            "each": {
+              "type": "boolean"
+            },
+            "where": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            },
+            "type": {
+              "type": "string",
+              "description": "The type the end has when no rule finds it: one of the edge kind's to types or a type below one. Without it the end takes the kind's to types."
+            },
+            "types": {
+              "type": "array",
+              "items": {"type": "string"},
+              "minItems": 1,
+              "description": "In place of type: the candidate types, in order. The end lands on the first whose node of the resolved name a rule maps; when none is mapped, on_miss applies and the end takes the first type."
+            },
+            "pattern": {
+              "type": "string",
+              "description": "RE2, with named captures the template may use. Present for the same reason the id block has it: the description above says from and template ARE the id block, and an endpoint that has to reshape a raw match needs somewhere to put the expression. Its absence is what made a pack invent an undeclared source key to smuggle a regex in."
+            },
+            "resolve": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/resolveStep"},
+              "minItems": 1,
+              "description": "The steps that turn the written name into a full one, in order; the first whose condition holds gives the name, and the name then takes on_miss. Without it the name is used as written."
+            },
+            "separator": {
+              "type": "string",
+              "description": "The separator bound_first_segment splits on and joins with, and prefix_with joins with."
+            },
+            "on_miss": {
+              "enum": ["unresolved"],
+              "description": "When no rule maps a node of the composed id, the end is a node in state unresolved recording the rule, the name searched for and what was found. Without it the end is a node in state referenced."
+            }
+          },
+          "anyOf": [
+            {
+              "required": [
+                "from"
+              ]
+            },
+            {
+              "required": [
+                "template"
+              ]
+            },
+            {
+              "required": [
+                "type"
+              ]
+            },
+            {
+              "required": [
+                "types"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic",
+        "text"
+      ],
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "description": "Advice for a reader. It never enters the map; it joins at read time."
+    },
+    "importRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ast",
+        "facts"
+      ],
+      "properties": {
+        "ast": {
+          "type": "string"
+        },
+        "group_ast": {
+          "type": "string",
+          "description": "The grouped form, `use A\\{B, C};`, where the kind keyword sits on the declaration rather than on each clause."
+        },
+        "clause": {
+          "type": "string",
+          "description": "The grammar node that binds one name, inside the declaration or inside its grouped form. Without it an engine cannot tell one binding from the next."
+        },
+        "facts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "properties": {
+            "target_fqn": {
+              "type": "string"
+            }
+          },
+          "description": "Named tree fields of a clause or declaration, each by a name bind refers to."
+        },
+        "bind": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "array",
+              "items": {"type": "string"},
+              "minItems": 1,
+              "description": "The sources of the bound name, tried in order: a fact, the text of the field it names on the clause or else on the declaration; last_segment, the written path's last segment; or path, the whole written path."
+            },
+            "normalize": {
+              "type": "array",
+              "items": {"type": "object", "additionalProperties": false, "required": ["replace", "with"], "properties": {"replace": {"type": "string"}, "with": {"type": "string"}}},
+              "description": "Steps run in order on the bound name, whichever source gave it, as a path value's normalize runs; the binding's target stays the written path."
+            },
+            "unbound_aliases": {
+              "type": "array",
+              "items": {"type": "string"},
+              "minItems": 1,
+              "description": "Texts of a fact that bind no name: a clause whose name comes from a fact written as one of these binds nothing, and the sources after it are not tried."
+            },
+            "prefix_from_group": {
+              "type": "boolean",
+              "description": "A clause of the grouped form takes the declaration's written prefix."
+            },
+            "strip_prefix": {
+              "type": "string",
+              "description": "Text stripped from the front of the written path."
+            },
+            "skip_when_field_set": {
+              "type": "string",
+              "description": "A fact: a declaration or clause where the field it names is set binds nothing."
+            }
+          },
+          "description": "How a declaration binds names. Without it the declaration binds nothing."
+        },
+        "binds_through_alias": {
+          "type": "boolean"
+        }
+      }
+    },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "same_pack",
+            "global"
+          ],
+          "description": "why: bare `extends Exception` in PHP bound to a TypeScript class because one global name map served every language — 12 phantom inheritance edges across 3 packages."
+        },
+        "match": {
+          "enum": [
+            "qualified_name_exact"
+          ]
+        },
+        "never_match_by": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "prefix",
+              "substring",
+              "case_folded_and_stripped"
+            ]
+          },
+          "description": "why: a class whose name is a strict prefix of its siblings lost its entire fan-in — `Pivot` went from degree 4 to degree 1 once `PivotRepository` existed."
+        },
+        "on_multiple_definitions": {
+          "enum": [
+            "refuse",
+            "first",
+            "unresolved"
+          ]
+        },
+        "on_zero_definitions": {
+          "enum": [
+            "unresolved",
+            "drop"
+          ],
+          "description": "`unresolved` emits a node recording which rule fired and what it looked for. It never drops the edge. why: every failure in the record was silent, and the graph still looked populated."
+        },
+        "detect_references_independently_of_imports": {
+          "type": "boolean",
+          "description": "why: 158 of 240 Eloquent relationships were unlinked because the edge tracked the `use` statement rather than the reference. 140 were same-namespace, so no import existed to track."
+        }
+      }
+    },
+    "excludedTokenGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group",
+        "tokens",
+        "positions"
+      ],
+      "properties": {
+        "group": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "positions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "type_reference",
+              "callee",
+              "supertype"
+            ]
+          },
+          "minItems": 1,
+          "description": "Declared per group because the failure was positional: the builtin list was applied at call sites only and never consulted by the supertype resolver."
+        },
+        "case_sensitive": {
+          "type": "boolean"
+        }
+      }
+    },
+    "embeddedRegion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "language",
+        "open",
+        "close"
+      ],
+      "properties": {
+        "language": {
+          "type": "string"
+        },
+        "open": {
+          "type": "string"
+        },
+        "close": {
+          "type": "string"
+        },
+        "line_offset": {
+          "enum": [
+            "preserve",
+            "reset"
+          ],
+          "description": "preserve: line numbers continue from the host file. A region reported at line 1 of itself is unfindable in the file it came from."
+        },
+        "skip_when_empty": {
+          "type": "boolean"
+        },
+        "host_constructs_inside": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
+          "description": "Constructs of the host language that may appear inside the region."
+        }
+      }
+    },
+    "attributeValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How one attribute's value is extracted. The same vocabulary as $defs/idBlock and $defs/edgeEnd, because it is the same operation: name a source, optionally reshape it. It was briefly an open object with additionalProperties true, which let a pack write anything of any depth into a bag nothing validates — the exact hole the twig fix had just closed elsewhere.",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/listedSource"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "RE2, with named captures the template may use."
+        },
+        "template": {
+          "type": "string"
+        },
+        "literal": {
+          "type": "string",
+          "description": "A fixed value, for an attribute that records what the rule is rather than what it found."
+        },
+        "normalize": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "replace",
+              "with"
+            ],
+            "properties": {
+              "replace": {
+                "type": "string"
+              },
+              "with": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code."
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "from"
+          ]
+        },
+        {
+          "required": [
+            "literal"
+          ]
+        }
+      ]
+    }
+  }
+}

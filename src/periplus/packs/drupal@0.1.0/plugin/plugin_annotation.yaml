@@ -1,0 +1,120 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — plugins declared by a docblock annotation. One rule per plugin type, and
+# they differ only in two values.
+#
+# Written to test whether twelve annotation classes need twelve mechanisms. They do not.
+# Every one is @Name(key = "value") in a docblock, so one grammar reads all of them, and a
+# rule differs from its neighbour by the annotation name and the type it emits.
+
+needs:
+  types:
+  - drupal.field_type
+  - drupal.field_widget
+  - drupal.field_formatter
+rules:
+- rule: field_type_from_annotation
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: FieldType
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  id: &id001
+    from:
+      annotation_key: id
+    must_be: string_literal
+    template: drupal.plugin.field_type::{id}
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.field_type
+  confidence: declared
+- rule: field_widget_from_annotation
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: FieldWidget
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  id: &id002
+    from:
+      annotation_key: id
+    must_be: string_literal
+    template: drupal.plugin.field_widget::{id}
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.field_widget
+  confidence: declared
+- rule: field_formatter_from_annotation
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: FieldFormatter
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  id: &id003
+    from:
+      annotation_key: id
+    must_be: string_literal
+    template: drupal.plugin.field_formatter::{id}
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.field_formatter
+  confidence: declared
+- rule: field_type_from_annotation_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: FieldType
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+  id: *id001
+- rule: field_widget_from_annotation_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: FieldWidget
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+  id: *id002
+- rule: field_formatter_from_annotation_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: FieldFormatter
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+  id: *id003

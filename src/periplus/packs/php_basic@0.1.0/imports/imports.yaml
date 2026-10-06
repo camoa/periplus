@@ -1,0 +1,19 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The import statements a file's written names resolve through. The facts name tree fields: alias
+# holds an alias, and type holds the function or const keyword of a use that binds no type name.
+# bind says how a clause binds: its alias, else the last segment of its written path, names it; a
+# grouped use joins each member to its prefix; a leading backslash is stripped; a use with a kind
+# keyword binds nothing.
+imports:
+- ast: namespace_use_declaration
+  group_ast: namespace_use_group
+  clause: namespace_use_clause
+  facts:
+    alias: alias
+    use_kind: type
+  bind:
+    name: [alias, last_segment]
+    prefix_from_group: true
+    strip_prefix: "\\"
+    skip_when_field_set: use_kind

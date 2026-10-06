@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A media source plugin declared by the MediaSource docblock annotation on its class, the twin of
+# the attribute rule. Two rules because a rule that emits an edge emits no node. An id that is not
+# text in double quotes makes no plugin and is listed under skipped.
+
+rules:
+- rule: media_source_from_annotation
+  reads: file
+  in:
+  - media_source_classes
+  match:
+    annotation: MediaSource
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.media_source
+  confidence: declared
+- rule: media_source_from_annotation_edges
+  reads: file
+  in:
+  - media_source_classes
+  match:
+    annotation: MediaSource
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

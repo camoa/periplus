@@ -1,0 +1,26 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# twig pack — text only, no grammar. Written to test whether a stack with no
+# tree-sitter grammar is mappable at all.
+#
+# It has no `grammar:` block. Every rule matches text with a pattern and mints ids from the
+# captures. If this works, the floor for adding a stack is "someone writes patterns", not
+# "someone writes a grammar" — and tree-sitter becomes an optimisation for the languages
+# that have one, rather than a requirement.
+
+pack: twig
+version: 0.0.1
+depends: []
+
+folders:
+  source: ./
+
+files:
+  extensions: [twig]
+  exclude: []
+
+identity:
+  qualified_name:
+    parts: [path]
+  case_folding:
+    sensitive: [all]

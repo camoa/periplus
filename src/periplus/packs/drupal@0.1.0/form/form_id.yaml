@@ -1,0 +1,48 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — the form's own id, from getFormId. One rule, reading the map.
+#
+# An entity type's id is a literal in an attribute or annotation, so it resolves every time.
+# A form's id comes from a method return, and usually that is also a literal — but not
+# always, and the exceptions are permanent rather than a pack needing improvement.
+#
+# Counted in core lib and modules: 274 getFormId() bodies return something. 266 return a
+# plain string literal. 8 compute it:
+#   RevisionRevertForm.php:106   $this->revision->getEntityTypeId() . '_revision_revert'
+#   RevisionDeleteForm.php:101   $this->revision->getEntityTypeId() . '_revision_delete'
+#   FileUploadForm.php:119       $this->getBaseFormId() . '_upload'
+#   OEmbedForm.php:76            $this->getBaseFormId() . '_oembed'
+#   JSInteractionTestForm.php:20 __CLASS__
+#   StubForm.php:48              $this->formId
+#
+# 97% resolvable is the useful number. Gaps being the exception is what makes an unresolved
+# count worth reading at all.
+
+needs:
+  types: [drupal.form]
+
+rules:
+
+  - rule: form_id_from_method_return
+    reads: map
+    match:
+      node_type: php.method
+      where:
+        - name: getFormId
+        - contained_by_type: drupal.form
+    id:
+      from: method_return_literal
+      must_be: string_literal
+      on_miss: unresolved
+    emits:
+      - attribute: {name: form_id, target: containing_node}
+    confidence: declared
+    # `reads: map` because the class has to be known to be a form first, and that is a map
+    # rule's output. Deciding literal-versus-not is a check, not a judgment, so no model is
+    # involved.
+    #
+    # It emits an ATTRIBUTE on the class, not a node. The form id is a second name for a
+    # thing already in the map, unlike an entity type id, which is referenced by config that
+    # never names the class. Nothing in a Drupal codebase references a form by its form id
+    # from another file — the id is used at runtime by hook_form_FORM_ID_alter, which is a
+    # function NAME, not a reference. That is a claim worth checking before it is relied on.

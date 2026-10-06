@@ -1,0 +1,50 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — classifies a class as a form. Three rules, all reading the map.
+#
+# Same reason as entity_class.yaml: a class becomes a form because of what it extends, and
+# the chain can pass through first-party base classes. Transitive classification is always a
+# map rule.
+#
+# About 258 classes in core modules reach drupal.form by extending FormBase, ConfirmFormBase,
+# EntityForm, ContentEntityForm, EntityDeleteForm or ConfigFormBase. Not one of them says
+# `implements FormInterface` at its own declaration site, so a rule matching the written
+# clause would match nothing real.
+
+needs:
+  types: [drupal.form, drupal.entity_form, drupal.content_entity_form]
+
+rules:
+
+  - rule: form_class
+    reads: map
+    match:
+      node_type: php.class
+      where:
+        - ancestor_reaches: "Drupal\\Core\\Form\\FormInterface"
+    emits:
+      - type: drupal.form
+    confidence: declared
+
+  - rule: entity_form_class
+    reads: map
+    match:
+      node_type: php.class
+      where:
+        - ancestor_reaches: "Drupal\\Core\\Entity\\EntityFormInterface"
+    emits:
+      - type: drupal.entity_form
+    confidence: declared
+
+  - rule: content_entity_form_class
+    reads: map
+    match:
+      node_type: php.class
+      where:
+        - ancestor_reaches: "Drupal\\Core\\Entity\\ContentEntityFormInterface"
+    emits:
+      - type: drupal.content_entity_form
+    confidence: declared
+    # Verified in a private Drupal site: 1 class extends ContentEntityForm, 1 extends
+    # ConfigFormBase. Small, and the rule that finds them is the same one that would find
+    # 258 in core.

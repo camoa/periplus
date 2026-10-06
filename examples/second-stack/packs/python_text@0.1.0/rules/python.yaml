@@ -1,0 +1,354 @@
+node_types:
+- name: python.module
+  id_namespace: python.module
+- name: python.class
+  id_namespace: python.class
+- name: python.function
+  id_namespace: python.function
+edge_kinds:
+- kind: contains
+  from: python.module
+  to: [python.class, python.function]
+- kind: imports
+  from: python.module
+  to: python.module
+- kind: calls
+  from: python.module
+  to: [python.function, python.class, python.module]
+rules:
+# One module per .py file, named by its path.
+- rule: module
+  reads: file
+  in: [python]
+  match: {file: '**', filetype: python}
+  id: {template: '{module}'}
+  emits: [{node: {type: python.module}}]
+  confidence: declared
+# A direct statement of the module body starts in the first column.
+- rule: class
+  reads: file
+  in: [python]
+  match: {file: '**', filetype: python, text: '(?m)^class[ \t]+(?<name>\w+)'}
+  id: {template: '{module}.{name}'}
+  emits: [{node: {type: python.class}}]
+  confidence: declared
+- rule: class_contained
+  reads: file
+  in: [python]
+  match: {file: '**', filetype: python, text: '(?m)^class[ \t]+(?<name>\w+)'}
+  id: {template: '{module}.{name}'}
+  emits:
+  - edge: {kind: contains, from: {template: '{module}'}, to: this_node}
+  confidence: declared
+- rule: function
+  reads: file
+  in: [python]
+  match: {file: '**', filetype: python, text: '(?m)^(?:async[ \t]+)?def[ \t]+(?<name>\w+)'}
+  id: {template: '{module}.{name}'}
+  emits: [{node: {type: python.function}}]
+  confidence: declared
+- rule: function_contained
+  reads: file
+  in: [python]
+  match: {file: '**', filetype: python, text: '(?m)^(?:async[ \t]+)?def[ \t]+(?<name>\w+)'}
+  id: {template: '{module}.{name}'}
+  emits:
+  - edge: {kind: contains, from: {template: '{module}'}, to: this_node}
+  confidence: declared
+# name( or a.b( outside a string or a comment: one edge from the module to the name its first
+# segment's import binds. The first branch consumes any name after a dot, as in f().name(, x .name(
+# or a .name( that starts a line, and captures nothing, so it gives no edge. Only
+# bound_first_segment resolves, so a name no import binds gives nothing: a builtin, a local, a
+# parameter, a keyword such as if( or
+# raise(, a def or class header, a same-module function, and a method on an object. The end is
+# the first of a function, a class or a module the rules map under that name, else an unresolved
+# function searched for under it.
+- rule: call
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '\.[ \t]*\w+(?:\.\w+)*\(|\b(?<callee>\w+(?:\.\w+)*)\('
+  id: {template: '{module}'}
+  emits:
+  - edge:
+      kind: calls
+      from: this_node
+      to: {from: {capture: callee}, types: [python.function, python.class, python.module], resolve: [bound_first_segment], separator: '.', on_miss: unresolved}
+  confidence: inferred
+# import a.b, c as d: one rule per position in the list, up to three names.
+- rule: import_first
+  reads: file
+  in: [python]
+  match: {file: '**', filetype: python, text: '(?m)^import[ \t]+(?<name>[\w.]+)'}
+  id: {template: '{module}'}
+  emits:
+  - edge: {kind: imports, from: this_node, to: {from: {capture: name}}}
+  confidence: declared
+- rule: import_second
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^import[ \t]+[\w.]+(?:[ \t]+as[ \t]+\w+)?[ \t]*,[ \t]*(?<name>[\w.]+)'
+  id: {template: '{module}'}
+  emits:
+  - edge: {kind: imports, from: this_node, to: {from: {capture: name}}}
+  confidence: declared
+- rule: import_third
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^import[ \t]+(?:[\w.]+(?:[ \t]+as[ \t]+\w+)?[ \t]*,[ \t]*){2}(?<name>[\w.]+)'
+  id: {template: '{module}'}
+  emits:
+  - edge: {kind: imports, from: this_node, to: {from: {capture: name}}}
+  confidence: declared
+# from a.b import c: one edge to a.b. A leading dot does not match \w, so a relative import
+# gives no edge.
+- rule: import_from
+  reads: file
+  in: [python]
+  match: {file: '**', filetype: python, text: '(?m)^from[ \t]+(?<name>\w[\w.]*)[ \t]+import\b'}
+  id: {template: '{module}'}
+  emits:
+  - edge: {kind: imports, from: this_node, to: {from: {capture: name}}}
+  confidence: declared
+# Bindings: the name each import statement binds in its file, at any indent, so an import inside
+# a function binds too. Bindings are file-wide and a later one wins. import a.b binds a to a;
+# import a.b as x binds x to a.b; from m import c as d binds d to m.c. A relative import starts
+# from the package path value, a two-dot one from parent_package; one with three dots or more
+# binds nothing. A list binds one rule per position, up to three names; a from-import list may sit
+# in parentheses across lines.
+- rule: bind_import_first
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*import[ \t]+(?<spec>[\w.]+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound:
+      from: {capture: spec}
+      normalize: [{replace: '^[\w.]+[ \t]+as[ \t]+', with: ''}, {replace: '\..*$', with: ''}]
+    target:
+      from: {capture: spec}
+      normalize: [{replace: '\.[\w.]*$', with: ''}, {replace: '[ \t]+as[ \t]+\w+$', with: ''}]
+  emits: [{binding: {name: '{bound}', target: '{target}'}}]
+  confidence: declared
+- rule: bind_import_second
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*import[ \t]+(?:[\w.]+(?:[ \t]+as[ \t]+\w+)?[ \t]*,[ \t]*){1}(?<spec>[\w.]+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound:
+      from: {capture: spec}
+      normalize: [{replace: '^[\w.]+[ \t]+as[ \t]+', with: ''}, {replace: '\..*$', with: ''}]
+    target:
+      from: {capture: spec}
+      normalize: [{replace: '\.[\w.]*$', with: ''}, {replace: '[ \t]+as[ \t]+\w+$', with: ''}]
+  emits: [{binding: {name: '{bound}', target: '{target}'}}]
+  confidence: declared
+- rule: bind_import_third
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*import[ \t]+(?:[\w.]+(?:[ \t]+as[ \t]+\w+)?[ \t]*,[ \t]*){2}(?<spec>[\w.]+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound:
+      from: {capture: spec}
+      normalize: [{replace: '^[\w.]+[ \t]+as[ \t]+', with: ''}, {replace: '\..*$', with: ''}]
+    target:
+      from: {capture: spec}
+      normalize: [{replace: '\.[\w.]*$', with: ''}, {replace: '[ \t]+as[ \t]+\w+$', with: ''}]
+  emits: [{binding: {name: '{bound}', target: '{target}'}}]
+  confidence: declared
+- rule: bind_from_first
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+(?<source>\w[\w.]*)[ \t]+import[ \t]*\(?\s*(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{source}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_second
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+(?<source>\w[\w.]*)[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){1}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{source}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_third
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+(?<source>\w[\w.]*)[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){2}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{source}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_relative_first
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.(?<source>\w[\w.]*)[ \t]+import[ \t]*\(?\s*(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{package}.{source}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_relative_second
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.(?<source>\w[\w.]*)[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){1}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{package}.{source}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_relative_third
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.(?<source>\w[\w.]*)[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){2}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{package}.{source}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_package_first
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.[ \t]+import[ \t]*\(?\s*(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{package}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_package_second
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){1}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{package}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_package_third
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){2}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{package}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_parent_relative_first
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.\.(?<source>\w[\w.]*)[ \t]+import[ \t]*\(?\s*(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{parent_package}.{source}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_parent_relative_second
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.\.(?<source>\w[\w.]*)[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){1}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{parent_package}.{source}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_parent_relative_third
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.\.(?<source>\w[\w.]*)[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){2}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{parent_package}.{source}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_parent_package_first
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.\.[ \t]+import[ \t]*\(?\s*(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{parent_package}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_parent_package_second
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.\.[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){1}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{parent_package}.{orig}'}}]
+  confidence: declared
+- rule: bind_from_parent_package_third
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^[ \t]*from[ \t]+\.\.[ \t]+import[ \t]*\(?\s*(?:\w+(?:[ \t]+as[ \t]+\w+)?\s*,\s*){2}(?<spec>\w+(?:[ \t]+as[ \t]+\w+)?)'
+  values:
+    bound: {from: {capture: spec}, normalize: [{replace: '^\w+[ \t]+as[ \t]+', with: ''}]}
+    orig: {from: {capture: spec}, normalize: [{replace: '[ \t]+as[ \t]+\w+$', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{parent_package}.{orig}'}}]
+  confidence: declared

@@ -1,0 +1,51 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# go pack — SKETCH in the rule format.
+#
+# Converted as the test of whether the format written against PHP, YAML and Drupal holds for
+# a language that behaves differently in three ways: it declares no type relationships, it
+# takes part of every id from a file at the repository root, and it joins id parts with two
+# different separators in fixed positions.
+
+pack: go
+version: 0.0.2
+depends: []
+
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.13"
+  language: go
+  grammar_version: "0.23.4"
+  # UNVERIFIED: both numbers are placeholders in the shape the other packs use. Neither has
+  # been checked against a published release. Note also that tree-sitter's maintainers say
+  # to pin to a commit rather than a version, which no pack here does yet.
+
+folders:
+  source: ./
+
+files:
+  extensions: [go]
+  exclude: []
+
+identity:
+  qualified_name:
+    parts:
+      - from: manifest
+        file: go.mod
+        match: '^module\s+(\S+)'
+        as: module_path
+      - from: path
+        relative_to: manifest_dir
+        strip: filename
+        as: package_dir
+      - from: declared_name
+    join:
+      - between: [module_path, package_dir]
+        with: "/"
+      - between: [package_dir, declared_name]
+        with: "."
+    # Two separators in fixed positions, and a part that comes from neither the file being
+    # classified nor the pack: `module_path` is one line in go.mod at the repository root.
+    # A PHP file writes its own namespace; a Go file does not.
+  case_folding:
+    sensitive: [all]

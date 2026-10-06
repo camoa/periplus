@@ -1,0 +1,39 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — the form lifecycle methods. Four rules, all reading the map.
+#
+# Each is a method name that means something only inside a form. The containing class's type
+# is what decides it, and that type is itself assigned by a map rule, so these run a pass
+# later again.
+
+needs:
+  types: [drupal.form, drupal.entity_form]
+
+rules:
+
+  - rule: form_build
+    reads: map
+    match: {node_type: php.method, where: [{name: buildForm}, {contained_by_type: drupal.form}]}
+    emits: [{type: drupal.form_build}]
+    confidence: declared
+
+  - rule: form_validate
+    reads: map
+    match: {node_type: php.method, where: [{name: validateForm}, {contained_by_type: drupal.form}]}
+    emits: [{type: drupal.form_validate}]
+    confidence: declared
+
+  - rule: form_submit
+    reads: map
+    match: {node_type: php.method, where: [{name: submitForm}, {contained_by_type: drupal.form}]}
+    emits: [{type: drupal.form_submit}]
+    confidence: declared
+
+  - rule: form_save
+    reads: map
+    match: {node_type: php.method, where: [{name: save}, {contained_by_type: drupal.entity_form}]}
+    emits: [{type: drupal.form_save}]
+    confidence: declared
+    # The pair that makes the point. EntityBase.php:368 and EntityForm.php:293 are both
+    # called `save`. One becomes drupal.entity_save, the other drupal.form_save, and the
+    # only thing separating them is the containing class's type.

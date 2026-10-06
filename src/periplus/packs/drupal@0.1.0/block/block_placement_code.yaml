@@ -1,0 +1,58 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — block placement created by PHP. One rule.
+#
+# Supplementary to block_placement_config.yaml, and the pair is the sharpest evidence we
+# have for why both are needed. In block_ways there are seven placements in config/install
+# and an eighth that exists only as PHP:
+#
+#   config/install     1 2 3 4 5 7 8
+#   block_ways.install 6
+#   the export         all eight
+#
+# So the config rule alone finds nothing until someone exports, and the code rule alone
+# misses seven. Together they hold whatever state the repository is in.
+
+needs:
+  types:
+  - drupal.block_placement
+  - drupal.block_plugin
+rules:
+- rule: block_placement_from_code
+  reads: file
+  in:
+  - custom_module
+  match:
+    static_call: Drupal\block\Entity\Block::create
+    argument: 0
+  id: &id001
+    from:
+      argument_key: id
+    must_be: string_literal
+    template: block.block.{id}
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.block_placement
+  confidence: declared
+- rule: block_placement_from_code_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    static_call: Drupal\block\Entity\Block::create
+    argument: 0
+  emits:
+  - edge:
+      kind: declares
+      from: enclosing_callable
+      to: this_node
+  - edge:
+      kind: places_plugin
+      from: this_node
+      to:
+        from:
+          argument_key: plugin
+        template: drupal.plugin.block::{plugin}
+  confidence: declared
+  id: *id001

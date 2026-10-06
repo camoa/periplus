@@ -1,0 +1,48 @@
+pack: python_text
+version: 0.1.0
+depends: []
+# The project folder is the import root: its direct children are the top-level packages.
+folders:
+  python: ./**
+files:
+  types:
+    python:
+      endings: [py]
+      reader: text
+      path_values:
+        # shop/sub/jobs.py is shop.sub.jobs; shop/__init__.py is shop.
+        module:
+          pattern: '^(?<path>.+)\.py$'
+          template: '{path}'
+          normalize:
+          - {replace: '/__init__$', with: ''}
+          - {replace: '/', with: '.'}
+        # The package a relative import starts from: shop for shop/__init__.py and shop/cli.py.
+        # A module in the project folder itself has none.
+        package:
+          pattern: '^(?<folder>.+)/[^/]+\.py$'
+          template: '{folder}'
+          normalize:
+          - {replace: '/', with: '.'}
+        # The package a two-dot import starts from: shop for shop/sub/jobs.py. A module less than
+        # two folders deep has none.
+        parent_package:
+          pattern: '^(?<folder>.+)/[^/]+/[^/]+\.py$'
+          template: '{folder}'
+          normalize:
+          - {replace: '/', with: '.'}
+      # Text a rule does not read: docstrings and other strings, and comments. Listed longest
+      # first, so a triple quote opens one section and not an empty string.
+      sections:
+      - name: long_string
+        open: '(?<mark>"""|'''''')'
+        close: '{mark}'
+      - name: string
+        open: '"'
+        close: '(?:[^"\\\n]|\\.)*["\n]'
+      - name: string
+        open: ''''
+        close: '(?:[^''\\\n]|\\.)*[''\n]'
+      - name: comment
+        open: '#'
+        close: '\n'

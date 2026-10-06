@@ -1,0 +1,32 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares entity displays. Finds nothing.
+#
+# A display says how a bundle is edited or rendered, one config object per mode. Two kinds,
+# and they are genuinely two: a form display and a view display of the same bundle and mode
+# carry the SAME internal id.
+#
+#   core.entity_form_display.block_content.block_ways_note.default.yml:9
+#   core.entity_view_display.block_content.block_ways_note.default.yml:9
+#     both:  id: block_content.block_ways_note.default
+#
+# That is the evidence for minting config ids from the file name rather than from the file's
+# own id key, and it was found by transcribing a map rather than by reading the schema.
+
+node_types:
+
+  - name: drupal.form_display
+    parent: drupal.config_object
+
+  - name: drupal.view_display
+    parent: drupal.config_object
+
+edge_kinds:
+
+  - kind: displays
+    from: [drupal.form_display, drupal.view_display]
+    to:   drupal.block_type
+
+  - kind: shows_field
+    from: [drupal.form_display, drupal.view_display]
+    to:   drupal.field_instance

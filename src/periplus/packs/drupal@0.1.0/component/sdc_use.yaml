@@ -1,0 +1,25 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — code rendering a component. One rule.
+
+needs:
+  types: [drupal.sdc_component]
+
+rules:
+
+  - rule: component_from_render_array
+    reads: file
+    in: [custom_module, custom_theme]
+    match:
+      array_entry: "#component"
+    id:
+      from: array_value
+      must_be: string_literal
+      on_miss: unresolved
+    emits:
+      - edge: {kind: renders_component, from: enclosing_callable, to: this_node}
+    confidence: declared
+    # WayCardTrait.php:31-38 returns '#type' => 'component', '#component' => 'block_ways:way_card'.
+    # A literal at the reference site meeting a composed id at the declaration site. This is
+    # the edge joining the PHP half of a module to its template half, and no tool that maps
+    # only source files produces it.

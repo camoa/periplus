@@ -1,0 +1,14 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the block type. Finds nothing.
+#
+# A block type is a bundle: it says what fields a content block has.
+#
+# Drupal makes one three ways, and the sibling files here each cover one way. This file
+# only says the type exists, so that a typo in a sibling fails the build instead of
+# minting a type nothing ever finds.
+
+node_types:
+
+  - name: drupal.block_type
+    id_namespace: drupal.block_type

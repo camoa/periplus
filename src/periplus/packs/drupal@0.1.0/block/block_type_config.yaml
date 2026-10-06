@@ -1,0 +1,45 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — block type declared by a config file. One rule.
+#
+# Covers two of the three ways at once, because both produce a file with the same name:
+#   a module shipping it   block_type_ways/config/install/block_content.type.type_way_install.yml
+#   a recipe               recipes/type_way_recipe/
+# and the export carries all of them, whatever route made them.
+
+needs:
+  types: [drupal.block_type]
+
+rules:
+
+  - rule: block_type_from_config
+    reads: file
+    in: [config, module_config]
+    match:
+      file: "block_content.type.*"
+      filetype: yaml
+    id:
+      from: file_stem
+    emits:
+      - node: {type: drupal.block_type}
+      - attribute: {name: label, from: {key: label}}
+    confidence: declared
+    # Verified against three types made three different ways, all reaching one shape:
+    #   config/default/block_content.type.type_way_install.yml
+    #   config/default/block_content.type.type_way_code.yml
+    #   config/default/block_content.type.type_way_recipe.yml
+    #
+    # The id is the whole file name, prefix included: block_content.type.type_way_code.
+    # Stripping the prefix was the first attempt and it is wrong, which only showed up when
+    # the second rule was written. References arrive in two shapes:
+    #   field.field.block_content.type_way_code.body.yml:6   block_content.type.type_way_code
+    #   field.field.block_content.type_way_code.body.yml:13  bundle: type_way_code
+    # The long form is what a dependency list writes, so the long form is the id, and the
+    # short one is composed up to it by whichever rule reads a bundle key.
+    #
+    # The id comes from the file name, not from the file's own `id:` key. That looks like a
+    # free choice and is not. Two files in one module carry the same `id:` value:
+    #   core.entity_form_display.block_content.block_ways_note.default.yml:9
+    #   core.entity_view_display.block_content.block_ways_note.default.yml:9
+    # Both say  id: block_content.block_ways_note.default.  Minting from that key merges a
+    # form display with a view display. The file name is what is actually unique.

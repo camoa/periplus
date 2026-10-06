@@ -1,0 +1,8 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A REST resource plugin, named by its plugin id; plugin_class joins it to its class.
+
+node_types:
+- name: drupal.rest_resource
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.rest_resource

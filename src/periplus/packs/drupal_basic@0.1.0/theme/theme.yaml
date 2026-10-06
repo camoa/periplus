@@ -1,0 +1,15 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A theme, named by its info file. A base theme outside the mapped folders stays referenced.
+
+node_types:
+- name: drupal.theme
+  id_namespace: drupal.theme
+
+edge_kinds:
+- kind: based_on_theme
+  from: drupal.theme
+  to: drupal.theme
+- kind: uses_library
+  from: drupal.theme
+  to: drupal.library

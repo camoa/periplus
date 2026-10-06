@@ -1,0 +1,25 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — the component, from its definition file. One rule.
+
+needs:
+  types: [drupal.sdc_component]
+
+rules:
+
+  - rule: sdc_from_component_file
+    reads: file
+    in: [custom_module, custom_theme]
+    match:
+      file: "components/*/*.component"
+      filetype: yaml
+    id:
+      from: [enclosing_module, parent_directory]
+      template: "{enclosing_module}:{parent_directory}"
+    emits:
+      - node: {type: drupal.sdc_component}
+      - attribute: {name: props, from: {key: props.properties, keys: true}}
+    confidence: declared
+    # The id is composed from two things outside the file: the module that ships it and the
+    # directory it sits in. The file never states its own name. Same shape as a Next.js
+    # route, where the path is the identity and nothing inside the file says so.

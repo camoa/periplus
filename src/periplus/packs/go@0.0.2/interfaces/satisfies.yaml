@@ -1,0 +1,47 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# go pack — implicit interface satisfaction. Two map rules.
+#
+# The case the two-bucket split was designed for. A Go type satisfies an interface by having
+# the right methods, says so nowhere, and the methods may sit in any file of the package. No
+# rule that reads one file can answer it.
+
+needs:
+  types:
+  - go.struct
+  - go.interface
+edge_kinds:
+- kind: has_receiver
+  from: go.method
+  to:
+  - go.struct
+  - go.interface
+- kind: satisfies
+  from: go.struct
+  to: go.interface
+rules:
+- rule: collect_method_set
+  reads: map
+  match:
+    node_type: go.struct
+    where:
+    - has_incoming_edge: has_receiver
+  emits:
+  - attribute:
+      name: method_set
+      from:
+        incoming_edges: has_receiver
+        value: signature
+  confidence: declared
+- rule: satisfies_interface
+  reads: map
+  match:
+    node_type: go.struct
+    where:
+    - method_set_covers: go.interface
+  emits:
+  - edge:
+      kind: satisfies
+      from: this_node
+      to: matched_node
+  confidence: declared

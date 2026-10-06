@@ -1,0 +1,98 @@
+node_types:
+- name: typer.app
+  id_namespace: typer.app
+- name: typer.command
+  id_namespace: typer.command
+edge_kinds:
+- kind: registered_on
+  from: typer.command
+  to: typer.app
+- kind: mounted_under
+  from: typer.app
+  to: typer.app
+rules:
+# name = typer.Typer(...) or name: T = x.Typer(...), a direct statement of the module body. Which
+# module x names is not read: the rule assumes it is typer.
+- rule: app_attribute
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^(?<var>\w+)(?:[ \t]*:[^=\n]*)?[ \t]*=[ \t]*\w+\.Typer\('
+  id: {template: '{module}.{var}'}
+  emits: [{node: {type: typer.app}}]
+  confidence: inferred
+# name = Typer(...), after from typer import Typer.
+- rule: app_bare
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)^(?<var>\w+)(?:[ \t]*:[^=\n]*)?[ \t]*=[ \t]*Typer\('
+  id: {template: '{module}.{var}'}
+  emits: [{node: {type: typer.app}}]
+  confidence: inferred
+# parent.add_typer(child, ...) and parent.add_typer(..., typer_instance=child). A text rule's edge
+# runs from or to this_node, which carries no on_miss, so each form is two rules: one whose
+# this_node is the parent, one whose this_node is the child. The two rules state the same edge.
+# Each end resolves through the file's bindings: a written name whose first segment an import
+# binds takes the bound target joined with the rest, and any other name takes {module}. An end
+# that names no app the rules map is unresolved, searched for under the resolved name.
+- rule: mount_parent
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)(?:^|[^\w.\n])(?<parent>\w+(?:\.\w+)*)\.add_typer\(\s*(?<child>\w+(?:\.\w+)*)\s*[,)]'
+  id: {from: {capture: parent}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.'}
+  emits:
+  - edge:
+      kind: mounted_under
+      from: {from: {capture: child}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}
+      to: this_node
+  confidence: inferred
+- rule: mount_child
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)(?:^|[^\w.\n])(?<parent>\w+(?:\.\w+)*)\.add_typer\(\s*(?<child>\w+(?:\.\w+)*)\s*[,)]'
+  id: {from: {capture: child}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.'}
+  emits:
+  - edge:
+      kind: mounted_under
+      from: this_node
+      to: {from: {capture: parent}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}
+  confidence: inferred
+- rule: mount_keyword_parent
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)(?:^|[^\w.\n])(?<parent>\w+(?:\.\w+)*)\.add_typer\((?:(?:[^()"'']|"[^"]*"|''[^'']*''|\((?:[^()"'']|"[^"]*"|''[^'']*'')*\))*?,)?\s*typer_instance\s*=\s*(?<child>\w+(?:\.\w+)*)'
+  id: {from: {capture: parent}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.'}
+  emits:
+  - edge:
+      kind: mounted_under
+      from: {from: {capture: child}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}
+      to: this_node
+  confidence: inferred
+- rule: mount_keyword_child
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: '(?m)(?:^|[^\w.\n])(?<parent>\w+(?:\.\w+)*)\.add_typer\((?:(?:[^()"'']|"[^"]*"|''[^'']*''|\((?:[^()"'']|"[^"]*"|''[^'']*'')*\))*?,)?\s*typer_instance\s*=\s*(?<child>\w+(?:\.\w+)*)'
+  id: {from: {capture: child}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.'}
+  emits:
+  - edge:
+      kind: mounted_under
+      from: this_node
+      to: {from: {capture: parent}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}
+  confidence: inferred

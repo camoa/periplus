@@ -1,0 +1,16 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+imports:
+# import u "example.com/app/util" binds u. import "gopkg.in/yaml.v3" binds yaml: the path less a
+# trailing /vN with N 2 or more, its last segment, less a trailing .vN. So "k8s.io/api/core/v1"
+# binds v1. The target is the whole path. A blank or a dot import binds nothing.
+- ast: import_spec
+  clause: interpreted_string_literal
+  facts: {alias: name}
+  bind:
+    name: [alias, path]
+    normalize:
+    - {replace: '/v([2-9]|[1-9][0-9]+)$', with: ''}
+    - {replace: '^.*/', with: ''}
+    - {replace: '\.v\d+$', with: ''}
+    unbound_aliases: [_, .]

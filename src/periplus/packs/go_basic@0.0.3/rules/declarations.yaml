@@ -1,0 +1,40 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+rules:
+# func Name(...): <package import path>.Name
+- rule: function
+  reads: file
+  in: [source]
+  match: {declaration: function_declaration, name_child: name, filetype: go}
+  id: {from: qualified_name}
+  emits: [{node: {type: go.function}}]
+  confidence: declared
+# func (c *Command) Name(...): <package>.Command.Name. The receiver field is the whole
+# parenthesised list; normalize drops the variable, the star and any type parameters.
+- rule: method
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: go}
+  id:
+    from: [pkg, receiver, declared_name]
+    template: '{pkg}.{receiver}.{declared_name}'
+    normalize:
+    - {replace: '\(\s*(?:\w+\s+)?\*?\s*', with: ''}
+    - {replace: '(?:\[[^\]]*\])?\s*\)', with: ''}
+  emits: [{node: {type: go.method}}]
+  confidence: declared
+# type T struct{...} and type T interface{...} are both type_spec; the child type tells them apart.
+- rule: struct
+  reads: file
+  in: [source]
+  match: {declaration: type_spec, name_child: name, filetype: go, where: [{has_child: struct_type}]}
+  id: {from: qualified_name}
+  emits: [{node: {type: go.struct}}]
+  confidence: declared
+- rule: interface
+  reads: file
+  in: [source]
+  match: {declaration: type_spec, name_child: name, filetype: go, where: [{has_child: interface_type}]}
+  id: {from: qualified_name}
+  emits: [{node: {type: go.interface}}]
+  confidence: declared

@@ -1,0 +1,20 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — the import-statement facts this pack extracts.
+
+# --------------------------------------------------------------------------------------
+# Import statements are facts, not just a lookup table.
+#
+# why: the importer kept only the last path segment and discarded the rest, so
+#      `use function A\{render};` claimed `render` as a class and re-pointed a sibling's
+#      `extends Render`.
+# --------------------------------------------------------------------------------------
+imports:
+  - ast: namespace_use_declaration
+    group_ast: namespace_use_group
+    facts:
+      target_fqn: written_path
+      alias: as_clause
+      use_kind: declaration_keyword     # `function` / `const` sits on the declaration in
+                                        # group form, not on each clause
+    binds_through_alias: true

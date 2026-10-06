@@ -1,0 +1,89 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — call edges. Five rules, and they differ in confidence for a reason only the
+# author knows.
+#
+# A call site's shape constrains what it may bind to. A bare `name()` is a function call and
+# can never resolve to a method.
+# why: conflating them fabricated 848 edges from 368 files for `event()` alone, 290 for
+#      `config()`, 186 for `dispatch()`.
+
+needs:
+  types: [php.callable, php.function, php.method]
+
+rules:
+
+  - rule: plain_function_call
+    reads: file
+    in: [source]
+    match: {declaration: function_call_expression}
+    emits: [{edge: {kind: calls, from: enclosing_callable, to: {from: qualified_name}}}]
+    confidence: declared
+
+  - rule: method_call_on_inline_construction
+    reads: file
+    in: [source]
+    match:
+      declaration: member_call_expression
+      where:
+        - receiver: object_creation_expression_in_scope
+    emits: [{edge: {kind: calls, from: enclosing_callable, to: {from: qualified_name}}}]
+    confidence: declared
+    # The receiver's class is written at the call site, so nothing is being guessed.
+
+  - rule: method_call_on_declared_type
+    reads: file
+    in: [source]
+    match:
+      declaration: member_call_expression
+      where:
+        - receiver: typed_property
+        - receiver: typed_parameter
+        - receiver: promoted_constructor_parameter
+    emits: [{edge: {kind: calls, from: enclosing_callable, to: {from: qualified_name}}}]
+    confidence: inferred
+    # The declared type is a claim about runtime, not an observation of it. Same edge kind,
+    # lower confidence, decided when the rule was written rather than at runtime.
+
+  - rule: this_call
+    reads: map
+    match:
+      declaration: member_call_expression
+      where:
+        - receiver: this
+    emits: [{edge: {kind: calls, from: enclosing_callable, to: {from: resolved_method}}}]
+    confidence: declared
+    # 239 sites in one real module, and the pack had no rule for the most common call shape
+    # in the language. `reads: map` because $this may resolve to a method on the class, on
+    # any ancestor, or on a mixed-in trait — 43 of those classes extend something and 7 use
+    # a trait, so it is a walk along inherits and mixes_in, not a lookup in one file.
+
+  - rule: untyped_receiver
+    reads: file
+    in: [source]
+    match:
+      declaration: member_call_expression
+      where:
+        - receiver: untyped_variable
+    id:
+      from: subscript_key
+      on_miss: unresolved
+    emits: [{node: {type: php.callable, state: unresolved}}]
+    confidence: declared
+    # 470 sites, the largest single shape, and honestly unresolvable: an untyped local has
+    # no declared type to bind to. The pack already says on_zero_definitions: unresolved.
+    # 470 recorded gaps beat 470 invented edges, and this is where `Draft -> t` came from.
+
+  - rule: static_call
+    reads: file
+    in: [source]
+    match: {declaration: scoped_call_expression}
+    emits: [{edge: {kind: calls, from: enclosing_callable, to: {from: qualified_name}}}]
+    confidence: declared
+
+  - rule: first_class_callable
+    reads: file
+    in: [source]
+    match: {declaration: first_class_callable}
+    emits: [{edge: {kind: indirect_call, from: enclosing_callable, to: {from: qualified_name}}}]
+    confidence: declared

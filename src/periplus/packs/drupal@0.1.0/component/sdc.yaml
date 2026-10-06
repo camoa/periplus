@@ -1,0 +1,19 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the Single Directory Component and the edge that renders one.
+
+node_types:
+
+  - name: drupal.sdc_component
+    id_namespace: drupal.sdc
+
+edge_kinds:
+
+  - kind: renders_component
+    from: php.callable
+    to:   drupal.sdc_component
+
+# The template itself is not in the map, and that is a gap rather than a decision.
+# components/way_card/way_card.twig is where the component's behaviour lives. No pack claims
+# .twig, so it is never opened. A twig pack fixes it the way the yaml pack fixed
+# configuration — by being a pack, not by this one growing a second grammar.

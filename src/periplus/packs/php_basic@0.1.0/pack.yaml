@@ -1,0 +1,64 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The basic PHP pack: every class, interface, trait, enum, function and method becomes a node
+# under its full name, and a class-like gets its inherits, implements, mixes_in and contains edges.
+# It sits beside the reference pack php and does not replace it.
+pack: php_basic
+version: 0.1.0
+depends: []
+
+# Pinned exactly: the rules name tree node types, and those can change across grammar releases.
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.0"
+  language: php
+  grammar_version: "0.24.1"
+
+# The whole project at any depth; a dependent pack or the project settings narrows it.
+folders:
+  source: ./**
+
+files:
+  extensions: [php]
+  exclude:
+  - '**/vendor/**'
+  - '**/node_modules/**'
+
+# How a full name is built, read by the engine as data. namespace names the tree node that
+# declares a namespace and the field holding its name; written_names are the tree node types of a
+# name written in source, such as the names after extends.
+identity:
+  qualified_name:
+    parts: [namespace, declared_name]
+    separator: "\\"
+  namespace:
+    declaration: namespace_definition
+    name_child: name
+  written_names: [name, qualified_name, namespace_name]
+  # How a written name becomes a full one, the first step that holds giving it: a name with a
+  # leading backslash is full without it; a name whose first segment a use of its namespace block
+  # binds takes the used path in place of that segment; any other name takes the namespace.
+  resolve:
+  - full_if_prefixed: "\\"
+  - bound_first_segment
+  - prefix_with: namespace
+  # How an attribute is written: its node, the list that holds it on a declaration, the field of
+  # its arguments, one argument and the field of its name, and the text literals with the node of
+  # their text.
+  attribute:
+    node: attribute
+    list: attribute_list
+    arguments: parameters
+    argument: argument
+    argument_name: name
+    literals: [string, encapsed_string]
+    literal_content: string_content
+  # A call's arguments: their field, one argument and the field of its name, and the text
+  # literals with the node of their text. view('a') holds 'a' at position 0.
+  call_arguments: arguments
+  call_argument: argument
+  call_argument_name: name
+  call_literals: [string, encapsed_string]
+  call_literal_content: [string_content]
+  # The tree node type of a comment; a docblock is the comment just before a declaration.
+  comment: comment

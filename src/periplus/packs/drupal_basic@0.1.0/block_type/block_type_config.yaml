@@ -1,0 +1,24 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A block type read from its config file. The id is the whole file name, prefix included, so a
+# dependency list's block_content.type.<id> reaches the same node.
+
+rules:
+- rule: block_type_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: block_content.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.block_type
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared

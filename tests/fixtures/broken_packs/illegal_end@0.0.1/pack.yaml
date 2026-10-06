@@ -1,0 +1,4 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+pack: illegal_end
+version: 0.0.1
+depends: []

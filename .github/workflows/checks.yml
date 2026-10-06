@@ -1,0 +1,98 @@
+# Three jobs, because they answer three questions and a failure
+# should name which one: does the suite pass on every interpreter the package declares, does the
+# source pass the two static checks, and does every bundled pack still agree with the shipped
+# schemas.
+
+name: checks
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# One in-flight run per branch. A second push supersedes the first rather than queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: suite on ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Every interpreter reports, rather than the first failure hiding the other three. A version
+      # that fails alone is the finding a matrix exists to produce.
+      fail-fast: false
+      matrix:
+        # The four `pyproject.toml` declares in `requires-python` and in its classifiers.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      # The dev extra is pinned to exact versions in `pyproject.toml`, so this installs the
+      # versions review runs rather than whatever resolved today.
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      # `uv` is a hard requirement of this job and it is not in the dev extra, because it is a
+      # tool the suite shells out to rather than a library the package imports. Six tests build a
+      # real virtualenv or a real wheel through it -- the two install tests, the wheel and sdist
+      # content tests, and the two that read the contract out of an installed wheel -- and each
+      # calls `pytest.fail("uv is not on PATH, ...")` rather than skipping, deliberately: a
+      # silently skipped install test is worse than a red job.
+      #
+      # The GitHub-hosted ubuntu runner image does not ship uv (its readme lists pip and pipx and
+      # not uv), so without this step the six tests fail.
+      #
+      # Installed from PyPI rather than through a third-party action, so this job depends on no
+      # action beyond the two first-party ones above. Pinned, like everything else here.
+      - run: python -m pip install 'uv==0.12.7'
+      # The three install tests build a virtualenv each and are slow by design. They run here:
+      # the marker exists so a tight inner loop can deselect them, never so CI can.
+      - run: python -m pytest
+
+  static:
+    name: ruff and mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # One interpreter, and the lowest one, because `[tool.mypy] python_version` is 3.11 and
+          # `[tool.ruff] target-version` is py311. Running the checks under the version they are
+          # configured for is the only run that says anything.
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m ruff check .
+      - run: python -m mypy
+
+  packs:
+    name: bundled packs validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install .
+      # The five pack names written out rather than read off `src/periplus/packs/`, for the reason
+      # `tests/test_validate.py` gives for its own copy: a step that lists the directory it is
+      # checking passes against an empty one.
+      #
+      # Every pack is validated before the job fails, so one run names every broken pack rather
+      # than the first. `periplus validate` exits 16 when a pack file disagrees with its schema.
+      - name: validate every bundled pack
+        run: |
+          set -u
+          status=0
+          for pack in drupal go php twig yaml; do
+            echo "== $pack"
+            periplus validate "$pack" || status=1
+          done
+          exit $status

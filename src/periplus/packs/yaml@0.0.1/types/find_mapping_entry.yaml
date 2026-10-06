@@ -1,0 +1,21 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# yaml pack — finds a mapping entry. One rule.
+#
+# Emitted only where a dependent pack asks for it with a path expression, never for every
+# key in every file. `each: "services.*"` in the Drupal pack and `each: "*"` for menu links
+# are that expression, and how it is written is the open question this sketch does not
+# close.
+
+needs:
+  types: [yaml.mapping_entry]
+
+rules:
+
+  - rule: find_mapping_entry
+    reads: file
+    in: [source]
+    match: {declaration: block_mapping_pair, name_child: key}
+    id: {from: qualified_name}
+    emits: [{node: {type: yaml.mapping_entry}}]
+    confidence: declared

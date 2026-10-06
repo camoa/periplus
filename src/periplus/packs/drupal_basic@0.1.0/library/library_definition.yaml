@@ -1,0 +1,58 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A library read from a libraries file, one per top-level key. Two rules because a rule that emits
+# an edge emits no node. The stem is viewer_3d.libraries, so the id drops .libraries before the
+# slash and reads viewer_3d/viewer_3d.
+
+rules:
+- rule: library_from_libraries_file
+  reads: file
+  in:
+  - module_root
+  - theme_root
+  match:
+    file: '*.libraries'
+    filetype: yaml
+    each: '*'
+  id:
+    from:
+    - file_stem
+    - key
+    template: '{file_stem}/{key}'
+    normalize:
+    - replace: \.libraries/
+      with: /
+  emits:
+  - node:
+      type: drupal.library
+  - attribute:
+      name: version
+      from:
+        key: version
+  confidence: declared
+- rule: library_from_libraries_file_edges
+  reads: file
+  in:
+  - module_root
+  - theme_root
+  match:
+    file: '*.libraries'
+    filetype: yaml
+    each: '*'
+  id:
+    from:
+    - file_stem
+    - key
+    template: '{file_stem}/{key}'
+    normalize:
+    - replace: \.libraries/
+      with: /
+  emits:
+  - edge:
+      kind: depends_on_library
+      from: this_node
+      to:
+        from:
+          key: dependencies
+        each: true
+  confidence: declared

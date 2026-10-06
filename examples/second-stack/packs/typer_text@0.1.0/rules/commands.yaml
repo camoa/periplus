@@ -1,0 +1,276 @@
+# Generated forms: each command rule pairs with an _on rule that gives its registered_on edge.
+# Decorators stacked above a def are matched by depth, one rule per depth, because one match
+# ends at the def and would hide the decorators below it.
+rules:
+# A command decorator with a written name, directly above its def.
+- rule: command_named_0
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:\w+\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})\s*,\s*)*name\s*=\s*)?["'](?<name>[^"'\n]+)["'](?:[^()"']|"[^"]*"|'[^']*'|\((?:[^()"']|"[^"]*"|'[^']*')*\))*\)[ \t]*\n[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  id: {template: '{module}.{recv}:{name}'}
+  emits:
+  - node: {type: typer.command}
+  - attribute: {name: name, from: {capture: name}}
+  - attribute: {name: function, from: {capture: fn}}
+  confidence: declared
+- rule: command_named_0_on
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:\w+\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})\s*,\s*)*name\s*=\s*)?["'](?<name>[^"'\n]+)["'](?:[^()"']|"[^"]*"|'[^']*'|\((?:[^()"']|"[^"]*"|'[^']*')*\))*\)[ \t]*\n[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  id: {template: '{module}.{recv}:{name}'}
+  emits:
+  - edge: {kind: registered_on, from: this_node, to: {from: {capture: recv}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}}
+  confidence: inferred
+# A command decorator whose name comes from its function, directly above its def.
+- rule: command_derived_0
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:None|""|'')\s*(?:,\s*)?)?(?:(?:(?:[a-mo-zA-Z_]\w*|n(?:[b-zA-Z0-9_]\w*|a(?:[a-ln-zA-Z0-9_]\w*|m(?:[a-df-zA-Z0-9_]\w*|e\w+)?)?)?)\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})|name\s*=\s*(?:None|""|''))\s*(?:,\s*)?)*\)[ \t]*\n[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  values:
+    command:
+      from: {capture: fn}
+      normalize:
+      - {replace: '^.*\.', with: ''}
+      - {replace: '_', with: '-'}
+      case: lower
+  id: {template: '{module}.{recv}:{command}'}
+  emits:
+  - node: {type: typer.command}
+  - attribute: {name: name, from: {value: command}}
+  - attribute: {name: function, from: {capture: fn}}
+  confidence: inferred
+- rule: command_derived_0_on
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:None|""|'')\s*(?:,\s*)?)?(?:(?:(?:[a-mo-zA-Z_]\w*|n(?:[b-zA-Z0-9_]\w*|a(?:[a-ln-zA-Z0-9_]\w*|m(?:[a-df-zA-Z0-9_]\w*|e\w+)?)?)?)\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})|name\s*=\s*(?:None|""|''))\s*(?:,\s*)?)*\)[ \t]*\n[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  values:
+    command:
+      from: {capture: fn}
+      normalize:
+      - {replace: '^.*\.', with: ''}
+      - {replace: '_', with: '-'}
+      case: lower
+  id: {template: '{module}.{recv}:{command}'}
+  emits:
+  - edge: {kind: registered_on, from: this_node, to: {from: {capture: recv}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}}
+  confidence: inferred
+# A command decorator with a written name, with one decorator between it and its def.
+- rule: command_named_1
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:\w+\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})\s*,\s*)*name\s*=\s*)?["'](?<name>[^"'\n]+)["'](?:[^()"']|"[^"]*"|'[^']*'|\((?:[^()"']|"[^"]*"|'[^']*')*\))*\)[ \t]*\n(?:[ \t]*@[^\n]*\n){1}[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  id: {template: '{module}.{recv}:{name}'}
+  emits:
+  - node: {type: typer.command}
+  - attribute: {name: name, from: {capture: name}}
+  - attribute: {name: function, from: {capture: fn}}
+  confidence: declared
+- rule: command_named_1_on
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:\w+\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})\s*,\s*)*name\s*=\s*)?["'](?<name>[^"'\n]+)["'](?:[^()"']|"[^"]*"|'[^']*'|\((?:[^()"']|"[^"]*"|'[^']*')*\))*\)[ \t]*\n(?:[ \t]*@[^\n]*\n){1}[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  id: {template: '{module}.{recv}:{name}'}
+  emits:
+  - edge: {kind: registered_on, from: this_node, to: {from: {capture: recv}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}}
+  confidence: inferred
+# A command decorator whose name comes from its function, with one decorator between it and its def.
+- rule: command_derived_1
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:None|""|'')\s*(?:,\s*)?)?(?:(?:(?:[a-mo-zA-Z_]\w*|n(?:[b-zA-Z0-9_]\w*|a(?:[a-ln-zA-Z0-9_]\w*|m(?:[a-df-zA-Z0-9_]\w*|e\w+)?)?)?)\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})|name\s*=\s*(?:None|""|''))\s*(?:,\s*)?)*\)[ \t]*\n(?:[ \t]*@[^\n]*\n){1}[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  values:
+    command:
+      from: {capture: fn}
+      normalize:
+      - {replace: '^.*\.', with: ''}
+      - {replace: '_', with: '-'}
+      case: lower
+  id: {template: '{module}.{recv}:{command}'}
+  emits:
+  - node: {type: typer.command}
+  - attribute: {name: name, from: {value: command}}
+  - attribute: {name: function, from: {capture: fn}}
+  confidence: inferred
+- rule: command_derived_1_on
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:None|""|'')\s*(?:,\s*)?)?(?:(?:(?:[a-mo-zA-Z_]\w*|n(?:[b-zA-Z0-9_]\w*|a(?:[a-ln-zA-Z0-9_]\w*|m(?:[a-df-zA-Z0-9_]\w*|e\w+)?)?)?)\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})|name\s*=\s*(?:None|""|''))\s*(?:,\s*)?)*\)[ \t]*\n(?:[ \t]*@[^\n]*\n){1}[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  values:
+    command:
+      from: {capture: fn}
+      normalize:
+      - {replace: '^.*\.', with: ''}
+      - {replace: '_', with: '-'}
+      case: lower
+  id: {template: '{module}.{recv}:{command}'}
+  emits:
+  - edge: {kind: registered_on, from: this_node, to: {from: {capture: recv}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}}
+  confidence: inferred
+# A command decorator with a written name, with two decorators between it and its def.
+- rule: command_named_2
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:\w+\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})\s*,\s*)*name\s*=\s*)?["'](?<name>[^"'\n]+)["'](?:[^()"']|"[^"]*"|'[^']*'|\((?:[^()"']|"[^"]*"|'[^']*')*\))*\)[ \t]*\n(?:[ \t]*@[^\n]*\n){2}[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  id: {template: '{module}.{recv}:{name}'}
+  emits:
+  - node: {type: typer.command}
+  - attribute: {name: name, from: {capture: name}}
+  - attribute: {name: function, from: {capture: fn}}
+  confidence: declared
+- rule: command_named_2_on
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:\w+\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})\s*,\s*)*name\s*=\s*)?["'](?<name>[^"'\n]+)["'](?:[^()"']|"[^"]*"|'[^']*'|\((?:[^()"']|"[^"]*"|'[^']*')*\))*\)[ \t]*\n(?:[ \t]*@[^\n]*\n){2}[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  id: {template: '{module}.{recv}:{name}'}
+  emits:
+  - edge: {kind: registered_on, from: this_node, to: {from: {capture: recv}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}}
+  confidence: inferred
+# A command decorator whose name comes from its function, with two decorators between it and its def.
+- rule: command_derived_2
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:None|""|'')\s*(?:,\s*)?)?(?:(?:(?:[a-mo-zA-Z_]\w*|n(?:[b-zA-Z0-9_]\w*|a(?:[a-ln-zA-Z0-9_]\w*|m(?:[a-df-zA-Z0-9_]\w*|e\w+)?)?)?)\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})|name\s*=\s*(?:None|""|''))\s*(?:,\s*)?)*\)[ \t]*\n(?:[ \t]*@[^\n]*\n){2}[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  values:
+    command:
+      from: {capture: fn}
+      normalize:
+      - {replace: '^.*\.', with: ''}
+      - {replace: '_', with: '-'}
+      case: lower
+  id: {template: '{module}.{recv}:{command}'}
+  emits:
+  - node: {type: typer.command}
+  - attribute: {name: name, from: {value: command}}
+  - attribute: {name: function, from: {capture: fn}}
+  confidence: inferred
+- rule: command_derived_2_on
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)^[ \t]*@(?<recv>\w+)\.command\(\s*(?:(?:None|""|'')\s*(?:,\s*)?)?(?:(?:(?:[a-mo-zA-Z_]\w*|n(?:[b-zA-Z0-9_]\w*|a(?:[a-ln-zA-Z0-9_]\w*|m(?:[a-df-zA-Z0-9_]\w*|e\w+)?)?)?)\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})|name\s*=\s*(?:None|""|''))\s*(?:,\s*)?)*\)[ \t]*\n(?:[ \t]*@[^\n]*\n){2}[ \t]*(?:async[ \t]+)?def[ \t]+(?<fn>\w+)
+  values:
+    command:
+      from: {capture: fn}
+      normalize:
+      - {replace: '^.*\.', with: ''}
+      - {replace: '_', with: '-'}
+      case: lower
+  id: {template: '{module}.{recv}:{command}'}
+  emits:
+  - edge: {kind: registered_on, from: this_node, to: {from: {capture: recv}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}}
+  confidence: inferred
+# A registration by direct call, receiver.command("name")(function).
+- rule: command_call_named
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)(?:^|[^\w.\n])(?<recv>\w+)\.command\(\s*(?:(?:\w+\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})\s*,\s*)*name\s*=\s*)?["'](?<name>[^"'\n]+)["'](?:[^()"']|"[^"]*"|'[^']*'|\((?:[^()"']|"[^"]*"|'[^']*')*\))*\)\((?<fn>\w+(?:\.\w+)*)\)
+  id: {template: '{module}.{recv}:{name}'}
+  emits:
+  - node: {type: typer.command}
+  - attribute: {name: name, from: {capture: name}}
+  - attribute: {name: function, from: {capture: fn}}
+  confidence: declared
+- rule: command_call_named_on
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)(?:^|[^\w.\n])(?<recv>\w+)\.command\(\s*(?:(?:\w+\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})\s*,\s*)*name\s*=\s*)?["'](?<name>[^"'\n]+)["'](?:[^()"']|"[^"]*"|'[^']*'|\((?:[^()"']|"[^"]*"|'[^']*')*\))*\)\((?<fn>\w+(?:\.\w+)*)\)
+  id: {template: '{module}.{recv}:{name}'}
+  emits:
+  - edge: {kind: registered_on, from: this_node, to: {from: {capture: recv}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}}
+  confidence: inferred
+# A registration by direct call whose name comes from the function.
+- rule: command_call_derived
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)(?:^|[^\w.\n])(?<recv>\w+)\.command\(\s*(?:(?:None|""|'')\s*(?:,\s*)?)?(?:(?:(?:[a-mo-zA-Z_]\w*|n(?:[b-zA-Z0-9_]\w*|a(?:[a-ln-zA-Z0-9_]\w*|m(?:[a-df-zA-Z0-9_]\w*|e\w+)?)?)?)\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})|name\s*=\s*(?:None|""|''))\s*(?:,\s*)?)*\)\((?<fn>\w+(?:\.\w+)*)\)
+  values:
+    command:
+      from: {capture: fn}
+      normalize:
+      - {replace: '^.*\.', with: ''}
+      - {replace: '_', with: '-'}
+      case: lower
+  id: {template: '{module}.{recv}:{command}'}
+  emits:
+  - node: {type: typer.command}
+  - attribute: {name: name, from: {value: command}}
+  - attribute: {name: function, from: {capture: fn}}
+  confidence: inferred
+- rule: command_call_derived_on
+  reads: file
+  in: [python]
+  match:
+    file: '**'
+    filetype: python
+    text: |-
+      (?m)(?:^|[^\w.\n])(?<recv>\w+)\.command\(\s*(?:(?:None|""|'')\s*(?:,\s*)?)?(?:(?:(?:[a-mo-zA-Z_]\w*|n(?:[b-zA-Z0-9_]\w*|a(?:[a-ln-zA-Z0-9_]\w*|m(?:[a-df-zA-Z0-9_]\w*|e\w+)?)?)?)\s*=\s*(?:[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*')(?:\s*[rRbBfFuU]{0,2}(?:"[^"\n]*"|'[^'\n]*'))*|[\w.]+(?:\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\])?|\((?:[^()"']|"[^"]*"|'[^']*')*\)|\[[^\[\]]*\]|\{[^{}]*\})|name\s*=\s*(?:None|""|''))\s*(?:,\s*)?)*\)\((?<fn>\w+(?:\.\w+)*)\)
+  values:
+    command:
+      from: {capture: fn}
+      normalize:
+      - {replace: '^.*\.', with: ''}
+      - {replace: '_', with: '-'}
+      case: lower
+  id: {template: '{module}.{recv}:{command}'}
+  emits:
+  - edge: {kind: registered_on, from: this_node, to: {from: {capture: recv}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}}
+  confidence: inferred

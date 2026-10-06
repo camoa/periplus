@@ -1,0 +1,64 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — the edge kinds this pack declares. Finding them is in edges/find_*.yaml.
+#
+# Endpoints take one type or a flat list of alternatives. Nesting a combination inside a
+# list is not expressible — that is the grammar restriction that keeps validation cheap,
+# and it can be widened later without breaking any pack written against it.
+
+edge_kinds:
+
+  - kind: contains
+    from: [php.file, php.file_entry, php.class_like, php.callable]
+    to:   [php.class_like, php.callable, php.property, php.class_constant, php.enum_case]
+    source: nearest_enclosing_container
+    # why: the containment source was hardcoded to the file node across 15 language
+    #      configs, so a method's container was the file rather than its class.
+
+  - kind: inherits
+    from: php.class
+    to:   php.class
+
+  - kind: implements
+    from: [php.class, php.enum]
+    to:   php.interface
+
+  - kind: mixes_in
+    from: php.class_like
+    to:   php.trait
+
+  - kind: instantiates
+    from: php.callable
+    to:   php.class
+    # why: `object_creation_expression` was simply absent from the trigger set. On one
+    #      615-file corpus that was 505 `new X(` sites across 178 classes emitting nothing.
+    #
+    # Its own kind rather than folded into `calls`: instantiating a class and calling a
+    # method are different questions, and a reader asking "who constructs this" should not
+    # have to filter call edges.
+
+  - kind: calls
+    from: php.callable
+    to:   php.callable
+
+  - kind: indirect_call
+    from: php.callable
+    to:   php.callable
+    # why: `$obj->m(...)` creates a Closure and transfers control nowhere. Recording it as
+    #      `calls` asserts something false; dropping it loses a real reference.
+
+  # Operational edges. Open in the design, drafted here so the shape can be argued with.
+  - kind: reads
+    from: php.callable
+    to:   [php.property, php.class_constant, php.enum_case]
+
+  - kind: writes
+    from: php.callable
+    to:   php.property
+    # Separate from `reads` rather than one relation with a direction field: the write is
+    # the half that answers "what changes this", and folding them together loses most of
+    # the value of having the edge at all.
+
+  - kind: imports
+    from: php.file
+    to:   [php.class_like, php.function, php.class_constant]

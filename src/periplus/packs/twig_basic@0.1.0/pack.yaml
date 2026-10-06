@@ -1,0 +1,11 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The smallest template pack: it claims the twig extension and nothing else. It has no grammar, so
+# a file of this type is never parsed; a whole-file rule that names the filetype needs only the
+# file's name.
+pack: twig_basic
+version: 0.1.0
+depends: []
+
+files:
+  extensions: [twig]

@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An action plugin declared by the Action docblock annotation on its class. Two rules because a rule
+# that emits an edge emits no node. An id that is not text in double quotes makes no plugin and is
+# listed under skipped in the map report.
+
+rules:
+- rule: action_from_annotation
+  reads: file
+  in:
+  - action_classes
+  match:
+    annotation: Action
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.action_plugin
+  confidence: declared
+- rule: action_from_annotation_edges
+  reads: file
+  in:
+  - action_classes
+  match:
+    annotation: Action
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

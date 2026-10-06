@@ -1,0 +1,44 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# yaml pack — the node types and the containment edge. Kept out of pack.yaml because the
+# manifest schema refuses a manifest that also holds types.
+
+# --------------------------------------------------------------------------------------
+# Node types.
+#
+# Two, and deliberately no more. A pack that declared yaml.scalar and yaml.sequence would
+# be re-emitting the parse tree as a graph, which is a different tool. The mapping node
+# exists only so a dependent pack has something to attach a `contains` edge to when one
+# file declares several things — `block_ways.links.menu.yml` declares three menu link
+# plugins and is itself no config object.
+# --------------------------------------------------------------------------------------
+node_types:
+
+  - name: yaml.file
+    container: true
+
+  - name: yaml.mapping_entry
+    parent: yaml.file
+    container: true
+
+edge_kinds:
+
+  - kind: contains
+    from: [yaml.file, yaml.mapping_entry]
+    to:   yaml.mapping_entry
+    source: nearest_enclosing_container
+    confidence: declared
+
+# --------------------------------------------------------------------------------------
+# What this pack deliberately does not have.
+#
+# No resolution section. A YAML scalar that happens to read like a name is a string, and
+# nothing in the language makes it a reference. Every reference in a Drupal config file —
+# `plugin: block_ways_attribute`, `menu_name: block-ways-demo`, a dependency list — is
+# meaningful only because Drupal says so. Putting a name-matching rule here would fabricate
+# edges in every YAML file of every stack.
+#
+# why: this is the same failure as the global lowercased name map that fused a PHP
+#      `Exception` with an unrelated TypeScript class. Matching by shape rather than by a
+#      declared rule is how phantom edges get made.
+# --------------------------------------------------------------------------------------

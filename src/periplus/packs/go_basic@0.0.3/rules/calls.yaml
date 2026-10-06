@@ -1,0 +1,25 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+rules:
+# f(x) in a function or method: an edge to <package>.f; pkg.F(x): to <import path>.F, through the
+# grammar's resolve. The end gives no resolve of its own, since its steps would run again on the
+# resolved name. whole_written skips a chained call, a.B().C(). Builtins and predeclared
+# conversions make nothing.
+- rule: calls
+  reads: file
+  in: [source]
+  match:
+    reference: call_expression
+    name_child: function
+    filetype: go
+    whole_written: true
+    skip_names: [append, cap, clear, close, complex, copy, delete, imag, len, make, max, min, new,
+      panic, print, println, real, recover, any, bool, byte, comparable, complex64, complex128,
+      error, float32, float64, int, int8, int16, int32, int64, rune, string, uint, uint8, uint16,
+      uint32, uint64, uintptr]
+  emits:
+  - edge:
+      kind: calls
+      from: enclosing_declaration
+      to: {types: [go.function, go.struct, go.interface], on_miss: unresolved}
+  confidence: declared

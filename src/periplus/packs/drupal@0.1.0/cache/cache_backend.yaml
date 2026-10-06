@@ -1,0 +1,31 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — classifies a cache backend and its role. Two rules, both reading the map.
+
+needs:
+  types: [drupal.cache_backend]
+  roles: [drupal.invalidates_cache_tags]
+
+rules:
+
+  - rule: cache_backend_class
+    reads: map
+    match:
+      node_type: php.class
+      where:
+        - ancestor_reaches: "Drupal\\Core\\Cache\\CacheBackendInterface"
+    emits:
+      - type: drupal.cache_backend
+    confidence: declared
+
+  - rule: invalidates_cache_tags
+    reads: map
+    match:
+      node_type: php.class
+      where:
+        - ancestor_reaches: "Drupal\\Core\\Cache\\CacheTagsInvalidatorInterface"
+    emits:
+      - role: drupal.invalidates_cache_tags
+    confidence: declared
+    # A role accumulates and never collides. A second matching TYPE would be a real
+    # collision and the build refuses; a second role is just a second capability.

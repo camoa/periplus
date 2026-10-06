@@ -1,0 +1,9 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An action plugin, named by its plugin id; plugin_class joins it to its class. It ends at the same
+# type and id namespace whichever way it is declared.
+
+node_types:
+- name: drupal.action_plugin
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.action

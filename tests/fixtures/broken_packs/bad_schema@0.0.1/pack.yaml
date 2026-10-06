@@ -1,0 +1,4 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+pack: bad_schema
+version: 0.0.1
+depends: []

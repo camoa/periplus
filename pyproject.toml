@@ -1,0 +1,114 @@
+[build-system]
+requires = ["hatchling==1.32.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "periplus-map"
+description = "A schema-first, deterministic codebase mapper, configurable to any stack."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "camoa" }]
+keywords = ["codebase", "map", "static-analysis", "deterministic"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Quality Assurance",
+  "Typing :: Typed",
+]
+# Declared here and nowhere else. src/periplus/__init__.py reads it back at runtime through
+# importlib.metadata.version(), so the number is written once and `periplus --version` prints
+# what this file says by construction rather than by two places agreeing.
+version = "0.1.0"
+
+# Five runtime distributions. The count is still a decision, not an accident, and this comment
+# said "two runtime distributions, zero transitive" until `periplus validate` needed a validator.
+# ruamel.yaml is here because it is YAML 1.2 and PyYAML is 1.1, which changes what every pack file
+# means. platformdirs is here because XDG is the Python convention and hand-rolling it gets the
+# Windows and macOS cases wrong. Both still pull nothing behind them.
+#
+# jsonschema is the third, and it is what cost the zero-transitive half: it brings attrs,
+# jsonschema-specifications, referencing, rpds-py and typing-extensions. Five, and rpds-py is a
+# compiled Rust extension -- so uv.lock now carries per-platform wheel entries, and an install
+# needs a wheel for its platform or a Rust toolchain to build one. That was taken knowingly.
+# `periplus validate` and the CI step that runs it exist to say that a pack file disagrees with the
+# shipped schema, and the bug that matters there is the one that says valid when it is not. A
+# fail-closed subset validator of our own was weighed and declined: all 48 $refs are local and the
+# schemas use 25 keywords, so it was tractable, but its verdict would agree with the reference
+# implementation only as far as our implementation is correct. A test pins the closure to those
+# five, so a version bump that adds a sixth is a decision somebody makes rather than a thing that
+# happens on an unlucky install.
+dependencies = [
+  "ruamel.yaml==0.19.1",
+  "platformdirs==4.11.5",
+  "jsonschema==4.26.0",
+  # The fourth and fifth: the parser runtime, and the grammar the bundled pack php_basic pins.
+  "tree-sitter==0.26.0",
+  "tree-sitter-php==0.24.1",
+]
+
+[project.optional-dependencies]
+# Pinned to the versions review runs. A local pass against a different version is not a pass.
+dev = [
+  "pytest==9.1.1",
+  "mypy==2.3.1",
+  "ruff==0.15.0",
+  # jsonschema ships no py.typed, so mypy strict reports import-untyped without these stubs.
+  "types-jsonschema==4.26.0.20260518",
+]
+# The grammar the bundled pack go_basic pins. Optional, because only a Go project reads it.
+go = ["tree-sitter-go==0.25.0"]
+
+[project.scripts]
+periplus = "periplus.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/camoa/periplus"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/periplus"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/periplus", "LICENSE", "NOTICE", "README.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
+# --strict-markers means an unregistered marker is an error, so it is declared here. The three
+# install tests each build a virtualenv and are slow by nature; they run by default because
+# installing is the packaging's whole point, and the marker exists so a tight inner
+# loop can deselect them with -m "not slow", never so CI can.
+markers = ["slow: builds a virtualenv and installs into it"]
+
+[tool.mypy]
+files = ["src"]
+strict = true
+python_version = "3.11"
+
+[tool.ruff]
+src = ["src"]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+  "E", "W",   # pycodestyle
+  "F",        # pyflakes
+  "I",        # import sorting
+  "B",        # bugbear — catches the mutable default argument the recipe names
+  "UP",       # pyupgrade
+  "S",        # bandit — catches shell=True and the injection sinks the recipe names
+  "PTH",      # flake8-use-pathlib — the recipe requires pathlib.Path over string joining
+  "RET",      # explicit returns
+  "SIM",      # simplify
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert; S101 forbids assert outside tests.
+"tests/**" = ["S101"]

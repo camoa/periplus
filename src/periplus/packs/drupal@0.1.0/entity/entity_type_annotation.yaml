@@ -1,0 +1,85 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — entity type declared by a docblock annotation. One rule.
+#
+# Not a legacy tail, and the measurement that says so is the strongest argument in this
+# directory. A private Drupal site, a 2026 codebase:
+#
+#   20 files carry @ContentEntityType
+#    0 files carry #[ContentEntityType]
+#
+# A pack supporting attributes only would map that site's entire entity layer as nothing.
+
+needs:
+  types:
+  - drupal.content_entity_type
+  - drupal.config_entity_type
+rules:
+- rule: content_entity_type_from_annotation
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: ContentEntityType
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  id: &id001
+    from:
+      annotation_key: id
+    must_be: string_literal
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.content_entity_type
+  confidence: declared
+- rule: config_entity_type_from_annotation
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: ConfigEntityType
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  id: &id002
+    from:
+      annotation_key: id
+    must_be: string_literal
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.config_entity_type
+  confidence: declared
+- rule: content_entity_type_from_annotation_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: ContentEntityType
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  emits:
+  - edge:
+      kind: entity_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+  id: *id001
+- rule: config_entity_type_from_annotation_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    annotation: ConfigEntityType
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  emits:
+  - edge:
+      kind: entity_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+  id: *id002

@@ -1,0 +1,60 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — classifies a class as an entity class. One rule, and it reads the map.
+#
+# This is the rule that settled a question the old file got wrong by omission. It looks
+# like a rule about one file, and it is not.
+#
+# A class becomes an entity class because of what it extends, and the chain has to be
+# followed. In the common case that is one hop into a class the pack already describes:
+# all 19 custom entities in a private Drupal site write `extends ContentEntityBase` directly,
+# so the pack's own hierarchy table answers it without the map.
+#
+# But the same rule shape, applied to the rest of that codebase, chains through FIRST-PARTY
+# base classes:
+#   OrgScopedEntityAccessControlHandler   extended 7 times, itself first-party
+#   JobTypeBase                           extended 9 times
+#   ChatToolLoop                          extended 7 times
+# A class extending one of those cannot be classified until that base has been, and nothing
+# tells you in advance which case a file is.
+#
+# So transitive classification is ALWAYS a map rule. Not sometimes. The fixpoint sorts the
+# order out, and no pack author has to think about it.
+
+needs:
+  types: [drupal.entity_class, drupal.content_entity_class, drupal.config_entity_class]
+
+rules:
+
+  - rule: entity_class_content
+    reads: map
+    match:
+      node_type: php.class
+      where:
+        - ancestor_reaches: "Drupal\\Core\\Entity\\ContentEntityInterface"
+    emits:
+      - type: drupal.content_entity_class
+    confidence: declared
+    # Verified: a private Drupal site has 19 classes reaching this through ContentEntityBase,
+    # and not one of them writes `implements ContentEntityInterface` at its own declaration.
+    # A rule matching the written clause would match nothing real.
+
+  - rule: entity_class_config
+    reads: map
+    match:
+      node_type: php.class
+      where:
+        - ancestor_reaches: "Drupal\\Core\\Config\\Entity\\ConfigEntityInterface"
+    emits:
+      - type: drupal.config_entity_class
+    confidence: declared
+    # contrib pathauto PathautoPattern.php:74 extends ConfigEntityBase.
+
+# ------------------------------------------------------------------------------------
+# Deduplication is engine behaviour, not a switch.
+#
+# The old file carried `dedupe_paths: true` on one rule. It exists because EntityForm
+# reaches FormInterface twice — through FormBase, and through EntityFormInterface which
+# extends BaseFormIdInterface. Following both paths and counting the hit twice is never
+# what anyone wants, so the engine always dedupes and a pack never says so.
+# ------------------------------------------------------------------------------------

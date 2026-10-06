@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — a service injected by attribute, on a property. One rule.
+#
+# Written to test whether an attribute sitting on something other than a class needs
+# anything new. It does not.
+
+needs:
+  types: [drupal.service]
+
+rules:
+
+  - rule: autowired_property
+    reads: file
+    in: [custom_module, custom_theme]
+    match:
+      attribute: "Symfony\\Component\\DependencyInjection\\Attribute\\Autowire"
+      where:
+        - applies_to: property_declaration
+    id:
+      from: {attribute_argument: service}
+      must_be: string_literal
+      on_miss: unresolved
+    emits:
+      - edge: {kind: resolves_service, from: enclosing_class, to: this_node}
+    confidence: declared
+    # Same five keys as every other rule. The only difference from the block attribute rule
+    # is one `applies_to` value and which argument holds the id.

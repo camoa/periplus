@@ -1,0 +1,49 @@
+# The edge rule's match, id and in equal the node rule's as documents: its twin is that rule, and
+# the run maps the edges from its nodes.
+
+node_types:
+- name: twin_found.thing
+  id_namespace: twin_found.thing
+- name: twin_found.other
+  id_namespace: twin_found.other
+
+# The from end allows two types with two namespaces, so the edge rule's own node is named only
+# through its twin.
+edge_kinds:
+- kind: twin_found_names
+  from:
+  - twin_found.thing
+  - twin_found.other
+  to: twin_found.other
+
+rules:
+- rule: thing_from_block_type
+  reads: file
+  in:
+  - config
+  match:
+    file: block_content.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: twin_found.thing
+  confidence: declared
+- rule: target_rule
+  reads: file
+  in:
+  - config
+  match:
+    file: block_content.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: twin_found_names
+      from: this_node
+      to:
+        from:
+          key: id
+  confidence: declared

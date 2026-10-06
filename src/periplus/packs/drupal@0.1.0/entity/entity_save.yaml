@@ -1,0 +1,27 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — the entity save method. One rule, and it reads the map.
+#
+# The case that proves a rule cannot key on a name. Core has two methods called `save` that
+# differ only in what their containing class is:
+#   EntityBase.php:368  save()
+#   EntityForm.php:293  save(array $form, FormStateInterface $form_state)
+# A name-only rule matches both and distinguishes neither.
+
+needs:
+  types: [drupal.entity_class]
+
+rules:
+
+  - rule: entity_save
+    reads: map
+    match:
+      node_type: php.method
+      where:
+        - name: save
+        - contained_by_type: drupal.entity_class
+    emits:
+      - type: drupal.entity_save
+    confidence: declared
+    # `reads: map` because the containing class's type is what decides it, and that type is
+    # itself assigned by a map rule. Two passes, and the old file said neither.

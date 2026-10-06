@@ -1,0 +1,50 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field widget plugin, named by its plugin id; plugin_class joins it to its class.
+
+node_types:
+- name: drupal.field_widget
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.field_widget
+
+# A field widget declared by the FieldWidget attribute on its class, the twin of the
+# annotation rule. Two rules because a rule that emits an edge emits no node. An id that is not a
+# text literal makes no field widget and is listed under skipped.
+
+rules:
+- rule: field_widget_from_attribute
+  reads: file
+  in:
+  - field_widget_classes
+  match:
+    attribute: Drupal\Core\Field\Attribute\FieldWidget
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.field_widget
+  confidence: declared
+- rule: field_widget_from_attribute_edges
+  reads: file
+  in:
+  - field_widget_classes
+  match:
+    attribute: Drupal\Core\Field\Attribute\FieldWidget
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

@@ -1,0 +1,51 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A block placement read from its config file: its theme, region and weight, and the plugin it
+# places. Two rules because a rule that emits an edge emits no node.
+
+rules:
+- rule: block_placement_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: block.block.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.block_placement
+  - attribute:
+      name: theme
+      from:
+        key: theme
+  - attribute:
+      name: region
+      from:
+        key: region
+  - attribute:
+      name: weight
+      from:
+        key: weight
+  confidence: declared
+- rule: block_placement_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: block.block.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: places_plugin
+      from: this_node
+      to:
+        from:
+          key: plugin
+        template: drupal.plugin.block::{plugin}
+  confidence: declared

@@ -1,2 +1,69 @@
 .DS_Store
 *.local
+
+# Secrets. Nothing here holds one today, but this CLI is designed to read settings files off
+# disk, and a settings file is where a token lands.
+#
+# Named forms only, never a bare *secret* or *credentials* glob, because of what they cost:
+# src/periplus/secret_redactor.py and credentials_rule.py would be plausible
+# modules for a mapper whose first pack targets Drupal, where "key" and "secret" name real config
+# objects — and a pattern that silently drops a source file gives green local runs and a pushed
+# tree missing a module, with nothing inventorying the subtree. A gap here is visible; an
+# over-match is not.
+.env
+.env.*
+!.env.example
+.envrc
+.netrc
+.pypirc
+*.local.*
+!*.local.example
+secrets.*
+.secrets/
+credentials.*
+.credentials/
+*.pem
+*.p12
+*.pfx
+*.key
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+
+# Pack data is data, and a pack may legitimately carry a rule file named secrets.yaml,
+# credentials.yaml or settings.local.yaml — Drupal, the first pack's target, has config objects
+# by those names.
+#
+# Scoped to *.yaml, and the scope is the whole point. A blanket `!src/periplus/packs/**` would
+# make .env, .pypirc, .netrc, id_rsa, deploy.pem and
+# .secrets/ committable anywhere under packs/ — and because hatchling honours .gitignore, a
+# planted id_rsa would reach the built wheel. That publishes a credential, not just commits one.
+# All bundled pack files are .yaml, so this re-includes every real pack file and nothing else.
+#
+# A gitignored pack file does not vanish silently from a fresh clone: hatchling drops it from the wheel
+# while rglob still sees it on disk, so test_wheel_pack_data_is_complete_not_just_the_manifests
+# fails naming the exact path.
+!src/periplus/packs/**/*.yaml
+
+# Build and install artifacts. uv, ruff, pytest and mypy each drop a self-ignoring .gitignore
+# inside their own cache directory, so these entries are belt-and-braces rather than the only
+# thing keeping them out — a tool version that stops doing that should not silently start
+# committing a virtualenv.
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# uv's lockfile is COMMITTED on purpose — uv's project-layout documentation says to check it in
+# and makes no library/application distinction, and it is the posture the map itself takes:
+# generated, committed, reviewed. It is listed here only to say it is deliberately absent from
+# the ignore list, so nobody adds it later thinking it was an oversight.
+# uv.lock

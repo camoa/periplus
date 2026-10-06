@@ -1,0 +1,50 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — the module, from its info file. One rule.
+
+needs:
+  types:
+  - drupal.module
+rules:
+- rule: module_from_info_file
+  reads: file
+  in:
+  - custom_module
+  match:
+    file: '*.info'
+    filetype: yaml
+    where:
+    - key:
+        name: type
+        equals: module
+  id: &id001
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.module
+  - attribute:
+      name: name
+      from:
+        key: name
+  confidence: declared
+- rule: module_from_info_file_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    file: '*.info'
+    filetype: yaml
+    where:
+    - key:
+        name: type
+        equals: module
+  emits:
+  - edge:
+      kind: depends_on_module
+      from: this_node
+      to:
+        from:
+          key: dependencies
+        each: true
+  confidence: declared
+  id: *id001

@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — block type created by PHP. One rule.
+#
+# Supplementary to block_type_config.yaml: neither needs the other, and they land on one
+# node only because both mint the same id. If they minted different ids there would be two
+# nodes, the map would look full, and nothing would report it.
+
+needs:
+  types:
+  - drupal.block_type
+rules:
+- rule: block_type_from_code
+  reads: file
+  in:
+  - custom_module
+  match:
+    static_call: Drupal\block_content\Entity\BlockContentType::create
+    argument: 0
+  id: &id001
+    from:
+      argument_key: id
+    must_be: string_literal
+    template: block_content.type.{id}
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.block_type
+  confidence: declared
+- rule: block_type_from_code_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    static_call: Drupal\block_content\Entity\BlockContentType::create
+    argument: 0
+  emits:
+  - edge:
+      kind: declares
+      from: enclosing_callable
+      to: this_node
+  confidence: declared
+  id: *id001

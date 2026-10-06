@@ -1,0 +1,19 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the service and the edge that resolves one.
+
+node_types:
+
+  - name: drupal.service
+    id_namespace: drupal.service
+
+edge_kinds:
+
+  - kind: resolves_service
+    from: [php.callable, drupal.config_object]
+    to:   drupal.service
+    # The config_object endpoint was added after a real refusal. A block placement
+    # references a service at block.block.block_ways_4_context.yml:21:
+    #   user: '@user.current_user_context:current_user'
+    # With `from: php.callable` alone the endpoint check rejected that edge, which is the
+    # schema working — and the fix is to widen the endpoint, not to drop the edge.

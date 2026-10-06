@@ -1,0 +1,4 @@
+bogus_key: 1
+node_types:
+- name: bad_schema.thing
+  id_namespace: bad_schema.thing

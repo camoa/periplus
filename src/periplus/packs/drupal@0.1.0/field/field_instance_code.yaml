@@ -1,0 +1,40 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — field instance created by PHP. One rule.
+
+needs:
+  types:
+  - drupal.field_instance
+rules:
+- rule: field_instance_from_code
+  reads: file
+  in:
+  - custom_module
+  match:
+    static_call: Drupal\field\Entity\FieldConfig::create
+    argument: 0
+  id: &id001
+    from:
+    - argument_key: entity_type
+    - argument_key: bundle
+    - argument_key: field_name
+    template: field.field.{entity_type}.{bundle}.{field_name}
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.field_instance
+  confidence: declared
+- rule: field_instance_from_code_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    static_call: Drupal\field\Entity\FieldConfig::create
+    argument: 0
+  emits:
+  - edge:
+      kind: declares
+      from: enclosing_callable
+      to: this_node
+  confidence: declared
+  id: *id001

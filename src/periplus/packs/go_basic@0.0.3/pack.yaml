@@ -1,0 +1,104 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# Known gaps. The basic Go pack maps every package-level function, every method under its
+# receiver type, and every struct and interface, each under its package's import path. It maps a
+# call written f(x) to the function, struct or interface of that name in the caller's package,
+# and pkg.F(x) to F under the import path pkg binds. A call into a package outside the project,
+# fmt.Println() or cobra.Execute() after "github.com/spf13/cobra/v2", is an unresolved function
+# named by the import path and the function: fmt.Println, github.com/spf13/cobra/v2.Execute.
+# What it does not map, today:
+# - A method call on a value, s.Serve(), makes no edge: s is bound by no import, so no step holds
+#   and the call is listed under skipped. A chained call, s.Self().Serve(), is skipped as not a
+#   written name; its inner call is a call of its own.
+# - A method expression, util.T.M(t), is an unresolved function example.com/app/util.T.M, beside
+#   the mapped method of that name, with no edge to the method.
+# - A generic call with type arguments, util.G[int](1), makes no edge and is not listed as skipped.
+# - A call in a package-level initialiser, var early = util.Make(), makes no edge: it is listed
+#   under skipped, as no enclosing declaration is mapped.
+# - An import binds its alias, else the last segment of its path less a trailing /vN, N 2 or more,
+#   or .vN: "gopkg.in/yaml.v3" binds yaml, "k8s.io/api/core/v1" binds v1. A package whose name
+#   differs, package other in folder naming, needs an alias: other.Thing() without one is
+#   skipped, and no edge reaches the mapped Thing.
+# - A blank or a dot import binds nothing: after . "unicode", unicode.IsUpper() is skipped as no
+#   step holds. A bare call of a name a dot import brings in, ToUpper(s), shows as an unresolved
+#   <package>.ToUpper in the caller's package.
+# - A local variable named like an imported package gives a false end: after
+#   url, err := url.Parse(s), url.String() is a calls edge to the unresolved net/url.String.
+# - A method call on a package-level variable gives a false unresolved function: os.Stdout.Fd()
+#   ends at os.Stdout.Fd, pflag.CommandLine.Parse() at github.com/spf13/pflag.CommandLine.Parse,
+#   not at a method of the variable's type.
+# - An edge's occurrences counts lines: two calls of one target on one line count once.
+# - A call of a local function variable or parameter, fn(), shows as a call of <package>.fn. It
+#   is unresolved, unless the package declares fn: then the edge lands on that declaration, falsely.
+# - A conversion to a named non-struct type, byName(x), also shows as an unresolved function.
+# - A call of a project function named like a Go builtin or predeclared type, such as min, max or
+#   len, makes no edge. Those names are skipped before any lookup.
+# - A type declared inside a function gets a package-level id, as if declared at the top. Two
+#   functions that each declare a type T give one node T holding both locations.
+# - Build constraints are not read, so every platform file is mapped. Plat declared in a_linux.go
+#   and a_windows.go of one package is one node holding both locations, with no problem reported.
+# - Test files (*_test.go) are not read, nor folders named testdata or vendor. So vendored
+#   dependencies are not mapped.
+# - A folder or a .go file whose name starts with _ or a dot is not read. Go still builds such a
+#   folder when another package imports it by path, so a call into it, hid.Secret() after
+#   hid "example.com/app/_hidden", ends at an unresolved example.com/app/_hidden.Secret.
+# - A nested module, a folder with its own go.mod, is mapped under the outer module as
+#   <module>/<folder>, which is not its real import path.
+# The module path is not read from go.mod. Give it in the project settings as values.module, such
+# as module: github.com/spf13/cobra, and run periplus at the module's root. Without it, periplus
+# map exits 19 and writes no map, with "the template {module}/{file}, which names module, no
+# capture of its pattern and no settings value". If the module sits in
+# a subfolder of the project, that folder's name becomes part of every package path: name the
+# folder as the module path's last segment and set values.module to the path without it, or move
+# the settings to the module's root.
+# The grammar is the optional extra go. Without it, periplus map exits 28 with "pins
+# tree-sitter-go 0.25.0, and the version found is none"; install periplus-map[go].
+pack: go_basic
+version: 0.0.3
+depends: []
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.0"
+  language: go
+  grammar_version: "0.25.0"
+# The whole project at any depth. The project root is the Go module's root.
+folders:
+  source: ./**
+files:
+  # A _test.go file is test code, often a second package, a testdata folder holds fixtures, a
+  # vendor folder holds dependencies. The go tool ignores a .go file whose name starts with _ or
+  # a dot, and ./... skips such a folder, though Go builds one a package imports by path.
+  exclude: ['**/*_test.go', '**/testdata/**', '**/vendor/**', '**/_*/**', '**/.*/**', '**/_*.go', '**/.*.go']
+  types:
+    go:
+      endings: [go]
+      reader: tree
+      path_values:
+        # The import path of a file's package: the module path from the settings, then the
+        # file's folder below the module root. main.go is <module>, doc/md_docs.go <module>/doc.
+        pkg:
+          pattern: '^(?<file>.+)$'
+          template: '{module}/{file}'
+          normalize:
+          - {replace: '/[^/]+$', with: ''}
+identity:
+  # A full name is the package's import path, a dot, and the declared name.
+  qualified_name:
+    parts: [namespace, declared_name]
+    separator: "."
+  namespace:
+    path_value: pkg
+  # A call's name is written when it is an identifier, f(), or a selector of identifiers,
+  # x.f(). interpreted_string_literal_content is an import's path.
+  written_names: [identifier, selector_expression, field_identifier, interpreted_string_literal_content]
+  # f() is in the file's own package, even when f is also an import's bound name: in Go a bare
+  # name in a call is never a package. x.f() takes the import path x binds. A dotted name whose
+  # first segment no import binds, as a method on a value, has no step that holds.
+  resolve:
+  - prefix_bare_with: namespace
+  - bound_first_segment
+  # A call's arguments are the named children of its arguments field, by position. Its text
+  # literals are an interpreted and a raw string, each with its own node of text.
+  call_arguments: arguments
+  call_literals: [interpreted_string_literal, raw_string_literal]
+  call_literal_content: [interpreted_string_literal_content, raw_string_literal_content]

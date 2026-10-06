@@ -1,0 +1,102 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — finds every declaration the language has. Nine rules, one per construct.
+#
+# One rule per construct rather than one rule with a list, because each declares where its
+# name lives and which child holds its body, and those differ. That difference is not
+# cosmetic: `enum_declaration_list` differs from `declaration_list` by one word, and that
+# single difference is what made all 119 enums invisible.
+
+needs:
+  types: [php.class, php.interface, php.trait, php.enum, php.function, php.method,
+          php.property, php.class_constant, php.enum_case]
+
+rules:
+
+  - rule: find_class
+    reads: file
+    in: [source]
+    match: {declaration: class_declaration, name_child: name, body_child: declaration_list}
+    id: {from: qualified_name}
+    emits: [{node: {type: php.class}}]
+    confidence: declared
+
+  - rule: find_interface
+    reads: file
+    in: [source]
+    match: {declaration: interface_declaration, name_child: name, body_child: declaration_list}
+    id: {from: qualified_name}
+    emits: [{node: {type: php.interface}}]
+    confidence: declared
+
+  - rule: find_trait
+    reads: file
+    in: [source]
+    match: {declaration: trait_declaration, name_child: name, body_child: declaration_list}
+    id: {from: qualified_name}
+    emits: [{node: {type: php.trait}}]
+    confidence: declared
+
+  - rule: find_enum
+    reads: file
+    in: [source]
+    match: {declaration: enum_declaration, name_child: name, body_child: enum_declaration_list}
+    id: {from: qualified_name}
+    emits: [{node: {type: php.enum}}]
+    confidence: declared
+    # why: this one child name differs from the other three, and that single difference is
+    #      what made all 119 enums invisible. Declaring it per rule is the fix.
+
+  - rule: find_function
+    reads: file
+    in: [source]
+    match: {declaration: function_definition, name_child: name}
+    id: {from: qualified_name}
+    emits: [{node: {type: php.function}}]
+    confidence: declared
+
+  - rule: find_method
+    reads: file
+    in: [source]
+    match: {declaration: method_declaration, name_child: name}
+    id:
+      from: [namespace, enclosing_type, declared_name]
+      template: "{namespace}\\{enclosing_type}::{declared_name}"
+    emits: [{node: {type: php.method}}]
+    confidence: declared
+
+  - rule: find_property
+    reads: file
+    in: [source]
+    match: {declaration: property_declaration, name_child: name}
+    id:
+      from: [namespace, enclosing_type, declared_name]
+      template: "{namespace}\\{enclosing_type}::{declared_name}"
+    emits: [{node: {type: php.property}}]
+    confidence: declared
+
+  # why: the pack's own identity block is `parts: [namespace, declared_name]`, which is right
+  #      for a class and wrong for everything inside one. Run against block_ways it merged
+  #      four different build() methods on four different classes into one node —
+  #      AnnotationBlock:31, AttributeBlock:30, ContextAwareBlock:40, DerivedBlock:33 — with
+  #      no error. A member's id needs the type that holds it, so these four rules carry
+  #      their own template, exactly as go's find_method carries its receiver.
+  - rule: find_class_constant
+    reads: file
+    in: [source]
+    match: {declaration: const_declaration, name_child: name}
+    id:
+      from: [namespace, enclosing_type, declared_name]
+      template: "{namespace}\\{enclosing_type}::{declared_name}"
+    emits: [{node: {type: php.class_constant}}]
+    confidence: declared
+
+  - rule: find_enum_case
+    reads: file
+    in: [source]
+    match: {declaration: enum_case, name_child: name}
+    id:
+      from: [namespace, enclosing_type, declared_name]
+      template: "{namespace}\\{enclosing_type}::{declared_name}"
+    emits: [{node: {type: php.enum_case}}]
+    confidence: declared

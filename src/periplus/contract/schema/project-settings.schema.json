@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://periplus.dev/schema/0/project-settings.schema.json",
+  "title": "Periplus project settings",
+  "description": "periplus.settings.yml, at the root of the repository being mapped. Committed and reviewed like source. It is the only place a person edits anything the map depends on, and it holds what no pack can know. A general settings file holds what is true for a machine or a user; this one wins where they disagree.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["periplus_version"],
+  "properties": {
+
+    "periplus_version": {"type": "integer", "minimum": 0},
+
+    "packs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*@\\d+\\.\\d+\\.\\d+$"},
+      "description": "Named, not implied by what happens to be on disk. A pack shipped inside a downloaded module loads because this list names it, not because it is present — which is also the whole of the trust story for third-party packs. Not required: a project nobody has configured has no `packs` key at all, which is the file `periplus init` writes and the state `periplus status` exits 0 on. `minItems` is what keeps the other case refused — a key present and empty is a claim that no pack applies, which is a different statement and one no run should accept quietly."
+    },
+
+    "pack_paths": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Extra directories to resolve packs from, beside the ones the tool ships. A pack a person writes for their own repository is found the same way a bundled one is, or third-party packs are second-class by construction."
+    },
+
+    "folders": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "string"},
+          {"type": "array", "items": {"type": "string"}, "minItems": 1}
+        ]
+      },
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+      "description": "Overrides the pack's defaults for this repository. Exported configuration is the case that proves it: three real Drupal sites keep it in three different places, one of them computed in PHP at runtime."
+    },
+
+    "first_party": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include": {"type": "array", "items": {"type": "string"}},
+        "exclude": {"type": "array", "items": {"type": "string"}}
+      },
+      "description": "Path-based, needing no pack, so a dependency published tomorrow still stops at the boundary. This is also where a dependency is deliberately promoted to first-party, which is the boundary mechanism under test: one line, no engine change."
+    },
+
+    "extensions": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "description": "The last word over any pack. An extension can have no correct global meaning — .inc is PHP here and Pascal somewhere else — so the only place that settles is the project."
+    },
+
+    "values": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+      "description": "Named text values that no pack can know, such as the module path a project's packages sit under. Every template of every pack may name one as {name}, as it names a path value: a rule's id template, and the template of a file type's path value, so a path value can read {module}/{dir}. A name a loaded pack also gives as a path value, or that a rule captures, is refused when the map is made, and so is a path value template that names a value neither its pattern nor these values give."
+    },
+
+    "exclude":    {"type": "array", "items": {"type": "string"}},
+    "re_include": {
+      "type": "array", "items": {"type": "string"},
+      "description": "Takes back a pack's exclusion without forking the pack. It has to exist for the same reason the extension override does: a pack states a convention, and one repository is always the exception."
+    },
+
+    "accepted_unknowns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "rule", "reason", "accepted_by", "accepted_on"],
+        "properties": {
+          "id":          {"type": "string"},
+          "rule":        {"type": "string", "description": "pack.rule_name, matching the `rule:` key of the rule that failed."},
+          "reason":      {"type": "string"},
+          "accepted_by": {"type": "string"},
+          "accepted_on": {"type": "string", "format": "date"}
+        }
+      },
+      "description": "Gaps accepted as permanent. Dynamic dispatch, a computed string, an id assembled at runtime. This cannot live in the map, which is generated and must never be hand-edited. Same shape as a lint suppression, and it is what lets an unresolved count reach zero and mean something."
+    }
+  }
+}

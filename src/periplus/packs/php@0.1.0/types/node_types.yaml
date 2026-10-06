@@ -1,0 +1,55 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — the node types this pack declares. Finding them is in types/find_*.yaml.
+#
+# why: `class_types` held `class_declaration` only. 291 declarations minted no node —
+#      142 interfaces, 30 traits, 119 enums — and their methods re-attributed to the file
+#      as free functions. ~19,000 imports edges dangled. 18 stubs shared one label.
+
+node_types:
+
+  - name: php.file
+    container: true
+
+  - name: php.file_entry
+    container: true
+    parent: php.file
+    synthetic: true
+    # why: top-level code has no enclosing callable, so a call from module scope had no
+    #      caller and the function looked dead — 18 file-caller edges out of ~195 known
+    #      sites. A declared synthetic entry container gives that code somewhere to live.
+
+  - name: php.class_like
+    abstract: true
+    container: true
+
+  - name: php.class
+    parent: php.class_like
+
+  - name: php.interface
+    parent: php.class_like
+
+  - name: php.trait
+    parent: php.class_like
+
+  - name: php.enum
+    parent: php.class_like
+
+  - name: php.callable
+    abstract: true
+    container: true
+
+  - name: php.function
+    parent: php.callable
+
+  - name: php.method
+    parent: php.callable
+
+  # Members get their own types so an edge can terminate on one.
+  # why: no language emitted an edge pointing at a member. `Foo::$prop` pointed at the
+  #      class, so "what writes this field" had no answer anywhere in the graph.
+  - name: php.property
+
+  - name: php.class_constant
+
+  - name: php.enum_case

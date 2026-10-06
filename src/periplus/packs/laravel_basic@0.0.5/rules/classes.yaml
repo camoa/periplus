@@ -1,0 +1,42 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A controller and an Eloquent model, each its own node beside the php.class php_basic makes for
+# the same class, with an edge to that class. A rule cannot add a type or a role to the class
+# node itself, cannot test what a class extends or its name, and a declaration rule cannot narrow
+# by file name, so both are found by folder alone: a controller is any class in the controllers
+# folder, a model any class in the models folder. No body_child: a second rule on
+# class_declaration with one breaks php_basic's enclosing_class edges.
+
+rules:
+
+- rule: controller_class
+  reads: file
+  in: [controllers]
+  match: {declaration: class_declaration, name_child: name, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: laravel.controller}}]
+  confidence: inferred
+
+- rule: controller_is_class
+  reads: file
+  in: [controllers]
+  match: {declaration: class_declaration, name_child: name, filetype: php}
+  id: {from: qualified_name}
+  emits: [{edge: {kind: implemented_by, from: this_node, to: {from: qualified_name}}}]
+  confidence: inferred
+
+- rule: model_class
+  reads: file
+  in: [models]
+  match: {declaration: class_declaration, name_child: name, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: laravel.model}}]
+  confidence: inferred
+
+- rule: model_is_class
+  reads: file
+  in: [models]
+  match: {declaration: class_declaration, name_child: name, filetype: php}
+  id: {from: qualified_name}
+  emits: [{edge: {kind: implemented_by, from: this_node, to: {from: qualified_name}}}]
+  confidence: inferred

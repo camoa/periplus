@@ -1,0 +1,42 @@
+node_types:
+- name: illegal_end.thing
+  id_namespace: illegal_end.thing
+- name: illegal_end.other
+  id_namespace: illegal_end.other
+
+edge_kinds:
+- kind: owns
+  from: illegal_end.other
+  to: illegal_end.other
+
+rules:
+- rule: thing_from_file
+  reads: file
+  in:
+  - config
+  match:
+    file: '*'
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: illegal_end.thing
+  confidence: declared
+- rule: target_rule
+  reads: file
+  in:
+  - config
+  match:
+    file: '*'
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: owns
+      from: this_node
+      to:
+        from:
+          key: label
+  confidence: declared

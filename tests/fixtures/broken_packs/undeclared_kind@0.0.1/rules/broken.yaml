@@ -1,0 +1,22 @@
+node_types:
+- name: undeclared_kind.thing
+  id_namespace: undeclared_kind.thing
+
+rules:
+- rule: target_rule
+  reads: file
+  in:
+  - config
+  match:
+    file: '*'
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: ghost_kind
+      from: this_node
+      to:
+        from:
+          key: label
+  confidence: declared

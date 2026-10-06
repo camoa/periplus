@@ -1,0 +1,46 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A config entity type declared by the ConfigEntityType docblock annotation on its class. An id
+# that is not text in double quotes makes no entity type and is listed under skipped.
+
+rules:
+- rule: config_entity_type_from_annotation
+  reads: file
+  in:
+  - entity_type_classes
+  match:
+    annotation: ConfigEntityType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.config_entity_type
+  - attribute:
+      name: label
+      from:
+        annotation_key: label
+  confidence: declared
+- rule: config_entity_type_from_annotation_edges
+  reads: file
+  in:
+  - entity_type_classes
+  match:
+    annotation: ConfigEntityType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: entity_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

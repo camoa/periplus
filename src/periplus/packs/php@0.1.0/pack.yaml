@@ -1,0 +1,117 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# PHP pack — first draft
+#
+# Every section below exists because something concrete went wrong when the same
+# information was an engine constant instead of configuration. The `# why:` lines cite
+# the failure, with the numbers the reporter measured. If a section has no `# why:`, it
+# is a design choice and not yet evidence-backed.
+#
+# This is the DATA schema side only. Nothing here describes the emitted map.
+
+pack: php
+version: 0.1.0
+depends: []
+# A pack with no dependencies. Not a "language pack" — there is no such kind. It is the
+# root of this dependency graph only because nothing sits beneath PHP.
+
+# --------------------------------------------------------------------------------------
+# The grammar this pack's rules are written against.
+#
+# The engine never parses source; an adapter does. So the pack has to say which grammar
+# its AST node names belong to, or `class_declaration` is a magic string that means
+# whatever the adapter happens to think.
+# --------------------------------------------------------------------------------------
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.13"      # tree-sitter runtime, released 2026-08-23
+  language: php
+  grammar_version: "0.23.11"       # tree-sitter-php
+  # Grammar versions are PINNED EXACTLY, never a range. Node type names are not guaranteed
+  # stable across a grammar's minor releases: tree-sitter issue #2611 records a JavaScript
+  # grammar rename, with the maintainer-adjacent line "just about any time a change is made
+  # to a grammar, the change is somehow breaking to consumers." A range would let a rule
+  # that matched yesterday silently match nothing today.
+  #
+  # tree-sitter PR #4135 (merged 2025-01-25, milestone 0.25) added a `semantic_version` field
+  # to TSLanguage and `ts_language_semantic_version()`, sourced from the grammar's
+  # tree-sitter.json manifest — so the engine can read which grammar it actually got and
+  # refuse a mismatch. It does not make grammar authors honour semver, which is why the pin
+  # is exact rather than caret.
+  #
+  # Two versions, because they move independently: the runtime that parses, and the grammar
+  # whose node names the rules below reference.
+
+# --------------------------------------------------------------------------------------
+# Which files are ours.
+#
+# A list, not a global map. A pack that depends on this one may add extensions, and the
+# project settings file may override any of them. All three layers resolve before extraction.
+#
+# why: `.inc` was hard-mapped to a Pascal extractor. Identical bytes gave 7 nodes as
+#      `a.inc` and 471 as `b.php`; across 12 pfSense files, 20 nodes instead of 755. One
+#      19,046-line file with 460 functions produced 7 nodes. Silently.
+# --------------------------------------------------------------------------------------
+# ======================================================================================
+# NAMED FOLDERS
+#
+# A rule says `in: [source]`. It never writes a path. php the language has no opinion about
+# where source lives, so the default is the repository root and the project settings file
+# narrows it. A dependent pack overrides it with something meaningful — Drupal replaces it
+# with custom_module and custom_theme.
+# ======================================================================================
+folders:
+  source: ./
+
+files:
+  extensions: [php, phtml, php3, php4, php5, php7, phps]
+  # Deliberately NOT here: module, inc, install, theme, profile. Those are Drupal
+  # conventions, not PHP ones, and belong to the pack that knows they are PHP.
+
+  exclude: []
+  # A path the extractor never opens. Different from a boundary, and the difference
+  # matters:
+  #   boundary — the file is not read, but a thing inside it can still be a node,
+  #              because something first-party refers to it by name.
+  #   exclude  — the file does not exist as far as the map is concerned. Nothing from
+  #              it appears, not even as the target of a reference.
+  #
+  # Enforced at file selection, before anything parses. Never "read it and drop the
+  # results": the map is a committed artifact, and a string literal or a variable name
+  # from an excluded file reaching a commit is not a mistake you can take back.
+  #
+  # Empty here on purpose. PHP the language excludes nothing. Every real exclusion is a
+  # convention of some framework or of one project, so it belongs to the pack or the
+  # overlay that knows the convention.
+
+  # The resolved language must reach the extraction cache key, or bytes cached under the
+  # previous language get served after an override changes it — in either direction.
+  cache_key_includes: [resolved_language]
+
+# --------------------------------------------------------------------------------------
+# Identity.
+#
+# The test for every rule here: does a declaration site and a reference site
+# independently produce the same string?
+#
+# why: one global lowercased name-to-id map fused a PHP `Exception` with an unrelated
+#      TypeScript class — 12 phantom inheritance edges across 3 Composer packages, and it
+#      inflated the TS node into a top-10 hub. Separately, `App\Models\Page` and
+#      `Filament\Pages\Page` collapsed onto one node.
+# --------------------------------------------------------------------------------------
+identity:
+  qualified_name:
+    parts: [namespace, declared_name]
+    separator: "\\"
+    leading_separator: strip     # `\Foo\Bar` and `Foo\Bar` name the same type
+  scope: pack                    # ids are namespaced to this pack; never a global name map
+
+  case_folding:
+    # PHP is case-insensitive for these and case-sensitive for the rest. Declared rather
+    # than assumed, because getting it backwards silently merges or splits nodes.
+    insensitive: [php.class, php.interface, php.trait, php.enum, php.function, php.method]
+    sensitive:   [php.property, php.class_constant]
+
+  # why: id normalization that casefolded AND stripped underscores collided `_count` with
+  #      `Count`. Normalization beyond what the language itself does is a defect.
+  never_normalize: [underscores, punctuation]

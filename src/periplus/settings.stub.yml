@@ -1,0 +1,99 @@
+# Periplus project settings.
+#
+# COMMIT THIS FILE. It is an input to the map, not local machine configuration: the schema and the
+# settings decide what gets extracted, so a map is only reproducible from a repository that carries
+# the settings that produced it. Gitignore this and "regenerate and diff" stops meaning anything,
+# and nothing in the tool will tell you.
+#
+# Every key Periplus reads is named below. One is declared; the rest are commented out, so this
+# file is the reference and you edit it rather than looking anything up. A key you leave commented
+# is not declared, and `periplus status` prints it as "not declared" rather than guessing a value.
+#
+# Paths in this file are RELATIVE to the directory holding `.periplus/`. An absolute path is
+# accepted and is a mistake: it does not survive a different checkout, and two spellings of one
+# directory resolve as two.
+
+# The settings format this file is written against. Declared, because the document has to be a
+# mapping for the loader to accept it, and because a later format change needs something to
+# compare against.
+periplus_version: 0
+
+
+# The packs this project loads, each pinned by name and exact version. A pack is loaded because
+# this list names it, never because it happens to be on disk -- which is the whole of the trust
+# story for a pack that arrives inside a downloaded dependency.
+#
+# packs:
+#   - drupal@0.1.0
+#   - twig@0.0.1
+
+
+# Extra directories to resolve packs from, beside the ones Periplus ships and the two it always
+# searches: `.periplus/packs/` here, and your user configuration directory. A pack you write for
+# this repository is found exactly the way a bundled one is.
+#
+# Relative to this project root. See the note at the top about absolute paths.
+#
+# pack_paths:
+#   - vendor/our-packs
+
+
+# Where this repository actually keeps things, when it does not keep them where the pack assumed.
+# A pack states a convention; one repository is always the exception, and this is where you say so
+# rather than forking the pack.
+#
+# folders:
+#   config_sync: config/sync
+#   modules: web/modules/custom
+
+
+# Which files are ours. Path-based, so a dependency published tomorrow still stops at the boundary
+# without anyone updating a list of names. This is also where a vendored dependency is deliberately
+# promoted to first-party.
+#
+# first_party:
+#   include:
+#     - web/modules/custom/**
+#   exclude:
+#     - web/modules/custom/legacy/**
+
+
+# What an extension means here. `.inc` is PHP in one repository and Pascal in another, so no pack
+# can settle it globally and the project has the last word.
+#
+# extensions:
+#   .inc: php
+#   .theme: php
+
+
+# Paths never read. Generated output, vendored trees, fixtures: anything whose structure is not
+# this codebase's structure.
+#
+# exclude:
+#   - web/sites/*/files/**
+
+
+# Paths taken back from an exclusion above, without forking the pack that wrote it.
+#
+# re_include:
+#   - web/sites/default/files/custom-module/**
+
+
+# Named text values no pack can know, such as the module path this project's packages sit under.
+# Any template of any pack may name one as {module}, as it names a value from a file's path.
+#
+# values:
+#   module: example.com/app
+
+
+# Gaps accepted as permanent, with a reason and a name against each. Dynamic dispatch, a computed
+# string, an id assembled at runtime: things static reading provably cannot resolve. This is what
+# lets an unresolved count reach zero and still mean something, and it lives here rather than in
+# the map because the map is generated and must never be hand-edited.
+#
+# accepted_unknowns:
+#   - id: dynamic-plugin-id
+#     rule: drupal.plugin_annotation
+#     reason: the plugin id is assembled from a config value at runtime
+#     accepted_by: your.name
+#     accepted_on: 2026-01-01

@@ -1,0 +1,324 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A display read from its config file: for each of the form and view displays, one node rule and
+# one edge rule per edge kind, and one displays rule per bundle entity type. A display shows a
+# configured field that is a key under content and that its dependency list names: the list names
+# every configured field, shown or hidden, and content also holds base and extra fields.
+
+rules:
+- rule: form_display_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_form_display.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.form_display
+  confidence: declared
+- rule: form_display_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_form_display.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: shows_field
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        - each: content.*
+        template: field.field.{targetEntityType}.{bundle}.{key}
+        where:
+        - listed_at: dependencies.config
+  confidence: declared
+- rule: form_display_block_type_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_form_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: block_content
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: '{targetEntityType}.type.{bundle}'
+        type: drupal.block_type
+  confidence: declared
+- rule: view_display_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_view_display.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.view_display
+  confidence: declared
+- rule: view_display_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_view_display.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: shows_field
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        - each: content.*
+        template: field.field.{targetEntityType}.{bundle}.{key}
+        where:
+        - listed_at: dependencies.config
+  confidence: declared
+- rule: view_display_block_type_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_view_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: block_content
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: '{targetEntityType}.type.{bundle}'
+        type: drupal.block_type
+  confidence: declared
+- rule: display_comment_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: comment
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: 'comment.type.{bundle}'
+  confidence: declared
+- rule: display_contact_message_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: contact_message
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: 'contact.form.{bundle}'
+  confidence: declared
+- rule: display_group_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: group
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: 'group.type.{bundle}'
+  confidence: declared
+- rule: display_group_relationship_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: group_relationship
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: 'group.relationship_type.{bundle}'
+  confidence: declared
+- rule: display_media_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: media
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: 'media.type.{bundle}'
+  confidence: declared
+- rule: display_node_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: node
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: 'node.type.{bundle}'
+  confidence: declared
+- rule: display_shortcut_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: shortcut
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: 'shortcut.set.{bundle}'
+  confidence: declared
+- rule: display_taxonomy_term_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: taxonomy_term
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: 'taxonomy.vocabulary.{bundle}'
+  confidence: declared

@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://periplus.dev/schema/0/pack-manifest.schema.json",
+  "title": "Periplus pack manifest",
+  "description": "pack.yaml, one per pack directory. Holds the pack's identity, where having two answers is a conflict rather than a merge. Everything else in a pack is a contributed file and merges additively.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pack", "version"],
+  "properties": {
+
+    "$schema": {
+      "type": "string",
+      "description": "The contract this manifest is written against, by the `$id` of the schema above. Allowed here because the top level refuses every key it does not declare, so a file carrying the key an editor reads would otherwise be invalid for saying which rules it follows. What the key claims is which contract the file was authored against; it does not claim that anything resolves the URL today."
+    },
+
+    "pack":    {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+
+    "depends": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+      "description": "Zero or more packs, forming a directed acyclic graph rather than a chain: Next.js sits on React and on the Node runtime at once. Because a graph has no single load order, contributions must merge additively and without depending on order. There are no kinds of pack — a root is one with nothing beneath it, and it need not be a language."
+    },
+
+    "detect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["any_of"],
+      "description": "How a repository is recognised as needing this pack, so `periplus init` can prefill a pin the person then edits. Declared here and never in engine code: a third-party pack is detected exactly as a bundled one is, which is what makes a new stack a pack rather than a release. A pack that declares no detector is never suggested — owning an extension is not the same as being a stack anybody pins, and a language pack firing on every file with its extension would prefill noise into every settings file there is.",
+      "properties": {
+        "any_of": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The alternatives, tried in the order written. A repository is Drupal if its composer.json requires Drupal core OR it has a docroot, so the block names its combining rule rather than leaving a bare list for a reader to guess at. An empty list detects nothing and is refused here, where the author sees it, rather than at the one call site that would notice.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "description": "One alternative: a repository-relative path that must exist as a file, and optionally a literal substring of that file's text. `contains` is a substring and not a regular expression, because detection reads third-party pack data with no time limit around it and a substring has no backtracking cost. The path stays under the repository root — a signal that leaves it never fires, since a detector that reads outside the checkout turns a committed settings file into a readout of the machine that ran `init`. Both levels are closed: an author who writes `contain:` gets a refusal, not a detector that silently degrades to an existence check and fires on every repository in the language.",
+            "properties": {
+              "path":     {"type": "string"},
+              "contains": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+
+    "grammar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "provider_version", "language", "grammar_version"],
+      "description": "Only a pack that owns a language declares this. A domain pack gets its grammars by depending on packs that own them, because a domain pack owning a language means every domain pack touching that language redeclares it and they drift.",
+      "properties": {
+        "provider":         {"enum": ["tree-sitter"]},
+        "provider_version": {"$ref": "#/$defs/exactVersion"},
+        "language":         {"type": "string"},
+        "grammar_version":  {"$ref": "#/$defs/exactVersion"}
+      }
+    },
+
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "extends":        {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+        "extensions":     {"type": "array", "items": {"type": "string"}},
+        "add_extensions": {"type": "array", "items": {"type": "string"}},
+        "exclude":        {"type": "array", "items": {"type": "string"}},
+        "add_excludes":   {"type": "array", "items": {"type": "string"}},
+        "cache_key_includes": {"type": "array", "items": {"type": "string"}},
+        "types": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_.]*$"},
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reader"],
+            "anyOf": [{"required": ["endings"]}, {"required": ["names"]}],
+            "if": {"properties": {"reader": {"const": "data"}}},
+            "then": {"required": ["format"]},
+            "else": {"not": {"required": ["format"]}},
+            "properties": {
+              "endings": {"type": "array", "items": {"type": "string", "pattern": "^\\.?[^./][^/]*$"}, "minItems": 1},
+              "names":   {"type": "array", "items": {"type": "string", "pattern": "^[^/]+$"}, "minItems": 1},
+              "reader":  {"enum": ["data", "text", "tree"]},
+              "format":  {"type": "string", "description": "The data format a type read as data is written in, by the name of one of the engine's data readers: yaml. Required with reader data and refused with any other reader. The short form extensions is read as yaml."},
+              "path_values": {
+                "type": "object",
+                "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["pattern", "template"],
+                  "properties": {
+                    "pattern":   {"type": "string"},
+                    "template":  {"type": "string"},
+                    "normalize": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["replace", "with"], "properties": {"replace": {"type": "string"}, "with": {"type": "string"}}}},
+                    "case":      {"enum": ["lower", "upper"]},
+                    "relative_to": {"type": "string", "description": "A folder name: the pattern is searched in the path below the deepest directory of that folder that holds the file, and the value is absent for a file no directory of it holds. A folder whose value holds ** is refused at load."}
+                  }
+                },
+                "description": "Values computed once per file of this type from its path from the project folder, forward slashes: the pattern is searched there and the template is filled from its named captures and the project's settings values, then normalize and case reshape it; a template naming a name that is neither, or both, is refused. A pattern that does not match leaves the value absent. Every rule on a file of this type may name the value in a template."
+              },
+              "sections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "open", "close"],
+                  "properties": {
+                    "name":  {"type": "string"},
+                    "open":  {"type": "string"},
+                    "close": {"type": "string"}
+                  }
+                },
+                "description": "Spans of the file's text a text rule does not read unless its match names the section under reads_sections. Found in one pass from the start: the earliest opening wins, the first listed on a tie, and the section runs to the end of the first closing match after it, or to the end of the file. In close, a braced name stands for the text the named capture of open matched, escaped."
+              },
+              "spans": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "open", "balance"],
+                  "properties": {
+                    "name":    {"type": "string"},
+                    "open":    {"type": "string"},
+                    "balance": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 1}, "minItems": 2, "maxItems": 2}
+                  }
+                },
+                "description": "Regions of the file's text a text rule's value reads with from: {enclosing: <name>, capture: <capture>}. A span starts at each match of open outside the sections. From the end of that match, each balance[0] outside the sections counts one up and each balance[1] one down; the span ends after the closing character that brings the count to zero or below, or at the end of the file. Spans of one name nest."
+              },
+              "resolve": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "oneOf": [
+                    {"enum": ["bound_first_segment", "as_written"]},
+                    {"type": "object", "additionalProperties": false, "required": ["full_if_prefixed"], "properties": {"full_if_prefixed": {"type": "string", "minLength": 1}}},
+                    {"type": "object", "additionalProperties": false, "required": ["prefix_with"], "properties": {"prefix_with": {"type": "string", "minLength": 1}}},
+                    {"type": "object", "additionalProperties": false, "required": ["prefix_bare_with"], "properties": {"prefix_bare_with": {"type": "string", "minLength": 1}}}
+                  ]
+                },
+                "description": "The resolution steps an edge end of a text rule on a file of this type takes when the end declares none: see resolveStep in the pack file schema."
+              },
+              "separator": {"type": "string", "description": "The separator beside the file type's resolve."}
+            }
+          },
+          "description": "Each file type by name. An ending is matched against the end of a file name after a dot, with or without its own leading dot, and the longest ending any loaded pack claims wins; a whole file name claims a file without an ending. The reader says how a rule reads the file: data, text, or tree, which needs the pack's grammar. The short form extensions is one type named by each listed ending, read as a tree when the pack pins a grammar and as data otherwise."
+        }
+      },
+      "description": "Exclude is not boundary. A boundary file is unread but the things inside it can still be nodes, because first-party code names them. An excluded file does not exist as far as the map is concerned, not even as the target of a reference, and it is enforced at file selection before anything parses."
+    },
+
+    "folders": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "string"},
+          {"type": "array", "items": {"type": "string"}, "minItems": 1}
+        ]
+      },
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+      "description": "Named folders a rule refers to with `in:`. A rule never writes a path. The value is a default; the project settings file overrides it for one repository without touching a rule. A value may reference another folder in braces, because a module's own config lives inside whatever custom_module resolves to."
+    },
+
+    "identity": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "How this language composes a qualified name, folds case, and what it must never normalise. Shape not yet derived from enough packs to close.",
+      "properties": {
+        "call_arguments": {"type": "string", "description": "The tree field of a call that holds its arguments, read by an id or a reference end from {argument: N}. Default: arguments."},
+        "call_argument": {"type": "string", "description": "The tree node type that holds one argument of a call; its value is its last named child. Without it, each named child of the arguments field is one argument, a comment or other extra node left out."},
+        "call_argument_name": {"type": "string", "description": "The field of an argument that holds its name. A named argument is found by its name, not its position, and its value is its last named child."},
+        "call_literals": {"type": "array", "items": {"type": "string"}, "description": "The tree node types of a call argument's text literal. Without them, no argument is a text literal."},
+        "call_literal_content": {"type": "array", "items": {"type": "string"}, "description": "The tree node types of a text literal's text. A literal with a named child of any other type is not a text literal."},
+        "call_literal_delimiters": {"type": "array", "items": {"type": "string"}, "description": "The tree node types of a text literal's named children that are skipped, such as a quote the grammar names."}
+      }
+    },
+
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applies_to_paths":     {"type": "array", "items": {"type": "string"}},
+        "emit_boundary_nodes":  {"enum": ["on_reference", "never"]},
+        "type_hierarchy":       {"type": "array", "items": {"$ref": "#/$defs/hierarchyEntry"}}
+      },
+      "description": "Path-based, so it needs no pack and works for a dependency published tomorrow. A boundary node enters the map because first-party code refers to it, never because a pack knows about it — otherwise every map on every site carries the same few hundred framework interfaces whether or not anything touches them."
+    }
+  },
+
+  "$defs": {
+    "exactVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Exact, never a range. Grammar node type names carry no stability guarantee across a minor release, so a range lets a rule that matched yesterday match nothing today, silently."
+    },
+    "hierarchyEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type":           {"type": "string"},
+        "extends":        {"type": "array", "items": {"type": "string"}},
+        "implemented_by": {"type": "array", "items": {"type": "string"}}
+      },
+      "description": "What a pack knows about types it does not read. A custom entity almost never writes `implements EntityInterface`; it writes `extends ContentEntityBase`, and the interface is two hops up inside the framework. A rule matching the written clause would match nothing real."
+    }
+  }
+}

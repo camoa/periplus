@@ -1,0 +1,49 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A local action read from a links.action file, one per top-level key. Two rules because a rule
+# that emits an edge emits no node.
+
+rules:
+- rule: local_action_from_links_file
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.links.action'
+    filetype: yaml
+    each: '*'
+  id:
+    from: key
+  emits:
+  - node:
+      type: drupal.local_action
+  - attribute:
+      name: title
+      from:
+        key: title
+  confidence: declared
+- rule: local_action_from_links_file_edges
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.links.action'
+    filetype: yaml
+    each: '*'
+  id:
+    from: key
+  emits:
+  - edge:
+      kind: links_to_route
+      from: this_node
+      to:
+        from:
+          key: route_name
+  - edge:
+      kind: appears_on_route
+      from: this_node
+      to:
+        from:
+          key: appears_on
+        each: true
+  confidence: declared

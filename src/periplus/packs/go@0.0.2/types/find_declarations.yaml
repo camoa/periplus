@@ -1,0 +1,137 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# go pack — finds the declarations. Five rules.
+#
+# Two of them match the same grammar node and are told apart by a child, which is the
+# `has_child` condition doing what `body_child` does for PHP.
+
+needs:
+  types:
+  - go.package
+  - go.func
+  - go.method
+  - go.struct
+  - go.interface
+rules:
+- rule: find_package
+  reads: file
+  in:
+  - source
+  match:
+    declaration: package_clause
+    name_child: package_identifier
+  id:
+    from: qualified_name
+  emits:
+  - node:
+      type: go.package
+  confidence: declared
+- rule: find_func
+  reads: file
+  in:
+  - source
+  match:
+    declaration: function_declaration
+    name_child: identifier
+  id:
+    from: qualified_name
+  emits:
+  - node:
+      type: go.func
+  confidence: declared
+- rule: find_struct
+  reads: file
+  in:
+  - source
+  match:
+    declaration: type_spec
+    name_child: type_identifier
+    where:
+    - has_child: struct_type
+  id:
+    from: qualified_name
+  emits:
+  - node:
+      type: go.struct
+  confidence: declared
+- rule: find_interface
+  reads: file
+  in:
+  - source
+  match:
+    declaration: type_spec
+    name_child: type_identifier
+    where:
+    - has_child: interface_type
+  id:
+    from: qualified_name
+  emits:
+  - node:
+      type: go.interface
+  - attribute:
+      name: method_set
+      from:
+        text: true
+        pattern: (?s)interface\s*\{(?P<body>.*?)\}
+        normalize:
+        - replace: interface\{\}
+          with: any
+        - replace: \n
+          with: ;
+        - replace: '[ \t]+'
+          with: ' '
+  confidence: declared
+- rule: find_method
+  reads: file
+  in:
+  - source
+  match:
+    declaration: method_declaration
+    name_child: field_identifier
+  id: &id001
+    from:
+    - module_path
+    - package_dir
+    - receiver_type
+    - declared_name
+    template: '{module_path}/{package_dir}.{receiver_type}.{declared_name}'
+  emits:
+  - node:
+      type: go.method
+  confidence: declared
+- rule: exported_by_capitalisation
+  reads: file
+  in:
+  - source
+  match:
+    declaration: identifier
+    where:
+    - name_matches: ^[A-Z]
+  emits:
+  - role: go.exported
+  confidence: declared
+- rule: find_method_edges
+  reads: file
+  in:
+  - source
+  match:
+    declaration: method_declaration
+    name_child: field_identifier
+  emits:
+  - edge:
+      kind: has_receiver
+      from: this_node
+      to:
+        from:
+          qualified: receiver_type
+      attributes:
+        signature:
+          from: text
+          pattern: func\s*\([^)]*\)\s*(?P<sig>\w+\s*\([^{]*)
+          normalize:
+          - replace: interface\{\}
+            with: any
+          - replace: \s+
+            with: ' '
+  confidence: declared
+  id: *id001

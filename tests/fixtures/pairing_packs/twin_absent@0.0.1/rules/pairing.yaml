@@ -1,0 +1,50 @@
+# The edge rule's id block adds a normalize step, so it is not equal to the node rule's as a
+# document and the rule has no twin. The node rule's type is illegal at the from end, so pairing the
+# two would be refused; unpaired, each edge starts at the edge rule's own id.
+
+node_types:
+- name: twin_absent.thing
+  id_namespace: twin_absent.thing
+- name: twin_absent.other
+  id_namespace: twin_absent.other
+
+edge_kinds:
+- kind: twin_absent_names
+  from:
+  - twin_absent.other
+  to: twin_absent.other
+
+rules:
+- rule: thing_from_block_type
+  reads: file
+  in:
+  - config
+  match:
+    file: block_content.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: twin_absent.thing
+  confidence: declared
+- rule: target_rule
+  reads: file
+  in:
+  - config
+  match:
+    file: block_content.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - replace: ^block_content\.type\.
+      with: ""
+  emits:
+  - edge:
+      kind: twin_absent_names
+      from: this_node
+      to:
+        from:
+          key: id
+  confidence: declared

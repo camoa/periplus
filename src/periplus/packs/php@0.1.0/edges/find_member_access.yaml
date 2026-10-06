@@ -1,0 +1,22 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — reads and writes of members. Two rules.
+
+needs:
+  types: [php.property, php.class_constant, php.enum_case]
+
+rules:
+
+  - rule: writes_property
+    reads: file
+    in: [source]
+    match: {declaration: assignment_expression_lhs}
+    emits: [{edge: {kind: writes, from: enclosing_callable, to: {from: qualified_name}}}]
+    confidence: declared
+
+  - rule: reads_member
+    reads: file
+    in: [source]
+    match: {declaration: member_access_expression}
+    emits: [{edge: {kind: reads, from: enclosing_callable, to: {from: qualified_name}}}]
+    confidence: declared

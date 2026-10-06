@@ -1,0 +1,65 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the config object and the catch-all that finds every config file.
+#
+# The catch-all is the reason a gap is visible instead of silent. Every file in the config
+# folders becomes a node here, and the specific rules elsewhere refine the ones they
+# understand. Measured on a private Drupal site: 431 files in, 162 refined by a specific rule,
+# 269 left as plain drupal.config_object — present, named, not understood.
+#
+# The path used to be written into this rule as **/config/{install,sync}/*.yml. All three
+# real sites keep config somewhere else, so it matched nothing and 431 files vanished
+# without a word. That is exactly the failure the catch-all exists to prevent.
+
+node_types:
+- name: drupal.config_object
+  id_namespace: drupal.config
+edge_kinds:
+- kind: config_depends
+  from: drupal.config_object
+  to: drupal.config_object
+- kind: depends_on_module
+  from:
+  - drupal.module
+  - drupal.config_object
+  to: drupal.module
+rules:
+- rule: any_config_file
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: '*'
+    filetype: yaml
+  id: &id001
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.config_object
+  confidence: declared
+- rule: any_config_file_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: '*'
+    filetype: yaml
+  emits:
+  - edge:
+      kind: config_depends
+      from: this_node
+      to:
+        from:
+          key: dependencies.config
+        each: true
+  - edge:
+      kind: depends_on_module
+      from: this_node
+      to:
+        from:
+          key: dependencies.module
+        each: true
+  confidence: declared
+  id: *id001

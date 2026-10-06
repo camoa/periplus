@@ -1,0 +1,15 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+node_types:
+- name: go.function
+  id_namespace: go.function
+- name: go.method
+  id_namespace: go.method
+- name: go.struct
+  id_namespace: go.struct
+- name: go.interface
+  id_namespace: go.interface
+edge_kinds:
+- kind: calls
+  from: [go.function, go.method]
+  to: [go.function, go.struct, go.interface]

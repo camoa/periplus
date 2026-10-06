@@ -1,0 +1,24 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — services declared in a services file. One rule.
+
+needs:
+  types: [drupal.service]
+
+rules:
+
+  - rule: service_from_services_file
+    reads: file
+    in: [custom_module, custom_theme]
+    match:
+      file: "*.services"
+      filetype: yaml
+      each: "services.*"
+    id:
+      from: key
+    emits:
+      - node: {type: drupal.service}
+    confidence: declared
+    # `each` addresses inside a data file rather than treating the file as one thing. This
+    # and the menu links file are the two places the pack needs it, and how the expression
+    # is written is still open.

@@ -1,0 +1,50 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field type plugin, named by its plugin id; plugin_class joins it to its class.
+
+node_types:
+- name: drupal.field_type
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.field_type
+
+# A field type declared by the FieldType attribute on its class, the twin of the
+# annotation rule. Two rules because a rule that emits an edge emits no node. An id that is not a
+# text literal makes no field type and is listed under skipped.
+
+rules:
+- rule: field_type_from_attribute
+  reads: file
+  in:
+  - field_type_classes
+  match:
+    attribute: Drupal\Core\Field\Attribute\FieldType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.field_type
+  confidence: declared
+- rule: field_type_from_attribute_edges
+  reads: file
+  in:
+  - field_type_classes
+  match:
+    attribute: Drupal\Core\Field\Attribute\FieldType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

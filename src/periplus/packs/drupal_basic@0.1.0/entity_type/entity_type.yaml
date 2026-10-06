@@ -1,0 +1,16 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An entity type, named by its id, and the PHP class that defines it.
+
+node_types:
+- name: drupal.entity_type
+  id_namespace: drupal.entity_type
+- name: drupal.content_entity_type
+  parent: drupal.entity_type
+- name: drupal.config_entity_type
+  parent: drupal.entity_type
+
+edge_kinds:
+- kind: entity_class
+  from: drupal.entity_type
+  to: php.class

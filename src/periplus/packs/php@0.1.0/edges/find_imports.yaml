@@ -1,0 +1,18 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — the imports edge. One rule.
+#
+# The facts a `use` statement carries are declared separately, in imports/imports.yaml. This
+# rule only emits the edge.
+
+needs:
+  types: [php.class_like, php.function, php.class_constant]
+
+rules:
+
+  - rule: imports_edge
+    reads: file
+    in: [source]
+    match: {declaration: namespace_use_declaration}
+    emits: [{edge: {kind: imports, from: enclosing_file, to: {from: qualified_name}}}]
+    confidence: declared

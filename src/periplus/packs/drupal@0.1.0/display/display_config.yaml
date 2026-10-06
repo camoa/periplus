@@ -1,0 +1,95 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — displays from config files. Two rules, one per kind.
+
+needs:
+  types:
+  - drupal.form_display
+  - drupal.view_display
+  - drupal.block_type
+  - drupal.field_instance
+rules:
+- rule: form_display_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_form_display.*
+    filetype: yaml
+  id: &id001
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.form_display
+  confidence: declared
+- rule: view_display_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_view_display.*
+    filetype: yaml
+  id: &id002
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.view_display
+  confidence: declared
+- rule: form_display_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_form_display.*
+    filetype: yaml
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: '{targetEntityType}.type.{bundle}'
+  - edge:
+      kind: shows_field
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        - each: content.*
+        template: field.field.{targetEntityType}.{bundle}.{key}
+  confidence: declared
+  id: *id001
+- rule: view_display_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_view_display.*
+    filetype: yaml
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        template: '{targetEntityType}.type.{bundle}'
+  - edge:
+      kind: shows_field
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        - each: content.*
+        template: field.field.{targetEntityType}.{bundle}.{key}
+  confidence: declared
+  id: *id002

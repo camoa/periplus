@@ -1,0 +1,79 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The walking-skeleton Drupal pack: every exported or installed configuration file becomes one
+# node. It is renamed to drupal when the reference packs retire.
+pack: drupal_basic
+version: 0.1.0
+depends: [yaml_basic, php_basic, twig_basic]
+
+# ======================================================================================
+# DETECTION
+#
+# What makes a checkout a Drupal checkout, so `periplus init` can prefill this pin. The
+# answer is written here rather than in the engine: recognising a stack is pack data, and
+# a pack somebody else wrote is detected exactly the way this one is.
+#
+# Neither signal is "there is PHP here". php_basic, yaml_basic and twig_basic are reached
+# through `depends` and declare no detector of their own, because a repository having PHP
+# in it is not a stack anybody pins.
+#
+# What init writes is a suggestion in a file the person then edits. A missed detection
+# costs them one typed line; a spurious one costs a wrong pin in a committed artifact. So
+# both signals below are things only a Drupal repository has.
+# ======================================================================================
+detect:
+  any_of:
+    # The dependency, which is the claim the repository makes about itself. `drupal/core`
+    # rather than `drupal/core-recommended`: the substring covers core, core-recommended
+    # and core-composer-scaffold, and every Drupal site requires at least one of them.
+    # Verified against drupal-cms/composer.json on 2026-08-28, which requires
+    # drupal/core-composer-scaffold, drupal/core-project-message and
+    # drupal/core-recommended.
+    - path: composer.json
+      contains: "drupal/core"
+
+    # The docroot, for a checkout that has core in the tree and no composer.json at the
+    # root -- core's own repository, and a site vendored without Composer. The filename
+    # alone is the evidence, so this signal needs no `contains`.
+    - path: web/core/lib/Drupal.php
+
+folders:
+  config:        ./config/sync
+  custom_module: ./web/modules/custom
+  custom_theme: ./web/themes/custom
+  # An extension's shipped configuration: config/install and config/optional.
+  module_config:
+  - "{custom_module}/**/config/install"
+  - "{custom_module}/**/config/optional"
+  - "{custom_theme}/**/config/install"
+  - "{custom_theme}/**/config/optional"
+  module_root: "{custom_module}/**"
+  theme_root: "{custom_theme}/**"
+  # php_basic's source, narrowed to the custom modules and themes at any depth.
+  source:
+  - "{custom_module}/**"
+  - "{custom_theme}/**"
+  # The folder a plugin kind is discovered in: the sub-folder its manager names, below a module's
+  # src folder, and every folder below it. A class elsewhere is not discovered. An entity type is
+  # discovered in src/Entity.
+  action_classes: "{module_root}/src/Plugin/Action/**"
+  ai_agent_classes: "{module_root}/src/Plugin/AiAgent/**"
+  ai_function_call_classes: "{module_root}/src/Plugin/AiFunctionCall/**"
+  block_plugin_classes: "{module_root}/src/Plugin/Block/**"
+  constraint_classes: "{module_root}/src/Plugin/Validation/Constraint/**"
+  entity_type_classes: "{module_root}/src/Entity/**"
+  field_formatter_classes: "{module_root}/src/Plugin/Field/FieldFormatter/**"
+  field_type_classes: "{module_root}/src/Plugin/Field/FieldType/**"
+  field_widget_classes: "{module_root}/src/Plugin/Field/FieldWidget/**"
+  media_source_classes: "{module_root}/src/Plugin/media/Source/**"
+  queue_job_type_classes: "{module_root}/src/Plugin/AdvancedQueue/JobType/**"
+  rest_resource_classes: "{module_root}/src/Plugin/rest/resource/**"
+
+files:
+  # The Drupal endings that hold PHP, added to php_basic's list.
+  extends: php_basic
+  add_extensions: [module, install, inc, theme, profile, engine]
+  # The Group module's group.permissions files hold Group permissions, not Drupal permissions, and
+  # their stem also ends in .permissions.
+  exclude:
+  - '**/*.group.permissions.yml'

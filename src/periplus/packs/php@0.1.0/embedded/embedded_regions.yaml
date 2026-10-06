@@ -1,0 +1,19 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — embedded sub-language regions.
+
+# --------------------------------------------------------------------------------------
+# Files that hold more than one language.
+#
+# why: inline `<script>` in `.php` was never indexed, so a helper and its caller both
+#      vanished along with the call between them.
+# --------------------------------------------------------------------------------------
+embedded_regions:
+  - open: "<script(?![^>]*\\bsrc=)[^>]*>"
+    close: "</script>"
+    language: javascript
+    line_offset: preserve
+    skip_when_empty: true
+    host_constructs_inside: ["<?= ?>", "<?php ?>"]
+    # Host tags inside the region are replaced with placeholders before the sub-language
+    # parses, or the sub-parse fails on syntax that is not its own.

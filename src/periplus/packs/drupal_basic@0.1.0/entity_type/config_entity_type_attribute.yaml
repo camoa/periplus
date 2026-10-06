@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A config entity type declared by the ConfigEntityType attribute on its class, the twin of the
+# annotation rule. Two rules because a rule that emits an edge emits no node. An id that is not a
+# text literal makes no entity type and is listed under skipped.
+
+rules:
+- rule: config_entity_type_from_attribute
+  reads: file
+  in:
+  - entity_type_classes
+  match:
+    attribute: Drupal\Core\Entity\Attribute\ConfigEntityType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.config_entity_type
+  confidence: declared
+- rule: config_entity_type_from_attribute_edges
+  reads: file
+  in:
+  - entity_type_classes
+  match:
+    attribute: Drupal\Core\Entity\Attribute\ConfigEntityType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: entity_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

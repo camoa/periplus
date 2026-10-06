@@ -1,0 +1,14 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — the recommendations: section.
+
+# ======================================================================================
+# Advice a pack may carry. The map may not.
+# ======================================================================================
+recommendations:
+  - topic: exported_configuration
+    text: >
+      Use a configuration overlay to reduce what gets exported. Less exported
+      configuration means less to map, and the map's config layer shrinks with it.
+    # Not derivable from the code, so it belongs to the pack and joins the map at read
+    # time. The map holds the count; this holds the note.

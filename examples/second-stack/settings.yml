@@ -1,0 +1,5 @@
+periplus_version: 0
+packs:
+  - python_text@0.1.0
+  - typer_text@0.1.0
+  - speckitty@0.1.0

@@ -1,0 +1,100 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Blade view, one per template file, named by its dotted path below the views folder:
+# books/show.blade.php is books.show. A view another view names by a literal is the end of an
+# edge from the naming view's node, at the line of the directive; unresolved when no such file
+# exists. A name written in a variable, @include($name), gives nothing. Text inside {{-- --}} is
+# not read.
+
+rules:
+
+- rule: view_file
+  reads: file
+  in: [views]
+  match: {file: '*', filetype: blade}
+  id: {template: '{view}'}
+  emits: [{node: {type: laravel.view}}]
+  confidence: declared
+
+# @include('x.y'), @includeIf('x.y'), @each('x.y', ...). The quote must close the argument, so a
+# name built by concatenation, @include('x.' . $y), gives nothing.
+- rule: view_include
+  reads: file
+  in: [views]
+  match:
+    file: '*'
+    filetype: blade
+    text: '@(?:include|includeIf|each)\(\s*[''"](?<name>[^''"]+)[''"]\s*[,)]'
+  id: {template: '{view}'}
+  emits:
+  - edge:
+      kind: includes_view
+      from: this_node
+      to: {from: {capture: name}, types: [laravel.view], on_miss: unresolved}
+  confidence: declared
+
+- rule: view_extends
+  reads: file
+  in: [views]
+  match:
+    file: '*'
+    filetype: blade
+    text: '@extends\(\s*[''"](?<name>[^''"]+)[''"]\s*[,)]'
+  id: {template: '{view}'}
+  emits:
+  - edge:
+      kind: extends_view
+      from: this_node
+      to: {from: {capture: name}, types: [laravel.view], on_miss: unresolved}
+  confidence: declared
+
+- rule: view_component
+  reads: file
+  in: [views]
+  match:
+    file: '*'
+    filetype: blade
+    text: '@component\(\s*[''"](?<name>[^''"]+)[''"]\s*[,)]'
+  id: {template: '{view}'}
+  emits:
+  - edge:
+      kind: includes_view
+      from: this_node
+      to: {from: {capture: name}, types: [laravel.view], on_miss: unresolved}
+  confidence: declared
+
+# view('books.show') in a PHP function or method: an edge from it to that view, at the call's line;
+# unresolved when no such template exists. The name is the call's first argument as written, so
+# view($name) and a concatenated name give nothing and go under skipped.
+- rule: view_call
+  reads: file
+  in: [source]
+  match:
+    reference: function_call_expression
+    name_child: function
+    filetype: php
+    where: [{name_matches: '(?i)\\?view'}]
+  emits:
+  - edge:
+      kind: renders
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [laravel.view], on_miss: unresolved}
+  confidence: declared
+
+# <x-alert> and <x-forms.input>: the anonymous component's view below components, so
+# components.alert and components.forms.input. <x-slot> is not a component, so the name may not be
+# slot; a namespaced <x-mail::message> gives nothing.
+- rule: blade_component_tag
+  reads: file
+  in: [views]
+  match:
+    file: '*'
+    filetype: blade
+    text: '<x-(?<name>(?:[a-rt-z0-9_]|s[a-km-z0-9_.-]|sl[a-np-z0-9_.-]|slo[a-su-z0-9_.-]|slot[\w.-])[\w.-]*)[\s/>]'
+  id: {template: '{view}'}
+  emits:
+  - edge:
+      kind: uses_component
+      from: this_node
+      to: {template: 'components.{name}', types: [laravel.view], on_miss: unresolved}
+  confidence: inferred

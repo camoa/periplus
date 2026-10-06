@@ -1,0 +1,37 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares field storage. Finds nothing.
+#
+# A storage is the field itself: its type, its cardinality, one per entity type. Many
+# bundles point at one storage, and the fan-in is information the individual files do not
+# carry.
+#
+# Verified in the export — one core storage, three instances, three different origins:
+#   field.storage.block_content.body            core's own (_core hash at line 8)
+#     field.field.block_content.basic.body            core's basic type
+#     field.field.block_content.block_ways_note.body  block_ways config/install
+#     field.field.block_content.type_way_code.body    added through the UI, label 'Body extra'
+#
+# The module's own storages are the opposite shape. field_tw_code_head has exactly one
+# instance, and so does every other field the three test modules create.
+
+node_types:
+
+  - name: drupal.field_storage
+    parent: drupal.config_object
+
+  - name: drupal.field_instance
+    parent: drupal.config_object
+
+edge_kinds:
+
+  - kind: stored_by
+    from: drupal.field_instance
+    to:   drupal.field_storage
+
+  - kind: field_of
+    from: drupal.field_instance
+    to:   drupal.block_type
+    # Narrow on purpose. The bundle a field belongs to is an entity bundle, and block types
+    # are the only bundles this pack currently declares. When node types and media types
+    # arrive the endpoint list widens; it must not be guessed ahead of them.

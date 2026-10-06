@@ -1,0 +1,27 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The edge kinds this pack declares. Finding them is in edges/find_structure.yaml.
+#
+# inherits ends at the abstract php.class_like, so a type named only by an extends and also by an
+# implements elsewhere takes the more specific php.interface.
+edge_kinds:
+
+- kind: inherits
+  from: php.class_like
+  to: php.class_like
+
+- kind: implements
+  from: [php.class, php.enum]
+  to: php.interface
+
+- kind: mixes_in
+  from: php.class_like
+  to: php.trait
+
+- kind: contains
+  from: php.class_like
+  to: php.method
+
+- kind: calls
+  from: [php.function, php.method]
+  to: [php.function, php.method]

@@ -1,0 +1,27 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field storage read from its config file.
+
+rules:
+- rule: field_storage_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: field.storage.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.field_storage
+  - attribute:
+      name: field_type
+      from:
+        key: type
+  - attribute:
+      name: cardinality
+      from:
+        key: cardinality
+  confidence: declared

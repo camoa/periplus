@@ -1,0 +1,48 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the Form API types and edges. Finds nothing.
+#
+# Under php alone every class here is php.class and every method is php.method. Adding this
+# pack keeps every id and refines every type to a descendant. That is the monotonic layering
+# check, and it is testable by running twice and diffing.
+#
+# Verified by grep over core lib and modules: no class implements both an entity interface
+# and a form interface. The two families are disjoint, so a class can never match both — a
+# form that edits a node is not a node.
+#
+# The collision that IS real sits inside the form family. EntityForm satisfies both
+# "reaches FormInterface" and "reaches EntityFormInterface", so both rules fire. The parent
+# declarations below make the most specific match win, and reserve refusal for genuine
+# ambiguity.
+
+node_types:
+
+  - name: drupal.form
+    parent: php.class
+
+  - name: drupal.entity_form
+    parent: drupal.form
+
+  - name: drupal.content_entity_form
+    parent: drupal.entity_form
+
+  - name: drupal.form_save
+    parent: php.method
+
+  - name: drupal.form_build
+    parent: php.method
+
+  - name: drupal.form_validate
+    parent: php.method
+
+  - name: drupal.form_submit
+    parent: php.method
+
+edge_kinds:
+
+  - kind: edits_entity
+    from: drupal.entity_form
+    to:   drupal.entity_type
+    # The endpoint is the entity TYPE, not the entity CLASS: an entity form
+    # edits an entity TYPE, which is its own node. Routing makes the binding at
+    # runtime, so the rule that fills this in is inferred, and it is not written yet.

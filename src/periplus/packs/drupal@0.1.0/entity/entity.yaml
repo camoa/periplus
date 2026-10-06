@@ -1,0 +1,33 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the Entity API types and edges. Finds nothing.
+#
+# The entity type is NOT the class that implements it, and the file this replaces got that
+# wrong. It made the class the node and treated id = "redirect" as the class's identity.
+#
+# References say otherwise. Everything that names an entity type names the machine name:
+#   field.storage.node.body                     -> node
+#   core.entity_view_display.node.article.…     -> node
+# Nothing anywhere writes Drupal\node\Entity\Node. So the entity type is its own node, the
+# class is another, and an edge joins them — the same finding as block plugin versus block
+# class, which was made first and not carried across.
+
+node_types:
+- name: drupal.entity_type
+  id_namespace: drupal.entity_type
+- name: drupal.content_entity_type
+  parent: drupal.entity_type
+- name: drupal.config_entity_type
+  parent: drupal.entity_type
+- name: drupal.entity_class
+  parent: php.class
+- name: drupal.content_entity_class
+  parent: drupal.entity_class
+- name: drupal.config_entity_class
+  parent: drupal.entity_class
+- name: drupal.entity_save
+  parent: php.method
+edge_kinds:
+- kind: entity_class
+  from: drupal.entity_type
+  to: php.class

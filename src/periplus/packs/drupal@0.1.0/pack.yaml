@@ -1,0 +1,196 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# Drupal pack — fragment
+#
+# Not a Drupal pack. A companion to the php pack that exercises what a dependent pack has
+# to do, using three of Drupal's APIs as the case, and deliberately leaving a fourth dark.
+#
+#   configured: Entity API, Form API, Cache API
+#   dark:       Event Subscriber API
+#
+# The dark one is not an oversight. It is the test for what happens when first-party code
+# leans on something no pack describes, which is the ordinary state of any real codebase.
+#
+# Every Drupal claim below was read from drupal-cms on 2026-08-28 and carries its file and
+# line. Nothing here is recalled.
+
+pack: drupal
+version: 0.1.0
+depends: [php, yaml]
+# Same mechanism as javascript -> react -> nextjs. Nothing marks this as a "framework
+# pack"; it is a pack that depends on another pack.
+#
+# Two languages rather than a layer on one, as transcribing the
+# block_ways map showed. A Drupal codebase is PHP and YAML in roughly equal measure, and with php
+# alone this pack declared config rules it could never run: `files` claimed no .yml, so no
+# .yml was ever opened and every config rule matched nothing without erroring.
+#
+# The alternative was a second `grammar:` block on this pack, which is wrong. A domain pack
+# that owns a language means every domain pack touching YAML re-declares the same grammar
+# and they drift. Instead the grammar follows the file extension, and the extension belongs
+# to whichever pack claimed it — so a `find` rule naming config/install/*.yml needs no
+# grammar field at all.
+
+# ======================================================================================
+# NAMED FOLDERS
+#
+# A rule says `in: [config]`. It never writes a path. The path lives here, once, and the
+# project settings file overrides it for one repository without touching a rule.
+#
+# Proved necessary: the default below is wrong for the codebase we tested
+# against, where settings.php:882 puts exported config at ./config/default. Under a rule
+# with the path baked in, that is a pack edit. Under a name, it is one line of settings.
+# ======================================================================================
+folders:
+  config:        ./config/sync        # exported configuration
+  custom_module: ./web/modules/custom
+  custom_theme:  ./web/themes/custom
+
+  # Relative to another folder, not to the root. A module ships its own config, and the
+  # path only means anything inside whatever custom_module resolves to.
+  module_config: "{custom_module}/*/config/install"
+
+files:
+  extends: [php, yaml]
+  add_extensions: [module, inc, install, theme, profile, engine]
+  # None of these say "PHP" by convention. A mapper that cannot be told they are PHP maps
+  # almost nothing in a Drupal codebase.
+
+  add_excludes:
+    # Every path here is PHP by extension, so the PHP pack would open it. None of it is
+    # code anyone wrote to be read. Excluded rather than bounded: nothing in these files
+    # should ever be a node, not even the target of a reference.
+    #
+    # Verified present in drupal-cms on 2026-08-28.
+    - "web/sites/*/settings.php"           # web/sites/default/settings.php
+    - "web/sites/*/settings.*.php"         # web/sites/default/settings.ddev.php
+    - "web/sites/*/default.settings.php"   # the template shipped by core
+    - "web/sites/*/services.yml"
+    - "web/sites/*/default.services.yml"
+    # Per-environment configuration, and the first two hold database credentials and the
+    # hash salt. The map is committed and diffed in a pull request, so this is the one
+    # exclusion that is a security rule and not a tidiness rule.
+
+    - "web/sites/*/files/**"
+    # The public files directory. User uploads, generated assets, and on some sites
+    # compiled Twig. Nothing here is authored.
+
+    - "web/sites/simpletest/**"
+    # Test-run scratch space, created and destroyed by the test runner.
+
+# ======================================================================================
+# BOUNDARY
+#
+# Entity API is not "a boundary". Every path below is the boundary. What separates Entity
+# API from Event Subscriber API is only that this pack ships knowledge about one of them.
+# Two mechanisms, kept apart, which is what lets the dark case degrade instead of fail.
+# ======================================================================================
+boundary:
+  applies_to_paths:
+    - "web/core/**"
+    - "web/modules/contrib/**"
+    - "vendor/**"
+  # Path-based, so it needs no pack and works for a dependency published tomorrow.
+  # `vendor/**` is not decoration: EventSubscriberInterface lives at
+  # vendor/symfony/event-dispatcher/EventSubscriberInterface.php, not in core. If the
+  # boundary were a special case for core, Symfony would leak in.
+
+  emit_boundary_nodes: on_reference
+  # A boundary node enters the map because first-party code refers to it, never because a
+  # pack knows about it. Otherwise every map on every Drupal site carries the same few
+  # hundred core interfaces whether or not anything touches them, and the map stops being
+  # about this repository.
+
+  # ------------------------------------------------------------------------------------
+  # The hierarchy the classification rules depend on.
+  #
+  # This is why "not mapped" and "not read" are different operations. A custom entity
+  # almost never writes `implements EntityInterface`; it writes `extends
+  # ContentEntityBase`, and the interface is two hops up inside core. A rule matching the
+  # written clause would match nothing real.
+  #
+  # Both families are diamonds. Verified:
+  #
+  #   ContentEntityForm extends EntityForm implements ContentEntityFormInterface
+  #     ContentEntityForm.php:16 / ContentEntityFormInterface.php:11
+  #   EntityForm extends FormBase implements EntityFormInterface      EntityForm.php:18
+  #   ConfirmFormBase extends FormBase implements ConfirmFormInterface
+  #     ConfirmFormBase.php:8
+  #   FormBase implements FormInterface, ContainerInjectionInterface   FormBase.php:45
+  #   EntityFormInterface extends BaseFormIdInterface        EntityFormInterface.php:14
+  #   BaseFormIdInterface extends FormInterface              BaseFormIdInterface.php:11
+  #   => EntityForm reaches FormInterface twice: via FormBase, and via
+  #      EntityFormInterface -> BaseFormIdInterface. Resolution must dedupe.
+  #
+  #   ContentEntityBase extends EntityBase implements ContentEntityInterface, ...
+  #     ContentEntityBase.php:20
+  #   EntityBase implements EntityInterface                  EntityBase.php:21
+  #   ContentEntityInterface extends FieldableEntityInterface, ...
+  #     ContentEntityInterface.php:24
+  #   FieldableEntityInterface extends EntityInterface  FieldableEntityInterface.php:23
+  #   ConfigEntityInterface extends EntityInterface, ...  ConfigEntityInterface.php:14
+  #   ConfigEntityBase extends EntityBase implements ConfigEntityInterface
+  #     ConfigEntityBase.php:26
+  #   => same diamond on the entity side.
+  # ------------------------------------------------------------------------------------
+  type_hierarchy:
+    # Form API
+    - type: "Drupal\\Core\\Form\\FormInterface"
+      implemented_by: ["Drupal\\Core\\Form\\FormBase"]
+    - type: "Drupal\\Core\\Form\\ConfirmFormInterface"
+      implemented_by: ["Drupal\\Core\\Form\\ConfirmFormBase"]
+    - type: "Drupal\\Core\\Form\\BaseFormIdInterface"
+      extends: ["Drupal\\Core\\Form\\FormInterface"]
+    - type: "Drupal\\Core\\Entity\\EntityFormInterface"
+      extends: ["Drupal\\Core\\Form\\BaseFormIdInterface"]
+      implemented_by: ["Drupal\\Core\\Entity\\EntityForm"]
+    - type: "Drupal\\Core\\Entity\\ContentEntityFormInterface"
+      extends: ["Drupal\\Core\\Entity\\EntityFormInterface"]
+      implemented_by: ["Drupal\\Core\\Entity\\ContentEntityForm"]
+
+    # Entity API
+    - type: "Drupal\\Core\\Entity\\EntityInterface"
+      implemented_by: ["Drupal\\Core\\Entity\\EntityBase"]
+    - type: "Drupal\\Core\\Entity\\FieldableEntityInterface"
+      extends: ["Drupal\\Core\\Entity\\EntityInterface"]
+    - type: "Drupal\\Core\\Entity\\ContentEntityInterface"
+      extends: ["Drupal\\Core\\Entity\\FieldableEntityInterface"]
+      implemented_by: ["Drupal\\Core\\Entity\\ContentEntityBase"]
+    - type: "Drupal\\Core\\Config\\Entity\\ConfigEntityInterface"
+      extends: ["Drupal\\Core\\Entity\\EntityInterface"]
+      implemented_by: ["Drupal\\Core\\Config\\Entity\\ConfigEntityBase"]
+
+    # Cache API. Both are standalone: neither extends another interface.
+    #   CacheBackendInterface.php:16 / CacheTagsInvalidatorInterface.php:14
+    - type: "Drupal\\Core\\Cache\\CacheBackendInterface"
+    - type: "Drupal\\Core\\Cache\\CacheTagsInvalidatorInterface"
+
+  # ------------------------------------------------------------------------------------
+  # Deliberately NOT shipped, so the unknown path is exercised by real code.
+  #
+  # Nothing below appears in type_hierarchy. Each is referenced by first-party code in the
+  # worked example, so each becomes a boundary node whose state is `referenced` rather
+  # than `declared`: the edge kind is known, because `implements` is written at the site,
+  # but nothing describes what the target is.
+  #
+  #   Symfony\Component\EventDispatcher\EventSubscriberInterface
+  #     vendor/symfony/event-dispatcher/EventSubscriberInterface.php
+  #     11 first-party files implement it across the three example modules.
+  #
+  #   Drupal\Core\Entity\EntityTypeListenerInterface
+  #     core/lib/Drupal/Core/Entity/EntityTypeListenerInterface.php:8
+  #
+  #   Drupal\Core\Form\WorkspaceDynamicSafeFormInterface
+  #     core/lib/Drupal/Core/Form/WorkspaceDynamicSafeFormInterface.php:15
+  #
+  #   Drupal\Core\Entity\EntityPublishedInterface
+  #     core/lib/Drupal/Core/Entity/EntityPublishedInterface.php:10
+  #     Note this one extends EntityInterface. Leaving it out costs nothing, because
+  #     Redirect still types correctly as a content entity through ContentEntityBase.
+  #     That is graceful degradation demonstrated rather than claimed.
+  #
+  # The Plugin API is also dark, incidentally rather than by design: ControllerBase,
+  # PluginBase, QueueWorkerBase, DeriverBase, ActionBase, FieldItemBase and
+  # ContainerFactoryPluginInterface all appear in the example modules and none is
+  # described here. That is what a real first pack looks like.
+  # ------------------------------------------------------------------------------------

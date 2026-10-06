@@ -1,0 +1,4 @@
+pack: typer_text
+version: 0.1.0
+# Reads the python file type and folder, and names the module path value, of python_text.
+depends: [python_text]

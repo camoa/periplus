@@ -1,0 +1,46 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field type declared by the FieldType docblock annotation on its class. An id that is
+# not text in double quotes makes no field type and is listed under skipped.
+
+rules:
+- rule: field_type_from_annotation
+  reads: file
+  in:
+  - field_type_classes
+  match:
+    annotation: FieldType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.field_type
+  - attribute:
+      name: label
+      from:
+        annotation_key: label
+  confidence: declared
+- rule: field_type_from_annotation_edges
+  reads: file
+  in:
+  - field_type_classes
+  match:
+    annotation: FieldType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

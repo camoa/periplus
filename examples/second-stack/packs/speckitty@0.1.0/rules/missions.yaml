@@ -1,0 +1,37 @@
+node_types:
+- name: speckitty.mission
+  id_namespace: speckitty.mission
+- name: speckitty.template
+  id_namespace: speckitty.template
+edge_kinds:
+- kind: has_template
+  from: speckitty.mission
+  to: speckitty.template
+rules:
+# One mission per missions/<name>/mission.yaml; its name attribute is mission.name, when present.
+- rule: mission
+  reads: file
+  in: [missions]
+  match: {file: mission, filetype: mission_yaml}
+  id: {template: '{mission}'}
+  emits:
+  - node: {type: speckitty.mission}
+  - attribute: {name: name, from: {key: mission.name}}
+  confidence: declared
+- rule: template
+  reads: file
+  in: [templates]
+  match: {file: '**', filetype: template_md}
+  id: {template: '{template}'}
+  emits: [{node: {type: speckitty.template}}]
+  confidence: declared
+# A whole-file rule cannot state an edge from a template without reading the file as data, so
+# the edge is a text rule on the start of the file: one match, with no text read.
+- rule: template_of_mission
+  reads: file
+  in: [templates]
+  match: {file: '**', filetype: template_md, text: '\A'}
+  id: {template: '{template}'}
+  emits:
+  - edge: {kind: has_template, from: {template: '{mission}'}, to: this_node}
+  confidence: declared

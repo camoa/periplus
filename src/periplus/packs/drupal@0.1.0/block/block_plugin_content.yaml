@@ -1,0 +1,46 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — the block plugin whose id does not exist until content is saved. One rule
+# that fires and fails, on purpose.
+#
+# Kept as a file rather than deleted, because a pack has to be able to say "this is out of
+# reach, and here is why" in a form the map can carry. Deleting it leaves a silent hole; a
+# rule that guessed would put a fabricated id into a committed artifact.
+
+needs:
+  types: [drupal.block_plugin]
+
+rules:
+
+  - rule: content_block_plugin_id
+    reads: file
+    in: [custom_module]
+    match:
+      static_call: "Drupal\\block\\Entity\\Block::create"
+      argument: 0
+    id:
+      from: {argument_key: plugin}
+      must_be: string_literal
+      on_miss: out_of_reach
+    emits:
+      - node: {type: drupal.block_plugin}
+    confidence: declared
+    # Verified: block_ways.install:41   'plugin' => 'block_content:' . $note->uuid(),
+    # A concatenation, not a literal. The uuid comes from a content entity saved seven lines
+    # earlier, and core keys the derivative by exactly that value:
+    #   block_content/src/Plugin/Derivative/BlockContent.php:51
+    #     $this->derivatives[$block_content->uuid()] = $base_plugin_definition;
+    #
+    # `on_miss: out_of_reach`, not `unresolved`. Unresolved says a rule looked and failed,
+    # which invites somebody to fix what is not broken. This target is not code, is not in
+    # the repository, and has a different identifier on every install. No pack change
+    # reaches it.
+    #
+    # A second, independent instance of the same shape sits in the same module:
+    #   block_ways.links.menu.yml:4  url: 'https://www.drupal.org/docs/drupal-apis/block-api'
+    # Two unrelated cases in one small module is the argument for this being its own state
+    # rather than an attribute on an edge.
+    #
+    # The same rule succeeds four lines earlier on the placement:
+    #   block_ways.install:37   'id' => 'block_ways_6_content',
+    # One Block::create, one id resolved and one not.

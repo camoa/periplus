@@ -1,0 +1,12 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A library, named module/name as every dependency on it writes it.
+
+node_types:
+- name: drupal.library
+  id_namespace: drupal.library
+
+edge_kinds:
+- kind: depends_on_library
+  from: drupal.library
+  to: drupal.library

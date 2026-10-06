@@ -1,0 +1,4 @@
+node_types:
+- name: undeclared_parent.thing
+  parent: undeclared_parent.ghost
+  id_namespace: undeclared_parent.thing

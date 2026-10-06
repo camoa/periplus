@@ -1,0 +1,48 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A menu link read from a links.menu file, one per top-level key. Two rules because a rule that
+# emits an edge emits no node. A link written with a url instead of a route_name links to no route.
+
+rules:
+- rule: menu_link_from_links_file
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.links.menu'
+    filetype: yaml
+    each: '*'
+  id:
+    from: key
+  emits:
+  - node:
+      type: drupal.menu_link
+  - attribute:
+      name: title
+      from:
+        key: title
+  confidence: declared
+- rule: menu_link_from_links_file_edges
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.links.menu'
+    filetype: yaml
+    each: '*'
+  id:
+    from: key
+  emits:
+  - edge:
+      kind: links_to_route
+      from: this_node
+      to:
+        from:
+          key: route_name
+  - edge:
+      kind: child_of_link
+      from: this_node
+      to:
+        from:
+          key: parent
+  confidence: declared

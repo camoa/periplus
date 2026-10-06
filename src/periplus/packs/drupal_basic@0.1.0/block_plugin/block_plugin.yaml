@@ -1,0 +1,24 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A block plugin, named by its plugin id, and the PHP class that implements it.
+
+node_types:
+- name: drupal.block_plugin
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.block
+
+edge_kinds:
+- kind: plugin_class
+  from:
+  - drupal.block_plugin
+  - drupal.field_formatter
+  - drupal.field_type
+  - drupal.field_widget
+  - drupal.constraint_plugin
+  - drupal.queue_job_type
+  - drupal.rest_resource
+  - drupal.action_plugin
+  - drupal.media_source
+  - drupal.ai_function_call
+  - drupal.ai_agent
+  to: php.class

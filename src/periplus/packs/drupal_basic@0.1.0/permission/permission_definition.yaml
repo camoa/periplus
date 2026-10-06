@@ -1,0 +1,27 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A permission read from a permissions file, one per top-level key that has a title. One rule. The
+# key permission_callbacks is a list, not a permission, and has no title.
+
+rules:
+- rule: permission_from_permissions_file
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.permissions'
+    filetype: yaml
+    each: '*'
+    where:
+    - has_key:
+        path: title
+  id:
+    from: key
+  emits:
+  - node:
+      type: drupal.permission
+  - attribute:
+      name: title
+      from:
+        key: title
+  confidence: declared

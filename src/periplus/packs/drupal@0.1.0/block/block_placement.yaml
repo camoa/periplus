@@ -1,0 +1,25 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the block placement and its edges. Finds nothing.
+#
+# A placement is one instance of a block, in a theme, in a region. It is a config entity, so
+# it is a refinement of drupal.config_object rather than a separate kind of thing — a reader
+# asking for all configuration still gets these.
+#
+# One block, many placements. Verified in the export:
+#   block.block.claro_page_title.yml     plugin: page_title_block
+#   block.block.gin_page_title.yml       plugin: page_title_block
+#   block.block.olivero_page_title.yml   plugin: page_title_block
+# and every block_ways placement now has a _b twin. In block_ways alone each block is placed
+# once, which looks one-to-one and is only the module being small.
+
+node_types:
+
+  - name: drupal.block_placement
+    parent: drupal.config_object
+
+edge_kinds:
+
+  - kind: places_plugin
+    from: drupal.block_placement
+    to:   drupal.block_plugin

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://periplus.dev/schema/0/map.schema.json",
+  "title": "Periplus map",
+  "description": "The emitted artifact. A committed lockfile, reviewed in a pull request, byte-identical across machines, locales and runs. Its shape stays stable while packs churn: a new domain type changes what is in the map and never its structure. Derived from two worked maps — one hand-transcribed from a Drupal module, one produced by the engine from gopkg.in/yaml.v2.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["periplus_map_version", "packs", "roots", "nodes", "edges"],
+  "properties": {
+
+    "periplus_map_version": {"type": "integer", "minimum": 0},
+
+    "generated_by": {"type": "string"},
+
+    "packs": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["pack", "version"],
+        "properties": {"pack": {"type": "string"}, "version": {"type": "string"}}
+      },
+      "description": "The declared pack set. The determinism claim is precisely this: the same first-party code plus the same declared packs produces the same map."
+    },
+
+    "settings": {"type": "string", "description": "Path to the project settings file this run used."},
+    "roots":    {"type": "array", "items": {"type": "string"}, "minItems": 1},
+
+    "type_hierarchy": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["type"],
+        "properties": {"type": {"type": "string"}, "parent": {"type": ["string", "null"]}}
+      },
+      "description": "The closure of types this map actually used — not the packs, just the hierarchy. It is what lets a finder answer \"every method here\" without loading a pack, which is one of the five properties. Measured cost on a 84-node map: 19 rows."
+    },
+
+    "counts": {"type": "object", "description": "Derived from nodes and edges. Present so a diff shows a shape change at the top of the file rather than only in the body."},
+
+    "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+    "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}}
+  },
+
+  "$defs": {
+
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "state", "locations", "provenance"],
+      "if": {"properties": {"state": {"const": "unresolved"}}, "required": ["state", "unresolved_detail"]},
+      "then": {"properties": {"unresolved_detail": {"required": ["types_tried"]}}},
+      "properties": {
+
+        "id": {
+          "type": "string",
+          "pattern": "^(?!None::)(?!::).*::",
+          "description": "<id namespace>::<name>. The namespace is never empty and never the literal None; that it is one a loaded pack declares is checked by periplus map before writing, since the schema cannot know the packs. Namespaced, and minted from the thing rather than from the rule that found it. Renaming a rule must not churn ids across the map. Two config files in one Drupal module carry the same internal id, so machine names alone are not unique and the namespace is load-bearing."
+        },
+
+        "type": {"type": "string", "description": "Exactly one. A second matching type is a real collision and the build refuses."},
+        "roles": {"type": "array", "items": {"type": "string"}, "description": "Capabilities, which accumulate and never collide. One cache backend that also invalidates tags is not ambiguous."},
+
+        "state": {
+          "enum": ["mapped", "declared", "referenced", "unresolved", "out_of_reach"],
+          "description": "How much of the thing is known — a different question from rule confidence, which says how sure we are the rule fired correctly. The state decides which edges are legal: a declared node can be the target of a typed edge, a referenced one only a generic edge. mapped: read it, first-party. declared: not read, but a pack describes it. referenced: saw the name, nothing describes it. unresolved: a rule looked and failed, and this node records what it was doing. out_of_reach: not code, not in the repository, and no pack change will ever resolve it."
+        },
+
+        "locations": {
+          "type": "array", "items": {"$ref": "#/$defs/location"},
+          "description": "Normally one. Sometimes several: Go assembles a package from declarations in any file, and Elixir writes one function as multiple clauses. Measured: one package node in gopkg.in/yaml.v2 carries 13 locations from 13 files. A node with zero locations is a boundary node the map never read."
+        },
+
+        "attributes": {"type": "object", "description": "Values a rule read or computed. No prose."},
+
+        "provenance": {
+          "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/provenance"},
+          "description": "Which pack, which rule, at what confidence, and what it set. This is what makes a wrong entry fixable rather than merely wrong, and what turns the map into a worklist instead of a verdict. Several entries mean several rules contributed to one node, which is the merge model working."
+        },
+
+        "source_hash": {
+          "type": "string", "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 of the source this node was read from. This is the whole of the map's connection to descriptions. A description is written once by a model, reviewed and committed in a SEPARATE artifact keyed by node id, recording the hash it was written against. Comparing that hash to this one tells a current description from a stale one, and limits a regeneration pass to the nodes that actually moved. The prose never enters the map, because the determinism gate extracts twice and byte-compares, and a model writing during extraction fails on the first run."
+        },
+
+        "unresolved_detail": {
+          "type": "object", "additionalProperties": false,
+          "required": ["rule", "searched_for", "found"],
+          "properties": {
+            "rule":          {"type": "string"},
+            "searched_for":  {"type": "string"},
+            "found":         {"type": "string"},
+            "why_permanent": {"type": ["string", "null"]},
+            "types_tried":   {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "The end's candidate types, in the order the build tried them. The node's type is the first, so its id does not depend on which candidates a rule lists."}
+          },
+          "description": "Required in spirit whenever state is unresolved or out_of_reach. \"Unresolved\" alone is a shrug; the entry has to read as \"add an anchor for this symbol\" rather than \"unknown\". Every failure in the record that motivated this project was silent, and the graph still looked populated."
+        }
+      }
+    },
+
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "from", "to", "locations", "provenance"],
+      "properties": {
+        "kind": {"type": "string"},
+        "from": {"type": "string", "description": "Must name a node present in the map. The ordinary foreign key, and the engine's job because the engine is the thing that reads."},
+        "to":   {"type": "string"},
+        "occurrences": {
+          "type": "integer", "minimum": 1,
+          "description": "Not a refinement. Deduplicating edges per pair was measured at 186 caller functions against 303 call sites, and \"show me every place this gets called\" is unanswerable from a map that keeps one line per pair."
+        },
+        "locations": {
+          "type": "array", "items": {"$ref": "#/$defs/location"},
+          "description": "Where the RELATIONSHIP is written — the extends clause, the call site — which is often nowhere near either endpoint."
+        },
+        "attributes": {"type": "object"},
+        "provenance": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/provenance"}}
+      }
+    },
+
+    "location": {
+      "type": "object", "additionalProperties": false, "required": ["file", "line"],
+      "properties": {
+        "file": {"type": "string", "description": "Repository-relative, forward slashes. Never absolute: an absolute path differs per machine and breaks the byte-identical guarantee."},
+        "line": {"type": "integer", "minimum": 1}
+      }
+    },
+
+    "provenance": {
+      "type": "object", "additionalProperties": false, "required": ["pack", "rule"],
+      "properties": {
+        "pack":       {"type": "string"},
+        "rule":       {"type": "string", "description": "The rule's `rule:` key. This is why a rule needs a name at all, and why the name must not be lost."},
+        "confidence": {"enum": ["declared", "inferred"]},
+        "sets":       {"type": "array", "items": {"type": "string"}, "description": "Which values this contribution set. Two contributions setting the same value differently is a conflict; two setting different values is a merge. A module's config/install and the site's export legitimately hold the same id with different contents, and recording who set what keeps that drift answerable instead of one side silently winning."}
+      }
+    }
+  }
+}

@@ -1,0 +1,72 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# YAML pack — SKETCH
+#
+# Written because transcribing the block_ways map found that the Drupal pack cannot open a
+# single YAML file. It declares `drupal.config_object` with
+# `find: {file: "config/sync/*.yml", …}` while `files` claims only `php` plus
+# [module, inc, install, theme, profile, engine]. No `.yml` is ever selected, so every
+# block placement, the view, the menu and the module's own info file are invisible — the
+# entire half of a Drupal codebase this tool exists to map.
+#
+# The fix is not a second `grammar:` block on the Drupal pack. A domain pack must not own a
+# language, or every domain pack that touches YAML re-declares the same grammar and they
+# drift. YAML is a pack, PHP is a pack, and Drupal depends on both — the same mechanism as
+# javascript -> react -> nextjs, used for a second language rather than a second layer.
+#
+# What follows from that: the grammar is chosen by the file's extension, and the
+# extension-to-grammar mapping belongs to whichever pack claimed the extension. A `find`
+# rule naming `file: "config/install/*.yml"` needs no grammar field — `.yml` resolves to
+# this pack's grammar because this pack claimed it. Nothing new in the format.
+#
+# Sketch, not a pack. It carries what block_ways actually needed and stops there.
+
+# ======================================================================================
+pack: yaml
+version: 0.0.1
+depends: []
+# A root of the graph, with nothing beneath it, exactly like php. There is no "language
+# pack" kind for it to be an instance of.
+# ======================================================================================
+
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.13"      # tree-sitter runtime, released 2026-08-23
+  language: yaml
+  grammar_version: "0.7.1"         # tree-sitter-yaml
+  # Pinned exactly, never a range. Node type names carry no stability guarantee across a
+  # grammar's minor release (tree-sitter issue #2611), so a range lets a rule that matched
+  # yesterday match nothing today, silently. UNVERIFIED: the two version numbers above are
+  # placeholders in the shape the other packs use. Neither has been checked against a
+  # published release, and both must be before this sketch becomes a pack.
+
+folders:
+  source: ./
+
+files:
+  extensions: [yml, yaml]
+  exclude: []
+  # YAML the language excludes nothing. Every real exclusion — a lock file, a vendored
+  # bundle, a CI cache — is a convention of some framework or one project, so it belongs to
+  # the pack or the settings file that knows the convention. Same posture as php.
+
+# --------------------------------------------------------------------------------------
+# Identity.
+#
+# A YAML file has no name inside it. Nothing in the document says what the document is
+# called, which is the opposite of PHP and the same as a React module: the path carries the
+# identity.
+#
+# So this pack mints ids from the path and stops. What a config name means — that
+# `core.entity_view_display.block_content.block_ways_note.default` is an entity view
+# display for one bundle — is Drupal's knowledge, not YAML's, and the rule that reads it
+# belongs to the Drupal pack.
+# --------------------------------------------------------------------------------------
+identity:
+  qualified_name:
+    parts:
+      - from: path
+        relative_to: project_root
+        as: file_path
+  case_folding:
+    sensitive: [all]

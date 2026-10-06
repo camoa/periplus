@@ -1,0 +1,7 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+pack: folder_not_text
+version: 0.0.1
+depends: []
+
+folders:
+  config: 5

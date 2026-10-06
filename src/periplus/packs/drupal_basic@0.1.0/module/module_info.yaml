@@ -1,0 +1,58 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A module read from its info file. The stem is block_ways.info, so the id drops the .info ending.
+# An info file writes a dependency as drupal:block; the project prefix is dropped, and so is a
+# version constraint after the name, as in ai:ai (>=1.4.2).
+
+rules:
+- rule: module_from_info_file
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.info'
+    filetype: yaml
+    where:
+    - key:
+        name: type
+        equals: module
+  id:
+    from: file_stem
+    normalize:
+    - replace: \.info$
+      with: ''
+  emits:
+  - node:
+      type: drupal.module
+  - attribute:
+      name: name
+      from:
+        key: name
+  confidence: declared
+- rule: module_from_info_file_edges
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.info'
+    filetype: yaml
+    where:
+    - key:
+        name: type
+        equals: module
+  id:
+    from: file_stem
+    normalize:
+    - replace: \.info$
+      with: ''
+  emits:
+  - edge:
+      kind: depends_on_module
+      from: this_node
+      to:
+        from:
+          key: dependencies
+        each: true
+        pattern: '^(?:[^:( ]*:)?(?<module>[^ (]+)'
+        template: '{module}'
+  confidence: declared

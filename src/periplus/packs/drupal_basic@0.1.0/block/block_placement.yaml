@@ -1,0 +1,16 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A placement is one instance of a block, in a theme, in a region. It is a config entity, so it
+# refines drupal.config_object. The plugin it places is declared in block_plugin/.
+
+node_types:
+- name: drupal.block_placement
+  parent: drupal.config_object
+- name: drupal.plugin
+  abstract: true
+  id_namespace: drupal.plugin
+
+edge_kinds:
+- kind: places_plugin
+  from: drupal.block_placement
+  to: drupal.block_plugin

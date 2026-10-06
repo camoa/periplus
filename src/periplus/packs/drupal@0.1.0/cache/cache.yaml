@@ -1,0 +1,18 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the cache backend type and the role that goes with it.
+#
+# The pair that forced the split between a type, of which a node has one, and a role, of
+# which it may have many. trash/src/Cache/TrashEntityCacheBackend.php:14 implements both
+# CacheBackendInterface and CacheTagsInvalidatorInterface. That is not ambiguity. It is one
+# cache backend that also invalidates tags, and which interface classifies is the author's
+# call because only the author knows.
+
+node_types:
+
+  - name: drupal.cache_backend
+    parent: php.class
+
+roles:
+
+  - name: drupal.invalidates_cache_tags

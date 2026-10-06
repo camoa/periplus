@@ -1,0 +1,13 @@
+node_types:
+- name: not_executable.thing
+  id_namespace: not_executable.thing
+
+rules:
+- rule: target_rule
+  reads: map
+  match:
+    node_type: not_executable.thing
+  emits:
+  - node:
+      type: not_executable.thing
+  confidence: declared

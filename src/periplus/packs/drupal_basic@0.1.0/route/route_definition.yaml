@@ -1,0 +1,97 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route read from a routing file, one per top-level key that has a path. Two rules because a
+# rule that emits an edge emits no node. The key route_callbacks is a list, not a route, and has no
+# path. A route's _permission joins permissions with a comma (all needed), read first, or with a
+# plus sign (any one); each permission between them is one edge, without the spaces around it: a
+# requires_permission edge, or an accepts_permission edge for a value with a plus sign and no
+# comma. The first branch of each pattern takes the whole of a value that is not its own and names
+# no permission, so that value gives the edge kind nothing. A _controller written Class::method is
+# handled_by that method; one written service:method names a service and makes no edge. A leading
+# backslash is dropped from a class name.
+
+rules:
+- rule: route_from_routing_file
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: yaml
+    each: '*'
+    where:
+    - has_key:
+        path: path
+  id:
+    from: key
+  emits:
+  - node:
+      type: drupal.route
+  - attribute:
+      name: path
+      from:
+        key: path
+  - attribute:
+      name: controller
+      from:
+        key: defaults._controller
+  - attribute:
+      name: form
+      from:
+        key: defaults._form
+  - attribute:
+      name: title
+      from:
+        key: defaults._title
+  confidence: declared
+- rule: route_from_routing_file_edges
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: yaml
+    each: '*'
+    where:
+    - has_key:
+        path: path
+  id:
+    from: key
+  emits:
+  - edge:
+      kind: requires_permission
+      from: this_node
+      to:
+        from:
+          key: requirements._permission
+        each: true
+        pattern: '^[^,]*\+[^,]*$|(?<permission>[^,\s](?:[^,]*[^,\s])?)'
+        template: '{permission}'
+  - edge:
+      kind: accepts_permission
+      from: this_node
+      to:
+        from:
+          key: requirements._permission
+        each: true
+        where:
+        - matches: '*+*'
+        pattern: '.*,.*|(?<permission>[^+\s](?:[^+]*[^+\s])?)'
+        template: '{permission}'
+  - edge:
+      kind: handled_by
+      from: this_node
+      to:
+        from:
+          key: defaults._controller
+        pattern: '^\\?(?<method>[^\\:][^:]*::[^:]+)$'
+        template: '{method}'
+  - edge:
+      kind: uses_form
+      from: this_node
+      to:
+        from:
+          key: defaults._form
+        pattern: '^\\?(?<form>[^\\].*)$'
+        template: '{form}'
+  confidence: declared

@@ -1,0 +1,229 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A config file, named by its file: config/app.php is app, the first segment of config('app.name').
+# Each text key of the array it returns, app.name, and a migration, named by its file.
+
+rules:
+
+- rule: config_file
+  reads: file
+  in: [config_files]
+  match: {file: '*', filetype: php}
+  id: {from: file_stem}
+  emits: [{node: {type: laravel.config}}]
+  confidence: declared
+
+# The route_file type claims every file named api.php, web.php, channels.php or console.php at any
+# depth, so a config file of one of those names is read as text, not as php. A type claimed by a
+# whole name has no ending, so its stem is the whole name, api.php.
+- rule: config_file_named_like_routes
+  reads: file
+  in: [config_files]
+  match: {file: '*', filetype: route_file}
+  id: {from: file_stem, normalize: [{replace: '\.php$', with: ''}]}
+  emits: [{node: {type: laravel.config}}]
+  confidence: declared
+
+# A key named by the config file alone, app for config/app.php, with a key_of edge to the file: it
+# stands for the whole array the file returns, so that config('app') ends on it.
+- rule: config_file_key
+  reads: file
+  in: [config_files]
+  match: {file: '*', filetype: config_text, text: '\A'}
+  id: {template: '{config_name}'}
+  emits: [{node: {type: laravel.config_key}}]
+  confidence: declared
+
+- rule: config_file_key_of
+  reads: file
+  in: [config_files]
+  match: {file: '*', filetype: config_text, text: '\A'}
+  id: {template: '{config_name}'}
+  emits: [{edge: {kind: key_of, from: this_node, to: {template: '{config_name}', types: [laravel.config]}}}]
+  confidence: declared
+
+- rule: config_file_key_named_like_routes
+  reads: file
+  in: [config_files]
+  match: {file: '*', filetype: route_file, text: '\A'}
+  id: {template: '{route_file}'}
+  emits: [{node: {type: laravel.config_key}}]
+  confidence: declared
+
+- rule: config_file_key_of_named_like_routes
+  reads: file
+  in: [config_files]
+  match: {file: '*', filetype: route_file, text: '\A'}
+  id: {template: '{route_file}'}
+  emits: [{edge: {kind: key_of, from: this_node, to: {template: '{route_file}', types: [laravel.config]}}}]
+  confidence: declared
+
+# Each text key of the array a config file returns, named by the file and every enclosing key:
+# 'one' => ['two' => 1] in config/app.php is app.one.two, with a key_of edge to the config app.
+# The match starts on the character before the key's quote, as the config_key span of a key whose
+# value is an array does, so that span holds its own key: value, an array or nothing, says so, and
+# parents leaves that key out. guard is a dot when the spans that hold the key allow a node (see
+# config_text in pack.yaml) and no key on the way holds a dot; otherwise it is empty and the id
+# makes nothing. The four rules differ only in their file type and the name of the file's value.
+- rule: config_key_decl
+  reads: file
+  in: [config_files]
+  match:
+    file: '*'
+    filetype: config_text
+    text: '[\[,(\s](?<q>[''"])(?<key>(?:(?!(?P=q))[^\\$])+)(?P=q)(?=\s*=>\s*(?<value>(?:(?!\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\]\s*\[)\[)?))'
+  values:
+    returns: {from: {enclosing: config_return, capture: word}}
+    brackets: {from: {enclosing: config_bracket, capture: at}, normalize: [{replace: '.', with: 'x'}]}
+    own: {from: {capture: value}, normalize: [{replace: '.', with: 'x'}]}
+    keyed: {from: {enclosing: config_key, capture: arrow}, normalize: [{replace: '.', with: 'x'}]}
+    parens: {from: {enclosing: config_paren, capture: at}}
+    braces: {from: {enclosing: config_brace, capture: at}}
+    path: {from: {enclosing: config_key, capture: key}}
+    guard: {template: '{returns}|{brackets}{own}|{keyed}x|{parens}{braces}|{path}{key}', normalize: [{replace: '(?s)^return\|(x*)\|\1\|\|[^.]*$', with: '.'}, {replace: '(?s)^(?!\.$).*', with: ''}]}
+    keys: {from: {enclosing: config_key, capture: key}, join: '.'}
+    head: {template: '{guard}${config_name}.{keys}${own}', normalize: [{replace: '(?s)^\$.*', with: ''}, {replace: '[^.$]*\$x$', with: ''}, {replace: '(?<!\.)\$$', with: '.'}, {replace: '\$$', with: ''}, {replace: '^\.\$', with: ''}]}
+  id: {template: '{head}{key}'}
+  line: {capture: key}
+  emits: [{node: {type: laravel.config_key}}]
+  confidence: declared
+
+- rule: config_key_decl_of
+  reads: file
+  in: [config_files]
+  match:
+    file: '*'
+    filetype: config_text
+    text: '[\[,(\s](?<q>[''"])(?<key>(?:(?!(?P=q))[^\\$])+)(?P=q)(?=\s*=>\s*(?<value>(?:(?!\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\]\s*\[)\[)?))'
+  values:
+    returns: {from: {enclosing: config_return, capture: word}}
+    brackets: {from: {enclosing: config_bracket, capture: at}, normalize: [{replace: '.', with: 'x'}]}
+    own: {from: {capture: value}, normalize: [{replace: '.', with: 'x'}]}
+    keyed: {from: {enclosing: config_key, capture: arrow}, normalize: [{replace: '.', with: 'x'}]}
+    parens: {from: {enclosing: config_paren, capture: at}}
+    braces: {from: {enclosing: config_brace, capture: at}}
+    path: {from: {enclosing: config_key, capture: key}}
+    guard: {template: '{returns}|{brackets}{own}|{keyed}x|{parens}{braces}|{path}{key}', normalize: [{replace: '(?s)^return\|(x*)\|\1\|\|[^.]*$', with: '.'}, {replace: '(?s)^(?!\.$).*', with: ''}]}
+    keys: {from: {enclosing: config_key, capture: key}, join: '.'}
+    head: {template: '{guard}${config_name}.{keys}${own}', normalize: [{replace: '(?s)^\$.*', with: ''}, {replace: '[^.$]*\$x$', with: ''}, {replace: '(?<!\.)\$$', with: '.'}, {replace: '\$$', with: ''}, {replace: '^\.\$', with: ''}]}
+  id: {template: '{head}{key}'}
+  emits:
+  - edge:
+      kind: key_of
+      from: this_node
+      to: {template: '{config_name}', types: [laravel.config], on_miss: unresolved}
+  confidence: declared
+
+# The same, in a config file the route_file type claims by its name: config/api.php is api.
+- rule: config_key_decl_named_like_routes
+  reads: file
+  in: [config_files]
+  match:
+    file: '*'
+    filetype: route_file
+    text: '[\[,(\s](?<q>[''"])(?<key>(?:(?!(?P=q))[^\\$])+)(?P=q)(?=\s*=>\s*(?<value>(?:(?!\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\]\s*\[)\[)?))'
+  values:
+    returns: {from: {enclosing: config_return, capture: word}}
+    brackets: {from: {enclosing: config_bracket, capture: at}, normalize: [{replace: '.', with: 'x'}]}
+    own: {from: {capture: value}, normalize: [{replace: '.', with: 'x'}]}
+    keyed: {from: {enclosing: config_key, capture: arrow}, normalize: [{replace: '.', with: 'x'}]}
+    parens: {from: {enclosing: config_paren, capture: at}}
+    braces: {from: {enclosing: config_brace, capture: at}}
+    path: {from: {enclosing: config_key, capture: key}}
+    guard: {template: '{returns}|{brackets}{own}|{keyed}x|{parens}{braces}|{path}{key}', normalize: [{replace: '(?s)^return\|(x*)\|\1\|\|[^.]*$', with: '.'}, {replace: '(?s)^(?!\.$).*', with: ''}]}
+    keys: {from: {enclosing: config_key, capture: key}, join: '.'}
+    head: {template: '{guard}${route_file}.{keys}${own}', normalize: [{replace: '(?s)^\$.*', with: ''}, {replace: '[^.$]*\$x$', with: ''}, {replace: '(?<!\.)\$$', with: '.'}, {replace: '\$$', with: ''}, {replace: '^\.\$', with: ''}]}
+  id: {template: '{head}{key}'}
+  line: {capture: key}
+  emits: [{node: {type: laravel.config_key}}]
+  confidence: declared
+
+- rule: config_key_decl_of_named_like_routes
+  reads: file
+  in: [config_files]
+  match:
+    file: '*'
+    filetype: route_file
+    text: '[\[,(\s](?<q>[''"])(?<key>(?:(?!(?P=q))[^\\$])+)(?P=q)(?=\s*=>\s*(?<value>(?:(?!\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\]\s*\[)\[)?))'
+  values:
+    returns: {from: {enclosing: config_return, capture: word}}
+    brackets: {from: {enclosing: config_bracket, capture: at}, normalize: [{replace: '.', with: 'x'}]}
+    own: {from: {capture: value}, normalize: [{replace: '.', with: 'x'}]}
+    keyed: {from: {enclosing: config_key, capture: arrow}, normalize: [{replace: '.', with: 'x'}]}
+    parens: {from: {enclosing: config_paren, capture: at}}
+    braces: {from: {enclosing: config_brace, capture: at}}
+    path: {from: {enclosing: config_key, capture: key}}
+    guard: {template: '{returns}|{brackets}{own}|{keyed}x|{parens}{braces}|{path}{key}', normalize: [{replace: '(?s)^return\|(x*)\|\1\|\|[^.]*$', with: '.'}, {replace: '(?s)^(?!\.$).*', with: ''}]}
+    keys: {from: {enclosing: config_key, capture: key}, join: '.'}
+    head: {template: '{guard}${route_file}.{keys}${own}', normalize: [{replace: '(?s)^\$.*', with: ''}, {replace: '[^.$]*\$x$', with: ''}, {replace: '(?<!\.)\$$', with: '.'}, {replace: '\$$', with: ''}, {replace: '^\.\$', with: ''}]}
+  id: {template: '{head}{key}'}
+  emits:
+  - edge:
+      kind: key_of
+      from: this_node
+      to: {template: '{route_file}', types: [laravel.config], on_miss: unresolved}
+  confidence: declared
+
+# config('app.name') written in a template: an edge from the view to the key app.name, and an
+# edge from the key app, named by the file, to the config file app, unresolved when no such file
+# exists. The key app.name is mapped when the file declares it; otherwise it is in state
+# referenced, since this_node takes no on_miss. The key is this rule's own node and the view the
+# end it names, because reads_config also runs from a PHP function or method, and this_node needs
+# one id namespace.
+- rule: config_read_in_view
+  reads: file
+  in: [views]
+  match:
+    file: '*'
+    filetype: blade
+    text: '(?:^|[^\w>$:])config\(\s*[''"](?<key>[\w-]+[\w.-]*)[''"]\s*[,)]'
+  id: {from: {capture: key}}
+  line: {capture: key}
+  emits:
+  - edge:
+      kind: reads_config
+      from: {template: '{view}', types: [laravel.view]}
+      to: this_node
+  confidence: declared
+
+# config('app.name') in a PHP function or method: an edge from it to the key app.name, at the
+# call's line, unresolved when no config file declares that key. config('app') ends on the key app
+# that stands for the file. No key_of edge: a reference rule's edges run from the function or
+# method. config($key) and config(['app.name' => 'x']) give nothing and go under skipped.
+- rule: config_call
+  reads: file
+  in: [source]
+  match:
+    reference: function_call_expression
+    name_child: function
+    filetype: php
+    where: [{name_matches: '(?i)\\?config'}]
+  emits:
+  - edge:
+      kind: reads_config
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [laravel.config_key], on_miss: unresolved}
+  confidence: declared
+
+- rule: config_key_in_file
+  reads: file
+  in: [views]
+  match:
+    file: '*'
+    filetype: blade
+    text: '(?:^|[^\w>$:])config\(\s*[''"](?<key>(?<file>[\w-]+)[\w.-]*)[''"]\s*[,)]'
+  id: {from: {capture: file}}
+  emits:
+  - edge:
+      kind: key_of
+      from: this_node
+      to: {from: {capture: file}, types: [laravel.config], on_miss: unresolved}
+  confidence: declared
+
+- rule: migration_file
+  reads: file
+  in: [migrations]
+  match: {file: '*', filetype: php}
+  id: {from: file_stem}
+  emits: [{node: {type: laravel.migration}}]
+  confidence: declared

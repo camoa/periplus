@@ -1,0 +1,58 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — field instance from a config file. One rule.
+#
+# The best example in the pack of a name carrying several facts at once, and so the case
+# that earns the regex.
+
+needs:
+  types:
+  - drupal.field_instance
+  - drupal.field_storage
+  - drupal.block_type
+rules:
+- rule: field_instance_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: field.field.*
+    filetype: yaml
+  id: &id001
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.field_instance
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: field_instance_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: field.field.*
+    filetype: yaml
+  emits:
+  - edge:
+      kind: stored_by
+      from: this_node
+      to:
+        from:
+          key: dependencies.config
+        where:
+        - matches: field.storage.*
+  - edge:
+      kind: field_of
+      from: this_node
+      to:
+        from:
+        - key: entity_type
+        - key: bundle
+        template: '{entity_type}.type.{bundle}'
+  confidence: declared
+  id: *id001

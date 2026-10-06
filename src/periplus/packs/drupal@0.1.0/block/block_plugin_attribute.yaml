@@ -1,0 +1,56 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — block plugin declared by a PHP attribute. One rule.
+#
+# The current recommended form and the only one core writes in new code.
+
+needs:
+  types:
+  - drupal.block_plugin
+rules:
+- rule: block_plugin_from_attribute
+  reads: file
+  in:
+  - custom_module
+  - custom_theme
+  match:
+    attribute: Drupal\Core\Block\Attribute\Block
+    where:
+    - applies_to: class_declaration
+  id: &id001
+    from:
+      attribute_argument: id
+    must_be: string_literal
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.block_plugin
+  - attribute:
+      name: admin_label
+      from:
+        attribute_argument: admin_label
+  - attribute:
+      name: category
+      from:
+        attribute_argument: category
+  confidence: declared
+- rule: block_plugin_from_attribute_edges
+  reads: file
+  in:
+  - custom_module
+  - custom_theme
+  match:
+    attribute: Drupal\Core\Block\Attribute\Block
+    where:
+    - applies_to: class_declaration
+  emits:
+  - edge:
+      kind: declares
+      from: enclosing_class
+      to: this_node
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+  id: *id001

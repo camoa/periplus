@@ -1,0 +1,69 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — block plugin declared by a docblock annotation. One rule.
+#
+# The pre-attribute form, still read in Drupal 11. Verified at
+# web/core/lib/Drupal/Core/Block/BlockManager.php:49, which passes both:
+#
+#   parent::__construct('Plugin/Block', $namespaces, $module_handler,
+#     BlockPluginInterface::class, Block::class, 'Drupal\Core\Block\Annotation\Block');
+#
+# One manager, two discovery forms. A pack supporting only attributes maps new core
+# correctly and loses most of contrib.
+#
+# Supplementary to block_plugin_attribute.yaml, and in practice they never meet — a class
+# carries one form or the other. They are two rules because the shapes differ, not because
+# a class might have both.
+
+needs:
+  types:
+  - drupal.block_plugin
+rules:
+- rule: block_plugin_from_annotation
+  reads: file
+  in:
+  - custom_module
+  - custom_theme
+  match:
+    annotation: Block
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  id: &id001
+    from:
+      annotation_key: id
+    must_be: string_literal
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.block_plugin
+  - attribute:
+      name: admin_label
+      from:
+        annotation_key: admin_label
+  - attribute:
+      name: category
+      from:
+        annotation_key: category
+  confidence: declared
+- rule: block_plugin_from_annotation_edges
+  reads: file
+  in:
+  - custom_module
+  - custom_theme
+  match:
+    annotation: Block
+    grammar: doctrine-annotation
+    where:
+    - applies_to: class_declaration
+  emits:
+  - edge:
+      kind: declares
+      from: enclosing_class
+      to: this_node
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+  id: *id001

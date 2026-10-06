@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — hook implementations declared by the Hook attribute. One rule.
+
+needs:
+  types: [drupal.hook_implementation]
+
+rules:
+
+  - rule: hook_from_attribute
+    reads: file
+    in: [custom_module, custom_theme]
+    match:
+      attribute: "Drupal\\Core\\Hook\\Attribute\\Hook"
+      where:
+        - applies_to: method_declaration
+    emits:
+      - type: drupal.hook_implementation
+      - attribute: {name: hook, from: {attribute_argument: 0}}
+    confidence: declared
+    # BlockWaysHooks.php:25-26. A type refinement of php.method, so the id does not change
+    # and every edge the php pack emitted still lands.
+    #
+    # The hook being implemented is an attribute, not a node, and that is unsettled. Nothing
+    # first-party ever declares a hook — core does, in documentation — so a hook node would
+    # exist only because something referenced it, which is exactly when the boundary rule
+    # says a boundary node should be emitted. So this is probably wrong as written, and one
+    # hook implementation is not enough evidence to design against.

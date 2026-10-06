@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A REST resource plugin declared by the RestResource attribute on its class, the twin of the
+# annotation rule. Two rules because a rule that emits an edge emits no node. An id that is not a
+# text literal makes no plugin and is listed under skipped.
+
+rules:
+- rule: rest_resource_from_attribute
+  reads: file
+  in:
+  - rest_resource_classes
+  match:
+    attribute: Drupal\rest\Attribute\RestResource
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.rest_resource
+  confidence: declared
+- rule: rest_resource_from_attribute_edges
+  reads: file
+  in:
+  - rest_resource_classes
+  match:
+    attribute: Drupal\rest\Attribute\RestResource
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

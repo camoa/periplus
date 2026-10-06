@@ -1,0 +1,61 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A theme read from its info file. The stem is simple_blog.info, so the id drops the .info ending.
+# The base theme is written under the key 'base theme', with a space; a library as module/name.
+
+rules:
+- rule: theme_from_info_file
+  reads: file
+  in:
+  - theme_root
+  match:
+    file: '*.info'
+    filetype: yaml
+    where:
+    - key:
+        name: type
+        equals: theme
+  id:
+    from: file_stem
+    normalize:
+    - replace: \.info$
+      with: ''
+  emits:
+  - node:
+      type: drupal.theme
+  - attribute:
+      name: name
+      from:
+        key: name
+  confidence: declared
+- rule: theme_from_info_file_edges
+  reads: file
+  in:
+  - theme_root
+  match:
+    file: '*.info'
+    filetype: yaml
+    where:
+    - key:
+        name: type
+        equals: theme
+  id:
+    from: file_stem
+    normalize:
+    - replace: \.info$
+      with: ''
+  emits:
+  - edge:
+      kind: based_on_theme
+      from: this_node
+      to:
+        from:
+          key: base theme
+  - edge:
+      kind: uses_library
+      from: this_node
+      to:
+        from:
+          key: libraries
+        each: true
+  confidence: declared

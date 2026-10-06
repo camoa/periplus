@@ -1,0 +1,314 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# Known gaps. The basic Laravel pack maps, beside php_basic's classes and methods:
+# - each route in a file named web.php, api.php, channels.php or console.php in the routes folder,
+#   named by file, method and URI, such as web:GET /books. Route::redirect and
+#   Route::permanentRedirect give web:REDIRECT /here and web:PERMANENTREDIRECT /a. Inside
+#   Route::prefix('admin')->name('admin.')->group(...), its calls in any order and middleware(...)
+#   among them, the URI and the name carry each enclosing group's prefix and name: GET /stats is
+#   web:GET admin/stats, named admin.stats, the URI joined as Laravel joins it; outside every
+#   group the URI stays as written. A route inside a comment, a quoted or backtick string, a
+#   heredoc, a nowdoc or inline HTML gives nothing;
+# - the controller method a route names as [BookController::class, 'index'] or
+#   [\App\Http\Controllers\BookController::class, 'index'], as a handled_by edge;
+# - Route::resource and Route::apiResource as one node each, with an edge to the controller class;
+# - Route::view with an edge to its view;
+# - each class in app/Http/Controllers as a controller, each class in app/Models as a model;
+# - each Blade view, named by its dotted path, the views it names in @include, @includeIf, @each,
+#   @component and @extends, and the view components.alert that a tag <x-alert> names;
+# - each file in config, each config('x.y') key a view reads, each file in database/migrations;
+# - each text key of the array a config file returns, at every depth, named by the file and every
+#   enclosing key: 'one' => ['two' => 1] in config/app.php is app.one.two, with a key_of edge to
+#   the config app. A config file named api.php, web.php, channels.php or console.php gets its keys
+#   too. Each config file also gets a key named by the file alone, app, which stands for the whole
+#   array, so that config('app') ends on it; it is not a key the file declares;
+# - each view('x.y') and config('x.y') call in a PHP function or method, read from the parse tree:
+#   a renders edge from it to the view x.y, unresolved when no such template exists, and a
+#   reads_config edge to the key x.y, unresolved when no config file declares it. A call inside a
+#   closure counts the function or method around it. The name matches in any letter case, as PHP's
+#   does: View('x.y') counts.
+# It has had no independent checker and no hand audit.
+#
+# False results:
+# - A route inside the array form, Route::group(['prefix' => 'admin', 'as' => 'admin.'], ...), or
+#   a group whose chain holds a call other than prefix, name and middleware, such as ->as('a.') or
+#   ->where(...), gets an id and a name without that group's prefix: /stats there is
+#   web:GET /stats, named stats. Two such routes with one verb and URI, in two groups, merge into
+#   one node with two locations and two handled_by edges.
+# - So does a route inside a group whose middleware argument holds parentheses,
+#   Route::middleware(Authorize::using('x'))->prefix('a')->group(...), or whose prefix is not a
+#   text literal, prefix($p) or prefix(self::P). The /api prefix the application adds to routes in
+#   api.php is in no id: GET /books there is api:GET /books.
+# - Inside a prefix group a URI keeps a final slash: Route::get('/users/') there is
+#   web:GET admin/users/, where Laravel registers admin/users.
+# - With routes set to a folder not named routes, such as ./routing/**, routing/admin/web.php is
+#   named web: its GET /x is web:GET /x, one node with GET /x in routing/web.php.
+# - A grouped use, use App\Http\Controllers\{PageController}, binds nothing in a route file, so a
+#   handled_by edge ends at an unresolved PageController::show that exists.
+# - Controllers and models are typed by folder alone: a plain class in app/Models is a model.
+# - A component tag ends at the view components.<name>, so these tags end at a view that is
+#   unresolved: <x-dynamic-component>, which names its component when the page renders; <x-card>
+#   for components/card/index.blade.php or components/card/card.blade.php, mapped as
+#   components.card.index and components.card.card; a class component whose render() returns
+#   another view; an inline class component, which has no view; a class registered under an alias,
+#   Blade::component('package-alert', Alert::class); a component in a folder registered with
+#   Blade::anonymousComponentPath().
+# - An HTML comment hides nothing: a tag or a directive inside <!-- --> still gives an edge. Only
+#   {{-- --}} hides text.
+# - view() and config() are matched by the name as written, not resolved: a project's own function
+#   named view or config, declared in the namespace or bound by use function, gives a renders or
+#   reads_config edge as if it were Laravel's helper.
+# - view('books/show') ends at an unresolved books/show, not at the existing view books.show,
+#   though Laravel reads the slash as a dot.
+# - An array indexed at once still gives k.a and every key below it a node when it holds arrays
+#   three deep, 'k' => ['a' => ['b' => ['c' => ['d' => 1]]]][$i], or a ] inside a string,
+#   'k' => ['a' => ']'][$i], though Laravel's k is the one value picked: false nodes. The pack
+#   tests what follows an array with a pattern that balances brackets only two deep and reads no
+#   string, because the engine lacks a span opening that can test the text after the span closes.
+# - A return without braces before the main one, if ($x) return ['early' => 1];, gives its keys as
+#   keys of the file beside the main array's, though the file returns one array or the other: a
+#   false node such as early.
+# - A key a project sets at run time, config(['app.extra' => 1]) or config()->set('app.extra', 1),
+#   as a test or a service provider does, is declared by no config file, so config('app.extra')
+#   from PHP ends at an unresolved key that exists when the code runs.
+#
+# Missing results:
+# - An invokable controller, Route::get('/x', ShowProfile::class), gives a route node with no
+#   handled_by edge. So do 'BookController@index' and a route inside a Route::controller group.
+# - A route that starts with another method, Route::middleware('auth')->get(...), gives no node.
+#   Route::match gives no node.
+# - Route::resource stands for seven routes and Route::apiResource for five. Each gets one node.
+# - A closure route gets no edge to the view it returns. Its ->name() is lost when its body holds
+#   a statement.
+# - A model in another folder than app/Models is not typed as a model.
+# - A quote that PHP itself rejects as unpaired hides every later route in its file.
+# - A file named web.php, api.php, channels.php or console.php is a route file in any folder, so
+#   php_basic maps no class in it.
+# - view($name), a concatenated view name, config($key) and config([...]) give no edge and go under
+#   skipped. View::make('x'), $this->view('x') and a view() or config() call outside every
+#   function and method give no edge. config()->set('x', 1) goes under skipped as argument 0 is
+#   missing. A key no config file declares has no key_of edge to its file. Read from a template,
+#   config('app.nosuch') ends at the key app.nosuch in state referenced, not unresolved, unless a
+#   PHP function or method reads it too, which makes it unresolved. config('nofile.key') in a
+#   template ends the same way at a referenced key, and gives the key nofile a key_of edge to the
+#   config nofile, which is unresolved. A template's read adds its line to the key_of edge of the
+#   key named by the file, app for config('app.name').
+#   php_basic still shows every view() and config() call inside a function or method as an
+#   unresolved call, such as App\Http\Controllers\view, unless the project declares its own.
+# - Two identical calls on one line, config('app.name') . config('app.name'), are one location of
+#   one reads_config edge, so the map counts one read where the source holds two.
+# - A config key gets no node, nor does any key below it, when it is: in an array assigned to a
+#   variable, above or after the return; in a call's argument, env('X', ['k' => 1]) or
+#   ->merge(['k' => 1]); in an array a closure or an arrow function returns; in a match; in old
+#   array( ) syntax, as a value or as the whole file; in a list entry, 'list' => [['k' => 1]],
+#   where Laravel's key is list.0.k; in the second array of ['a' => 1] + ['b' => 1]; below a key
+#   that holds a dot, 'a.b' => ['c' => 1]; in an array indexed at once, ['a' => 1][$k], returned
+#   or as a key's value; that key gets a node as a key with no array. A key that holds a dot gets
+#   no node itself. A key that is not a text literal gets none, nor does any key below it:
+#   1 => x, CONSTANT => x, Foo::class => x, public_path('x') => x, a double-quoted key holding $,
+#   a key holding a backslash escape, 'it\'s', and a key that ends in a text literal but is not
+#   one, FOO . '_bar' => x, 'a' . 'b' => x or $c ? 'a' : 'b' => x. Nor does a key at the start of
+#   a line after a line that ends in a // or # comment, 'a' => 1, // note; a key right after */ with
+#   no space; a key with a comment before its =>, 'a' /* c */ => x; or any key below one of these.
+#   A key whose array follows => and a comment, 'a' => /* c */ ['b' => 1], gets a node as a key
+#   with no array, and the keys below it get none.
+# - view('mail::html.button') ends at an unresolved view whose name holds ::, not at the package's
+#   view. view(view: 'a.b') and view()->make('x') give no
+#   edge and go under skipped as argument 0 is missing. response()->view('x') and
+#   Route::view('/', 'x') in a function or method give no renders edge.
+#   Inertia::render('Books/Index') gives only an unresolved call to Inertia\Inertia::render.
+# - The routes are still read as text. Reading them from the tree needs three things the engine
+#   lacks: an id that joins the URI argument with a path value, the upper-cased verb and the
+#   prefix of each enclosing group; a route name read from a chained ->name() call on a parent
+#   node; and an edge end from an array argument, [BookController::class, 'index'], whose class
+#   the file's imports resolve, for the handled_by edge.
+# - @include($name), a concatenated view name, @includeWhen, @includeUnless and @includeFirst give
+#   no edge. A Livewire component gives nothing.
+# - A class component's tag never ends at its class. <x-s>, <x-sl>, <x-slo>, a name that starts
+#   with a capital, and a namespaced <x-pkg::thing> give nothing.
+#
+# Settings to know:
+# - A project that keeps its routes elsewhere sets routes; one that keeps its templates elsewhere
+#   sets views_root, and views then reads every folder below it. A views setting without a final
+#   /** reads only the files directly in that folder.
+# - A template gets a node only below views_root, named by its path below it. A template a views
+#   setting reads outside views_root gets no node and no reads_config edge, and the report lists
+#   it neither as a problem nor as skipped. A config('x.y') in it still gives the key x a key_of
+#   edge to the config x, and counts a fire of config_read_in_view and config_key_in_file.
+# - The routes and config folders read only their own files: routes/admin/web.php and
+#   config/sub/x.php get no node, and routes/admin.php is read as PHP, so its routes get no node.
+#   With routes set to ./routes/**, routes/admin/web.php is read and its routes are admin/web:.
+# - php_basic skips every vendor folder, so resources/views/vendor is not mapped. To map it, add
+#   re_include: ['**/resources/views/vendor/**'] to the settings.
+
+# A Laravel application: its routes, controllers, Eloquent models, Blade views, config files and
+# migrations, on top of php_basic's classes and methods.
+pack: laravel_basic
+version: 0.0.5
+depends: [php_basic]
+
+# Laravel's default layout, relative to the project folder; a project's settings move each one.
+folders:
+  routes: ./routes
+  # A project that moves its templates sets views_root alone; views reads every folder below it.
+  views_root: ./resources/views
+  views: '{views_root}/**'
+  config_files: ./config
+  migrations: ./database/migrations
+  controllers: ./app/Http/Controllers/**
+  models: ./app/Models/**
+
+files:
+  types:
+    # The route files, by whole name, read as text: a text rule cannot read a file read as a tree.
+    route_file:
+      names: [web.php, api.php, channels.php, console.php]
+      reader: text
+      path_values:
+        route_file:
+          # routes/web.php is web and routes/admin/web.php is admin/web; routing/web.php is web.
+          pattern: '^(?<name>.+)\.php$'
+          template: '{name}'
+          normalize:
+          - {replace: '^(?:.*/)?routes/', with: '//'}
+          - {replace: '^[^/].*/', with: ''}
+          - {replace: '^//', with: ''}
+      # PHP comments, strings and inline HTML, so a route written inside one gives nothing. A string
+      # is a section so that // inside 'http://x' opens no comment. #[ opens an attribute, not a
+      # comment. A heredoc or nowdoc ends at its label at the start of a line, indented or not.
+      # A double-quoted string steps over the quotes inside {$...} interpolation.
+      # Text these sections leave out is read as code: a quote left unpaired there opens a string
+      # that hides the routes after it, and a /* there hides every route up to the next */.
+      sections:
+      - name: heredoc
+        open: '<<<[ \t]*["'']?(?<label>[A-Za-z_][A-Za-z0-9_]*)'
+        close: '\n[ \t]*{label}\b'
+      # ?> ends PHP inside a // or # comment too; this section is listed before them to win the tie.
+      - name: inline_html
+        open: '(?://[^\n]*?|#(?:[^\[\n][^\n]*?)?)?\?>'
+        close: '<\?(?:php|=)?'
+      - name: block_comment
+        open: '/\*'
+        close: '\*/'
+      - name: line_comment
+        open: '//'
+        close: '\n'
+      - name: hash_comment
+        open: '#[^\[\n]'
+        close: '\n'
+      - name: string
+        open: ''''
+        close: '(?:[^''\\]|\\(?s:.))*'''
+      - name: string
+        open: '"'
+        close: '(?:[^"\\{]|\\(?s:.)|\{\$(?:[^{}"'']|"(?:[^"\\]|\\(?s:.))*"|''(?:[^''\\]|\\(?s:.))*'')*\}|\{)*"'
+      - name: string
+        open: '`'
+        close: '(?:[^`\\]|\\(?s:.))*`'
+      # For the config key rules; see config_text.
+      - name: operator
+        open: '[.?:]\s*(?=[''"])'
+        close: '(?=[''"])'
+      # A route group written Route::prefix('a')->name('a.')->group(...), its calls chained in any
+      # order and with middleware(...) among them; it ends at the parenthesis that closes group(.
+      spans:
+      - name: group
+        open: 'Route::(?:(?:prefix\(\s*[''"](?<prefix>[^''"]*)[''"]\s*\)|name\(\s*[''"](?<name>[^''"]*)[''"]\s*\)|middleware\((?:[^()''"]|''[^'']*''|"[^"]*")*\))\s*->\s*)+group(?=\s*\()'
+        balance: ['(', ')']
+      # The spans the config key rules read, for a config file this type claims by its name, such as
+      # config/api.php. They are config_text's spans; see there.
+      - name: config_return
+        open: '(?<![\w$>])(?<word>return)\s*(?=\[)(?!\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\]\s*\[)'
+        balance: ['[', ']']
+      - name: config_key
+        open: '[\[,(\s](?<q>[''"])(?<key>(?:(?!(?P=q))[^\\$])+)(?P=q)\s*(?<arrow>=)>\s*(?=\[)(?!\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\]\s*\[)'
+        balance: ['[', ']']
+      - name: config_bracket
+        open: '(?=(?<at>\[))'
+        balance: ['[', ']']
+      - name: config_paren
+        open: '(?=(?<at>\())'
+        balance: ['(', ')']
+      - name: config_brace
+        open: '(?=(?<at>\{))'
+        balance: ['{', '}']
+    # A config file read a second time, as text, for the keys of the array it returns: the php type
+    # still gives each file its laravel.config node. Its sections are route_file's less inline HTML,
+    # which a valid config file holds only outside the array it returns.
+    config_text:
+      endings: [php]
+      reader: text
+      path_values:
+        # config/app.php is app.
+        config_name:
+          pattern: '^(?:.*/)?(?<name>[^/]+)\.php$'
+          template: '{name}'
+      sections:
+      - name: heredoc
+        open: '<<<[ \t]*["'']?(?<label>[A-Za-z_][A-Za-z0-9_]*)'
+        close: '\n[ \t]*{label}\b'
+      - name: block_comment
+        open: '/\*'
+        close: '\*/'
+      - name: line_comment
+        open: '//'
+        close: '\n'
+      - name: hash_comment
+        open: '#[^\[\n]'
+        close: '\n'
+      - name: string
+        open: ''''
+        close: '(?:[^''\\]|\\(?s:.))*'''
+      - name: string
+        open: '"'
+        close: '(?:[^"\\{]|\\(?s:.)|\{\$(?:[^{}"'']|"(?:[^"\\]|\\(?s:.))*"|''(?:[^''\\]|\\(?s:.))*'')*\}|\{)*"'
+      - name: string
+        open: '`'
+        close: '(?:[^`\\]|\\(?s:.))*`'
+      # The operator before a string, so that a key match starting before a string after . ? or :
+      # is left out: FOO . 'x' => 1 and $c ? 'a' : 'b' => 1 give no key.
+      - name: operator
+        open: '[.?:]\s*(?=[''"])'
+        close: '(?=[''"])'
+      # A key match counts the spans that hold its start. config_return is the array a return
+      # statement gives, config_key the array a text key's value is, config_bracket each array,
+      # written [ ], config_paren each pair of parentheses and config_brace each pair of braces. A
+      # key gets a node only inside one config_return, inside no parentheses and no braces, and
+      # when every array that holds it is the return's or a text key's: so not below a list entry,
+      # not in a call's argument, not in a closure and not in old array( ) syntax. An array indexed
+      # at once, ['a' => 1][$k], opens neither config_return nor config_key, nor is it a key's
+      # value, when it holds arrays at most two deep.
+      spans:
+      - name: config_return
+        open: '(?<![\w$>])(?<word>return)\s*(?=\[)(?!\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\]\s*\[)'
+        balance: ['[', ']']
+      - name: config_key
+        open: '[\[,(\s](?<q>[''"])(?<key>(?:(?!(?P=q))[^\\$])+)(?P=q)\s*(?<arrow>=)>\s*(?=\[)(?!\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\]\s*\[)'
+        balance: ['[', ']']
+      - name: config_bracket
+        open: '(?=(?<at>\[))'
+        balance: ['[', ']']
+      - name: config_paren
+        open: '(?=(?<at>\())'
+        balance: ['(', ')']
+      - name: config_brace
+        open: '(?=(?<at>\{))'
+        balance: ['{', '}']
+    # A Blade template ends in .blade.php; the longer ending wins over php_basic's php, so a
+    # template is read as text and not parsed as PHP.
+    blade:
+      endings: [blade.php]
+      reader: text
+      path_values:
+        # Below views_root, resources/views/books/show.blade.php is books.show, the name view() and
+        # @include use.
+        view:
+          pattern: '^(?<name>.+)\.blade\.php$'
+          template: '{name}'
+          relative_to: views_root
+          normalize:
+          - {replace: '/', with: '.'}
+      sections:
+      - name: blade_comment
+        open: '\{\{--'
+        close: '--\}\}'

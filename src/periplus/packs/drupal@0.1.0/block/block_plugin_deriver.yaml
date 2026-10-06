@@ -1,0 +1,30 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — the base plugin that names a deriver. One rule.
+#
+# The base plugin itself is found by block_plugin_attribute.yaml. This adds only the edge to
+# the deriver class, so it is supplementary to that rule and lands on the same node.
+
+needs:
+  types: [drupal.block_plugin]
+
+rules:
+
+  - rule: deriver_argument
+    reads: file
+    in: [custom_module, custom_theme]
+    match:
+      attribute: "Drupal\\Core\\Block\\Attribute\\Block"
+      where:
+        - has_argument: deriver
+    id:
+      from: {attribute_argument: id}
+      must_be: string_literal
+    emits:
+      - edge: {kind: deriver_class, from: this_node, to: {from: {argument_class: deriver}}}
+    confidence: declared
+    # Verified first-party: DerivedBlock.php:20-25, deriver: NodeTypeBlockDeriver::class.
+    # Verified in core, the same shape three times:
+    #   modules/views/src/Plugin/Block/ViewsBlock.php:17,19
+    #   modules/system/src/Plugin/Block/SystemMenuBlock.php:21,24
+    #   modules/block_content/src/Plugin/Block/BlockContentBlock.php:24,27

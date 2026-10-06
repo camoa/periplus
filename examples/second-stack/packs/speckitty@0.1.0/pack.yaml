@@ -1,0 +1,28 @@
+pack: speckitty
+version: 0.1.0
+depends: []
+# A mission is a folder under a folder named missions; its templates sit below its templates
+# folder, at any depth.
+folders:
+  missions: ./**/missions/*
+  templates: ./**/missions/*/templates/**
+files:
+  types:
+    mission_yaml:
+      endings: [yaml]
+      reader: data
+      format: yaml
+      path_values:
+        mission:
+          pattern: '(?:^|/)missions/(?<mission>[^/]+)/mission\.yaml$'
+          template: '{mission}'
+    template_md:
+      endings: [md]
+      reader: text
+      path_values:
+        mission:
+          pattern: '(?:^|/)missions/(?<mission>[^/]+)/templates/'
+          template: '{mission}'
+        template:
+          pattern: '(?:^|/)missions/(?<mission>[^/]+)/templates/(?<below>.+)$'
+          template: '{mission}/{below}'

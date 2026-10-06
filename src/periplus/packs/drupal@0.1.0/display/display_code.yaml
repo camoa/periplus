@@ -1,0 +1,53 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — displays built by PHP. One rule, and the one that does not fit the shape.
+#
+# Every other PHP rule in this pack matches a config entity class, ::create, and an array.
+# This one does not. A display is built through a service and a fluent chain:
+#
+#   block_type_ways.install:51   $display_repository = \Drupal::service('entity_display.repository');
+#   block_type_ways.install:53   $form_display = $display_repository->getFormDisplay('block_content', 'type_way_code');
+#   block_type_ways.install:54-58  ->setComponent(…)->setComponent(…)->save();
+#
+# So it is written here rather than folded into a shared ::create rule, and it is the
+# evidence that a single generic "config entity created in PHP" rule would not cover
+# everything.
+
+needs:
+  types:
+  - drupal.form_display
+  - drupal.view_display
+rules:
+- rule: display_from_code
+  reads: file
+  in:
+  - custom_module
+  match:
+    method_call: getFormDisplay
+    where:
+    - on_service: entity_display.repository
+  id: &id001
+    from:
+    - argument: 0
+    - argument: 1
+    template: core.entity_form_display.{0}.{1}.default
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.form_display
+  confidence: inferred
+- rule: display_from_code_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    method_call: getFormDisplay
+    where:
+    - on_service: entity_display.repository
+  emits:
+  - edge:
+      kind: declares
+      from: enclosing_callable
+      to: this_node
+  confidence: inferred
+  id: *id001

@@ -1,0 +1,10 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The smallest YAML pack: it claims the two extensions and nothing else. A rule that names the
+# filetype yaml selects files by this list, so the claim lives here and in no rule.
+pack: yaml_basic
+version: 0.1.0
+depends: []
+
+files:
+  extensions: [yml, yaml]

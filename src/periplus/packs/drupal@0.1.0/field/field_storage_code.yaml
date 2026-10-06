@@ -1,0 +1,39 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — field storage created by PHP. One rule.
+
+needs:
+  types:
+  - drupal.field_storage
+rules:
+- rule: field_storage_from_code
+  reads: file
+  in:
+  - custom_module
+  match:
+    static_call: Drupal\field\Entity\FieldStorageConfig::create
+    argument: 0
+  id: &id001
+    from:
+    - argument_key: entity_type
+    - argument_key: field_name
+    template: field.storage.{entity_type}.{field_name}
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.field_storage
+  confidence: declared
+- rule: field_storage_from_code_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    static_call: Drupal\field\Entity\FieldStorageConfig::create
+    argument: 0
+  emits:
+  - edge:
+      kind: declares
+      from: enclosing_callable
+      to: this_node
+  confidence: declared
+  id: *id001

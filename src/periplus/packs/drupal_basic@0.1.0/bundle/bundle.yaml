@@ -1,0 +1,10 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The configuration of a bundle: a content type, a vocabulary, a media type and the like; a block
+# type refines it. It refines drupal.config_object, so it lands on the node the config-file rule
+# finds. A bundle no file defines is referenced as a bundle, or as a block type by a block type's
+# rule, which names that type on its edge's to end.
+
+node_types:
+- name: drupal.bundle
+  parent: drupal.config_object

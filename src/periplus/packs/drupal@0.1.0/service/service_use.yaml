@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — code reaching a service. Two rules, and they differ in confidence for a
+# reason that only the author knows.
+
+needs:
+  types: [drupal.service]
+
+rules:
+
+  - rule: static_service_accessor
+    reads: file
+    in: [custom_module, custom_theme]
+    match:
+      static_call: "Drupal::service"
+    id:
+      from: {argument: 0}
+      must_be: string_literal
+      on_miss: unresolved
+    emits:
+      - edge: {kind: resolves_service, from: enclosing_callable, to: this_node}
+    confidence: declared
+    # The id is a literal at the call site, so nothing is inferred.
+
+  - rule: constructor_injection
+    reads: file
+    in: [custom_module, custom_theme]
+    match:
+      node_type: php.method
+      where:
+        - has_promoted_constructor_parameter: true
+    id:
+      from: parameter_type
+      on_miss: unresolved
+    emits:
+      - edge: {kind: resolves_service, from: enclosing_callable, to: this_node}
+    confidence: inferred
+    # Identified by the parameter's type, which is a claim about what the container will
+    # pass rather than an observation of it. Same edge kind, lower confidence, and the
+    # difference is a property of the rule, not of the file it runs on.
+    #
+    # A third accessor form exists and is not covered: $container->get('entity_type.manager'),
+    # at NodeTypeBlockDeriver.php:32. Named here rather than left as a silent miss.

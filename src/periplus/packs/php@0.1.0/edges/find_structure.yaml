@@ -1,0 +1,38 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — the edges written at a declaration site. Four rules.
+
+needs:
+  types: [php.class, php.class_like, php.interface, php.trait, php.enum]
+
+rules:
+
+  - rule: inherits_from_base_clause
+    reads: file
+    in: [source]
+    match: {declaration: base_clause}
+    emits: [{edge: {kind: inherits, from: enclosing_class, to: {from: qualified_name}}}]
+    confidence: declared
+
+  - rule: implements_from_interface_clause
+    reads: file
+    in: [source]
+    match: {declaration: class_interface_clause}
+    emits: [{edge: {kind: implements, from: enclosing_class, to: {from: qualified_name}}}]
+    confidence: declared
+
+  - rule: mixes_in_from_use_declaration
+    reads: file
+    in: [source]
+    match: {declaration: use_declaration}
+    emits: [{edge: {kind: mixes_in, from: enclosing_class, to: {from: qualified_name}}}]
+    confidence: declared
+
+  - rule: instantiates_from_new
+    reads: file
+    in: [source]
+    match: {declaration: object_creation_expression}
+    emits: [{edge: {kind: instantiates, from: enclosing_callable, to: {from: qualified_name}}}]
+    confidence: declared
+    # why: absent from the trigger set entirely — 505 `new X(` sites across 178 classes
+    #      emitting nothing, including 0 of 22 `$bus->dispatch(new SomeCommand())` sites.

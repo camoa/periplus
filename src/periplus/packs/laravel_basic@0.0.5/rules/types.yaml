@@ -1,0 +1,50 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The node types and edge kinds this pack declares.
+node_types:
+- name: laravel.route
+  id_namespace: laravel.route
+- name: laravel.view
+  id_namespace: laravel.view
+- name: laravel.controller
+  id_namespace: laravel.controller
+- name: laravel.model
+  id_namespace: laravel.model
+- name: laravel.config
+  id_namespace: laravel.config
+- name: laravel.config_key
+  id_namespace: laravel.config_key
+- name: laravel.migration
+  id_namespace: laravel.migration
+
+edge_kinds:
+- kind: handled_by
+  from: laravel.route
+  to: php.method
+- kind: resource_controller
+  from: laravel.route
+  to: php.class
+- kind: route_renders
+  from: laravel.route
+  to: laravel.view
+- kind: includes_view
+  from: laravel.view
+  to: laravel.view
+- kind: extends_view
+  from: laravel.view
+  to: laravel.view
+- kind: implemented_by
+  from: [laravel.controller, laravel.model]
+  to: php.class
+- kind: renders
+  from: [php.function, php.method]
+  to: laravel.view
+- kind: reads_config
+  from: [laravel.view, php.function, php.method]
+  to: laravel.config_key
+- kind: key_of
+  from: laravel.config_key
+  to: laravel.config
+- kind: uses_component
+  from: laravel.view
+  to: laravel.view

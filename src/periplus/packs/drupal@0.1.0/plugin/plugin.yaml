@@ -1,0 +1,17 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the field plugin types.
+
+node_types:
+
+  - name: drupal.field_type
+    parent: drupal.plugin
+    id_namespace: drupal.plugin.field_type
+
+  - name: drupal.field_widget
+    parent: drupal.plugin
+    id_namespace: drupal.plugin.field_widget
+
+  - name: drupal.field_formatter
+    parent: drupal.plugin
+    id_namespace: drupal.plugin.field_formatter

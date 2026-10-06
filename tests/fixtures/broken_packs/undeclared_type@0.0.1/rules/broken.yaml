@@ -1,0 +1,18 @@
+node_types:
+- name: undeclared_type.thing
+  id_namespace: undeclared_type.thing
+
+rules:
+- rule: target_rule
+  reads: file
+  in:
+  - config
+  match:
+    file: '*'
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: undeclared_type.ghost
+  confidence: declared

@@ -1,0 +1,61 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — block plugin added by an alter hook. One rule.
+#
+# The bottom of the findability gradient among mechanisms that can be found at all. The id
+# is a string key in an array literal, inside a method body, in a class that has no
+# relationship to the class the plugin actually uses.
+
+needs:
+  types:
+  - drupal.block_plugin
+rules:
+- rule: block_plugin_from_alter_hook
+  reads: file
+  in:
+  - custom_module
+  - custom_theme
+  match:
+    subscript_assignment: true
+    where:
+    - in_method_with_attribute: Drupal\Core\Hook\Attribute\Hook
+    - attribute_argument:
+        index: 0
+        equals: block_alter
+  id: &id001
+    from: subscript_key
+    must_be: string_literal
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.block_plugin
+  - attribute:
+      name: admin_label
+      from:
+        array_key: admin_label
+  confidence: inferred
+- rule: block_plugin_from_alter_hook_edges
+  reads: file
+  in:
+  - custom_module
+  - custom_theme
+  match:
+    subscript_assignment: true
+    where:
+    - in_method_with_attribute: Drupal\Core\Hook\Attribute\Hook
+    - attribute_argument:
+        index: 0
+        equals: block_alter
+  emits:
+  - edge:
+      kind: declares
+      from: enclosing_callable
+      to: this_node
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to:
+        from:
+          array_key_class: class
+  confidence: inferred
+  id: *id001

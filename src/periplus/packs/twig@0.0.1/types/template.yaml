@@ -1,0 +1,57 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# twig pack — the template and the names it references. Text rules only.
+#
+# `twig.reference`, not `twig.variable`, and `inferred`, not `declared`. A pattern grabs the
+# first word after {{ and cannot tell these apart:
+#
+#     {{ way }}            a variable
+#     {{ way|upper }}      a variable with a filter
+#     {{ path('front') }}  a function call
+#     {{ user.name }}      a property on an object
+#
+# A grammar would separate them; a pattern gives back `way`, `way`, `path`, `user`. So the
+# pack claims what it can actually see — a name is referenced here — and marks it inferred.
+# The alternative is calling `path` a variable, which is a wrong entry in a committed map.
+
+node_types:
+- name: twig.template
+  id_namespace: twig.template
+- name: twig.reference
+edge_kinds:
+- kind: references
+  from: twig.template
+  to: twig.reference
+rules:
+- rule: template_file
+  reads: file
+  in:
+  - source
+  match:
+    file: '*'
+    filetype: twig
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: twig.template
+  confidence: declared
+- rule: template_references
+  reads: file
+  in:
+  - source
+  match:
+    file: '*'
+    filetype: twig
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: references
+      from: this_node
+      to:
+        each: true
+        from: text
+        pattern: \{\{\s*(?P<var>[a-z_][a-z0-9_]*)
+        template: twig.reference::{var}
+  confidence: inferred

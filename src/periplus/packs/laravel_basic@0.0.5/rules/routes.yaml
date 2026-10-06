@@ -1,0 +1,210 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route, read as text from a route file, named by its file, its verb and its URI as written:
+# web:GET /books/{slug}. Inside Route::prefix('admin')->group(...), the URI joins the prefixes of
+# every enclosing group as Laravel does, outermost first: web:GET admin/stats. A route's name
+# follows each enclosing ->name('admin.') the same way. A prefix the application adds outside the
+# file (BookStack's /api) is not in the name. Two rules per route form, because a rule that emits
+# an edge emits no node.
+
+rules:
+
+# The use statements of a route file, bound for bound_first_segment: use A\B\C binds C to A\B\C,
+# use A\B as D binds D to A\B. A grouped use, use A\{B, C}, binds nothing.
+- rule: route_use
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: '(?m)^use[ \t]+\\?(?<path>\w+(?:\\\w+)*)[ \t]*;'
+  values:
+    bound: {from: {capture: path}, normalize: [{replace: '^.*\\', with: ''}]}
+  emits: [{binding: {name: '{bound}', target: '{path}'}}]
+  confidence: declared
+
+- rule: route_use_alias
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: '(?m)^use[ \t]+\\?(?<path>\w+(?:\\\w+)*)[ \t]+as[ \t]+(?<alias>\w+)[ \t]*;'
+  emits: [{binding: {name: '{alias}', target: '{path}'}}]
+  confidence: declared
+
+# Route::get('/uri', ...) and the other verbs, Route::view('/uri', 'view') and
+# Route::redirect('/uri', '/to'). Any handler: an array, a closure, a string.
+- rule: route_verb
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::(?<verb>get|post|put|patch|delete|options|any|view|redirect|permanentRedirect)\(\s*[''"](?<uri>[^''"]*)[''"]'
+  values:
+    method: {from: {capture: verb}, case: upper}
+    prefix: {from: {enclosing: group, capture: prefix}, join: '/', normalize: [{replace: '/+', with: '/'}, {replace: '^/|/$', with: ''}]}
+    path: {template: '{prefix} {uri}', normalize: [{replace: '^ ', with: ''}, {replace: ' /*$', with: ''}, {replace: ' /*', with: '/'}]}
+  id: {template: '{route_file}:{method} {path}'}
+  emits:
+  - node: {type: laravel.route}
+  - attribute: {name: uri, from: {capture: uri}}
+  confidence: declared
+
+# ->name('x') chained on a route, in the same statement: the route's name attribute. A text rule
+# cannot emit an attribute alone, so it emits the route node again, at the same line.
+- rule: route_name
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::(?<verb>get|post|put|patch|delete|options|any|view|redirect|permanentRedirect)\(\s*[''"](?<uri>[^''"]*)[''"][^;]*?\)\s*->name\(\s*[''"](?<name>[^''"]+)[''"]'
+  values:
+    method: {from: {capture: verb}, case: upper}
+    prefix: {from: {enclosing: group, capture: prefix}, join: '/', normalize: [{replace: '/+', with: '/'}, {replace: '^/|/$', with: ''}]}
+    path: {template: '{prefix} {uri}', normalize: [{replace: '^ ', with: ''}, {replace: ' /*$', with: ''}, {replace: ' /*', with: '/'}]}
+    name_prefix: {from: {enclosing: group, capture: name}}
+    full_name: {template: '{name_prefix}{name}'}
+  id: {template: '{route_file}:{method} {path}'}
+  emits: [{node: {type: laravel.route}}, {attribute: {name: name, from: {value: full_name}}}]
+  confidence: declared
+
+- rule: fallback_name
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::fallback\([^;]*?\)\s*->name\(\s*[''"](?<name>[^''"]+)[''"]'
+  id: {template: '{route_file}:FALLBACK'}
+  emits: [{node: {type: laravel.route}}, {attribute: {name: name, from: {capture: name}}}]
+  confidence: declared
+
+# Route::fallback(...): one per file.
+- rule: route_fallback
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::fallback\('
+  id: {template: '{route_file}:FALLBACK'}
+  emits: [{node: {type: laravel.route}}]
+  confidence: declared
+
+# The handler [Controller::class, 'method'] with a qualified class, EntityControllers\BookController:
+# the first segment resolves through the file's use bindings, split on a backslash, and the rest,
+# ::method included, follows it. The end is the method php_basic's find_method names
+# Class::method, unresolved when no class of that name with that method is mapped.
+- rule: route_handler_qualified
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::(?<verb>get|post|put|patch|delete|options|any)\(\s*[''"](?<uri>[^''"]*)[''"]\s*,\s*\[\s*(?<class>\\?\w+(?:\\\w+)+)::class\s*,\s*[''"](?<action>\w+)[''"]\s*\]'
+  values:
+    method: {from: {capture: verb}, case: upper}
+    prefix: {from: {enclosing: group, capture: prefix}, join: '/', normalize: [{replace: '/+', with: '/'}, {replace: '^/|/$', with: ''}]}
+    path: {template: '{prefix} {uri}', normalize: [{replace: '^ ', with: ''}, {replace: ' /*$', with: ''}, {replace: ' /*', with: '/'}]}
+  id: {template: '{route_file}:{method} {path}'}
+  emits:
+  - edge:
+      kind: handled_by
+      from: this_node
+      to: {template: '{class}::{action}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '\', types: [php.method], on_miss: unresolved}
+  confidence: declared
+
+# The same with a bare class, MetaController: split on a colon, the first segment is the class, and
+# ::method follows the bound name.
+- rule: route_handler_bare
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::(?<verb>get|post|put|patch|delete|options|any)\(\s*[''"](?<uri>[^''"]*)[''"]\s*,\s*\[\s*(?<class>\w+)::class\s*,\s*[''"](?<action>\w+)[''"]\s*\]'
+  values:
+    method: {from: {capture: verb}, case: upper}
+    prefix: {from: {enclosing: group, capture: prefix}, join: '/', normalize: [{replace: '/+', with: '/'}, {replace: '^/|/$', with: ''}]}
+    path: {template: '{prefix} {uri}', normalize: [{replace: '^ ', with: ''}, {replace: ' /*$', with: ''}, {replace: ' /*', with: '/'}]}
+  id: {template: '{route_file}:{method} {path}'}
+  emits:
+  - edge:
+      kind: handled_by
+      from: this_node
+      to: {template: '{class}::{action}', resolve: [bound_first_segment, as_written], separator: ':', types: [php.method], on_miss: unresolved}
+  confidence: declared
+
+# Route::fallback([Controller::class, 'method']), bare class.
+- rule: route_fallback_handler
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::fallback\(\s*\[\s*(?<class>\w+)::class\s*,\s*[''"](?<action>\w+)[''"]\s*\]'
+  id: {template: '{route_file}:FALLBACK'}
+  emits:
+  - edge:
+      kind: handled_by
+      from: this_node
+      to: {template: '{class}::{action}', resolve: [bound_first_segment, as_written], separator: ':', types: [php.method], on_miss: unresolved}
+  confidence: declared
+
+# Route::view('/uri', 'dotted.view'): the route renders that view.
+- rule: route_view
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::view\(\s*[''"](?<uri>[^''"]*)[''"]\s*,\s*[''"](?<view>[^''"]+)[''"]'
+  values:
+    prefix: {from: {enclosing: group, capture: prefix}, join: '/', normalize: [{replace: '/+', with: '/'}, {replace: '^/|/$', with: ''}]}
+    path: {template: '{prefix} {uri}', normalize: [{replace: '^ ', with: ''}, {replace: ' /*$', with: ''}, {replace: ' /*', with: '/'}]}
+  id: {template: '{route_file}:VIEW {path}'}
+  emits:
+  - edge:
+      kind: route_renders
+      from: this_node
+      to: {from: {capture: view}, types: [laravel.view], on_miss: unresolved}
+  confidence: declared
+
+# Route::resource('photos', PhotoController::class) registers seven routes; only the resource
+# itself is stated, as one node, with an edge to its controller class.
+- rule: route_resource
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::(?<verb>resource|apiResource)\(\s*[''"](?<uri>[^''"]*)[''"]'
+  values:
+    method: {from: {capture: verb}, case: upper}
+    prefix: {from: {enclosing: group, capture: prefix}, join: '/', normalize: [{replace: '/+', with: '/'}, {replace: '^/|/$', with: ''}]}
+    path: {template: '{prefix} {uri}', normalize: [{replace: '^ ', with: ''}, {replace: ' /*$', with: ''}, {replace: ' /*', with: '/'}]}
+  id: {template: '{route_file}:{method} {path}'}
+  emits: [{node: {type: laravel.route}}]
+  confidence: declared
+
+- rule: route_resource_controller
+  reads: file
+  in: [routes]
+  match:
+    file: '*'
+    filetype: route_file
+    text: 'Route::(?<verb>resource|apiResource)\(\s*[''"](?<uri>[^''"]*)[''"]\s*,\s*(?<class>\\?\w+(?:\\\w+)*)::class'
+  values:
+    method: {from: {capture: verb}, case: upper}
+    prefix: {from: {enclosing: group, capture: prefix}, join: '/', normalize: [{replace: '/+', with: '/'}, {replace: '^/|/$', with: ''}]}
+    path: {template: '{prefix} {uri}', normalize: [{replace: '^ ', with: ''}, {replace: ' /*$', with: ''}, {replace: ' /*', with: '/'}]}
+  id: {template: '{route_file}:{method} {path}'}
+  emits:
+  - edge:
+      kind: resource_controller
+      from: this_node
+      to: {from: {capture: class}, resolve: [{full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '\', types: [php.class], on_miss: unresolved}
+  confidence: declared

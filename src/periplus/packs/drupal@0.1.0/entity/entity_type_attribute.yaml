@@ -1,0 +1,76 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — entity type declared by a PHP attribute. One rule.
+#
+# The current core form. Supplementary to entity_type_annotation.yaml: a class carries one
+# or the other, both mint the same id, and neither needs the other.
+
+needs:
+  types:
+  - drupal.content_entity_type
+  - drupal.config_entity_type
+rules:
+- rule: content_entity_type_from_attribute
+  reads: file
+  in:
+  - custom_module
+  match:
+    attribute: Drupal\Core\Entity\Attribute\ContentEntityType
+    where:
+    - applies_to: class_declaration
+  id: &id001
+    from:
+      attribute_argument: id
+    must_be: string_literal
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.content_entity_type
+  confidence: declared
+- rule: config_entity_type_from_attribute
+  reads: file
+  in:
+  - custom_module
+  match:
+    attribute: Drupal\Core\Entity\Attribute\ConfigEntityType
+    where:
+    - applies_to: class_declaration
+  id: &id002
+    from:
+      attribute_argument: id
+    must_be: string_literal
+    on_miss: unresolved
+  emits:
+  - node:
+      type: drupal.config_entity_type
+  confidence: declared
+- rule: content_entity_type_from_attribute_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    attribute: Drupal\Core\Entity\Attribute\ContentEntityType
+    where:
+    - applies_to: class_declaration
+  emits:
+  - edge:
+      kind: entity_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+  id: *id001
+- rule: config_entity_type_from_attribute_edges
+  reads: file
+  in:
+  - custom_module
+  match:
+    attribute: Drupal\Core\Entity\Attribute\ConfigEntityType
+    where:
+    - applies_to: class_declaration
+  emits:
+  - edge:
+      kind: entity_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+  id: *id002

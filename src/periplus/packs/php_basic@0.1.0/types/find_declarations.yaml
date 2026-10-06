@@ -1,0 +1,57 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# One rule per construct, because each names where its body lives: enum_declaration_list differs
+# from declaration_list by one word. A rule with a body_child is a type a method can sit in.
+rules:
+
+- rule: find_class
+  reads: file
+  in: [source]
+  match: {declaration: class_declaration, name_child: name, body_child: declaration_list, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: php.class}}]
+  confidence: declared
+
+- rule: find_interface
+  reads: file
+  in: [source]
+  match: {declaration: interface_declaration, name_child: name, body_child: declaration_list, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: php.interface}}]
+  confidence: declared
+
+- rule: find_trait
+  reads: file
+  in: [source]
+  match: {declaration: trait_declaration, name_child: name, body_child: declaration_list, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: php.trait}}]
+  confidence: declared
+
+- rule: find_enum
+  reads: file
+  in: [source]
+  match: {declaration: enum_declaration, name_child: name, body_child: enum_declaration_list, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: php.enum}}]
+  confidence: declared
+
+- rule: find_function
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: php.function}}]
+  confidence: declared
+
+# A method's id holds the full name of the type it sits in, so five build methods on five classes
+# stay five nodes.
+- rule: find_method
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{node: {type: php.method}}]
+  confidence: declared

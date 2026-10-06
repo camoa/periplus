@@ -1,0 +1,36 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# go pack — the node types. Finding them is in types/find_declarations.yaml.
+#
+# The abstractions are here because a finder needs them, and their absence was invisible
+# until one was asked for. A map whose types are all siblings cannot answer "every callable
+# here" — the query has nothing to descend. php declared php.callable from the start; this
+# sketch did not, and nothing complained until the map was queried.
+
+node_types:
+
+  - name: go.package
+    container: true
+
+  - name: go.callable
+    abstract: true
+
+  - name: go.func
+    parent: go.callable
+
+  - name: go.method
+    parent: go.callable
+
+  - name: go.type
+    abstract: true
+
+  - name: go.struct
+    parent: go.type
+    container: true
+
+  - name: go.interface
+    parent: go.type
+
+roles:
+
+  - name: go.exported

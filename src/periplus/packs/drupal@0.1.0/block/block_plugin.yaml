@@ -1,0 +1,52 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the block plugin types and their edges. Finds nothing.
+#
+# A block plugin is NOT the class that implements it, and that is the finding this whole
+# directory is shaped around. Three cases in one module force it:
+#
+#   one class, many plugins   DerivedBlock.php:20-25 names a deriver, and the deriver
+#                             returns one plugin per content type
+#   many plugins, no class    views_block:block_ways_recent-block_1 is declared by
+#                             views.view.block_ways_recent.yml:89 and implemented by core's
+#                             ViewsBlock. Nothing first-party has a class.
+#   a class discovery misses  AlteredBlock.php:19 has no attribute and no annotation and
+#                             sits outside src/Plugin/Block/. Only the hook makes it exist.
+#
+# So plugin and class are separate nodes, joined by an edge.
+
+node_types:
+
+  - name: drupal.plugin
+    abstract: true
+    id_namespace: drupal.plugin
+
+  - name: drupal.block_plugin
+    parent: drupal.plugin
+    id_namespace: drupal.plugin.block
+
+  - name: drupal.plugin_deriver
+    parent: php.class
+
+edge_kinds:
+
+  - kind: plugin_class
+    from: drupal.plugin
+    to:   php.class
+    # What code runs for this plugin. Absent where the class is behind the boundary and
+    # nothing first-party names it, and that absence is accurate rather than a gap.
+
+  - kind: declares
+    from: [php.class, php.callable, drupal.config_object]
+    to:   drupal.plugin
+    # Where the declaration is written, which is a different question from which class runs
+    # and often a different file. For an attribute the two edges join the same pair in
+    # opposite directions; for block_ways_altered they do not.
+
+  - kind: deriver_class
+    from: drupal.plugin
+    to:   php.class
+
+  - kind: derived_from
+    from: drupal.plugin
+    to:   drupal.plugin

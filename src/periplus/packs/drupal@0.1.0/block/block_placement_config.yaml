@@ -1,0 +1,53 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — block placement from a config file. One rule.
+
+needs:
+  types:
+  - drupal.block_placement
+  - drupal.block_plugin
+rules:
+- rule: block_placement_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: block.block.*
+    filetype: yaml
+  id: &id001
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.block_placement
+  - attribute:
+      name: theme
+      from:
+        key: theme
+  - attribute:
+      name: region
+      from:
+        key: region
+  - attribute:
+      name: weight
+      from:
+        key: weight
+  confidence: declared
+- rule: block_placement_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: block.block.*
+    filetype: yaml
+  emits:
+  - edge:
+      kind: places_plugin
+      from: this_node
+      to:
+        from:
+          key: plugin
+        template: drupal.plugin.block::{plugin}
+  confidence: declared
+  id: *id001

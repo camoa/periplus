@@ -1,0 +1,12 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A hook, named without its hook_ prefix, and the method that implements it.
+
+node_types:
+- name: drupal.hook
+  id_namespace: drupal.hook
+
+edge_kinds:
+- kind: implements_hook
+  from: php.method
+  to: drupal.hook

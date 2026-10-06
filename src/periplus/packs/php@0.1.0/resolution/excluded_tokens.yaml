@@ -1,0 +1,23 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — tokens excluded from resolution.
+
+# --------------------------------------------------------------------------------------
+# Tokens that are never type names.
+# --------------------------------------------------------------------------------------
+excluded_tokens:
+
+  - group: relative_scope
+    tokens: [self, static, parent]
+    case_sensitive: false
+    positions: [type_reference, callee, supertype]
+    # why: treated as types, these minted one global node each, wired to a large fraction
+    #      of all classes. `parent::setUp()` alone fabricated 1,698 inbound calls onto a
+    #      single method. `STATIC` needs the same treatment, hence case-insensitive.
+
+  - group: builtin_bases
+    tokens: [Exception, Throwable, Error, ArrayObject, ArrayAccess, Countable,
+             Iterator, IteratorAggregate, Traversable, JsonSerializable, Stringable]
+    positions: [type_reference, callee, supertype]
+    # why: the supertype resolver never consulted the builtin list at all — it was applied
+    #      at call sites only. Positions are declared here so that cannot recur.

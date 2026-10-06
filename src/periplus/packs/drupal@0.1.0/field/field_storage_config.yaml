@@ -1,0 +1,24 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — field storage from a config file. One rule.
+
+needs:
+  types: [drupal.field_storage]
+
+rules:
+
+  - rule: field_storage_from_config
+    reads: file
+    in: [config, module_config]
+    match:
+      file: "field.storage.*"
+      filetype: yaml
+    id:
+      from: file_stem
+    emits:
+      - node: {type: drupal.field_storage}
+      - attribute: {name: field_type,  from: {key: type}}
+      - attribute: {name: cardinality, from: {key: cardinality}}
+    confidence: declared
+    # Verified: field.storage.block_content.body.yml, and the six the test modules ship as
+    # field.storage.block_content.field_tw_*.yml.

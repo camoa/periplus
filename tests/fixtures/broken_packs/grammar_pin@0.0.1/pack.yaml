@@ -1,0 +1,11 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+# A grammar pinned to a version that is not the installed one: the run is refused with exit 28.
+pack: grammar_pin
+version: 0.0.1
+depends: []
+
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.0"
+  language: php
+  grammar_version: "0.0.1"

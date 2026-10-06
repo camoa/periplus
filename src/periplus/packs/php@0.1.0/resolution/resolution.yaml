@@ -1,0 +1,35 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# php pack — the name-resolution rules.
+
+# --------------------------------------------------------------------------------------
+# Resolution.
+#
+# These are the rules for turning a written name into a node, and most of the damage in
+# the record came from here rather than from extraction.
+# --------------------------------------------------------------------------------------
+resolution:
+  scope: same_pack
+  # why: bare `extends Exception` in PHP bound to a TypeScript class because one global
+  #      name map served every language.
+
+  match: qualified_name_exact
+  never_match_by: [prefix, substring, case_folded_and_stripped]
+  # why: a class whose name is a strict prefix of its siblings lost its entire fan-in —
+  #      `Pivot` went from degree 4 to degree 1 once `PivotRepository` existed, and the
+  #      "what depends on this" query then answered "nothing".
+
+  on_multiple_definitions: refuse
+  on_zero_definitions: unresolved
+  # `unresolved` emits a node recording which rule fired and what it looked for. It never
+  # drops the edge.
+  # why: every failure in this record was silent, and the graph still looked populated.
+
+  # Ambiguity is decided on evidence, not on a vocabulary list. These are two jobs and
+  # conflating them was load-bearing by accident: a shared builtin list suppressed 27–29
+  # of 29 names in most languages, and removing it recovered 45 edges of which 43 were
+  # phantom. The refusal rule above does that work; the list below does not.
+  detect_references_independently_of_imports: true
+  # why: 158 of 240 Eloquent relationships (65%) were unlinked because the edge tracked
+  #      the `use` statement rather than the reference. 140 were same-namespace, so no
+  #      import existed to track.

@@ -1,0 +1,12 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A local action, named by its key in a links.action file.
+
+node_types:
+- name: drupal.local_action
+  id_namespace: drupal.local_action
+
+edge_kinds:
+- kind: appears_on_route
+  from: drupal.local_action
+  to: drupal.route

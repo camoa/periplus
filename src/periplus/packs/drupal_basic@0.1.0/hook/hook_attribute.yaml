@@ -1,0 +1,41 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method that implements a hook by the Hook attribute. The hook is named by the attribute's first
+# argument, or by the argument named hook, and is a referenced node; the method is the node
+# php_basic finds. Two rules, one per way of naming it.
+
+rules:
+- rule: hook_from_attribute
+  reads: file
+  in:
+  - source
+  match:
+    attribute: Drupal\Core\Hook\Attribute\Hook
+    filetype: php
+    where:
+    - applies_to: method_declaration
+  emits:
+  - edge:
+      kind: implements_hook
+      from: enclosing_method
+      to:
+        from:
+          attribute_argument: '0'
+  confidence: declared
+- rule: hook_from_named_attribute
+  reads: file
+  in:
+  - source
+  match:
+    attribute: Drupal\Core\Hook\Attribute\Hook
+    filetype: php
+    where:
+    - applies_to: method_declaration
+  emits:
+  - edge:
+      kind: implements_hook
+      from: enclosing_method
+      to:
+        from:
+          attribute_argument: hook
+  confidence: declared

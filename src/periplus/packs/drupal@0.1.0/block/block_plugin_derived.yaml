@@ -1,0 +1,110 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — the plugins core's derivers produce. Two plain rules, one per deriver.
+#
+# There was a generic `enumerate` mechanism here and it could never have worked. A deriver's
+# key format is PHP inside the deriver class, and no generic rule reads that:
+#
+#   views/src/Plugin/Derivative/ViewsBlock.php:88     $view->id() . '-' . $display['id']
+#   system/src/Plugin/Derivative/SystemMenuBlock.php:48   the menu id
+#   block_content/src/Plugin/Derivative/BlockContent.php:51   the content entity uuid
+#
+# The pack has to state each one anyway, so it states them as ordinary rules. A config
+# object goes in, a plugin id comes out. Nothing new in the format.
+
+needs:
+  types:
+  - drupal.block_plugin
+  - drupal.config_object
+rules:
+- rule: views_block_from_display
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where:
+    - id_matches: ^views\.view\.(?<view>[a-z0-9_]+)$
+    - has_key:
+        path: display.*
+        where:
+          display_plugin: block
+  id: &id001
+    from:
+    - capture: view
+    - each_key: display.*
+    template: drupal.plugin.block::views_block:{view}-{each_key}
+  emits:
+  - node:
+      type: drupal.block_plugin
+  confidence: declared
+- rule: menu_block_from_menu
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where:
+    - id_matches: ^system\.menu\.(?<menu>[a-z0-9_-]+)$
+  id: &id002
+    from:
+      capture: menu
+    template: drupal.plugin.block::system_menu_block:{menu}
+  emits:
+  - node:
+      type: drupal.block_plugin
+  confidence: declared
+- rule: views_block_from_display_edges
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where:
+    - id_matches: ^views\.view\.(?<view>[a-z0-9_]+)$
+    - has_key:
+        path: display.*
+        where:
+          display_plugin: block
+  emits:
+  - edge:
+      kind: derived_from
+      from: this_node
+      to:
+        from:
+          literal: drupal.plugin.block::views_block
+  - edge:
+      kind: declares
+      from: source_node
+      to: this_node
+  confidence: declared
+  id: *id001
+- rule: menu_block_from_menu_edges
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where:
+    - id_matches: ^system\.menu\.(?<menu>[a-z0-9_-]+)$
+  emits:
+  - edge:
+      kind: derived_from
+      from: this_node
+      to:
+        from:
+          literal: drupal.plugin.block::system_menu_block
+  - edge:
+      kind: declares
+      from: source_node
+      to: this_node
+  confidence: declared
+  id: *id002
+- rule: derivative_from_reference
+  reads: map
+  match:
+    node_type: drupal.block_plugin
+    where:
+    - id_matches: ^drupal\.plugin\.block::(?<base>[a-z0-9_]+):(?<key>.+)$
+    - base_is_known_plugin: true
+  emits:
+  - edge:
+      kind: derived_from
+      from: this_node
+      to:
+        from:
+          capture: base
+        template: drupal.plugin.block::{base}
+  confidence: declared

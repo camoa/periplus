@@ -1,0 +1,8 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# drupal pack — declares the module type.
+
+node_types:
+
+  - name: drupal.module
+    id_namespace: drupal.module
