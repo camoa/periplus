@@ -41,6 +41,12 @@ grep -q "^  version:  *0.3.0" "$work/pinned.txt" \
     && grep -q "^  directory:  *$site/.periplus/packs/drupal_basic@0.3.0" "$work/pinned.txt" \
     || { echo "pinned copy not named"; cat "$work/pinned.txt"; exit 1; }
 
+# name@version names the project-local copy too, from inside the project.
+(cd "$site" && "$PERIPLUS" validate drupal_basic@0.3.0 >"$work/local.txt") \
+    || { echo "project-local copy did not validate"; cat "$work/local.txt"; exit 1; }
+grep -q "^  directory:  *$site/.periplus/packs/drupal_basic@0.3.0" "$work/local.txt" \
+    || { echo "project-local copy not named"; cat "$work/local.txt"; exit 1; }
+
 # A version on no root is unknown and names the versions that are there.
 status=0
 (cd "$other" && "$PERIPLUS" validate drupal_basic@9.9.9 >"$work/unknown.txt") || status=$?
