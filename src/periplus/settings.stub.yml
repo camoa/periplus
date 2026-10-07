@@ -24,8 +24,7 @@ periplus_version: 0
 # story for a pack that arrives inside a downloaded dependency.
 #
 # packs:
-#   - drupal@0.1.0
-#   - twig@0.0.1
+#   - drupal_basic@0.2.0
 
 
 # Extra directories to resolve packs from, beside the ones Periplus ships and the two it always
@@ -43,8 +42,9 @@ periplus_version: 0
 # rather than forking the pack.
 #
 # folders:
-#   config_sync: config/sync
-#   modules: web/modules/custom
+#   config: config/sync
+#   custom_module: web/modules/custom
+#   custom_theme: web/themes/custom
 
 
 # Which files are ours. Path-based, so a dependency published tomorrow still stops at the boundary
