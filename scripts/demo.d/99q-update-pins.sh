@@ -39,6 +39,18 @@ cp "$work/before.yml" "$site/.periplus/settings.yml"
 text="$(cd "$site" && "$PERIPLUS" update)"
 printf '%s\n' "$text" | grep -qxF "drupal_basic: 0.1.0 -> 0.2.0" || { echo "text: $text"; exit 1; }
 
+# The file `init` writes keeps its long header, double blank lines and quoted pin through an update.
+mkdir "$work/init"
+printf '{"require": {"drupal/core": "^11"}}\n' >"$work/init/composer.json"
+(cd "$work/init" && "$PERIPLUS" init >/dev/null)
+sed -i 's/drupal_basic@0.2.0/drupal_basic@0.1.0/' "$work/init/.periplus/settings.yml"
+cp "$work/init/.periplus/settings.yml" "$work/init-before.yml"
+(cd "$work/init" && "$PERIPLUS" update >/dev/null)
+sed 's/drupal_basic@0.2.0/drupal_basic@0.1.0/' "$work/init/.periplus/settings.yml" | cmp - "$work/init-before.yml" \
+    || { echo "update changed the init-written file beyond the pin"; exit 1; }
+grep -qF '"drupal_basic@0.2.0"' "$work/init/.periplus/settings.yml" \
+    || { echo "the init-written pin was not moved"; exit 1; }
+
 mkdir "$work/bare"
 status=0
 (cd "$work/bare" && "$PERIPLUS" update >"$work/bare.txt") || status=$?
