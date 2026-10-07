@@ -1,6 +1,9 @@
 # Periplus
 
 > *periplus* (n.): an ancient coastal record of the ports and the distances between them.
+>
+> *rutter* (n.): a mariner's book of written sailing directions for one coast, from the French
+> *routier*; it told a pilot what to look for before charts did.
 
 Periplus makes a map of a code base: a JSON file of nodes and edges. Configuration files called
 rutters tell it what to find. The same input always gives the same map, byte for byte. Periplus
