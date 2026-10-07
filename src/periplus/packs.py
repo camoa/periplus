@@ -234,7 +234,12 @@ def bundled_digest() -> str:
     pending: list[tuple[str, Traversable]] = [("", _bundled_root())]
     while pending:
         prefix, folder = pending.pop()
-        for entry in folder.iterdir():
+        try:
+            entries = tuple(folder.iterdir())
+        except OSError:
+            # An absent or unreadable folder contributes nothing, as `discover_candidates` treats it.
+            continue
+        for entry in entries:
             name = f"{prefix}{entry.name}"
             if entry.is_dir():
                 pending.append((f"{name}/", entry))
