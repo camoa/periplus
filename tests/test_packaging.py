@@ -102,6 +102,7 @@ EXPECTED_MODULE_FILES = {
     "periplus/engine/source.py",
     "periplus/engine/tree.py",
     "periplus/validate.py",
+    "periplus/update.py",
 }
 
 # The contract, which is data the way the packs are data: four JSON Schemas that define what a

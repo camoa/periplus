@@ -139,6 +139,18 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="how to print the findings (default: text)",
     )
+    refresh = subcommands.add_parser(
+        "update",
+        help="move this project's pins to the rutter versions that are installed",
+        description="Rewrite each pin whose rutter is installed at another version, and stop.",
+    )
+    refresh.add_argument(
+        "--format",
+        # A literal for the reason `validate`'s is: `periplus.update` reaches `ruamel.yaml`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
     extract = subcommands.add_parser(
         "map",
         help="extract the map of this project and write it",
@@ -329,6 +341,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         sys.stdout.write(VALIDATE_RENDERERS[args.format](findings))
         return findings.exit_code
+
+    # Imported here because `periplus.update` imports `ruamel.yaml`.
+    if args.command == "update":
+        from periplus.update import RENDERERS as UPDATE_RENDERERS
+        from periplus.update import update_pins
+
+        updated = update_pins(start=Path.cwd(), env=os.environ, dependencies=dependencies)
+        sys.stdout.write(UPDATE_RENDERERS[args.format](updated))
+        return updated.exit_code
 
     # Imported here for the reason `validate` is: `periplus.map` imports `jsonschema`.
     if args.command == "map":
