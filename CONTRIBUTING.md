@@ -94,6 +94,10 @@ cannot say.
 **A new version replaces the old one.** A bundled rutter at a new version replaces the folder of
 the old version. Maps made with the old version must be made again.
 
+**A change under `src/periplus/packs` bumps the version.** A bundled rutter that changes without a
+new `version` in `pyproject.toml` leaves two installs with one version and different rutters.
+`periplus status` prints a `rutters:` digest of the bundled packs, so the two installs still differ.
+
 **A check or a test makes its own input.** Each test and each check writes the small project it
 maps, in a temporary folder. The repository holds no site to map. Map your own projects to find
 gaps, then write each gap as a small input that a check can hold.

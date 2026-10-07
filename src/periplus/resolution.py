@@ -33,6 +33,7 @@ from periplus.packs import (
     MatchedPack,
     PackCandidate,
     PackRoot,
+    bundled_digest,
     discover_candidates,
     match_pins,
     resolve_pack_roots,
@@ -82,6 +83,7 @@ class ResolutionReport:
     """
 
     tool_version: str
+    rutters_digest: str
     project_root: Path | None
     user_config_from: Literal["PERIPLUS_CONFIG_DIR", "platformdirs"]
     settings_sources: tuple[SettingsSource, ...]
@@ -180,6 +182,7 @@ def resolve(
 
     return ResolutionReport(
         tool_version=periplus.__version__,
+        rutters_digest=bundled_digest(),
         project_root=effective_root,
         user_config_from=user_config_from,
         settings_sources=sources,

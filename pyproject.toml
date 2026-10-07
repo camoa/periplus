@@ -25,7 +25,7 @@ classifiers = [
 # Declared here and nowhere else. src/periplus/__init__.py reads it back at runtime through
 # importlib.metadata.version(), so the number is written once and `periplus --version` prints
 # what this file says by construction rather than by two places agreeing.
-version = "0.1.0"
+version = "0.2.0"
 
 # Five runtime distributions. The count is still a decision, not an accident, and this comment
 # said "two runtime distributions, zero transitive" until `periplus validate` needed a validator.
@@ -70,6 +70,11 @@ periplus = "periplus.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/camoa/periplus"
+
+# uv keys a local-directory build on the modification time of pyproject.toml alone, so an edit under
+# src/periplus/packs never rebuilt an install. These keys make any source change rebuild it.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/periplus/**" }]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/periplus"]

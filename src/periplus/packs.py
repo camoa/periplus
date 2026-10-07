@@ -1,9 +1,12 @@
 """Pack resolution: where packs are looked for, what directories are there, and what a pin matches.
 
-Three questions and no fourth. Where — ``resolve_pack_roots``. What is there —
-``discover_candidates``. Which of them a ``packs:`` pin names — ``match_pins``.
+Three questions and one fact. Where — ``resolve_pack_roots``. What is there —
+``discover_candidates``. Which of them a ``packs:`` pin names — ``match_pins``. The fact is
+``bundled_digest``, a hash of the bundled pack files, which tells two installs apart.
 
-**No file inside a pack directory is opened.** Not a manifest, not ``pack.yaml``, not anything. That
+**No file inside a pack directory is opened, except by ``bundled_digest``.** It is the one
+function here that opens pack files, and it only hashes their bytes. Not a manifest, not
+``pack.yaml``, not anything else. That
 is a deliberate limit and the reason this module is small: resolving a pin, detecting a
 duplicate and refusing a version mismatch are judgments about pack *validity*, and a harness making
 them would have to know what a ``folders`` block is before anything knows what a pack is. A pack
@@ -12,8 +15,9 @@ validator later confirms the manifest inside agrees with the name outside — a 
 could never make.
 
 The only ``Traversable`` operations this module calls are ``is_dir``, ``is_file``, ``iterdir`` and
-``name``, plus the one ``joinpath`` that reaches the bundled root itself. It never calls ``open``,
-``read_text`` or ``read_bytes``, and it never calls ``builtins.open``.
+``name``, plus the one ``joinpath`` that reaches the bundled root itself. Apart from
+``bundled_digest``'s ``read_bytes``, it never calls ``open`` or ``read_text``, and it never
+calls ``builtins.open``.
 
 Nothing here is rendered. A directory name is attacker-influenced text and is stored exactly as it
 is on disk; escaping it is ``report.py``'s work, and escaping in the producer would make the escaped
@@ -32,6 +36,7 @@ resource rather than as a module.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.resources
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -49,6 +54,7 @@ __all__ = [
     "PackCandidate",
     "PackName",
     "PackRoot",
+    "bundled_digest",
     "discover_candidates",
     "match_pins",
     "resolve_pack_roots",
@@ -187,9 +193,7 @@ def resolve_pack_roots(
     if project_root is not None:
         found.append(_root("project", project_root / PROJECT_MARKER / PACKS_DIRECTORY, None))
     found.append(_root("user", user_config_dir / PACKS_DIRECTORY, None))
-    # The import package's own name, not the distribution's. `importlib.resources` reaches the
-    # bundled data directory as a resource; the module you are reading shadows it as a module.
-    found.append(_root("bundled", importlib.resources.files("periplus") / PACKS_DIRECTORY, None))
+    found.append(_root("bundled", _bundled_root(), None))
     if configured is not None:
         # `entry_sources` is one reference per entry of `value`, in the same order, because
         # `settings._merge_sequence` appends to both in one loop body — so indexing it positionally
@@ -211,6 +215,35 @@ def resolve_pack_roots(
             seen.add(key)
         roots.append(root)
     return tuple(roots)
+
+
+def _bundled_root() -> Traversable:
+    # The import package's own name, not the distribution's. `importlib.resources` reaches the
+    # bundled data directory as a resource; the module you are reading shadows it as a module.
+    return importlib.resources.files("periplus") / PACKS_DIRECTORY
+
+
+def bundled_digest() -> str:
+    """The sha256 of every file under the bundled packs, in sorted path order.
+
+    Each file contributes its path relative to the bundled root, then its bytes, so a renamed file
+    changes the digest as a changed one does. Two installs carry the same rutters exactly when this
+    string is equal.
+    """
+    files: dict[str, Traversable] = {}
+    pending: list[tuple[str, Traversable]] = [("", _bundled_root())]
+    while pending:
+        prefix, folder = pending.pop()
+        for entry in folder.iterdir():
+            name = f"{prefix}{entry.name}"
+            if entry.is_dir():
+                pending.append((f"{name}/", entry))
+            else:
+                files[name] = entry
+    digest = hashlib.sha256()
+    for name in sorted(files):
+        digest.update(name.encode("utf-8") + b"\0" + files[name].read_bytes() + b"\0")
+    return digest.hexdigest()
 
 
 def _root(

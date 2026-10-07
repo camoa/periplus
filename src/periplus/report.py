@@ -144,6 +144,7 @@ def render_text(report: ResolutionReport) -> str:
     is something else.
     """
     lines: list[str] = [f"periplus {_escape(report.tool_version)}"]
+    lines.append(f"rutters: {report.rutters_digest}")
     lines += _block("Dependencies", _dependency_rows(report.dependencies))
     lines += _block(
         "Project root",
@@ -426,6 +427,7 @@ def render_json(report: ResolutionReport) -> str:
     """
     payload = {
         "tool_version": report.tool_version,
+        "rutters_digest": report.rutters_digest,
         "project_root": _text(report.project_root),
         "user_config_from": report.user_config_from,
         "settings_sources": [_json_source(source) for source in report.settings_sources],
