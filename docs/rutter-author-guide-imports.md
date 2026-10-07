@@ -113,7 +113,7 @@ skipped. No test plants either key on Go. A grammar whose string node holds name
 declares them in `call_literal_delimiters`; no bundled pack does yet.
 
 A declaration rule's id may come from an argument too, with an optional `normalize` and no other
-key. No bundled pack uses it yet. Check 98d-laravel-pack plants this rule, which gives one node per
+key. Check 98d-laravel-pack plants this rule, which gives one node per
 `Route::get` or `Route::post` call, named by its URI:
 
 ```

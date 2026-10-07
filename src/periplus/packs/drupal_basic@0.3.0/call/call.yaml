@@ -16,8 +16,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #   break inside. A manager under another name, as $etm, makes nothing. Other manager methods
 #   that take an entity type id, such as getHandler and getDefinition, make nothing.
 # - A \Drupal:: shortcut such as \Drupal::currentUser(), and a static call on an entity class such
-#   as User::load(1), make no edge: each needs a table from the method or class to a service or
-#   entity type, and a reference rule's end takes only a call's argument or the written name.
+#   as User::load(1), give an edge only for a name pack.yaml's tables list. An entity class is
+#   known by its short name, so a project class named as a core one, such as Drupal\mymod\Node,
+#   gives a false entity type.
 # - get on the service container counts only when its object is written $container,
 #   $this->container or \Drupal::getContainer(). A container under another name makes nothing, and
 #   a $container or $this->container that is not Drupal's service container gives a false service.
@@ -181,4 +182,45 @@ rules:
       kind: uses_entity_type
       from: enclosing_declaration
       to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+# \Drupal::logger('my_module'), \Drupal::currentUser() and the other shortcuts, to the service the
+# table shortcut_services gives for the method's name. Inferred: the table, not the file, names the
+# service. The methods other rules read, and getContainer, are left to them.
+- rule: drupal_shortcut_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: '(?!(?:service|getContainer|entityQuery(?:Aggregate)?)$)\w+'}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: shortcut_services], types: [drupal.service]}
+  confidence: inferred
+
+# User::load(1), Node::loadMultiple() and Term::create([...]), to the entity type the table
+# entity_classes gives for the class's short name: the last segment of the class's full name, as
+# a use binds it or the namespace prefixes it. Inferred: the table, not the file, names the entity
+# type. static::, self:: and parent:: are not read.
+- rule: entity_class_static_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: scope
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?(?:\w+\\)*[A-Z]\w*'}
+    - name_matches: {child: name, pattern: 'load|loadMultiple|create'}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: entity_classes], types: [drupal.entity_type]}
   confidence: inferred

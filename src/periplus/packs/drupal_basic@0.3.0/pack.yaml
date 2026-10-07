@@ -74,8 +74,6 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   gives no hook. Nor does a function named with another module's name, such as
 #   othermod_cron in mymod.module, which Drupal counts as a hook of othermod.
 # - The number of an update_N function is not recorded apart from the function's name.
-# - A .theme file leaves two skipped rows, the id source theme_name is absent, from the include
-#   rules hook_from_theme_include and theme_include_implements_hook.
 # - Plugins of the core types not named under folders below give nothing, such as a views
 #   argument, sort or display plugin. A views field, filter or style plugin declared by an
 #   annotation, and a mail plugin declared by an annotation, give nothing. A views plugin gives
@@ -86,17 +84,19 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A class that extends ContentEntityBase and carries no ContentEntityType attribute or
 #   annotation, such as an abstract base or a bundle class, is not marked as an entity class. The
 #   map holds only its plain inherits edge.
-# - A service or entity type named by a variable, a constant or a concatenation gives no edge and
-#   goes under skipped, so getStorage(MyEntity::ENTITY_TYPE) gives no edge. getStorage('x') on an
-#   object with another name, as $etm, get('x') on a container with another name, a receiver
+# - A service or entity type named by a variable, a concatenation, or a class constant that no
+#   mapped file declares as text, gives no edge and goes under skipped. So does parent::X, even
+#   when a mapped file declares it: only self and static read as the enclosing class.
+#   getStorage('x') on an object with another name, as $etm, get('x') on a container with another
+#   name, a receiver
 #   written with a space or a line break inside get('entity_type.manager'), and other entity type
 #   manager methods such as getHandler('x') give no edge.
-# - \Drupal::currentUser(), \Drupal::config('x'), \Drupal::messenger() and the other static
-#   shortcuts give no uses_service edge, and php_basic maps each as a calls edge to an unresolved
-#   method such as Drupal::state. A static call on an entity class, as User::load(1),
-#   Node::create([...]) or MyEntity::loadMultiple(), gives no uses_entity_type edge. Both need a
-#   table from the method or the class to its service or entity type, which no rule can hold
-#   today: a reference rule's edge ends only at a call's argument or the written name.
+# - A \Drupal:: shortcut gives a uses_service edge only when the table shortcut_services below
+#   lists its method, and \Drupal::cache('x') gives none. A static load, loadMultiple or create
+#   call gives a uses_entity_type edge only on a core entity class the table entity_classes lists:
+#   MyEntity::loadMultiple() and Message::load(1) give none. Each such call is listed as skipped.
+#   An entity class is known by its short name, so a project class named as a core one, such as
+#   a module's own User class, gives a false uses_entity_type edge.
 # - The container rule reads only $container, $this->container and \Drupal::getContainer() as
 #   written. $this->getContainer()->get('x'), static::getContainer()->get('x'), a receiver split
 #   over lines, $container?->get('x') and another letter case, such as ->GET('x'), give no edge
@@ -292,3 +292,104 @@ grammar:
   provider_version: "0.26.0"
   language: php
   grammar_version: "0.24.1"
+  # A call argument written MyType::ENTITY_TYPE, self::X or static::X stands for the text that
+  # constant is declared with, when a mapped file declares it as one text literal. A constant read
+  # as parent::X, of core, of contrib, or declared by an expression gives the row "argument N is a
+  # class constant with no declared text".
+  constant_access:
+    node: class_constant_access_expression
+    scope: [name, qualified_name, relative_scope]
+    name: [name]
+    enclosing: [self, static]
+  constant_declaration:
+    node: const_element
+    name: [name]
+    value: [string, encapsed_string]
+
+# Name tables that call/call.yaml looks a written name up in.
+tables:
+  # Each static method of core's Drupal class, as of Drupal 11.4, that gets one fixed service from
+  # the container, and that service. cache() names its service by its argument and is left out.
+  shortcut_services:
+    accessManager: access_manager
+    classResolver: class_resolver
+    config: config.factory
+    configFactory: config.factory
+    csrfToken: csrf_token
+    currentUser: current_user
+    database: database
+    destination: redirect.destination
+    entityDefinitionUpdateManager: entity.definition_update_manager
+    entityTypeManager: entity_type.manager
+    flood: flood
+    formBuilder: form_builder
+    hasRequest: request_stack
+    httpClient: http_client
+    isConfigSyncing: config.installer
+    keyValue: keyvalue
+    keyValueExpirable: keyvalue.expirable
+    languageManager: language_manager
+    linkGenerator: link_generator
+    lock: lock
+    logger: logger.factory
+    menuTree: menu.link_tree
+    messenger: messenger
+    moduleHandler: module_handler
+    pathValidator: path.validator
+    queue: queue
+    request: request_stack
+    requestStack: request_stack
+    routeMatch: current_route_match
+    state: state
+    theme: theme.manager
+    time: datetime.time
+    token: token
+    transliteration: transliteration
+    translation: string_translation
+    typedDataManager: typed_data_manager
+    urlGenerator: url_generator
+  # Each entity class of Drupal 11.4 core by its short name, and its entity type id. Message, the
+  # contact module's class for contact_message, is left out: the Message module's class for the
+  # entity type message has the same short name.
+  entity_classes:
+    Action: action
+    BaseFieldOverride: base_field_override
+    Block: block
+    BlockContent: block_content
+    BlockContentType: block_content_type
+    Comment: comment
+    CommentType: comment_type
+    ConfigurableLanguage: configurable_language
+    ContactForm: contact_form
+    ContentLanguageSettings: language_content_settings
+    ContentModerationState: content_moderation_state
+    DateFormat: date_format
+    Editor: editor
+    EntityFormDisplay: entity_form_display
+    EntityFormMode: entity_form_mode
+    EntityViewDisplay: entity_view_display
+    EntityViewMode: entity_view_mode
+    FieldConfig: field_config
+    FieldStorageConfig: field_storage_config
+    File: file
+    FilterFormat: filter_format
+    ImageStyle: image_style
+    Media: media
+    MediaType: media_type
+    Menu: menu
+    MenuLinkContent: menu_link_content
+    Node: node
+    NodeType: node_type
+    PathAlias: path_alias
+    ResponsiveImageStyle: responsive_image_style
+    RestResourceConfig: rest_resource_config
+    Role: user_role
+    SearchPage: search_page
+    Shortcut: shortcut
+    ShortcutSet: shortcut_set
+    Term: taxonomy_term
+    User: user
+    View: view
+    Vocabulary: taxonomy_vocabulary
+    Workflow: workflow
+    Workspace: workspace

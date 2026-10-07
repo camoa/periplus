@@ -2,16 +2,16 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A function in a file a theme includes, such as preprocess/html.preprocess.inc, that implements a
 # hook by its name: the theme's folder name, an underscore, then the hook's name. Drupal finds such
-# a function by the theme's name, not the file's. The rules select files by the .inc ending, so a
-# file such as helpers.inc is read too. The theme's own .theme file is read as well and yields
-# skipped rows; hook_from_function_name emits its hooks. Inferred, because a name is a convention.
+# a function by the theme's name, not the file's. The rules read only files claimed by the .inc
+# ending, so a file such as helpers.inc is read too, and the theme's own .theme file is not;
+# hook_from_function_name emits its hooks. Inferred, because a name is a convention.
 
 rules:
 - rule: hook_from_theme_include
   reads: file
   in:
   - theme_root
-  match: {declaration: function_definition, name_child: name, filetype: php}
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: inc}
   id: {from: declared_name, pattern: '^{theme_name}_(?<hook>\w+)$', template: '{hook}'}
   emits:
   - node:
@@ -21,7 +21,7 @@ rules:
   reads: file
   in:
   - theme_root
-  match: {declaration: function_definition, name_child: name, filetype: php}
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: inc}
   id: {from: declared_name, pattern: '^{theme_name}_(?<hook>\w+)$', template: '{hook}'}
   emits:
   - edge:

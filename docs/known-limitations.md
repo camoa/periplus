@@ -39,18 +39,19 @@ a list of its known gaps.
   as `othermod_cron` in `mymod.module`. A hook with a variable part keeps it:
   `mymod_form_user_login_form_alter` implements `form_user_login_form_alter`. A function in a plain
   `.php` file other than `post_update.php` or `deploy.php` gives no hook. Each such file leaves two
-  skipped rows in the report, and so does a `.theme` file. A theme's include file gives hooks only
+  skipped rows in the report. A theme's include file gives hooks only
   when the theme's folder sits directly below `custom_theme` and is named by its machine name.
 - **Drupal, missing results:** a class that extends `ContentEntityBase` with no entity type
   attribute or annotation, such as an abstract base or a bundle class, is not marked as an entity
-  class. A service or entity type named by a variable, a class constant or a concatenation gives
-  no edge and goes under skipped, so `getStorage(MyEntity::ENTITY_TYPE)` gives none.
+  class. A service or entity type named by a variable or a concatenation gives no edge and goes
+  under skipped, and so does a class constant that no mapped file declares as text. So does
+  `parent::X`, even when a mapped file declares it: Drupal reads only `self` and `static` as the
+  enclosing class.
   `getStorage('x')` on an object not named `entityTypeManager` or `$entity_type_manager`,
   `get('x')` on a container with another name, and other entity type manager methods such as
-  `getHandler('x')` give no edge. `$etm->getStorage('x')` gives no entity type edge. Static
-  shortcuts such as `\Drupal::config('x')` give no service edge, and a static call on an entity
-  class, such as `User::load(1)`, gives no entity type edge. Both need a table from the method or
-  the class to its service or entity type, which no rule can hold today. The container rule reads
+  `getHandler('x')` give no edge. `$etm->getStorage('x')` gives no entity type edge. An entity
+  class is known by its short name, so `User::load(1)` on a module's own `User` class gives a false
+  entity type. The container rule reads
   only `$container`, `$this->container` and `\Drupal::getContainer()` as written:
   `$this->getContainer()->get('x')`, `static::getContainer()->get('x')`, a receiver split over
   lines, `$container?->get('x')` and another letter case, such as `->GET('x')`, give no edge and no

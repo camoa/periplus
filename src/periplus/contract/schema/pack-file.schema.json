@@ -399,6 +399,13 @@
           "type": "string",
           "description": "A glob, relative to each folder named in `in`."
         },
+        "ending": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "array", "items": {"type": "string"}, "minItems": 1}
+          ],
+          "description": "On a declaration, text or reference rule: the endings, without the dot, one of which must have claimed a file for the rule to read it. The glob in file is matched against the name with the claimed ending removed, so it cannot tell two endings apart; this can. Each must be an ending a loaded pack claims. Without it, every file of the file type is read."
+        },
         "attribute": {
           "type": "string",
           "description": "Fully qualified attribute class."
@@ -965,9 +972,15 @@
           "additionalProperties": false,
           "required": ["prefix_bare_with"],
           "properties": {"prefix_bare_with": {"type": "string", "minLength": 1}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lookup_last_segment_in"],
+          "properties": {"lookup_last_segment_in": {"type": "string", "minLength": 1}}
         }
       ],
-      "description": "full_if_prefixed: a name starting with the text is full without it. bound_first_segment: a name whose first segment the file binds takes the binding's target in its place. prefix_with: the named path value, value or namespace, the separator and the name. prefix_bare_with: as prefix_with, for a name that does not hold the separator only. as_written: the name. On a tree reference rule, a reference whose steps hold on no edge makes nothing, counts no fire and is listed as skipped. When the steps hold on one edge and fail on another, only the edge they hold on is made, the reference counts a fire, and no skipped row names the other edge."
+      "description": "full_if_prefixed: a name starting with the text is full without it. bound_first_segment: a name whose first segment the file binds takes the binding's target in its place. prefix_with: the named path value, value or namespace, the separator and the name. prefix_bare_with: as prefix_with, for a name that does not hold the separator only. lookup_last_segment_in: a name whose last segment, split at the separator, is a key of the named table that the pack or a pack it depends on declares under tables gives that key's value alone. as_written: the name. On a tree reference rule, a reference whose steps hold on no edge makes nothing, counts no fire and is listed as skipped. When the steps hold on one edge and fail on another, only the edge they hold on is made, the reference counts a fire, and no skipped row names the other edge."
     },
     "edgeEnd": {
       "description": "A node the rule already has, or an id minted the same way any id is minted. There is no separate target language: from and template are the id block, where filters, each makes one edge per entry.",

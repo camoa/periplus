@@ -2,8 +2,8 @@
 # The bundled ai_basic pack, pinned beside drupal_basic@0.3.0. A class in the module's
 # src/Plugin/AiAgent folder with the AiAgent attribute makes the agent named by its id, and a class
 # in src/Plugin/AiFunctionCall with the FunctionCall attribute makes the function call named by its
-# id; each is joined to its class by plugin_class. A FunctionCall attribute whose id is not a text
-# literal makes no plugin and is listed under skipped. The map and the report are byte-identical
+# id; each is joined to its class by plugin_class. A FunctionCall attribute whose id is a class
+# constant declared as text makes the plugin that text names. The map and the report are byte-identical
 # across two runs, the report but for the map path it names.
 set -euo pipefail
 work="$(mktemp -d)"
@@ -105,6 +105,7 @@ assert nodes == {
     agent_base: ("php.class_like", "referenced"),
     function_base: ("php.class_like", "referenced"),
     cls + "AiAgent\\MyAgent": ("php.class", "mapped"),
+    "drupal.plugin.ai_function_call::computed": ("drupal.ai_function_call", "mapped"),
     cls + "AiFunctionCall\\ComputedFunction": ("php.class", "mapped"),
     cls + "AiFunctionCall\\MyFunction": ("php.class", "mapped"),
 }, nodes
@@ -118,6 +119,8 @@ assert edges == sorted([
      [(agent, line(agent, "#[AiAgent("))]),
     ("plugin_class", "drupal.plugin.ai_function_call::mymodule:my_function",
      cls + "AiFunctionCall\\MyFunction", [(function, line(function, "#[FunctionCall("))]),
+    ("plugin_class", "drupal.plugin.ai_function_call::computed",
+     cls + "AiFunctionCall\\ComputedFunction", [(computed, line(computed, "#[FunctionCall("))]),
     ("inherits", cls + "AiAgent\\MyAgent", agent_base,
      [(agent, line(agent, "class MyAgent extends AiAgentBase {"))]),
     ("inherits", cls + "AiFunctionCall\\MyFunction", function_base,
@@ -126,10 +129,6 @@ assert edges == sorted([
      [(computed, line(computed, "class ComputedFunction extends FunctionCallBase {"))]),
 ]), edges
 
-skipped = sorted((row["file"], row["line"], row["rule"], row["reason"]) for row in report["skipped"])
-assert skipped == [
-    (computed, line(computed, "#[FunctionCall("), "ai_function_call_from_attribute",
-     "argument id is not a text literal"),
-], skipped
+assert report["skipped"] == [], report["skipped"]
 PY
 echo "ai pack ok"

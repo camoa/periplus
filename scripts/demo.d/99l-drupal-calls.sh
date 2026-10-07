@@ -5,7 +5,8 @@
 # referenced service for an undeclared one; a variable argument gives a skipped row; Other::service
 # gives nothing. \Drupal::entityQuery gives uses_entity_type at declared. getStorage on an object
 # ending in entityTypeManager, with or without a call and through ?->, gives uses_entity_type at
-# inferred; on another object it gives nothing; a variable argument gives a skipped row. get on an
+# inferred; on another object it gives nothing; a variable argument gives a skipped row.
+# \Drupal::entityTypeManager() gives uses_service to entity_type.manager at inferred. get on an
 # object written $container, $this->container or \Drupal::getContainer() gives uses_service at
 # inferred; get on config, a request, a form state, another object or Drush's container gives
 # nothing, as does get on $containerBuilder; a variable argument gives a skipped row. In a
@@ -145,6 +146,8 @@ expected = {
      line("$mine = $this->entityTypeManager->getStorage('thing');")),
     ("uses_entity_type", entities, "drupal.entity_type::node",
      line("$nodes = \\Drupal::entityTypeManager()->getStorage('node');")),
+    ("uses_service", entities, "drupal.service::entity_type.manager",
+     line("$nodes = \\Drupal::entityTypeManager()->getStorage('node');")),
     ("uses_entity_type", entities, "drupal.entity_type::safe_thing",
      line("$safe = $this->entityTypeManager?->getStorage('safe_thing');")),
     ("uses_service", create, "drupal.service::my_module.helper",
@@ -175,6 +178,7 @@ assert confidence == {
     ("drupal.service::my_module.helper", "container_get_call", "inferred"),
     ("drupal.service::entity_type.manager", "container_get_call", "inferred"),
     ("drupal.service::path.current", "container_get_call", "inferred"),
+    ("drupal.service::entity_type.manager", "drupal_shortcut_call", "inferred"),
 }, sorted(confidence)
 assert nodes["drupal.service::my_module.helper"]["state"] == "mapped", nodes
 assert nodes["drupal.service::path.current"]["state"] == "referenced", nodes
@@ -192,6 +196,6 @@ assert skipped == sorted([
     ("container_get_call", form_line("$any = $container->get($name);")),
 ]), skipped
 assert nodes[helper_lookup]["type"] == "php.function", nodes[helper_lookup]
-print("drupal calls: seven service uses, four entity type uses, three skipped, none for other receivers")
+print("drupal calls: eight service uses, four entity type uses, three skipped, none for other receivers")
 PY
 echo "drupal calls ok"

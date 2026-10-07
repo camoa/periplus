@@ -5,7 +5,9 @@
 # settings_submit, each at confidence inferred with an implements_hook edge from its function at
 # confidence inferred; a form callback reads as a hook, a stated gap. helper_thing does not start
 # with mymod_, so it makes no hook, no edge and no skipped row. In mytheme.theme, mytheme_preprocess_node gives the hook
-# preprocess_node. No hook node has an empty id.
+# preprocess_node. In the include preprocess/page.preprocess.inc, mytheme_preprocess_page gives the
+# hook preprocess_page by the theme's folder name. The include rules read .inc files only, so the
+# .theme file leaves no skipped row. No hook node has an empty id.
 set -euo pipefail
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -13,7 +15,8 @@ trap 'rm -rf "$work"' EXIT
 site="$work/site"
 module="$site/web/modules/custom/mymod/mymod.module"
 theme="$site/web/themes/custom/mytheme/mytheme.theme"
-mkdir -p "$site/.periplus" "$(dirname "$module")" "$(dirname "$theme")"
+include="$site/web/themes/custom/mytheme/preprocess/page.preprocess.inc"
+mkdir -p "$site/.periplus" "$(dirname "$module")" "$(dirname "$include")"
 printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n' >"$site/.periplus/settings.yml"
 cat >"$module" <<'PHP'
 <?php
@@ -36,25 +39,27 @@ cat >"$theme" <<'PHP'
 function mytheme_preprocess_node(&$variables) {
 }
 PHP
+cat >"$include" <<'PHP'
+<?php
+
+function mytheme_preprocess_page(&$variables) {
+}
+PHP
 
 (cd "$site" && "$PERIPLUS" map --output "$work/map.json" --format json >"$work/report.json")
 
-python3 - "$work" "$module" "$theme" <<'PY'
+python3 - "$work" "$module" "$theme" "$include" <<'PY'
 import json
 import os
 import sys
 
-work, module, theme = sys.argv[1:]
+work, module, theme, include = sys.argv[1:]
 document = json.load(open(os.path.join(work, "map.json")))
 report = json.load(open(os.path.join(work, "report.json")))
 assert not report["problems"], report["problems"]
 assert not report["not_executed"], report["not_executed"]
-# The include-hook rules read every PHP file under theme_root, and their theme_name path value
-# fits .inc files only, so the plain .theme file leaves exactly these two skipped rows.
-assert sorted((row["rule"], row["reason"]) for row in report["skipped"]) == [
-    ("hook_from_theme_include", "the id source theme_name is absent"),
-    ("theme_include_implements_hook", "the id source theme_name is absent"),
-], report["skipped"]
+# The include-hook rules read only .inc files under theme_root, so the .theme file leaves no row.
+assert report["skipped"] == [], report["skipped"]
 
 
 def line(path, text):
@@ -70,6 +75,7 @@ expected = {
     ("form_alter", where(module), line(module, "function mymod_form_alter(&$form) {"), ("inferred",)),
     ("settings_submit", where(module), line(module, "function mymod_settings_submit($form) {"), ("inferred",)),
     ("preprocess_node", where(theme), line(theme, "function mytheme_preprocess_node(&$variables) {"), ("inferred",)),
+    ("preprocess_page", where(include), line(include, "function mytheme_preprocess_page(&$variables) {"), ("inferred",)),
 }
 hooks = {
     (

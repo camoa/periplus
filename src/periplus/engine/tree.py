@@ -45,6 +45,7 @@ STEPS = {
     "bound_first_segment": False,
     "prefix_with": True,
     "prefix_bare_with": True,
+    "lookup_last_segment_in": True,
     "as_written": False,
 }
 
@@ -55,6 +56,8 @@ def resolve_name(
     separator: str,
     bindings: Mapping[str, str],
     values: Mapping[str, str],
+    *,
+    tables: Mapping[str, Mapping[str, str]],
 ) -> str | None:
     """The name the first step that holds gives; ``None`` when none holds.
 
@@ -63,7 +66,8 @@ def resolve_name(
     bound target joined with the remaining segments. ``prefix_with`` holds when ``values`` holds
     the value it names and gives that value joined with the name, an empty part left out.
     ``prefix_bare_with`` does the same for a name that does not hold the separator.
-    ``as_written`` always holds.
+    ``lookup_last_segment_in`` holds when the name's last segment is a key of the table of
+    ``tables`` it names and gives that key's value alone. ``as_written`` always holds.
     """
     for kind, argument in steps:
         if kind == "full_if_prefixed" and written.startswith(argument):
@@ -72,6 +76,10 @@ def resolve_name(
             first, _, rest = written.partition(separator) if separator else (written, "", "")
             if first in bindings:
                 return separator.join(part for part in (bindings[first], rest) if part)
+        if kind == "lookup_last_segment_in":
+            segment = written.split(separator)[-1] if separator else written
+            if segment in tables.get(argument, {}):
+                return tables[argument][segment]
         bare = kind == "prefix_bare_with" and not (separator and separator in written)
         if (kind == "prefix_with" or bare) and argument in values:
             return separator.join(part for part in (values[argument], written) if part)
@@ -126,6 +134,13 @@ class Grammar:
     is the field of a named argument's name. ``call_literals`` are the node types of a call's text
     literal, ``call_literal_content`` those of its text, and ``call_literal_delimiters`` those of
     its children that are skipped.
+
+    ``constant_access`` is the node type of a class constant access, ``constant_scope`` the types
+    its first named child, the scope, may have, and ``constant_name`` those of its last, the name.
+    ``constant_enclosing`` holds the scope texts that stand for the enclosing class; any other
+    scope that is not a written name stands for no class, and the argument for no text.
+    ``constant_declaration`` is the node type of one class constant declaration, and
+    ``constant_declared_name`` and ``constant_value`` the types of its first and last named child.
     """
 
     language: str
@@ -151,6 +166,13 @@ class Grammar:
     call_literals: frozenset[str] = frozenset()
     call_literal_content: frozenset[str] = frozenset()
     call_literal_delimiters: frozenset[str] = frozenset()
+    constant_access: str = ""
+    constant_scope: frozenset[str] = frozenset()
+    constant_name: frozenset[str] = frozenset()
+    constant_enclosing: frozenset[str] = frozenset()
+    constant_declaration: str = ""
+    constant_declared_name: frozenset[str] = frozenset()
+    constant_value: frozenset[str] = frozenset()
 
     def join(self, values: Mapping[str, str]) -> str | None:
         """The full name: each part's value that is not empty, joined by the separator; ``None``
@@ -172,6 +194,9 @@ class ParsedFile:
     imports: Mapping[int, Mapping[str, str]]
     #: The file's value table: its path values and the project's settings values.
     values: Mapping[str, str] = field(default_factory=dict)
+    #: The run's class constants with a text value, by the full name of their class and their
+    #: name; one mapping shared by every file the run parses.
+    constants: Mapping[tuple[str, str], str] = field(default_factory=dict)
 
     def namespace_at(self, node: Node) -> str:
         """The name of the last namespace declaration that starts before the node, or ``""``."""
@@ -200,6 +225,7 @@ class ParsedFile:
             grammar.separator,
             self.imports.get(self.block_at(written.start_byte), {}),
             {"namespace": self.namespace_at(written)},
+            tables={},
         )
 
 
@@ -252,10 +278,15 @@ def line_of(node: Node) -> int:
     return node.start_point[0] + 1
 
 
-def parse_file(path: Path, grammar: Grammar, values: Mapping[str, str]) -> ParsedFile:
+def parse_file(
+    path: Path,
+    grammar: Grammar,
+    values: Mapping[str, str],
+    constants: Mapping[tuple[str, str], str],
+) -> ParsedFile:
     """The file parsed with the grammar, indexed by node type, with its namespaces, imports and
-    value table. With ``namespace_value``, the value of that name is one namespace over the whole
-    file, and the file has none when the value is absent."""
+    value table, and the run's constants. With ``namespace_value``, the value of that name is one
+    namespace over the whole file, and the file has none when the value is absent."""
     tree = _parser(grammar.language).parse(path.read_bytes())
     by_type: dict[str, list[Node]] = {}
     pending = [tree.root_node]
@@ -277,6 +308,7 @@ def parse_file(path: Path, grammar: Grammar, values: Mapping[str, str]) -> Parse
         namespaces=namespaces,
         imports={},
         values=values,
+        constants=constants,
     )
     imports: dict[int, dict[str, str]] = {}
     for rule in grammar.imports:

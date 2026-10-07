@@ -2,9 +2,9 @@
 
 A tree rule can test the text of any child of its match, not only the name. A tree declaration
 rule can also require that its id source fit a pattern, and start or end an edge at the node
-another rule declares at the same match. No example below is Drupal. The check
+another rule declares at the same match. No worked example below is Drupal. The check
 `scripts/demo.d/97p-ability-examples.sh` runs each one from this page and gets the result stated
-there.
+there. The last section reads a class constant as a call's argument.
 
 ## A call tested on its class and its method
 
@@ -263,3 +263,45 @@ and the row names the end. The type must be one of the kind's types at that end,
 one; any other refuses the map with exit 22, naming the rule and the type. A type that neither the
 rutter nor one it depends on declares refuses the map with exit 23. Only a tree declaration rule
 takes this end.
+
+## A class constant as a call's argument
+
+This section is not a worked example. Its block is copied from the Drupal pack's manifest, in
+src/periplus/packs, and check 99u-drupal-guide-fences compares the two.
+
+`{argument: N}` reads a text literal. A Drupal module often names an entity type by a class
+constant, `getStorage(MyType::ENTITY_TYPE)`, declared once as text. Two keys of the manifest's
+`grammar` block let the argument read it:
+
+```yaml drupal_basic@0.3.0/pack.yaml
+# A call argument written MyType::ENTITY_TYPE, self::X or static::X stands for the text that
+# constant is declared with, when a mapped file declares it as one text literal. A constant read
+# as parent::X, of core, of contrib, or declared by an expression gives the row "argument N is a
+# class constant with no declared text".
+constant_access:
+  node: class_constant_access_expression
+  scope: [name, qualified_name, relative_scope]
+  name: [name]
+  enclosing: [self, static]
+constant_declaration:
+  node: const_element
+  name: [name]
+  value: [string, encapsed_string]
+```
+
+`constant_access` names the tree node of a constant read. `scope` lists the node types its first
+named child may have, and `name` those of its last, the constant's name. `constant_declaration`
+names the node of one declaration in a class body. `name` lists the node types of its first named
+child, and `value` those of its last. Each key needs the other: one alone refuses the map, naming
+the key it lacks. Before any rule runs, the engine collects each declaration whose value is a text
+literal, by its class's full name and the constant's name; of two with one key, the first read
+stays. An argument written as a constant stands for that text when its scope is a written name that
+the file's imports and namespace resolve to that class.
+
+A scope that is not a written name, such as `self`, `static` or `parent`, stands for the enclosing
+class only when `enclosing` lists its text. Drupal lists `self` and `static`. So `parent::X` gives
+no edge and leaves the skipped row `argument N is a class constant with no declared text`, as does
+a constant that only a parent class declares, one of core or contrib, or one declared by an
+expression. An id from a call's argument reads a constant the same way. A constant in an
+attribute's value or at an attribute edge's end goes through the same reading, but no test or check
+exercises those two yet.

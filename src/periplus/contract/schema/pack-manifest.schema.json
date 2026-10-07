@@ -56,7 +56,34 @@
         "provider":         {"enum": ["tree-sitter"]},
         "provider_version": {"$ref": "#/$defs/exactVersion"},
         "language":         {"type": "string"},
-        "grammar_version":  {"$ref": "#/$defs/exactVersion"}
+        "grammar_version":  {"$ref": "#/$defs/exactVersion"},
+        "constant_access": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["node", "scope", "name"],
+          "description": "A class constant read as a call's or an attribute's argument: the tree node type of the access, the node types its first named child, the scope, may have, and the node types its last named child, the constant's name, may have. A scope that is a written name resolves as one. A scope whose text enclosing lists is the enclosing class, and any other scope stands for no text; without enclosing, no scope is. The argument then stands for the text the run read declared for that constant. A pack that reads the file type may declare it, and the first such pack in load order is used.",
+          "properties": {
+            "node":  {"type": "string", "minLength": 1},
+            "scope": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "name":  {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "enclosing": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+          }
+        },
+        "constant_declaration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["node", "name", "value"],
+          "description": "A class constant declared in a class body: the tree node type of one declaration, the node types of its first named child, the name, and those of its last named child, the value. A value that is a text literal by the identity block's call literal keys is collected, under the full name of the enclosing type declaration and the constant's name.",
+          "properties": {
+            "node":  {"type": "string", "minLength": 1},
+            "name":  {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "value": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+          }
+        }
+      },
+      "dependentRequired": {
+        "constant_access": ["constant_declaration"],
+        "constant_declaration": ["constant_access"]
       }
     },
 
@@ -188,6 +215,15 @@
         "type_hierarchy":       {"type": "array", "items": {"$ref": "#/$defs/hierarchyEntry"}}
       },
       "description": "Path-based, so it needs no pack and works for a dependency published tomorrow. A boundary node enters the map because first-party code refers to it, never because a pack knows about it — otherwise every map on every site carries the same few hundred framework interfaces whether or not anything touches them."
+    },
+
+    "tables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {"type": "string", "minLength": 1}
+      },
+      "description": "Name tables by table name, each mapping a written name to a node name. A rule's lookup_last_segment_in step names a table this pack or a pack it depends on declares; this pack's table wins over a dependency's of the same name."
     }
   },
 

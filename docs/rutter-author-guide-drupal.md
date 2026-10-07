@@ -173,6 +173,32 @@ the key itself, the service's name.
   confidence: declared
 ```
 
+## A rule read on one ending
+
+`drupal_basic` claims the endings module, install, inc, theme and profile for PHP. `match.ending`
+narrows a rule to the files of one ending, or of any in a list, written without the dot. With no
+`ending`, every file the type claims passes. The rule for a theme's include files reads only `.inc`
+files, so the theme's own `.theme` file leaves no skipped row:
+
+```yaml drupal_basic@0.3.0/hook/hook_theme_include.yaml
+- rule: hook_from_theme_include
+  reads: file
+  in:
+  - theme_root
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: inc}
+  id: {from: declared_name, pattern: '^{theme_name}_(?<hook>\w+)$', template: '{hook}'}
+  emits:
+  - node:
+      type: drupal.hook
+  confidence: inferred
+```
+
+`match.file` globs the stem, the name less its ending, so it cannot tell two endings apart.
+A declaration, text or reference rule takes `ending`. An ending that no loaded pack claims refuses
+the map with exit 26, and the problem lists the endings that are claimed. `periplus map` checks
+this, and `periplus validate` does not. An ending that only another file type claims passes the
+check and reads nothing. Check 99m-drupal-hooks proves the rule.
+
 ## Where to look when the map misses a thing
 
 Run these in a Drupal project that names `drupal_basic` in its settings:

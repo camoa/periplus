@@ -3,7 +3,8 @@
 # src/Plugin/AdvancedQueue/JobType folder, a class with the AdvancedQueueJobType attribute and one
 # with the AdvancedQueueJobType annotation each make the job type named by its id, joined to its
 # class by plugin_class; both end at the same node type. An attribute whose id is not a text
-# literal makes no job type and is listed under skipped. The map and the report are byte-identical
+# literal makes no job type and is listed under skipped; a constant declared by expression gets its
+# own reason. The map and the report are byte-identical
 # across two runs, the report but for the map path it names.
 set -euo pipefail
 work="$(mktemp -d)"
@@ -58,7 +59,7 @@ use Drupal\advancedqueue\Plugin\AdvancedQueue\JobType\JobTypeBase;
   id: self::ID,
 )]
 class ComputedJob extends JobTypeBase {
-  const ID = 'computed';
+  const ID = 'comp' . 'uted';
 }
 EOF
 printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - advancedqueue_basic@0.0.1\n' \
@@ -124,7 +125,7 @@ assert edges == sorted([
 skipped = sorted((row["file"], row["line"], row["rule"], row["reason"]) for row in report["skipped"])
 assert skipped == [
     (computed, line(computed, "#[AdvancedQueueJobType("), "queue_job_type_from_attribute",
-     "argument id is not a text literal"),
+     "argument id is a class constant with no declared text"),
 ], skipped
 PY
 echo "advancedqueue pack ok"

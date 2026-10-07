@@ -77,6 +77,61 @@ Confidence is `declared`: the call is written in the file. The grammar's imports
 [Import paths and call arguments](rutter-author-guide-imports.md) covers `name_matches` and the keys
 that read a call's argument.
 
+## A name looked up in a table
+
+A written name that no file declares, such as the method of a `\Drupal::` shortcut, can still name
+its end through a table the rutter carries. `tables` is a top-level key of `pack.yaml`: a map from
+a table's name to a map of written name to node name. The Drupal pack declares two:
+
+```yaml drupal_basic@0.3.0/pack.yaml
+# Name tables that call/call.yaml looks a written name up in.
+tables:
+  # Each static method of core's Drupal class, as of Drupal 11.4, that gets one fixed service from
+  # the container, and that service. cache() names its service by its argument and is left out.
+  shortcut_services:
+    accessManager: access_manager
+    classResolver: class_resolver
+    config: config.factory
+```
+
+The resolution step `lookup_last_segment_in: <table>` splits the name at the end's `separator` and
+looks its last segment up in the table; with no separator, the whole name is the segment. When the
+segment is a key, the step gives that key's value alone. When it is not, the next step runs, and
+when none holds, the end goes under `skipped`: no resolution step holds for its `name_child`. A rule
+may name its own pack's tables and those of the packs it depends on. Of two tables with one name,
+the nearer pack's wins whole, so a key that only the farther one holds is not found. A step naming
+a table that none of them declares refuses the map with exit 26, naming the `tables` key.
+`periplus map` checks this; `periplus validate`, which checks the schemas only, does not.
+
+```yaml drupal_basic@0.3.0/call/call.yaml
+# \Drupal::logger('my_module'), \Drupal::currentUser() and the other shortcuts, to the service the
+# table shortcut_services gives for the method's name. Inferred: the table, not the file, names the
+# service. The methods other rules read, and getContainer, are left to them.
+- rule: drupal_shortcut_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: '(?!(?:service|getContainer|entityQuery(?:Aggregate)?)$)\w+'}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: shortcut_services], types: [drupal.service]}
+  confidence: inferred
+```
+
+`\Drupal::logger('x')` ends at `drupal.service::logger.factory`. The end has no `on_miss`, so a
+service that no mapped file declares is `referenced`. The rule `entity_class_static_call` beside it
+looks a class's short name up in the table `entity_classes`, for `load`, `loadMultiple` and
+`create`. A short name is not a class: a project class named like a core one, such as a module's
+own `User`, gives a false `uses_entity_type` edge, and a `load` or `create` call on any other
+capitalised class leaves a skipped row. Check 99s-drupal-table-step proves the two rules.
+
 ## Two declaration rules on one tree node
 
 Two packs may each match one tree node with a declaration rule, as a Laravel rutter does beside

@@ -168,6 +168,25 @@ def run_file_rules(
     skipped: list[Skipped] = []
     selected: dict[tuple[str, str], set[str]] = {}
     file_types = FileTypes.build(packs, selection.extensions)
+    constants: dict[tuple[str, str], str] = {}
+    # Every file a tree rule reads is parsed and its constants collected before any rule runs, so
+    # a constant declared in a file read after its use is found.
+    for rule in rule_set.rules:
+        grammar = rule_set.grammars.get(rule.filetype)
+        tree_rule = rule.declaration or rule.attribute or rule.annotation or rule.reference
+        if not (rule.supported and rule.text is None and tree_rule and grammar):
+            continue
+        if not grammar.constant_declaration:
+            continue
+        info = rule_set.files.get(rule.filetype, FileInfo())
+        holders = _holder_rules(rule_set, rule.filetype, frozenset(p.name.pack for p in packs))
+        for file, _, _ in _matches(root, rule, packs, folders, selection, read, removed):
+            own = (file, rule.filetype)
+            if own not in paths:
+                paths[own] = {**rule_set.values, **_path_values(file, info, rule_set, folders)}
+            if file not in trees:
+                trees[file] = parse_file(root / file, grammar, paths[own], constants)
+                _collect(trees[file], grammar, holders, rule_set, constants)
     for rule in sorted(rule_set.rules, key=lambda one: not one.bindings):
         if not rule.supported:
             continue
@@ -190,7 +209,7 @@ def run_file_rules(
             if rule.declaration or rule.attribute or rule.annotation or rule.reference:
                 grammar = rule_set.grammars[rule.filetype]
                 if file not in trees:
-                    trees[file] = parse_file(root / file, grammar, paths[own])
+                    trees[file] = parse_file(root / file, grammar, paths[own], constants)
                 within = _within(rule.pack, packs)
                 tree = (grammar, file, trees[file], within)
                 if rule.reference:
@@ -270,6 +289,7 @@ def _texts(
     fired = 0
     names = {name: target for _, name, target in sorted(bound, key=lambda one: one[0])}
     info = rule_set.files.get(rule.filetype, FileInfo())
+    tables = rule_set.tables.get(rule.pack, {})
     for found in _outside(pattern, text, sections, rule.reads_sections):
         values = {name: value for name, value in found.groupdict().items() if value is not None}
         lines = {name: text.count("\n", 0, found.start(name)) + 1 for name in values}
@@ -295,7 +315,9 @@ def _texts(
             values.get(rule.id_capture) if rule.id_capture else _fill(rule.id_template, present)
         )
         if node_id and rule.id_resolve:
-            node_id = resolve_name(node_id, rule.id_resolve, rule.id_separator, names, present)
+            node_id = resolve_name(
+                node_id, rule.id_resolve, rule.id_separator, names, present, tables=tables
+            )
         if not node_id:
             continue
         node_id = _reshape(node_id, rule.normalize)
@@ -341,7 +363,9 @@ def _texts(
                 continue
             steps = spec if spec.resolve else info
             if steps.resolve:
-                end = resolve_name(end, steps.resolve, steps.separator, names, present)
+                end = resolve_name(
+                    end, steps.resolve, steps.separator, names, present, tables=tables
+                )
             if not end:
                 reason = f"no resolution step holds for {lacking or spec.template}"
                 skipped.append((file, line, rule.name, f"edge {spec.kind}: {reason}"))
@@ -539,7 +563,7 @@ def _declarations(
             values["enclosing_type"], holder_id = holder
         node_id: str | None
         if rule.id_argument:
-            node_id, row = _call_id(match, rule, grammar)
+            node_id, row = _call_id(match, rule, grammar, parsed, holder[0] if holder else None)
             if node_id is None:
                 skipped.append((file, line, rule.name, row))
                 continue
@@ -675,8 +699,10 @@ def _attributes(
             continue
         line = line_of(match)
         node_id = ""
+        holder = _holder(match, holders, rule_set, grammar, parsed)
+        enclosing = holder[0] if holder else None
         if rule.id_argument:
-            value, text, row = _argument(match, rule.id_argument, grammar)
+            value, text, row = _argument(match, rule.id_argument, grammar, parsed, enclosing)
             if value is not None and text is None and not rule.must_be_literal:
                 text = text_of(value)
             if not text:
@@ -688,7 +714,9 @@ def _attributes(
         before, silent, skipped_before = len(nodes) + len(edges), 0, len(skipped)
         if rule.node_type:
             read = ((name, argument_of(match, key, grammar)) for name, key in rule.attributes)
-            found = ((name, literal_of(v, grammar), line_of(v)) for name, v in read if v)
+            found = (
+                (name, _literal(v, grammar, parsed, enclosing), line_of(v)) for name, v in read if v
+            )
             nodes.append(
                 FoundNode(
                     id=f"{namespace_of(types, rule.node_type)}::{node_id}",
@@ -701,7 +729,6 @@ def _attributes(
                     attributes=tuple(a for a in found if a[1] is not None),
                 )
             )
-        holder = _holder(match, holders, rule_set, grammar, parsed)
         method = None
         if owner.type not in holders and holder is not None:
             method = _minted(owner, holder[0], rule.filetype, rule_set, within, grammar, parsed)
@@ -720,7 +747,9 @@ def _attributes(
                     ends.append(method)
                 else:
                     value = argument_of(match, spec.key, grammar)
-                    text = literal_of(value, grammar) if value is not None else None
+                    text = (
+                        _literal(value, grammar, parsed, enclosing) if value is not None else None
+                    )
                     ends.append(f"{namespace}::{text}" if text is not None else None)
                     end, absent = f"argument {spec.key}", value is None
                 silent += absent
@@ -897,22 +926,85 @@ def _fires(rule: Rule, node: Node) -> bool:
 
 
 def _argument(
-    node: Node, key: str, grammar: Grammar, call: bool = False
+    node: Node,
+    key: str,
+    grammar: Grammar,
+    parsed: ParsedFile,
+    holder: str | None,
+    call: bool = False,
 ) -> tuple[Node | None, str | None, str]:
     """The attribute's or, with ``call``, the call's argument at the key, ``None`` when missing;
-    its text literal, ``None`` when it is not one; and the skipped row for no text."""
+    its text, as ``_literal`` reads it, ``None`` when it has none; and the skipped row for no
+    text."""
     value = argument_of(node, key, grammar, call)
-    literal = literal_of(value, grammar, call) if value is not None else None
+    literal = _literal(value, grammar, parsed, holder, call) if value is not None else None
     state = (
-        "is missing" if value is None else "is empty" if literal == "" else "is not a text literal"
+        "is missing"
+        if value is None
+        else "is empty"
+        if literal == ""
+        else "is a class constant with no declared text"
+        if value.type == grammar.constant_access
+        else "is not a text literal"
     )
     return value, literal, f"argument {key} {state}"
 
 
-def _call_id(node: Node, rule: Rule, grammar: Grammar) -> tuple[str | None, str]:
+def _literal(
+    value: Node, grammar: Grammar, parsed: ParsedFile, holder: str | None, call: bool = False
+) -> str | None:
+    """The text of a text literal; for a class constant access, the text the run collected for
+    that constant, its scope resolved as a written name, or else the enclosing class ``holder``
+    when the grammar's enclosing scope texts name this one; ``None`` for any other node, any
+    other scope, or a constant with no collected text."""
+    if value.type != grammar.constant_access:
+        return literal_of(value, grammar, call)
+    named = value.named_children
+    if (
+        len(named) < 2
+        or named[0].type not in grammar.constant_scope
+        or named[-1].type not in grammar.constant_name
+    ):
+        return None
+    if named[0].type in grammar.written:
+        scope = parsed.resolve(named[0], grammar)
+    elif text_of(named[0]) in grammar.constant_enclosing:
+        scope = holder
+    else:
+        return None
+    return parsed.constants.get((scope, text_of(named[-1]))) if scope is not None else None
+
+
+def _collect(
+    parsed: ParsedFile,
+    grammar: Grammar,
+    holders: Mapping[str, tuple[Rule, ...]],
+    rule_set: RuleSet,
+    constants: dict[tuple[str, str], str],
+) -> None:
+    """Each class constant of the file whose value is a text literal into ``constants``, by the
+    full name of its enclosing type declaration and its name; of two, the first read stays."""
+    for node in parsed.by_type.get(grammar.constant_declaration, ()):
+        named = node.named_children
+        holder = _holder(node, holders, rule_set, grammar, parsed)
+        if (
+            len(named) < 2
+            or holder is None
+            or named[0].type not in grammar.constant_declared_name
+            or named[-1].type not in grammar.constant_value
+        ):
+            continue
+        text = literal_of(named[-1], grammar, call=True)
+        if text is not None:
+            constants.setdefault((holder[0], text_of(named[0])), text)
+
+
+def _call_id(
+    node: Node, rule: Rule, grammar: Grammar, parsed: ParsedFile, holder: str | None
+) -> tuple[str | None, str]:
     """The bare id the rule's call argument gives at the node, ``None`` when it holds no text;
     and the skipped row for no text."""
-    _, literal, row = _argument(node, rule.id_argument, grammar, call=True)
+    _, literal, row = _argument(node, rule.id_argument, grammar, parsed, holder, call=True)
     return (_reshape(literal, rule.normalize) if literal else None), row
 
 
@@ -970,7 +1062,7 @@ def _minted(
         if values is None:
             continue
         if rule.id_argument:
-            node_id, _ = _call_id(node, rule, grammar)
+            node_id, _ = _call_id(node, rule, grammar, parsed, holder)
         else:
             node_id = _node_id(
                 rule, values if holder is None else {**values, "enclosing_type": holder}
@@ -1240,6 +1332,7 @@ def _references(
             )
         ):
             declared.setdefault(other.declaration, []).append(other)
+    tables = rule_set.tables.get(rule.pack, {})
     fired = 0
     for match in parsed.by_type.get(rule.reference, ()):
         if not _fires(rule, match):
@@ -1268,7 +1361,9 @@ def _references(
             separator = spec.separator or grammar.separator
             reason = f"no resolution step holds for {rule.name_child}"
             if spec.key:
-                _, name, row = _argument(match, spec.key, grammar, call=True)
+                holder = _holder(match, holders, rule_set, grammar, parsed)
+                enclosing = holder[0] if holder else None
+                _, name, row = _argument(match, spec.key, grammar, parsed, enclosing, call=True)
                 name = name or None
                 reason = reason if name is not None else row
             else:
@@ -1276,7 +1371,7 @@ def _references(
                 if name is not None and member is not None:
                     name = separator.join((name, text_of(member)))
             if name is not None and spec.resolve:
-                name = resolve_name(name, spec.resolve, separator, bindings, known)
+                name = resolve_name(name, spec.resolve, separator, bindings, known, tables=tables)
             names.append(name)
             reasons.append(reason)
         if names and not any(names):
@@ -1518,6 +1613,7 @@ def _matches(
     for file in kept:
         claimed = types.claim(posixpath.basename(file))
         names, stem = claimed if claimed is not None else (frozenset(), "")
-        if fnmatchcase(stem, rule.glob):
+        ending = posixpath.basename(file)[len(stem) + 1 :]
+        if fnmatchcase(stem, rule.glob) and (not rule.endings or ending in rule.endings):
             matched.append((file, stem, names))
     return matched

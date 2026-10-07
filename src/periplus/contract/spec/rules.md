@@ -145,6 +145,11 @@ The rule names the file and declares the type. The pack that owns the language c
 extensions — `[yml, yaml]` — so a site keeping config as `.yaml` needs no rule change, and
 a glob can never accidentally match a file of another type sharing a name.
 
+`match.ending` is the one place a rule names an ending, and only one a pack already claims: it
+keeps the files of that ending, or of any in a list, where the glob, which reads the stem, cannot
+tell `.inc` from `.theme`. An ending that no loaded pack claims is refused, and the refusal lists
+the claimed endings.
+
 ---
 
 ## 8. Confidence is declared on the rule, never computed
@@ -197,6 +202,15 @@ names the end; when no rule maps that id, the end is a referenced node of the na
 The end does not test the other rule's folders. It, `enclosing_class` and `enclosing_method` take
 another rule's whole id, so an end filled only by whole ids may list types with different id
 namespaces.
+
+An end may also find its name in a table the pack carries. `tables`, a top-level key of
+`pack.yaml`, maps a table's name to a map of written name to node name; the resolution step
+`lookup_last_segment_in: <table>` gives the value of the name's last segment, and a rule may name
+the tables of its pack and of the packs it depends on, the nearer pack's winning. A step naming a
+table none of them declares is refused, naming the `tables` key. The table is data, so the engine
+still holds no language knowledge. An end read `{argument: N}` also takes a class constant
+declared as text, when the grammar block declares `constant_access` and `constant_declaration`,
+the node types of a constant read and of a declaration; one without the other is refused.
 
 ---
 

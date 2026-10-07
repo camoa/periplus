@@ -49,11 +49,15 @@ _RESOLVE = (
     *(".resolve.*.prefix_bare_with", ".separator"),
 )
 
+#: The key paths, below a rule's id or edge end, of the steps that look a name up in a table.
+_TABLE_STEPS = (".resolve.*.lookup_last_segment_in",)
+
 #: Every key path of the two pack schemas that the engine or the pack check executes. ``*`` is one
 #: key or item. A path starts with the document it sits in: ``manifest.`` or ``file.``.
 EXECUTED_KEYS = frozenset(
     {
         *(f"manifest.{k}" for k in ("pack", "version", "depends", "folders", "identity")),
+        "manifest.tables",
         *(f"manifest.identity.call_{k}" for k in ("arguments", "argument", "argument_name")),
         *(f"manifest.identity.call_literal{k}" for k in ("s", "_content", "_delimiters")),
         *(f"manifest.detect{k}" for k in ("", ".any_of", ".any_of.*.path", ".any_of.*.contains")),
@@ -61,6 +65,11 @@ EXECUTED_KEYS = frozenset(
             f"manifest.grammar{k}"
             for k in ("", ".provider", ".provider_version", ".language", ".grammar_version")
         ),
+        *(
+            f"manifest.grammar.constant_access{k}"
+            for k in ("", ".node", ".scope", ".name", ".enclosing")
+        ),
+        *(f"manifest.grammar.constant_declaration{k}" for k in ("", ".node", ".name", ".value")),
         *(
             f"manifest.files{k}"
             for k in (
@@ -101,7 +110,7 @@ EXECUTED_KEYS = frozenset(
         *(
             f"{_RULE}match.{k}"
             for k in (
-                *("file", "filetype", "each", "where", "declaration", "name_child"),
+                *("file", "ending", "filetype", "each", "where", "declaration", "name_child"),
                 *("reference", "skip_names", "whole_written"),
                 *("body_child", "attribute", "annotation", "text", "reads_sections"),
             )
@@ -119,7 +128,7 @@ EXECUTED_KEYS = frozenset(
                 *("template", "must_be", "normalize", "normalize.*.replace", "normalize.*.with"),
             )
         ),
-        *(f"{_RULE}id{k}" for k in _RESOLVE),
+        *(f"{_RULE}id{k}" for k in (*_RESOLVE, *_TABLE_STEPS)),
         *(f"{_RULE}emits.*.binding{k}" for k in ("", ".name", ".target")),
         *(f"{_RULE}emits.*.{k}" for k in ("node", "node.type", "attribute", "attribute.name")),
         *(f"{_RULE}emits.*.{k}" for k in ("attribute.from", "attribute.template", "edge")),
@@ -133,6 +142,7 @@ EXECUTED_KEYS = frozenset(
                 *("", ".from", ".template", ".type", ".each", ".pattern", ".where", ".on_miss"),
                 *(".where.*.matches", ".where.*.listed_at", ".from.key", ".from.capture"),
                 *(".from.*.key", ".from.*.each", ".types", ".declared", *_RESOLVE),
+                *_TABLE_STEPS,
             )
         ),
     }
@@ -200,7 +210,9 @@ def _holds(value: object, segments: Sequence[str]) -> bool:
 _RULE_KEYS = {"rule", "reads", "in", "match", "id", "emits", "confidence"}
 
 #: The match keys of a rule that reads a parse tree.
-_DECLARATION_MATCH = {"declaration", "name_child", "body_child", "where", "filetype", "file"}
+_DECLARATION_MATCH = {
+    *("declaration", "name_child", "body_child", "where", "filetype", "file", "ending"),
+}
 
 #: The names the engine fills for a declaration rule's id. Any other name its template holds is a
 #: path value, a settings value or a field of the matched node.
@@ -396,6 +408,9 @@ class Rule:
     id_separator: str = ""
     #: A text rule's ``line`` capture: the node, its values and templates sit at its line.
     line_capture: str = ""
+    #: A declaration, text or reference rule's ``match.ending``: the claimed endings of the files
+    #: it reads; empty for any.
+    endings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -456,6 +471,7 @@ class RuleSet:
 
     ``grammars`` holds, for each file type a supported tree rule reads, the grammar of its pack.
     ``values`` holds the project's settings values, which every template may name.
+    ``tables`` holds, for each pack, the tables its table steps may name.
     """
 
     rules: tuple[Rule, ...]
@@ -465,6 +481,7 @@ class RuleSet:
     grammars: Mapping[str, Grammar] = field(default_factory=dict)
     files: Mapping[str, FileInfo] = field(default_factory=dict)
     values: Mapping[str, str] = field(default_factory=dict)
+    tables: Mapping[str, Mapping[str, Mapping[str, str]]] = field(default_factory=dict)
 
 
 def load_rules(
@@ -492,6 +509,7 @@ def load_rules(
     sources: list[str] = []
     siblings: dict[str, list[Mapping[str, Any]]] = {}
     imports: dict[str, list[Mapping[str, Any]]] = {}
+    tables = _tables(packs)
     for pack in packs:
         for relative, node in _yaml_files(pack.directory):
             if relative == MANIFEST_FILENAME:
@@ -508,7 +526,7 @@ def load_rules(
             )
             imports.setdefault(pack.name.pack, []).extend(document.get("imports", []))
             for item in document.get("rules", []):
-                rules.append(_read_rule(pack.name.pack, item))
+                rules.append(_read_rule(pack.name.pack, item, frozenset(tables[pack.name.pack])))
                 items.append(item)
                 sources.append(relative)
                 siblings.setdefault(pack.name.pack, []).append(item)
@@ -518,7 +536,7 @@ def load_rules(
         for rule, item in zip(rules, items, strict=True)
     ]
     file_types = FileTypes.build(packs, {})
-    rules = [_check_reader(rule, file_types) for rule in rules]
+    rules = [_check_ending(_check_reader(rule, file_types), file_types) for rule in rules]
     files = _file_info(packs)
     rules = [_check_names(rule, files.get(rule.filetype, FileInfo()), values) for rule in rules]
     conflicts.extend(_collisions(rules, sources, files, packs, values, origins or {}))
@@ -557,7 +575,32 @@ def load_rules(
         grammars=grammars,
         files=files,
         values=values,
+        tables=tables,
     )
+
+
+def _tables(packs: Sequence[LoadedPack]) -> dict[str, dict[str, Mapping[str, str]]]:
+    """The tables of each pack and of every pack it depends on, directly or not; of two tables of
+    one name, the one of the pack nearer in the walk from the pack wins."""
+    declared: dict[str, Mapping[str, Mapping[str, str]]] = {}
+    for p in packs:
+        own = p.manifest.document.get("tables")
+        declared[p.name.pack] = own if isinstance(own, Mapping) else {}
+    depends = {p.name.pack: [d.partition("@")[0] for d in p.manifest.depends] for p in packs}
+    found: dict[str, dict[str, Mapping[str, str]]] = {}
+    for pack in declared:
+        visible: dict[str, Mapping[str, str]] = {}
+        seen: set[str] = set()
+        pending = [pack]
+        while pending:
+            name = pending.pop(0)
+            if name not in seen:
+                seen.add(name)
+                for table, entries in declared.get(name, {}).items():
+                    visible.setdefault(table, entries)
+                pending.extend(depends.get(name, []))
+        found[pack] = visible
+    return found
 
 
 def _file_info(packs: Sequence[LoadedPack]) -> dict[str, FileInfo]:
@@ -850,15 +893,38 @@ def _check_reader(rule: Rule, types: FileTypes) -> Rule:
     return replace(rule, supported=False, reason=reason + ", ".join(sorted(readers)))
 
 
+def _check_ending(rule: Rule, types: FileTypes) -> Rule:
+    """The rule, marked not executed when its ``match.ending`` names an ending no pack claims."""
+    claimed = sorted({ending for kind in types.types for ending in kind.endings})
+    unclaimed = [ending for ending in rule.endings if ending not in claimed]
+    if not rule.supported or not unclaimed:
+        return rule
+    reason = f"match.ending names {', '.join(unclaimed)}, which no pack claims; the claimed "
+    return replace(rule, supported=False, reason=reason + f"endings are {', '.join(claimed)}")
+
+
 def _grammar(
     filetype: str, packs: Sequence[LoadedPack], imports: Mapping[str, list[Mapping[str, Any]]]
 ) -> Grammar:
     """The grammar of the pack that declares the file type read as a tree, and pins one.
 
     Its ``identity`` block, an open object in the manifest schema, gives the full-name parts and
-    separator, the namespace declaration and its name field, and the written-name node types.
+    separator, the namespace declaration and its name field, and the written-name node types. The
+    class constant keys come from the ``grammar`` block of the first pack that reads the file type
+    and declares them; the manifest schema refuses one without the other.
     """
     owners = {kind.pack for kind in FileTypes.build(packs, {}).named(filetype)}
+    constants: Mapping[str, Any] = next(
+        (
+            block
+            for pack in packs
+            for block in [pack.manifest.document.get("grammar")]
+            if pack.name.pack in owners
+            and isinstance(block, Mapping)
+            and "constant_access" in block
+        ),
+        {},
+    )
     for pack in packs:
         document = pack.manifest.document
         grammar, identity = document.get("grammar"), document.get("identity")
@@ -878,6 +944,8 @@ def _grammar(
         try:
             qualified, namespace = identity["qualified_name"], identity["namespace"]
             attribute = identity.get("attribute", {})
+            access = constants.get("constant_access", {})
+            declaration = constants.get("constant_declaration", {})
             if "path_value" in namespace:
                 namespace = {"declaration": "", "name_child": "", **namespace}
             return Grammar(
@@ -906,6 +974,13 @@ def _grammar(
                 call_literal_delimiters=frozenset(
                     map(str, identity.get("call_literal_delimiters", []))
                 ),
+                constant_access=str(access.get("node", "")),
+                constant_scope=frozenset(map(str, access.get("scope", []))),
+                constant_name=frozenset(map(str, access.get("name", []))),
+                constant_enclosing=frozenset(map(str, access.get("enclosing", []))),
+                constant_declaration=str(declaration.get("node", "")),
+                constant_declared_name=frozenset(map(str, declaration.get("name", []))),
+                constant_value=frozenset(map(str, declaration.get("value", []))),
             )
         except (KeyError, TypeError) as error:
             raise unread from error
@@ -1073,19 +1148,20 @@ class _Unsupported(Exception):
     """A rule shape the engine does not execute, with the reason."""
 
 
-def _read_rule(pack: str, item: Any) -> Rule:
-    """The rule as a record; ``supported`` holds only for the shapes the engine runs."""
+def _read_rule(pack: str, item: Any, tables: frozenset[str] = frozenset()) -> Rule:
+    """The rule as a record; ``supported`` holds only for the shapes the engine runs. ``tables``
+    names the tables its steps may name."""
     name = str(item.get("rule")) if isinstance(item, Mapping) else ""
     try:
         keys = unexecuted(item, _RULE)
         if keys:
             raise _Unsupported(f"the key {', '.join(keys)} is accepted and not executed")
-        return _build_rule(pack, item)
+        return _build_rule(pack, item, tables)
     except _Unsupported as reason:
         return Rule(pack, name, False, (), "", "", "", "", reason=str(reason))
 
 
-def _build_rule(pack: str, item: Any) -> Rule:
+def _build_rule(pack: str, item: Any, tables: frozenset[str]) -> Rule:
     if (
         isinstance(item.get("id"), Mapping)
         and "pattern" in item["id"]
@@ -1093,13 +1169,13 @@ def _build_rule(pack: str, item: Any) -> Rule:
     ):
         raise _Unsupported("only the id of a tree declaration rule takes a pattern")
     if "text" in item["match"]:
-        return _build_text(pack, item)
+        return _build_text(pack, item, tables)
     if isinstance(item.get("id"), Mapping) and {"resolve", "separator"} & set(item["id"]):
         raise _Unsupported("only the id of a text rule takes resolution steps")
     if "declaration" in item["match"]:
         return _build_declaration(pack, item)
     if "reference" in item["match"]:
-        return _build_reference(pack, item)
+        return _build_reference(pack, item, tables)
     if "attribute" in item["match"] or "annotation" in item["match"]:
         return _build_attribute(pack, item)
     shape = _Unsupported("the rule has a shape the engine does not execute")
@@ -1155,7 +1231,7 @@ def _build_rule(pack: str, item: Any) -> Rule:
     )
 
 
-def _build_text(pack: str, item: Mapping[str, Any]) -> Rule:
+def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> Rule:
     """A rule that reads its file as text and fires on each match of ``match.text``. The id comes
     from one capture or a template; each attribute from one capture, one value or a template; each
     edge runs between this_node and an end from one capture or a template, in either direction.
@@ -1171,7 +1247,7 @@ def _build_text(pack: str, item: Mapping[str, Any]) -> Rule:
         not _RULE_KEYS - {"id"} <= set(item) <= {*_RULE_KEYS, "values", "line"}
         or item["reads"] != "file"
         or not {"file", "filetype", "text"} <= set(match)
-        or not set(match) <= {"file", "filetype", "text", "reads_sections"}
+        or not set(match) <= {"file", "ending", "filetype", "text", "reads_sections"}
         or not isinstance(block, Mapping)
         or not set(block) <= {"from", "template", "normalize", "resolve", "separator"}
         or len({"from", "template"} & set(block)) != 1
@@ -1180,8 +1256,8 @@ def _build_text(pack: str, item: Mapping[str, Any]) -> Rule:
     ):
         raise _Unsupported(
             "a text rule is not a file rule with in, an id from one capture or a template, and "
-            "match.file, match.filetype and match.text, with optional reads_sections, values "
-            "and line"
+            "match.file, match.filetype and match.text, with optional ending, reads_sections, "
+            "values and line"
         )
     pattern = _regex(match["text"])
     values = item.get("values", {})
@@ -1254,7 +1330,7 @@ def _build_text(pack: str, item: Mapping[str, Any]) -> Rule:
                 finish="this_node" if flipped else "",
                 to_type=end.get("type", next(iter(end.get("types", [])), "")),
                 on_miss="on_miss" in end,
-                resolve=_read_steps(end.get("resolve", [])),
+                resolve=_read_steps(end.get("resolve", []), tables),
                 separator=str(end.get("separator", "")),
                 types=tuple(end.get("types", ())),
             )
@@ -1272,6 +1348,7 @@ def _build_text(pack: str, item: Mapping[str, Any]) -> Rule:
         supported=True,
         folders=tuple(item["in"]),
         glob=match["file"],
+        endings=_read_ending(match),
         filetype=match["filetype"],
         node_type=nodes[0] if nodes else "",
         confidence=item["confidence"],
@@ -1285,14 +1362,15 @@ def _build_text(pack: str, item: Mapping[str, Any]) -> Rule:
         reads_sections=tuple(str(name) for name in match.get("reads_sections", [])),
         templates=tuple(templates),
         bindings=tuple((b["name"], b["target"]) for b in bindings),
-        id_resolve=_read_steps(block.get("resolve", [])),
+        id_resolve=_read_steps(block.get("resolve", []), tables),
         id_separator=str(block.get("separator", "")),
         line_capture=line,
     )
 
 
-def _read_steps(steps: object) -> tuple[Step, ...]:
-    """Resolution steps: each a kind that takes no text, or a mapping of one kind to its text."""
+def _read_steps(steps: object, tables: frozenset[str] = frozenset()) -> tuple[Step, ...]:
+    """Resolution steps: each a kind that takes no text, or a mapping of one kind to its text. A
+    table step's text is one of ``tables``."""
     read: list[Step] = []
     for step in steps if isinstance(steps, list) else [None]:
         pair = next(iter(step.items()), (None, "")) if isinstance(step, Mapping) else (step, "")
@@ -1305,7 +1383,13 @@ def _read_steps(steps: object) -> tuple[Step, ...]:
         ):
             raise _Unsupported(
                 "a resolution step is not bound_first_segment, as_written, or one of "
-                "full_if_prefixed, prefix_with and prefix_bare_with with its text"
+                "full_if_prefixed, prefix_with, prefix_bare_with and lookup_last_segment_in with "
+                "its text"
+            )
+        if kind.startswith("lookup_") and text not in tables:
+            raise _Unsupported(
+                f"the resolution step {kind} names {text}, which no tables key of the pack or a "
+                "pack it depends on declares"
             )
         read.append((kind, text))
     return tuple(read)
@@ -1367,7 +1451,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
     ):
         raise _Unsupported(
             "a declaration rule is not a file rule with in, match.filetype and no match keys "
-            "beyond declaration, name_child, body_child, where and file"
+            "beyond declaration, name_child, body_child, where, file and ending"
         )
     where = match.get("where", [])
     if not isinstance(where, list) or not all(
@@ -1421,6 +1505,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         id_source=str(block["from"]) if pattern else "",
         normalize=_read_normalize(item["id"].get("normalize", [])) if "id" in item else (),
         declaration=match["declaration"],
+        endings=_read_ending(match),
         name_child=match.get("name_child", ""),
         body_child=match.get("body_child", ""),
         has_child=tuple(c["has_child"] for c in where if "has_child" in c),
@@ -1429,13 +1514,19 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
     )
 
 
+def _read_ending(match: Mapping[str, Any]) -> tuple[str, ...]:
+    """A rule's ``match.ending``, one ending or a list of them; empty when absent."""
+    ending = match.get("ending", [])
+    return (ending,) if isinstance(ending, str) else tuple(ending)
+
+
 def _types_ok(end: Mapping[str, Any]) -> bool:
     """Whether an end gives ``type`` or a list of ``types``, not both."""
     listed = end.get("types", [])
     return not {"type", "types"} <= set(end) and all(isinstance(t, str) for t in listed)
 
 
-def _build_reference(pack: str, item: Mapping[str, Any]) -> Rule:
+def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> Rule:
     """A rule that fires on each tree node of the ``reference`` type: an edge from the node the
     nearest enclosing declaration was given to the name its ``name_child`` writes."""
     match, emits = item["match"], item["emits"]
@@ -1445,7 +1536,10 @@ def _build_reference(pack: str, item: Mapping[str, Any]) -> Rule:
         set(item) != _RULE_KEYS - {"id"}
         or item["reads"] != "file"
         or not set(match)
-        <= {"reference", "name_child", "filetype", "file", "skip_names", "whole_written", "where"}
+        <= {
+            *("reference", "name_child", "filetype", "file", "ending"),
+            *("skip_names", "whole_written", "where"),
+        }
         or "filetype" not in match
         or not fields
         or not all(isinstance(field, str) for field in fields)
@@ -1489,7 +1583,7 @@ def _build_reference(pack: str, item: Mapping[str, Any]) -> Rule:
                 start="enclosing_declaration",
                 to_type=end.get("type", next(iter(end.get("types", [])), "")),
                 on_miss="on_miss" in end,
-                resolve=_read_steps(end.get("resolve", [])),
+                resolve=_read_steps(end.get("resolve", []), tables),
                 separator=str(end.get("separator", "")),
                 # The one-type form is a list of that one type.
                 types=tuple(end.get("types", ())) or tuple(end.get("type", "").split()),
@@ -1508,6 +1602,7 @@ def _build_reference(pack: str, item: Mapping[str, Any]) -> Rule:
         id_template="",
         name_child=fields[0],
         reference=match["reference"],
+        endings=_read_ending(match),
         member_child=fields[1] if len(fields) > 1 else "",
         skip_names=frozenset(match.get("skip_names", ())),
         whole_written=match.get("whole_written") is True,

@@ -16,10 +16,21 @@ RUN = {
     *(f"{RULE}values{k}" for k in (*VALUE, ".*.from", ".*.from.capture", ".*.case")),
     f"{RULE}match.reads_sections",
     f"{RULE}match.skip_names",
+    f"{RULE}match.ending",
     f"{RULE}match.where.*.has_child",
     f"{RULE}emits.*.attribute.template",
     *(f"{RULE}emits.*.edge.{end}.on_miss" for end in ("from", "to")),
     *(f"{RULE}emits.*.edge.from{k}" for k in (".from", ".from.capture", ".template", ".type")),
+    "manifest.tables",
+    *(
+        f"{RULE}{holder}.resolve.*.lookup_last_segment_in"
+        for holder in ("id", "emits.*.edge.from", "emits.*.edge.to")
+    ),
+    *(
+        f"manifest.grammar.constant_access{k}"
+        for k in ("", ".node", ".scope", ".name", ".enclosing")
+    ),
+    *(f"manifest.grammar.constant_declaration{k}" for k in ("", ".node", ".name", ".value")),
 }
 
 

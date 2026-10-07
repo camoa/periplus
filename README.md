@@ -336,7 +336,10 @@ pass `periplus validate`, but they hold vocabulary only and cannot make a map.
 New in this release: `drupal_basic` 0.3.0, the eleven rutters for contributed Drupal modules,
 listed after it in the Drupal table, and the two JavaScript rutters, `js_basic` and
 `drupal_js_basic`. The AI and Advanced Queue plugins moved out of `drupal_basic` into their own
-rutters.
+rutters. Three new rutter shapes: a resolution step that looks a written name up in a table the
+rutter declares under `tables`, a call argument written as a class constant read through the
+grammar's `constant_access` and `constant_declaration` keys, and a rule narrowed to one file
+ending by `match.ending`.
 Settings `values` pass project facts, such as a Go module path, to a rutter.
 
 ## Tests and checks
