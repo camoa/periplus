@@ -1,0 +1,56 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An ECK bundle read from its config file eck.eck_type.<entity type>.<bundle> as the bundle
+# <entity type>.<bundle>, the id drupal_basic gives a field or display of it. The file names its
+# entity type only in its name, so both edges read it from the path value
+# eck_entity_type.
+
+rules:
+- rule: bundle_eck_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: eck.eck_type.*
+    filetype: yml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^eck\.eck_type\.', with: ''}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: name
+  confidence: declared
+- rule: bundle_eck_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: eck.eck_type.*
+    filetype: yml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^eck\.eck_type\.', with: ''}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: type
+        template: 'eck.eck_type.{eck_entity_type}.{type}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: type
+        template: '{eck_entity_type}'
+  confidence: declared

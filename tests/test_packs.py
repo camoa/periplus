@@ -39,19 +39,32 @@ from periplus.settings import (
     resolve_settings,
 )
 
-# The five packs that ship inside the wheel, in the code-point order discovery has to return them
+# The packs that ship inside the wheel, in the code-point order discovery has to return them
 # in. Written out rather than read off the directory, for the reason the packaging suite gives
 # about its own copy: a list derived from the thing under test agrees with any edit to it.
 BUNDLED_PACK_NAMES = [
+    "advancedqueue_basic@0.0.1",
+    "ai_basic@0.0.1",
+    "config_pages_basic@0.0.1",
+    "crop_basic@0.0.1",
     "drupal@0.1.0",
-    "drupal_basic@0.2.0",
+    "drupal_basic@0.3.0",
+    "drupal_js_basic@0.0.1",
+    "drush_basic@0.0.1",
+    "eck_basic@0.0.1",
     "go@0.0.2",
     "go_basic@0.0.3",
+    "js_basic@0.0.1",
     "laravel_basic@0.0.5",
+    "paragraphs_basic@0.0.1",
     "php@0.1.0",
     "php_basic@0.2.0",
+    "profile_basic@0.0.1",
+    "salesforce_basic@0.0.1",
     "twig@0.0.1",
     "twig_basic@0.1.0",
+    "twig_tweak_basic@0.0.1",
+    "webform_basic@0.0.1",
     "yaml@0.0.1",
     "yaml_basic@0.1.0",
 ]

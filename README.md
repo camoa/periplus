@@ -30,6 +30,7 @@ Periplus is not on PyPI yet. Install it from a local copy of this repository:
 ```
 uv tool install /path/to/periplus           # or: pip install /path/to/periplus
 uv tool install '/path/to/periplus[go]'     # adds the Go grammar that go_basic needs
+uv tool install '/path/to/periplus[js]'     # adds the JavaScript grammar that js_basic needs
 periplus --version
 ```
 
@@ -64,7 +65,7 @@ update Periplus, run `periplus update` to bring the pins to the installed versio
 ```yaml
 periplus_version: 0
 packs:
-  - drupal_basic@0.2.0
+  - drupal_basic@0.3.0
 folders:
   config: ./config/default
 ```
@@ -72,7 +73,7 @@ folders:
 The `folders` line moves the config folder from `drupal_basic`'s default, `./config/sync`. Leave
 it out when your site uses the default.
 
-In a Drupal project, `periplus init` writes the `drupal_basic@0.2.0` pin for you. It looks for
+In a Drupal project, `periplus init` writes the `drupal_basic@0.3.0` pin for you. It looks for
 `drupal/core` in `composer.json`, or for `web/core/lib/Drupal.php`. The rutters that
 `drupal_basic` depends on load without a pin of their own.
 
@@ -263,22 +264,56 @@ compared two machines or two operating systems yet.
 ## The rutters provided
 
 Bundled rutters load by name. Example rutters are copied into a project's `.periplus/packs`.
+The tables group them by language and by framework.
+
+### Languages and file types
 
 | Rutter | Version | What it finds |
 |---|---|---|
 | `php_basic` | 0.2.0 | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interfaces, traits, containment, and plain and static calls; a call to a PHP builtin function makes nothing. Reads a parse tree. |
-| `drupal_basic` | 0.2.0 | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays and plugins. The services and entity types that `\Drupal::service('x')`, `$container->get('x')`, `\Drupal::entityQuery('x')` and an entity type manager's `getStorage('x')` name in PHP functions and methods. Hooks from `Hook` attribute methods, and from procedural functions named by their file's name, such as `mymod_cron` in `mymod.module`. Depends on `php_basic`, `yaml_basic` and `twig_basic`. |
+| `js_basic` | 0.0.1 | JavaScript functions that have a name of their own, each under its script's path. Reads a parse tree. Needs the `js` extra. |
+| `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. Reads a parse tree. Needs the `go` extra. |
 | `yaml_basic` | 0.1.0 | Claims `.yml` and `.yaml` files for rutters that depend on it. No rules of its own. |
 | `twig_basic` | 0.1.0 | Claims `.twig` files for rutters that depend on it. No rules of its own. |
-| `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. Reads a parse tree. Needs the `go` extra. |
+
+### Drupal
+
+The two core rutters come first. Each contributed module has a rutter of its own, pinned
+beside `drupal_basic` when the site uses that module.
+
+| Rutter | Version | What it finds |
+|---|---|---|
+| `drupal_basic` | 0.3.0 | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays and plugins. The services and entity types that `\Drupal::service('x')`, `$container->get('x')`, `\Drupal::entityQuery('x')` and an entity type manager's `getStorage('x')` name in PHP functions and methods. Hooks from `Hook` attribute methods, and from procedural functions named by their file's name, such as `mymod_cron` in `mymod.module`. Depends on `php_basic`, `yaml_basic` and `twig_basic`. |
+| `drupal_js_basic` | 0.0.1 | Drupal behaviors and the behaviors they attach, `drupalSettings` keys that PHP attaches and behaviors read, and the libraries that PHP and templates attach. Depends on `js_basic` and `drupal_basic`. |
+| `ai_basic` | 0.0.1 | The AI module's agent plugins and function call plugins, by attribute, each joined to its class. |
+| `advancedqueue_basic` | 0.0.1 | The Advanced Queue module's job type plugins, by attribute or annotation, each joined to its class. |
+| `config_pages_basic` | 0.0.1 | Each Config Pages type, from its config file, as a bundle of the entity type `config_pages`. |
+| `crop_basic` | 0.0.1 | Each Crop API crop type, from its config file, as a bundle of the entity type `crop`. |
+| `drush_basic` | 0.0.1 | Drush commands in the custom modules, from the `Command` attribute or the `@command` tag, each joined to its method and class. |
+| `eck_basic` | 0.0.1 | Each Entity Construction Kit entity type, and each of its bundles, from their config files. |
+| `paragraphs_basic` | 0.0.1 | Each paragraph type, from its config file, as a bundle of the entity type `paragraph`. |
+| `profile_basic` | 0.0.1 | Each Profile type, from its config file, as a bundle of the entity type `profile`. |
+| `salesforce_basic` | 0.0.1 | Salesforce mapping field plugins; each mapping with its Salesforce object and its edges to the bundle, entity type and fields it maps; the Salesforce events that subscribers name. |
+| `twig_tweak_basic` | 0.0.1 | The block plugins, menus, entity types and field storages that Twig Tweak functions such as `drupal_block('x')` name in templates. |
+| `webform_basic` | 0.0.1 | Webform handler plugins, by annotation, and each webform, from its config file, as a bundle of `webform_submission`. |
+
+### Laravel
+
+| Rutter | Version | What it finds |
+|---|---|---|
 | `laravel_basic` | 0.0.5 | Laravel routes with the prefixes and names of `Route::prefix()->name()->group()` groups, their controller methods, controllers, models, migrations, Blade views with their includes and component tags, and configuration files with the text keys of the array each returns. The views and keys that `view('x')` and `config('x.y')` calls name in PHP functions and methods. Depends on `php_basic`. Reads text, and a parse tree for the calls. |
-| `python_text` (example) | 0.1.0 | Python modules, top-level classes and functions, imports and calls. Reads text. |
-| `typer_text` (example) | 0.1.0 | Typer apps, commands and mounts. Depends on `python_text`. |
-| `speckitty` (example) | 0.1.0 | spec-kitty missions and their templates. |
+
+### Examples
+
+| Rutter | Version | What it finds |
+|---|---|---|
+| `python_text` | 0.1.0 | Python modules, top-level classes and functions, imports and calls. Reads text. |
+| `typer_text` | 0.1.0 | Typer apps, commands and mounts. Depends on `python_text`. |
+| `speckitty` | 0.1.0 | spec-kitty missions and their templates. |
 
 The bundled rutters are in `src/periplus/packs`. The examples are in
-`examples/second-stack/packs`. The manifests of `php_basic`, `drupal_basic`, `go_basic` and
-`laravel_basic` each open with a list of their known gaps.
+`examples/second-stack/packs`. The manifest of every rutter in the tables above, except
+`yaml_basic`, `twig_basic` and the examples, opens with a list of its known gaps.
 
 To map a Go module, install the `go` extra and run Periplus at the module's root. Give the module
 path in the settings, because Periplus does not read `go.mod`:
@@ -298,18 +333,20 @@ set `views_root` under `folders`; a template is named by its path below `views_r
 The bundle also holds five older reference packs, `php`, `drupal`, `yaml`, `twig` and `go`. They
 pass `periplus validate`, but they hold vocabulary only and cannot make a map.
 
-New in this release: the Go and Laravel rutters, Go calls into imported packages, and
-`periplus init` pinning `drupal_basic`.
+New in this release: `drupal_basic` 0.3.0, the eleven rutters for contributed Drupal modules,
+listed after it in the Drupal table, and the two JavaScript rutters, `js_basic` and
+`drupal_js_basic`. The AI and Advanced Queue plugins moved out of `drupal_basic` into their own
+rutters.
 Settings `values` pass project facts, such as a Go module path, to a rutter.
 
 ## Tests and checks
 
-The pytest suite holds 275 tests. `scripts/demo.sh` runs the 41 end-to-end checks in
+The pytest suite holds 288 tests. `scripts/demo.sh` runs the 53 end-to-end checks in
 `scripts/demo.d` and stops at the first failure. Each check maps a small project and compares the
 result with what it expects.
 
 The CI workflow, `.github/workflows/checks.yml`, installs the package with its `dev` extra only.
-It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates the five reference packs. It
+It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates every bundled pack. It
 does not run the end-to-end checks, and it never maps a Go project. The workflow has not run yet.
 
 To propose a change, read [`CONTRIBUTING.md`](CONTRIBUTING.md).

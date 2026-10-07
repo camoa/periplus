@@ -1,0 +1,55 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# Known gaps. This pack maps the Drupal side of a project's JavaScript and what joins it to
+# Drupal. Each line below was seen on real code or on a planted file.
+#
+# Behaviors. Drupal.behaviors.name = {...} is a node named by its name, and
+# Drupal.behaviors.other.attach(...) inside a behavior object is an edge to the other behavior.
+# - Any object assigned to Drupal.behaviors.name is a behavior, with or without an attach
+#   member: Drupal.behaviors.empty = {} gives a node.
+# - Drupal.behaviors['name'] = {...} and window.Drupal.behaviors.name = {...}: no node.
+# - A value that is not an object gives no node: Drupal.behaviors.trapFocus = (element) => {...}.
+# - Two scripts that declare one behavior name give one node holding both locations. Drupal
+#   keeps only the one loaded last on a page.
+# - Drupal.behaviors.other.detach(...): no edge.
+# - once(), Drupal.t() and an Ajax call: no rule reads them.
+#
+# Settings. $build['#attached']['drupalSettings']['key'] = ... in PHP is a setting node named by
+# that first key, and drupalSettings.key inside a behavior object is an edge to it. A key that
+# no mapped PHP file attaches is a referenced node.
+# - Only the first name after drupalSettings is the key. drupalSettings.a.b reads the key a.
+# - drupalSettings['key'], and a read through the second parameter of attach,
+#   attach(context, settings) { settings.key }: no edge.
+#
+# The two text file types this pack reads, drupal_template_text and drupal_php_text, are declared
+# by drupal_basic, so every Drupal pack reads them the same way.
+#
+# Library attachments. In PHP, $build['#attached']['library'][] = 'module/library' is an edge
+# from the class or the function around it. The array form,
+# '#attached' => ['library' => ['module/library', ...]], is an edge from the class of its file,
+# one for each text in the list. In Twig, attach_library('module/library') in a
+# <name>.html.twig file is an edge from the template.
+# - The array form is read as text. Its class is named from the file's path, by Drupal's PSR-4
+#   layout: <module>/src/A/B.php is Drupal\<module>\A\B. So the rule is inferred, a file whose
+#   class is named otherwise gets an edge from a class that does not exist, and a file outside
+#   a src folder, such as a .module file, makes no edge and no skipped row.
+# - The array form with something between => and the array makes nothing:
+#   '#attached' => $flag ? ['library' => [...]] : [].
+# - A library named by a constant, a variable or a joined text: no edge.
+# - '#attached' => ['drupalSettings' => ['key' => ...]]: no setting node. The site this pack was
+#   written on holds none.
+# - A Twig file not named .html.twig, such as a component's <name>.twig: no edge.
+# - A call inside a Twig comment makes nothing. A call inside a quoted text or a verbatim block
+#   still gives an edge.
+# - The JS files a library names in its .libraries.yml file: no edge. The engine accepts the
+#   key each_key and does not execute it.
+#
+# An edge that starts at what is around a match needs a behavior object in JavaScript, and a
+# class or a function in PHP. A behavior call or a settings read outside a behavior object makes
+# no edge and is listed under skipped: no value for enclosing_class. In PHP an attachment in a
+# function, such as a hook in a .module file, starts at the function, and one in a method starts
+# at the class, not at the method. An attachment outside both makes no edge and is listed the
+# same way; its setting node is still made.
+pack: drupal_js_basic
+version: 0.0.1
+depends: [js_basic, drupal_basic]

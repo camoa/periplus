@@ -1,0 +1,80 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A views style plugin declared by the ViewsStyle attribute on its class. The id is the first argument,
+# written alone or named id, and an attribute rule reads one of the two, so there is one node rule
+# and one edge rule for each. An id that is not a text literal makes no plugin and is listed under
+# skipped in the map report.
+
+rules:
+- rule: views_style_from_attribute
+  reads: file
+  in:
+  - views_style_classes
+  match:
+    attribute: Drupal\views\Attribute\ViewsStyle
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: '0'
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.views_style_plugin
+  confidence: declared
+- rule: views_style_from_named_attribute
+  reads: file
+  in:
+  - views_style_classes
+  match:
+    attribute: Drupal\views\Attribute\ViewsStyle
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.views_style_plugin
+  confidence: declared
+- rule: views_style_from_attribute_edges
+  reads: file
+  in:
+  - views_style_classes
+  match:
+    attribute: Drupal\views\Attribute\ViewsStyle
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: '0'
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+- rule: views_style_from_named_attribute_edges
+  reads: file
+  in:
+  - views_style_classes
+  match:
+    attribute: Drupal\views\Attribute\ViewsStyle
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

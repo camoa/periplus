@@ -1,0 +1,44 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A role read from its config file, user.role.<role>, and one grants_permission edge per entry of
+# its permissions list, each cited at its entry's line. Two rules because a rule that emits an edge
+# emits no node.
+
+rules:
+- rule: role_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: user.role.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.role
+  - attribute:
+      name: is_admin
+      from:
+        key: is_admin
+  confidence: declared
+- rule: role_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: user.role.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: grants_permission
+      from: this_node
+      to:
+        from:
+          key: permissions
+        each: true
+  confidence: declared

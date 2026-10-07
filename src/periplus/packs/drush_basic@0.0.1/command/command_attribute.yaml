@@ -1,0 +1,88 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Drush command declared by the Command attribute on a method, named by the argument name.
+# Two rules because a rule that emits an edge emits no node, and two pairs because a match names
+# one full class: Drush's attribute, and the Consolidation one it extends, which a command file may
+# import instead.
+
+rules:
+- rule: command_from_attribute
+  reads: file
+  in:
+  - source
+  match:
+    attribute: Drush\Attributes\Command
+    filetype: php
+    where:
+    - applies_to: method_declaration
+  id:
+    from:
+      attribute_argument: name
+    must_be: string_literal
+  emits:
+  - node:
+      type: drush.command
+  confidence: declared
+- rule: command_from_attribute_edges
+  reads: file
+  in:
+  - source
+  match:
+    attribute: Drush\Attributes\Command
+    filetype: php
+    where:
+    - applies_to: method_declaration
+  id:
+    from:
+      attribute_argument: name
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: command_method
+      from: this_node
+      to: enclosing_method
+  - edge:
+      kind: command_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+- rule: command_from_consolidation_attribute
+  reads: file
+  in:
+  - source
+  match:
+    attribute: Consolidation\AnnotatedCommand\Attributes\Command
+    filetype: php
+    where:
+    - applies_to: method_declaration
+  id:
+    from:
+      attribute_argument: name
+    must_be: string_literal
+  emits:
+  - node:
+      type: drush.command
+  confidence: declared
+- rule: command_from_consolidation_attribute_edges
+  reads: file
+  in:
+  - source
+  match:
+    attribute: Consolidation\AnnotatedCommand\Attributes\Command
+    filetype: php
+    where:
+    - applies_to: method_declaration
+  id:
+    from:
+      attribute_argument: name
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: command_method
+      from: this_node
+      to: enclosing_method
+  - edge:
+      kind: command_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

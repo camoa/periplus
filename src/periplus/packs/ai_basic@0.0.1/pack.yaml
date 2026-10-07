@@ -1,0 +1,15 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The AI contributed module: its agent plugins and its function call plugins, by attribute, each
+# joined to its class by plugin_class. Moved out of drupal_basic 0.2.0, which held them against
+# the rule that a contributed module gets its own pack.
+#
+# Known gaps: an id that is not a text literal makes no plugin and is listed under skipped.
+pack: ai_basic
+version: 0.0.1
+depends: [drupal_basic, php_basic]
+
+folders:
+  # The folders the two plugin managers discover in, below a module's src folder.
+  ai_agent_classes: "{module_root}/src/Plugin/AiAgent/**"
+  ai_function_call_classes: "{module_root}/src/Plugin/AiFunctionCall/**"

@@ -1,0 +1,12 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The Profile contributed module: each profile type, from its config file, as the bundle
+# profile.<id> with its label, a configured_by edge to that file and a bundle_of edge to the entity
+# type profile.
+#
+# Known gaps: the roles a profile type is limited to, and its registration and multiple settings,
+# give nothing. The entity type profile is declared by the module's PHP, which is not mapped, so it
+# stays referenced.
+pack: profile_basic
+version: 0.0.1
+depends: [drupal_basic]

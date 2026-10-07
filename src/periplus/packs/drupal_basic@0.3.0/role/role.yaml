@@ -1,0 +1,14 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The configuration of a user role, and each permission it grants. It refines
+# drupal.config_object, so it lands on the node the config-file rule finds. A permission no mapped
+# file declares, such as one from core or a contributed module, ends at a referenced node.
+
+node_types:
+- name: drupal.role
+  parent: drupal.config_object
+
+edge_kinds:
+- kind: grants_permission
+  from: drupal.role
+  to: drupal.permission

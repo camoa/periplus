@@ -1,0 +1,15 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+rules:
+# $x['#attached']['library'][] = 'module/library' in a method: the class attaches the library.
+- rule: library_attached_in_class
+  reads: file
+  in: [source]
+  match:
+    declaration: assignment_expression
+    name_child: right
+    filetype: php
+    where: [{name_matches: {child: left, pattern: '(?s).*\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"]library[''"]\s*\]\s*\[\s*\]'}}]
+  id: {from: declared_name, pattern: '^[''"](?<library>[^''"]+)[''"]$', template: '{library}'}
+  emits: [{edge: {kind: attaches_library, from: enclosing_class, to: this_node}}]
+  confidence: declared

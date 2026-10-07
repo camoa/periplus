@@ -64,6 +64,9 @@ dev = [
 ]
 # The grammar the bundled pack go_basic pins. Optional, because only a Go project reads it.
 go = ["tree-sitter-go==0.25.0"]
+# The grammar the bundled pack js_basic pins. Optional, because only a project with JavaScript
+# reads it.
+js = ["tree-sitter-javascript==0.25.0"]
 
 [project.scripts]
 periplus = "periplus.cli:main"

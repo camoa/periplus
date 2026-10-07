@@ -1,0 +1,20 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+rules:
+# $x['#attached']['drupalSettings']['key'] = ..., with or without more keys after it: the
+# setting key the page gets.
+- rule: setting_attached
+  reads: file
+  in: [source]
+  match: {declaration: assignment_expression, name_child: left, filetype: php}
+  id: {from: declared_name, pattern: '\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"]drupalSettings[''"]\s*\]\s*\[\s*[''"](?<key>[\w.-]+)[''"]\s*\]', template: '{key}'}
+  emits: [{node: {type: drupal.js_setting}}]
+  confidence: declared
+# The same assignment in a method: the class provides the setting.
+- rule: setting_attached_in_class
+  reads: file
+  in: [source]
+  match: {declaration: assignment_expression, name_child: left, filetype: php}
+  id: {from: declared_name, pattern: '\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"]drupalSettings[''"]\s*\]\s*\[\s*[''"](?<key>[\w.-]+)[''"]\s*\]', template: '{key}'}
+  emits: [{edge: {kind: provides_setting, from: enclosing_class, to: this_node}}]
+  confidence: declared

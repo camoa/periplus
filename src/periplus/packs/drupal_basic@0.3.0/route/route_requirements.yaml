@@ -1,0 +1,108 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route's methods and its access requirements, read from the routing file. Two rules because a
+# rule that emits an edge emits no node. A requirement that is only a value is an attribute. A
+# route's _role joins roles as _permission joins permissions: with a comma (all needed), read
+# first, or with a plus sign (any one); each role is one edge to the role's configuration,
+# user.role.<role>, a requires_role edge, or an accepts_role edge for a value with a plus sign and
+# no comma. A _custom_access written service:method is access_checked_by_service that service; one
+# written Class::method is access_checked_by that method. The whole value stays in the attribute
+# custom_access. A leading backslash is dropped from a class name.
+
+rules:
+- rule: route_requirements_from_routing_file
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: yaml
+    each: '*'
+    where:
+    - has_key:
+        path: path
+  id:
+    from: key
+  emits:
+  - node:
+      type: drupal.route
+  - attribute:
+      name: methods
+      from:
+        key: methods
+  - attribute:
+      name: access
+      from:
+        key: requirements._access
+  - attribute:
+      name: format
+      from:
+        key: requirements._format
+  - attribute:
+      name: user_is_logged_in
+      from:
+        key: requirements._user_is_logged_in
+  - attribute:
+      name: csrf_token
+      from:
+        key: requirements._csrf_token
+  - attribute:
+      name: entity_access
+      from:
+        key: requirements._entity_access
+  - attribute:
+      name: custom_access
+      from:
+        key: requirements._custom_access
+  confidence: declared
+- rule: route_requirements_from_routing_file_edges
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: yaml
+    each: '*'
+    where:
+    - has_key:
+        path: path
+  id:
+    from: key
+  emits:
+  - edge:
+      kind: requires_role
+      from: this_node
+      to:
+        from:
+          key: requirements._role
+        each: true
+        pattern: '^[^,]*\+[^,]*$|(?<role>[^,\s](?:[^,]*[^,\s])?)'
+        template: 'user.role.{role}'
+  - edge:
+      kind: accepts_role
+      from: this_node
+      to:
+        from:
+          key: requirements._role
+        each: true
+        where:
+        - matches: '*+*'
+        pattern: '.*,.*|(?<role>[^+\s](?:[^+]*[^+\s])?)'
+        template: 'user.role.{role}'
+  - edge:
+      kind: access_checked_by_service
+      from: this_node
+      to:
+        from:
+          key: requirements._custom_access
+        pattern: '^(?<service>[^\\:][^:]*):[^:]+$'
+        template: '{service}'
+  - edge:
+      kind: access_checked_by
+      from: this_node
+      to:
+        from:
+          key: requirements._custom_access
+        pattern: '^\\?(?<method>[^\\:][^:]*::[^:]+)$'
+        template: '{method}'
+  confidence: declared

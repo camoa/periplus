@@ -1,0 +1,83 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Salesforce mapping read from its config file: the node with the Salesforce object and the two
+# standalone flags, and its edges. The bundle is {drupal_entity_type}.{drupal_bundle}. Each field
+# instance the mapping's dependencies.config lists is a maps_field edge, inferred: Salesforce
+# writes those dependencies from the field mappings, so a base field such as title, a constant or
+# a token gives none. The field mappings themselves are not read: a list source's each part fills
+# {key} with the key name drupal_field_value, not its value.
+
+rules:
+- rule: salesforce_mapping_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: salesforce_mapping.salesforce_mapping.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: salesforce.mapping
+  - attribute:
+      name: salesforce_object
+      from:
+        key: salesforce_object_type
+  - attribute:
+      name: push_standalone
+      from:
+        key: push_standalone
+  - attribute:
+      name: pull_standalone
+      from:
+        key: pull_standalone
+  confidence: declared
+- rule: salesforce_mapping_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: salesforce_mapping.salesforce_mapping.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: maps_bundle
+      from: this_node
+      to:
+        from:
+        - key: drupal_entity_type
+        - key: drupal_bundle
+        template: '{drupal_entity_type}.{drupal_bundle}'
+  - edge:
+      kind: maps_entity_type
+      from: this_node
+      to:
+        from:
+          key: drupal_entity_type
+  confidence: declared
+- rule: salesforce_mapping_fields_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: salesforce_mapping.salesforce_mapping.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: maps_field
+      from: this_node
+      to:
+        from:
+          key: dependencies.config
+        each: true
+        where:
+        - matches: 'field.field.*'
+  confidence: inferred

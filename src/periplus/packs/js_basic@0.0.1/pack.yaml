@@ -1,0 +1,48 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# Known gaps. The basic JavaScript pack maps each function that has a name of its own, as a
+# node named <script path>:<name>: function name() {}, async function name() {}, and a const,
+# let or var whose value is an arrow function or a function expression. Each line below was
+# seen on real code or on a planted file.
+# What it does not map, today:
+# - A call: no rule reads one, so the map holds no edge between two functions.
+# - A generator, function* name() {}, a class and a class method: no node.
+# - A function that is a member of an object, { name() {} }, { name: function () {} } or
+#   { name: () => {} }, and a function passed as an argument: no node.
+# - A function declared inside another gets the same kind of id, so two functions of one name in
+#   one script are one node holding both locations.
+# - An import or an export: no rule. A script in a .mjs, .cjs, .jsx or .ts file is not read.
+# - The script path is the path from the project folder, so the same script mapped from another
+#   folder gets another id.
+# The grammar is not a dependency of periplus-map. Without it, periplus map stops with a problem
+# that names the pin; install periplus with the extra js, which pins tree-sitter-javascript 0.25.0.
+pack: js_basic
+version: 0.0.1
+depends: []
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.0"
+  language: javascript
+  grammar_version: "0.25.0"
+# The whole project at any depth; a dependent pack or the project settings narrows it.
+folders:
+  js_source: ./**
+files:
+  exclude: ['**/node_modules/**']
+  types:
+    javascript:
+      endings: [js]
+      reader: tree
+      path_values:
+        # A script is named by its path from the project folder.
+        script:
+          pattern: '^(?<file>.+)$'
+          template: '{file}'
+identity:
+  # A full name is the script's path, a colon, and the declared name.
+  qualified_name:
+    parts: [namespace, declared_name]
+    separator: ":"
+  namespace:
+    path_value: script
+  written_names: [identifier]

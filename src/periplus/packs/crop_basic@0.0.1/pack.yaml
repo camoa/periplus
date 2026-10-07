@@ -1,0 +1,11 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The Crop API contributed module: each crop type, from its config file, as the bundle crop.<id>
+# with its label, a configured_by edge to that file and a bundle_of edge to the entity type crop.
+#
+# Known gaps: a crop type's aspect ratio and size limits give nothing, and an image style's crop
+# effect gives no edge to the crop type it names. The entity type crop is declared by the module's
+# PHP, which is not mapped, so it stays referenced.
+pack: crop_basic
+version: 0.0.1
+depends: [drupal_basic]

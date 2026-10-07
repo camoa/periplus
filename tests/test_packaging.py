@@ -56,15 +56,28 @@ UV = shutil.which("uv")
 # where a file whose top-level keys are not pack vocabulary fails to load; it is deferred there
 # deliberately rather than approximated here.
 BUNDLED_PACKS = {
+    "advancedqueue_basic@0.0.1": 4,
+    "ai_basic@0.0.1": 5,
+    "config_pages_basic@0.0.1": 2,
+    "crop_basic@0.0.1": 2,
     "drupal@0.1.0": 48,
-    "drupal_basic@0.2.0": 68,
+    "drupal_basic@0.3.0": 77,
+    "drupal_js_basic@0.0.1": 10,
+    "drush_basic@0.0.1": 4,
+    "eck_basic@0.0.1": 3,
     "go@0.0.2": 4,
     "go_basic@0.0.3": 5,
+    "js_basic@0.0.1": 2,
     "laravel_basic@0.0.5": 6,
+    "paragraphs_basic@0.0.1": 2,
     "php@0.1.0": 12,
     "php_basic@0.2.0": 6,
+    "profile_basic@0.0.1": 2,
+    "salesforce_basic@0.0.1": 6,
     "twig@0.0.1": 2,
     "twig_basic@0.1.0": 1,
+    "twig_tweak_basic@0.0.1": 5,
+    "webform_basic@0.0.1": 4,
     "yaml@0.0.1": 3,
     "yaml_basic@0.1.0": 1,
 }
@@ -218,9 +231,10 @@ def test_runtime_dependencies_are_exactly_the_three_the_design_decided(
 
     # The grammar a bundled rutter pins is declared by the package and is not a start-up
     # requirement. The only exceptions are the reference packs go and yaml, whose grammars the
-    # package does not declare, and go_basic, whose grammar is installed with the extra go; each
-    # must still pin one, so the list cannot outlive its reason.
-    undeclared = {"go", "go_basic", "yaml"}
+    # package does not declare, go_basic, whose grammar is installed with the extra go, and
+    # js_basic, whose grammar is installed with the extra js; each must still pin one, so the list
+    # cannot outlive its reason.
+    undeclared = {"go", "go_basic", "js_basic", "yaml"}
     pinned, excepted = set(), {}
     for path in sorted((PROJECT_ROOT / "src" / "periplus" / "packs").glob("*@*/pack.yaml")):
         document = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8"))

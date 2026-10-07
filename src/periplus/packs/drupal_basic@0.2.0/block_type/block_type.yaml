@@ -1,8 +1,0 @@
-$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
-
-# A block type is a bundle: it says what fields a content block has. It refines drupal.bundle and
-# lands on the node the config-file rule finds.
-
-node_types:
-- name: drupal.block_type
-  parent: drupal.bundle

@@ -43,19 +43,32 @@ SOURCE_PACK = "go@0.0.2"
 FIXTURE_PACK = "gofixture"
 FIXTURE_DIRECTORY = f"{FIXTURE_PACK}@0.0.2"
 
-#: The five packs the wheel carries, by name. Restated here rather than read off the directory
+#: The packs the wheel carries, by name. Restated here rather than read off the directory
 #: listing, for the reason ``test_packaging.BUNDLED_PACKS`` gives: a test that reads the same
 #: directory it is checking passes against an empty one.
 BUNDLED_PACK_NAMES = (
+    "advancedqueue_basic",
+    "ai_basic",
+    "config_pages_basic",
+    "crop_basic",
     "drupal",
     "drupal_basic",
+    "drupal_js_basic",
+    "drush_basic",
+    "eck_basic",
     "go",
     "go_basic",
+    "js_basic",
     "laravel_basic",
+    "paragraphs_basic",
     "php",
     "php_basic",
+    "profile_basic",
+    "salesforce_basic",
     "twig",
     "twig_basic",
+    "twig_tweak_basic",
+    "webform_basic",
     "yaml",
     "yaml_basic",
 )
@@ -697,12 +710,12 @@ def test_two_processes_from_two_directories_under_two_locales_emit_the_same_byte
 
 
 def test_every_bundled_pack_file_declares_the_schema_it_is_written_against() -> None:
-    """Every pack file declares its schema, on all sixty-nine files rather than the five manifests.
+    """Every pack file declares its schema, on all 216 files rather than the 24 manifests.
 
     That is wider than "a pack declares X", which means the manifest declares it everywhere else
     in this project; the wider check buys what matters, because the rules live in
-    ``service/service_autowire.yaml`` and not in ``pack.yaml``, and five of sixty-nine covers the
-    files nobody edits.
+    ``service/service_autowire.yaml`` and not in ``pack.yaml``, and 24 of 216 covers the files
+    nobody edits.
 
     **What is claimed is that each file states which contract it is written against. Not that any
     editor validates it** — ``periplus.dev`` has no DNS record, so nothing resolves the URL today.
@@ -723,7 +736,7 @@ def test_every_bundled_pack_file_declares_the_schema_it_is_written_against() -> 
             wrong.append(f"{path.relative_to(BUNDLED_PACKS)}: declares {declared!r}")
 
     assert wrong == [], "\n".join(wrong)
-    assert len(_bundled_pack_files()) == 156, "the bundled pack file count changed"
+    assert len(_bundled_pack_files()) == 216, "the bundled pack file count changed"
 
 
 @pytest.mark.parametrize("pack", BUNDLED_PACK_NAMES)
@@ -732,7 +745,7 @@ def test_every_bundled_pack_validates_against_the_shipped_schemas(
 ) -> None:
     """Every bundled pack validates, run locally, as a substitute for watching CI reject one.
 
-    **Asserted:** the exact command a CI step would run exits 0 for each of the five bundled packs,
+    **Asserted:** the exact command a CI step would run exits 0 for each bundled pack,
     on this machine, now.
 
     **Not asserted:** that CI rejects a broken pack. Nothing is pushed, and no test in this file can

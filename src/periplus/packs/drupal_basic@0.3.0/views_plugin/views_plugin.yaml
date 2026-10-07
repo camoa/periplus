@@ -1,0 +1,15 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Views field, filter and style plugins, each named by its plugin id; plugin_class joins each to its
+# class. Views keeps one id list per plugin type, so each type has its own id namespace.
+
+node_types:
+- name: drupal.views_field_plugin
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.views_field
+- name: drupal.views_filter_plugin
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.views_filter
+- name: drupal.views_style_plugin
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.views_style

@@ -1,0 +1,20 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The Webform contributed module: its handler plugins, by annotation, each joined to its class by
+# plugin_class; and each webform, from its config file, as the bundle webform_submission.<id> with
+# its label (key title), a configured_by edge to that file and a bundle_of edge to the entity type
+# webform_submission.
+#
+# Known gaps: an id that is not text in double quotes makes no plugin and is listed under skipped.
+# A handler declared by an attribute gives nothing: this pack reads the annotation only, and the
+# attribute class was not checked against a Webform release. Webform's other plugin types, such as
+# elements and exporters, give nothing. A webform's elements, handlers and settings in its config
+# file give nothing, nor does its category or status. The entity type webform_submission is
+# declared by the module's PHP, which is not mapped, so it stays referenced.
+pack: webform_basic
+version: 0.0.1
+depends: [drupal_basic, php_basic]
+
+folders:
+  # The folder the handler manager discovers in, below a module's src folder.
+  webform_handler_classes: "{module_root}/src/Plugin/WebformHandler/**"

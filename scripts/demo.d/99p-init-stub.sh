@@ -38,9 +38,9 @@ for line in lines:
 assert written and example_pins and example_keys, (written, example_pins, example_keys)
 for pin in written + example_pins:
     assert (packs / pin / "pack.yaml").is_file(), f"no bundled pack for {pin}"
-declared = yaml.load(packs / "drupal_basic@0.2.0" / "pack.yaml")["folders"]
+declared = yaml.load(packs / "drupal_basic@0.3.0" / "pack.yaml")["folders"]
 for key in example_keys:
     assert key in declared, f"drupal_basic declares no folder key {key}: {sorted(declared)}"
-assert "drupal_basic@0.2.0" in written and "drupal_basic@0.2.0" in example_pins, (written, example_pins)
+assert "drupal_basic@0.3.0" in written and "drupal_basic@0.3.0" in example_pins, (written, example_pins)
 PY
 echo "init stub ok"

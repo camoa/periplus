@@ -1,0 +1,14 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A block plugin, named by its plugin id, and the PHP class that implements it. The plugin_class
+# kind starts at drupal.plugin, so every plugin type below it, in this pack or in another, has it.
+
+node_types:
+- name: drupal.block_plugin
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.block
+
+edge_kinds:
+- kind: plugin_class
+  from: drupal.plugin
+  to: php.class

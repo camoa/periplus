@@ -1,0 +1,55 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route's options, read from the routing file. Two rules because a rule that emits an edge emits
+# no node. A route parameter whose type is entity:<type> is converted to an entity of that type, a
+# loads_entity_type edge; any other parameter type names no entity type and gives no edge.
+
+rules:
+- rule: route_options_from_routing_file
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: yaml
+    each: '*'
+    where:
+    - has_key:
+        path: path
+  id:
+    from: key
+  emits:
+  - node:
+      type: drupal.route
+  - attribute:
+      name: no_cache
+      from:
+        key: options.no_cache
+  - attribute:
+      name: admin_route
+      from:
+        key: options._admin_route
+  confidence: declared
+- rule: route_options_from_routing_file_edges
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: yaml
+    each: '*'
+    where:
+    - has_key:
+        path: path
+  id:
+    from: key
+  emits:
+  - edge:
+      kind: loads_entity_type
+      from: this_node
+      to:
+        from:
+          key: options.parameters.*.type
+        pattern: '^entity:(?<entity_type>.+)$'
+        template: '{entity_type}'
+  confidence: declared

@@ -1,0 +1,13 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+node_types:
+- name: drupal.js_setting
+  id_namespace: drupal.js_setting
+
+edge_kinds:
+- kind: provides_setting
+  from: [php.class, php.function]
+  to: drupal.js_setting
+- kind: reads_setting
+  from: drupal.js_behavior
+  to: drupal.js_setting

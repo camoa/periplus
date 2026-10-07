@@ -1,0 +1,27 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# Known gaps. This pack maps the Twig functions of the contributed module Twig Tweak that name a
+# Drupal thing by a quoted first argument, each as an edge from the template that calls it:
+# drupal_block('plugin_id') to the block plugin, drupal_menu('name') to the config object
+# system.menu.<name>, drupal_entity('type', ...) and drupal_entity_form('type', ...) to the entity
+# type, and drupal_field('field', 'type', ...) to the config object field.storage.<type>.<field>.
+# Each line below was seen on real code or on a planted file.
+# - drupal_view, drupal_region, drupal_config, drupal_image, drupal_token, drupal_contextual_links
+#   and drupal_breadcrumb: no rule. The site this pack was written on calls none of them.
+# - drupal_messages() and drupal_url() name nothing a node stands for: no edge.
+# - A name held in a variable or joined from parts, as drupal_block(block_id): no edge, and no
+#   skipped row.
+# - drupal_entity('webform', 'x') and drupal_entity('block_content', 6) end at the entity type,
+#   not at the entity. A config entity named by its id, such as the webform x, is not reached.
+# - drupal_field ends at the field storage. The bundle and the field instance are not named by
+#   the call and get no edge.
+# - A Twig file not named .html.twig, such as a component's <name>.twig: no edge, since it is
+#   no template node. On the site this pack was written on, such files hold no call.
+# - A call inside a Twig comment makes nothing. A call inside a quoted text or a verbatim block
+#   still gives an edge.
+# - Two templates of one name, in two modules, are one template node, so their edges join.
+# - The text type is drupal_basic's drupal_template_text. The engine lets one text type claim
+#   the ending twig across all packs.
+pack: twig_tweak_basic
+version: 0.0.1
+depends: [drupal_basic]

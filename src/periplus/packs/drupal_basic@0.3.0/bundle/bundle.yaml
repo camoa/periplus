@@ -1,0 +1,20 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A bundle: a content type, a vocabulary, a media type and the like; a block type refines it. Its
+# id is the entity type and the bundle's machine name, as node.article, the two keys a field
+# instance and a display state. So a bundle that a config file declares and one that only a field
+# names are one node, whatever module's config prefix declares it: a pack for a contributed module
+# maps its bundle config onto the same id. A bundle no rule declares is referenced, and a bundle
+# config file stays a config object, the end of its bundle's configured_by edge.
+
+node_types:
+- name: drupal.bundle
+  id_namespace: drupal.bundle
+
+edge_kinds:
+- kind: configured_by
+  from: drupal.bundle
+  to: drupal.config_object
+- kind: bundle_of
+  from: drupal.bundle
+  to: drupal.entity_type

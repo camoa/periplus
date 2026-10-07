@@ -1,0 +1,65 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A hook, named without its hook_ prefix, and the method or function that implements it.
+
+node_types:
+- name: drupal.hook
+  id_namespace: drupal.hook
+
+edge_kinds:
+- kind: implements_hook
+  from: [php.method, php.function]
+  to: drupal.hook
+
+# A function that implements a hook by its name: in a module, install, include, theme, profile,
+# post_update.php or deploy.php file, the first part of the file name, an underscore, then the
+# hook's name. Every update_N function implements the one hook update_N, every post-update
+# function the one hook post_update_NAME and every deploy function the one hook deploy_NAME; the
+# number or the name stays in the function's name. The hook collector of Drupal 11.1 goes by the name too and takes no list of
+# hook names. It leaves out install, uninstall, schema and update_N functions, which Drupal's
+# installer and update system call; this rule keeps them. Themes name their hook functions the
+# same way. Inferred, because a name is a convention.
+#
+# Gaps: any prefixed function reads as a hook, such as the form callback mymod_settings_submit,
+# the helper mymod_build_list or mymod_update_NEXT. A file named other than its module or theme,
+# such as includes/content.theme holding mytheme_ functions, gives no hook. A hook with a variable
+# part keeps it, so mymod_form_user_login_form_alter names the hook form_user_login_form_alter. A
+# function in a file of another ending leaves two skipped rows.
+
+rules:
+- rule: hook_from_function_name
+  reads: file
+  in:
+  - source
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: declared_name
+    pattern: '^{extension}_(?<hook>\w+)$'
+    template: '{hook}'
+    normalize:
+    - {replace: '^update_\d+$', with: 'update_N'}
+    - {replace: '^post_update_\w+$', with: 'post_update_NAME'}
+    - {replace: '^deploy_\w+$', with: 'deploy_NAME'}
+  emits:
+  - node:
+      type: drupal.hook
+  confidence: inferred
+- rule: function_implements_hook
+  reads: file
+  in:
+  - source
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: declared_name
+    pattern: '^{extension}_(?<hook>\w+)$'
+    template: '{hook}'
+    normalize:
+    - {replace: '^update_\d+$', with: 'update_N'}
+    - {replace: '^post_update_\w+$', with: 'post_update_NAME'}
+    - {replace: '^deploy_\w+$', with: 'deploy_NAME'}
+  emits:
+  - edge:
+      kind: implements_hook
+      from: {declared: php.function}
+      to: this_node
+  confidence: inferred

@@ -1,0 +1,12 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The Paragraphs contributed module: each paragraph type, from its config file, as the bundle
+# paragraph.<id> with its label, a configured_by edge to that file and a bundle_of edge to the
+# entity type paragraph.
+#
+# Known gaps: a paragraph type's behavior plugins, icon and description give nothing. The entity
+# type paragraph is declared by the module's PHP, which is not mapped, so it stays referenced. A
+# field's allowed paragraph types give no edge.
+pack: paragraphs_basic
+version: 0.0.1
+depends: [drupal_basic]

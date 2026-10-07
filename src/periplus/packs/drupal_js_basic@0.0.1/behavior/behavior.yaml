@@ -1,0 +1,29 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+node_types:
+- name: drupal.js_behavior
+  id_namespace: drupal.js_behavior
+
+edge_kinds:
+- kind: attaches_behavior
+  from: drupal.js_behavior
+  to: drupal.js_behavior
+
+rules:
+# Drupal.behaviors.name = {...}: the behavior name. An arrow function or any other value on the
+# right is not a behavior object and makes nothing.
+- rule: behavior_from_assignment
+  reads: file
+  in: [js_source]
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: object}]}
+  id: {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)$', template: '{behavior}'}
+  emits: [{node: {type: drupal.js_behavior}}]
+  confidence: declared
+# Drupal.behaviors.other.attach(...) inside a behavior object: that behavior runs the other one.
+- rule: behavior_attach_call
+  reads: file
+  in: [js_source]
+  match: {declaration: call_expression, name_child: function, filetype: javascript}
+  id: {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)\.attach$', template: '{behavior}'}
+  emits: [{edge: {kind: attaches_behavior, from: enclosing_class, to: this_node}}]
+  confidence: declared

@@ -17,7 +17,7 @@ trap 'rm -rf "$work"' EXIT
 site="$work/site"
 module="$site/web/modules/custom/my_module"
 mkdir -p "$site/.periplus" "$module/src/Entity" "$module/src/Controller" "$module/src/Form"
-printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.2.0\n' >"$site/.periplus/settings.yml"
+printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n' >"$site/.periplus/settings.yml"
 cat >"$module/my_module.services.yml" <<'EOF'
 services:
   my_module.helper:

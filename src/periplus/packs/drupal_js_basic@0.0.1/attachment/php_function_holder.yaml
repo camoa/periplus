@@ -1,0 +1,13 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+rules:
+# A PHP function holds what its body holds, as a class does. So an attachment written in a
+# function, such as a hook in a .module file, starts its edge at that function. The node is the
+# one php_basic already makes for the function.
+- rule: php_function_holds_body
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, body_child: body, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: php.function}}]
+  confidence: declared

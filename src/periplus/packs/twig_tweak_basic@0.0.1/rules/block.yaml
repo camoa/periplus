@@ -1,0 +1,20 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# {{ drupal_block('plugin_id', {...}) }}: the template renders the block plugin the call names.
+
+edge_kinds:
+- kind: renders_block
+  from: drupal.template
+  to: drupal.block_plugin
+
+rules:
+- rule: block_rendered_in_template
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: 'drupal_block\(\s*[''"](?<plugin>[^''"\s]+)[''"]'
+  id: {template: '{template_name}'}
+  emits: [{edge: {kind: renders_block, from: this_node, to: {from: {capture: plugin}}}}]
+  confidence: declared

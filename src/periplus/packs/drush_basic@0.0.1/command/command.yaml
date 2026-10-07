@@ -1,0 +1,15 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Drush command, named by its name, and the method and class that run it.
+
+node_types:
+- name: drush.command
+  id_namespace: drush.command
+
+edge_kinds:
+- kind: command_method
+  from: drush.command
+  to: php.method
+- kind: command_class
+  from: drush.command
+  to: php.class

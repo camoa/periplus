@@ -14,7 +14,7 @@ site="$work/site"
 module="$site/web/modules/custom/mymod/mymod.module"
 theme="$site/web/themes/custom/mytheme/mytheme.theme"
 mkdir -p "$site/.periplus" "$(dirname "$module")" "$(dirname "$theme")"
-printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.2.0\n' >"$site/.periplus/settings.yml"
+printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n' >"$site/.periplus/settings.yml"
 cat >"$module" <<'PHP'
 <?php
 
@@ -49,7 +49,12 @@ document = json.load(open(os.path.join(work, "map.json")))
 report = json.load(open(os.path.join(work, "report.json")))
 assert not report["problems"], report["problems"]
 assert not report["not_executed"], report["not_executed"]
-assert report["skipped"] == [], report["skipped"]
+# The include-hook rules read every PHP file under theme_root, and their theme_name path value
+# fits .inc files only, so the plain .theme file leaves exactly these two skipped rows.
+assert sorted((row["rule"], row["reason"]) for row in report["skipped"]) == [
+    ("hook_from_theme_include", "the id source theme_name is absent"),
+    ("theme_include_implements_hook", "the id source theme_name is absent"),
+], report["skipped"]
 
 
 def line(path, text):

@@ -1,0 +1,116 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field instance read from its config file: one node rule and edge rules, because a rule that
+# emits an edge emits no node. The storage and the bundle are named by the field's own keys, the
+# bundle as {entity_type}.{bundle}; a block type's bundle is typed as a block type when no rule
+# maps it. The bundle's own bundle_of edge, read here, is inferred: the field states it in passing.
+
+rules:
+- rule: field_instance_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: field.field.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.field_instance
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: field_instance_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: field.field.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: stored_by
+      from: this_node
+      to:
+        from:
+        - key: field_name
+        - key: entity_type
+        template: field.storage.{entity_type}.{field_name}
+  confidence: declared
+- rule: field_instance_block_type_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: field.field.*
+    filetype: yaml
+    where:
+    - key:
+        name: entity_type
+        equals: block_content
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: field_of
+      from: this_node
+      to:
+        from:
+        - key: bundle
+        - key: entity_type
+        template: '{entity_type}.{bundle}'
+        type: drupal.block_type
+  confidence: declared
+- rule: field_instance_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: field.field.*
+    filetype: yaml
+    where:
+    - key:
+        name: entity_type
+        not_equals: block_content
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: field_of
+      from: this_node
+      to:
+        from:
+        - key: bundle
+        - key: entity_type
+        template: '{entity_type}.{bundle}'
+  confidence: declared
+- rule: field_instance_bundle_of_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: field.field.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^field\.field\.', with: ''}
+    - {replace: '\.[^.]+$', with: ''}
+  emits:
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: entity_type
+  confidence: inferred

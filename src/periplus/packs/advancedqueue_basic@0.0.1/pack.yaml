@@ -1,0 +1,14 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The Advanced Queue contributed module: its job type plugins, by attribute or by annotation,
+# each joined to its class by plugin_class. Moved out of drupal_basic 0.2.0, which held them
+# against the rule that a contributed module gets its own pack.
+#
+# Known gaps: an id that is not a text literal makes no plugin and is listed under skipped.
+pack: advancedqueue_basic
+version: 0.0.1
+depends: [drupal_basic, php_basic]
+
+folders:
+  # The folder the job type manager discovers in, below a module's src folder.
+  queue_job_type_classes: "{module_root}/src/Plugin/AdvancedQueue/JobType/**"

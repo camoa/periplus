@@ -1,0 +1,29 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# Drush commands in the custom modules: each command, named by its name, as mymodule:sync, with
+# a command_method edge to the method that runs it and a command_class edge to that method's
+# class. A command is read from the Command attribute on a method, #[CLI\Command(name: '...')],
+# and from the @command tag in a method's docblock. A method that carries both is one node with
+# two locations, and its edges are found twice.
+#
+# Known gaps:
+# - The @command tag is read as text, because the engine reads a docblock annotation only in the
+#   form @Name(...). The engine allows one file type read as text per ending, so the tag is read
+#   through drupal_basic's drupal_php_text, inside its block_comment section. Its class is named from the file's path by Drupal's PSR-4 layout:
+#   <module>/src/A/B.php is Drupal\<module>\A\B. So its edges are inferred, and a file whose class
+#   is named otherwise gives edges to a method and a class that do not exist, as unresolved nodes.
+#   A tag outside a file below a src folder makes a node and no edge.
+# - The tag's method is the first function after the docblock's end, past one-line attributes
+#   and modifiers. An attribute split over lines between the docblock and the function makes the
+#   node and no edge. A tag inside a PHP string still makes a command.
+# - An attribute whose name is not the named argument name:, such as #[CLI\Command('x')], or is
+#   not a text literal, makes nothing and is listed under skipped.
+# - Aliases give nothing: the engine reads no item of an attribute's list argument, and the
+#   @aliases tag would need one rule per position in its list.
+# - Options, arguments, usages, hooks (#[CLI\Hook], @hook), topics and validators give nothing.
+# - A command class that is a service in a drush.services.yml file is mapped by drupal_basic as
+#   a service with its class; nothing joins that service to the command.
+pack: drush_basic
+version: 0.0.1
+depends: [drupal_basic, php_basic]
+

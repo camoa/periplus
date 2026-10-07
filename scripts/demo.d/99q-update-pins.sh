@@ -24,31 +24,31 @@ cp "$site/.periplus/settings.yml" "$work/before.yml"
 
 (cd "$site" && "$PERIPLUS" update --format json >"$work/report.json")
 out="$(cd "$site" && "$PERIPLUS" update)" || true
-[ "$out" = "kept drupal_basic@0.2.0: already current
+[ "$out" = "kept drupal_basic@0.3.0: already current
 kept mine@1.0.0: shipped from the project's own packs" ] \
     || { echo "second run printed: $out"; exit 1; }
-sed 's/drupal_basic@0.2.0/drupal_basic@0.1.0/' "$site/.periplus/settings.yml" | cmp - "$work/before.yml" \
+sed 's/drupal_basic@0.3.0/drupal_basic@0.1.0/' "$site/.periplus/settings.yml" | cmp - "$work/before.yml" \
     || { echo "the settings file changed beyond the pin"; exit 1; }
 "$python" - "$work/report.json" <<'PY'
 import json, sys
 report = json.load(open(sys.argv[1]))
-assert [(c["name"], c["old"], c["new"]) for c in report["changed"]] == [("drupal_basic", "0.1.0", "0.2.0")], report
+assert [(c["name"], c["old"], c["new"]) for c in report["changed"]] == [("drupal_basic", "0.1.0", "0.3.0")], report
 assert report["kept"] == [{"pin": "mine@1.0.0", "reason": "shipped from the project's own packs"}], report
 PY
 cp "$work/before.yml" "$site/.periplus/settings.yml"
 text="$(cd "$site" && "$PERIPLUS" update)"
-printf '%s\n' "$text" | grep -qxF "drupal_basic: 0.1.0 -> 0.2.0" || { echo "text: $text"; exit 1; }
+printf '%s\n' "$text" | grep -qxF "drupal_basic: 0.1.0 -> 0.3.0" || { echo "text: $text"; exit 1; }
 
 # The file `init` writes keeps its long header, double blank lines and quoted pin through an update.
 mkdir "$work/init"
 printf '{"require": {"drupal/core": "^11"}}\n' >"$work/init/composer.json"
 (cd "$work/init" && "$PERIPLUS" init >/dev/null)
-sed -i 's/drupal_basic@0.2.0/drupal_basic@0.1.0/' "$work/init/.periplus/settings.yml"
+sed -i 's/drupal_basic@0.3.0/drupal_basic@0.1.0/' "$work/init/.periplus/settings.yml"
 cp "$work/init/.periplus/settings.yml" "$work/init-before.yml"
 (cd "$work/init" && "$PERIPLUS" update >/dev/null)
-sed 's/drupal_basic@0.2.0/drupal_basic@0.1.0/' "$work/init/.periplus/settings.yml" | cmp - "$work/init-before.yml" \
+sed 's/drupal_basic@0.3.0/drupal_basic@0.1.0/' "$work/init/.periplus/settings.yml" | cmp - "$work/init-before.yml" \
     || { echo "update changed the init-written file beyond the pin"; exit 1; }
-grep -qF '"drupal_basic@0.2.0"' "$work/init/.periplus/settings.yml" \
+grep -qF '"drupal_basic@0.3.0"' "$work/init/.periplus/settings.yml" \
     || { echo "the init-written pin was not moved"; exit 1; }
 
 mkdir "$work/bare"

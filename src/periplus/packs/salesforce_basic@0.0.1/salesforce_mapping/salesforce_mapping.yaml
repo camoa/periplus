@@ -1,0 +1,19 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Salesforce mapping: a config entity that syncs one Drupal bundle with one Salesforce object.
+# It refines the config object of its file, so it shares that node's id.
+
+node_types:
+- name: salesforce.mapping
+  parent: drupal.config_object
+
+edge_kinds:
+- kind: maps_bundle
+  from: salesforce.mapping
+  to: drupal.bundle
+- kind: maps_entity_type
+  from: salesforce.mapping
+  to: drupal.entity_type
+- kind: maps_field
+  from: salesforce.mapping
+  to: drupal.field_instance

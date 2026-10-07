@@ -1,0 +1,54 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A profile type read from its config file as the bundle profile.<id>, the id drupal_basic gives a field or
+# display of it. Two rules: the node with its label, and its edges.
+
+rules:
+- rule: bundle_profile_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: profile.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^profile\.type\.', with: 'profile.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: bundle_profile_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: profile.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^profile\.type\.', with: 'profile.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'profile.type.{id}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'profile'
+  confidence: declared

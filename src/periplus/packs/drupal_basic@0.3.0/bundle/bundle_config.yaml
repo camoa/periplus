@@ -1,0 +1,393 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A bundle read from its config file, two rules per bundle entity type's config prefix: the node
+# with its label, and its edges. The prefix names the entity type, so node.type.article is the
+# bundle node.article of the entity type node. An edge rule's this_node is the bundle, and its
+# ends are built from the key holding the bundle's machine name. The block type is read by its own
+# rules.
+
+rules:
+- rule: bundle_comment_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: comment.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^comment\.type\.', with: 'comment.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: bundle_comment_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: comment.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^comment\.type\.', with: 'comment.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'comment.type.{id}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'comment'
+  confidence: declared
+- rule: bundle_contact_message_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: contact.form.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^contact\.form\.', with: 'contact_message.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: bundle_contact_message_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: contact.form.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^contact\.form\.', with: 'contact_message.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'contact.form.{id}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'contact_message'
+  confidence: declared
+- rule: bundle_group_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: group.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^group\.type\.', with: 'group.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: bundle_group_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: group.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^group\.type\.', with: 'group.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'group.type.{id}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'group'
+  confidence: declared
+- rule: bundle_group_relationship_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: group.relationship_type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^group\.relationship_type\.', with: 'group_relationship.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: bundle_group_relationship_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: group.relationship_type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^group\.relationship_type\.', with: 'group_relationship.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'group.relationship_type.{id}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'group_relationship'
+  confidence: declared
+- rule: bundle_media_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: media.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^media\.type\.', with: 'media.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: bundle_media_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: media.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^media\.type\.', with: 'media.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'media.type.{id}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'media'
+  confidence: declared
+- rule: bundle_node_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: node.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^node\.type\.', with: 'node.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: name
+  confidence: declared
+- rule: bundle_node_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: node.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^node\.type\.', with: 'node.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: type
+        template: 'node.type.{type}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: type
+        template: 'node'
+  confidence: declared
+- rule: bundle_shortcut_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: shortcut.set.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^shortcut\.set\.', with: 'shortcut.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: bundle_shortcut_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: shortcut.set.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^shortcut\.set\.', with: 'shortcut.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'shortcut.set.{id}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'shortcut'
+  confidence: declared
+- rule: bundle_taxonomy_term_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: taxonomy.vocabulary.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^taxonomy\.vocabulary\.', with: 'taxonomy_term.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: name
+  confidence: declared
+- rule: bundle_taxonomy_term_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: taxonomy.vocabulary.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^taxonomy\.vocabulary\.', with: 'taxonomy_term.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: vid
+        template: 'taxonomy.vocabulary.{vid}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: vid
+        template: 'taxonomy_term'
+  confidence: declared

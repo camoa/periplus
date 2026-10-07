@@ -1,0 +1,54 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A webform read from its config file as the bundle webform_submission.<id>, the id drupal_basic gives a field or
+# display of it. Two rules: the node with its label, and its edges.
+
+rules:
+- rule: bundle_webform_submission_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: webform.webform.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^webform\.webform\.', with: 'webform_submission.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: title
+  confidence: declared
+- rule: bundle_webform_submission_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: webform.webform.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^webform\.webform\.', with: 'webform_submission.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'webform.webform.{id}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'webform_submission'
+  confidence: declared

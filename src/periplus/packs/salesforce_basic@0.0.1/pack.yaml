@@ -1,0 +1,31 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The Salesforce contributed modules: their mapping field plugins, by annotation, each joined to
+# its class by plugin_class; each mapping config file as a salesforce.mapping on its config node,
+# with its Salesforce object and its push and pull standalone flags, a maps_bundle edge to
+# <drupal_entity_type>.<drupal_bundle>, a maps_entity_type edge, and an inferred maps_field edge to
+# each field instance its dependencies.config lists; and each SalesforceEvents constant a
+# subscriber keys, as a salesforce.event, read as text through drupal_basic's drupal_php_text.
+#
+# Known gaps:
+# - The mapping field manager reads the generic Plugin annotation, so any class in the folder
+#   below that carries a Plugin annotation is read as a mapping field. An id that is not text in
+#   double quotes makes no plugin and is listed under skipped. The other Salesforce plugin types,
+#   such as auth providers and pull queue workers, give nothing.
+# - A mapping's field_mappings list is not read: a list source's each part names the key, not its
+#   value. So a field mapped by a property path, such as field_my_date.value, which the
+#   dependencies do not list, gives no maps_field edge, and nor does any mapping's Salesforce
+#   field, direction or mapping field plugin. A mapping whose dependencies list no field instance,
+#   as a webform submission mapping, is listed under skipped: fired and emitted nothing.
+# - A mapping's sync triggers, pull settings and key give nothing. The auth provider config,
+#   salesforce.salesforce_auth.*, and salesforce_logger.settings stay plain config objects.
+# - An event is named by its constant as written, less any namespace. One used through an alias,
+#   or as the event's own text, such as 'salesforce.pull_query', makes no event. No edge joins a
+#   subscriber to its event: that rule belongs to drupal_basic.
+pack: salesforce_basic
+version: 0.0.1
+depends: [drupal_basic, php_basic]
+
+folders:
+  # The folder the mapping field manager discovers in, below a module's src folder.
+  salesforce_mapping_field_classes: "{module_root}/src/Plugin/SalesforceMappingField/**"

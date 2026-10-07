@@ -1,0 +1,30 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route a template links to: path('name') or url('name') in a <name>.html.twig file is an edge
+# from the template to the route. Read as text, because a call is not a Twig tree node the twig
+# grammar names. The route is the first quoted argument; <front> is a route name Drupal accepts.
+# A call inside a Twig comment makes nothing. A call inside a quoted text or a verbatim block
+# still gives an edge. A CSS url(...) in a style block names no route, because its argument is
+# not a route name: the capture takes <front> or a name of letters, digits, underscores and dots.
+# A route that no mapped routing file declares, such as user.login, ends at a referenced node.
+
+rules:
+- rule: route_linked_in_template
+  reads: file
+  in:
+  - module_root
+  - theme_root
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\b(?:path|url)\(\s*[''"](?<route><front>|[A-Za-z_][\w.]*)[''"]'
+  id:
+    template: '{template_name}'
+  emits:
+  - edge:
+      kind: template_links_route
+      from: this_node
+      to:
+        from:
+          capture: route
+  confidence: declared

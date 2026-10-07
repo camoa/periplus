@@ -1,0 +1,33 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A template, named by its file: node--article.html.twig is node--article. A name that a module
+# and a theme both define is one node with a location in each file. A template links a route
+# when it calls path() or url() with the route's name.
+
+node_types:
+- name: drupal.template
+  id_namespace: drupal.template
+
+edge_kinds:
+- kind: template_links_route
+  from: drupal.template
+  to: drupal.route
+
+rules:
+- rule: template_file
+  reads: file
+  in:
+  - module_root
+  - theme_root
+  match:
+    file: '*.html'
+    filetype: twig
+  id:
+    from: file_stem
+    normalize:
+    - replace: \.html$
+      with: ''
+  emits:
+  - node:
+      type: drupal.template
+  confidence: declared

@@ -1,0 +1,36 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Salesforce event, named by its SalesforceEvents constant as written, as
+# SalesforceEvents::PULL_QUERY. Read from PHP as text, where a subscriber's getSubscribedEvents
+# keys it: SalesforceEvents::X => 'method', or $events[SalesforceEvents::X][] = .... A use of the
+# constant as a value, as in a test's assertArrayHasKey(SalesforceEvents::X, ...), makes nothing.
+# The id is the constant's name, not the event name it holds, such as salesforce.pull_query. The
+# class the file's path names by Drupal's PSR-4 layout subscribes to the event, so the edge is
+# inferred and a file outside a src folder makes no edge. The Salesforce module defines the
+# event and is not in the mapped code, so the event is the referenced end of the edge and no
+# rule makes it a node of its own.
+
+node_types:
+- name: salesforce.event
+  id_namespace: salesforce.event
+
+edge_kinds:
+- kind: subscribes_to_salesforce_event
+  from: php.class
+  to: salesforce.event
+
+rules:
+- rule: salesforce_event_subscribed_by_class
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bSalesforceEvents::(?<event>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*\[\s*\]\s*=)'
+  id: {template: '{psr4_class}'}
+  emits:
+  - edge:
+      kind: subscribes_to_salesforce_event
+      from: this_node
+      to: {template: 'SalesforceEvents::{event}', types: [salesforce.event]}
+  confidence: inferred

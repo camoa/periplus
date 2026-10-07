@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Webform handler plugin declared by the WebformHandler docblock annotation on its class. Two
+# rules because a rule that emits an edge emits no node. An id that is not text in double quotes
+# makes no plugin and is listed under skipped in the map report.
+
+rules:
+- rule: webform_handler_from_annotation
+  reads: file
+  in:
+  - webform_handler_classes
+  match:
+    annotation: WebformHandler
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.webform_handler
+  confidence: declared
+- rule: webform_handler_from_annotation_edges
+  reads: file
+  in:
+  - webform_handler_classes
+  match:
+    annotation: WebformHandler
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

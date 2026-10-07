@@ -1,0 +1,15 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+rules:
+# drupalSettings.key inside a behavior object: the behavior reads the setting.
+- rule: setting_read_in_behavior
+  reads: file
+  in: [js_source]
+  match:
+    declaration: member_expression
+    name_child: property
+    filetype: javascript
+    where: [{name_matches: {child: object, pattern: 'drupalSettings'}}]
+  id: {from: declared_name}
+  emits: [{edge: {kind: reads_setting, from: enclosing_class, to: this_node}}]
+  confidence: declared

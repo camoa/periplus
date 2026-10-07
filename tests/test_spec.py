@@ -401,8 +401,10 @@ def test_a_pack_name_no_directory_carries_exits_fifteen_and_names_what_is_there(
     assert report.documents, "a bad pack name suppressed the contract"
     problem = next(p for p in report.problems if p.code is ExitCode.PACK_UNKNOWN)
     assert problem.detail["available"] == (
-        "drupal, drupal_basic, go, go_basic, laravel_basic, php, php_basic, twig, twig_basic, "
-        "yaml, yaml_basic"
+        "advancedqueue_basic, ai_basic, config_pages_basic, crop_basic, drupal, drupal_basic, "
+        "drupal_js_basic, drush_basic, eck_basic, go, go_basic, js_basic, laravel_basic, "
+        "paragraphs_basic, php, php_basic, profile_basic, salesforce_basic, twig, twig_basic, "
+        "twig_tweak_basic, webform_basic, yaml, yaml_basic"
     )
 
 

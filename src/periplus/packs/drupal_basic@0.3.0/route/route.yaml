@@ -1,0 +1,42 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route, named by its key in a routing file, and the PHP method or form class that answers it. A
+# route requires a permission or a role it needs, and accepts each of permissions or roles any one
+# of which lets in. A route's title comes from a PHP method, its access from a service or a PHP
+# method, and a parameter's value is loaded as an entity of an entity type.
+
+node_types:
+- name: drupal.route
+  id_namespace: drupal.route
+
+edge_kinds:
+- kind: requires_permission
+  from: drupal.route
+  to: drupal.permission
+- kind: accepts_permission
+  from: drupal.route
+  to: drupal.permission
+- kind: handled_by
+  from: drupal.route
+  to: php.method
+- kind: uses_form
+  from: drupal.route
+  to: php.class
+- kind: titled_by
+  from: drupal.route
+  to: php.method
+- kind: requires_role
+  from: drupal.route
+  to: drupal.role
+- kind: accepts_role
+  from: drupal.route
+  to: drupal.role
+- kind: access_checked_by_service
+  from: drupal.route
+  to: drupal.service
+- kind: access_checked_by
+  from: drupal.route
+  to: php.method
+- kind: loads_entity_type
+  from: drupal.route
+  to: drupal.entity_type

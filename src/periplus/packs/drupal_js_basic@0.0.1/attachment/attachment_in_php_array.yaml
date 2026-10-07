@@ -1,0 +1,27 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+rules:
+# '#attached' => ['library' => ['module/library', ...]] in a class file under src: each text in
+# the list is a library the class attaches. The id names both spans, so a text outside either
+# one makes nothing.
+- rule: library_attached_in_array
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,\s][''"](?<library>[A-Za-z0-9_]+/[\w.-]+)[''"]\s*[,\]]'
+  values:
+    in_attached: {from: {enclosing: attached, capture: mark}}
+    in_library: {from: {enclosing: library_list, capture: mark}}
+  id:
+    template: '{in_attached}|{in_library}|{library}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+  line: {capture: library}
+  emits:
+  - edge:
+      kind: attaches_library
+      from: {template: '{psr4_class}', types: [php.class]}
+      to: this_node
+  confidence: inferred

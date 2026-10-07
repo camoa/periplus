@@ -1,0 +1,60 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A form mode or a view mode read from its config file: one node rule each, with its label, and
+# one mode_of rule for both, from the mode's targetEntityType.
+
+rules:
+- rule: form_mode_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_form_mode.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.form_mode
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: view_mode_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_view_mode.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.view_mode
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: mode_entity_type_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_mode.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: mode_of
+      from: this_node
+      to:
+        from:
+          key: targetEntityType
+  confidence: declared

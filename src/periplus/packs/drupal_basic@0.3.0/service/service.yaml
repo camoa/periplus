@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A service, named by its key in a services file, a tag a service carries, and the PHP class that
+# implements a service. service_class ends at a class or an interface, because a service built by a
+# factory may name an interface under class.
+
+node_types:
+- name: drupal.service
+  id_namespace: drupal.service
+- name: drupal.service_tag
+  id_namespace: drupal.service_tag
+
+edge_kinds:
+- kind: injects_service
+  from: drupal.service
+  to: drupal.service
+- kind: extends_service
+  from: drupal.service
+  to: drupal.service
+- kind: alias_of_service
+  from: drupal.service
+  to: drupal.service
+- kind: tagged_as
+  from: drupal.service
+  to: drupal.service_tag
+- kind: service_class
+  from: drupal.service
+  to: [php.class, php.interface]

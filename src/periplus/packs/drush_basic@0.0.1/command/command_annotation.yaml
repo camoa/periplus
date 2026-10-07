@@ -1,0 +1,60 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Drush command declared by the @command tag in a method's docblock, read as text. The pattern
+# runs from the tag to the docblock's end, never past it, then past one-line attributes and
+# modifiers to the function's name. The node rule is declared; the edge rules name the class from
+# the file's path, so they are inferred.
+
+rules:
+- rule: command_from_annotation
+  reads: file
+  in:
+  - source
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@command[ \t]+(?<name>[\w:.-]+)'
+  id:
+    template: '{name}'
+  line: {capture: name}
+  emits:
+  - node:
+      type: drush.command
+  confidence: declared
+- rule: command_method_from_annotation
+  reads: file
+  in:
+  - source
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@command[ \t]+(?<name>[\w:.-]+)(?:[^*]|\*[^/])*\*/\s*(?:#\[[^\n]*\]\s*)*(?:(?:public|protected|private|static|final)\s+)*function\s+(?<method>\w+)'
+  id:
+    template: '{name}'
+  line: {capture: name}
+  emits:
+  - edge:
+      kind: command_method
+      from: this_node
+      to: {template: '{psr4_class}::{method}', types: [php.method], on_miss: unresolved}
+  confidence: inferred
+- rule: command_class_from_annotation
+  reads: file
+  in:
+  - source
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@command[ \t]+(?<name>[\w:.-]+)'
+  id:
+    template: '{name}'
+  line: {capture: name}
+  emits:
+  - edge:
+      kind: command_class
+      from: this_node
+      to: {template: '{psr4_class}', types: [php.class], on_miss: unresolved}
+  confidence: inferred

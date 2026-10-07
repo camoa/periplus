@@ -1,0 +1,26 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An ECK entity type read from its config file: a content entity type named by its id, with its
+# label. ECK defines no class for it, so it has no entity_class edge.
+
+rules:
+- rule: eck_entity_type_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: eck.eck_entity_type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^eck\.eck_entity_type\.', with: ''}
+  emits:
+  - node:
+      type: drupal.content_entity_type
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared

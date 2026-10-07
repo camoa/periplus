@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The Entity Construction Kit contributed module: each ECK entity type, from its config file, as
+# a content entity type with its label; and each ECK bundle, from its config file
+# eck.eck_type.<entity type>.<bundle>, as the bundle <entity type>.<bundle> with its label (key
+# name), a configured_by edge to that file and a bundle_of edge to its entity type.
+#
+# Known gaps: an ECK entity type's base field switches (uid, created, changed, title) and
+# standalone_url give nothing, and it has no entity_class edge, because ECK defines no class per
+# type. The bundle_of edge reads the entity type from the file name, not from a key, so a file
+# renamed by hand gives a wrong edge. A bundle's description gives nothing.
+#
+# The path value eck_entity_type is declared on yaml_basic's type yml, so the bundle rules match
+# filetype yml; a type of another name that claims the ending yml is refused.
+pack: eck_basic
+version: 0.0.1
+depends: [drupal_basic]
+files:
+  types:
+    # A bundle file names its entity type only in its file name, eck.eck_type.<entity type>.<bundle>.
+    yml:
+      endings: [yml]
+      reader: data
+      format: yaml
+      path_values:
+        eck_entity_type:
+          pattern: '^(?:.*/)?eck\.eck_type\.(?<name>[^./]+)\.[^/]+\.yml$'
+          template: '{name}'

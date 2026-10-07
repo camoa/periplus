@@ -226,7 +226,9 @@ def test_a_directory_name_holding_a_newline_cannot_forge_a_line(tmp_path: Path) 
     text = render_text(report)
     rows = _section(text, "Candidates")
 
-    assert len(report.candidates) == 15, [c.entry for c in report.candidates]
+    bundled_dir = Path(__file__).parent.parent / "src" / "periplus" / "packs"
+    bundled = [d for d in bundled_dir.iterdir() if d.is_dir()]
+    assert len(report.candidates) == len(bundled) + 4, [c.entry for c in report.candidates]
     assert len(rows) == len(report.candidates), rows
     assert "evil\npack" not in text
     assert "evil\\npack@1.0.0" in text

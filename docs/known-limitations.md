@@ -1,8 +1,8 @@
 # Known limitations
 
 The README's Known limitations section lists the limits a new user meets first. This page lists
-the rest. `php_basic@0.2.0/pack.yaml`, `drupal_basic@0.2.0/pack.yaml`, `go_basic@0.0.3/pack.yaml`
-and `laravel_basic@0.0.5/pack.yaml` each open with a list of their known gaps.
+the rest. The `pack.yaml` of every bundled rutter except `yaml_basic` and `twig_basic` opens with
+a list of its known gaps.
 
 ## The engine
 
@@ -17,14 +17,16 @@ and `laravel_basic@0.0.5/pack.yaml` each open with a list of their known gaps.
   built-in, `function strlen()` in its namespace, gets no edge from an unqualified call. Drupal's
   global functions, such as `t()`, are not built-ins and give an unresolved function.
   `skip_names` matches the exact case, so `ISSET(` still gives an unresolved function.
-- **Drupal:** template `embed` and `include` give no edge. Plugin types that contributed modules
-  define need their own rutter. Things generated at run time, such as a route from a view, appear
-  as `referenced`. A service or entity type that no mapped file declares, such as `config.factory`
+- **Drupal:** template `embed` and `include` give no edge. A contributed module's plugins and
+  bundle config files are mapped only by that module's rutter, listed below. Without one, its
+  bundle config file stays a plain config object and its bundle is `referenced`, with no label.
+  Things generated at run time, such as a route from a view, appear as `referenced`. A service or entity type that no mapped file declares, such as `config.factory`
   or `node`, appears as `referenced`, and so does a misspelled name. A service that `get('x')`
   names on an object written `$container`, `$this->container` or `\Drupal::getContainer()` gives
   an edge with confidence `inferred`, so a `$container` or `$this->container` that is not Drupal's
   service container gives a false service.
-- **Drupal, hooks:** a function in a module, install, include, theme or profile file is a hook
+- **Drupal, hooks:** a function in a module, install, include, theme, profile, `post_update.php` or
+  `deploy.php` file is a hook
   when its name starts with the first part of the file name and an underscore. So any function
   that starts with the first part of the file name reads as a hook, such as the form callback
   `mymod_settings_submit`, the helper `mymod_build_list` or `mymod_update_NEXT`. The prefix is
@@ -36,23 +38,77 @@ and `laravel_basic@0.0.5/pack.yaml` each open with a list of their known gaps.
   named other than its module or theme gives no hook. Nor does a function named with another module's name, such
   as `othermod_cron` in `mymod.module`. A hook with a variable part keeps it:
   `mymod_form_user_login_form_alter` implements `form_user_login_form_alter`. A function in a plain
-  `.php` file gives no hook, so a post-update function in `mymod.post_update.php` gives no hook. It
-  leaves two skipped rows in the report.
+  `.php` file other than `post_update.php` or `deploy.php` gives no hook. Each such file leaves two
+  skipped rows in the report, and so does a `.theme` file. A theme's include file gives hooks only
+  when the theme's folder sits directly below `custom_theme` and is named by its machine name.
 - **Drupal, missing results:** a class that extends `ContentEntityBase` with no entity type
   attribute or annotation, such as an abstract base or a bundle class, is not marked as an entity
-  class. A service or entity type named by a variable gives no edge and goes under skipped.
-  `getStorage('x')` on an object not named `entityTypeManager`, `get('x')` on a container with
-  another name, other entity type manager methods such as `getViewBuilder('x')`, and static
-  shortcuts such as `\Drupal::config('x')` give no edge. `$etm->getStorage('x')`,
-  `\Drupal::service('entity_type.manager')->getStorage('x')` and
-  `$container->get('entity_type.manager')->getStorage('x')` give no entity type edge. The last two
-  give a service edge to `entity_type.manager`. The container rule reads only `$container`,
-  `$this->container` and `\Drupal::getContainer()` as written: `$this->getContainer()->get('x')`,
-  `static::getContainer()->get('x')`, a receiver split over lines, `$container?->get('x')` and
-  another letter case, such as `->GET('x')`, give no edge and no skipped row.
+  class. A service or entity type named by a variable, a class constant or a concatenation gives
+  no edge and goes under skipped, so `getStorage(MyEntity::ENTITY_TYPE)` gives none.
+  `getStorage('x')` on an object not named `entityTypeManager` or `$entity_type_manager`,
+  `get('x')` on a container with another name, and other entity type manager methods such as
+  `getHandler('x')` give no edge. `$etm->getStorage('x')` gives no entity type edge. Static
+  shortcuts such as `\Drupal::config('x')` give no service edge, and a static call on an entity
+  class, such as `User::load(1)`, gives no entity type edge. Both need a table from the method or
+  the class to its service or entity type, which no rule can hold today. The container rule reads
+  only `$container`, `$this->container` and `\Drupal::getContainer()` as written:
+  `$this->getContainer()->get('x')`, `static::getContainer()->get('x')`, a receiver split over
+  lines, `$container?->get('x')` and another letter case, such as `->GET('x')`, give no edge and no
+  skipped row. Core plugins whose folders the rutter does not name give nothing, such as a views
+  argument, sort or display plugin, and so do a views field, filter or style plugin and a mail
+  plugin declared by an annotation. A plugin type, its attribute class and its plugin manager get
+  no node. A display in the mode `default` has no `in_mode` edge, and an entity reference field's
+  target bundles give no edge.
+- **Drupal, routes and roles:** route requirements and options other than those the manifest
+  lists give nothing, such as `_entity_create_access` or `_auth`. A `_custom_access` written
+  `service:method` gives an edge to the service only. A parameter converted to an entity by its
+  name alone, or typed other than `entity:<type>`, gives no `loads_entity_type` edge. An attribute
+  keeps its value as written, so `no_cache: 'TRUE'` and `no_cache: true` differ. The `applies_to`
+  key of an `access_check` tag is kept on the service, not on its `tagged_as` edge, because the
+  engine accepts an attribute on an edge and does not execute it; a custom requirement that such a
+  tag binds gives no edge.
 - **Drupal, settings to know:** only the custom modules and themes are read as PHP. A folder
   setting may not leave the project root, so a site is mapped from inside its own tree.
   `drupal_basic` repeats `php_basic`'s grammar pin, so a grammar update must change both.
+- **Drupal contributed modules, bundles:** `config_pages_basic`, `crop_basic`, `eck_basic`,
+  `paragraphs_basic`, `profile_basic` and `webform_basic` map each type's label and nothing else of
+  its settings, such as a paragraph type's behaviors, a crop type's aspect ratio, a profile type's
+  roles or a webform's elements and handlers. Their entity types, other than an ECK one, are
+  declared by the module's PHP, which is not mapped, so they stay `referenced`. An image style's
+  crop effect and a field's allowed paragraph types give no edge. An ECK bundle's entity type is
+  read from its file name, so a file renamed by hand gives a wrong edge. `eck_basic` declares its
+  path value on `yaml_basic`'s type `yml`, so a type of another name that claims the ending `yml`
+  is refused beside it.
+- **Drupal contributed modules, plugins:** in `ai_basic`, `advancedqueue_basic`,
+  `salesforce_basic` and `webform_basic`, a plugin id that is not a text literal, or in an
+  annotation not text in double quotes, makes no plugin and is listed under skipped. `webform_basic` reads handlers declared by annotation only, and no other
+  Webform plugin type. `salesforce_basic` reads any class with a generic `Plugin` annotation in the
+  mapping field folder as a mapping field. It does not read a mapping's `field_mappings`, so a field
+  mapped by a property path, a Salesforce field and a direction give no edge. Sync triggers, pull
+  settings and other Salesforce plugin types give nothing. An event used through an alias, or
+  written as its own text, makes no event, and no edge joins a subscriber to its event.
+- **Drush:** the `@command` tag is read as text, because the engine reads a docblock annotation
+  only in the form `@Name(...)` and allows one text file type per ending. Its class is named from
+  the file's path, so its edges are inferred, and a class named otherwise gives unresolved ends.
+  An attribute without the named argument `name:`, aliases, options, arguments, hooks and
+  validators give nothing. Nothing joins a command class's service to its command.
+- **Twig Tweak:** only `drupal_block`, `drupal_menu`, `drupal_entity`, `drupal_entity_form` and
+  `drupal_field` give edges, each from a quoted first argument; a name in a variable gives no edge
+  and no skipped row. `drupal_entity` ends at the entity type, not the entity, and `drupal_field`
+  at the field storage. A Twig file not named `.html.twig` gives no edge. A call inside a quoted
+  text or a verbatim block still gives one. Two templates of one name in two modules are one node.
+- **JavaScript:** `js_basic` maps named functions only. A call, an import, an export, a
+  generator, a class, a class method and a function that is an object member or an argument give
+  nothing. Two functions of one name in one script are one node. A `.mjs`, `.cjs`, `.jsx` or `.ts`
+  file is not read. A script's id is its path from the project folder.
+- **Drupal JavaScript:** `drupal_js_basic` reads a behavior only as `Drupal.behaviors.name = {...}`,
+  and any object so assigned is one, with or without `attach`. A behavior call or a settings read
+  outside a behavior object makes no edge and goes under skipped. `detach`, `once()`, `Drupal.t()`,
+  `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge. Only the
+  first key after `drupalSettings` is read. The array form of a PHP library attachment is read as
+  text and named by PSR-4 path, so it is inferred and a file outside a `src` folder gives no edge.
+  A library named by a constant or a variable, and the scripts a `.libraries.yml` file lists, give
+  no edge.
 - **Python:** text rules see no scopes. Every call starts at the module, and a local name that
   shadows an import gives a false edge. Method calls on objects and imports re-exported through
   another file are not followed. More forms are listed in the author guide.

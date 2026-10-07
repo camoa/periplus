@@ -1,0 +1,54 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A config page type read from its config file as the bundle config_pages.<id>, the id drupal_basic gives a field or
+# display of it. Two rules: the node with its label, and its edges.
+
+rules:
+- rule: bundle_config_pages_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: config_pages.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^config_pages\.type\.', with: 'config_pages.'}
+  emits:
+  - node:
+      type: drupal.bundle
+  - attribute:
+      name: label
+      from:
+        key: label
+  confidence: declared
+- rule: bundle_config_pages_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: config_pages.type.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^config_pages\.type\.', with: 'config_pages.'}
+  emits:
+  - edge:
+      kind: configured_by
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'config_pages.type.{id}'
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: id
+        template: 'config_pages'
+  confidence: declared

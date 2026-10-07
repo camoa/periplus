@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # A project that pins the old drupal_basic@0.1.0 stops with exit 5 and the problem that no pack
-# directory of that name is on the pack search path. The JSON detail names drupal_basic@0.2.0 as
+# directory of that name is on the pack search path. The JSON detail names drupal_basic@0.3.0 as
 # the near miss, so the version to pin is given. No map file is written.
 set -euo pipefail
 work="$(mktemp -d)"
@@ -30,6 +30,6 @@ assert len(problems) == 1, problems
 assert problems[0]["code"] == 5, problems
 assert problems[0]["message"] == sys.argv[2], problems
 assert problems[0]["detail"]["pin"] == "drupal_basic@0.1.0", problems
-assert "drupal_basic@0.2.0" in problems[0]["detail"]["near_misses"], problems
+assert "drupal_basic@0.3.0" in problems[0]["detail"]["near_misses"], problems
 PY
 echo "old pin ok"

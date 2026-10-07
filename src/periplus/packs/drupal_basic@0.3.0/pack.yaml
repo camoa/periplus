@@ -1,0 +1,294 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The walking-skeleton Drupal pack: every exported or installed configuration file becomes one
+# node. It is renamed to drupal when the reference packs retire.
+#
+# Known gaps. The basic Drupal pack maps, beside php_basic's classes, functions and methods:
+# - configuration, modules, themes, services with their tags and classes, routes, permissions,
+#   libraries, templates, entity types, bundles, fields, displays, menu links, local actions,
+#   block placements and the plugin kinds whose folders are named under folders below. A service's
+#   class may be a class or an interface, as for a service a factory builds;
+# - each bundle under the id <entity type>.<bundle>, as node.article. A bundle config file of a core
+#   prefix declares it with its label, a configured_by edge to that file and a bundle_of edge to
+#   its entity type. A field instance or a display gives a field_of or displays edge to the bundle
+#   its entity type and bundle keys name, and an inferred bundle_of edge from that bundle. A bundle
+#   or an entity type that no rule declares, such as a paragraph type or the ECK entity type
+#   my_type, ends at a referenced node. A field storage gives a storage_of edge to its entity
+#   type, a view or form mode a mode_of edge to its entity type, and a display in a mode other than
+#   default an in_mode edge to that mode;
+# - each service that \Drupal::service('x') names in a PHP function or method, as a uses_service
+#   edge; each service that get('x') names on an object written $container, $this->container or
+#   \Drupal::getContainer(), as a uses_service edge with confidence inferred; and each entity type
+#   that \Drupal::entityQuery('x') or \Drupal::entityQueryAggregate('x') names, or that
+#   getStorage('x'), getViewBuilder('x'), getListBuilder('x'), getFormObject('x') or
+#   getAccessControlHandler('x') names on an object written ending in entityTypeManager, written
+#   $entity_type_manager, or written as the container's get('entity_type.manager') or
+#   \Drupal::service('entity_type.manager'), as a uses_entity_type edge. A service or an
+#   entity type that no mapped file declares, such as config.factory or node, ends at a referenced
+#   node: Drupal core and contributed modules are outside the mapped code;
+# - each method that carries a Hook attribute, and each function in a module, install, inc, theme,
+#   profile, post_update.php or deploy.php file whose name starts with the first part of the file
+#   name and an underscore, as an implements_hook edge to the hook the rest of the name gives:
+#   mymod_cron in mymod.module implements cron, mymod_post_update_fix in mymod.post_update.php
+#   implements post_update_NAME, as every update_N function implements the one hook update_N. A
+#   function in an inc file below a custom theme folder, whose name starts with that folder's name
+#   and an underscore, implements a hook the same way: mytheme_preprocess_node in
+#   mytheme/preprocess/node.preprocess.inc implements preprocess_node. A hook found by a
+#   function's name has confidence inferred;
+# - a route's methods, its requirements _access, _format, _user_is_logged_in, _csrf_token,
+#   _entity_access and _custom_access, and its options no_cache and _admin_route, as attributes
+#   holding the value as written; each role its _role names, as a requires_role or accepts_role
+#   edge to user.role.<role>; a _custom_access written service:method as an
+#   access_checked_by_service edge, one written Class::method as an access_checked_by edge; a
+#   _title_callback written Class::method as a titled_by edge; and each parameter typed
+#   entity:<type> as a loads_entity_type edge;
+# - each role's configuration as a role, with its is_admin attribute, and each permission it lists
+#   as a grants_permission edge. A role or permission that no mapped file declares, such as one
+#   from core or a contributed module, ends at a referenced node.;
+# - each route a template names in path('x') or url('x'), as a template_links_route edge, read as
+#   text; a core route such as user.login ends at a referenced node.
+#
+# False results:
+# - Any function whose name starts with the first part of the file name reads as a hook: the form
+#   callback mymod_settings_submit reads as the hook settings_submit, the helper mymod_build_list
+#   as build_list, and mymod_update_NEXT as update_NEXT. The same holds for a theme's inc file
+#   and the theme folder's name. On one site, 8 of 165 hooks were such callbacks or helpers.
+# - The prefix is the file name, not an installed module's name. If Drupal core were inside the
+#   mapped folders, its files such as form.inc would give false hooks, such as select_options from
+#   form_select_options.
+# - A procedural function kept beside a Hook attribute method for the same hook, a LegacyHook shim,
+#   reads as a second implementation of that hook, though Drupal skips the shim.
+# - A function below one that carries the ProceduralHookScanStop attribute, and every function of
+#   a module that sets skip_procedural_hook_scan, still reads as a hook, though Drupal does not
+#   scan them.
+# - A misspelled service or entity type name ends at a referenced node, as a real one from core
+#   does, and not at an unresolved one.
+# - A $container or $this->container that is not Drupal's service container gives a false
+#   service.
+#
+# Missing results:
+# - A function in a module file named other than its module, such as includes/helpers.inc
+#   holding mymod_ functions, gives no hook, and nor does a theme file of another ending, such as
+#   includes/content.theme. A theme's inc file is read by the name of the folder directly below
+#   custom_theme, so a theme nested deeper, or one whose folder name is not its machine name,
+#   gives no hook. Nor does a function named with another module's name, such as
+#   othermod_cron in mymod.module, which Drupal counts as a hook of othermod.
+# - The number of an update_N function is not recorded apart from the function's name.
+# - A .theme file leaves two skipped rows, the id source theme_name is absent, from the include
+#   rules hook_from_theme_include and theme_include_implements_hook.
+# - Plugins of the core types not named under folders below give nothing, such as a views
+#   argument, sort or display plugin. A views field, filter or style plugin declared by an
+#   annotation, and a mail plugin declared by an annotation, give nothing. A views plugin gives
+#   one skipped row, argument 0 or id missing, from the rule that reads the other form of the id.
+# - A plugin type itself, its attribute class and its plugin manager service, gets no node.
+# - A hook with a variable part keeps that part in its name: mymod_form_user_login_form_alter
+#   implements form_user_login_form_alter, not form_FORM_ID_alter.
+# - A class that extends ContentEntityBase and carries no ContentEntityType attribute or
+#   annotation, such as an abstract base or a bundle class, is not marked as an entity class. The
+#   map holds only its plain inherits edge.
+# - A service or entity type named by a variable, a constant or a concatenation gives no edge and
+#   goes under skipped, so getStorage(MyEntity::ENTITY_TYPE) gives no edge. getStorage('x') on an
+#   object with another name, as $etm, get('x') on a container with another name, a receiver
+#   written with a space or a line break inside get('entity_type.manager'), and other entity type
+#   manager methods such as getHandler('x') give no edge.
+# - \Drupal::currentUser(), \Drupal::config('x'), \Drupal::messenger() and the other static
+#   shortcuts give no uses_service edge, and php_basic maps each as a calls edge to an unresolved
+#   method such as Drupal::state. A static call on an entity class, as User::load(1),
+#   Node::create([...]) or MyEntity::loadMultiple(), gives no uses_entity_type edge. Both need a
+#   table from the method or the class to its service or entity type, which no rule can hold
+#   today: a reference rule's edge ends only at a call's argument or the written name.
+# - The container rule reads only $container, $this->container and \Drupal::getContainer() as
+#   written. $this->getContainer()->get('x'), static::getContainer()->get('x'), a receiver split
+#   over lines, $container?->get('x') and another letter case, such as ->GET('x'), give no edge
+#   and no skipped row.
+# - A contributed module's bundle config file, such as paragraphs.paragraphs_type.text or
+#   eck.eck_type.my_type.my_bundle, stays a plain config object. Its bundle is
+#   referenced, with no label and no configured_by edge, and a type that no field or display names
+#   has no bundle node. That module's own rutter maps the file onto the same bundle id.
+# - A display in the mode default has no in_mode edge, because that mode has no config file.
+# - An entity reference field's target bundles, under settings.handler_settings.target_bundles,
+#   give no edge.
+# - A top-level function in a plain .php file in the custom folders, other than a post_update.php
+#   or deploy.php file, makes no hook. Each such file leaves two skipped rows in the report, one
+#   per hook rule, at its first function.
+# - A _custom_access written service:method gives an edge to the service only. The method stays in
+#   the custom_access attribute and gives no edge to a PHP method.
+# - The applies_to key of a service's access_check tag is kept as the service's applies_to
+#   attribute, not on the tagged_as edge, because an attribute on an edge is accepted and not
+#   executed. A custom route requirement that such a tag binds, such as _mymod_access: 'TRUE', is
+#   not read and gives no edge to the service.
+# - A route parameter that Drupal converts to an entity because its name is an entity type, with
+#   no options.parameters type, gives no loads_entity_type edge, nor does a type other than
+#   entity:<type>, such as entity_revision:<type>.
+# - Requirements and options other than those listed above give nothing: _entity_create_access,
+#   _module_dependencies, a parameter's pattern, _auth, _maintenance_access, a custom option, and
+#   the like.
+# - An attribute keeps the value as written, so no_cache: 'TRUE' and no_cache: true give "TRUE"
+#   and true, and is_admin: null gives null.
+#
+# Settings to know:
+# - Only the custom modules and themes are read as PHP. Move them with custom_module and
+#   custom_theme under folders. A folder setting may not leave the project root, so a site is
+#   mapped from inside its own tree or from a copy.
+# - This pack repeats php_basic's PHP grammar pin, because a pack that reads a file type as a tree
+#   must pin the grammar itself. A grammar update must change both packs.
+pack: drupal_basic
+version: 0.3.0
+depends: [yaml_basic, php_basic, twig_basic]
+
+# ======================================================================================
+# DETECTION
+#
+# What makes a checkout a Drupal checkout, so `periplus init` can prefill this pin. The
+# answer is written here rather than in the engine: recognising a stack is pack data, and
+# a pack somebody else wrote is detected exactly the way this one is.
+#
+# Neither signal is "there is PHP here". php_basic, yaml_basic and twig_basic are reached
+# through `depends` and declare no detector of their own, because a repository having PHP
+# in it is not a stack anybody pins.
+#
+# What init writes is a suggestion in a file the person then edits. A missed detection
+# costs them one typed line; a spurious one costs a wrong pin in a committed artifact. So
+# both signals below are things only a Drupal repository has.
+# ======================================================================================
+detect:
+  any_of:
+    # The dependency, which is the claim the repository makes about itself. `drupal/core`
+    # rather than `drupal/core-recommended`: the substring covers core, core-recommended
+    # and core-composer-scaffold, and every Drupal site requires at least one of them.
+    # Verified against drupal-cms/composer.json on 2026-08-28, which requires
+    # drupal/core-composer-scaffold, drupal/core-project-message and
+    # drupal/core-recommended.
+    - path: composer.json
+      contains: "drupal/core"
+
+    # The docroot, for a checkout that has core in the tree and no composer.json at the
+    # root -- core's own repository, and a site vendored without Composer. The filename
+    # alone is the evidence, so this signal needs no `contains`.
+    - path: web/core/lib/Drupal.php
+
+folders:
+  config:        ./config/sync
+  custom_module: ./web/modules/custom
+  custom_theme: ./web/themes/custom
+  # An extension's shipped configuration: config/install and config/optional.
+  module_config:
+  - "{custom_module}/**/config/install"
+  - "{custom_module}/**/config/optional"
+  - "{custom_theme}/**/config/install"
+  - "{custom_theme}/**/config/optional"
+  module_root: "{custom_module}/**"
+  theme_root: "{custom_theme}/**"
+  # php_basic's source, narrowed to the custom modules and themes at any depth.
+  source:
+  - "{custom_module}/**"
+  - "{custom_theme}/**"
+  # The folder a plugin kind is discovered in: the sub-folder its manager names, below a module's
+  # src folder, and every folder below it. A class elsewhere is not discovered. An entity type is
+  # discovered in src/Entity.
+  action_classes: "{module_root}/src/Plugin/Action/**"
+  block_plugin_classes: "{module_root}/src/Plugin/Block/**"
+  constraint_classes: "{module_root}/src/Plugin/Validation/Constraint/**"
+  entity_type_classes: "{module_root}/src/Entity/**"
+  field_formatter_classes: "{module_root}/src/Plugin/Field/FieldFormatter/**"
+  field_type_classes: "{module_root}/src/Plugin/Field/FieldType/**"
+  field_widget_classes: "{module_root}/src/Plugin/Field/FieldWidget/**"
+  mail_classes: "{module_root}/src/Plugin/Mail/**"
+  media_source_classes: "{module_root}/src/Plugin/media/Source/**"
+  queue_worker_classes: "{module_root}/src/Plugin/QueueWorker/**"
+  rest_resource_classes: "{module_root}/src/Plugin/rest/resource/**"
+  views_field_classes: "{module_root}/src/Plugin/views/field/**"
+  views_filter_classes: "{module_root}/src/Plugin/views/filter/**"
+  views_style_classes: "{module_root}/src/Plugin/views/style/**"
+
+files:
+  # The Drupal endings that hold PHP, added to php_basic's list.
+  extends: php_basic
+  add_extensions: [module, install, inc, theme, profile, engine]
+  # The Group module's group.permissions files hold Group permissions, not Drupal permissions, and
+  # their stem also ends in .permissions.
+  exclude:
+  - '**/*.group.permissions.yml'
+  types:
+    # php_basic's type, given the path value extension: the first part of a module, install,
+    # include, theme, profile, post_update.php or deploy.php file's name, which its procedural
+    # hook functions start with. Absent for any other ending. And theme_name: the name of the
+    # folder directly below custom_theme that holds the file, which a theme's included files
+    # name their functions with. A type read as a tree needs its pack to pin the grammar,
+    # php_basic's pin repeated.
+    php:
+      endings: [module, install, inc, theme, profile]
+      reader: tree
+      path_values:
+        extension:
+          pattern: '^(?:.*/)?(?<name>[^/.]+)\.(?:(?:[^/]+\.)?(?:module|install|inc|theme|profile)|post_update\.php|deploy\.php)$'
+          template: '{name}'
+        theme_name:
+          pattern: '^(?<name>[^/]+)/(?:[^/]+/)*[^/]+\.inc$'
+          template: '{name}'
+          relative_to: custom_theme
+
+    # Two text readings, beside the tree readings twig_basic and php_basic give the same files,
+    # for what a tree rule cannot reach: a call inside a template, the array form of an
+    # attachment, a docblock tag, a class constant used as an array key. Declared here, once,
+    # because the engine lets one text type claim a file ending across all packs; drupal_js_basic,
+    # drush_basic, salesforce_basic and twig_tweak_basic read them.
+    # Templates read as text with their own name as a value, beside the reading twig_basic
+    # gives them. A match that starts inside a Twig comment makes nothing.
+    drupal_template_text:
+      endings: [twig]
+      reader: text
+      path_values:
+        template_name:
+          pattern: '^(?:.*/)?(?<name>[^/]+)\.html\.twig$'
+          template: '{name}'
+      sections:
+      - name: comment
+        open: '\{#'
+        close: '#\}'
+    # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
+    # attachment. The sections are the comments and the strings. A span is the array after
+    # '#attached' =>, and the array after 'library' =>.
+    drupal_php_text:
+      endings: [php, module, theme, inc, install, profile]
+      reader: text
+      path_values:
+        # The class a file under src holds, by Drupal's PSR-4 layout: <module>/src/A/B.php is
+        # Drupal\<module>\A\B.
+        psr4_class:
+          pattern: '^(?:.*/)?(?<module>[^/]+)/src/(?<rest>.+)\.php$'
+          template: 'Drupal\{module}\{rest}'
+          normalize:
+          - {replace: '/', with: '\'}
+      sections:
+      - name: heredoc
+        open: '<<<[ \t]*["'']?(?<label>[A-Za-z_][A-Za-z0-9_]*)'
+        close: '\n[ \t]*{label}\b'
+      - name: block_comment
+        open: '/\*'
+        close: '\*/'
+      - name: line_comment
+        open: '//'
+        close: '\n'
+      - name: hash_comment
+        open: '#[^\[\n]'
+        close: '\n'
+      - name: string
+        open: ''''
+        close: '(?:[^''\\]|\\(?s:.))*'''
+      - name: string
+        open: '"'
+        close: '(?:[^"\\]|\\(?s:.))*"'
+      spans:
+      - name: attached
+        open: '[\[,(\s][''"](?<mark>#attached)[''"]\s*=>\s*(?=\[)'
+        balance: ['[', ']']
+      - name: library_list
+        open: '[\[,(\s][''"](?<mark>library)[''"]\s*=>\s*(?=\[)'
+        balance: ['[', ']']
+
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.0"
+  language: php
+  grammar_version: "0.24.1"

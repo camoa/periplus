@@ -24,7 +24,7 @@ periplus_version: 0
 # story for a pack that arrives inside a downloaded dependency.
 #
 # packs:
-#   - drupal_basic@0.2.0
+#   - drupal_basic@0.3.0
 
 
 # Extra directories to resolve packs from, beside the ones Periplus ships and the two it always

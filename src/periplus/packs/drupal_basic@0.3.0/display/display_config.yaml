@@ -1,0 +1,203 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A display read from its config file: for each of the form and view displays, one node rule and
+# one shows_field rule; then the displays and in_mode rules for both. The bundle is named
+# {targetEntityType}.{bundle}, as the field instance names it. A display shows a
+# configured field that is a key under content and that its dependency list names: the list names
+# every configured field, shown or hidden, and content also holds base and extra fields.
+
+rules:
+- rule: form_display_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_form_display.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.form_display
+  confidence: declared
+- rule: form_display_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_form_display.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: shows_field
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        - each: content.*
+        template: field.field.{targetEntityType}.{bundle}.{key}
+        where:
+        - listed_at: dependencies.config
+  confidence: declared
+- rule: view_display_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_view_display.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - node:
+      type: drupal.view_display
+  confidence: declared
+- rule: view_display_from_config_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_view_display.*
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: shows_field
+      from: this_node
+      to:
+        from:
+        - key: targetEntityType
+        - key: bundle
+        - each: content.*
+        template: field.field.{targetEntityType}.{bundle}.{key}
+        where:
+        - listed_at: dependencies.config
+  confidence: declared
+- rule: display_block_type_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        equals: block_content
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: bundle
+        - key: targetEntityType
+        template: '{targetEntityType}.{bundle}'
+        type: drupal.block_type
+  confidence: declared
+- rule: display_bundle_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: targetEntityType
+        not_equals: block_content
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: displays
+      from: this_node
+      to:
+        from:
+        - key: bundle
+        - key: targetEntityType
+        template: '{targetEntityType}.{bundle}'
+  confidence: declared
+- rule: display_bundle_of_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_*_display.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^core\.entity_(?:form|view)_display\.', with: ''}
+    - {replace: '\.[^.]+$', with: ''}
+  emits:
+  - edge:
+      kind: bundle_of
+      from: this_node
+      to:
+        from:
+          key: targetEntityType
+  confidence: inferred
+- rule: form_display_mode_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_form_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: mode
+        not_equals: default
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: in_mode
+      from: this_node
+      to:
+        from:
+        - key: mode
+        - key: targetEntityType
+        template: 'core.entity_form_mode.{targetEntityType}.{mode}'
+        type: drupal.form_mode
+  confidence: declared
+- rule: view_display_mode_edges
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: core.entity_view_display.*
+    filetype: yaml
+    where:
+    - key:
+        name: mode
+        not_equals: default
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: in_mode
+      from: this_node
+      to:
+        from:
+        - key: mode
+        - key: targetEntityType
+        template: 'core.entity_view_mode.{targetEntityType}.{mode}'
+        type: drupal.view_mode
+  confidence: declared

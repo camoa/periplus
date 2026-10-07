@@ -1,0 +1,31 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+node_types:
+- name: js.function
+  id_namespace: js.function
+
+rules:
+# function name(...) {...}: <script path>:name
+- rule: function_declaration
+  reads: file
+  in: [js_source]
+  match: {declaration: function_declaration, name_child: name, filetype: javascript}
+  id: {from: qualified_name}
+  emits: [{node: {type: js.function}}]
+  confidence: declared
+# const name = (...) => {...}, and the same with let or var.
+- rule: function_from_arrow
+  reads: file
+  in: [js_source]
+  match: {declaration: variable_declarator, name_child: name, filetype: javascript, where: [{has_child: arrow_function}]}
+  id: {from: qualified_name}
+  emits: [{node: {type: js.function}}]
+  confidence: declared
+# const name = function (...) {...}, and the same with let or var.
+- rule: function_from_expression
+  reads: file
+  in: [js_source]
+  match: {declaration: variable_declarator, name_child: name, filetype: javascript, where: [{has_child: function_expression}]}
+  id: {from: qualified_name}
+  emits: [{node: {type: js.function}}]
+  confidence: declared
