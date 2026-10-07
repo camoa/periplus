@@ -33,6 +33,11 @@ uv tool install '/path/to/periplus[go]'     # adds the Go grammar that go_basic 
 periplus --version
 ```
 
+To update an install, pull the repository and run `uv tool install /path/to/periplus` again. A
+local directory is rebuilt when `pyproject.toml` changes or a file under `src/periplus` does. Run
+`uv tool install --reinstall /path/to/periplus` for the form that always rebuilds. The command
+`periplus status` prints a `rutters:` digest of the bundled rutters, so you can compare two installs.
+
 The distribution name is `periplus-map`. Its five runtime dependencies are pinned exactly. One
 package that `jsonschema` brings is compiled, so your platform needs a prebuilt wheel or Rust.
 
@@ -48,11 +53,13 @@ Run each command in the project folder.
 | `periplus init` | Creates `.periplus/`, a pack folder and a commented settings file. It pins a rutter when it recognises the stack. |
 | `periplus status` | Shows the settings, where each value came from, and the pack search path. |
 | `periplus spec drupal_basic --summary` | Prints the rutter contract and what one rutter declares and inherits. |
-| `periplus validate drupal_basic` | Checks one rutter's files against the shipped schemas and names each disagreement. |
+| `periplus validate drupal_basic` | Checks one rutter's files against the shipped schemas and names each disagreement. Give a bare `name`, or `name@version` to pick one of several copies. |
+| `periplus update` | Moves each pin to the installed version of that rutter. It leaves project-local and unknown pins as they are. |
 | `periplus map --output map.json` | Runs the loaded rutters over the project and writes the map. |
 
-`status`, `spec`, `validate` and `map` also take `--format json`. The settings file,
-`.periplus/settings.yml`, names the rutters to load, each pinned to an exact version:
+`status`, `spec`, `validate`, `update` and `map` also take `--format json`. The settings file,
+`.periplus/settings.yml`, names the rutters to load, each pinned to an exact version. After you
+update Periplus, run `periplus update` to bring the pins to the installed versions:
 
 ```yaml
 periplus_version: 0
@@ -297,7 +304,7 @@ Settings `values` pass project facts, such as a Go module path, to a rutter.
 
 ## Tests and checks
 
-The pytest suite holds 275 tests. `scripts/demo.sh` runs the 37 end-to-end checks in
+The pytest suite holds 275 tests. `scripts/demo.sh` runs the 41 end-to-end checks in
 `scripts/demo.d` and stops at the first failure. Each check maps a small project and compares the
 result with what it expects.
 
