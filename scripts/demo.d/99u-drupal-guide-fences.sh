@@ -2,8 +2,8 @@
 # The Drupal pack's blocks in three author guides: each YAML block whose fence names a
 # drupal_basic@0.3.0 file is copied from it, as 99g-second-stack checks the main guide. Under one
 # indent, the block's lines are a run of that file's lines, byte for byte. The references guide
-# quotes the table and the table step, the abilities guide the constant keys, and the Drupal guide
-# a rule narrowed by ending.
+# quotes the table, the table step and the boundary, the abilities guide the constant keys, and
+# the Drupal guide a rule narrowed by ending.
 set -euo pipefail
 python3 - "$ROOT/src/periplus/packs" "$ROOT"/docs/rutter-author-guide-{references,abilities,drupal}.md <<'PY'
 import re

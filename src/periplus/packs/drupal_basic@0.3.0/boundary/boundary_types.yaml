@@ -1,0 +1,19 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The roles a first-party class takes from the core base or interface it descends from, which the
+# boundary block in pack.yaml names. Each keeps php.type, so the class keeps its id and every edge
+# that ends on it.
+
+node_types:
+- name: drupal.controller_class
+  parent: php.class
+  id_namespace: php.type
+- name: drupal.form_class
+  parent: php.class
+  id_namespace: php.type
+- name: drupal.config_form_class
+  parent: drupal.form_class
+  id_namespace: php.type
+- name: drupal.event_subscriber_class
+  parent: php.class
+  id_namespace: php.type

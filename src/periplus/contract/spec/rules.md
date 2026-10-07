@@ -304,6 +304,14 @@ cannot be the target of an edge. Two displays name a field instance, and that wa
 argument for keeping it a node — until the displays turned out to declare their own bundle,
 so pointing at the storage loses nothing.
 
+**A boundary is named, never read.** A pack's `boundary` groups list the framework names the
+project builds on. Each group gives a `type`, its `ancestry` edge kinds and its `names`. A listed
+name that an edge reaches is a node with state `declared`: the group's type, no location, the
+drawing pack's provenance. A name's value classifies a mapped class whose ancestry reaches the
+name. A class whose type lies above the value takes the value's type. A class already of that
+type or below it keeps its type. Either way it gains an `inferred` row. When its type and the
+value lie on no one chain, it keeps its type and the report holds a skipped row naming both.
+
 ---
 
 ## 16. Silence is the enemy

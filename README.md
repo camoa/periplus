@@ -339,7 +339,9 @@ listed after it in the Drupal table, and the two JavaScript rutters, `js_basic` 
 rutters. Three new rutter shapes: a resolution step that looks a written name up in a table the
 rutter declares under `tables`, a call argument written as a class constant read through the
 grammar's `constant_access` and `constant_declaration` keys, and a rule narrowed to one file
-ending by `match.ending`.
+ending by `match.ending`. A rutter's `boundary` lists the framework classes the map never reads.
+Each one an edge reaches becomes a `declared` node, and a class that descends from one may take
+the type the list gives it.
 Settings `values` pass project facts, such as a Go module path, to a rutter.
 
 ## Tests and checks
@@ -360,7 +362,7 @@ These are the limits a new user meets first. [`docs/known-limitations.md`](docs/
 lists the rest, each rutter's among them.
 
 - **Keys accepted but not executed.** The schemas accept more than the engine runs, for example
-  the manifest's `boundary` block, `resolution` and `excluded_tokens`. A rule with such a key does
+  `resolution` and `excluded_tokens`. A rule with such a key does
   not run. Such a key outside a rule stops the map. `rutter-author-guide-references.md` lists every key.
 - **No order among rutters.** Two rules in one rutter on one parse-tree node: the last one wins.
   Nothing settles two rutters that give one attribute two values.

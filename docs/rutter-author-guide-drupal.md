@@ -220,6 +220,7 @@ not listed. `skipped` names matches that made nothing. An `unresolved` node is a
 - The tree layout. A rule names node types and fields; how the engine walks the tree, finds the
   enclosing class and nests namespace blocks is engine code. A text rule on PHP names its own
   file type, a second one claiming the ending php and read as text; then both readers run.
-- A boundary. The manifest's `boundary` block and the pack-file keys `resolution` and
-  `excluded_tokens` pass the schemas and do not run. One in a rutter refuses the map: a problem
-  names the key and its file, and the run exits with no map, as check 91-unexecuted-keys proves.
+- A resolution or a token exclusion. The pack-file keys `resolution` and `excluded_tokens` pass
+  the schemas and do not run. One in a rutter refuses the map: a problem names the key and its
+  file, and the run exits with no map, as check 91-unexecuted-keys proves. The manifest's
+  `boundary` block runs; [Tree references](rutter-author-guide-references.md) shows it.

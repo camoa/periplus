@@ -180,7 +180,6 @@ a list of its known gaps.
 
 - Go method calls on a value. A call written `v.M()` is not mapped, because the rutter cannot know the
   type of `v`. Calls of an imported package's function, `pkg.F()`, are mapped.
-- Boundaries declared by a rutter. The `boundary` key is accepted and not executed.
 - An order among rutters that state the same thing.
 - A choice between one map file and a map split by pack or by folder. This is an open design
   question.

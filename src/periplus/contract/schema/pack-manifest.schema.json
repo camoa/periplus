@@ -208,13 +208,21 @@
 
     "boundary": {
       "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "applies_to_paths":     {"type": "array", "items": {"type": "string"}},
-        "emit_boundary_nodes":  {"enum": ["on_reference", "never"]},
-        "type_hierarchy":       {"type": "array", "items": {"$ref": "#/$defs/hierarchyEntry"}}
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "ancestry", "names"],
+        "properties": {
+          "type":     {"type": "string", "minLength": 1, "description": "A node type this pack or a pack it depends on declares. The group's names live in its id namespace."},
+          "ancestry": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "description": "The edge kinds whose edges carry descent toward a listed name."},
+          "names": {
+            "type": "object",
+            "additionalProperties": {"type": ["string", "null"]},
+            "description": "Each qualified name where the framework begins, with the node type that classifies a first-party descendant of it, any node type this pack or a pack it depends on declares, or null for none."
+          }
+        }
       },
-      "description": "Path-based, so it needs no pack and works for a dependency published tomorrow. A boundary node enters the map because first-party code refers to it, never because a pack knows about it — otherwise every map on every site carries the same few hundred framework interfaces whether or not anything touches them."
+      "description": "Named groups of the names where a framework begins. An edge end no rule found that lands on a listed name becomes a declared node this pack drew, with no location; the engine never reads that code. A boundary node enters the map because first-party code refers to it, never because a pack knows about it, so a listed name no edge reaches is not in the map. Every loaded pack's groups apply, and an id two packs list refuses the map."
     },
 
     "tables": {
@@ -232,17 +240,6 @@
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+$",
       "description": "Exact, never a range. Grammar node type names carry no stability guarantee across a minor release, so a range lets a rule that matched yesterday match nothing today, silently."
-    },
-    "hierarchyEntry": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type"],
-      "properties": {
-        "type":           {"type": "string"},
-        "extends":        {"type": "array", "items": {"type": "string"}},
-        "implemented_by": {"type": "array", "items": {"type": "string"}}
-      },
-      "description": "What a pack knows about types it does not read. A custom entity almost never writes `implements EntityInterface`; it writes `extends ContentEntityBase`, and the interface is two hops up inside the framework. A rule matching the written clause would match nothing real."
     }
   }
 }

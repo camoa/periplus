@@ -22,6 +22,7 @@ RUN = {
     *(f"{RULE}emits.*.edge.{end}.on_miss" for end in ("from", "to")),
     *(f"{RULE}emits.*.edge.from{k}" for k in (".from", ".from.capture", ".template", ".type")),
     "manifest.tables",
+    *(f"manifest.boundary{k}" for k in ("", ".*.type", ".*.ancestry", ".*.names")),
     *(
         f"{RULE}{holder}.resolve.*.lookup_last_segment_in"
         for holder in ("id", "emits.*.edge.from", "emits.*.edge.to")

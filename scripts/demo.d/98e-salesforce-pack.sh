@@ -122,10 +122,10 @@ assert nodes == {
         "drupal.salesforce_mapping_field", "mapped"),
     sub_method + "check": ("php.method", "mapped"),
     sub_method + "getSubscribedEvents": ("php.method", "mapped"),
-    sub_class: ("php.class", "mapped"),
+    sub_class: ("drupal.event_subscriber_class", "mapped"),
     field_class: ("php.class", "mapped"),
     field_base: ("php.class_like", "referenced"),
-    interface: ("php.interface", "referenced"),
+    interface: ("php.interface", "declared"),
     "salesforce.event::SalesforceEvents::PULL_PRESAVE": ("salesforce.event", "referenced"),
     "salesforce.event::SalesforceEvents::PUSH_PARAMS": ("salesforce.event", "referenced"),
 }, nodes

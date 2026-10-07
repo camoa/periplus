@@ -11,7 +11,14 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from periplus.engine.emit import type_chain
-from periplus.engine.packload import RuleSet, load_rules, node_types, twin_type, unexecuted
+from periplus.engine.packload import (
+    _BOUNDARY_SHAPE,
+    RuleSet,
+    load_rules,
+    node_types,
+    twin_type,
+    unexecuted,
+)
 from periplus.engine.select import FileTypes, extended, folder_values, reachable
 from periplus.engine.source import DATA_READERS
 from periplus.engine.tree import grammar_problems
@@ -56,7 +63,8 @@ def _schema_problems(packs: Sequence[LoadedPack]) -> tuple[list[Problem], set[st
         problems.extend(
             Problem(
                 ExitCode.SCHEMA_INVALID,
-                f"{pack.name.pack}/{error.file} {error.pointer}: {error.message}",
+                f"{pack.name.pack}/{error.file} {error.pointer}: {error.message}"
+                + (f"; write {_BOUNDARY_SHAPE}" if error.pointer.startswith("$.boundary") else ""),
                 {"pack": pack.name.pack, "file": error.file, "pointer": error.pointer},
             )
             for error in errors

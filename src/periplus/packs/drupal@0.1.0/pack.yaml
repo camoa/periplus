@@ -81,28 +81,21 @@ files:
 # ======================================================================================
 # BOUNDARY
 #
-# Entity API is not "a boundary". Every path below is the boundary. What separates Entity
-# API from Event Subscriber API is only that this pack ships knowledge about one of them.
+# Entity API is not "a boundary". Every class listed below is the boundary. What separates
+# Entity API from Event Subscriber API is only that this pack ships knowledge about one of them.
 # Two mechanisms, kept apart, which is what lets the dark case degrade instead of fail.
 # ======================================================================================
 boundary:
-  applies_to_paths:
-    - "web/core/**"
-    - "web/modules/contrib/**"
-    - "vendor/**"
-  # Path-based, so it needs no pack and works for a dependency published tomorrow.
-  # `vendor/**` is not decoration: EventSubscriberInterface lives at
-  # vendor/symfony/event-dispatcher/EventSubscriberInterface.php, not in core. If the
-  # boundary were a special case for core, Symfony would leak in.
-
-  emit_boundary_nodes: on_reference
   # A boundary node enters the map because first-party code refers to it, never because a
-  # pack knows about it. Otherwise every map on every Drupal site carries the same few
-  # hundred core interfaces whether or not anything touches them, and the map stops being
-  # about this repository.
+  # pack knows about it. An edge end that lands on a listed name becomes a declared node this
+  # pack drew; a listed name nothing reaches stays out of the map, so the map stays about this
+  # repository.
+  framework:
+    type: php.class_like
+    ancestry: [inherits, implements]
 
   # ------------------------------------------------------------------------------------
-  # The hierarchy the classification rules depend on.
+  # The hierarchy the ancestry kinds walk toward a listed name.
   #
   # This is why "not mapped" and "not read" are different operations. A custom entity
   # almost never writes `implements EntityInterface`; it writes `extends
@@ -133,42 +126,37 @@ boundary:
   #     ConfigEntityBase.php:26
   #   => same diamond on the entity side.
   # ------------------------------------------------------------------------------------
-  type_hierarchy:
-    # Form API
-    - type: "Drupal\\Core\\Form\\FormInterface"
-      implemented_by: ["Drupal\\Core\\Form\\FormBase"]
-    - type: "Drupal\\Core\\Form\\ConfirmFormInterface"
-      implemented_by: ["Drupal\\Core\\Form\\ConfirmFormBase"]
-    - type: "Drupal\\Core\\Form\\BaseFormIdInterface"
-      extends: ["Drupal\\Core\\Form\\FormInterface"]
-    - type: "Drupal\\Core\\Entity\\EntityFormInterface"
-      extends: ["Drupal\\Core\\Form\\BaseFormIdInterface"]
-      implemented_by: ["Drupal\\Core\\Entity\\EntityForm"]
-    - type: "Drupal\\Core\\Entity\\ContentEntityFormInterface"
-      extends: ["Drupal\\Core\\Entity\\EntityFormInterface"]
-      implemented_by: ["Drupal\\Core\\Entity\\ContentEntityForm"]
+    # Each name below is a boundary with no classification (~).
+    names:
+      # Form API
+      "Drupal\\Core\\Form\\FormInterface": ~
+      "Drupal\\Core\\Form\\FormBase": ~
+      "Drupal\\Core\\Form\\ConfirmFormInterface": ~
+      "Drupal\\Core\\Form\\ConfirmFormBase": ~
+      "Drupal\\Core\\Form\\BaseFormIdInterface": ~
+      "Drupal\\Core\\Entity\\EntityFormInterface": ~
+      "Drupal\\Core\\Entity\\EntityForm": ~
+      "Drupal\\Core\\Entity\\ContentEntityFormInterface": ~
+      "Drupal\\Core\\Entity\\ContentEntityForm": ~
 
-    # Entity API
-    - type: "Drupal\\Core\\Entity\\EntityInterface"
-      implemented_by: ["Drupal\\Core\\Entity\\EntityBase"]
-    - type: "Drupal\\Core\\Entity\\FieldableEntityInterface"
-      extends: ["Drupal\\Core\\Entity\\EntityInterface"]
-    - type: "Drupal\\Core\\Entity\\ContentEntityInterface"
-      extends: ["Drupal\\Core\\Entity\\FieldableEntityInterface"]
-      implemented_by: ["Drupal\\Core\\Entity\\ContentEntityBase"]
-    - type: "Drupal\\Core\\Config\\Entity\\ConfigEntityInterface"
-      extends: ["Drupal\\Core\\Entity\\EntityInterface"]
-      implemented_by: ["Drupal\\Core\\Config\\Entity\\ConfigEntityBase"]
+      # Entity API
+      "Drupal\\Core\\Entity\\EntityInterface": ~
+      "Drupal\\Core\\Entity\\EntityBase": ~
+      "Drupal\\Core\\Entity\\FieldableEntityInterface": ~
+      "Drupal\\Core\\Entity\\ContentEntityInterface": ~
+      "Drupal\\Core\\Entity\\ContentEntityBase": ~
+      "Drupal\\Core\\Config\\Entity\\ConfigEntityInterface": ~
+      "Drupal\\Core\\Config\\Entity\\ConfigEntityBase": ~
 
-    # Cache API. Both are standalone: neither extends another interface.
-    #   CacheBackendInterface.php:16 / CacheTagsInvalidatorInterface.php:14
-    - type: "Drupal\\Core\\Cache\\CacheBackendInterface"
-    - type: "Drupal\\Core\\Cache\\CacheTagsInvalidatorInterface"
+      # Cache API. Both are standalone: neither extends another interface.
+      #   CacheBackendInterface.php:16 / CacheTagsInvalidatorInterface.php:14
+      "Drupal\\Core\\Cache\\CacheBackendInterface": ~
+      "Drupal\\Core\\Cache\\CacheTagsInvalidatorInterface": ~
 
   # ------------------------------------------------------------------------------------
   # Deliberately NOT shipped, so the unknown path is exercised by real code.
   #
-  # Nothing below appears in type_hierarchy. Each is referenced by first-party code in the
+  # Nothing below appears in names. Each is referenced by first-party code in the
   # worked example, so each becomes a boundary node whose state is `referenced` rather
   # than `declared`: the edge kind is known, because `implements` is written at the site,
   # but nothing describes what the target is.

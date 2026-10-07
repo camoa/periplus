@@ -82,8 +82,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A hook with a variable part keeps that part in its name: mymod_form_user_login_form_alter
 #   implements form_user_login_form_alter, not form_FORM_ID_alter.
 # - A class that extends ContentEntityBase and carries no ContentEntityType attribute or
-#   annotation, such as an abstract base or a bundle class, is not marked as an entity class. The
-#   map holds only its plain inherits edge.
+#   annotation, such as an abstract base or a bundle class, reads as a descendant of the boundary
+#   name ContentEntityBase, and is still not marked as an entity class.
 # - A service or entity type named by a variable, a concatenation, or a class constant that no
 #   mapped file declares as text, gives no edge and goes under skipped. So does parent::X, even
 #   when a mapped file declares it: only self and static read as the enclosing class.
@@ -393,3 +393,58 @@ tables:
     Vocabulary: taxonomy_vocabulary
     Workflow: workflow
     Workspace: workspace
+
+# The core and Symfony classes and interfaces that the custom code builds on and the map never
+# reads. Each one an inherits or implements edge reaches becomes a declared node this pack draws,
+# with no location. A custom class that descends from a name with a type takes that type: those
+# roles have no attribute to read. A plugin base names no type, because its attribute or
+# annotation already gives the plugin. Contributed modules' bases belong to their own rutters.
+boundary:
+  core_classes:
+    type: php.class_like
+    ancestry: [inherits, implements]
+    names:
+      Drupal\Component\Plugin\Attribute\Plugin: ~
+      Drupal\Component\Plugin\Derivative\DeriverBase: ~
+      Drupal\Core\Block\BlockBase: ~
+      Drupal\Core\Config\Entity\ConfigEntityBase: ~
+      Drupal\Core\Config\Entity\ConfigEntityListBuilder: ~
+      Drupal\Core\Controller\ControllerBase: drupal.controller_class
+      Drupal\Core\Entity\ContentEntityBase: ~
+      Drupal\Core\Entity\EntityAccessControlHandler: ~
+      Drupal\Core\Entity\EntityDeleteForm: ~
+      Drupal\Core\Entity\EntityForm: ~
+      Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase: ~
+      Drupal\Core\Form\ConfigFormBase: drupal.config_form_class
+      Drupal\Core\Form\ConfirmFormBase: ~
+      Drupal\Core\Form\FormBase: drupal.form_class
+      Drupal\Core\Mail\Plugin\Mail\PhpMail: ~
+      Drupal\Core\Plugin\DefaultPluginManager: ~
+      Drupal\Core\Plugin\PluginBase: ~
+      Drupal\Core\Queue\QueueWorkerBase: ~
+      Drupal\Core\Routing\RouteSubscriberBase: ~
+      Drupal\KernelTests\Components\ComponentKernelTestBase: ~
+      Drupal\KernelTests\KernelTestBase: ~
+      Drupal\Tests\BrowserTestBase: ~
+      Drupal\Tests\UnitTestCase: ~
+      Symfony\Component\Validator\Constraint: ~
+      Symfony\Component\Validator\ConstraintValidator: ~
+      Symfony\Contracts\EventDispatcher\Event: ~
+  core_interfaces:
+    type: php.interface
+    ancestry: [inherits, implements]
+    names:
+      Drupal\Component\Plugin\PluginInspectionInterface: ~
+      Drupal\Core\Ajax\CommandInterface: ~
+      Drupal\Core\Cache\CacheableDependencyInterface: ~
+      Drupal\Core\DependencyInjection\ContainerInjectionInterface: ~
+      Drupal\Core\DependencyInjection\ServiceModifierInterface: ~
+      Drupal\Core\Entity\EntityHandlerInterface: ~
+      Drupal\Core\Flood\FloodInterface: ~
+      Drupal\Core\Form\FormInterface: ~
+      Drupal\Core\Lock\LockBackendInterface: ~
+      Drupal\Core\Plugin\ContainerFactoryPluginInterface: ~
+      Drupal\Core\Plugin\Discovery\ContainerDeriverInterface: ~
+      Drupal\Core\Queue\QueueInterface: ~
+      Drupal\Core\Routing\Access\AccessInterface: ~
+      Symfony\Component\EventDispatcher\EventSubscriberInterface: drupal.event_subscriber_class

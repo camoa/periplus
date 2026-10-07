@@ -18,6 +18,7 @@ __all__ = [
     "PATTERN_VALUE",
     "PLACEHOLDER",
     "TEXT",
+    "BoundaryEntry",
     "Condition",
     "EXECUTED_KEYS",
     "UNEXECUTED_KEYS",
@@ -58,6 +59,7 @@ EXECUTED_KEYS = frozenset(
     {
         *(f"manifest.{k}" for k in ("pack", "version", "depends", "folders", "identity")),
         "manifest.tables",
+        *(f"manifest.boundary{k}" for k in ("", ".*.type", ".*.ancestry", ".*.names")),
         *(f"manifest.identity.call_{k}" for k in ("arguments", "argument", "argument_name")),
         *(f"manifest.identity.call_literal{k}" for k in ("s", "_content", "_delimiters")),
         *(f"manifest.detect{k}" for k in ("", ".any_of", ".any_of.*.path", ".any_of.*.contains")),
@@ -466,12 +468,26 @@ class EdgeKind:
 
 
 @dataclass(frozen=True, slots=True)
+class BoundaryEntry:
+    """One name a boundary group lists: the pack and group that list it, the group's node type,
+    the type that classifies a first-party descendant of it or ``None``, and the edge kinds that
+    carry descent toward it."""
+
+    pack: str
+    group: str
+    type: str
+    classifies: str | None
+    ancestry: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RuleSet:
     """Every rule in load order, the table of declared types and the table of edge kinds.
 
     ``grammars`` holds, for each file type a supported tree rule reads, the grammar of its pack.
     ``values`` holds the project's settings values, which every template may name.
     ``tables`` holds, for each pack, the tables its table steps may name.
+    ``boundary`` holds, by node id, each name a boundary group of a loaded pack lists.
     """
 
     rules: tuple[Rule, ...]
@@ -482,6 +498,7 @@ class RuleSet:
     files: Mapping[str, FileInfo] = field(default_factory=dict)
     values: Mapping[str, str] = field(default_factory=dict)
     tables: Mapping[str, Mapping[str, Mapping[str, str]]] = field(default_factory=dict)
+    boundary: Mapping[str, BoundaryEntry] = field(default_factory=dict)
 
 
 def load_rules(
@@ -496,7 +513,8 @@ def load_rules(
     declared twice with different ends is left in ``RuleSet.conflicts``, so the run can report it
     beside the other problems of the packs, and so is a name the settings ``values`` and a pack
     both give, a path value template naming a value nothing gives, and a declaration rule's id
-    naming a name that is no field of its grammar and no value. ``origins`` names the settings
+    naming a name that is no field of its grammar and no value, and so is a boundary group whose
+    type, classifying type or ancestry kind the run cannot use. ``origins`` names the settings
     file of each settings value. Every pack given has passed its schema.
     """
     values = dict(values or {})
@@ -567,6 +585,7 @@ def load_rules(
                 "which no loaded pack declares with an id_namespace",
                 {"pack": rule.pack, "rule": rule.name, "type": rule.node_type},
             )
+    boundary = _boundary_entries(packs, types, kinds, conflicts)
     return RuleSet(
         rules=tuple(rules),
         types=types,
@@ -576,6 +595,7 @@ def load_rules(
         files=files,
         values=values,
         tables=tables,
+        boundary=boundary,
     )
 
 
@@ -586,20 +606,113 @@ def _tables(packs: Sequence[LoadedPack]) -> dict[str, dict[str, Mapping[str, str
     for p in packs:
         own = p.manifest.document.get("tables")
         declared[p.name.pack] = own if isinstance(own, Mapping) else {}
-    depends = {p.name.pack: [d.partition("@")[0] for d in p.manifest.depends] for p in packs}
     found: dict[str, dict[str, Mapping[str, str]]] = {}
-    for pack in declared:
+    for pack, walk in _visible_packs(packs).items():
         visible: dict[str, Mapping[str, str]] = {}
-        seen: set[str] = set()
+        for name in walk:
+            for table, entries in declared.get(name, {}).items():
+                visible.setdefault(table, entries)
+        found[pack] = visible
+    return found
+
+
+def _visible_packs(packs: Sequence[LoadedPack]) -> dict[str, list[str]]:
+    """Each pack's name, then the name of every pack it depends on, directly or not, nearer
+    first."""
+    depends = {p.name.pack: [d.partition("@")[0] for d in p.manifest.depends] for p in packs}
+    found: dict[str, list[str]] = {}
+    for pack in depends:
+        seen: list[str] = []
         pending = [pack]
         while pending:
             name = pending.pop(0)
             if name not in seen:
-                seen.add(name)
-                for table, entries in declared.get(name, {}).items():
-                    visible.setdefault(table, entries)
+                seen.append(name)
                 pending.extend(depends.get(name, []))
-        found[pack] = visible
+        found[pack] = seen
+    return found
+
+
+def _boundary(packs: Sequence[LoadedPack]) -> dict[str, Mapping[str, Mapping[str, Any]]]:
+    """The boundary groups each pack declares, by pack. No rule names a group, so no group hides
+    another of the same name."""
+    declared: dict[str, Mapping[str, Mapping[str, Any]]] = {}
+    for p in packs:
+        own = p.manifest.document.get("boundary")
+        declared[p.name.pack] = own if isinstance(own, Mapping) else {}
+    return declared
+
+
+#: The boundary block's working shape, named by each refusal of a group.
+_BOUNDARY_SHAPE = (
+    "boundary: {<group>: {type: <node type>, ancestry: [<edge kind>], "
+    "names: {<name>: <node type or ~>}}}"
+)
+
+
+def _boundary_entries(
+    packs: Sequence[LoadedPack],
+    types: Mapping[str, TypeInfo],
+    kinds: Mapping[str, EdgeKind],
+    conflicts: list[Problem],
+) -> dict[str, BoundaryEntry]:
+    """Each name of every group a loaded pack declares, by node id.
+
+    A group whose type no pack the declaring pack sees declares with an id namespace, whose names
+    value no such pack declares, or whose ancestry names a kind no pack declares is left out, with
+    a problem in ``conflicts``. An id two packs list adds a problem too: which pack draws it is
+    precedence, not decided here.
+    """
+    declared = _boundary(packs)
+    found: dict[str, BoundaryEntry] = {}
+    for pack, walk in _visible_packs(packs).items():
+        for group, spec in declared[pack].items():
+            kind = str(spec["type"])
+            namespace = namespace_of(types, kind)
+            reasons: list[str] = []
+            if kind not in types or types[kind].pack not in walk or namespace is None:
+                reasons.append(
+                    f"the type {kind}, which neither {pack} nor a pack it depends on declares "
+                    "with an id_namespace"
+                )
+            else:
+                reasons.extend(
+                    f"the names value {value} for {name}, which neither {pack} nor a pack it "
+                    "depends on declares"
+                    for name, value in spec["names"].items()
+                    if value is not None and (value not in types or types[value].pack not in walk)
+                )
+            reasons.extend(
+                f"the ancestry kind {edge}, which no loaded pack declares"
+                for edge in spec["ancestry"]
+                if edge not in kinds
+            )
+            for reason in reasons:
+                conflicts.append(
+                    Problem(
+                        ExitCode.RULE_NOT_EXECUTABLE,
+                        f"{pack}/{MANIFEST_FILENAME}: the boundary group {group} names {reason}; "
+                        f"write {_BOUNDARY_SHAPE}",
+                        {"pack": pack, "file": MANIFEST_FILENAME, "group": str(group)},
+                    )
+                )
+            if reasons:
+                continue
+            for name, value in spec["names"].items():
+                node = f"{namespace}::{name}"
+                first = found.setdefault(
+                    node, BoundaryEntry(pack, str(group), kind, value, tuple(spec["ancestry"]))
+                )
+                if first.pack != pack:
+                    conflicts.append(
+                        Problem(
+                            ExitCode.RULE_NOT_EXECUTABLE,
+                            f"{pack}/{MANIFEST_FILENAME}: the boundary group {group} names {node}, "
+                            f"which the pack {first.pack} lists too in its group {first.group}; "
+                            f"list it in one pack and write {_BOUNDARY_SHAPE}",
+                            {"pack": pack, "file": MANIFEST_FILENAME, "group": str(group)},
+                        )
+                    )
     return found
 
 

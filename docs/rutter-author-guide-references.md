@@ -132,6 +132,52 @@ looks a class's short name up in the table `entity_classes`, for `load`, `loadMu
 own `User`, gives a false `uses_entity_type` edge, and a `load` or `create` call on any other
 capitalised class leaves a skipped row. Check 99s-drupal-table-step proves the two rules.
 
+## Where the framework begins: boundary
+
+The project's classes extend and implement classes the map never reads, such as Drupal core's.
+`boundary` is a top-level key of `pack.yaml`: a map from a group's name to its `type`, its
+`ancestry` and its `names`. The Drupal pack declares two groups, `core_classes` and
+`core_interfaces`:
+
+```yaml drupal_basic@0.3.0/pack.yaml
+# The core and Symfony classes and interfaces that the custom code builds on and the map never
+# reads. Each one an inherits or implements edge reaches becomes a declared node this pack draws,
+# with no location. A custom class that descends from a name with a type takes that type: those
+# roles have no attribute to read. A plugin base names no type, because its attribute or
+# annotation already gives the plugin. Contributed modules' bases belong to their own rutters.
+boundary:
+  core_classes:
+    type: php.class_like
+    ancestry: [inherits, implements]
+    names:
+      Drupal\Component\Plugin\Attribute\Plugin: ~
+      Drupal\Component\Plugin\Derivative\DeriverBase: ~
+      Drupal\Core\Block\BlockBase: ~
+      Drupal\Core\Config\Entity\ConfigEntityBase: ~
+      Drupal\Core\Config\Entity\ConfigEntityListBuilder: ~
+      Drupal\Core\Controller\ControllerBase: drupal.controller_class
+```
+
+A name lives in the id namespace of the group's `type`, so `ControllerBase` is the node
+`php.type::Drupal\Core\Controller\ControllerBase`. When an edge ends on a listed name and no rule
+found that node, the node has state `declared`, the group's type, no location, and one provenance
+row: the pack, rule `boundary.<group>`, confidence `declared`. A name no edge reaches makes
+nothing. An end not listed stays `referenced`.
+
+A name's value is a node type, or `~` for none. A mapped class whose `ancestry` edges reach the
+name, directly or through other mapped classes, is classified by that type. A referenced or
+declared class in between stops the walk. A class whose type is an ancestor of the value takes
+the value; one already of the value's type or below it keeps its type. Both gain a provenance row,
+rule `boundary.<group>`, confidence `inferred`. Any other class keeps its type, and `skipped`
+gets one row: `<id>: classification <value> from <boundary id> does not descend from <type>`.
+
+`periplus map` refuses with exit 26 a group `type` or a names value that no pack visible to the
+declaring pack declares, an `ancestry` kind that no loaded pack declares, and one id that two
+packs list. Each problem names the shape to write. The
+path-based keys of earlier releases, `applies_to_paths`, `emit_boundary_nodes` and
+`type_hierarchy`, fail the manifest schema with exit 16. Check 99v-drupal-boundary proves the
+Drupal groups.
+
 ## Two declaration rules on one tree node
 
 Two packs may each match one tree node with a declaration rule, as a Laravel rutter does beside
@@ -251,8 +297,5 @@ file.rules.*.match.where.*: ancestor_reaches attribute_argument base_is_known_pl
     in_method_with_attribute listed_at matches method_set_covers name on_service receiver
 file.rules.*.values.*.from: annotation_key argument argument_class argument_key array_key_class
     attribute_argument each each_key incoming_edges key literal qualified value
-manifest: boundary
-manifest.boundary: applies_to_paths emit_boundary_nodes type_hierarchy
-manifest.boundary.type_hierarchy.*: extends implemented_by type
 manifest.files: cache_key_includes
 ```

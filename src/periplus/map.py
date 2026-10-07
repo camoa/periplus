@@ -164,6 +164,8 @@ def run(
             packs,
             periplus.__version__,
             Path(os.path.relpath(project.path, root)).as_posix(),
+            boundary=rule_set.boundary,
+            skipped=skipped,
         )
     except HarnessError as error:
         return _failed([error.problem()])
@@ -210,7 +212,7 @@ def run(
         selected=len(read),
         excluded=len(removed),
         parse_errors=tuple(broken),
-        skipped=tuple(skipped),
+        skipped=tuple(sorted(skipped)),
         unread=tuple(unread),
         unlisted=tuple(unlisted),
     )
