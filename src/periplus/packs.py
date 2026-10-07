@@ -237,7 +237,7 @@ def bundled_digest() -> str:
         try:
             entries = tuple(folder.iterdir())
         except OSError:
-            # An absent or unreadable folder contributes nothing, as `discover_candidates` treats it.
+            # An absent or unreadable folder contributes nothing, as in `discover_candidates`.
             continue
         for entry in entries:
             name = f"{prefix}{entry.name}"
