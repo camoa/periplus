@@ -336,7 +336,7 @@ def test_the_settings_flag_reaches_the_resolution_and_anchors_the_project_root(
     assert document["settings"]["periplus_version"]["value"] == 7
 
 
-def test_the_subcommands_are_exactly_init_spec_status_validate_and_map() -> None:
+def test_the_subcommands_are_exactly_init_spec_status_validate_map_and_update() -> None:
     """The surface, asserted as a set rather than by trying names one at a time.
 
     ``resolve`` named a function rather than what a person is asking for, and it is gone rather
@@ -356,7 +356,7 @@ def test_the_subcommands_are_exactly_init_spec_status_validate_and_map() -> None
         action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
     )
 
-    assert set(subcommands.choices) == {"init", "spec", "status", "validate", "map"}
+    assert set(subcommands.choices) == {"init", "spec", "status", "validate", "map", "update"}
 
 
 def test_the_old_subcommand_name_is_a_usage_error() -> None:
