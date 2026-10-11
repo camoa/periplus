@@ -4,6 +4,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # node named <script path>:<name>: function name() {}, async function name() {}, and a const,
 # let or var whose value is an arrow function or a function expression. Each line below was
 # seen on real code or on a planted file.
+# Each script is a js.file node named by its path, and each function above has a
+# script_declares_function edge from its script.
 # What it does not map, today:
 # - A call: no rule reads one, so the map holds no edge between two functions.
 # - A generator, function* name() {}, a class and a class method: no node.

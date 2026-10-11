@@ -41,8 +41,9 @@ rules:
 # names a function. A static call, Class::method(), resolves the class through the imports and
 # joins the method with ::, which is how find_method builds a method's id. A call on self, static
 # or parent, a call on a variable and a call outside any function or method make nothing and go
-# under skipped. A method call on an object, member_call_expression, is not stated: the class of
-# $x in $x->m() is known only when the code runs. A function imported by use function x as y is
+# under skipped. A method call on an object, member_call_expression, is stated only by
+# calls_property_method below: the class of $x in $x->m() is known only when the code runs. A
+# function imported by use function x as y is
 # not bound, because the imports bind type names only, so y() resolves under the namespace as y;
 # and PHP's fallback of an unqualified call to a global function is not read.
 # skip_names lists PHP's language constructs, as written: grammar 0.24.1 parses isset(, empty(,
@@ -509,3 +510,23 @@ rules:
   match: {reference: scoped_call_expression, name_child: [scope, name], filetype: php}
   emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.method], separator: "::", on_miss: unresolved}}}]
   confidence: declared
+
+# A call on a property of the enclosing object, $this->mailer->send(), to the method of the type
+# the same class declares for that property: a typed property, a promoted constructor parameter, or
+# a @var docblock, tried in that order. The type resolves through the file's imports and namespace
+# as a written name does. The declared type is a claim about what runs, not an observation of it,
+# so the edge is inferred where a static call's is declared. A property the class declares no type
+# for makes nothing and goes under skipped; a call on anything else is not read.
+- rule: calls_property_method
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: [object, name]
+    filetype: php
+    where:
+    - receiver: typed_property
+    - receiver: promoted_constructor_parameter
+    - receiver: var_annotation
+  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.method], separator: "::", on_miss: unresolved}}}]
+  confidence: inferred

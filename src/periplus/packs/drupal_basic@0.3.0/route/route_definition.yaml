@@ -9,7 +9,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # no permission, so that value gives the edge kind nothing. A _controller written Class::method is
 # handled_by that method; one written service:method names a service and makes no edge. A
 # _title_callback written Class::method is titled_by that method. A leading backslash is dropped
-# from a class name.
+# from a class name. A route serves its path as written, a route_serves_path edge to the
+# drupal.url_path node that url/url.yaml joins links to.
 
 rules:
 - rule: route_from_routing_file
@@ -103,4 +104,10 @@ rules:
           key: defaults._form
         pattern: '^\\?(?<form>[^\\].*)$'
         template: '{form}'
+  - edge:
+      kind: route_serves_path
+      from: this_node
+      to:
+        from:
+          key: path
   confidence: declared

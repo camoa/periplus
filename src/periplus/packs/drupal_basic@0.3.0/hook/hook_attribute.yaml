@@ -3,6 +3,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # A method that implements a hook by the Hook attribute. The hook is named by the attribute's first
 # argument, or by the argument named hook, and is a referenced node; the method is the node
 # php_basic finds. Two rules, one per way of naming it.
+#
+# A third links a hook the attribute names, such as #[Hook('node_presave')], to the entity type it
+# acts on, by the name pattern and exclusions of hook.yaml's hook_acts_on_entity_type. Read as text,
+# because the engine takes an id pattern only on a declaration rule and no edge end from an
+# attribute argument except as its target. Text sees no namespace, so any attribute written
+# Hook( counts, and a hook name given as a constant gives nothing. A hook whose first part is no
+# entity type, not excluded here, ends at a referenced drupal.entity_type node of that name.
 
 rules:
 - rule: hook_from_attribute
@@ -39,3 +46,19 @@ rules:
         from:
           attribute_argument: hook
   confidence: declared
+- rule: hook_attribute_acts_on_entity_type
+  reads: file
+  in:
+  - source
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[Hook\(\s*(?:hook:\s*)?[''"](?<hook>(?!entity_|block_view(?:_alter)?[''"]|contextual_links_view_alter[''"]|views_|preprocess_|theme_|jsonapi_|language_fallback_candidates_|post_update_)(?<etype>\w+?)_(?:access|create_access|create|presave|insert|update|predelete|delete|preload|load|storage_load|view|view_alter|build_defaults_alter|prepare_form|field_values_init|duplicate|revision_create|revision_delete|translation_create|translation_insert|translation_delete))[''"]'
+  id: {template: '{etype}'}
+  line: {capture: hook}
+  emits:
+  - edge:
+      kind: hook_acts_on_entity_type
+      from: {template: '{hook}', types: [drupal.hook]}
+      to: this_node
+  confidence: inferred

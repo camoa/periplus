@@ -3,6 +3,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 - name: js.function
   id_namespace: js.function
+- name: js.file
+  id_namespace: js.file
+
+edge_kinds:
+- kind: script_declares_function
+  from: js.file
+  to: js.function
 
 rules:
 # function name(...) {...}: <script path>:name
@@ -13,6 +20,13 @@ rules:
   id: {from: qualified_name}
   emits: [{node: {type: js.function}}]
   confidence: declared
+- rule: function_declaration_in_file
+  reads: file
+  in: [js_source]
+  match: {declaration: function_declaration, name_child: name, filetype: javascript}
+  id: {from: qualified_name}
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
 # const name = (...) => {...}, and the same with let or var.
 - rule: function_from_arrow
   reads: file
@@ -21,6 +35,13 @@ rules:
   id: {from: qualified_name}
   emits: [{node: {type: js.function}}]
   confidence: declared
+- rule: function_from_arrow_in_file
+  reads: file
+  in: [js_source]
+  match: {declaration: variable_declarator, name_child: name, filetype: javascript, where: [{has_child: arrow_function}]}
+  id: {from: qualified_name}
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
 # const name = function (...) {...}, and the same with let or var.
 - rule: function_from_expression
   reads: file
@@ -28,4 +49,20 @@ rules:
   match: {declaration: variable_declarator, name_child: name, filetype: javascript, where: [{has_child: function_expression}]}
   id: {from: qualified_name}
   emits: [{node: {type: js.function}}]
+  confidence: declared
+- rule: function_from_expression_in_file
+  reads: file
+  in: [js_source]
+  match: {declaration: variable_declarator, name_child: name, filetype: javascript, where: [{has_child: function_expression}]}
+  id: {from: qualified_name}
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
+# The script itself: its path from the project folder, the same value that starts each function's
+# name. A node for a script that holds no function lets a library reach it.
+- rule: script_file
+  reads: file
+  in: [js_source]
+  match: {declaration: program, filetype: javascript}
+  id: {from: script}
+  emits: [{node: {type: js.file}}]
   confidence: declared

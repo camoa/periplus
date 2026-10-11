@@ -12,6 +12,12 @@ edge_kinds:
 - kind: template_links_route
   from: drupal.template
   to: drupal.route
+- kind: template_includes
+  from: drupal.template
+  to: drupal.template
+- kind: template_includes_component
+  from: drupal.template
+  to: drupal.component
 
 rules:
 - rule: template_file
@@ -30,4 +36,51 @@ rules:
   emits:
   - node:
       type: drupal.template
+  confidence: declared
+
+# A template another template includes: include, extends, embed, import or from naming a
+# .html.twig file, as a tag or as the include() function, is an edge from the template to the
+# one the name gives. The name is the file's stem, so '@theme/partials/card.html.twig' and
+# 'card.html.twig' both name card. A component named '<theme>:<name>' in an include or embed is
+# an edge to the component <name>. Read as text, like template_route_link.yaml; a call inside a
+# Twig comment makes nothing. A name that no mapped template or component has ends at a
+# referenced node.
+- rule: template_included_in_template
+  reads: file
+  in:
+  - module_root
+  - theme_root
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\b(?:include|extends|embed|import|from)\b\s*\(?\s*[''"](?:[^''"]*/)?(?<name>[^''"/:]+)\.html\.twig[''"]'
+  id:
+    template: '{template_name}'
+  emits:
+  - edge:
+      kind: template_includes
+      from: this_node
+      to:
+        from:
+          capture: name
+  confidence: declared
+
+- rule: component_included_in_template
+  reads: file
+  in:
+  - module_root
+  - theme_root
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\b(?:include|embed)\b\s*\(?\s*[''"][A-Za-z_][\w-]*:(?<name>[A-Za-z_][\w-]*)[''"]'
+  id:
+    template: '{template_name}'
+  emits:
+  - edge:
+      kind: template_includes_component
+      from: this_node
+      to:
+        from:
+          capture: name
   confidence: declared

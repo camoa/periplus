@@ -1,0 +1,29 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An entity template suggestion names its bundle: node--article--teaser.html.twig is the
+# template for the view mode teaser of the bundle node.article. Only the form <entity>--<bundle>--
+# <view mode> of a core content entity links, with a bundle that starts with a letter, so
+# node--full (a view mode or a bundle, the file cannot tell) and node--12 (a node id) link to
+# nothing. The name is read at the end of the file, because most templates open with a comment.
+edge_kinds:
+- kind: suggests_bundle
+  from: drupal.template
+  to: drupal.bundle
+
+rules:
+- rule: template_suggests_bundle
+  reads: file
+  in:
+  - module_root
+  - theme_root
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\Z'
+  id: {template: '{bundle_suggestion}'}
+  emits:
+  - edge:
+      kind: suggests_bundle
+      from: {template: '{template_name}', type: drupal.template}
+      to: this_node
+  confidence: inferred

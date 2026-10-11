@@ -133,6 +133,29 @@ before any file is read, at exit 18:
 the folder views_root, which a path value is relative_to, holds ** in its value
 ```
 
+## The keys of a list as paths
+
+A data rule can turn each key under a list into the path of another file. A path value on the
+file's type gives the folder the file sits in, and the edge's `to` joins it with each key:
+
+```yaml drupal_js_basic@0.0.1/pack.yaml
+    yml:
+      endings: [yml]
+      reader: data
+      format: yaml
+      path_values:
+        libraries_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
+```
+
+With `to: {from: [{each: js.*}], template: '{libraries_dir}/{key}', where: [{not_matches: 'http:*'}]}`,
+a libraries file `web/modules/custom/m/m.libraries.yml` that lists `js/form.js` under `js:` gives
+an edge to `web/modules/custom/m/js/form.js`, and a key starting `http:` gives none. `matches` and
+`not_matches` are globs on the key and are described in
+[Tree references](rutter-author-guide-references.md#filtering-the-keys-of-a-list-form-edge-end).
+The end reaches a script's `js.file` node through `from: enclosing_file`, described there too.
+
 ## Two skipped rows
 
 The map report's `skipped` list holds a row, with its `file`, `line`, `rule` and `reason`, for a

@@ -51,6 +51,7 @@ assert nodes == {
     "drupal.config::profile.type.my_type": ("mapped", None),
     "drupal.entity_type::profile": ("referenced", None),
     "drupal.module::mymodule": ("mapped", None),
+    "drupal.module::profile": ("referenced", None),
 }, nodes
 
 sync = "config/sync/profile.type.my_type.yml"
@@ -68,6 +69,10 @@ assert edges == sorted([
      [(install, 1)]),
     ("configured_by", "drupal.bundle::profile.my_other_type",
      "drupal.config::profile.type.my_other_type", [(install, 1)]),
+    ("config_provided_by", "drupal.config::profile.settings",
+     "drupal.module::profile", [("config/sync/profile.settings.yml", 1)]),
+    ("config_provided_by", "drupal.config::profile.type.my_type",
+     "drupal.module::profile", [("config/sync/profile.type.my_type.yml", 1)]),
 ]), edges
 PY
 echo "profile pack ok"

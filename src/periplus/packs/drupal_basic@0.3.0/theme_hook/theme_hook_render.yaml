@@ -1,0 +1,20 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# '#theme' => 'my_card' in a class file under src: the class renders the theme hook. Read as
+# text, as the '#attached' array is. A render array in a function of a module file gives no edge.
+rules:
+- rule: theme_hook_rendered_in_class
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"]#theme[''"]\s*=>\s*[''"](?<hook>[A-Za-z][A-Za-z0-9_]*)[''"]'
+  id: {template: '{hook}'}
+  line: {capture: hook}
+  emits:
+  - edge:
+      kind: renders_theme_hook
+      from: {template: '{psr4_class}', types: [php.class]}
+      to: this_node
+  confidence: declared

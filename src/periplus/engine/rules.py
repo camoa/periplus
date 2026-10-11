@@ -604,6 +604,23 @@ def _declarations(
                     ends.append([(f"{twin}::{node_id}", line)])
                 elif end == "enclosing_class":
                     ends.append([(holder_id, line)] if holder_id else [])
+                elif end == "enclosing_file":
+                    root = match
+                    while root.parent is not None:
+                        root = root.parent
+                    found = next(
+                        filter(
+                            None,
+                            (
+                                _minted(
+                                    root, None, rule.filetype, rule_set, within, grammar, parsed, t
+                                )
+                                for t in allowed
+                            ),
+                        ),
+                        None,
+                    )
+                    ends.append([(found, line)] if found else [])
                 elif declared:
                     found = _minted(
                         match,
@@ -1208,10 +1225,11 @@ def _found(
     before, stated, written = len(edges), False, len(skipped)
     for spec in rule.edges:
         ends = _ends(spec, data, entry, paths)
-        sources = [path for mode, path in spec.parts if mode != "entry"] or [spec.key]
+        sources = [path for mode, path in spec.parts if mode not in ("entry", "file")] or [spec.key]
         reached = any(resolve_path(data, path) for path in sources)
         stated = stated or reached
-        if reached and not ends and not (spec.matches or spec.pattern or spec.listed_at):
+        filtered = spec.matches or spec.pattern or spec.listed_at or spec.not_matches
+        if reached and not ends and not filtered:
             row = f"edge {spec.kind}: no value for key {', '.join(sources)}"
             skipped.append((file, line, rule.name, row))
         edges.extend(_edges(rule, rule_set, spec, file, node_id, ends))
@@ -1333,12 +1351,17 @@ def _references(
         ):
             declared.setdefault(other.declaration, []).append(other)
     tables = rule_set.tables.get(rule.pack, {})
+    typed: dict[int, dict[str, str]] = {}
     fired = 0
     for match in parsed.by_type.get(rule.reference, ()):
         if not _fires(rule, match):
             continue
         line = line_of(match)
         written = _child(match, rule.name_child)
+        if rule.receivers:
+            written = _property(written, grammar)
+            if written is None:
+                continue
         member = _child(match, rule.member_child) if rule.member_child else None
         if (
             written is None
@@ -1359,7 +1382,11 @@ def _references(
         names, reasons = [], []
         for spec in rule.edges:
             separator = spec.separator or grammar.separator
-            reason = f"no resolution step holds for {rule.name_child}"
+            reason = (
+                f"{rule.name_child} has no declared type"
+                if rule.receivers
+                else f"no resolution step holds for {rule.name_child}"
+            )
             if spec.key:
                 holder = _holder(match, holders, rule_set, grammar, parsed)
                 enclosing = holder[0] if holder else None
@@ -1367,7 +1394,11 @@ def _references(
                 name = name or None
                 reason = reason if name is not None else row
             else:
-                name = parsed.resolve(written, grammar)
+                name = (
+                    _declared_type(match, text_of(written), rule, holders, grammar, parsed, typed)
+                    if rule.receivers
+                    else parsed.resolve(written, grammar)
+                )
                 if name is not None and member is not None:
                     name = separator.join((name, text_of(member)))
             if name is not None and spec.resolve:
@@ -1404,6 +1435,117 @@ def _references(
                 )
             )
     return fired
+
+
+def _property(node: Node | None, grammar: Grammar) -> Node | None:
+    """The name of the property the node reads on the enclosing object, or ``None`` when it is no
+    such read."""
+    if node is None or node.type not in grammar.property_access:
+        return None
+    owner = node.child_by_field_name(grammar.property_object)
+    name = node.child_by_field_name(grammar.property_name)
+    if owner is None or text_of(owner) != grammar.property_self or name is None:
+        return None
+    return name
+
+
+def _declared_type(
+    node: Node,
+    name: str,
+    rule: Rule,
+    holders: Mapping[str, tuple[Rule, ...]],
+    grammar: Grammar,
+    parsed: ParsedFile,
+    typed: dict[int, dict[str, str]],
+) -> str | None:
+    """The full name of the type the nearest enclosing type declaration declares for its property
+    ``name``, or ``None``; ``typed`` holds each declaration's types already read, by node id.
+
+    The rule's receiver kinds are read in order, and the first declaration of a kind that gives a
+    type wins. A nearer node that holds a body but no rule maps, an anonymous class, gives none.
+    """
+    bodies = {r.body_child for rules in holders.values() for r in rules}
+    holder = node.parent
+    while holder is not None and not any(c.type in bodies for c in holder.children):
+        holder = holder.parent
+    if holder is None or holder.type not in holders:
+        return None
+    if holder.id not in typed:
+        typed[holder.id] = _property_types(holder, rule.receivers, bodies, grammar, parsed)
+    return typed[holder.id].get(name)
+
+
+def _property_types(
+    holder: Node, kinds: Sequence[str], bodies: set[str], grammar: Grammar, parsed: ParsedFile
+) -> dict[str, str]:
+    """The full name of each property's declared type in the type declaration ``holder``, by the
+    property's name, a nested declaration with a body left out."""
+    found: list[Node] = []
+    pending = [holder]
+    while pending:
+        node = pending.pop()
+        found.append(node)
+        if node is holder or not any(c.type in bodies for c in node.children):
+            pending.extend(reversed(node.named_children))
+    declarations = dict(grammar.property_declarations)
+    types: dict[str, str] = {}
+    for kind in kinds:
+        for node in (n for n in found if n.type == declarations.get(kind)):
+            name = _bare(node.child_by_field_name(grammar.property_name), grammar)
+            if name is None or name in types:
+                continue
+            if kind == "var_annotation":
+                full = _annotated(node, holder, grammar, parsed)
+            else:
+                written = _typed(node, holder, grammar)
+                full = parsed.resolve(written, grammar) if written is not None else None
+            if full:
+                types[name] = full
+    return types
+
+
+def _bare(node: Node | None, grammar: Grammar) -> str | None:
+    """The text of the written name at or last below the node, or ``None``: ``$box`` gives
+    ``box``."""
+    while node is not None and node.type not in grammar.written and node.named_children:
+        node = node.named_children[-1]
+    return text_of(node) if node is not None and node.type in grammar.written else None
+
+
+def _typed(node: Node, holder: Node, grammar: Grammar) -> Node | None:
+    """The written name of the type field on the node or its nearest ancestor below ``holder``,
+    reached through only children; ``None`` for a type of several names or none."""
+    at: Node | None = node
+    while at is not None and at is not holder:
+        found = at.child_by_field_name(grammar.property_type)
+        if found is not None:
+            while found.type not in grammar.written and len(found.named_children) == 1:
+                found = found.named_children[0]
+            return found if found.type in grammar.written else None
+        at = at.parent
+    return None
+
+
+def _annotated(node: Node, holder: Node, grammar: Grammar, parsed: ParsedFile) -> str | None:
+    """The full name the annotation pattern's ``type`` capture gives in the comment just before
+    the node or its nearest ancestor below ``holder`` that has one, or ``None``."""
+    at: Node | None = node
+    while at is not None and at is not holder and grammar.property_annotation is not None:
+        before = at.prev_named_sibling
+        if before is not None and before.type == grammar.comment:
+            found = grammar.property_annotation.search(text_of(before))
+            if found is None or not found.group("type"):
+                return None
+            return resolve_name(
+                found.group("type"),
+                grammar.resolve or (("as_written", ""),),
+                grammar.separator,
+                parsed.imports.get(parsed.block_at(before.start_byte), {}),
+                {"namespace": parsed.namespace_at(before)},
+                tables={},
+            )
+        at = at.parent
+    return None
 
 
 def _all_written(node: Node, written: frozenset[str]) -> bool:
@@ -1532,6 +1674,9 @@ def _composed(
     each: list[Hit] | None = None
     line = 0
     for mode, path in spec.parts:
+        if mode == "file":
+            line = entry[1]
+            continue
         if mode == "entry":
             if entry[0] is None:
                 return []
@@ -1553,6 +1698,10 @@ def _composed(
         values = {**paths, **fixed}
         if each is not None:
             values["key"] = hit.key if hit.key is not None else str(_text(hit.value))
+            if (spec.matches is not None and not fnmatchcase(values["key"], spec.matches)) or any(
+                fnmatchcase(values["key"], glob) for glob in spec.not_matches
+            ):
+                continue
         end = _fill(spec.template, values)
         if end is not None and (listed is None or end in listed):
             ends.append((end, hit.line))

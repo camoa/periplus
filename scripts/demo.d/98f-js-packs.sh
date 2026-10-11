@@ -104,6 +104,7 @@ nodes = {n["id"]: (n["type"], n["state"]) for n in document["nodes"]}
 assert nodes == {
     f"js.function::{script}:format": ("js.function", "mapped"),
     f"js.function::{script}:shout": ("js.function", "mapped"),
+    f"js.file::{script}": ("js.file", "mapped"),
     widget: ("drupal.js_behavior", "mapped"),
     other: ("drupal.js_behavior", "mapped"),
     setting: ("drupal.js_setting", "mapped"),
@@ -121,6 +122,13 @@ edges = sorted(
     for e in document["edges"]
 )
 assert edges == sorted([
+    ("library_includes_script", "drupal.library::mymodule/widget", f"js.file::{script}", [(f"{folder}/mymodule.libraries.yml", 3)]),
+    ("script_declares_function", f"js.file::{script}", f"js.function::{script}:format",
+     [(script, 2)]),
+    ("script_declares_function", f"js.file::{script}", f"js.function::{script}:shout",
+     [(script, 6)]),
+    ("script_declares_behavior", f"js.file::{script}", widget, [(script, line(script, "Drupal.behaviors.mymoduleWidget = {"))]),
+    ("script_declares_behavior", f"js.file::{script}", other, [(script, line(script, "Drupal.behaviors.mymoduleOther = {"))]),
     ("attaches_behavior", widget, other,
      [(script, line(script, "Drupal.behaviors.mymoduleOther.attach(context);"))]),
     ("reads_setting", widget, setting,

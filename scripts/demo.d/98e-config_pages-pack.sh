@@ -51,6 +51,7 @@ assert nodes == {
     "drupal.config::config_pages.type.my_type": ("mapped", None),
     "drupal.entity_type::config_pages": ("referenced", None),
     "drupal.module::mymodule": ("mapped", None),
+    "drupal.module::config_pages": ("referenced", None),
 }, nodes
 
 sync = "config/sync/config_pages.type.my_type.yml"
@@ -68,6 +69,10 @@ assert edges == sorted([
      [(install, 1)]),
     ("configured_by", "drupal.bundle::config_pages.my_other_type",
      "drupal.config::config_pages.type.my_other_type", [(install, 1)]),
+    ("config_provided_by", "drupal.config::config_pages.settings",
+     "drupal.module::config_pages", [("config/sync/config_pages.settings.yml", 1)]),
+    ("config_provided_by", "drupal.config::config_pages.type.my_type",
+     "drupal.module::config_pages", [(sync, 1)]),
 ]), edges
 PY
 echo "config_pages pack ok"

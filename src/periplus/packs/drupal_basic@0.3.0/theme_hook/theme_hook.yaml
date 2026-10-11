@@ -1,0 +1,87 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A theme hook: a name a render array gives '#theme' and a hook_theme function declares, as
+# my_card. hook_theme returns one entry per hook, an array whose first key is one of the registry
+# keys (variables, render element, template and the like); that first key tells a hook's entry
+# from the 'variables' array inside it. An entry may also open with path or file when a registry
+# key follows at its own bracket level; a variable default such as 'link' => ['path' => NULL]
+# has none, so it does not read as a hook. An entry that opens with type, pattern or function is
+# not found. A hook links to the template that renders it: the one
+# its 'template' key names at confidence declared, and when the entry has neither a 'template'
+# nor a 'function' key the hook name with underscores written as dashes, at confidence inferred.
+# An entry is read inside a function named theme or ending in _theme, and a template or function
+# key is found beside up to four levels of brackets.
+
+node_types:
+- name: drupal.theme_hook
+  id_namespace: drupal.theme_hook
+
+edge_kinds:
+- kind: theme_hook_template
+  from: drupal.theme_hook
+  to: drupal.template
+- kind: renders_theme_hook
+  from: [php.class, php.trait, php.function]
+  to: drupal.theme_hook
+
+rules:
+- rule: theme_hook_entry
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<hook>(?!variables[''"])[A-Za-z][A-Za-z0-9_]*)[''"]\s*=>\s*(?=\[\s*[''"](?:variables|render element|template|base hook|initial preprocess|preprocess functions|theme path)[''"]\s*=>|\[\s*[''"](?:file|path)[''"]\s*=>(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*\])*\])*?[''"](?:variables|render element|template|base hook|initial preprocess|preprocess functions|theme path)[''"]\s*=>)'
+  values:
+    in_theme: {from: {enclosing: hook_theme_body, capture: mark}}
+  id:
+    template: '{in_theme}|{hook}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+  line: {capture: hook}
+  emits: [{node: {type: drupal.theme_hook}}]
+  confidence: declared
+
+- rule: theme_hook_template_key
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<hook>(?!variables[''"])[A-Za-z][A-Za-z0-9_]*)[''"]\s*=>\s*\[(?:(?![''"]template[''"]\s*=>)(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*\])*\]))*[''"]template[''"]\s*=>\s*[''"](?<template>[A-Za-z0-9_-]+)[''"]'
+  values:
+    in_theme: {from: {enclosing: hook_theme_body, capture: mark}}
+  id:
+    template: '{in_theme}|{hook}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+  line: {capture: hook}
+  emits:
+  - edge:
+      kind: theme_hook_template
+      from: this_node
+      to: {from: {capture: template}}
+  confidence: declared
+
+# The id of this rule is the template: the hook name with its underscores written as dashes.
+- rule: theme_hook_default_template
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<hook>(?!variables[''"])[A-Za-z][A-Za-z0-9_]*)[''"]\s*=>\s*(?=\[\s*[''"](?:variables|render element|template|base hook|initial preprocess|preprocess functions|theme path)[''"]\s*=>|\[\s*[''"](?:file|path)[''"]\s*=>(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*\])*\])*?[''"](?:variables|render element|template|base hook|initial preprocess|preprocess functions|theme path)[''"]\s*=>)(?=\[(?:(?![''"](?:template|function)[''"]\s*=>)(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*\])*\]))*\])'
+  values:
+    in_theme: {from: {enclosing: hook_theme_body, capture: mark}}
+  id:
+    template: '{in_theme}|{hook}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+    - {replace: '_', with: '-'}
+  line: {capture: hook}
+  emits:
+  - edge:
+      kind: theme_hook_template
+      from: {from: {capture: hook}, type: drupal.theme_hook}
+      to: this_node
+  confidence: inferred

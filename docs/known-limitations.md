@@ -10,14 +10,15 @@ a list of its known gaps.
 
 ## The rutters
 
-- **PHP:** a method call on an object, `$x->m()`, is not stated. `use function` aliases do not
+- **PHP:** a method call on an object, `$x->m()`, is not stated, except through a property of
+  `$this` whose type the class declares, which is `inferred`. `use function` aliases do not
   bind. A call to a PHP built-in function makes nothing, but the names are compared as written:
   `\strlen()` and `StrLen()` still give an unresolved function. A built-in of an extension that
   was not loaded when the list was taken is not listed. A project's own function named like a
   built-in, `function strlen()` in its namespace, gets no edge from an unqualified call. Drupal's
   global functions, such as `t()`, are not built-ins and give an unresolved function.
   `skip_names` matches the exact case, so `ISSET(` still gives an unresolved function.
-- **Drupal:** template `embed` and `include` give no edge. A contributed module's plugins and
+- **Drupal:** a template name held in a variable, a concatenation or a list gives no edge. A contributed module's plugins and
   bundle config files are mapped only by that module's rutter, listed below. Without one, its
   bundle config file stays a plain config object and its bundle is `referenced`, with no label.
   Things generated at run time, such as a route from a view, appear as `referenced`. A service or entity type that no mapped file declares, such as `config.factory`
@@ -108,7 +109,8 @@ a list of its known gaps.
   `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge. Only the
   first key after `drupalSettings` is read. The array form of a PHP library attachment is read as
   text and named by PSR-4 path, so it is inferred and a file outside a `src` folder gives no edge.
-  A library named by a constant or a variable, and the scripts a `.libraries.yml` file lists, give
+  A library named by a constant or a variable gives no edge. A script or stylesheet a
+  `.libraries.yml` file lists by a URL or by a path from the Drupal root, starting with `/`, gives
   no edge.
 - **Python:** text rules see no scopes. Every call starts at the module, and a local name that
   shadows an import gives a false edge. Method calls on objects and imports re-exported through

@@ -141,6 +141,14 @@ class Grammar:
     scope that is not a written name stands for no class, and the argument for no text.
     ``constant_declaration`` is the node type of one class constant declaration, and
     ``constant_declared_name`` and ``constant_value`` the types of its first and last named child.
+
+    ``property_access`` are the node types of a property read; its field ``property_object`` must
+    have the text ``property_self`` for the enclosing object, and its field ``property_name`` names
+    the property. ``property_declarations`` pairs each receiver kind with the node type that
+    declares one property: its field ``property_name`` names it, and the field ``property_type`` on
+    it or on the nearest ancestor holding one gives its type. ``property_annotation`` is the pattern
+    whose ``type`` capture, searched in the comment before such a node of the kind
+    ``var_annotation``, gives its type. Each is empty when the pack declares none.
     """
 
     language: str
@@ -173,6 +181,13 @@ class Grammar:
     constant_declaration: str = ""
     constant_declared_name: frozenset[str] = frozenset()
     constant_value: frozenset[str] = frozenset()
+    property_access: frozenset[str] = frozenset()
+    property_object: str = ""
+    property_self: str = ""
+    property_name: str = ""
+    property_type: str = ""
+    property_declarations: tuple[tuple[str, str], ...] = ()
+    property_annotation: re.Pattern[str] | None = None
 
     def join(self, values: Mapping[str, str]) -> str | None:
         """The full name: each part's value that is not empty, joined by the separator; ``None``

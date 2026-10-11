@@ -118,6 +118,7 @@ assert nodes == {
     mapping: ("salesforce.mapping", "mapped"),
     "drupal.entity_type::node": ("drupal.entity_type", "referenced"),
     "drupal.module::mymodule": ("drupal.module", "mapped"),
+    "drupal.module::salesforce_mapping": ("drupal.module", "referenced"),
     "drupal.plugin.salesforce_mapping_field::my_field": (
         "drupal.salesforce_mapping_field", "mapped"),
     sub_method + "check": ("php.method", "mapped"),
@@ -148,6 +149,7 @@ assert edges == sorted([
      [(config, line(config, "field.field.node.my_type.field_my_field"))]),
     ("config_depends", mapping, "drupal.config::node.type.my_type",
      [(config, line(config, "node.type.my_type"))]),
+    ("config_provided_by", mapping, "drupal.module::salesforce_mapping", [(config, 1)]),
     ("plugin_class", "drupal.plugin.salesforce_mapping_field::my_field", field_class,
      [(field, line(field, "@Plugin("))]),
     ("inherits", field_class, field_base,

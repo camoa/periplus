@@ -41,8 +41,23 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A Twig file not named .html.twig, such as a component's <name>.twig: no edge.
 # - A call inside a Twig comment makes nothing. A call inside a quoted text or a verbatim block
 #   still gives an edge.
-# - The JS files a library names in its .libraries.yml file: no edge. The engine accepts the
-#   key each_key and does not execute it.
+# - A script a library lists under js: is an edge from the library to the script's js.file node.
+#   The script's path is the libraries file's folder joined with the key. A key that is a URL
+#   (http:, https: or //) makes no edge and no node, and so does a key that starts with /, which
+#   Drupal reads from the Drupal root, such as /core/misc/drupal.js.
+#   Chain: library -> script -> behavior. A script is linked to each behavior object it assigns,
+#   by a script_declares_behavior edge from its js.file node.
+# - A stylesheet a library lists under css:, in any group, is an edge from the library to a
+#   css.file node named by the same joined path, with the same URL filter. Each .css file in a
+#   module or theme is a css.file node named by its path, so a listed file that does not exist
+#   gets a referenced node. A key that starts with /, which Drupal reads from the Drupal root,
+#   makes no edge and no node.
+# - A second pack that claims libraries files, by a file type of its own for the ending yml, is
+#   refused (exit 19: the ending yml is claimed by different file types), because libraries
+#   files are read through this pack's type yml and drupal_basic's library rules. A pack that
+#   declares the type yml again in full, under the same name and with a path value of its own,
+#   merges with it and keeps the library edges. Two themes or modules that keep a script at one
+#   path meet at one js.file node.
 #
 # An edge that starts at what is around a match needs a behavior object in JavaScript, and a
 # class or a function in PHP. A behavior call or a settings read outside a behavior object makes
@@ -53,3 +68,23 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: drupal_js_basic
 version: 0.0.1
 depends: [js_basic, drupal_basic]
+files:
+  types:
+    # yaml_basic's type yml, read as data, given the path value libraries_dir: the folder the file
+    # sits in, which a libraries file's js: keys are written from.
+    yml:
+      endings: [yml]
+      reader: data
+      format: yaml
+      path_values:
+        libraries_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
+    # A stylesheet, read as text only to be named by its path from the project folder.
+    css_text:
+      endings: [css]
+      reader: text
+      path_values:
+        stylesheet:
+          pattern: '^(?<file>.+)$'
+          template: '{file}'

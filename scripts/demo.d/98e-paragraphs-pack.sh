@@ -51,6 +51,7 @@ assert nodes == {
     "drupal.config::paragraphs.paragraphs_type.my_type": ("mapped", None),
     "drupal.entity_type::paragraph": ("referenced", None),
     "drupal.module::mymodule": ("mapped", None),
+    "drupal.module::paragraphs": ("referenced", None),
 }, nodes
 
 sync = "config/sync/paragraphs.paragraphs_type.my_type.yml"
@@ -68,6 +69,10 @@ assert edges == sorted([
      [(install, 1)]),
     ("configured_by", "drupal.bundle::paragraph.my_other_type",
      "drupal.config::paragraphs.paragraphs_type.my_other_type", [(install, 1)]),
+    ("config_provided_by", "drupal.config::paragraphs.settings",
+     "drupal.module::paragraphs", [("config/sync/paragraphs.settings.yml", 1)]),
+    ("config_provided_by", "drupal.config::paragraphs.paragraphs_type.my_type",
+     "drupal.module::paragraphs", [("config/sync/paragraphs.paragraphs_type.my_type.yml", 1)]),
 ]), edges
 PY
 echo "paragraphs pack ok"

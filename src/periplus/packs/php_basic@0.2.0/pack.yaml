@@ -26,8 +26,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   not PHP builtins: a call to one still gives an unresolved function node.
 #
 # Missing results:
-# - A method call on an object, $x->m(), makes nothing: only plain function calls and static
-#   calls are read.
+# - A method call on an object, $x->m(), makes nothing, except a call on a property of $this
+#   whose type the same class declares: only plain function calls, static calls and those are read.
 # - A use function alias does not bind.
 pack: php_basic
 version: 0.2.0
@@ -88,3 +88,20 @@ identity:
   call_literal_content: [string_content]
   # The tree node type of a comment; a docblock is the comment just before a declaration.
   comment: comment
+  # A call on a property of the enclosing object, $this->mailer->send(): the property read, its
+  # object field holding $this and its name field the property; and where each receiver kind
+  # finds the property's declared type. A typed property and a promoted constructor parameter
+  # name it in their type field, on the node or the declaration holding it; a @var docblock
+  # names it in the comment before. A @var of several types, or of an array, gives none; a @var
+  # of a scalar, such as string, is read as a class name.
+  property_receiver:
+    access: [member_access_expression]
+    object: object
+    self: $this
+    name: name
+    type: type
+    typed_property: property_element
+    promoted_constructor_parameter: property_promotion_parameter
+    var_annotation:
+      node: property_element
+      pattern: '@var\s+\??(?<type>\\?[A-Za-z_][A-Za-z0-9_\\]*)(?:\|null)?(?:\s|\*)'

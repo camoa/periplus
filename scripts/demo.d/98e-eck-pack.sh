@@ -53,6 +53,7 @@ assert nodes == {
     "drupal.config::eck.eck_type.my_entity.my_type": ("mapped", None),
     "drupal.entity_type::my_entity": ("mapped", "My entity"),
     "drupal.module::mymodule": ("mapped", None),
+    "drupal.module::eck": ("referenced", None),
 }, nodes
 kinds = {n["id"]: n["type"] for n in document["nodes"]}
 assert kinds["drupal.entity_type::my_entity"] == "drupal.content_entity_type", kinds
@@ -72,6 +73,10 @@ assert edges == sorted([
      [(install, 2)]),
     ("configured_by", "drupal.bundle::my_entity.my_other_type",
      "drupal.config::eck.eck_type.my_entity.my_other_type", [(install, 2)]),
+    ("config_provided_by", "drupal.config::eck.eck_entity_type.my_entity",
+     "drupal.module::eck", [("config/sync/eck.eck_entity_type.my_entity.yml", 1)]),
+    ("config_provided_by", "drupal.config::eck.eck_type.my_entity.my_type",
+     "drupal.module::eck", [("config/sync/eck.eck_type.my_entity.my_type.yml", 1)]),
 ]), edges
 PY
 echo "eck pack ok"

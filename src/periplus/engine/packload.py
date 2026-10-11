@@ -62,6 +62,7 @@ EXECUTED_KEYS = frozenset(
         *(f"manifest.boundary{k}" for k in ("", ".*.type", ".*.ancestry", ".*.names")),
         *(f"manifest.identity.call_{k}" for k in ("arguments", "argument", "argument_name")),
         *(f"manifest.identity.call_literal{k}" for k in ("s", "_content", "_delimiters")),
+        "manifest.identity.property_receiver",
         *(f"manifest.detect{k}" for k in ("", ".any_of", ".any_of.*.path", ".any_of.*.contains")),
         *(
             f"manifest.grammar{k}"
@@ -121,6 +122,7 @@ EXECUTED_KEYS = frozenset(
             f"{_RULE}match.where.*.{k}"
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
         ),
+        f"{_RULE}match.where.*.receiver",
         *(f"{_RULE}match.where.*.name_matches{k}" for k in ("", ".child", ".pattern")),
         *(
             f"{_RULE}id.{k}"
@@ -143,6 +145,7 @@ EXECUTED_KEYS = frozenset(
             for k in (
                 *("", ".from", ".template", ".type", ".each", ".pattern", ".where", ".on_miss"),
                 *(".where.*.matches", ".where.*.listed_at", ".from.key", ".from.capture"),
+                ".where.*.not_matches",
                 *(".from.*.key", ".from.*.each", ".types", ".declared", *_RESOLVE),
                 *_TABLE_STEPS,
             )
@@ -208,6 +211,9 @@ def _holds(value: object, segments: Sequence[str]) -> bool:
     return isinstance(value, Mapping) and head in value and _holds(value[head], rest)
 
 
+#: The receiver kinds a reference rule's receiver condition may name and the engine executes.
+_RECEIVERS = ("typed_property", "promoted_constructor_parameter", "var_annotation")
+
 #: The keys of the rule shapes this engine executes. A rule with any other key is not run.
 _RULE_KEYS = {"rule", "reads", "in", "match", "id", "emits", "confidence"}
 
@@ -222,6 +228,9 @@ _TREE_FILLED = {"declared_name", "namespace", "qualified_name", "enclosing_type"
 
 #: The edge ends of a tree rule that name a node, where the other kind of end is a written name.
 _TREE_ENDS = {"this_node", "enclosing_class"}
+
+#: The edge ends of a declaration rule: those, and the node the file's own rule made for it.
+_DECLARATION_ENDS = {*_TREE_ENDS, "enclosing_file"}
 
 #: The edge ends of an attribute rule that name a node; the other kind is an argument's value.
 _ATTRIBUTE_ENDS = {"this_node", "enclosing_class", "enclosing_method"}
@@ -394,6 +403,9 @@ class Rule:
     member_child: str = ""
     skip_names: frozenset[str] = frozenset()
     whole_written: bool = False
+    #: A reference rule: the receiver kinds its ``name_child``, a property of the enclosing
+    #: object, takes its declared type from, in order; empty when it reads a written name.
+    receivers: tuple[str, ...] = ()
     #: A rule that reads its file as text: the pattern it fires on, and the capture of the id.
     #: Its ``attributes`` and each edge's ``key`` name a capture.
     text: re.Pattern[str] | None = None
@@ -420,6 +432,7 @@ class EdgeSpec:
     """One edge a rule emits. ``parts`` is the list form of the end's source.
 
     A part is ``("key", path)``, ``("each", path)`` or ``("entry", "")`` for the entry's own key;
+    ``from: []`` is the one part ``("file", "")``, a template over the path values alone;
     without parts the end reads ``key``. A rule
     that reads data runs from ``this_node`` to that end, and ``finish`` is ``""``. A rule that
     reads a parse tree names each end in ``start`` and ``finish``: ``this_node``,
@@ -443,6 +456,8 @@ class EdgeSpec:
     full_id: bool = False
     #: The key path of a list in the same file that must hold the end's value; ``None`` for none.
     listed_at: str | None = None
+    #: Globs a list-form end's each key must not match; the end's ``matches`` glob it must.
+    not_matches: tuple[str, ...] = ()
     #: The type the composed end has when no rule finds it; ``""`` for the kind's types there.
     #: A data or text rule's composed end is the from end when ``start`` is ``""``.
     to_type: str = ""
@@ -573,6 +588,13 @@ def load_rules(
             rules[index] = replace(rule, supported=False, reason=missing)
         if rules[index].supported and rule.annotation and not grammars[rule.filetype].comment:
             missing = f"the grammar for {rule.filetype} declares no identity.comment"
+            rules[index] = replace(rule, supported=False, reason=missing)
+        if (
+            rules[index].supported
+            and rule.receivers
+            and not grammars[rule.filetype].property_access
+        ):
+            missing = f"the grammar for {rule.filetype} declares no identity.property_receiver"
             rules[index] = replace(rule, supported=False, reason=missing)
     for rule in rules:
         if (
@@ -1049,8 +1071,8 @@ def _grammar(
             "qualified_name.parts and .separator, namespace.declaration and .name_child or "
             "namespace.path_value, "
             "written_names, an import's ast, clause and facts with a bind naming only its "
-            "facts, last_segment or path, an optional attribute mapping, an optional comment and "
-            "optional resolution steps"
+            "facts, last_segment or path, an optional attribute mapping, an optional comment, "
+            "an optional property_receiver mapping and optional resolution steps"
         )
         if not isinstance(identity, Mapping):
             raise unread
@@ -1058,6 +1080,8 @@ def _grammar(
             qualified, namespace = identity["qualified_name"], identity["namespace"]
             attribute = identity.get("attribute", {})
             access = constants.get("constant_access", {})
+            receiver = identity.get("property_receiver", {})
+            annotation = receiver.get("var_annotation", {})
             declaration = constants.get("constant_declaration", {})
             if "path_value" in namespace:
                 namespace = {"declaration": "", "name_child": "", **namespace}
@@ -1094,6 +1118,17 @@ def _grammar(
                 constant_declaration=str(declaration.get("node", "")),
                 constant_declared_name=frozenset(map(str, declaration.get("name", []))),
                 constant_value=frozenset(map(str, declaration.get("value", []))),
+                property_access=frozenset(map(str, receiver.get("access", []))),
+                property_object=str(receiver.get("object", "")),
+                property_self=str(receiver.get("self", "")),
+                property_name=str(receiver.get("name", "")),
+                property_type=str(receiver.get("type", "")),
+                property_declarations=tuple(
+                    (kind, str(receiver[kind]["node"] if kind == _RECEIVERS[2] else receiver[kind]))
+                    for kind in _RECEIVERS
+                    if kind in receiver
+                ),
+                property_annotation=_regex(annotation["pattern"]) if annotation else None,
             )
         except (KeyError, TypeError) as error:
             raise unread from error
@@ -1664,9 +1699,15 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
         )
     where = match.get("where", [])
     if not isinstance(where, list) or not all(
-        isinstance(c, Mapping) and set(c) == {"name_matches"} for c in where
+        isinstance(c, Mapping) and set(c) in ({"name_matches"}, {"receiver"}) for c in where
     ):
-        raise _Unsupported("the match.where of a reference rule holds only name_matches conditions")
+        raise _Unsupported(
+            "the match.where of a reference rule holds only name_matches and receiver conditions"
+        )
+    receivers = tuple(c["receiver"] for c in where if "receiver" in c)
+    for receiver in receivers:
+        if receiver not in _RECEIVERS:
+            raise _Unsupported(f"the receiver {receiver} is accepted and not executed")
     specs = []
     for emit in emits:
         edge = emit["edge"]
@@ -1720,6 +1761,7 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
         skip_names=frozenset(match.get("skip_names", ())),
         whole_written=match.get("whole_written") is True,
         name_matches=_name_matches(where, fields[0]),
+        receivers=receivers,
     )
 
 
@@ -1871,12 +1913,12 @@ def _read_tree_edge(edge: Mapping[str, Any]) -> EdgeSpec:
         finish = "qualified_name"
     if (
         set(edge) != {"kind", "from", "to"}
-        or not (declared[0] or isinstance(start, str) and start in _TREE_ENDS)
-        or not (declared[1] or finish in {*_TREE_ENDS, "qualified_name"})
+        or not (declared[0] or isinstance(start, str) and start in _DECLARATION_ENDS)
+        or not (declared[1] or finish in {*_DECLARATION_ENDS, "qualified_name"})
     ):
         raise _Unsupported(
-            "an edge of a declaration rule does not run from this_node, enclosing_class or "
-            "{declared: <type>} to one of them or to {from: qualified_name}"
+            "an edge of a declaration rule does not run from this_node, enclosing_class, "
+            "enclosing_file or {declared: <type>} to one of them or to {from: qualified_name}"
         )
     return EdgeSpec(edge["kind"], "", False, None, None, None, (), start, finish, declared=declared)
 
@@ -2021,22 +2063,48 @@ def _read_forward(edge: object) -> EdgeSpec:
         raise _Unsupported("an edge template is not a string")
     source = end["from"]
     if isinstance(source, list):
-        parts = tuple(_read_part(part) for part in source)
+        parts = tuple(_read_part(part) for part in source) or (("file", ""),)
         where = end.get("where", [{"listed_at": None}])
-        one = where[0] if isinstance(where, list) and len(where) == 1 else None
-        listed = one["listed_at"] if isinstance(one, dict) and set(one) == {"listed_at"} else ""
+        conditions = where if isinstance(where, list) else [None]
+        listed: object = None
+        seen = False
+        matches: str | None = None
+        not_matches: list[str] = []
+        refused = "an edge end takes a key, or a list source with a template and at most one each, "
+        refused += "or from: [] with a template alone, and where conditions "
+        refused += "listed_at, matches (a glob on each key) and not_matches (a glob on each key)"
+        for condition in conditions:
+            if not isinstance(condition, dict) or len(condition) != 1:
+                raise _Unsupported(refused)
+            ((name, value),) = condition.items()
+            if name == "listed_at" and not seen:
+                listed, seen = value, True
+            elif name == "matches" and matches is None and isinstance(value, str):
+                matches = value
+            elif name == "not_matches" and isinstance(value, str):
+                not_matches.append(value)
+            else:
+                raise _Unsupported(refused)
+        eaches = sum(mode == "each" for mode, _ in parts)
         if (
-            sum(mode == "each" for mode, _ in parts) > 1
+            eaches > 1
+            or (eaches == 0 and (matches is not None or not_matches))
             or template is None
             or not {"from", "template"} <= set(end) <= {"from", "template", "where", "type"}
             or not (listed is None or (isinstance(listed, str) and listed))
         ):
-            raise _Unsupported(
-                "a list source needs a template, at most one each, and at most one where "
-                "condition, listed_at"
-            )
+            raise _Unsupported(refused)
         return EdgeSpec(
-            edge["kind"], "", False, None, None, template, parts, listed_at=listed, to_type=to_type
+            edge["kind"],
+            "",
+            False,
+            matches,
+            None,
+            template,
+            parts,
+            listed_at=listed,
+            not_matches=tuple(not_matches),
+            to_type=to_type,
         )
     where = end.get("where")
     matches = None

@@ -2,7 +2,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # Every file in the config folders becomes a node, and a rule that understands more refines it.
 # Its dependencies key lists modules, configuration and themes, and its enforced key the same
-# three lists; an enforced dependency is a dependency, each cited at its item's line.
+# three lists; an enforced dependency is a dependency, each cited at its item's line. A file with
+# no top-level uuid, in the site's exported configuration folder, is simple configuration,
+# provided by the module its name starts with; a configuration entity (it has a uuid) has no owner
+# edge. Drupal strips the uuid from a module's config/install and config/optional files, so the
+# test cannot tell the two apart there and those files get no owner edge. core.* names no module.
 node_types:
 - name: drupal.config_object
   id_namespace: drupal.config
@@ -19,6 +23,9 @@ edge_kinds:
 - kind: depends_on_theme
   from: drupal.config_object
   to: drupal.theme
+- kind: config_provided_by
+  from: drupal.config_object
+  to: drupal.module
 
 rules:
 - rule: any_config_file
@@ -88,4 +95,25 @@ rules:
         from:
           key: dependencies.enforced.theme
         each: true
+  confidence: declared
+- rule: simple_config_owner
+  reads: file
+  in:
+  - config
+  match:
+    file: '*'
+    filetype: yml
+    where:
+    - key:
+        name: uuid
+        equals: null
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: config_provided_by
+      from: this_node
+      to:
+        from: []
+        template: '{config_owner}'
   confidence: declared

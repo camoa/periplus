@@ -46,9 +46,42 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   as a grants_permission edge. A role or permission that no mapped file declares, such as one
 #   from core or a contributed module, ends at a referenced node.;
 # - each route a template names in path('x') or url('x'), as a template_links_route edge, read as
-#   text; a core route such as user.login ends at a referenced node.
+#   text; a core route such as user.login ends at a referenced node;
+# - each template another template names in an include, extends, embed, import or from, as a
+#   template_includes edge, and each component an include or embed names as theme:name, as a
+#   template_includes_component edge to the component's name. Read as text; a name no mapped
+#   template or component has ends at a referenced node;
+# - each theme hook that a hook_theme function declares, as a drupal.theme_hook node, and the
+#   class or trait under src that gives '#theme' => 'name' in a render array, as a
+#   renders_theme_hook edge to it. A hook links to its template by theme_hook_template: the
+#   template key as declared, and
+#   for a hook with no template and no function key its name with underscores written as dashes,
+#   as inferred. A template named <entity>--<bundle>--<view mode> of node, taxonomy-term,
+#   block-content, paragraph, media or comment gives a suggests_bundle edge to the bundle
+#   <entity>.<bundle>, as inferred.
+# - each simple configuration file, with no top-level uuid, as a config_provided_by edge to the
+#   module its name starts with; each literal form id a form class returns, as a drupal.form_id
+#   node with a form_has_id edge from the class, and each form id a CAPTCHA point or the honeypot
+#   settings name, as a config_names_form edge; each hook named <extension>_<type>_<operation>,
+#   as an inferred hook_acts_on_entity_type edge to <type>; each route's path, as a
+#   route_serves_path edge to a drupal.url_path node, and each path Url::fromUserInput or
+#   Url::fromUri('internal:...') names, as a links_to_path edge. The rule files' headers name
+#   their limits.
 #
 # False results:
+# - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
+#   unmapped bundle ends at a referenced node.
+# - A hook with a template key kept in a variables default, or an entry whose first key is not a
+#   registry key, reads as no hook or as the wrong one. A hook entry that opens with the key
+#   type, pattern or function is not found. One that opens with path or file is found when a
+#   registry key follows at its own bracket level, so a variable default such as
+#   'link' => ['path' => NULL] does not read as a hook. Inside a hook_theme function, any key
+#   whose array opens with a registry key reads as a hook: 'nested' => ['variables' => NULL]
+#   inside an entry gives the hook nested.
+# - A function name of the form <extension>_<type>_<operation> gives a hook_acts_on_entity_type
+#   edge whether or not <type> is an entity type. On Drupal core, helpers read as the hooks
+#   cookie_delete, mass_update, set_edit_access and translate_access end at the referenced entity
+#   types cookie, mass, set_edit and translate.
 # - Any function whose name starts with the first part of the file name reads as a hook: the form
 #   callback mymod_settings_submit reads as the hook settings_submit, the helper mymod_build_list
 #   as build_list, and mymod_update_NEXT as update_NEXT. The same holds for a theme's inc file
@@ -67,6 +100,19 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   service.
 #
 # Missing results:
+# - A '#theme' written in a function, such as a hook in a module file, gives no edge, because the
+#   rule starts it at the class the file path names. A theme hook declared by a method of a class,
+#   or by a hook_theme function that is not named theme or ending in _theme, is not found. A
+#   template named <entity>--<name>.html.twig gives no suggests_bundle edge, because the file
+#   cannot tell a bundle from a view mode or a node id.
+# - A form id is read only from a getFormId() whose body returns a literal text, which gives a
+#   drupal.form_id node and a form_has_id edge. A constant, a concatenation or a variable returned
+#   gives neither.
+# - A template is known by its file stem, and a component by its name without the theme: two
+#   themes that define a component of one name meet at one node, as templates of one name do.
+#   A template or component named by a variable, a concatenation or a list gives no edge. Only
+#   a name ending in .html.twig gives a template edge, and only a .html.twig file is read, so
+#   a component's own .twig and story files give none.
 # - A function in a module file named other than its module, such as includes/helpers.inc
 #   holding mymod_ functions, gives no hook, and nor does a theme file of another ending, such as
 #   includes/content.theme. A theme's inc file is read by the name of the folder directly below
@@ -228,6 +274,18 @@ files:
           template: '{name}'
           relative_to: custom_theme
 
+    # yaml_basic's type yml, read as data, given the path value config_owner: the first
+    # dot-separated part of a configuration file's name, the module that provides the file when
+    # it is simple configuration. Absent for core.*, which names no module.
+    yml:
+      endings: [yml]
+      reader: data
+      format: yaml
+      path_values:
+        config_owner:
+          pattern: '^(?:.*/)?(?!core\.)(?<owner>[^/.]+)\.[^/]+\.[^/.]+$'
+          template: '{owner}'
+
     # Two text readings, beside the tree readings twig_basic and php_basic give the same files,
     # for what a tree rule cannot reach: a call inside a template, the array form of an
     # attachment, a docblock tag, a class constant used as an array key. Declared here, once,
@@ -242,6 +300,13 @@ files:
         template_name:
           pattern: '^(?:.*/)?(?<name>[^/]+)\.html\.twig$'
           template: '{name}'
+        # The bundle an entity template suggestion names, as node.article for
+        # node--article--teaser. Absent for any other name.
+        bundle_suggestion:
+          pattern: '^(?:.*/)?(?<entity>node|taxonomy-term|block-content|paragraph|media|comment)--(?<bundle>[a-z][a-z0-9-]*?)--[a-z0-9]+(?:-[a-z0-9]+)*\.html\.twig$'
+          template: '{entity}.{bundle}'
+          normalize:
+          - {replace: '-', with: '_'}
       sections:
       - name: comment
         open: '\{#'
@@ -286,6 +351,11 @@ files:
       - name: library_list
         open: '[\[,(\s][''"](?<mark>library)[''"]\s*=>\s*(?=\[)'
         balance: ['[', ']']
+      # The body of a function named theme or ending in _theme, which is where hook_theme returns
+      # its entries.
+      - name: hook_theme_body
+        open: '\b(?<mark>function)\s+(?:\w+_)?theme\s*\([^)]*\)[^{;]*(?=\{)'
+        balance: ['{', '}']
 
 grammar:
   provider: tree-sitter

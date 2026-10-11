@@ -243,6 +243,140 @@ Each parenthesis opens a node type, such as function_call_expression, and a word
 field, such as function: the names `match.reference`, `match.declaration` and `name_child` take.
 Another grammar's package may name its function language(), as tree_sitter_go does.
 
+## Filtering the keys of a list-form edge end
+
+When an edge end's `from` is a list holding an `each` part, `where` may hold `listed_at`,
+`matches` and `not_matches`. `matches: 'js/*'` keeps only the keys of the `each` part that the glob
+selects. `not_matches` drops the keys its glob selects and may repeat, one glob per condition. A
+key that is dropped gives no edge and no node. `listed_at` and `matches` may each appear once.
+Any other condition, a repeat of those two, a glob that is not a string, or a glob on a list with
+no `each` part refuses the edge, and the rule is not run.
+
+## An edge from the file: enclosing_file
+
+A declaration rule's edge may start or end at the file that holds the match, `from: enclosing_file`,
+beside `this_node` and `enclosing_class`. The end is the node that a declaration rule on the file's
+root made for that file, in this pack or in a pack it depends on; `js_basic` makes a `js.file`
+node from `program`. The rule
+needs a twin node rule with the same match and id, since a rule makes a node or an edge. When no
+rule made a node for the file, the edge is skipped and `skipped` says
+`no value for enclosing_file`. This is `drupal_js_basic` linking a script to its behavior:
+
+```yaml drupal_js_basic@0.0.1/behavior/behavior.yaml
+- rule: behavior_from_assignment_in_file
+  reads: file
+  in: [js_source]
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: object}]}
+  id: {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)$', template: '{behavior}'}
+  emits: [{edge: {kind: script_declares_behavior, from: enclosing_file, to: this_node}}]
+  confidence: declared
+```
+
+A pack outside the bundle uses both this end and the key filter above with no engine change:
+check 99y-third-party-file-links maps a project-local pack that has them and gets the same nodes
+and edges as the bundled rutters.
+
+## An edge end from the file's path alone: from: []
+
+A data rule's edge end may be `from: []` with a `template` and nothing else. The template is
+filled once per fire from the file's path values, at the fire's line, and reads no key of the
+file. `drupal_basic` uses it for `config_provided_by`: each simple configuration file links to the
+module its name starts with. An end with `from: []` and no template is refused, and the rule is not
+run. This project-local pack links each configuration file to the module its file name starts
+with:
+
+```yaml .periplus/packs/owner@0.0.1/pack.yaml
+pack: owner
+version: 0.0.1
+depends: []
+folders:
+  config: ./config
+files:
+  types:
+    yml:
+      endings: [yml]
+      reader: data
+      format: yaml
+      path_values:
+        owner:
+          pattern: '^(?:.*/)?(?<owner>[^/.]+)\.[^/]+\.yml$'
+          template: '{owner}'
+```
+
+```yaml .periplus/packs/owner@0.0.1/rules/config.yaml
+node_types:
+- name: app.config
+  id_namespace: app.config
+- name: app.module
+  id_namespace: app.module
+edge_kinds:
+- kind: provided_by
+  from: app.config
+  to: app.module
+rules:
+- rule: config_file
+  reads: file
+  in: [config]
+  match: {file: '*', filetype: yml}
+  id: {template: '{file_stem}'}
+  emits: [{node: {type: app.config}}]
+  confidence: declared
+- rule: config_provider
+  reads: file
+  in: [config]
+  match: {file: '*', filetype: yml}
+  id: {template: '{file_stem}'}
+  emits:
+  - edge:
+      kind: provided_by
+      from: this_node
+      to: {from: [], template: '{owner}'}
+  confidence: inferred
+```
+
+`config/mymod.settings.yml` gives the edge `app.config::mymod.settings` to `app.module::mymod`, a
+referenced node, since no rule maps the module. A file whose name the pattern does not fit has no
+`owner` value and gives no edge. Check 99z-template-only-end maps these two blocks as written here.
+
+## A call on a property of the enclosing object
+
+A reference rule with `receiver` conditions reads its first name child as a property of the
+enclosing object, such as `$this->mailer` in `$this->mailer->send()`. Its name is the type that the
+enclosing type declaration declares for that property; the second name child joins it with the
+end's separator. Each condition names one place the type may be declared, and they are tried in
+the rule's order: `typed_property`, `promoted_constructor_parameter` and `var_annotation`, a
+docblock such as `/** @var Mailer */`. The type resolves through the file's imports and namespace,
+as a written name does. Only the class around the call is read, never another file.
+
+A property the class declares no type for makes no edge, and `skipped` says
+`object has no declared type`. A call on anything that is not a property of the enclosing object
+is not a fire and leaves no row. The schema also accepts `typed_parameter`,
+`object_creation_expression_in_scope`, `this` and `untyped_variable`; a rule naming one is not run.
+A rule with a `receiver` condition on a grammar whose pack declares no
+`identity.property_receiver` refuses the map with exit 26, naming the rule and that key.
+
+The pack that owns the grammar names the tree nodes in `identity.property_receiver`: `access`, the
+node types of a property read; `object`, `self` and `name`, its object field, the object's text and
+its name field; `type`, the field holding a declared type; a node type for `typed_property` and
+`promoted_constructor_parameter`; and `var_annotation`, a node type and a pattern whose `type`
+capture is the type. This is `php_basic` mapping such a call:
+
+```yaml php_basic@0.2.0/edges/find_structure.yaml
+- rule: calls_property_method
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: [object, name]
+    filetype: php
+    where:
+    - receiver: typed_property
+    - receiver: promoted_constructor_parameter
+    - receiver: var_annotation
+  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.method], separator: "::", on_miss: unresolved}}}]
+  confidence: inferred
+```
+
 ## Keys the schemas accept and the engine does not run
 
 A rule holding one is not run, and `not_executed` names it; a manifest or pack file holding one
@@ -294,7 +428,7 @@ file.rules.*.id.from.*: annotation_key argument argument_class argument_key arra
 file.rules.*.match: argument array_entry grammar method_call node_type static_call subscript_assignment
 file.rules.*.match.where.*: ancestor_reaches attribute_argument base_is_known_plugin
     contained_by_type has_argument has_incoming_edge has_promoted_constructor_parameter
-    in_method_with_attribute listed_at matches method_set_covers name on_service receiver
+    in_method_with_attribute listed_at matches method_set_covers name not_matches on_service
 file.rules.*.values.*.from: annotation_key argument argument_class argument_key array_key_class
     attribute_argument each each_key incoming_edges key literal qualified value
 manifest.files: cache_key_includes

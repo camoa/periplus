@@ -199,6 +199,48 @@ the map with exit 26, and the problem lists the endings that are claimed. `perip
 this, and `periplus validate` does not. An ending that only another file type claims passes the
 check and reads nothing. Check 99m-drupal-hooks proves the rule.
 
+## From a library to a behavior, and between templates
+
+`drupal_js_basic` joins three things that Drupal joins at run time. A libraries file lists a
+script under `js:`; the rule `library_script` makes a `library_includes_script` edge from the
+library to the script's `js.file` node, and skips a key that starts `/`, `http:` or `https:`.
+`js_basic` makes that node for every script and a `script_declares_function` edge to each function
+in it; `behavior_from_assignment_in_file` makes a `script_declares_behavior` edge to each
+`Drupal.behaviors.name = {...}`. So `periplus` follows library, script, behavior (check
+99w-library-scripts proves the chain).
+
+`drupal_basic` links a template to what it names: an include, extends, embed, import or from of a
+`.html.twig` file is a `template_includes` edge, and `theme:name` in an include or embed is a
+`template_includes_component` edge to the component's name. A call in a Twig comment gives
+nothing (check 99x-twig-relations proves it). Two themes with a template or component of one name
+meet at one node. A third party gets the same links from a project-local pack
+([Tree references](rutter-author-guide-references.md#an-edge-from-the-file-enclosing_file)).
+
+## Configuration owners, theme hooks, stylesheets, forms, entity hooks and paths
+
+Each relation below is an edge kind `drupal_basic@0.3.0` or `drupal_js_basic@0.0.1` declares.
+The pack's `pack.yaml` lists what each one misses and where it is wrong.
+
+- `config_provided_by`, from a configuration object to a module: each simple configuration file,
+  one with no top-level `uuid`, names the module its file name starts with, as
+  `mymod.settings` to `mymod`. A configuration entity file has none. The end is
+  [from the file's path alone](rutter-author-guide-references.md#an-edge-end-from-the-files-path-alone-from-).
+- `drupal.theme_hook`, a node for each entry of a `hook_theme` function; `renders_theme_hook`, from
+  the class or trait under `src` whose render array gives `'#theme' => 'name'`;
+  `theme_hook_template`, from a hook to its template, declared by its `template` key or inferred
+  from its name with underscores written as dashes; `suggests_bundle`, inferred from a template
+  named `node--article--teaser` to the bundle `node.article`.
+- `library_includes_stylesheet`, from a library to a `css.file` node for each stylesheet its `css:`
+  groups list, joined with the libraries file's folder, as scripts are.
+- `drupal.form_id`, a node for each literal a form class's `getFormId()` returns; `form_has_id`,
+  from that class to it; `config_names_form`, from a configuration object that names a form id,
+  such as a CAPTCHA point, to it. Two edges join a configuration file to a form class.
+- `hook_acts_on_entity_type`, inferred from a hook named `<extension>_<type>_<operation>`, such as
+  `mymod_node_presave`, to the entity type `node`.
+- `drupal.url_path`, a node for each path as written; `route_serves_path`, from a route to its
+  `path`; `links_to_path`, from the class or function around `Url::fromUserInput('/x')` or
+  `Url::fromUri('internal:/x')` to that path. A route and a link meet only on the same text.
+
 ## Where to look when the map misses a thing
 
 Run these in a Drupal project that names `drupal_basic` in its settings:
@@ -215,7 +257,8 @@ not listed. `skipped` names matches that made nothing. An `unresolved` node is a
 
 ## What the parse-tree side cannot say today
 
-- A method call on an object, `$x->m()`; plain and static calls are stated.
+- A method call on an object, `$x->m()`; plain and static calls are stated, and so is a call
+  through a property of `$this` whose type the class declares.
   [Tree references](rutter-author-guide-references.md) lists the other calls not stated.
 - The tree layout. A rule names node types and fields; how the engine walks the tree, finds the
   enclosing class and nests namespace blocks is engine code. A text rule on PHP names its own

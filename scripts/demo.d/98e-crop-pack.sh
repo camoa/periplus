@@ -51,6 +51,7 @@ assert nodes == {
     "drupal.config::crop.type.my_type": ("mapped", None),
     "drupal.entity_type::crop": ("referenced", None),
     "drupal.module::mymodule": ("mapped", None),
+    "drupal.module::crop": ("referenced", None),
 }, nodes
 
 sync = "config/sync/crop.type.my_type.yml"
@@ -68,6 +69,10 @@ assert edges == sorted([
      [(install, 1)]),
     ("configured_by", "drupal.bundle::crop.my_other_type",
      "drupal.config::crop.type.my_other_type", [(install, 1)]),
+    ("config_provided_by", "drupal.config::crop.settings",
+     "drupal.module::crop", [("config/sync/crop.settings.yml", 1)]),
+    ("config_provided_by", "drupal.config::crop.type.my_type",
+     "drupal.module::crop", [("config/sync/crop.type.my_type.yml", 1)]),
 ]), edges
 PY
 echo "crop pack ok"

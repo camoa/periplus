@@ -1,0 +1,70 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A URL written as a path string, joined to the route that serves that exact path. A route serves
+# the path its routing file gives it, a route_serves_path edge in route/route_definition.yaml. A
+# class or a function that builds a URL from a path names that path, a links_to_path edge:
+# Url::fromUserInput('/x') and Url::fromUri('internal:/x'). Both meet at one drupal.url_path node,
+# whose id is the path as written, so a route and a link reach each other through it. A path no
+# route serves ends at a referenced node.
+#
+# Limits:
+# - A call in a method links from the class around it, and one in a function from the function. A
+#   call in a trait, an enum or an interface gives no edge and goes under skipped.
+# - A query string or a fragment stays in the id: /my/path?x=1 is a referenced path node of its
+#   own and meets no route. No reference end can cut a suffix from a call's argument.
+# - A path is matched exactly. A route path with a placeholder, such as /my/item/{id}, meets no
+#   link: /my/item/5 is a referenced path node of its own.
+# - new RedirectResponse('/x') gives no edge: the engine reads a call's argument by its field, and
+#   an object creation has none. Nor does fromUri with another scheme, such as route:, entity: or
+#   https:, which goes under skipped, nor a path built from a variable or a concatenation.
+# - Url is matched by its short name or written in full, with or without a leading backslash.
+
+node_types:
+- name: drupal.url_path
+  id_namespace: drupal.url_path
+
+edge_kinds:
+- kind: route_serves_path
+  from: drupal.route
+  to: drupal.url_path
+- kind: links_to_path
+  from: [php.class, php.function]
+  to: drupal.url_path
+
+rules:
+# Url::fromUserInput('/my/path').
+- rule: user_input_url_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '(?:\\?Drupal\\Core\\)?Url'}
+    - name_matches: {child: name, pattern: fromUserInput}
+  emits:
+  - edge:
+      kind: links_to_path
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.url_path]}
+  confidence: declared
+
+# Url::fromUri('internal:/my/path'): the scheme is cut by the resolution step, and a URI with any
+# other scheme holds no step.
+- rule: internal_uri_url_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '(?:\\?Drupal\\Core\\)?Url'}
+    - name_matches: {child: name, pattern: fromUri}
+  emits:
+  - edge:
+      kind: links_to_path
+      from: enclosing_declaration
+      to: {from: {argument: 0}, resolve: [full_if_prefixed: 'internal:'], types: [drupal.url_path]}
+  confidence: declared

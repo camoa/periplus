@@ -611,6 +611,10 @@
           "minLength": 1,
           "description": "On an edge end: a key path of the same file whose list must hold the end's composed value. An end that is not an item gives no edge and no node."
         },
+        "not_matches": {
+          "type": "string",
+          "description": "On a list-form edge end: a glob that a key of the each part must not match. Several conditions may be given; an end whose key matches any gives no edge and no node."
+        },
         "attribute_argument": {
           "type": "object"
         },
@@ -635,8 +639,16 @@
           "description": "FORCES reads: map. Follows contains backwards. Core has two methods called save, distinguished only by what their containing class is."
         },
         "receiver": {
-          "type": "string",
-          "description": "What the call is made on. A bare name() can never resolve to a method; a call on a typed property is a claim about runtime rather than an observation, which is why two rules with the same edge kind carry different confidence."
+          "enum": [
+            "typed_property",
+            "promoted_constructor_parameter",
+            "var_annotation",
+            "typed_parameter",
+            "object_creation_expression_in_scope",
+            "this",
+            "untyped_variable"
+          ],
+          "description": "What the call is made on. A bare name() can never resolve to a method; a call on a typed property is a claim about runtime rather than an observation, which is why two rules with the same edge kind carry different confidence. Executed on a tree reference rule for the first three: its first name child is read as a property of the enclosing object, and its type is the one the enclosing type declaration declares for that property, by a typed property, a promoted constructor parameter or a @var docblock, tried in the rule's order. The pack's identity.property_receiver names the tree nodes. A rule naming any other value is not run."
         },
         "has_child": {
           "type": "string",
@@ -1019,6 +1031,7 @@
                 },
                 {
                   "type": "array",
+                  "description": "The list form: one template over the sources. An empty list with a template alone gives one end per file, filled from the file's path values.",
                   "items": {
                     "$ref": "#/$defs/listedSource"
                   }
