@@ -267,6 +267,22 @@ def test_the_map_format_choices_and_default_are_exactly_the_map_renderers() -> N
     assert fmt.default == next(iter(RENDERERS))
 
 
+def test_the_check_map_format_choices_and_default_are_exactly_the_check_map_renderers() -> None:
+    """``check-map --format`` names the formats ``checkmap.RENDERERS`` holds, as ``map``'s does."""
+    from periplus.checkmap import RENDERERS
+    from periplus.cli import build_parser
+
+    parser = build_parser()
+    subcommands = next(
+        action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+    )
+    check = subcommands.choices["check-map"]
+    fmt = next(action for action in check._actions if action.dest == "format")
+
+    assert tuple(fmt.choices or ()) == tuple(RENDERERS)
+    assert fmt.default == next(iter(RENDERERS))
+
+
 def test_main_returns_the_reports_exit_code_for_a_run_it_completed(tmp_path: Path) -> None:
     """``main(["status", ...])`` returns an integer, and it is the report's own code.
 
@@ -336,7 +352,7 @@ def test_the_settings_flag_reaches_the_resolution_and_anchors_the_project_root(
     assert document["settings"]["periplus_version"]["value"] == 7
 
 
-def test_the_subcommands_are_exactly_init_spec_status_validate_map_and_update() -> None:
+def test_the_subcommands_are_exactly_the_twelve_listed_below() -> None:
     """The surface, asserted as a set rather than by trying names one at a time.
 
     ``resolve`` named a function rather than what a person is asking for, and it is gone rather
@@ -356,7 +372,21 @@ def test_the_subcommands_are_exactly_init_spec_status_validate_map_and_update() 
         action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
     )
 
-    assert set(subcommands.choices) == {"init", "spec", "status", "validate", "map", "update"}
+    assert set(subcommands.choices) == {
+        "init",
+        "spec",
+        "status",
+        "validate",
+        "map",
+        "update",
+        "types",
+        "check-map",
+        "find",
+        "show",
+        "neighbors",
+        "affected",
+        "path",
+    }
 
 
 def test_the_old_subcommand_name_is_a_usage_error() -> None:

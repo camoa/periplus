@@ -178,6 +178,169 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="where to write the map (default: .periplus/map.json under the project root)",
     )
+    types = subcommands.add_parser(
+        "types",
+        help="list the node types and edge kinds in the written map",
+        description="Count the node types and edge kinds the map holds, and stop.",
+    )
+    types.add_argument(
+        "--format",
+        # A literal for the reason `map`'s is: `periplus.navigate` imports `jsonschema`. A test
+        # asserts these names equal `tuple(types.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
+    types.add_argument(
+        "--map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="the map file to read (default: .periplus/map.json under the project root)",
+    )
+    check = subcommands.add_parser(
+        "check-map",
+        help="check the written map against the map schema",
+        description="Check every node and edge of the map against the map schema, and stop.",
+    )
+    check.add_argument(
+        "--format",
+        # A literal for the reason `map`'s is: `periplus.checkmap` imports `jsonschema`. A test
+        # asserts these names equal `tuple(checkmap.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
+    check.add_argument(
+        "--map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="the map file to check (default: .periplus/map.json under the project root)",
+    )
+    find = subcommands.add_parser(
+        "find",
+        help="find the nodes whose id holds a text",
+        description="List the nodes whose id holds TEXT, closest match first, and stop.",
+    )
+    find.add_argument("text", metavar="TEXT", help="the text to look for in node ids")
+    find.add_argument("--type", default=None, metavar="T", help="keep type T and its subtypes")
+    find.add_argument(
+        "--limit", type=int, default=50, metavar="N", help="rows to show; 0 shows all (default: 50)"
+    )
+    find.add_argument(
+        "--map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="the map file to read (default: .periplus/map.json under the project root)",
+    )
+    find.add_argument(
+        "--format",
+        # A literal for the reason `types`' is; a test asserts it equals `tuple(find.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
+    show = subcommands.add_parser(
+        "show",
+        help="show one node and the edges at it",
+        description="Show the node ID and every edge leaving or arriving at it, and stop.",
+    )
+    show.add_argument("id", metavar="ID", help="the node id, as periplus find prints it")
+    show.add_argument(
+        "--limit", type=int, default=50, metavar="N", help="rows to show; 0 shows all (default: 50)"
+    )
+    show.add_argument(
+        "--map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="the map file to read (default: .periplus/map.json under the project root)",
+    )
+    show.add_argument(
+        "--format",
+        # A literal for the reason `types`' is; a test asserts it equals `tuple(show.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
+    for name, helptext in (
+        ("neighbors", "list the items an item's edges lead to"),
+        ("affected", "list the items whose edges lead to an item"),
+    ):
+        walking = subcommands.add_parser(name, help=helptext, description=f"{helptext}, and stop.")
+        walking.add_argument("id", metavar="ID", help="the node id, as periplus find prints it")
+        walking.add_argument(
+            "--depth",
+            type=int,
+            default=1,
+            metavar="N",
+            help="edges to follow, 1 or more (default: 1)",
+        )
+        walking.add_argument(
+            "--kind",
+            action="append",
+            default=[],
+            metavar="K",
+            help="keep only edges of kind K; repeat for several",
+        )
+        walking.add_argument(
+            "--limit",
+            type=int,
+            default=50,
+            metavar="N",
+            help="rows to show; 0 shows all (default: 50)",
+        )
+        walking.add_argument(
+            "--map",
+            type=Path,
+            default=None,
+            metavar="PATH",
+            help="the map file to read (default: .periplus/map.json under the project root)",
+        )
+        walking.add_argument(
+            "--format",
+            # A literal for the reason `types`' is; a test asserts it equals the RENDERERS.
+            choices=("text", "json"),
+            default="text",
+            help="how to print the report (default: text)",
+        )
+    path = subcommands.add_parser(
+        "path",
+        help="show every shortest chain of edges from one item to another",
+        description="Show the shortest directed chains of edges from FROM to TO, and stop.",
+    )
+    path.add_argument("source", metavar="FROM", help="the node id the chains start at")
+    path.add_argument("target", metavar="TO", help="the node id the chains end at")
+    path.add_argument(
+        "--kind",
+        action="append",
+        default=[],
+        metavar="K",
+        help="follow only edges of kind K; repeat for several",
+    )
+    path.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        metavar="N",
+        help="chains to show; 0 shows all (default: 10)",
+    )
+    path.add_argument(
+        "--map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="the map file to read (default: .periplus/map.json under the project root)",
+    )
+    path.add_argument(
+        "--format",
+        # A literal for the reason `types`' is; a test asserts it equals `tuple(path.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
     status = subcommands.add_parser(
         "status",
         help="report the settings, the pack search path and the directories on it",
@@ -365,6 +528,90 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         sys.stdout.write(MAP_RENDERERS[args.format](written))
         return written.exit_code
+
+    if getattr(args, "limit", 0) < 0:
+        parser.error("--limit must be 0 or more")
+
+    # Imported here for the reason `map` is: `periplus.navigate` imports `jsonschema`.
+    if args.command == "types":
+        from periplus.navigate.types import RENDERERS as TYPES_RENDERERS
+        from periplus.navigate.types import run as run_types
+
+        listed = run_types(start=Path.cwd(), env=os.environ, map_path=args.map)
+        sys.stdout.write(TYPES_RENDERERS[args.format](listed))
+        return listed.exit_code
+
+    if args.command == "check-map":
+        from periplus.checkmap import RENDERERS as CHECK_RENDERERS
+        from periplus.checkmap import run as run_check
+
+        checked = run_check(start=Path.cwd(), env=os.environ, map_path=args.map)
+        sys.stdout.write(CHECK_RENDERERS[args.format](checked))
+        return checked.exit_code
+
+    if args.command == "find":
+        from periplus.navigate.find import RENDERERS as FIND_RENDERERS
+        from periplus.navigate.find import run as run_find
+
+        found = run_find(
+            start=Path.cwd(),
+            env=os.environ,
+            text=args.text,
+            type_name=args.type,
+            limit=args.limit,
+            map_path=args.map,
+        )
+        sys.stdout.write(FIND_RENDERERS[args.format](found))
+        return found.exit_code
+
+    if args.command == "show":
+        from periplus.navigate.show import RENDERERS as SHOW_RENDERERS
+        from periplus.navigate.show import run as run_show
+
+        shown = run_show(
+            start=Path.cwd(),
+            env=os.environ,
+            node_id=args.id,
+            limit=args.limit,
+            map_path=args.map,
+        )
+        sys.stdout.write(SHOW_RENDERERS[args.format](shown))
+        return shown.exit_code
+
+    if args.command in ("neighbors", "affected"):
+        from periplus.navigate.walk import RENDERERS as WALK_RENDERERS
+        from periplus.navigate.walk import run as run_walk
+
+        if args.depth < 1:
+            parser.error("--depth must be 1 or more")
+        walked = run_walk(
+            start=Path.cwd(),
+            env=os.environ,
+            node_id=args.id,
+            direction="out" if args.command == "neighbors" else "in",
+            depth=args.depth,
+            kinds=args.kind,
+            limit=args.limit,
+            map_path=args.map,
+        )
+        sys.stdout.write(WALK_RENDERERS[args.format](walked))
+        return walked.exit_code
+
+    if args.command == "path":
+        from periplus.navigate.path import RENDERERS as PATH_RENDERERS
+        from periplus.navigate.path import run as run_path
+
+        chained = run_path(
+            start=Path.cwd(),
+            env=os.environ,
+            from_id=args.source,
+            to_id=args.target,
+            kinds=args.kind,
+            limit=args.limit,
+            map_path=args.map,
+        )
+        sys.stdout.write(PATH_RENDERERS[args.format](chained))
+        return chained.exit_code
 
     # Startup step 3. Imported here and never at module level: everything below this line reaches
     # `ruamel.yaml` and `platformdirs`, and the check above is what makes reaching them safe.

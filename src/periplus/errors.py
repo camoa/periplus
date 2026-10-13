@@ -254,6 +254,16 @@ class ExitCode(IntEnum):
     #: or one that is not installed at all. Found before any source file is opened.
     GRAMMAR_MISMATCH = 28
 
+    #: A navigation command found no map to read: no project above the working directory, or no
+    #: file at the default path or at the ``--map`` path. Remedy: run ``periplus map``.
+    MAP_NOT_FOUND = 29
+
+    #: The file a navigation command read is not JSON, or fails the map schema.
+    NOT_A_MAP = 30
+
+    #: An id given to a navigation command names no node in the map.
+    NODE_NOT_FOUND = 31
+
 
 @dataclass(frozen=True, slots=True)
 class Problem:

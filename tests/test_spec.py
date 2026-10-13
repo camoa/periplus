@@ -126,6 +126,7 @@ def test_the_command_publishes_every_shipped_document_whole_and_unaltered() -> N
 
     assert [document.path for document in report.documents] == [
         "schema/map.schema.json",
+        "schema/navigation.schema.json",
         "schema/pack-file.schema.json",
         "schema/pack-manifest.schema.json",
         "schema/project-settings.schema.json",
@@ -313,7 +314,7 @@ def test_the_contract_comes_out_in_path_order_whatever_order_the_package_lists_i
     assert [document.path for document in forwards] == sorted(
         document.path for document in forwards
     )
-    assert len(forwards) == 6, "the fixture is not the shipped contract"
+    assert len(forwards) == 7, "the fixture is not the shipped contract"
 
 
 def _emit_in_a_child(cwd: Path, config: Path, fmt: str, pack: str, **overrides: str) -> str:
@@ -427,6 +428,7 @@ def test_the_json_form_carries_the_documents_and_keeps_unread_apart_from_empty(
     assert dependent["inherited"] is None
     assert {document["path"] for document in independent["documents"]} == {
         "schema/map.schema.json",
+        "schema/navigation.schema.json",
         "schema/pack-file.schema.json",
         "schema/pack-manifest.schema.json",
         "schema/project-settings.schema.json",

@@ -84,6 +84,16 @@ In a Drupal project, `periplus init` writes the `drupal_basic@0.3.0` pin for you
 no rule read. It also names folders it could not list, files that did not parse, and rules it
 could not run.
 
+### Read the map
+
+Six commands answer a question about a written map, and stop: `periplus types` counts the node
+types and edge kinds, `periplus find TEXT` searches node ids, `periplus show ID` prints a node
+and its edges, `periplus neighbors ID` and `periplus affected ID` follow edges out of and into a
+node, and `periplus path FROM TO` prints the shortest chains between two. They read the ids the
+map holds and nothing more. `periplus check-map` runs the full schema check that these commands
+skip. The [navigation guide](docs/navigation.md) gives each command's options, output and exit
+codes, with an example you can run.
+
 ## Write a rutter
 
 A rutter for a new stack is a folder of YAML files in the project. You write it, map the

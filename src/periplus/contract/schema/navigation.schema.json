@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://periplus.dev/schema/0/navigation.schema.json",
+  "title": "Periplus navigation result",
+  "description": "What `--format json` prints for the navigation commands: types, find, show, neighbors, affected and path. Each command has one definition under $defs, and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
+
+  "anyOf": [
+    {"$ref": "#/$defs/types"},
+    {"$ref": "#/$defs/find"},
+    {"$ref": "#/$defs/show"},
+    {"$ref": "#/$defs/neighbors"},
+    {"$ref": "#/$defs/affected"},
+    {"$ref": "#/$defs/path"}
+  ],
+
+  "$defs": {
+
+    "problem": {
+      "type": "object", "additionalProperties": false, "required": ["code", "message", "detail"],
+      "properties": {
+        "code": {"type": "integer"},
+        "message": {"type": "string"},
+        "detail": {"type": "object"}
+      }
+    },
+    "problems": {"type": "array", "items": {"$ref": "#/$defs/problem"}},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+
+    "location": {
+      "type": "object", "required": ["file", "line"],
+      "properties": {"file": {"type": "string"}, "line": {"type": "integer"}}
+    },
+    "provenance": {
+      "type": "object", "required": ["pack", "rule"],
+      "properties": {
+        "pack": {"type": "string"},
+        "rule": {"type": "string"},
+        "confidence": {"enum": ["declared", "inferred"]},
+        "sets": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+
+    "listing": {
+      "description": "The shared cut list. The items schema is supplied by the command that uses it.",
+      "type": "object", "additionalProperties": false, "required": ["items", "total", "shown", "truncated"],
+      "properties": {
+        "items": {"type": "array"},
+        "total": {"type": "integer", "minimum": 0},
+        "shown": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"}
+      }
+    },
+
+    "types": {
+      "type": "object", "additionalProperties": false, "required": ["node_types", "edge_kinds", "problems"],
+      "properties": {
+        "node_types": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["type", "count", "parent"],
+            "properties": {
+              "type": {"type": "string"},
+              "count": {"type": "integer", "minimum": 0},
+              "parent": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "edge_kinds": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["kind", "count"],
+            "properties": {"kind": {"type": "string"}, "count": {"type": "integer", "minimum": 0}}
+          }
+        },
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "find": {
+      "type": "object", "additionalProperties": false,
+      "required": ["items", "total", "shown", "truncated", "warnings", "problems"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location"],
+            "properties": {
+              "id": {"type": "string"},
+              "type": {"type": "string"},
+              "state": {"type": "string"},
+              "location": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "total": {"type": "integer", "minimum": 0},
+        "shown": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"},
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "edge_row": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "other", "other_type", "other_state", "locations", "occurrences", "confidences", "rules"],
+      "properties": {
+        "kind": {"type": "string"},
+        "other": {"type": "string"},
+        "other_type": {"type": "string"},
+        "other_state": {"type": "string"},
+        "locations": {"type": "array", "items": {"$ref": "#/$defs/location"}},
+        "occurrences": {"type": ["integer", "null"]},
+        "confidences": {"type": "array", "items": {"enum": ["declared", "inferred"]}},
+        "rules": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "edge_listing": {
+      "allOf": [{"$ref": "#/$defs/listing"}],
+      "properties": {"items": {"type": "array", "items": {"$ref": "#/$defs/edge_row"}}}
+    },
+
+    "show": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "type", "state", "roles", "attributes", "locations", "provenance", "outgoing", "incoming", "problems"],
+      "properties": {
+        "id": {"type": "string"},
+        "type": {"type": "string"},
+        "state": {"type": "string"},
+        "roles": {"type": "array", "items": {"type": "string"}},
+        "attributes": {"type": "object"},
+        "locations": {"type": "array", "items": {"$ref": "#/$defs/location"}},
+        "provenance": {"type": "array", "items": {"$ref": "#/$defs/provenance"}},
+        "outgoing": {"$ref": "#/$defs/edge_listing"},
+        "incoming": {"$ref": "#/$defs/edge_listing"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "walk": {
+      "type": "object", "additionalProperties": false, "required": ["start", "direction", "rows", "warnings", "problems"],
+      "properties": {
+        "start": {"type": "string"},
+        "direction": {"enum": ["out", "in"]},
+        "rows": {
+          "allOf": [{"$ref": "#/$defs/listing"}],
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["id", "type", "state", "depth", "kind", "via"],
+                "properties": {
+                  "id": {"type": "string"},
+                  "type": {"type": "string"},
+                  "state": {"type": "string"},
+                  "depth": {"type": "integer", "minimum": 1},
+                  "kind": {"type": "string"},
+                  "via": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+    "neighbors": {"allOf": [{"$ref": "#/$defs/walk"}], "properties": {"direction": {"const": "out"}}},
+    "affected": {"allOf": [{"$ref": "#/$defs/walk"}], "properties": {"direction": {"const": "in"}}},
+
+    "path": {
+      "type": "object", "additionalProperties": false, "required": ["from", "to", "chains", "warnings", "problems"],
+      "properties": {
+        "from": {"type": "string"},
+        "to": {"type": "string"},
+        "chains": {
+          "allOf": [{"$ref": "#/$defs/listing"}],
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object", "additionalProperties": false, "required": ["from", "kind", "to"],
+                  "properties": {
+                    "from": {"type": "string"},
+                    "kind": {"type": "string"},
+                    "to": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    }
+  }
+}
