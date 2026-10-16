@@ -88,3 +88,28 @@ files:
         stylesheet:
           pattern: '^(?<file>.+)$'
           template: '{file}'
+    # A script read as text, to find a path written whole in a string (behavior/behavior.yaml). Named
+    # by its path from the project folder, as js_basic names its js.file node.
+    js_text:
+      endings: [js]
+      reader: text
+      path_values:
+        script:
+          pattern: '^(?<file>.+)$'
+          template: '{file}'
+      sections:
+      - name: block_comment
+        open: '/\*'
+        close: '\*/'
+      - name: line_comment
+        open: '//'
+        close: '\n'
+      - name: string
+        open: ''''
+        close: '(?:[^''\\\n]|\\.)*'''
+      - name: string
+        open: '"'
+        close: '(?:[^"\\\n]|\\.)*"'
+      - name: template_string
+        open: '`'
+        close: '(?:[^`\\]|\\(?s:.))*`'

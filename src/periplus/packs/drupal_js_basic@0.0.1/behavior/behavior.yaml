@@ -19,6 +19,10 @@ edge_kinds:
 - kind: script_declares_behavior
   from: js.file
   to: drupal.js_behavior
+# drupal_basic's links_to_path cannot start at a script: drupal_basic does not depend on js_basic.
+- kind: script_links_to_path
+  from: js.file
+  to: drupal.url_path
 
 rules:
 # Drupal.behaviors.name = {...}: the behavior name. An arrow function or any other value on the
@@ -119,4 +123,19 @@ rules:
   match: {file: '*', filetype: css_text}
   id: {template: '{stylesheet}'}
   emits: [{node: {type: css.file}}]
+  confidence: declared
+# A path a script writes whole as a string, such as let endpoint = "/my/path" or fetch('/my/path'):
+# an edge to the drupal.url_path node route_serves_path meets (drupal_basic url/url.yaml). Read as
+# the type js_text. The string follows a space, (, [, comma, =, : or ?, starts with one / and holds
+# no space, quote, brace or $. So "/", "//cdn.example.com/x" and "/a b" make nothing, and
+# "/my/" + id, a URL joined by +, makes nothing. A string inside a comment or a template literal makes nothing.
+- rule: path_in_script_string
+  reads: file
+  in: [js_source]
+  match:
+    file: '*'
+    filetype: js_text
+    text: '[\s(\[,=:?]["''](?<path>/[^/\s"''`{}$][^\s"''`{}$]*)["''](?!\s*\+)'
+  id: {template: '{script}'}
+  emits: [{edge: {kind: script_links_to_path, from: this_node, to: {from: {capture: path}}}}]
   confidence: declared

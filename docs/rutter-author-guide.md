@@ -11,7 +11,7 @@ Typer apps, commands and mounts. `speckitty` maps spec-kitty's missions and thei
 The PHP and Drupal rutters read a parse tree; [Reading the Drupal rutters](rutter-author-guide-drupal.md)
 walks through them. [Text spans](rutter-author-guide-text.md) covers nested regions of a text file.
 [Second children and id patterns](rutter-author-guide-abilities.md) tests a call's class and its
-method in one rule, and keeps an id only when its source fits a pattern.
+method in one rule, and keeps an id only when its source fits a pattern. [Map rules](rutter-author-guide-map-rules.md) chain files.
 
 ## The files of a rutter, and how a project loads one
 

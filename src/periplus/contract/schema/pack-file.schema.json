@@ -428,7 +428,24 @@
         },
         "node_type": {
           "$ref": "#/$defs/typeName",
-          "description": "Only with reads: map. Matches nodes already in the graph."
+          "description": "Only with reads: map. Matches nodes already in the graph: each node a rule found, of this type or a type below it."
+        },
+        "follow": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "maxProperties": 1,
+            "properties": {
+              "edge": {"type": "string", "description": "Move to each node an edge of this declared kind runs to from the current node."},
+              "ancestors": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "Run the steps after this one from the current node, else from the nearest node reached by edges of these declared kinds, breadth first, that gives a result: a member found on a class or else on its nearest ancestor."},
+              "node": {"type": "string", "description": "Move to the node whose whole id this template gives, filled from the captures before it; nothing when no rule found such a node or an edge end."},
+              "id_matches": {"type": "string", "description": "RE2 searched in the current node's whole id; a node it does not fit gives nothing, and its named captures join the values."}
+            }
+          },
+          "description": "Only with reads: map. Steps from the matched node, in order; the rule fires once for each node the last step reaches, which an edge end names matched_node. A step reads only nodes and edges that file rules made and edges that map rules made between them, never an end a map rule composed."
         },
         "grammar": {
           "type": "string",
@@ -643,12 +660,14 @@
             "typed_property",
             "promoted_constructor_parameter",
             "var_annotation",
+            "assigned_parameter",
+            "untyped_member",
             "typed_parameter",
             "object_creation_expression_in_scope",
             "this",
             "untyped_variable"
           ],
-          "description": "What the call is made on. A bare name() can never resolve to a method; a call on a typed property is a claim about runtime rather than an observation, which is why two rules with the same edge kind carry different confidence. Executed on a tree reference rule for the first three: its first name child is read as a property of the enclosing object, and its type is the one the enclosing type declaration declares for that property, by a typed property, a promoted constructor parameter or a @var docblock, tried in the rule's order. The pack's identity.property_receiver names the tree nodes. A rule naming any other value is not run."
+          "description": "What the call is made on. A bare name() can never resolve to a method; a call on a typed property is a claim about runtime rather than an observation, which is why two rules with the same edge kind carry different confidence. Executed on a tree reference rule for the first three: its first name child is read as a property of the enclosing object, and its type is the one the enclosing type declaration declares for that property, by a typed property, a promoted constructor parameter or a @var docblock, tried in the rule's order. assigned_parameter, the rule's only receiver, reads an assignment to a property of the enclosing object: its first name child is the property, and its type is the one declared for the parameter its second name child names, in the nearest enclosing node holding a parameter of that name. untyped_member, the rule's only receiver, fires on a property of the enclosing object that no typed property, promoted constructor parameter or @var docblock types, and its to end is a template. A rule with a receiver gives its edge ends' templates enclosing_type, the enclosing type's full name, member, the property's name, and method, its second name child's text; a template end is {template} at from or at to, never both, and the rutter writes the whole id shape. The pack's identity.property_receiver names the tree nodes. A rule naming any other value is not run."
         },
         "has_child": {
           "type": "string",
@@ -773,7 +792,7 @@
       ]
     },
     "idSource": {
-      "description": "A source of a declaration rule's id: any name. declared_name, namespace, qualified_name and enclosing_type are filled by the engine, a path value of the rule's file type or a settings value by its name, and any other name is the field of the matched node of that name, read as name_child reads it. The four engine names, then path values and settings values, shadow a node field of the same name, so such a field cannot be named. A name that is none of these and no field of the grammar is refused at load. A source absent for a match makes nothing, and the rule's report lists it once per file under skipped. Every other rule kind, and every other place a source is named, takes a listed source only.",
+      "description": "A source of a declaration rule's id: any name. declared_name, namespace, qualified_name, enclosing_type and enclosing_method are filled by the engine, a path value of the rule's file type or a settings value by its name, and any other name is the field of the matched node of that name, read as name_child reads it. enclosing_method is the declared name of the member of the enclosing type that holds the match, at which a rule of the pack or of a pack it depends on mints a node. In a from list, {qualified: <field>} reads that field and resolves its text through the file's imports and namespace, as a written name at a reference rule's end is; a text that resolves to nothing is used as written, and the template names it by the field name. The five engine names, then path values and settings values, shadow a node field of the same name, so such a field cannot be named. A name that is none of these and no field of the grammar is refused at load. A source absent for a match makes nothing, and the rule's report lists it once per file under skipped. Every other rule kind, and every other place a source is named, takes a listed source only.",
       "anyOf": [
         {
           "type": "string",
@@ -789,6 +808,7 @@
           "enum": [
             "array_value",
             "declared_name",
+            "enclosing_method",
             "enclosing_module",
             "enclosing_type",
             "file_stem",
@@ -854,7 +874,7 @@
             },
             "qualified": {
               "type": "string",
-              "description": "Compose a value into a full id using the pack's own identity rules. An edge target naming a type must produce the same string the node rule produced, and only the identity block knows which separators go where."
+              "description": "Compose a value into a full id using the pack's own identity rules. An edge target naming a type must produce the same string the node rule produced, and only the identity block knows which separators go where. Executed in the from list of a tree declaration rule's id, where it names a field of the matched node."
             }
           }
         }
@@ -995,7 +1015,7 @@
       "description": "full_if_prefixed: a name starting with the text is full without it. bound_first_segment: a name whose first segment the file binds takes the binding's target in its place. prefix_with: the named path value, value or namespace, the separator and the name. prefix_bare_with: as prefix_with, for a name that does not hold the separator only. lookup_last_segment_in: a name whose last segment, split at the separator, is a key of the named table that the pack or a pack it depends on declares under tables gives that key's value alone. as_written: the name. On a tree reference rule, a reference whose steps hold on no edge makes nothing, counts no fire and is listed as skipped. When the steps hold on one edge and fail on another, only the edge they hold on is made, the reference counts a fire, and no skipped row names the other edge."
     },
     "edgeEnd": {
-      "description": "A node the rule already has, or an id minted the same way any id is minted. There is no separate target language: from and template are the id block, where filters, each makes one edge per entry.",
+      "description": "A node the rule already has, or an id minted the same way any id is minted. There is no separate target language: from and template are the id block, where filters, each makes one edge per entry. On a map rule, this_node is the node it matched, matched_node the node its follow steps reached, and a template end is filled from its captures.",
       "oneOf": [
         {
           "enum": [

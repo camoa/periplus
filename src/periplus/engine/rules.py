@@ -6,7 +6,7 @@ import posixpath
 import re
 from bisect import bisect_right
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fnmatch import fnmatchcase
 from itertools import product
 from pathlib import Path
@@ -15,6 +15,7 @@ from typing import Any
 from tree_sitter import Node
 
 from periplus.engine.packload import (
+    DECLARING_RECEIVERS,
     PATTERN_VALUE,
     PLACEHOLDER,
     TEXT,
@@ -54,7 +55,7 @@ from periplus.engine.tree import (
 )
 from periplus.manifest import LoadedPack
 
-__all__ = ["FoundEdge", "FoundNode", "Skipped", "run_file_rules"]
+__all__ = ["FoundEdge", "FoundNode", "MapPass", "Skipped", "run_file_rules", "run_map_rules"]
 
 #: One match that made nothing because its id argument is missing or not a text literal: the file,
 #: the line of the attribute or annotation, the rule and the reason.
@@ -70,6 +71,10 @@ _MARGIN = " \t\r\n*"
 
 #: One span of a text file: its name, its start and end offsets, and its opening's captures.
 Span = tuple[str, int, int, dict[str, str]]
+
+#: One pass of the map rules: its number from 1, and each rule that added something in it, as its
+#: pack, its name and its fires in that pass.
+MapPass = tuple[int, tuple[tuple[str, str, int], ...]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,7 +193,7 @@ def run_file_rules(
                 trees[file] = parse_file(root / file, grammar, paths[own], constants)
                 _collect(trees[file], grammar, holders, rule_set, constants)
     for rule in sorted(rule_set.rules, key=lambda one: not one.bindings):
-        if not rule.supported:
+        if not rule.supported or rule.matches_type:
             continue
         fired = 0
         info = rule_set.files.get(rule.filetype, FileInfo())
@@ -254,6 +259,171 @@ def run_file_rules(
     broken = sorted(file for file, parsed in trees.items() if parsed.broken)
     opened = sorted({*contents, *trees, *texts})
     return nodes, edges, fires, opened, read, removed, broken, sorted(skipped)
+
+
+def run_map_rules(
+    rule_set: RuleSet, nodes: Sequence[FoundNode], edges: Sequence[FoundEdge]
+) -> tuple[list[FoundNode], list[FoundEdge], dict[tuple[str, str], int], list[MapPass]]:
+    """Run every supported map rule over what the file rules found, in passes, until a pass adds
+    nothing; return the nodes and edges the map rules made, each map rule's fires, and the passes.
+
+    A pass reads the map as it stood when the pass began, rules in load order and nodes in id
+    order, so a rule reads what another made only in a later pass. The ids a map rule reads are
+    fixed by the file rules: each node they found and each end of their edges, an end with
+    candidate ids on the first a rule found. A rule matches such a node that a rule found of its
+    ``node_type`` or a type below it; it reads an edge whose two ends are such ids, and never an end
+    a map rule composed that is no such id. So the records the passes can make are finite and the
+    last pass adds none.
+
+    A fire is one matched node that each ``where`` pattern fits, with one node its ``follow``
+    reaches, that makes a node or edge record no pass made before. A record sits at the matched
+    node's first location.
+    """
+    rules = [rule for rule in rule_set.rules if rule.supported and rule.matches_type]
+    if not rules:
+        return [], [], {}, []
+    found = {node.id for node in nodes}
+    ends = [_landed_end(edge, found) for edge in edges]
+    known = found | {end for edge in ends for end in (edge.source, edge.target)}
+    made_nodes: list[FoundNode] = []
+    made_edges: list[FoundEdge] = []
+    seen: set[FoundNode | FoundEdge] = set()
+    fires = {(rule.pack, rule.name): 0 for rule in rules}
+    passes: list[MapPass] = []
+    while True:
+        typed: dict[str, set[str]] = {}
+        places: dict[str, tuple[str, int]] = {}
+        for node in (*nodes, *made_nodes):
+            if node.id in known:
+                typed.setdefault(node.id, set()).add(node.type)
+                places[node.id] = min(
+                    places.get(node.id, (node.file, node.line)), (node.file, node.line)
+                )
+        found = set(typed)
+        out: dict[tuple[str, str], set[str]] = {}
+        for edge in (*ends, *(_landed_end(edge, found) for edge in made_edges)):
+            if edge.source in known and edge.target in known:
+                out.setdefault((edge.kind, edge.source), set()).add(edge.target)
+        added: list[FoundNode | FoundEdge] = []
+        fired: list[tuple[str, str, int]] = []
+        for rule in rules:
+            count = 0
+            for node_id in sorted(typed):
+                if not any(
+                    _allows(rule_set, name, (rule.matches_type,)) for name in typed[node_id]
+                ):
+                    continue
+                values = _captured(rule.where, node_id, dict(rule_set.values))
+                if values is None:
+                    continue
+                for reached, captured in _follow(rule.follow, node_id, values, known, out):
+                    made = _made(rule, rule_set, node_id, reached, captured, places[node_id])
+                    new = [record for record in made if record not in seen]
+                    seen.update(new)
+                    added.extend(new)
+                    count += bool(new)
+            if count:
+                fired.append((rule.pack, rule.name, count))
+                fires[(rule.pack, rule.name)] += count
+        passes.append((len(passes) + 1, tuple(fired)))
+        if not added:
+            return made_nodes, made_edges, fires, passes
+        made_nodes.extend(record for record in added if isinstance(record, FoundNode))
+        made_edges.extend(record for record in added if isinstance(record, FoundEdge))
+
+
+def _landed_end(edge: FoundEdge, found: set[str]) -> FoundEdge:
+    """The edge with its composed end on the first candidate id a rule found, else the first."""
+    if not edge.candidates:
+        return edge
+    chosen = next((c for c in edge.candidates if c in found), edge.candidates[0])
+    return replace(edge, source=chosen) if edge.source_type else replace(edge, target=chosen)
+
+
+def _captured(
+    where: Sequence[Condition], node_id: str, values: dict[str, str]
+) -> dict[str, str] | None:
+    """The values with the named captures of each ``id_matches`` pattern searched in the id;
+    ``None`` when one does not fit."""
+    for condition in where:
+        found = condition.pattern.search(node_id) if isinstance(condition, IdMatches) else None
+        if found is None:
+            return None
+        values.update({k: v for k, v in found.groupdict().items() if v is not None})
+    return values
+
+
+def _follow(
+    steps: Sequence[tuple[str, Any]],
+    at: str,
+    values: dict[str, str],
+    known: set[str],
+    out: Mapping[tuple[str, str], set[str]],
+) -> list[tuple[str, dict[str, str]]]:
+    """Each id the steps reach from the id ``at``, in order, with the values its ``id_matches``
+    steps captured. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
+    ids its kinds reach, breadth first, that give any."""
+    if not steps:
+        return [(at, values)]
+    (name, value), rest = steps[0], steps[1:]
+    if name == "edge":
+        return [
+            r
+            for to in sorted(out.get((value, at), ()))
+            for r in _follow(rest, to, values, known, out)
+        ]
+    if name == "node":
+        to = _fill(value, values)
+        return _follow(rest, to, values, known, out) if to is not None and to in known else []
+    if name == "id_matches":
+        captured = _captured((IdMatches(value),), at, dict(values))
+        return _follow(rest, at, captured, known, out) if captured is not None else []
+    level, seen = [at], {at}
+    while level:
+        reached = [r for here in level for r in _follow(rest, here, values, known, out)]
+        if reached:
+            return reached
+        level = sorted({t for h in level for k in value for t in out.get((k, h), ())} - seen)
+        seen.update(level)
+    return []
+
+
+def _made(
+    rule: Rule,
+    rule_set: RuleSet,
+    this: str,
+    reached: str,
+    values: Mapping[str, str],
+    place: tuple[str, int],
+) -> list[FoundNode | FoundEdge]:
+    """The node or the edges one fire of a map rule makes, at ``place``: ``this`` is the id it
+    matched and ``reached`` the id its follow reached. A template naming an absent capture makes
+    nothing."""
+    file, line = place
+    if rule.node_type:
+        filled = _fill(rule.id_template, values)
+        if filled is None:
+            return []
+        node_id = f"{namespace_of(rule_set.types, rule.node_type)}::{filled}"
+        return [
+            FoundNode(node_id, rule.node_type, file, line, rule.pack, rule.name, rule.confidence)
+        ]
+    ends = {"this_node": this, "matched_node": reached}
+    made: list[FoundNode | FoundEdge] = []
+    for spec in rule.edges:
+        if spec.template is None:
+            source, target = ends[spec.start], ends[spec.finish]
+            made.append(
+                FoundEdge(
+                    spec.kind, source, target, file, line, rule.pack, rule.name, rule.confidence
+                )
+            )
+            continue
+        composed = _fill(spec.template, values)
+        if composed is not None:
+            whole = ends[spec.start or spec.finish]
+            made.extend(_edges(rule, rule_set, spec, file, "", [(composed, line)], whole=whole))
+    return made
 
 
 def _texts(
@@ -550,6 +720,9 @@ def _declarations(
     types = rule_set.types
     fired = 0
     absent: set[str] = set()
+    needs_method = "enclosing_method" in PLACEHOLDER.findall(rule.id_template) or any(
+        "enclosing_method" in (spec.start, spec.finish) for spec in rule.edges
+    )
     for match in parsed.by_type.get(rule.declaration, ()):
         if not _fires(rule, match):
             continue
@@ -561,6 +734,12 @@ def _declarations(
         holder_id = None
         if holder is not None:
             values["enclosing_type"], holder_id = holder
+        method = None
+        if needs_method:
+            enclosing = holder[0] if holder else None
+            method = _method(match, enclosing, holders, rule, rule_set, within, grammar, parsed)
+            if method is not None and method[1] is not None:
+                values["enclosing_method"] = method[1]
         node_id: str | None
         if rule.id_argument:
             node_id, row = _call_id(match, rule, grammar, parsed, holder[0] if holder else None)
@@ -604,6 +783,9 @@ def _declarations(
                     ends.append([(f"{twin}::{node_id}", line)])
                 elif end == "enclosing_class":
                     ends.append([(holder_id, line)] if holder_id else [])
+                elif end == "enclosing_method":
+                    ends.append([(method[0], line)] if method else [])
+                    unwritten = method is None
                 elif end == "enclosing_file":
                     root = match
                     while root.parent is not None:
@@ -620,7 +802,7 @@ def _declarations(
                         ),
                         None,
                     )
-                    ends.append([(found, line)] if found else [])
+                    ends.append([(found[0], line)] if found else [])
                 elif declared:
                     found = _minted(
                         match,
@@ -632,7 +814,7 @@ def _declarations(
                         parsed,
                         declared,
                     )
-                    ends.append([(found, line)] if found else [])
+                    ends.append([(found[0], line)] if found else [])
                     end = f"{{declared: {declared}}}"
                 else:
                     ends.append(
@@ -748,7 +930,8 @@ def _attributes(
             )
         method = None
         if owner.type not in holders and holder is not None:
-            method = _minted(owner, holder[0], rule.filetype, rule_set, within, grammar, parsed)
+            minted = _minted(owner, holder[0], rule.filetype, rule_set, within, grammar, parsed)
+            method = minted[0] if minted else None
         for spec in rule.edges:
             kind = rule_set.edge_kinds[spec.kind]
             ends: list[str | None] = []
@@ -1057,9 +1240,10 @@ def _minted(
     grammar: Grammar,
     parsed: ParsedFile,
     node_type: str = "",
-) -> str | None:
-    """The id the first node rule that fires on the tree node and mints an id there gives it,
-    inside the type ``holder`` when there is one, of the type ``node_type`` when that is given.
+) -> tuple[str, str | None] | None:
+    """The id the first node rule that fires on the tree node and mints an id there gives it, and
+    the declared name that rule reads, inside the type ``holder`` when there is one, of the type
+    ``node_type`` when that is given.
 
     Only rules of the packs in ``within`` count, as in ``_holder_rules``. A rule that fires and
     mints no id passes the node to the next, for ``enclosing_method`` as for ``{declared: <type>}``.
@@ -1085,7 +1269,29 @@ def _minted(
                 rule, values if holder is None else {**values, "enclosing_type": holder}
             )
         if node_id is not None:
-            return f"{namespace_of(rule_set.types, rule.node_type)}::{node_id}"
+            namespace = namespace_of(rule_set.types, rule.node_type)
+            return f"{namespace}::{node_id}", values.get("declared_name")
+    return None
+
+
+def _method(
+    match: Node,
+    holder: str | None,
+    holders: Mapping[str, tuple[Rule, ...]],
+    rule: Rule,
+    rule_set: RuleSet,
+    within: frozenset[str],
+    grammar: Grammar,
+    parsed: ParsedFile,
+) -> tuple[str, str | None] | None:
+    """The id and the declared name ``_minted`` gives the member of the enclosing type ``holder``
+    that holds the match, as for an attribute's ``enclosing_method``; ``None`` outside a type."""
+    bodies = {other.body_child for rules in holders.values() for other in rules}
+    member = match.parent
+    while holder is not None and member is not None and member.parent is not None:
+        if member.parent.type in bodies:
+            return _minted(member, holder, rule.filetype, rule_set, within, grammar, parsed)
+        member = member.parent
     return None
 
 
@@ -1110,17 +1316,19 @@ def _names(node: Node, rule: Rule, grammar: Grammar, parsed: ParsedFile) -> dict
     for field in rule.fields:
         child = node.child_by_field_name(field)
         if child is not None:
-            values[field] = text_of(child)
+            written = parsed.resolve(child, grammar) if field in rule.qualified else None
+            values[field] = written or text_of(child)
     return values
 
 
 def _lacking(rule: Rule, grammar: Grammar, values: Mapping[str, Any]) -> set[str]:
     """The fields and values the id template names that are absent, a full name standing for its
-    absent parts; an absent enclosing type is not one, since no enclosing type is not a gap.
+    absent parts; an absent enclosing type or method is not one, since having none is not a gap.
 
     With an id pattern, its source and the values it names count too, and its captures do not; a
     source the pattern does not fit lacks nothing."""
-    names = set(PLACEHOLDER.findall(rule.id_template)) - set(values) - {"enclosing_type"}
+    names = set(PLACEHOLDER.findall(rule.id_template)) - set(values)
+    names -= {"enclosing_type", "enclosing_method"}
     if rule.id_pattern:
         pattern, source = _id_pattern(rule, values), values.get(rule.id_source)
         if pattern is not None and source is not None and pattern.search(source) is None:
@@ -1244,8 +1452,10 @@ def _edges(
     file: str,
     node_id: str,
     ends: list[tuple[str, int]],
+    whole: str = "",
 ) -> list[FoundEdge]:
-    """One edge per composed end and its line, between it and the fire's own node.
+    """One edge per composed end and its line, between it and the fire's own node, or the node of
+    the id ``whole`` when it is given.
 
     The composed end is the from end when the spec's ``start`` is ``""``. An end that is not a
     full id takes the one id namespace of the kind's types at its side, and makes no edge when
@@ -1256,7 +1466,9 @@ def _edges(
     near, far = (kind.to_types, kind.from_types) if flipped else (kind.from_types, kind.to_types)
     types = rule_set.types
     own = (
-        namespace_of(types, rule.twin_type)
+        ""
+        if whole
+        else namespace_of(types, rule.twin_type)
         if rule.twin_type
         else next(iter(namespaces(types, near)))
     )
@@ -1266,7 +1478,7 @@ def _edges(
         candidates = () if spec.full_id else _candidates(spec, types, end)
         if not spec.full_id and other is None and not candidates:
             continue
-        this, composed = f"{own}::{node_id}", end if spec.full_id else f"{other}::{end}"
+        this, composed = whole or f"{own}::{node_id}", end if spec.full_id else f"{other}::{end}"
         composed = candidates[0] if candidates else composed
         found.append(
             FoundEdge(
@@ -1373,21 +1585,34 @@ def _references(
             continue
         if text_of(written) in rule.skip_names:
             continue
-        source = _enclosing(match, declared, holders, rule_set, grammar, parsed)
+        if "untyped_member" in rule.receivers and _declared_type(
+            match, text_of(written), DECLARING_RECEIVERS, holders, grammar, parsed, typed
+        ):
+            continue
+        # An edge whose from end is a template needs no enclosing declaration.
+        needed = any(spec.from_template is None for spec in rule.edges)
+        source = _enclosing(match, declared, holders, rule_set, grammar, parsed) if needed else ""
         if source is None:
             skipped.append((file, line, rule.name, "no enclosing declaration is mapped"))
             continue
         bindings = parsed.imports.get(parsed.block_at(match.start_byte), {})
         known = {"namespace": parsed.namespace_at(match)}
-        names, reasons = [], []
+        values = _receiver_values(match, written, member, holders, rule_set, grammar, parsed)
+        names, reasons, starts = [], [], []
         for spec in rule.edges:
             separator = spec.separator or grammar.separator
             reason = (
-                f"{rule.name_child} has no declared type"
+                f"{rule.member_child} is not a typed parameter"
+                if "assigned_parameter" in rule.receivers
+                else f"{rule.name_child} has no declared type"
                 if rule.receivers
                 else f"no resolution step holds for {rule.name_child}"
             )
-            if spec.key:
+            start = source if spec.from_template is None else _fill(spec.from_template, values)
+            if spec.template is not None or start is None:
+                name = _fill(spec.template, values) if start is not None else None
+                reason = "no enclosing type is mapped"
+            elif spec.key:
                 holder = _holder(match, holders, rule_set, grammar, parsed)
                 enclosing = holder[0] if holder else None
                 _, name, row = _argument(match, spec.key, grammar, parsed, enclosing, call=True)
@@ -1395,33 +1620,48 @@ def _references(
                 reason = reason if name is not None else row
             else:
                 name = (
-                    _declared_type(match, text_of(written), rule, holders, grammar, parsed, typed)
+                    _parameter_type(match, member, grammar, parsed)
+                    if "assigned_parameter" in rule.receivers
+                    else _declared_type(
+                        match, text_of(written), rule.receivers, holders, grammar, parsed, typed
+                    )
                     if rule.receivers
                     else parsed.resolve(written, grammar)
                 )
-                if name is not None and member is not None:
+                if (
+                    name is not None
+                    and member is not None
+                    and "assigned_parameter" not in rule.receivers
+                ):
                     name = separator.join((name, text_of(member)))
             if name is not None and spec.resolve:
                 name = resolve_name(name, spec.resolve, separator, bindings, known, tables=tables)
             names.append(name)
             reasons.append(reason)
+            starts.append(start)
         if names and not any(names):
             for reason in dict.fromkeys(reasons):
                 skipped.append((file, line, rule.name, reason))
             continue
         fired += 1
-        for spec, name, reason in zip(rule.edges, names, reasons, strict=True):
-            if not name:
+        for spec, name, reason, start in zip(rule.edges, names, reasons, starts, strict=True):
+            if not name or start is None:
                 skipped.append((file, line, rule.name, f"edge {spec.kind}: {reason}"))
                 continue
             kind = rule_set.edge_kinds[spec.kind]
-            candidates = _candidates(spec, rule_set.types, name)
+            candidates = () if spec.full_id else _candidates(spec, rule_set.types, name)
             far = next(iter(namespaces(rule_set.types, kind.to_types)), None)
+            if spec.from_template is not None:
+                start = f"{next(iter(namespaces(rule_set.types, kind.from_types)))}::{start}"
             edges.append(
                 FoundEdge(
                     kind=spec.kind,
-                    source=source,
-                    target=candidates[0] if candidates else f"{far}::{name}",
+                    source=start,
+                    target=name
+                    if spec.full_id
+                    else candidates[0]
+                    if candidates
+                    else f"{far}::{name}",
                     file=file,
                     line=line,
                     pack=rule.pack,
@@ -1452,7 +1692,7 @@ def _property(node: Node | None, grammar: Grammar) -> Node | None:
 def _declared_type(
     node: Node,
     name: str,
-    rule: Rule,
+    kinds: Sequence[str],
     holders: Mapping[str, tuple[Rule, ...]],
     grammar: Grammar,
     parsed: ParsedFile,
@@ -1461,7 +1701,7 @@ def _declared_type(
     """The full name of the type the nearest enclosing type declaration declares for its property
     ``name``, or ``None``; ``typed`` holds each declaration's types already read, by node id.
 
-    The rule's receiver kinds are read in order, and the first declaration of a kind that gives a
+    The receiver kinds are read in order, and the first declaration of a kind that gives a
     type wins. A nearer node that holds a body but no rule maps, an anonymous class, gives none.
     """
     bodies = {r.body_child for rules in holders.values() for r in rules}
@@ -1471,7 +1711,7 @@ def _declared_type(
     if holder is None or holder.type not in holders:
         return None
     if holder.id not in typed:
-        typed[holder.id] = _property_types(holder, rule.receivers, bodies, grammar, parsed)
+        typed[holder.id] = _property_types(holder, kinds, bodies, grammar, parsed)
     return typed[holder.id].get(name)
 
 
@@ -1502,6 +1742,52 @@ def _property_types(
             if full:
                 types[name] = full
     return types
+
+
+def _receiver_values(
+    node: Node,
+    written: Node,
+    member: Node | None,
+    holders: Mapping[str, tuple[Rule, ...]],
+    rule_set: RuleSet,
+    grammar: Grammar,
+    parsed: ParsedFile,
+) -> dict[str, str]:
+    """The values a receiver rule's templates read at the node: ``member``, the property's name;
+    ``method``, the second name child's text; ``enclosing_type``, the full name of the nearest
+    enclosing type declaration. A value the node lacks is left out."""
+    values = {"member": text_of(written)}
+    if member is not None:
+        values["method"] = text_of(member)
+    holder = _holder(node, holders, rule_set, grammar, parsed)
+    if holder is not None:
+        values["enclosing_type"] = holder[0]
+    return values
+
+
+def _parameter_type(
+    node: Node, written: Node | None, grammar: Grammar, parsed: ParsedFile
+) -> str | None:
+    """The full name of the type declared for the parameter that ``written`` names, in the nearest
+    enclosing node holding a parameter of that name, or ``None``.
+
+    A parameter is a node of the grammar's ``assigned_parameter`` type that is a child or a
+    grandchild of an ancestor of the node, outside the branch that holds the node.
+    """
+    kind = dict(grammar.property_declarations).get("assigned_parameter")
+    name = _bare(written, grammar)
+    below, at = node, node.parent
+    while kind and name and at is not None:
+        for child in at.named_children:
+            if child.id == below.id:
+                continue
+            for found in (child, *child.named_children):
+                named = _bare(found.child_by_field_name(grammar.property_name), grammar)
+                if found.type == kind and named == name:
+                    typed = _typed(found, at, grammar)
+                    return parsed.resolve(typed, grammar) if typed is not None else None
+        below, at = at, at.parent
+    return None
 
 
 def _bare(node: Node | None, grammar: Grammar) -> str | None:

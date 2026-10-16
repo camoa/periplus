@@ -116,8 +116,10 @@ EXECUTED_KEYS = frozenset(
                 *("file", "ending", "filetype", "each", "where", "declaration", "name_child"),
                 *("reference", "skip_names", "whole_written"),
                 *("body_child", "attribute", "annotation", "text", "reads_sections"),
+                *("node_type", "follow"),
             )
         ),
+        *(f"{_RULE}match.follow.*.{k}" for k in ("edge", "ancestors", "node", "id_matches")),
         *(
             f"{_RULE}match.where.*.{k}"
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
@@ -128,7 +130,7 @@ EXECUTED_KEYS = frozenset(
             f"{_RULE}id.{k}"
             for k in (
                 *("from", "from.capture", "from.attribute_argument", "from.annotation_key"),
-                *("from.argument", "pattern"),
+                *("from.argument", "from.*.qualified", "pattern"),
                 *("template", "must_be", "normalize", "normalize.*.replace", "normalize.*.with"),
             )
         ),
@@ -211,8 +213,14 @@ def _holds(value: object, segments: Sequence[str]) -> bool:
     return isinstance(value, Mapping) and head in value and _holds(value[head], rest)
 
 
+#: The receiver kinds that read the type the enclosing type declaration declares for a property.
+DECLARING_RECEIVERS = ("typed_property", "promoted_constructor_parameter", "var_annotation")
+
 #: The receiver kinds a reference rule's receiver condition may name and the engine executes.
-_RECEIVERS = ("typed_property", "promoted_constructor_parameter", "var_annotation")
+_RECEIVERS = (*DECLARING_RECEIVERS, "assigned_parameter", "untyped_member")
+
+#: The values a reference rule with a receiver condition gives its edge ends' templates.
+_RECEIVER_VALUES = {"enclosing_type", "member", "method"}
 
 #: The keys of the rule shapes this engine executes. A rule with any other key is not run.
 _RULE_KEYS = {"rule", "reads", "in", "match", "id", "emits", "confidence"}
@@ -224,13 +232,15 @@ _DECLARATION_MATCH = {
 
 #: The names the engine fills for a declaration rule's id. Any other name its template holds is a
 #: path value, a settings value or a field of the matched node.
-_TREE_FILLED = {"declared_name", "namespace", "qualified_name", "enclosing_type"}
+_TREE_FILLED = {
+    *("declared_name", "namespace", "qualified_name", "enclosing_type", "enclosing_method"),
+}
 
 #: The edge ends of a tree rule that name a node, where the other kind of end is a written name.
 _TREE_ENDS = {"this_node", "enclosing_class"}
 
 #: The edge ends of a declaration rule: those, and the node the file's own rule made for it.
-_DECLARATION_ENDS = {*_TREE_ENDS, "enclosing_file"}
+_DECLARATION_ENDS = {*_TREE_ENDS, "enclosing_file", "enclosing_method"}
 
 #: The edge ends of an attribute rule that name a node; the other kind is an argument's value.
 _ATTRIBUTE_ENDS = {"this_node", "enclosing_class", "enclosing_method"}
@@ -387,6 +397,8 @@ class Rule:
     #: fields of the matched node its id names.
     has_child: tuple[str, ...] = ()
     fields: tuple[str, ...] = ()
+    #: A declaration rule: the fields its id reads resolved through the file's imports.
+    qualified: tuple[str, ...] = ()
     #: A declaration or reference rule: each child, by field or node type, and the pattern its
     #: whole text must match.
     name_matches: tuple[tuple[str, re.Pattern[str]], ...] = ()
@@ -425,6 +437,10 @@ class Rule:
     #: A declaration, text or reference rule's ``match.ending``: the claimed endings of the files
     #: it reads; empty for any.
     endings: tuple[str, ...] = ()
+    #: A map rule: the node type it matches, ``""`` on a file rule, and its follow steps, each a
+    #: step name and its value: a kind, a tuple of kinds, a template or a compiled pattern.
+    matches_type: str = ""
+    follow: tuple[tuple[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -471,6 +487,8 @@ class EdgeSpec:
     types: tuple[str, ...] = ()
     #: The node type of a ``declared`` end, at from and at to; ``""`` at an end that is not one.
     declared: tuple[str, str] = ("", "")
+    #: A reference rule's from end written as a template, in place of ``enclosing_declaration``.
+    from_template: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -595,6 +613,16 @@ def load_rules(
             and not grammars[rule.filetype].property_access
         ):
             missing = f"the grammar for {rule.filetype} declares no identity.property_receiver"
+            rules[index] = replace(rule, supported=False, reason=missing)
+        if (
+            rules[index].supported
+            and "assigned_parameter" in rule.receivers
+            and "assigned_parameter" not in dict(grammars[rule.filetype].property_declarations)
+        ):
+            missing = (
+                f"the grammar for {rule.filetype} declares no "
+                "identity.property_receiver.assigned_parameter"
+            )
             rules[index] = replace(rule, supported=False, reason=missing)
     for rule in rules:
         if (
@@ -839,7 +867,13 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
             return replace(rule, supported=False, reason=reason)
         named = {*PLACEHOLDER.findall(rule.id_template), rule.id_source} - {""}
         named = named - _TREE_FILLED - known - captures
+        if set(rule.qualified) - named:
+            lacking = ", ".join(sorted(set(rule.qualified) - named))
+            reason = f"the id source qualified names {lacking}, which is no field of the match"
+            return replace(rule, supported=False, reason=reason)
         return replace(rule, fields=tuple(sorted(named)))
+    if rule.supported and rule.matches_type:
+        return _check_map_names(rule, values)
     if not rule.supported or tree:
         return rule
     if rule.text is not None:
@@ -898,6 +932,28 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
                 "its file type does not declare"
             )
             return replace(rule, supported=False, reason=reason)
+    return rule
+
+
+def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
+    """The map rule, marked not executed when a follow step's node template names a name that no
+    id_matches before it captures and no settings value gives, or its id or an edge template names
+    one that no id_matches of the rule captures and no settings value gives."""
+    known = set(values)
+    for condition in rule.where:
+        known |= set(condition.pattern.groupindex) if isinstance(condition, IdMatches) else set()
+    for name, value in rule.follow:
+        if name == "id_matches":
+            known |= set(value.groupindex)
+        elif name == "node" and set(PLACEHOLDER.findall(value)) - known:
+            lacking = ", ".join(sorted(set(PLACEHOLDER.findall(value)) - known))
+            reason = f"the follow step node {value} names {lacking}, which no id_matches captures"
+            return replace(rule, supported=False, reason=reason + " before it")
+    templates = [rule.id_template, *(edge.template or "" for edge in rule.edges)]
+    missing = sorted({name for t in templates for name in PLACEHOLDER.findall(t)} - known)
+    if missing:
+        reason = f"a template names {', '.join(missing)}, which no id_matches of the rule captures"
+        return replace(rule, supported=False, reason=reason)
     return rule
 
 
@@ -1216,6 +1272,8 @@ def _full_ids(rule: Rule, prefixes: tuple[str, ...]) -> Rule:
 
 def _check_edges(rule: Rule, types: Mapping[str, TypeInfo], kinds: Mapping[str, EdgeKind]) -> Rule:
     """The rule, marked not executed when an edge it emits cannot be minted."""
+    # A map rule's node ends name nodes already in the map, by their whole id.
+    whole = _WHOLE_ENDS | set(_MAP_ENDS) if rule.matches_type else _WHOLE_ENDS
     for edge in rule.edges if rule.supported else ():
         kind = kinds.get(edge.kind)
         if kind is None:
@@ -1225,8 +1283,8 @@ def _check_edges(rule: Rule, types: Mapping[str, TypeInfo], kinds: Mapping[str, 
         # A composed end that is a full id, or that lists its types, needs no namespace of its
         # kind's types; neither does an end that takes the whole id of a node another rule found.
         composed_full = edge.full_id or bool(edge.types)
-        from_full = composed_full and not edge.start or edge.start in _WHOLE_ENDS
-        to_full = composed_full and bool(edge.start) or edge.finish in _WHOLE_ENDS
+        from_full = composed_full and not edge.start or edge.start in whole
+        to_full = composed_full and bool(edge.start) or edge.finish in whole
         if any(namespace_of(types, name) is None for name in edge.types):
             reason = f"a type the end of {edge.kind} lists has no id namespace"
             return replace(rule, supported=False, reason=reason)
@@ -1310,6 +1368,8 @@ def _read_rule(pack: str, item: Any, tables: frozenset[str] = frozenset()) -> Ru
 
 
 def _build_rule(pack: str, item: Any, tables: frozenset[str]) -> Rule:
+    if item.get("reads") == "map":
+        return _build_map(pack, item)
     if (
         isinstance(item.get("id"), Mapping)
         and "pattern" in item["id"]
@@ -1651,6 +1711,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         id_template=template,
         id_pattern=pattern,
         id_source=str(block["from"]) if pattern else "",
+        qualified=tuple(s["qualified"] for s in block.get("from", ()) if isinstance(s, Mapping)),
         normalize=_read_normalize(item["id"].get("normalize", [])) if "id" in item else (),
         declaration=match["declaration"],
         endings=_read_ending(match),
@@ -1662,10 +1723,115 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
     )
 
 
+def _build_map(pack: str, item: Mapping[str, Any]) -> Rule:
+    """A rule that reads the map: it fires on each node of ``match.node_type`` or a type below it
+    that its ``where`` holds for, once for each node its ``follow`` steps reach."""
+    match, emits = item["match"], item["emits"]
+    if (
+        "in" in item
+        or not set(match) <= {"node_type", "where", "follow"}
+        or "node_type" not in match
+    ):
+        raise _Unsupported(
+            "a map rule is not a rule with match.node_type, optional where and follow, and no in"
+        )
+    where = _read_where(match.get("where", []))
+    if not all(isinstance(condition, IdMatches) for condition in where):
+        raise _Unsupported("the match.where of a map rule holds only id_matches conditions")
+    follow: list[tuple[str, Any]] = []
+    for step in match.get("follow", []):
+        ((name, value),) = step.items()
+        if name == "id_matches":
+            value = _regex(value)
+        elif name == "ancestors":
+            value = tuple(value)
+        follow.append((name, value))
+    nodes = node_types(item)
+    edges = [_read_map_edge(emit["edge"], bool(follow)) for emit in emits if "edge" in emit]
+    block = item.get("id")
+    if (
+        len(nodes) + len(edges) != len(emits)
+        or len(nodes) > 1
+        or any(emit["node"].keys() != {"type"} for emit in emits if "node" in emit)
+        or (edges and block is not None)
+        or (nodes and not (isinstance(block, Mapping) and set(block) == {"template"}))
+    ):
+        raise _Unsupported(
+            "a map rule emits one node with a type and an id from one template, or edges and no id"
+        )
+    return Rule(
+        pack=pack,
+        name=str(item["rule"]),
+        supported=True,
+        folders=(),
+        glob="",
+        filetype="",
+        node_type=nodes[0] if nodes else "",
+        confidence=item["confidence"],
+        where=where,
+        edges=tuple(edges),
+        id_template=str(block["template"]) if nodes and block is not None else "",
+        matches_type=str(match["node_type"]),
+        follow=tuple(follow),
+    )
+
+
+#: The ends of a map rule's edge that name a node: the node it matched, and the node its follow
+#: steps reached.
+_MAP_ENDS = ("this_node", "matched_node")
+
+
+def _read_map_edge(edge: Mapping[str, Any], followed: bool) -> EdgeSpec:
+    """An edge of a map rule: between two node ends, or a node end and one composed end."""
+    start, end = edge.get("from"), edge.get("to")
+    composed = [e for e in (start, end) if isinstance(e, Mapping)]
+    named = [e for e in (start, end) if isinstance(e, str) and e in _MAP_ENDS]
+    if (
+        set(edge) != {"kind", "from", "to"}
+        or len(named) + len(composed) != 2
+        or len(composed) > 1
+        or ("matched_node" in named and not followed)
+        or any(
+            not {"template"} <= set(c) <= {"template", "type", "types", "on_miss"}
+            or not isinstance(c["template"], str)
+            or not _types_ok(c)
+            for c in composed
+        )
+    ):
+        raise _Unsupported(
+            "an edge of a map rule does not run between this_node or matched_node and one of them "
+            "or a template with type or types and on_miss; matched_node needs match.follow"
+        )
+    if not composed:
+        return EdgeSpec(edge["kind"], "", False, None, None, None, (), str(start), str(end))
+    part, flipped = composed[0], isinstance(start, Mapping)
+    return EdgeSpec(
+        edge["kind"],
+        "",
+        False,
+        None,
+        None,
+        part["template"],
+        (),
+        start="" if flipped else str(start),
+        finish=str(end) if flipped else "",
+        to_type=part.get("type", next(iter(part.get("types", [])), "")),
+        on_miss="on_miss" in part,
+        types=tuple(part.get("types", ())),
+    )
+
+
 def _read_ending(match: Mapping[str, Any]) -> tuple[str, ...]:
     """A rule's ``match.ending``, one ending or a list of them; empty when absent."""
     ending = match.get("ending", [])
     return (ending,) if isinstance(ending, str) else tuple(ending)
+
+
+def _template_end(end: object) -> bool:
+    """Whether an edge end is ``{template: <text>}`` and nothing else."""
+    return (
+        isinstance(end, Mapping) and set(end) == {"template"} and isinstance(end["template"], str)
+    )
 
 
 def _types_ok(end: Mapping[str, Any]) -> bool:
@@ -1708,22 +1874,47 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
     for receiver in receivers:
         if receiver not in _RECEIVERS:
             raise _Unsupported(f"the receiver {receiver} is accepted and not executed")
+    alone = {"assigned_parameter", "untyped_member"} & set(receivers)
+    if alone and (len(receivers) > 1 or ("assigned_parameter" in alone and len(fields) < 2)):
+        raise _Unsupported(
+            "a reference rule with the receiver assigned_parameter or untyped_member names no "
+            "other receiver, and assigned_parameter needs a second name child"
+        )
     specs = []
     for emit in emits:
         edge = emit["edge"]
         end = edge.get("to")
         argument = _argument(end.get("from"), "argument") if isinstance(end, Mapping) else None
+        start = edge.get("from")
         if (
             set(edge) != {"kind", "from", "to"}
-            or edge["from"] != "enclosing_declaration"
+            or (start != "enclosing_declaration" and not _template_end(start))
             or not isinstance(end, Mapping)
-            or not set(end) <= {"type", "types", "on_miss", "resolve", "separator", "from"}
+            or not set(end)
+            <= {"type", "types", "on_miss", "resolve", "separator", "from", "template"}
             or ("from" in end and argument is None)
             or not _types_ok(end)
         ):
             raise _Unsupported(
-                "an edge of a reference rule does not run from enclosing_declaration to an end "
-                "of type or types, resolve, separator and on_miss, and from a call's argument"
+                "an edge of a reference rule does not run from enclosing_declaration or a template "
+                "to an end of type or types, resolve, separator and on_miss, and from a call's "
+                "argument or a template"
+            )
+        to_template = end.get("template")
+        from_template = start["template"] if isinstance(start, Mapping) else None
+        names = set(PLACEHOLDER.findall(f"{to_template or ''}{from_template or ''}"))
+        if (
+            (to_template is not None and ("from" in end or not isinstance(to_template, str)))
+            or (to_template is not None and from_template is not None)
+            or ((to_template is not None or from_template is not None) and not receivers)
+            or not names <= _RECEIVER_VALUES
+            or ("method" in names and len(fields) < 2)
+            or ("untyped_member" in receivers and to_template is None)
+        ):
+            raise _Unsupported(
+                "a template end of a reference rule is one end of an edge, on a rule with a "
+                "receiver condition, naming only enclosing_type, member and method, method with a "
+                "second name child; the to end of an untyped_member rule is a template"
             )
         specs.append(
             EdgeSpec(
@@ -1732,15 +1923,16 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
                 False,
                 None,
                 None,
-                None,
+                to_template,
                 (),
-                start="enclosing_declaration",
+                start="enclosing_declaration" if from_template is None else "template",
                 to_type=end.get("type", next(iter(end.get("types", [])), "")),
                 on_miss="on_miss" in end,
                 resolve=_read_steps(end.get("resolve", []), tables),
                 separator=str(end.get("separator", "")),
                 # The one-type form is a list of that one type.
                 types=tuple(end.get("types", ())) or tuple(end.get("type", "").split()),
+                from_template=from_template,
             )
         )
     return Rule(
@@ -1890,6 +2082,8 @@ def _tree_id(block: Mapping[str, Any]) -> str:
     if set(block) <= {"from", "template", "normalize"}:
         if isinstance(source, str) and PLACEHOLDER.fullmatch(f"{{{source}}}") and template is None:
             return f"{{{source}}}"
+        if isinstance(source, list):
+            source = [_qualified(s) if isinstance(s, Mapping) else s for s in source]
         if (
             isinstance(source, list)
             and isinstance(template, str)
@@ -1900,6 +2094,13 @@ def _tree_id(block: Mapping[str, Any]) -> str:
         "the id block of a declaration rule is not from one source, or from several with a "
         "template naming each, and an optional normalize"
     )
+
+
+def _qualified(source: Mapping[str, Any]) -> str:
+    """The field a source ``{qualified: <field>}`` names."""
+    if set(source) != {"qualified"} or not isinstance(source["qualified"], str):
+        raise _Unsupported("a source of a declaration rule's id is a name or {qualified: <field>}")
+    return source["qualified"]
 
 
 def _read_tree_edge(edge: Mapping[str, Any]) -> EdgeSpec:
@@ -1918,7 +2119,8 @@ def _read_tree_edge(edge: Mapping[str, Any]) -> EdgeSpec:
     ):
         raise _Unsupported(
             "an edge of a declaration rule does not run from this_node, enclosing_class, "
-            "enclosing_file or {declared: <type>} to one of them or to {from: qualified_name}"
+            "enclosing_file, enclosing_method or {declared: <type>} to one of them or to "
+            "{from: qualified_name}"
         )
     return EdgeSpec(edge["kind"], "", False, None, None, None, (), start, finish, declared=declared)
 
@@ -1949,6 +2151,7 @@ def _id_template(block: Mapping[str, Any], entries: bool) -> str:
     # A placeholder beyond the sources must be a path value, checked once the file types are read.
     if (
         isinstance(named, list)
+        and all(isinstance(name, str) for name in named)
         and set(named) <= allowed
         and isinstance(template, str)
         and set(named) <= set(PLACEHOLDER.findall(template))

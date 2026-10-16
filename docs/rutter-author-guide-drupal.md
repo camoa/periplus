@@ -240,6 +240,11 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
 - `drupal.url_path`, a node for each path as written; `route_serves_path`, from a route to its
   `path`; `links_to_path`, from the class or function around `Url::fromUserInput('/x')` or
   `Url::fromUri('internal:/x')` to that path. A route and a link meet only on the same text.
+  Two text rules add links from a path written whole. `path_in_template_attribute` gives
+  `links_to_path` from a template whose attribute value is a path, as `data-endpoint="/x"`.
+  `path_in_script_string` gives `script_links_to_path` from a script's `js.file` node to a path
+  it holds in a quoted string, as `"/x"`. Only a path written whole counts: it starts with one
+  `/` and holds no space. `"/x/" + id` links to `/x/` alone, and `/x/{{ id }}` links nowhere.
 
 ## Where to look when the map misses a thing
 

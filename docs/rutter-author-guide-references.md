@@ -377,6 +377,54 @@ capture is the type. This is `php_basic` mapping such a call:
   confidence: inferred
 ```
 
+A property that a parent class declares, or that a constructor assigns from a typed parameter,
+has no type the calling class declares. `php_basic` finds it with no `receiver` condition: small
+declaration rules state each part at its own line, and one `reads: map` rule joins them. The
+parts are a property, `{enclosing_type}::{declared_name}`, with a `declares_property` edge from
+its class; a parameter of a method, `<class>::<method>::$<name>`, and for one typed by a class
+name its twin, whose id ends in the type that `{qualified: type}` resolves through the file's
+imports; an assignment `$this-><member> = ...`, one node for each class and member, with an
+`assigned_value` edge to a twin holding the assigning method and the right-hand text; and a call
+site `$this-><member>-><method>()`, with an edge to and from its enclosing method through
+`enclosing_method`. A `{declared: <type>}` end reaches only a node whose id leaves out
+`enclosing_method`: the type twin in the parameter pair, and in the assignment pair the assignment
+node, not its twin. A function's parameter has no enclosing method and makes nothing. The map
+rule reads each call site:
+
+```yaml php_basic@0.2.0/edges/find_structure.yaml
+- rule: calls_through_assigned_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - node: 'php.member_assignment::{owner}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
+    - node: 'php.parameter::{owner}::{setter}::${parameter}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+```
+
+It goes up `inherits` to the call's class or its nearest ancestor that declares the property, to
+that class's assignment of it, to the assigned parameter of the assigning method, and to its type.
+Every step names a whole id with `node:` or follows an edge, because a follow pattern cannot name
+an earlier capture. The `calls` edge runs from the method around the call to `<type>::<method>`,
+at the call site's line, inferred. `drupal_basic@0.3.0/service` holds the same walk for a
+property assigned `\Drupal::service('<id>')`: it follows `service_class` from that service to its
+class. A nullable or union parameter type, a service id in double quotes, an assignment in a
+class other than the one declaring the property, and a property set in `create()` from
+`$container->get('<id>')` give no edge. Such a call keeps its call site node, with no `calls`
+edge. Check 97s-inherited-property-calls proves the chain.
+
 ## Keys the schemas accept and the engine does not run
 
 A rule holding one is not run, and `not_executed` names it; a manifest or pack file holding one
@@ -424,8 +472,8 @@ file.rules.*.id: on_miss
 file.rules.*.id.from: argument_class argument_key array_key_class each each_key incoming_edges
     key literal qualified value
 file.rules.*.id.from.*: annotation_key argument argument_class argument_key array_key_class
-    attribute_argument capture each each_key incoming_edges key literal qualified value
-file.rules.*.match: argument array_entry grammar method_call node_type static_call subscript_assignment
+    attribute_argument capture each each_key incoming_edges key literal value
+file.rules.*.match: argument array_entry grammar method_call static_call subscript_assignment
 file.rules.*.match.where.*: ancestor_reaches attribute_argument base_is_known_plugin
     contained_by_type has_argument has_incoming_edge has_promoted_constructor_parameter
     in_method_with_attribute listed_at matches method_set_covers name not_matches on_service

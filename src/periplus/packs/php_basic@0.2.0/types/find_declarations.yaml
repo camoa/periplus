@@ -55,3 +55,84 @@ rules:
     template: "{enclosing_type}::{declared_name}"
   emits: [{node: {type: php.method}}]
   confidence: declared
+
+# The parts of a call through a property of the enclosing object. A property, <class>::$<name>.
+- rule: find_property
+  reads: file
+  in: [source]
+  match: {declaration: property_element, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{node: {type: php.property}}]
+  confidence: declared
+
+# A parameter of a method, <class>::<method>::$<name>, and for one typed by a class name its twin,
+# <class>::$<name>::<type>, the type resolved through the file's imports and namespace. A scalar,
+# nullable or union type gives no twin, and a function's parameter makes nothing. The twin keeps
+# the method out of its id, so find_structure.yaml's parameter_typed_as reaches it.
+- rule: find_parameter
+  reads: file
+  in: [source]
+  match: {declaration: simple_parameter, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
+  emits: [{node: {type: php.parameter}}]
+  confidence: declared
+
+- rule: find_parameter_type
+  reads: file
+  in: [source]
+  match: {declaration: simple_parameter, name_child: name, filetype: php, where: [{has_child: named_type}]}
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.parameter_type}}]
+  confidence: declared
+
+# An assignment to a property of the object, <class>::$this-><name>, one node for each class and
+# property; and its twin, <class>::<method>::$this-><name>=<right-hand text>, one for each method
+# and text. A text holding a line break is kept as written.
+- rule: find_member_assignment
+  reads: file
+  in: [source]
+  match:
+    declaration: assignment_expression
+    name_child: left
+    filetype: php
+    where: [{name_matches: {child: left, pattern: '\$this->\w+'}}]
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{node: {type: php.member_assignment}}]
+  confidence: declared
+
+- rule: find_member_assignment_value
+  reads: file
+  in: [source]
+  match:
+    declaration: assignment_expression
+    name_child: left
+    filetype: php
+    where: [{name_matches: {child: left, pattern: '\$this->\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, right]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}={right}"
+  emits: [{node: {type: php.member_assignment_value}}]
+  confidence: declared
+
+# A call on a property of the object, <class>::<method>::$this-><name>-><called method>.
+- rule: find_call_site
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: [{name_matches: {child: object, pattern: '\$this->\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared

@@ -530,3 +530,82 @@ rules:
     - receiver: var_annotation
   emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.method], separator: "::", on_miss: unresolved}}}]
   confidence: inferred
+
+# The joins of a call through a property, each the twin of a rule in types/find_declarations.yaml:
+# a class to its property; a typed parameter to its type; an assignment to its value; and a call
+# site to and from the method around it.
+- rule: declares_property
+  reads: file
+  in: [source]
+  match: {declaration: property_element, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{edge: {kind: declares_property, from: enclosing_class, to: this_node}}]
+  confidence: declared
+
+- rule: parameter_typed_as
+  reads: file
+  in: [source]
+  match: {declaration: simple_parameter, name_child: name, filetype: php, where: [{has_child: named_type}]}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
+  emits: [{edge: {kind: parameter_typed_as, from: this_node, to: {declared: php.parameter_type}}}]
+  confidence: declared
+
+- rule: assigned_value
+  reads: file
+  in: [source]
+  match:
+    declaration: assignment_expression
+    name_child: left
+    filetype: php
+    where: [{name_matches: {child: left, pattern: '\$this->\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, right]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}={right}"
+  emits: [{edge: {kind: assigned_value, from: {declared: php.member_assignment}, to: this_node}}]
+  confidence: declared
+
+- rule: call_site_method
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: [{name_matches: {child: object, pattern: '\$this->\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+# A call site $this->mailer->send() to Mailer::send, when the call's class or its nearest ancestor
+# that declares the property assigns it, $this->mailer = $mailer, from a typed parameter of the
+# assigning method. The edge runs from the method around the call, at the call's line. Inferred:
+# another assignment may give the property another object. A call no rule types keeps its call
+# site and gets no edge.
+- rule: calls_through_assigned_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - node: 'php.member_assignment::{owner}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
+    - node: 'php.parameter::{owner}::{setter}::${parameter}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred

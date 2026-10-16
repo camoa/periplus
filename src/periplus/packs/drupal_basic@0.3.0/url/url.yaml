@@ -3,7 +3,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # A URL written as a path string, joined to the route that serves that exact path. A route serves
 # the path its routing file gives it, a route_serves_path edge in route/route_definition.yaml. A
 # class or a function that builds a URL from a path names that path, a links_to_path edge:
-# Url::fromUserInput('/x') and Url::fromUri('internal:/x'). Both meet at one drupal.url_path node,
+# Url::fromUserInput('/x') and Url::fromUri('internal:/x'). A template's attribute value written
+# whole as a path names it too. All meet at one drupal.url_path node,
 # whose id is the path as written, so a route and a link reach each other through it. A path no
 # route serves ends at a referenced node.
 #
@@ -28,7 +29,7 @@ edge_kinds:
   from: drupal.route
   to: drupal.url_path
 - kind: links_to_path
-  from: [php.class, php.function]
+  from: [php.class, php.function, drupal.template]
   to: drupal.url_path
 
 rules:
@@ -67,4 +68,21 @@ rules:
       kind: links_to_path
       from: enclosing_declaration
       to: {from: {argument: 0}, resolve: [full_if_prefixed: 'internal:'], types: [drupal.url_path]}
+  confidence: declared
+
+# data-endpoint="/my/path" or href="/my/path" in a <name>.html.twig file, read as text as
+# template/template_route_link.yaml is. The = follows the attribute name with no space, so
+# {% set url = '/my/path' %} makes nothing. The value starts with one / and holds no space, quote,
+# brace or angle bracket, so "/", "//cdn.example.com/x" and "/my/{{ id }}" make nothing. An
+# attribute inside a Twig comment makes nothing; one inside a verbatim block still gives an edge.
+- rule: path_in_template_attribute
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\s[\w:.-]+=["''](?<path>/[^/\s"''{}<>][^\s"''{}<>]*)["'']'
+  id: {from: {capture: path}}
+  # links_to_path starts at classes and functions too, so the template end names its type.
+  emits: [{edge: {kind: links_to_path, from: {template: '{template_name}', types: [drupal.template]}, to: this_node}}]
   confidence: declared

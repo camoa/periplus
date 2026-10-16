@@ -26,3 +26,31 @@ edge_kinds:
 - kind: service_class
   from: drupal.service
   to: [php.class, php.interface]
+
+# A call site $this->helper->run() to Helper::run, when the call's class or its nearest ancestor
+# that declares the property assigns it $this->helper = \Drupal::service('my_module.helper') and
+# a services file gives that service its class. php_basic's calls_through_assigned_property reads
+# the same chain up to the assignment's value. Only the id written in single quotes is read; the
+# edge runs from the method around the call, at the call's line. Inferred: the services file, not
+# the call, names the class.
+rules:
+- rule: calls_through_service_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - node: 'php.member_assignment::{owner}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '=\\?Drupal::service\(''(?<service>[^'']+)''\)$'
+    - node: 'drupal.service::{service}'
+    - edge: service_class
+    - id_matches: '^php\.type::(?<type>.+)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred

@@ -290,6 +290,32 @@ def _undeclared(
             for edge in _emits(rule, "edge")
             if isinstance(edge, Mapping) and edge.get("kind") not in kinds
         )
+        found = rule.get("match")
+        match: Mapping[str, Any] = found if isinstance(found, Mapping) else {}
+        problems.extend(
+            Problem(
+                ExitCode.UNDECLARED_TYPE,
+                f"{pack}/{file}: the rule {rule_name} matches the type {name}, which neither "
+                f"{pack} nor a pack it depends on declares",
+                {"pack": pack, "file": file, "rule": str(rule_name), "type": name},
+            )
+            for name in _strings(match.get("node_type"))
+            if name not in types
+        )
+        follow = match.get("follow")
+        steps = follow if isinstance(follow, list) else []
+        problems.extend(
+            Problem(
+                ExitCode.UNDECLARED_EDGE_KIND,
+                f"{pack}/{file}: the rule {rule_name} follows the edge kind {kind}, which "
+                f"neither {pack} nor a pack it depends on declares",
+                {"pack": pack, "file": file, "rule": str(rule_name), "kind": kind},
+            )
+            for step in steps
+            if isinstance(step, Mapping)
+            for kind in _strings(step.get("edge")) + _strings(step.get("ancestors"))
+            if kind not in kinds
+        )
     return problems
 
 

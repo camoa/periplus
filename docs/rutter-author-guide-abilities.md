@@ -264,6 +264,54 @@ one; any other refuses the map with exit 22, naming the rule and the type. A typ
 rutter nor one it depends on declares refuses the map with exit 23. Only a tree declaration rule
 takes this end.
 
+## A field resolved through the imports, and the method around a match
+
+These two blocks are not worked examples; `tests/test_qualified_source.py` and
+`tests/test_enclosing_method_end.py` run the same shapes.
+
+A tree declaration rule's id may list `{qualified: <field>}` among its sources. The engine reads
+that field of the matched node and resolves its text through the file's imports and namespace,
+by the rutter's `identity` and `imports` blocks, as it resolves a written name at a reference
+rule's end. The template names the result by the field name. A text that resolves to nothing is
+used as written. A match without the field makes nothing, and the report lists it once per file
+under `skipped`:
+
+```yaml
+- rule: parameter
+  reads: file
+  in: [source]
+  match: {declaration: simple_parameter, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: '{enclosing_type}::{declared_name}:{type}'
+  emits: [{node: {type: probe.parameter}}]
+  confidence: declared
+```
+
+With `use App\Service\Registration;` in `namespace App\Ctl;`, the parameter
+`Registration $reg` of class `Thing` gets the id `App\Ctl\Thing::$reg:App\Service\Registration`.
+`Helper $help`, not imported, gets `App\Ctl\Thing::$help:App\Ctl\Helper`. An untyped `$loose`
+gives the row `the id source type is absent`.
+
+`enclosing_method` is the member of the enclosing type that holds the match, at which a rule of
+the rutter or of one it depends on mints a node. As an id source it is that member's declared
+name. As an edge end it is that node's id, at `from` or at `to`, with `this_node`,
+`enclosing_class`, `enclosing_file` or `{declared: <type>}` at the other end:
+
+```yaml
+- rule: held_by
+  reads: file
+  in: [source]
+  match: {declaration: simple_parameter, name_child: name, filetype: php}
+  id: {from: declared_name}
+  emits: [{edge: {kind: probe_held_by, from: this_node, to: enclosing_method}}]
+  confidence: declared
+```
+
+A match outside any type, or in no member a rule mints, has no enclosing method. An id that names
+it makes nothing, and an edge that names it is not made. No row under `skipped` reports either, as
+for an id that names `enclosing_type` outside any type.
+
 ## A class constant as a call's argument
 
 This section is not a worked example. Its block is copied from the Drupal pack's manifest, in

@@ -25,3 +25,24 @@ edge_kinds:
 - kind: calls
   from: [php.function, php.method]
   to: [php.function, php.method]
+
+# The joins of a call through a property; edges/find_structure.yaml finds them.
+- kind: declares_property
+  from: php.class_like
+  to: php.property
+
+- kind: parameter_typed_as
+  from: php.parameter
+  to: php.parameter_type
+
+- kind: assigned_value
+  from: php.member_assignment
+  to: php.member_assignment_value
+
+- kind: has_call_site
+  from: php.method
+  to: php.call_site
+
+- kind: call_site_in
+  from: php.call_site
+  to: php.method

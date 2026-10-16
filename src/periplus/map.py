@@ -23,7 +23,7 @@ from jsonschema import Draft202012Validator
 import periplus
 from periplus.engine.check import checked
 from periplus.engine.emit import build_document, render
-from periplus.engine.rules import run_file_rules
+from periplus.engine.rules import MapPass, run_file_rules, run_map_rules
 from periplus.engine.select import Selection, files_in, holds_double_star, resolve_folders
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER, SETTINGS_FILENAME
@@ -63,6 +63,8 @@ class MapReport:
     unread: tuple[str, ...] = ()
     #: The folders below the rules' folders that the unread walk could not list.
     unlisted: tuple[str, ...] = ()
+    #: Each pass of the map rules, the last one adding nothing; empty when no map rule runs.
+    map_passes: tuple[MapPass, ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -153,12 +155,16 @@ def run(
         found_nodes, found_edges, fires, opened, read, removed, broken, skipped = run_file_rules(
             root, rule_set, packs, folders, selection
         )
+        map_nodes, map_edges, map_fires, map_passes = run_map_rules(
+            rule_set, found_nodes, found_edges
+        )
+        fires.update(map_fires)
         directories = sorted({path for name in wanted for path in folders[name]})
         listed, unlisted = files_in(root, directories, selection)
         unread = sorted(set(listed) - read)
         document = build_document(
-            found_nodes,
-            found_edges,
+            [*found_nodes, *map_nodes],
+            [*found_edges, *map_edges],
             rule_set.types,
             rule_set.edge_kinds,
             packs,
@@ -215,6 +221,7 @@ def run(
         skipped=tuple(sorted(skipped)),
         unread=tuple(unread),
         unlisted=tuple(unlisted),
+        map_passes=tuple(map_passes),
     )
 
 
@@ -289,6 +296,14 @@ def render_text(report: MapReport) -> str:
         "Rules that fired zero times", [f"{_escape(p)} {_escape(r)}" for p, r in report.idle]
     )
     lines += _section(
+        "Map rule passes",
+        [
+            f"pass {n}: "
+            + (", ".join(f"{_escape(p)} {_escape(r)} fired {k}" for p, r, k in rows) or "none")
+            for n, rows in report.map_passes
+        ],
+    )
+    lines += _section(
         "Rules not executed",
         [f"{_escape(p)} {_escape(r)} {_escape(why)}" for p, r, why in report.not_executed],
     )
@@ -329,6 +344,10 @@ def render_json(report: MapReport) -> str:
         "excluded": report.excluded,
         "unread": list(report.unread),
         "unlisted": list(report.unlisted),
+        "map_passes": [
+            {"pass": n, "fired": [{"pack": p, "rule": r, "fires": k} for p, r, k in rows]}
+            for n, rows in report.map_passes
+        ],
         "problems": [
             {"code": int(p.code), "message": p.message, "detail": dict(p.detail)}
             for p in report.problems

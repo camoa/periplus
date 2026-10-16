@@ -67,7 +67,15 @@ templates with patterns alone.
 Every rule whose `reads` is `map`, repeatedly, until nothing changes.
 
 It terminates because a pass may only add attributes or refine a type downward through a
-hierarchy the packs declare, and that hierarchy is finite. Nothing moves back up.
+hierarchy the packs declare, and that hierarchy is finite. Nothing moves back up. Edges a map
+rule adds terminate too: map rules match and follow only nodes and edges the rules found or file
+rules emitted, never an end a map rule composed, so the ids a pass reads are fixed once the file
+rules have run. Edges merge on `(kind, from, to)` over that finite set, and a pass that adds
+nothing stops the loop.
+
+Each pass reads the map as it stood when the pass began, rules in load order and nodes in id
+order, so a rule reads an edge another map rule made in the next pass, and the map stays
+byte-identical across runs.
 
 The engine must report how many passes ran and which rules fired in each. The fixpoint hides
 its own sequencing, and when a classification comes out wrong, "it fired in pass three off a

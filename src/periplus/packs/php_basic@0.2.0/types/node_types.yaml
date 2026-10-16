@@ -32,3 +32,24 @@ node_types:
 - name: php.method
   parent: php.callable
   id_namespace: php.method
+
+# The parts of a call through a property of the enclosing object, $this->mailer->send(), that
+# edges/find_structure.yaml joins in the map rule calls_through_assigned_property. Each is found at
+# its own line by a rule in types/find_declarations.yaml; its id is shaped there.
+- name: php.property
+  id_namespace: php.property
+
+- name: php.parameter
+  id_namespace: php.parameter
+
+- name: php.parameter_type
+  id_namespace: php.parameter_type
+
+- name: php.member_assignment
+  id_namespace: php.member_assignment
+
+- name: php.member_assignment_value
+  id_namespace: php.member_assignment_value
+
+- name: php.call_site
+  id_namespace: php.call_site
