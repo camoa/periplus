@@ -1,5 +1,12 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
+# The type a class declares for a property, which the rules below find; node_types.yaml holds the
+# pack's other node types.
+node_types:
+
+- name: php.property_type
+  id_namespace: php.property_type
+
 # One rule per construct, because each names where its body lives: enum_declaration_list differs
 # from declaration_list by one word. A rule with a body_child is a type a method can sit in.
 rules:
@@ -67,6 +74,17 @@ rules:
   emits: [{node: {type: php.property}}]
   confidence: declared
 
+# The property a promoted constructor parameter declares, the same <class>::$<name>.
+- rule: find_promoted_property
+  reads: file
+  in: [source]
+  match: {declaration: property_promotion_parameter, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{node: {type: php.property}}]
+  confidence: declared
+
 # A parameter of a method, <class>::<method>::$<name>, and for one typed by a class name its twin,
 # <class>::$<name>::<type>, the type resolved through the file's imports and namespace. A scalar,
 # nullable or union type gives no twin, and a function's parameter makes nothing. The twin keeps
@@ -89,6 +107,82 @@ rules:
     from: [enclosing_type, declared_name, {qualified: type}]
     template: "{enclosing_type}::{declared_name}::{type}"
   emits: [{node: {type: php.parameter_type}}]
+  confidence: declared
+
+# The type a class declares for a property, <class>::$<name>::<type>, resolved through the file's
+# imports and namespace: written on the property, private Mailer $mailer; on a promoted constructor
+# parameter; or in the @var line of the docblock before the property. A nullable class type,
+# ?Mailer, gives the class. A scalar, ?int or union type on the property gives none, and so does
+# a @var of several types or of an array; a @var of a scalar, such as string, is read as a class
+# name. A declaration of several properties in one
+# statement names its first only. find_structure.yaml's property_typed_as reaches each.
+- rule: find_property_type
+  reads: file
+  in: [source]
+  match:
+    declaration: property_declaration
+    name_child: [property_element, name]
+    filetype: php
+    where: [{has_child: named_type}]
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.property_type}}]
+  confidence: declared
+
+- rule: find_promoted_property_type
+  reads: file
+  in: [source]
+  match:
+    declaration: property_promotion_parameter
+    name_child: name
+    filetype: php
+    where: [{has_child: named_type}]
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.property_type}}]
+  confidence: declared
+
+- rule: find_nullable_property_type
+  reads: file
+  in: [source]
+  match:
+    declaration: property_declaration
+    name_child: [property_element, name]
+    filetype: php
+    where: [{has_child: optional_type}]
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.property_type}}]
+  confidence: declared
+
+- rule: find_nullable_promoted_property_type
+  reads: file
+  in: [source]
+  match:
+    declaration: property_promotion_parameter
+    name_child: name
+    filetype: php
+    where: [{has_child: optional_type}]
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.property_type}}]
+  confidence: declared
+
+- rule: find_var_property_type
+  reads: file
+  in: [source]
+  match: {declaration: property_declaration, name_child: [property_element, name], filetype: php}
+  id:
+    from:
+    - enclosing_type
+    - declared_name
+    - qualified: {docblock: '@var\s+\??(?<type>\\?[A-Za-z_][A-Za-z0-9_\\]*)(?:\|null)?(?:\s|\*)'}
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.property_type}}]
   confidence: declared
 
 # An assignment to a property of the object, <class>::$this-><name>, one node for each class and

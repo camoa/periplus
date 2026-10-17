@@ -476,7 +476,7 @@
             {"type": "string"},
             {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2}
           ],
-          "description": "Which child holds the declared name, by field name only: a child with no field name cannot be named here. On a reference rule, two fields: the first is the written name, and the second's text follows it once resolved."
+          "description": "Which child holds the declared name, by field name only: a child with no field name cannot be named here. On a declaration rule, a list is a path walked from the matched node, each step the child in that field or else the first named child of that node type, and the declared name is the leaf's text. On a reference rule, two fields: the first is the written name, and the second's text follows it once resolved."
         },
         "reference": {
           "type": "string",
@@ -655,20 +655,6 @@
           "$ref": "#/$defs/typeName",
           "description": "FORCES reads: map. Follows contains backwards. Core has two methods called save, distinguished only by what their containing class is."
         },
-        "receiver": {
-          "enum": [
-            "typed_property",
-            "promoted_constructor_parameter",
-            "var_annotation",
-            "assigned_parameter",
-            "untyped_member",
-            "typed_parameter",
-            "object_creation_expression_in_scope",
-            "this",
-            "untyped_variable"
-          ],
-          "description": "What the call is made on. A bare name() can never resolve to a method; a call on a typed property is a claim about runtime rather than an observation, which is why two rules with the same edge kind carry different confidence. Executed on a tree reference rule for the first three: its first name child is read as a property of the enclosing object, and its type is the one the enclosing type declaration declares for that property, by a typed property, a promoted constructor parameter or a @var docblock, tried in the rule's order. assigned_parameter, the rule's only receiver, reads an assignment to a property of the enclosing object: its first name child is the property, and its type is the one declared for the parameter its second name child names, in the nearest enclosing node holding a parameter of that name. untyped_member, the rule's only receiver, fires on a property of the enclosing object that no typed property, promoted constructor parameter or @var docblock types, and its to end is a template. A rule with a receiver gives its edge ends' templates enclosing_type, the enclosing type's full name, member, the property's name, and method, its second name child's text; a template end is {template} at from or at to, never both, and the rutter writes the whole id shape. The pack's identity.property_receiver names the tree nodes. A rule naming any other value is not run."
-        },
         "has_child": {
           "type": "string",
           "description": "A required direct child of the matched node, by tree node type. Executed on a declaration rule: a match without such a child is passed. Go tells a struct from an interface this way: both are type_spec, and only the child differs."
@@ -721,7 +707,11 @@
             {
               "type": "array",
               "items": {
-                "$ref": "#/$defs/idSource"
+                "anyOf": [
+                  {"$ref": "#/$defs/idSource"},
+                  {"$ref": "#/$defs/docblockSource"},
+                  {"$ref": "#/$defs/qualifiedDocblockSource"}
+                ]
               },
               "minItems": 2
             }
@@ -800,6 +790,24 @@
         },
         {"$ref": "#/$defs/listedSource"}
       ]
+    },
+    "qualifiedDocblockSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qualified"],
+      "properties": {"qualified": {"$ref": "#/$defs/docblockSource"}},
+      "description": "A docblock source whose value is resolved through the file's imports and namespace, as {qualified: <field>} resolves a field; a value that resolves to nothing is used as written."
+    },
+    "docblockSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["docblock"],
+      "properties": {
+        "docblock": {
+          "type": "string",
+          "description": "RE2 with exactly one named group, searched in the comment that is the matched node's previous sibling, of the type the grammar's identity.comment names. The group's name is the value the template names. A match with no such comment, or one the pattern does not fit, makes nothing and no skipped row. One per id, in a from list; the template may leave its value out, and then the source is only a condition."
+        }
+      }
     },
     "listedSource": {
       "description": "A named source from the engine's list, or one of the object forms.",

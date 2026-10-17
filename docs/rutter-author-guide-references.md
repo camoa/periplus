@@ -340,46 +340,43 @@ referenced node, since no rule maps the module. A file whose name the pattern do
 
 ## A call on a property of the enclosing object
 
-A reference rule with `receiver` conditions reads its first name child as a property of the
-enclosing object, such as `$this->mailer` in `$this->mailer->send()`. Its name is the type that the
-enclosing type declaration declares for that property; the second name child joins it with the
-end's separator. Each condition names one place the type may be declared, and they are tried in
-the rule's order: `typed_property`, `promoted_constructor_parameter` and `var_annotation`, a
-docblock such as `/** @var Mailer */`. The type resolves through the file's imports and namespace,
-as a written name does. Only the class around the call is read, never another file.
-
-A property the class declares no type for makes no edge, and `skipped` says
-`object has no declared type`. A call on anything that is not a property of the enclosing object
-is not a fire and leaves no row. The schema also accepts `typed_parameter`,
-`object_creation_expression_in_scope`, `this` and `untyped_variable`; a rule naming one is not run.
-A rule with a `receiver` condition on a grammar whose pack declares no
-`identity.property_receiver` refuses the map with exit 26, naming the rule and that key.
-
-The pack that owns the grammar names the tree nodes in `identity.property_receiver`: `access`, the
-node types of a property read; `object`, `self` and `name`, its object field, the object's text and
-its name field; `type`, the field holding a declared type; a node type for `typed_property` and
-`promoted_constructor_parameter`; and `var_annotation`, a node type and a pattern whose `type`
-capture is the type. This is `php_basic` mapping such a call:
+A call such as `$this->mailer->send()` names a property of the enclosing object. `php_basic` maps
+it with rules alone, and the engine looks up no declared type. Three declaration rules each mint a
+`php.property_type` node, `<class>::$<name>::<type>`, at the property: `find_property_type` for a
+typed property, `find_promoted_property_type` for a promoted constructor parameter, and
+`find_var_property_type` for a docblock such as `/** @var Mailer */`, whose at-var pattern the
+rutter writes. The type resolves through the file's imports and namespace, as a written name does.
+A `property_typed_as` edge runs from each property to its type node. The map rule
+`calls_through_typed_property` reads each call site:
 
 ```yaml php_basic@0.2.0/edges/find_structure.yaml
-- rule: calls_property_method
-  reads: file
-  in: [source]
+- rule: calls_through_typed_property
+  reads: map
   match:
-    reference: member_call_expression
-    name_child: [object, name]
-    filetype: php
-    where:
-    - receiver: typed_property
-    - receiver: promoted_constructor_parameter
-    - receiver: var_annotation
-  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.method], separator: "::", on_miss: unresolved}}}]
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_typed_as
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
   confidence: inferred
 ```
 
-A property that a parent class declares, or that a constructor assigns from a typed parameter,
-has no type the calling class declares. `php_basic` finds it with no `receiver` condition: small
-declaration rules state each part at its own line, and one `reads: map` rule joins them. The
+It goes up `inherits` from the call's class to the class that declares the property, through
+`property_typed_as` to its type, and emits `calls` from the method around the call to
+`<type>::<method>`, at the call site's line, inferred. A property with no declared type keeps its
+call site node and gets no `calls` edge and no skipped row. Check 97t-typed-property-calls proves
+the three forms.
+
+A property that a constructor assigns from a typed parameter has no declared type. `php_basic`
+finds it the same way: small declaration rules state each part at its own line, and one
+`reads: map` rule joins them. The
 parts are a property, `{enclosing_type}::{declared_name}`, with a `declares_property` edge from
 its class; a parameter of a method, `<class>::<method>::$<name>`, and for one typed by a class
 name its twin, whose id ends in the type that `{qualified: type}` resolves through the file's
@@ -456,7 +453,7 @@ file.rules.*.emits.*.edge.from.from.*: annotation_key argument argument_class ar
 file.rules.*.emits.*.edge.from.where.*: ancestor_reaches applies_to attribute_argument
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
     has_promoted_constructor_parameter id_matches in_method_with_attribute is_mapping key
-    method_set_covers name name_matches on_service receiver
+    method_set_covers name name_matches on_service
 file.rules.*.emits.*.edge.from.where.*.name_matches: child pattern
 file.rules.*.emits.*.edge.to.from: annotation_key argument_class argument_key array_key_class
     each each_key incoming_edges literal qualified value
@@ -465,7 +462,7 @@ file.rules.*.emits.*.edge.to.from.*: annotation_key argument argument_class argu
 file.rules.*.emits.*.edge.to.where.*: ancestor_reaches applies_to attribute_argument
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
     has_promoted_constructor_parameter id_matches in_method_with_attribute is_mapping key
-    method_set_covers name name_matches on_service receiver
+    method_set_covers name name_matches on_service
 file.rules.*.emits.*.edge.to.where.*.name_matches: child pattern
 file.rules.*.emits.*.node: state
 file.rules.*.id: on_miss

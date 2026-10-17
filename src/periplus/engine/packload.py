@@ -62,7 +62,6 @@ EXECUTED_KEYS = frozenset(
         *(f"manifest.boundary{k}" for k in ("", ".*.type", ".*.ancestry", ".*.names")),
         *(f"manifest.identity.call_{k}" for k in ("arguments", "argument", "argument_name")),
         *(f"manifest.identity.call_literal{k}" for k in ("s", "_content", "_delimiters")),
-        "manifest.identity.property_receiver",
         *(f"manifest.detect{k}" for k in ("", ".any_of", ".any_of.*.path", ".any_of.*.contains")),
         *(
             f"manifest.grammar{k}"
@@ -124,13 +123,13 @@ EXECUTED_KEYS = frozenset(
             f"{_RULE}match.where.*.{k}"
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
         ),
-        f"{_RULE}match.where.*.receiver",
         *(f"{_RULE}match.where.*.name_matches{k}" for k in ("", ".child", ".pattern")),
         *(
             f"{_RULE}id.{k}"
             for k in (
                 *("from", "from.capture", "from.attribute_argument", "from.annotation_key"),
-                *("from.argument", "from.*.qualified", "pattern"),
+                *("from.argument", "from.*.qualified", "from.*.docblock"),
+                *("from.*.qualified.docblock", "pattern"),
                 *("template", "must_be", "normalize", "normalize.*.replace", "normalize.*.with"),
             )
         ),
@@ -213,14 +212,8 @@ def _holds(value: object, segments: Sequence[str]) -> bool:
     return isinstance(value, Mapping) and head in value and _holds(value[head], rest)
 
 
-#: The receiver kinds that read the type the enclosing type declaration declares for a property.
-DECLARING_RECEIVERS = ("typed_property", "promoted_constructor_parameter", "var_annotation")
-
-#: The receiver kinds a reference rule's receiver condition may name and the engine executes.
-_RECEIVERS = (*DECLARING_RECEIVERS, "assigned_parameter", "untyped_member")
-
-#: The values a reference rule with a receiver condition gives its edge ends' templates.
-_RECEIVER_VALUES = {"enclosing_type", "member", "method"}
+#: The values a reference rule gives its edge ends' templates, beside its name_matches groups.
+_REFERENCE_VALUES = {"enclosing_type", "enclosing_method"}
 
 #: The keys of the rule shapes this engine executes. A rule with any other key is not run.
 _RULE_KEYS = {"rule", "reads", "in", "match", "id", "emits", "confidence"}
@@ -392,6 +385,13 @@ class Rule:
     id_source: str = ""
     declaration: str = ""
     name_child: str = ""
+    #: A declaration rule: the children walked from the match to its name, each by field or node
+    #: type, when ``name_child`` is a list; ``name_child`` is then ``""``.
+    name_path: tuple[str, ...] = ()
+    #: A declaration rule: the pattern of its id's docblock source, whose one named group is the
+    #: value, and whether that value is resolved through the file's imports and namespace.
+    docblock: re.Pattern[str] | None = None
+    docblock_qualified: bool = False
     body_child: str = ""
     #: A declaration rule: the tree node types the match must have as direct children, and the
     #: fields of the matched node its id names.
@@ -415,9 +415,6 @@ class Rule:
     member_child: str = ""
     skip_names: frozenset[str] = frozenset()
     whole_written: bool = False
-    #: A reference rule: the receiver kinds its ``name_child``, a property of the enclosing
-    #: object, takes its declared type from, in order; empty when it reads a written name.
-    receivers: tuple[str, ...] = ()
     #: A rule that reads its file as text: the pattern it fires on, and the capture of the id.
     #: Its ``attributes`` and each edge's ``key`` name a capture.
     text: re.Pattern[str] | None = None
@@ -606,23 +603,6 @@ def load_rules(
             rules[index] = replace(rule, supported=False, reason=missing)
         if rules[index].supported and rule.annotation and not grammars[rule.filetype].comment:
             missing = f"the grammar for {rule.filetype} declares no identity.comment"
-            rules[index] = replace(rule, supported=False, reason=missing)
-        if (
-            rules[index].supported
-            and rule.receivers
-            and not grammars[rule.filetype].property_access
-        ):
-            missing = f"the grammar for {rule.filetype} declares no identity.property_receiver"
-            rules[index] = replace(rule, supported=False, reason=missing)
-        if (
-            rules[index].supported
-            and "assigned_parameter" in rule.receivers
-            and "assigned_parameter" not in dict(grammars[rule.filetype].property_declarations)
-        ):
-            missing = (
-                f"the grammar for {rule.filetype} declares no "
-                "identity.property_receiver.assigned_parameter"
-            )
             rules[index] = replace(rule, supported=False, reason=missing)
     for rule in rules:
         if (
@@ -866,7 +846,7 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
             )
             return replace(rule, supported=False, reason=reason)
         named = {*PLACEHOLDER.findall(rule.id_template), rule.id_source} - {""}
-        named = named - _TREE_FILLED - known - captures
+        named = named - _TREE_FILLED - known - captures - set(_groups(rule.docblock))
         if set(rule.qualified) - named:
             lacking = ", ".join(sorted(set(rule.qualified) - named))
             reason = f"the id source qualified names {lacking}, which is no field of the match"
@@ -1127,8 +1107,8 @@ def _grammar(
             "qualified_name.parts and .separator, namespace.declaration and .name_child or "
             "namespace.path_value, "
             "written_names, an import's ast, clause and facts with a bind naming only its "
-            "facts, last_segment or path, an optional attribute mapping, an optional comment, "
-            "an optional property_receiver mapping and optional resolution steps"
+            "facts, last_segment or path, an optional attribute mapping, an optional comment "
+            "and optional resolution steps"
         )
         if not isinstance(identity, Mapping):
             raise unread
@@ -1136,8 +1116,6 @@ def _grammar(
             qualified, namespace = identity["qualified_name"], identity["namespace"]
             attribute = identity.get("attribute", {})
             access = constants.get("constant_access", {})
-            receiver = identity.get("property_receiver", {})
-            annotation = receiver.get("var_annotation", {})
             declaration = constants.get("constant_declaration", {})
             if "path_value" in namespace:
                 namespace = {"declaration": "", "name_child": "", **namespace}
@@ -1174,17 +1152,6 @@ def _grammar(
                 constant_declaration=str(declaration.get("node", "")),
                 constant_declared_name=frozenset(map(str, declaration.get("name", []))),
                 constant_value=frozenset(map(str, declaration.get("value", []))),
-                property_access=frozenset(map(str, receiver.get("access", []))),
-                property_object=str(receiver.get("object", "")),
-                property_self=str(receiver.get("self", "")),
-                property_name=str(receiver.get("name", "")),
-                property_type=str(receiver.get("type", "")),
-                property_declarations=tuple(
-                    (kind, str(receiver[kind]["node"] if kind == _RECEIVERS[2] else receiver[kind]))
-                    for kind in _RECEIVERS
-                    if kind in receiver
-                ),
-                property_annotation=_regex(annotation["pattern"]) if annotation else None,
             )
         except (KeyError, TypeError) as error:
             raise unread from error
@@ -1655,7 +1622,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         or item["reads"] != "file"
         or not set(match) <= _DECLARATION_MATCH
         or "filetype" not in match
-        or not isinstance(match.get("name_child", ""), str)
+        or not isinstance(match.get("name_child", ""), (str, list))
     ):
         raise _Unsupported(
             "a declaration rule is not a file rule with in, match.filetype and no match keys "
@@ -1698,6 +1665,12 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         PLACEHOLDER.findall(template + (f"{{{block['from']}}}" if pattern else ""))
     ):
         raise _Unsupported("an id from declared_name or qualified_name needs match.name_child")
+    sources = [s for s in block.get("from", ()) if isinstance(s, Mapping)] if template else []
+    docblocks = [d for d in map(_docblock, sources) if d is not None]
+    if len(docblocks) > 1:
+        raise _Unsupported("a declaration rule's id has one docblock source")
+    name_child = match.get("name_child", "")
+    path = tuple(name_child) if isinstance(name_child, list) else ()
     return Rule(
         pack=pack,
         name=str(item["rule"]),
@@ -1711,15 +1684,18 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         id_template=template,
         id_pattern=pattern,
         id_source=str(block["from"]) if pattern else "",
-        qualified=tuple(s["qualified"] for s in block.get("from", ()) if isinstance(s, Mapping)),
+        qualified=tuple(s["qualified"] for s in sources if _docblock(s) is None),
+        docblock=docblocks[0][0] if docblocks else None,
+        docblock_qualified=bool(docblocks) and docblocks[0][1],
         normalize=_read_normalize(item["id"].get("normalize", [])) if "id" in item else (),
         declaration=match["declaration"],
         endings=_read_ending(match),
-        name_child=match.get("name_child", ""),
+        name_child="" if path else name_child,
+        name_path=path,
         body_child=match.get("body_child", ""),
         has_child=tuple(c["has_child"] for c in where if "has_child" in c),
         id_argument=argument or "",
-        name_matches=_name_matches(where, match.get("name_child")),
+        name_matches=_name_matches(where, None if path else name_child or None),
     )
 
 
@@ -1865,21 +1841,11 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
         )
     where = match.get("where", [])
     if not isinstance(where, list) or not all(
-        isinstance(c, Mapping) and set(c) in ({"name_matches"}, {"receiver"}) for c in where
+        isinstance(c, Mapping) and set(c) == {"name_matches"} for c in where
     ):
-        raise _Unsupported(
-            "the match.where of a reference rule holds only name_matches and receiver conditions"
-        )
-    receivers = tuple(c["receiver"] for c in where if "receiver" in c)
-    for receiver in receivers:
-        if receiver not in _RECEIVERS:
-            raise _Unsupported(f"the receiver {receiver} is accepted and not executed")
-    alone = {"assigned_parameter", "untyped_member"} & set(receivers)
-    if alone and (len(receivers) > 1 or ("assigned_parameter" in alone and len(fields) < 2)):
-        raise _Unsupported(
-            "a reference rule with the receiver assigned_parameter or untyped_member names no "
-            "other receiver, and assigned_parameter needs a second name child"
-        )
+        raise _Unsupported("the match.where of a reference rule holds only name_matches conditions")
+    name_matches = _name_matches(where, fields[0])
+    groups = {group for _, pattern in name_matches for group in pattern.groupindex}
     specs = []
     for emit in emits:
         edge = emit["edge"]
@@ -1906,15 +1872,12 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
         if (
             (to_template is not None and ("from" in end or not isinstance(to_template, str)))
             or (to_template is not None and from_template is not None)
-            or ((to_template is not None or from_template is not None) and not receivers)
-            or not names <= _RECEIVER_VALUES
-            or ("method" in names and len(fields) < 2)
-            or ("untyped_member" in receivers and to_template is None)
+            or not names <= _REFERENCE_VALUES | groups
         ):
             raise _Unsupported(
-                "a template end of a reference rule is one end of an edge, on a rule with a "
-                "receiver condition, naming only enclosing_type, member and method, method with a "
-                "second name child; the to end of an untyped_member rule is a template"
+                "a template end of a reference rule is one end of an edge, naming only "
+                "enclosing_type, enclosing_method and the named groups of its name_matches "
+                "conditions"
             )
         specs.append(
             EdgeSpec(
@@ -1952,8 +1915,7 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
         member_child=fields[1] if len(fields) > 1 else "",
         skip_names=frozenset(match.get("skip_names", ())),
         whole_written=match.get("whole_written") is True,
-        name_matches=_name_matches(where, fields[0]),
-        receivers=receivers,
+        name_matches=name_matches,
     )
 
 
@@ -2082,12 +2044,15 @@ def _tree_id(block: Mapping[str, Any]) -> str:
     if set(block) <= {"from", "template", "normalize"}:
         if isinstance(source, str) and PLACEHOLDER.fullmatch(f"{{{source}}}") and template is None:
             return f"{{{source}}}"
+        gates: set[str] = set()
         if isinstance(source, list):
+            found = [_docblock(s) for s in source if isinstance(s, Mapping)]
+            gates = {g for d in found if d is not None for g in _groups(d[0])}
             source = [_qualified(s) if isinstance(s, Mapping) else s for s in source]
         if (
             isinstance(source, list)
             and isinstance(template, str)
-            and set(PLACEHOLDER.findall(template)) == set(source)
+            and set(PLACEHOLDER.findall(template)) | gates == set(source)
         ):
             return template
     raise _Unsupported(
@@ -2097,10 +2062,33 @@ def _tree_id(block: Mapping[str, Any]) -> str:
 
 
 def _qualified(source: Mapping[str, Any]) -> str:
-    """The field a source ``{qualified: <field>}`` names."""
+    """The field a source ``{qualified: <field>}`` names, or the value a docblock source's group
+    names."""
+    docblock = _docblock(source)
+    if docblock is not None:
+        return next(iter(_groups(docblock[0])))
     if set(source) != {"qualified"} or not isinstance(source["qualified"], str):
         raise _Unsupported("a source of a declaration rule's id is a name or {qualified: <field>}")
     return source["qualified"]
+
+
+def _docblock(source: Mapping[str, Any]) -> tuple[re.Pattern[str], bool] | None:
+    """The pattern of a source ``{docblock: <pattern>}``, or of one wrapped in ``qualified``, and
+    whether it is wrapped; ``None`` for any other source. The pattern has one named group."""
+    inner = source.get("qualified")
+    wrapped = isinstance(inner, Mapping) and set(source) == {"qualified"}
+    found: Mapping[str, Any] = inner if wrapped and isinstance(inner, Mapping) else source
+    if set(found) != {"docblock"}:
+        return None
+    pattern = _regex(found["docblock"])
+    if len(pattern.groupindex) != 1:
+        raise _Unsupported("the pattern of a docblock source has not exactly one named group")
+    return pattern, wrapped
+
+
+def _groups(pattern: re.Pattern[str] | None) -> tuple[str, ...]:
+    """The names of the pattern's named groups; none for no pattern."""
+    return tuple(pattern.groupindex) if pattern is not None else ()
 
 
 def _read_tree_edge(edge: Mapping[str, Any]) -> EdgeSpec:

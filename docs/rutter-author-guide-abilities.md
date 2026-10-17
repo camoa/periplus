@@ -270,11 +270,12 @@ These two blocks are not worked examples; `tests/test_qualified_source.py` and
 `tests/test_enclosing_method_end.py` run the same shapes.
 
 A tree declaration rule's id may list `{qualified: <field>}` among its sources. The engine reads
-that field of the matched node and resolves its text through the file's imports and namespace,
-by the rutter's `identity` and `imports` blocks, as it resolves a written name at a reference
-rule's end. The template names the result by the field name. A text that resolves to nothing is
-used as written. A match without the field makes nothing, and the report lists it once per file
-under `skipped`:
+that field of the matched node and takes the first written name inside it: the field itself when
+it is one, or, for a nullable type `?Foo`, the `Foo` within. It resolves that name through the
+file's imports and namespace, by the rutter's `identity` and `imports` blocks, as it resolves a
+written name at a reference rule's end. The template names the result by the field name. A name
+that resolves to nothing is used as written. A field that holds no written name makes nothing. A
+match without the field makes nothing, and the report lists it once per file under `skipped`:
 
 ```yaml
 - rule: parameter
@@ -290,8 +291,9 @@ under `skipped`:
 
 With `use App\Service\Registration;` in `namespace App\Ctl;`, the parameter
 `Registration $reg` of class `Thing` gets the id `App\Ctl\Thing::$reg:App\Service\Registration`.
-`Helper $help`, not imported, gets `App\Ctl\Thing::$help:App\Ctl\Helper`. An untyped `$loose`
-gives the row `the id source type is absent`.
+`Helper $help`, not imported, gets `App\Ctl\Thing::$help:App\Ctl\Helper`. A nullable
+`?Registration $maybe` gets `App\Ctl\Thing::$maybe:App\Service\Registration`, the name inside the
+`?` resolved the same way. An untyped `$loose` gives the row `the id source type is absent`.
 
 `enclosing_method` is the member of the enclosing type that holds the match, at which a rule of
 the rutter or of one it depends on mints a node. As an id source it is that member's declared
@@ -311,6 +313,45 @@ name. As an edge end it is that node's id, at `from` or at `to`, with `this_node
 A match outside any type, or in no member a rule mints, has no enclosing method. An id that names
 it makes nothing, and an edge that names it is not made. No row under `skipped` reports either, as
 for an id that names `enclosing_type` outside any type.
+
+## A name below the match, and a value from the docblock
+
+These blocks are not worked examples; `tests/test_property_type_sources.py` runs the same shapes.
+
+A tree declaration rule's `name_child` may be a list, a path walked from the matched node. Each
+step is the child in that field, or else the first named child of that node type. The declared
+name is the leaf's text, and the node sits at the leaf's line. In PHP a typed property's type sits
+on the `property_declaration`, and its name two levels down:
+
+```yaml
+match: {declaration: property_declaration, name_child: [property_element, name], filetype: php}
+```
+
+A rule with this match fires once per statement, so `protected $a, $b;` names `$a` only.
+
+The id may also list one docblock source, `{docblock: <pattern>}`. The engine searches the
+pattern in the comment that is the matched node's previous sibling, of the node type the grammar's
+`identity.comment` names. The pattern holds exactly one named group, and the template names the
+value by that group's name. Wrapped as `{qualified: {docblock: <pattern>}}`, the value resolves
+through the file's imports and namespace, as `{qualified: <field>}` resolves a field:
+
+```yaml
+- rule: resolved
+  reads: file
+  in: [source]
+  match: {declaration: property_declaration, name_child: [property_element, name], filetype: php}
+  id:
+    from: [declared_name, {qualified: {docblock: '@var\s+(?<type>[\w\\]+)'}}]
+    template: '{declared_name}:{type}'
+  emits: [{node: {type: probe.resolved}}]
+  confidence: declared
+```
+
+With `use App\Service\Registration;` in `namespace App\Ctl;`, `/** @var Registration */` before
+`protected $reg;` gives `$reg:App\Service\Registration`. Without `qualified` it gives
+`$reg:Registration`. A match with no comment before it, or whose comment the pattern does not fit,
+makes nothing, and no row under `skipped` reports it. The template may leave the value out; the
+source is then only a condition, and an edge rule can use it to start at the property's own id.
 
 ## A class constant as a call's argument
 

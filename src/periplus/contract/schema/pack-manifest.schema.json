@@ -202,8 +202,7 @@
         "call_argument_name": {"type": "string", "description": "The field of an argument that holds its name. A named argument is found by its name, not its position, and its value is its last named child."},
         "call_literals": {"type": "array", "items": {"type": "string"}, "description": "The tree node types of a call argument's text literal. Without them, no argument is a text literal."},
         "call_literal_content": {"type": "array", "items": {"type": "string"}, "description": "The tree node types of a text literal's text. A literal with a named child of any other type is not a text literal."},
-        "call_literal_delimiters": {"type": "array", "items": {"type": "string"}, "description": "The tree node types of a text literal's named children that are skipped, such as a quote the grammar names."},
-        "property_receiver": {"type": "object", "description": "The tree nodes a reference rule's receiver condition reads: access, the node types of a property read on the enclosing object; object, self and name, its object field, the object's text and its name field; type, the field holding a declared type; typed_property, the node type of a property declaration; promoted_constructor_parameter, that of a promoted constructor parameter; and var_annotation, {node, pattern}, the node type of a @var docblock and a pattern whose type capture is the type; and assigned_parameter, the node type of a parameter, whose name field names it and whose type field gives its type. A rule with a receiver condition on a grammar without it refuses the map with exit 26."}
+        "call_literal_delimiters": {"type": "array", "items": {"type": "string"}, "description": "The tree node types of a text literal's named children that are skipped, such as a quote the grammar names."}
       }
     },
 

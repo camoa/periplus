@@ -1,5 +1,13 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
+# A property to the type its class declares for it, which the rules below find; edge_kinds.yaml
+# holds the pack's other edge kinds.
+edge_kinds:
+
+- kind: property_typed_as
+  from: php.property
+  to: php.property_type
+
 # The edges written at a declaration. Each of the first three makes one edge per name written in
 # the clause, at that name's line, to the full name the file's imports and namespace give it.
 rules:
@@ -41,10 +49,9 @@ rules:
 # names a function. A static call, Class::method(), resolves the class through the imports and
 # joins the method with ::, which is how find_method builds a method's id. A call on self, static
 # or parent, a call on a variable and a call outside any function or method make nothing and go
-# under skipped. A method call on an object, member_call_expression, is stated only by
-# calls_property_method below: the class of $x in $x->m() is known only when the code runs. A
-# function imported by use function x as y is
-# not bound, because the imports bind type names only, so y() resolves under the namespace as y;
+# under skipped. A method call on an object, member_call_expression, is stated only by the map
+# rules below, for a call on a property of the enclosing object: the class of $x in $x->m() is
+# known only when the code runs. A function imported by use function x as y is not bound, because the imports bind type names only, so y() resolves under the namespace as y;
 # and PHP's fallback of an unqualified call to a global function is not read.
 # skip_names lists PHP's language constructs, as written: grammar 0.24.1 parses isset(, empty(,
 # die( and eval( as function calls, and the rest are listed in case a release does too. After them
@@ -511,29 +518,9 @@ rules:
   emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.method], separator: "::", on_miss: unresolved}}}]
   confidence: declared
 
-# A call on a property of the enclosing object, $this->mailer->send(), to the method of the type
-# the same class declares for that property: a typed property, a promoted constructor parameter, or
-# a @var docblock, tried in that order. The type resolves through the file's imports and namespace
-# as a written name does. The declared type is a claim about what runs, not an observation of it,
-# so the edge is inferred where a static call's is declared. A property the class declares no type
-# for makes nothing and goes under skipped; a call on anything else is not read.
-- rule: calls_property_method
-  reads: file
-  in: [source]
-  match:
-    reference: member_call_expression
-    name_child: [object, name]
-    filetype: php
-    where:
-    - receiver: typed_property
-    - receiver: promoted_constructor_parameter
-    - receiver: var_annotation
-  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.method], separator: "::", on_miss: unresolved}}}]
-  confidence: inferred
-
 # The joins of a call through a property, each the twin of a rule in types/find_declarations.yaml:
-# a class to its property; a typed parameter to its type; an assignment to its value; and a call
-# site to and from the method around it.
+# a class to its property; a typed parameter to its type; a property to the type its class
+# declares for it; an assignment to its value; and a call site to and from the method around it.
 - rule: declares_property
   reads: file
   in: [source]
@@ -552,6 +539,80 @@ rules:
     from: [enclosing_type, enclosing_method, declared_name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}"
   emits: [{edge: {kind: parameter_typed_as, from: this_node, to: {declared: php.parameter_type}}}]
+  confidence: declared
+
+- rule: property_typed_as
+  reads: file
+  in: [source]
+  match:
+    declaration: property_declaration
+    name_child: [property_element, name]
+    filetype: php
+    where: [{has_child: named_type}]
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
+  confidence: declared
+
+- rule: promoted_property_typed_as
+  reads: file
+  in: [source]
+  match:
+    declaration: property_promotion_parameter
+    name_child: name
+    filetype: php
+    where: [{has_child: named_type}]
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
+  confidence: declared
+
+# A nullable type, ?Mailer. The type is read only so that ?int, which holds no class name, makes no
+# edge and no row; normalize drops it again, leaving the property's id.
+- rule: nullable_property_typed_as
+  reads: file
+  in: [source]
+  match:
+    declaration: property_declaration
+    name_child: [property_element, name]
+    filetype: php
+    where: [{has_child: optional_type}]
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+    normalize: [{replace: '::[^:]+$', with: ''}]
+  emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
+  confidence: declared
+
+- rule: nullable_promoted_property_typed_as
+  reads: file
+  in: [source]
+  match:
+    declaration: property_promotion_parameter
+    name_child: name
+    filetype: php
+    where: [{has_child: optional_type}]
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+    normalize: [{replace: '::[^:]+$', with: ''}]
+  emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
+  confidence: declared
+
+# The docblock source is only a condition here: a property with no @var line gets no edge.
+- rule: var_property_typed_as
+  reads: file
+  in: [source]
+  match: {declaration: property_declaration, name_child: [property_element, name], filetype: php}
+  id:
+    from:
+    - enclosing_type
+    - declared_name
+    - docblock: '@var\s+\??(?<type>\\?[A-Za-z_][A-Za-z0-9_\\]*)(?:\|null)?(?:\s|\*)'
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
   confidence: declared
 
 - rule: assigned_value
@@ -605,6 +666,28 @@ rules:
     - node: 'php.parameter::{owner}::{setter}::${parameter}'
     - edge: parameter_typed_as
     - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+# A call site $this->mailer->send() to Mailer::send, when the call's class or its nearest ancestor
+# that declares the property declares its type: on the property, on a promoted constructor
+# parameter or in a @var docblock. The edge runs from the method around the call, at the call's
+# line. Inferred: the declared type is a claim about what runs, not an observation of it. A call no
+# rule types keeps its call site and gets no edge.
+- rule: calls_through_typed_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_typed_as
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
     - node: 'php.call_site::{site}'
     - edge: call_site_in
   emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]

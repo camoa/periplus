@@ -6,7 +6,9 @@ import posixpath
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from errno import EBADF, ELOOP, ENOENT, ENOTDIR
 from pathlib import Path, PurePosixPath
+from stat import S_ISDIR, S_ISLNK, S_ISREG
 
 from periplus.engine.source import SHORT_FORM_FORMAT, SourceUnreadable
 from periplus.errors import ExitCode, HarnessError
@@ -409,6 +411,17 @@ def _any(patterns: Sequence[re.Pattern[str]], path: str) -> bool:
     return any(pattern.fullmatch(path) for pattern in patterns)
 
 
+def _followed_mode(link: Path) -> int:
+    """The mode of the file a link leads to, or 0 when it leads nowhere, as 3.11 ``Path.is_file``
+    decides; any other fault raises."""
+    try:
+        return link.stat().st_mode
+    except OSError as error:
+        if error.errno in (ENOENT, ENOTDIR, EBADF, ELOOP):
+            return 0
+        raise
+
+
 def files_in(
     root: Path, directories: Sequence[str], selection: Selection
 ) -> tuple[list[str], list[str]]:
@@ -430,14 +443,17 @@ def files_in(
             continue
         walked.add(directory)
         try:
+            # From 3.13 is_file, is_dir and is_symlink return False on any OSError; lstat and
+            # stat still raise for a child of a folder that cannot be searched.
+            modes = [(child, child.lstat().st_mode) for child in _listing(root, directory)]
             children = [
                 (
                     posixpath.join(directory, child.name),
-                    child.is_file(),
-                    child.is_dir(),
-                    child.is_symlink(),
+                    S_ISREG(kind := _followed_mode(child) if S_ISLNK(mode) else mode),
+                    S_ISDIR(kind),
+                    S_ISLNK(mode),
                 )
-                for child in _listing(root, directory)
+                for child, mode in modes
             ]
         except (SourceUnreadable, OSError):
             unlisted.add(directory)

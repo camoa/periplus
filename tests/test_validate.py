@@ -766,6 +766,46 @@ def test_every_bundled_pack_validates_against_the_shipped_schemas(
     assert payload["checked"], f"{pack} validated clean because nothing was opened"
 
 
+def test_a_reference_rule_with_a_receiver_condition_is_refused(project: Project) -> None:
+    """The receiver condition is gone from ``pack-file.schema.json``: a reference rule that writes
+    ``receiver: typed_property`` is refused, and the error names the file, the condition's path and
+    the unknown key."""
+    pack = _copy_pack(project.packs)
+    (pack / "types" / "calls.yaml").write_text(
+        f'$schema: "{_schema_id("pack-file.schema.json")}"\n'
+        "rules:\n"
+        "- rule: calls_on_property\n"
+        "  reads: file\n"
+        "  in: [source]\n"
+        "  match:\n"
+        "    reference: call_expression\n"
+        "    name_child: function\n"
+        "    filetype: go\n"
+        "    where: [{receiver: typed_property}]\n"
+        "  emits: [{edge: {kind: has_receiver, from: enclosing_declaration, to: {types: [m]}}}]\n"
+        "  confidence: inferred\n",
+        encoding="utf-8",
+    )
+
+    result = _run(
+        ["validate", FIXTURE_PACK, "--format", "json"], cwd=project.root, config=project.config
+    )
+
+    assert result.returncode == 16, f"{result.stdout}{result.stderr}"
+    errors = [
+        (error["file"], error["pointer"], error["keyword"], error["message"])
+        for error in json.loads(result.stdout)["errors"]
+    ]
+    assert errors == [
+        (
+            "types/calls.yaml",
+            "$.rules[0].match.where[0]",
+            "additionalProperties",
+            "Additional properties are not allowed ('receiver' was unexpected)",
+        )
+    ], errors
+
+
 def test_a_deliberately_broken_pack_is_rejected_by_the_command_ci_would_run(
     project: Project,
 ) -> None:
