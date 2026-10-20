@@ -72,14 +72,17 @@ def test_the_library_nodes_and_edges_the_map_had_before_are_kept(tmp_path: Path)
     ) in edges
 
 
-def test_a_script_key_read_from_the_drupal_root_gives_no_edge_and_no_node(tmp_path: Path) -> None:
+def test_a_script_key_read_from_the_drupal_root_ends_at_a_referenced_node(tmp_path: Path) -> None:
     _plant(tmp_path)
     (tmp_path / MODULE / "mymodule.libraries.yml").write_text(
         "form:\n  js:\n    js/form.js: {}\n    /core/misc/root.js: {}\n"
     )
     document = _map(tmp_path)
-    assert not [n["id"] for n in document["nodes"] if "root.js" in str(n["id"])]
-    assert not [e for e in document["edges"] if "root.js" in str(e["to"])]
+    root = "js.file::web/core/misc/root.js"
+    assert [n["state"] for n in document["nodes"] if "root.js" in str(n["id"])] == ["referenced"]
+    assert [(e["from"], e["to"]) for e in document["edges"] if "root.js" in str(e["to"])] == [
+        ("drupal.library::mymodule/form", root)
+    ]
     assert ("library_includes_script", "drupal.library::mymodule/form") in {
         (str(e["kind"]), str(e["from"])) for e in document["edges"]
     }

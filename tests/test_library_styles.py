@@ -47,7 +47,13 @@ def test_a_library_links_to_its_local_stylesheets_and_not_to_an_address(tmp_path
     document = json.loads(Path(report.map_path).read_text())
 
     missing = f"css.file::{MODULE}/css/missing.css"
-    sheets = {f"css.file::{MODULE}/css/form.css", f"css.file::{MODULE}/css/form-theme.css", missing}
+    root = "css.file::web/core/misc/root.css"
+    sheets = {
+        f"css.file::{MODULE}/css/form.css",
+        f"css.file::{MODULE}/css/form-theme.css",
+        missing,
+        root,
+    }
     edges = {
         (e["from"], e["to"])
         for e in document["edges"]
@@ -55,5 +61,7 @@ def test_a_library_links_to_its_local_stylesheets_and_not_to_an_address(tmp_path
     }
     assert edges == {("drupal.library::mymodule/form", sheet) for sheet in sheets}
     css_nodes = {n["id"]: n["state"] for n in document["nodes"] if n["id"].startswith("css.file::")}
-    assert css_nodes == {sheet: "referenced" if sheet == missing else "mapped" for sheet in sheets}
-    assert not any("example.com" in n["id"] or "root.css" in n["id"] for n in document["nodes"])
+    assert css_nodes == {
+        sheet: "referenced" if sheet in (missing, root) else "mapped" for sheet in sheets
+    }
+    assert not any("example.com" in n["id"] for n in document["nodes"])

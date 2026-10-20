@@ -7,3 +7,6 @@ edge_kinds:
 - kind: template_attaches_library
   from: drupal.template
   to: drupal.library
+- kind: component_attaches_library
+  from: drupal.component
+  to: drupal.library

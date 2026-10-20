@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # The bundled JavaScript packs, js_basic and drupal_js_basic, pinned beside drupal_basic@0.3.0.
-# A module holds a libraries file, a script with two named functions and two behaviors, a
+# A module holds a libraries file, a script with two named functions and four behaviors, a
 # controller and a template. The functions are js.function nodes named by script path and name.
 # Each behavior is a node; the one whose attach calls the other's attach has an attaches_behavior
-# edge to it, and its read of drupalSettings.mymoduleColor is a reads_setting edge. The controller
+# edge to it, and its read of drupalSettings.mymoduleColor is a reads_setting edge. Two behaviors
+# are assigned an arrow function and a function expression; the arrow one's read of
+# drupalSettings.k is a reads_setting edge from it. The controller
 # attaches a library by assignment and by array, each an attaches_library edge from its class,
 # and attaches the setting, a provides_setting edge. The template's attach_library() is a
 # template_attaches_library edge. The map and the report are byte-identical across two runs, the
@@ -38,6 +40,12 @@ cat >"$module/js/widget.js" <<'EOF'
   Drupal.behaviors.mymoduleOther = {
     attach() {},
   };
+
+  Drupal.behaviors.mymoduleArrow = (context) => {
+    const k = drupalSettings.k;
+  };
+
+  Drupal.behaviors.mymoduleFunc = function (context) {};
 })(Drupal, drupalSettings);
 EOF
 cat >"$module/src/Controller/WidgetController.php" <<'EOF'
@@ -84,6 +92,7 @@ controller = "php.type::Drupal\\mymodule\\Controller\\WidgetController"
 method = "php.method::Drupal\\mymodule\\Controller\\WidgetController::"
 widget, other = "drupal.js_behavior::mymoduleWidget", "drupal.js_behavior::mymoduleOther"
 setting = "drupal.js_setting::mymoduleColor"
+arrow, func = "drupal.js_behavior::mymoduleArrow", "drupal.js_behavior::mymoduleFunc"
 
 
 def load(name):
@@ -107,7 +116,10 @@ assert nodes == {
     f"js.file::{script}": ("js.file", "mapped"),
     widget: ("drupal.js_behavior", "mapped"),
     other: ("drupal.js_behavior", "mapped"),
+    arrow: ("drupal.js_behavior", "mapped"),
+    func: ("drupal.js_behavior", "mapped"),
     setting: ("drupal.js_setting", "mapped"),
+    "drupal.js_setting::k": ("drupal.js_setting", "referenced"),
     "drupal.library::mymodule/widget": ("drupal.library", "mapped"),
     "drupal.library::mymodule/card": ("drupal.library", "referenced"),
     "drupal.module::mymodule": ("drupal.module", "mapped"),
@@ -129,6 +141,10 @@ assert edges == sorted([
      [(script, 6)]),
     ("script_declares_behavior", f"js.file::{script}", widget, [(script, line(script, "Drupal.behaviors.mymoduleWidget = {"))]),
     ("script_declares_behavior", f"js.file::{script}", other, [(script, line(script, "Drupal.behaviors.mymoduleOther = {"))]),
+    ("script_declares_behavior", f"js.file::{script}", arrow, [(script, line(script, "Drupal.behaviors.mymoduleArrow = (context) => {"))]),
+    ("script_declares_behavior", f"js.file::{script}", func, [(script, line(script, "Drupal.behaviors.mymoduleFunc = function (context) {};"))]),
+    ("reads_setting", arrow, "drupal.js_setting::k",
+     [(script, line(script, "const k = drupalSettings.k;"))]),
     ("attaches_behavior", widget, other,
      [(script, line(script, "Drupal.behaviors.mymoduleOther.attach(context);"))]),
     ("reads_setting", widget, setting,

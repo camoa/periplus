@@ -357,6 +357,13 @@ files:
       - name: hook_theme_body
         open: '\b(?<mark>function)\s+(?:\w+_)?theme\s*\([^)]*\)[^{;]*(?=\{)'
         balance: ['{', '}']
+      # The body of a named function; name is the name as written.
+      - name: function_body
+        open: '\b(?<mark>function)\s+(?<name>\w+)\s*\([^)]*\)[^{;]*(?=\{)'
+        balance: ['{', '}']
+      - name: settings_list
+        open: '[\[,(\s][''"](?<mark>drupalSettings)[''"]\s*=>\s*(?=\[)'
+        balance: ['[', ']']
 
 grammar:
   provider: tree-sitter

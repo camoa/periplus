@@ -18,3 +18,75 @@ rules:
   id: {from: declared_name, pattern: '\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"]drupalSettings[''"]\s*\]\s*\[\s*[''"](?<key>[\w.-]+)[''"]\s*\]', template: '{key}'}
   emits: [{edge: {kind: provides_setting, from: enclosing_class, to: this_node}}]
   confidence: declared
+# '#attached' => ['drupalSettings' => ['key' => ...]]: each first-level key is a setting. level is
+# first only when the innermost keyed_array around the key is drupalSettings, or is the key's own
+# array value just inside it, so a key below the first level, at any depth, makes nothing.
+- rule: setting_attached_in_array
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,]\s*[''"](?<key>(?!drupalSettings[''"])[\w.-]+)[''"]\s*=>(?=\s*(?<arr>\[?))'
+  values:
+    in_attached: {from: {enclosing: attached, capture: mark}}
+    in_settings: {from: {enclosing: settings_list, capture: mark}}
+    chain: {from: {enclosing: keyed_array, capture: key}, join: '|'}
+    level: {template: '{chain}#{arr}', normalize: [{replace: '^(?:.*\|)?[''"]drupalSettings[''"](?:\|[^|]+#\[|#)$', with: first}, {replace: '^(?!first$).*', with: ''}]}
+  id:
+    template: '{in_attached}|{in_settings}|{level}|{key}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+  line: {capture: key}
+  emits: [{node: {type: drupal.js_setting}}]
+  confidence: declared
+# The same key in a class file under src: the class of its file provides the setting.
+- rule: setting_attached_in_array_in_class
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,]\s*[''"](?<key>(?!drupalSettings[''"])[\w.-]+)[''"]\s*=>(?=\s*(?<arr>\[?))'
+  values:
+    in_attached: {from: {enclosing: attached, capture: mark}}
+    in_settings: {from: {enclosing: settings_list, capture: mark}}
+    chain: {from: {enclosing: keyed_array, capture: key}, join: '|'}
+    level: {template: '{chain}#{arr}', normalize: [{replace: '^(?:.*\|)?[''"]drupalSettings[''"](?:\|[^|]+#\[|#)$', with: first}, {replace: '^(?!first$).*', with: ''}]}
+  id:
+    template: '{in_attached}|{in_settings}|{level}|{key}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+  line: {capture: key}
+  emits:
+  - edge:
+      kind: provides_setting
+      from: {template: '{psr4_class}', types: [php.class]}
+      to: this_node
+  confidence: inferred
+# The same key in a function of a procedural file: the function provides the setting.
+- rule: setting_attached_in_array_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, theme, inc, install, profile]
+    text: '[\[,]\s*[''"](?<key>(?!drupalSettings[''"])[\w.-]+)[''"]\s*=>(?=\s*(?<arr>\[?))'
+  values:
+    in_attached: {from: {enclosing: attached, capture: mark}}
+    in_settings: {from: {enclosing: settings_list, capture: mark}}
+    chain: {from: {enclosing: keyed_array, capture: key}, join: '|'}
+    level: {template: '{chain}#{arr}', normalize: [{replace: '^(?:.*\|)?[''"]drupalSettings[''"](?:\|[^|]+#\[|#)$', with: first}, {replace: '^(?!first$).*', with: ''}]}
+    fn: {from: {enclosing: function_body, capture: name}}
+  id:
+    template: '{in_attached}|{in_settings}|{level}|{key}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+  line: {capture: key}
+  emits:
+  - edge:
+      kind: provides_setting
+      from: {template: '{fn}', types: [php.function]}
+      to: this_node
+  confidence: inferred

@@ -107,15 +107,20 @@ a list of its known gaps.
   generator, a class, a class method and a function that is an object member or an argument give
   nothing. Two functions of one name in one script are one node. A `.mjs`, `.cjs`, `.jsx` or `.ts`
   file is not read. A script's id is its path from the project folder.
-- **Drupal JavaScript:** `drupal_js_basic` reads a behavior only as `Drupal.behaviors.name = {...}`,
-  and any object so assigned is one, with or without `attach`. A behavior call or a settings read
+- **Drupal JavaScript:** `drupal_js_basic` reads a behavior only as `Drupal.behaviors.name = ...`,
+  and any object so assigned is one, with or without `attach`. An arrow function or a function
+  expression so assigned is one too; a value of any other kind, such as a variable, gives none. A behavior call or a settings read
   outside a behavior object makes no edge and goes under skipped. `detach`, `once()`, `Drupal.t()`,
   `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge. Only the
-  first key after `drupalSettings` is read. The array form of a PHP library attachment is read as
-  text and named by PSR-4 path, so it is inferred and a file outside a `src` folder gives no edge.
-  A library named by a constant or a variable gives no edge. A script or stylesheet a
-  `.libraries.yml` file lists by a URL or by a path from the Drupal root, starting with `/`, gives
-  no edge.
+  first key after `drupalSettings` is read. The array form of a PHP library attachment or of
+  `drupalSettings` is read as text, so it is inferred. Under `src` its class is named by PSR-4
+  path; in a `.module` file the edge starts at the function around it. A library or a key named
+  by a constant or a variable gives no edge, and a key nested below a first-level key gives none,
+  whatever wraps the array: a ternary, a call, a cast, a list or old `array( )`. A path in a script
+  string joined to another value with `+` on either side links nothing, at any distance and across
+  a line break. A script or stylesheet a
+  `.libraries.yml` file lists by a URL gives no edge. One listed by a path from the Drupal root,
+  starting with `/`, gives none in a project whose top folder is the Drupal root itself.
 - **Python:** text rules see no scopes. Every call starts at the module, and a local name that
   shadows an import gives a false edge. Method calls on objects and imports re-exported through
   another file are not followed. More forms are listed in the author guide.

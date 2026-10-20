@@ -2,7 +2,10 @@
 # A path written whole as a Twig attribute value or a JS string links to the path node the route
 # serves. data-endpoint="/x/y" in a template and "/x/y" in a script each link to
 # drupal.url_path::/x/y, which the route mymod.xy serves. A value that does not start with / or
-# that holds a space links nowhere, and so does a joined URL such as '/x/joined/' + id, and so does one in a comment or a Twig set statement.
+# that holds a space links nowhere, and so does a path joined with + on either side at any distance,
+# across a line break or through a parenthesis, such as '/x/joined/' + id or base + '/api/x', and
+# so does one in a comment or a Twig set statement. A whole path in an assignment, a list, a ternary
+# branch or a call argument on its own line links.
 set -euo pipefail
 
 work="$(mktemp -d)"
@@ -29,6 +32,19 @@ cat >"$module/js/xy.js" <<'EOF'
   let relative = 'x/y';
   let label = '/x y';
   let joined = fetch('/x/joined/' + endpoint);
+  let after = base + '/api/x';
+  let before = '/api/y/' + id;
+  let across = base +
+    '/api/n';
+  let spaced = base +   '/api/s';
+  let tight = base+'/api/t';
+  let paren = base + ('/api/p');
+  x = '/x/y';
+  let list = ['/x/y'];
+  let pick = flag ? '/x/y' : other;
+  fetch(
+    '/x/y'
+  );
   // fetch('/x/commented');
   fetch(endpoint);
 })();
@@ -56,6 +72,13 @@ assert links == [
     ("links_to_path", "drupal.template::xy-button", path),
     ("script_links_to_path", "js.file::web/modules/custom/mymod/js/xy.js", path),
 ], links
+script_lines = sorted(
+    location["line"]
+    for e in document["edges"]
+    if e["kind"] == "script_links_to_path"
+    for location in e["locations"]
+)
+assert script_lines == [2, 13, 14, 15, 17], script_lines
 serves = sorted((e["from"], e["to"]) for e in document["edges"] if e["kind"] == "route_serves_path")
 assert serves == [("drupal.route::mymod.xy", path)], serves
 paths = sorted(n["id"] for n in document["nodes"] if n["type"] == "drupal.url_path")

@@ -8,7 +8,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - Any object assigned to Drupal.behaviors.name is a behavior, with or without an attach
 #   member: Drupal.behaviors.empty = {} gives a node.
 # - Drupal.behaviors['name'] = {...} and window.Drupal.behaviors.name = {...}: no node.
-# - A value that is not an object gives no node: Drupal.behaviors.trapFocus = (element) => {...}.
+# - An arrow function or a function expression gives the node, Drupal.behaviors.trapFocus =
+#   (element) => {...}; a value of any other kind, such as a variable, gives none.
 # - Two scripts that declare one behavior name give one node holding both locations. Drupal
 #   keeps only the one loaded last on a page.
 # - Drupal.behaviors.other.detach(...): no edge.
@@ -30,28 +31,31 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # one for each text in the list. In Twig, attach_library('module/library') in a
 # <name>.html.twig file is an edge from the template.
 # - The array form is read as text. Its class is named from the file's path, by Drupal's PSR-4
-#   layout: <module>/src/A/B.php is Drupal\<module>\A\B. So the rule is inferred, a file whose
-#   class is named otherwise gets an edge from a class that does not exist, and a file outside
-#   a src folder, such as a .module file, makes no edge and no skipped row.
+#   layout: <module>/src/A/B.php is Drupal\<module>\A\B. So the rule is inferred, and a file
+#   whose class is named otherwise gets an edge from a class that does not exist. In a .module,
+#   .theme, .inc, .install or .profile file the edge starts at the function around the list.
 # - The array form with something between => and the array makes nothing:
 #   '#attached' => $flag ? ['library' => [...]] : [].
 # - A library named by a constant, a variable or a joined text: no edge.
-# - '#attached' => ['drupalSettings' => ['key' => ...]]: no setting node. The site this pack was
-#   written on holds none.
-# - A Twig file not named .html.twig, such as a component's <name>.twig: no edge.
+# - '#attached' => ['drupalSettings' => ['key' => ...]] is read as text the same way: a setting
+#   node for each first-level key, from the class or the function. A key named by a variable, or
+#   below the first level, makes nothing.
+# - A component's components/<name>/<name>.twig is an edge from drupal.component::<name>. Any
+#   other Twig file not named .html.twig: no edge.
 # - A call inside a Twig comment makes nothing. A call inside a quoted text or a verbatim block
 #   still gives an edge.
 # - A script a library lists under js: is an edge from the library to the script's js.file node.
 #   The script's path is the libraries file's folder joined with the key. A key that is a URL
-#   (http:, https: or //) makes no edge and no node, and so does a key that starts with /, which
-#   Drupal reads from the Drupal root, such as /core/misc/drupal.js.
+#   (http:, https: or //) makes no edge and no node. A key that starts with /, such as
+#   /core/misc/drupal.js, is read from the Drupal root, the folder above the first modules, themes
+#   or profiles folder; a file outside the mapped folders gets a referenced node. In a project
+#   whose top folder is the Drupal root itself, such a key makes no edge.
 #   Chain: library -> script -> behavior. A script is linked to each behavior object it assigns,
 #   by a script_declares_behavior edge from its js.file node.
 # - A stylesheet a library lists under css:, in any group, is an edge from the library to a
 #   css.file node named by the same joined path, with the same URL filter. Each .css file in a
 #   module or theme is a css.file node named by its path, so a listed file that does not exist
-#   gets a referenced node. A key that starts with /, which Drupal reads from the Drupal root,
-#   makes no edge and no node.
+#   gets a referenced node. A key that starts with / is read from the Drupal root, as for a script.
 # - A second pack that claims libraries files, by a file type of its own for the ending yml, is
 #   refused (exit 19: the ending yml is claimed by different file types), because libraries
 #   files are read through this pack's type yml and drupal_basic's library rules. A pack that
@@ -80,6 +84,40 @@ files:
         libraries_dir:
           pattern: '^(?<dir>.+)/[^/]+$'
           template: '{dir}'
+        # The folder above the first modules, themes or profiles folder: the Drupal root, which a
+        # js: or css: key that starts with / is written from. A file with no folder above it has
+        # no value.
+        drupal_root:
+          pattern: '^(?<root>.*?)/(?:modules|themes|profiles)/'
+          template: '{root}'
+    # drupal_basic's type drupal_template_text, given the path value component_name: the name of a
+    # single-directory component whose folder components/<name>/ holds the file <name>.twig.
+    drupal_template_text:
+      endings: [twig]
+      reader: text
+      path_values:
+        component_name:
+          pattern: '^(?:.*/)?components/(?<name>[^/]+)/(?P=name)\.twig$'
+          template: '{name}'
+    # drupal_basic's type drupal_php_text, given one more span: the array after each quoted,
+    # constant or variable key and =>, to any depth. The array-form setting rules read the keys
+    # around a match from it.
+    drupal_php_text:
+      endings: [php, module, theme, inc, install, profile]
+      reader: text
+      spans:
+      - name: keyed_array
+        open: '[\[,]\s*(?<key>[''"][\w.-]+[''"]|[^\s\[\](),''"=>|]+(?:\[[^\[\]]*\])*)\s*=>\s*(?=\[)'
+        balance: ['[', ']']
+      # The same name for an array that is not the whole value after =>, such as one inside a
+      # ternary, a call's argument or a list, and for old array( ). Its key is the character before
+      # the bracket, or the word array, so a key inside it is below the first level.
+      - name: keyed_array
+        open: '(?<key>[^\s\w$\]])(?<!=>)\s*(?=\[)'
+        balance: ['[', ']']
+      - name: keyed_array
+        open: '\b(?<key>array)\s*(?=\()'
+        balance: ['(', ')']
     # A stylesheet, read as text only to be named by its path from the project folder.
     css_text:
       endings: [css]

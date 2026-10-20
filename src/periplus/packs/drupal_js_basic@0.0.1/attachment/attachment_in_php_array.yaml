@@ -25,3 +25,28 @@ rules:
       from: {template: '{psr4_class}', types: [php.class]}
       to: this_node
   confidence: inferred
+# The same list in a function of a procedural file, such as a hook in a .module file: the
+# function attaches the library. Its node is the one php_basic makes for the function.
+- rule: library_attached_in_array_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, theme, inc, install, profile]
+    text: '[\[,\s][''"](?<library>[A-Za-z0-9_]+/[\w.-]+)[''"]\s*[,\]]'
+  values:
+    in_attached: {from: {enclosing: attached, capture: mark}}
+    in_library: {from: {enclosing: library_list, capture: mark}}
+    fn: {from: {enclosing: function_body, capture: name}}
+  id:
+    template: '{in_attached}|{in_library}|{library}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+  line: {capture: library}
+  emits:
+  - edge:
+      kind: attaches_library
+      from: {template: '{fn}', types: [php.function]}
+      to: this_node
+  confidence: inferred

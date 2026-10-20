@@ -4,7 +4,9 @@
 # script declares a behavior. Each local script is a js.file node reached by a
 # library_includes_script edge from the library, and has a script_declares_behavior edge to its
 # behavior. The remote script makes no node and no edge. The library, its dependency edge and a library
-# attached from PHP are all still mapped, none of them referenced.
+# attached from PHP are all still mapped, none of them referenced. A key from the Drupal root ends at
+# the module's own script, or at a referenced node for a file outside the mapped folders; a library
+# that lists only a URL gives one skipped row for library_script, at its libraries file.
 set -euo pipefail
 
 work="$(mktemp -d)"
@@ -20,11 +22,17 @@ form:
     js/form.js: {}
     js/extra.js: {}
     https://example.com/remote.js: {type: external}
+    /modules/custom/mymodule/js/root.js: {}
+    /core/misc/drupal.js: {}
   dependencies:
     - core/drupal
+remote:
+  js:
+    //cdn.example.com/remote.js: {type: external}
 YAML
 printf 'Drupal.behaviors.mymoduleForm = {\n  attach() {},\n};\n' >"$module/js/form.js"
 printf 'Drupal.behaviors.mymoduleExtra = {\n  attach() {},\n};\n' >"$module/js/extra.js"
+printf 'const mymoduleRoot = 1;\n' >"$module/js/root.js"
 cat >"$module/src/Controller/FormController.php" <<'EOF2'
 <?php
 
@@ -58,13 +66,20 @@ nodes = {n["id"]: n["state"] for n in document["nodes"]}
 assert nodes[library] == "mapped", nodes
 assert nodes["drupal.library::core/drupal"] == "referenced", nodes
 assert f"js.file::{folder}/https://example.com/remote.js" not in nodes, nodes
-for name in ("form", "extra"):
+for name in ("form", "extra", "root"):
     assert nodes[f"js.file::{folder}/js/{name}.js"] == "mapped", nodes
+assert nodes["js.file::web/core/misc/drupal.js"] == "referenced", nodes
+assert nodes["drupal.library::mymodule/remote"] == "mapped", nodes
+assert not any("cdn.example.com" in node for node in nodes), nodes
+skipped = sorted((s["rule"], s["file"]) for s in report["skipped"])
+assert skipped == [("library_script", f"{folder}/mymodule.libraries.yml")], report["skipped"]
 edges = sorted((e["kind"], e["from"], e["to"]) for e in document["edges"])
 assert edges == sorted([
     ("depends_on_library", library, "drupal.library::core/drupal"),
     ("library_includes_script", library, f"js.file::{folder}/js/form.js"),
     ("library_includes_script", library, f"js.file::{folder}/js/extra.js"),
+    ("library_includes_script", library, f"js.file::{folder}/js/root.js"),
+    ("library_includes_script", library, "js.file::web/core/misc/drupal.js"),
     ("script_declares_behavior", f"js.file::{folder}/js/form.js",
      "drupal.js_behavior::mymoduleForm"),
     ("script_declares_behavior", f"js.file::{folder}/js/extra.js",

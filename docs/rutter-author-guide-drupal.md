@@ -204,10 +204,20 @@ check and reads nothing. Check 99m-drupal-hooks proves the rule.
 `drupal_js_basic` joins three things that Drupal joins at run time. A libraries file lists a
 script under `js:`; the rule `library_script` makes a `library_includes_script` edge from the
 library to the script's `js.file` node, and skips a key that starts `/`, `http:` or `https:`.
+Its second edge reads a key that starts with one `/` from the path value `drupal_root`, the
+folder above the first `modules`, `themes` or `profiles` folder.
 `js_basic` makes that node for every script and a `script_declares_function` edge to each function
 in it; `behavior_from_assignment_in_file` makes a `script_declares_behavior` edge to each
 `Drupal.behaviors.name = {...}`. So `periplus` follows library, script, behavior (check
 99w-library-scripts proves the chain).
+
+A library attachment or a `drupalSettings` key in the array form, `'#attached' => ['library' =>
+[...], 'drupalSettings' => [...]]`, is read as text. `drupal_php_text` declares the spans
+`function_body`, whose `name` is the function's name, and `settings_list`, the array after
+`'drupalSettings' =>`. A rule reads the function's name with `{enclosing: function_body, capture:
+name}` and starts its edge at `{template: '{fn}', types: [php.function]}`, so a hook in a
+`.module` file attaches the library or provides the key (check 98g-js-module-attachments proves
+it).
 
 `drupal_basic` links a template to what it names: an include, extends, embed, import or from of a
 `.html.twig` file is a `template_includes` edge, and `theme:name` in an include or embed is a
@@ -231,7 +241,8 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   from its name with underscores written as dashes; `suggests_bundle`, inferred from a template
   named `node--article--teaser` to the bundle `node.article`.
 - `library_includes_stylesheet`, from a library to a `css.file` node for each stylesheet its `css:`
-  groups list, joined with the libraries file's folder, as scripts are.
+  groups list, joined with the libraries file's folder or, for a key that starts with `/`, with
+  the Drupal root, as scripts are.
 - `drupal.form_id`, a node for each literal a form class's `getFormId()` returns; `form_has_id`,
   from that class to it; `config_names_form`, from a configuration object that names a form id,
   such as a CAPTCHA point, to it. Two edges join a configuration file to a form class.
@@ -252,7 +263,8 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   `links_to_path` from a template whose attribute value is a path, as `data-endpoint="/x"`.
   `path_in_script_string` gives `script_links_to_path` from a script's `js.file` node to a path
   it holds in a quoted string, as `"/x"`. Only a path written whole counts: it starts with one
-  `/` and holds no space. `"/x/" + id` links to `/x/` alone, and `/x/{{ id }}` links nowhere.
+  `/` and holds no space. A path joined to another value with `+` on either side, as `"/x/" + id`
+  or `base + "/x/y"`, links nothing, and `/x/{{ id }}` links nowhere.
 
 ## Where to look when the map misses a thing
 

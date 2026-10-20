@@ -25,8 +25,8 @@ edge_kinds:
   to: drupal.url_path
 
 rules:
-# Drupal.behaviors.name = {...}: the behavior name. An arrow function or any other value on the
-# right is not a behavior object and makes nothing.
+# Drupal.behaviors.name = {...}: the behavior name. An arrow function or a function expression on
+# the right is read by the rules below; any other value, such as a variable, makes nothing.
 - rule: behavior_from_assignment
   reads: file
   in: [js_source]
@@ -41,6 +41,38 @@ rules:
   id: {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)$', template: '{behavior}'}
   emits: [{edge: {kind: script_declares_behavior, from: enclosing_file, to: this_node}}]
   confidence: declared
+# Drupal.behaviors.name = (context) => {...}: the behavior name, as for an object.
+# body_child is object, not the function: a function body would end the enclosing-behavior walk
+# at every attach: function () {} or attach: () => {} pair, losing the edges inside it.
+- rule: behavior_from_arrow
+  reads: file
+  in: [js_source]
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: arrow_function}]}
+  id: {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)$', template: '{behavior}'}
+  emits: [{node: {type: drupal.js_behavior}}]
+  confidence: declared
+- rule: behavior_from_arrow_in_file
+  reads: file
+  in: [js_source]
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: arrow_function}]}
+  id: {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)$', template: '{behavior}'}
+  emits: [{edge: {kind: script_declares_behavior, from: enclosing_file, to: this_node}}]
+  confidence: declared
+# Drupal.behaviors.name = function (context) {...}: the behavior name, as for an object.
+- rule: behavior_from_function
+  reads: file
+  in: [js_source]
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: function_expression}]}
+  id: {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)$', template: '{behavior}'}
+  emits: [{node: {type: drupal.js_behavior}}]
+  confidence: declared
+- rule: behavior_from_function_in_file
+  reads: file
+  in: [js_source]
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: function_expression}]}
+  id: {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)$', template: '{behavior}'}
+  emits: [{edge: {kind: script_declares_behavior, from: enclosing_file, to: this_node}}]
+  confidence: declared
 # Drupal.behaviors.other.attach(...) inside a behavior object: that behavior runs the other one.
 - rule: behavior_attach_call
   reads: file
@@ -50,7 +82,10 @@ rules:
   emits: [{edge: {kind: attaches_behavior, from: enclosing_class, to: this_node}}]
   confidence: declared
 # A local script a library lists under js:. The key is the script's path from the libraries file's
-# folder, so that folder joined with the key is the script's path from the project folder.
+# folder, so that folder joined with the key is the script's path from the project folder. A key
+# that starts with one /, such as /core/misc/drupal.js, is joined to the Drupal root instead, by a
+# second edge in this rule, so a library with no such key leaves no skipped row. A file outside the
+# mapped folders gets a referenced node. A URL, //host/x, makes nothing.
 - rule: library_script
   reads: file
   in:
@@ -80,6 +115,16 @@ rules:
         - not_matches: /*
         - not_matches: http:*
         - not_matches: https:*
+  - edge:
+      kind: library_includes_script
+      from: this_node
+      to:
+        from:
+        - each: js.*
+        template: '{drupal_root}{key}'
+        where:
+        - matches: /*
+        - not_matches: //*
   confidence: declared
 # A local stylesheet a library lists under css:, in any group (base, layout, component, state,
 # theme). Read the same way as library_script; the id is the file's path from the project folder.
@@ -112,6 +157,16 @@ rules:
         - not_matches: /*
         - not_matches: http:*
         - not_matches: https:*
+  - edge:
+      kind: library_includes_stylesheet
+      from: this_node
+      to:
+        from:
+        - each: css.*.*
+        template: '{drupal_root}{key}'
+        where:
+        - matches: /*
+        - not_matches: //*
   confidence: declared
 # Each .css file in a module or theme, named by its path from the project folder: the id a
 # library's css: entry builds, so a listed file that exists is a mapped node.
@@ -128,14 +183,16 @@ rules:
 # an edge to the drupal.url_path node route_serves_path meets (drupal_basic url/url.yaml). Read as
 # the type js_text. The string follows a space, (, [, comma, =, : or ?, starts with one / and holds
 # no space, quote, brace or $. So "/", "//cdn.example.com/x" and "/a b" make nothing, and
-# "/my/" + id, a URL joined by +, makes nothing. A string inside a comment or a template literal makes nothing.
+# "/my/" + id or base + "/my/path", a URL joined by + on either side, makes nothing. The + before a
+# string, or before a ( that opens it, is refused at any distance, across a line break too. A string
+# inside a comment or a template literal makes nothing.
 - rule: path_in_script_string
   reads: file
   in: [js_source]
   match:
     file: '*'
     filetype: js_text
-    text: '[\s(\[,=:?]["''](?<path>/[^/\s"''`{}$][^\s"''`{}$]*)["''](?!\s*\+)'
+    text: '(?:(?<![+\s])\s*[(\[,=:?]\s*|(?<![+\s])\s+)["''](?<path>/[^/\s"''`{}$][^\s"''`{}$]*)["''](?!\s*\+)'
   id: {template: '{script}'}
   emits: [{edge: {kind: script_links_to_path, from: this_node, to: {from: {capture: path}}}}]
   confidence: declared
