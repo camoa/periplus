@@ -30,7 +30,7 @@ edge_kinds:
 # A call site $this->helper->run() to Helper::run, when the call's class or its nearest ancestor
 # that declares the property assigns it $this->helper = \Drupal::service('my_module.helper') and
 # a services file gives that service its class. php_basic's calls_through_assigned_property reads
-# the same chain up to the assignment's value. Only the id written in single quotes is read; the
+# the same chain up to the assignment's value. The id is read in single or double quotes; the
 # edge runs from the method around the call, at the call's line. Inferred: the services file, not
 # the call, names the class.
 rules:
@@ -46,7 +46,7 @@ rules:
     - node: 'php.property::{owner}::${member}'
     - node: 'php.member_assignment::{owner}::$this->{member}'
     - edge: assigned_value
-    - id_matches: '=\\?Drupal::service\(''(?<service>[^'']+)''\)$'
+    - id_matches: '=\\?Drupal::service\(["''](?<service>[^"'']+)["'']\)$'
     - node: 'drupal.service::{service}'
     - edge: service_class
     - id_matches: '^php\.type::(?<type>.+)$'

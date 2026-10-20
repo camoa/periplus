@@ -11,7 +11,9 @@ a list of its known gaps.
 ## The rutters
 
 - **PHP:** a method call on an object, `$x->m()`, is not stated, except through a property of
-  `$this` whose type the class declares, which is `inferred`. `use function` aliases do not
+  `$this` whose type the class declares, which is `inferred`. A property typed by a union of two or
+  more class names, `Helper|Other`, gives no edge, and neither does a call in a parent class through
+  a property only a child assigns. `use function` aliases do not
   bind. A call to a PHP built-in function makes nothing, but the names are compared as written:
   `\strlen()` and `StrLen()` still give an unresolved function. A built-in of an extension that
   was not loaded when the list was taken is not listed. A project's own function named like a
@@ -23,7 +25,8 @@ a list of its known gaps.
   bundle config file stays a plain config object and its bundle is `referenced`, with no label.
   Things generated at run time, such as a route from a view, appear as `referenced`. A service or entity type that no mapped file declares, such as `config.factory`
   or `node`, appears as `referenced`, and so does a misspelled name. A service that `get('x')`
-  names on an object written `$container`, `$this->container` or `\Drupal::getContainer()` gives
+  or `?->get('x')` names on an object written `$container`, `$this->container`,
+  `\Drupal::getContainer()`, or `getContainer()` on `$this`, `static` or `self`, gives
   an edge with confidence `inferred`, so a `$container` or `$this->container` that is not Drupal's
   service container gives a false service.
 - **Drupal, hooks:** a function in a module, install, include, theme, profile, `post_update.php` or
@@ -36,26 +39,27 @@ a list of its known gaps.
   the same hook, a `LegacyHook` shim, reads as a second implementation. A function below one that
   carries `ProceduralHookScanStop`, and every function of a module that sets
   `skip_procedural_hook_scan`, still reads as a hook, though Drupal does not scan them. A file
-  named other than its module or theme gives no hook. Nor does a function named with another module's name, such
+  named other than its module gives no hook. Nor does a function named with another module's name, such
   as `othermod_cron` in `mymod.module`. A hook with a variable part keeps it:
   `mymod_form_user_login_form_alter` implements `form_user_login_form_alter`. A function in a plain
   `.php` file other than `post_update.php` or `deploy.php` gives no hook. Each such file leaves two
-  skipped rows in the report. A theme's include file gives hooks only
-  when the theme's folder sits directly below `custom_theme` and is named by its machine name.
+  skipped rows in the report. A theme's include file, and a `.theme` file named other than its
+  theme, such as `includes/content.theme`, is read by the theme's folder name. It gives hooks only
+  when the theme's folder sits directly below `custom_theme` and is named by its machine name. The
+  theme's own `.theme` file leaves two skipped rows.
 - **Drupal, missing results:** a class that extends `ContentEntityBase` with no entity type
   attribute or annotation, such as an abstract base or a bundle class, is not marked as an entity
   class. A service or entity type named by a variable or a concatenation gives no edge and goes
   under skipped, and so does a class constant that no mapped file declares as text. So does
   `parent::X`, even when a mapped file declares it: Drupal reads only `self` and `static` as the
   enclosing class.
-  `getStorage('x')` on an object not named `entityTypeManager` or `$entity_type_manager`,
-  `get('x')` on a container with another name, and other entity type manager methods such as
-  `getHandler('x')` give no edge. `$etm->getStorage('x')` gives no entity type edge. An entity
+  `getStorage('x')` on a property or promoted parameter with no declared type, unless it is named
+  `entityTypeManager`, `get('x')` on a container with another name, and other entity type manager
+  methods such as `getHandler('x')` give no edge. A local variable, such as `$etm->getStorage('x')`
+  on a parameter, gives no entity type edge unless it is named `$entity_type_manager`. An entity
   class is known by its short name, so `User::load(1)` on a module's own `User` class gives a false
-  entity type. The container rule reads
-  only `$container`, `$this->container` and `\Drupal::getContainer()` as written:
-  `$this->getContainer()->get('x')`, `static::getContainer()->get('x')`, a receiver split over
-  lines, `$container?->get('x')` and another letter case, such as `->GET('x')`, give no edge and no
+  entity type. The container rules read
+  `get('x')` in lower case only: another letter case, such as `->GET('x')`, gives no edge and no
   skipped row. Core plugins whose folders the rutter does not name give nothing, such as a views
   argument, sort or display plugin, and so do a views field, filter or style plugin and a mail
   plugin declared by an annotation. A plugin type, its attribute class and its plugin manager get

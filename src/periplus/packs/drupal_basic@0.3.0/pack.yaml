@@ -17,23 +17,26 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   type, a view or form mode a mode_of edge to its entity type, and a display in a mode other than
 #   default an in_mode edge to that mode;
 # - each service that \Drupal::service('x') names in a PHP function or method, as a uses_service
-#   edge; each service that get('x') names on an object written $container, $this->container or
-#   \Drupal::getContainer(), as a uses_service edge with confidence inferred; and each entity type
+#   edge; each service that get('x') or ?->get('x') names on an object written $container,
+#   $this->container, \Drupal::getContainer(), or getContainer() on $this, static or self, as a
+#   uses_service edge with confidence inferred; and each entity type
 #   that \Drupal::entityQuery('x') or \Drupal::entityQueryAggregate('x') names, or that
 #   getStorage('x'), getViewBuilder('x'), getListBuilder('x'), getFormObject('x') or
 #   getAccessControlHandler('x') names on an object written ending in entityTypeManager, written
-#   $entity_type_manager, or written as the container's get('entity_type.manager') or
-#   \Drupal::service('entity_type.manager'), as a uses_entity_type edge. A service or an
-#   entity type that no mapped file declares, such as config.factory or node, ends at a referenced
-#   node: Drupal core and contributed modules are outside the mapped code;
+#   $entity_type_manager, written as the container's get('entity_type.manager') or
+#   \Drupal::service('entity_type.manager'), or reached through a property of $this whose declared
+#   type is EntityTypeManager or EntityTypeManagerInterface, as a uses_entity_type edge. A service
+#   or an entity type that no mapped file declares, such as config.factory or node, ends at a
+#   referenced node: Drupal core and contributed modules are outside the mapped code;
 # - each method that carries a Hook attribute, and each function in a module, install, inc, theme,
 #   profile, post_update.php or deploy.php file whose name starts with the first part of the file
 #   name and an underscore, as an implements_hook edge to the hook the rest of the name gives:
 #   mymod_cron in mymod.module implements cron, mymod_post_update_fix in mymod.post_update.php
 #   implements post_update_NAME, as every update_N function implements the one hook update_N. A
-#   function in an inc file below a custom theme folder, whose name starts with that folder's name
-#   and an underscore, implements a hook the same way: mytheme_preprocess_node in
-#   mytheme/preprocess/node.preprocess.inc implements preprocess_node. A hook found by a
+#   function in an inc file, or a theme file other than the theme's own, below a custom theme
+#   folder, whose name starts with that folder's name and an underscore, implements a hook the
+#   same way: mytheme_preprocess_node in mytheme/preprocess/node.preprocess.inc or in
+#   mytheme/includes/content.theme implements preprocess_node. A hook found by a
 #   function's name has confidence inferred;
 # - a route's methods, its requirements _access, _format, _user_is_logged_in, _csrf_token,
 #   _entity_access and _custom_access, and its options no_cache and _admin_route, as attributes
@@ -114,8 +117,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   a name ending in .html.twig gives a template edge, and only a .html.twig file is read, so
 #   a component's own .twig and story files give none.
 # - A function in a module file named other than its module, such as includes/helpers.inc
-#   holding mymod_ functions, gives no hook, and nor does a theme file of another ending, such as
-#   includes/content.theme. A theme's inc file is read by the name of the folder directly below
+#   holding mymod_ functions, gives no hook. A theme's inc file, and a theme file named other than
+#   its theme, such as includes/content.theme, is read by the name of the folder directly below
 #   custom_theme, so a theme nested deeper, or one whose folder name is not its machine name,
 #   gives no hook. Nor does a function named with another module's name, such as
 #   othermod_cron in mymod.module, which Drupal counts as a hook of othermod.
@@ -143,10 +146,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   MyEntity::loadMultiple() and Message::load(1) give none. Each such call is listed as skipped.
 #   An entity class is known by its short name, so a project class named as a core one, such as
 #   a module's own User class, gives a false uses_entity_type edge.
-# - The container rule reads only $container, $this->container and \Drupal::getContainer() as
-#   written. $this->getContainer()->get('x'), static::getContainer()->get('x'), a receiver split
-#   over lines, $container?->get('x') and another letter case, such as ->GET('x'), give no edge
-#   and no skipped row.
+# - The container rules read get('x') in lower case only: another letter case, such as
+#   ->GET('x'), gives no edge and no skipped row.
 # - A contributed module's bundle config file, such as paragraphs.paragraphs_type.text or
 #   eck.eck_type.my_type.my_bundle, stays a plain config object. Its bundle is
 #   referenced, with no label and no configured_by edge, and a type that no field or display names
@@ -259,8 +260,8 @@ files:
     # php_basic's type, given the path value extension: the first part of a module, install,
     # include, theme, profile, post_update.php or deploy.php file's name, which its procedural
     # hook functions start with. Absent for any other ending. And theme_name: the name of the
-    # folder directly below custom_theme that holds the file, which a theme's included files
-    # name their functions with. A type read as a tree needs its pack to pin the grammar,
+    # folder directly below custom_theme that holds an inc file, or a theme file other than the
+    # theme's own, which a theme's included files name their functions with. A type read as a tree needs its pack to pin the grammar,
     # php_basic's pin repeated.
     php:
       endings: [module, install, inc, theme, profile]
@@ -270,7 +271,7 @@ files:
           pattern: '^(?:.*/)?(?<name>[^/.]+)\.(?:(?:[^/]+\.)?(?:module|install|inc|theme|profile)|post_update\.php|deploy\.php)$'
           template: '{name}'
         theme_name:
-          pattern: '^(?<name>[^/]+)/(?:[^/]+/)*[^/]+\.inc$'
+          pattern: '^(?<name>[^/]+)/(?!(?P=name)\.theme$)(?:[^/]+/)*[^/]+\.(?:inc|theme)$'
           template: '{name}'
           relative_to: custom_theme
 

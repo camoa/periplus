@@ -112,7 +112,8 @@ rules:
 # The type a class declares for a property, <class>::$<name>::<type>, resolved through the file's
 # imports and namespace: written on the property, private Mailer $mailer; on a promoted constructor
 # parameter; or in the @var line of the docblock before the property. A nullable class type,
-# ?Mailer, gives the class. A scalar, ?int or union type on the property gives none, and so does
+# ?Mailer, gives the class, and so does a union of one class name with null, false or scalars,
+# Mailer|null. A scalar, ?int, or a union of two class names, Mailer|Other, gives none, and so does
 # a @var of several types or of an array; a @var of a scalar, such as string, is read as a class
 # name. A declaration of several properties in one
 # statement names its first only. find_structure.yaml's property_typed_as reaches each.
@@ -166,6 +167,40 @@ rules:
     name_child: name
     filetype: php
     where: [{has_child: optional_type}]
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.property_type}}]
+  confidence: declared
+
+# {qualified: type} takes a union's first class-like name and skips null, false and scalars, so the
+# name_matches guard admits a union of one class name among those, in any order, and refuses two.
+- rule: find_union_property_type
+  reads: file
+  in: [source]
+  match:
+    declaration: property_declaration
+    name_child: [property_element, name]
+    filetype: php
+    where:
+    - has_child: union_type
+    - name_matches: {child: type, pattern: '(?i)^(?:(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable)\s*\|\s*)*\\?[A-Za-z_][\w\\]*(?:\s*\|\s*(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable))*$'}
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.property_type}}]
+  confidence: declared
+
+- rule: find_union_promoted_property_type
+  reads: file
+  in: [source]
+  match:
+    declaration: property_promotion_parameter
+    name_child: name
+    filetype: php
+    where:
+    - has_child: union_type
+    - name_matches: {child: type, pattern: '(?i)^(?:(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable)\s*\|\s*)*\\?[A-Za-z_][\w\\]*(?:\s*\|\s*(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable))*$'}
   id:
     from: [enclosing_type, declared_name, {qualified: type}]
     template: "{enclosing_type}::{declared_name}::{type}"

@@ -24,8 +24,9 @@ edge_kinds:
 # same way. Inferred, because a name is a convention.
 #
 # Gaps: any prefixed function reads as a hook, such as the form callback mymod_settings_submit,
-# the helper mymod_build_list or mymod_update_NEXT. A file named other than its module or theme,
-# such as includes/content.theme holding mytheme_ functions, gives no hook. A hook with a variable
+# the helper mymod_build_list or mymod_update_NEXT. A file named other than its module gives no
+# hook. A theme file named other than its theme, such as includes/content.theme holding mytheme_
+# functions, is read by the theme's folder name, by hook_theme_include.yaml. A hook with a variable
 # part keeps it, so mymod_form_user_login_form_alter names the hook form_user_login_form_alter. A
 # function in a file of another ending leaves two skipped rows.
 

@@ -8,6 +8,10 @@
 # map pass; go() keeps its call site and gets no calls edge. The call sites take their method
 # through enclosing_method and the parameter its type through {qualified: type}: without either,
 # no edge is made. No node of the parts' types is unresolved.
+# ToolParent declares $tool untyped and calls $this->tool->go(); ToolChild assigns it from a
+# parameter typed Tool and calls $this->tool->work(). calls_through_property_assigned_here gives
+# ToolChild::useTool a calls edge to Tool::work; ToolParent::useParent gets none. ToolOwner
+# declares and assigns its own $tool from Tool: its one edge carries rows from both map rules.
 set -euo pipefail
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -30,6 +34,77 @@ class Helper
 {
     public function run()
     {
+    }
+}
+PHP
+cat >"$module/src/Tool.php" <<'PHP'
+<?php
+
+namespace Drupal\my_module;
+
+class Tool
+{
+    public function go()
+    {
+    }
+
+    public function work()
+    {
+    }
+}
+PHP
+cat >"$module/src/ToolParent.php" <<'PHP'
+<?php
+
+namespace Drupal\my_module;
+
+class ToolParent
+{
+    protected $tool;
+
+    public function useParent()
+    {
+        $this->tool->go();
+    }
+}
+PHP
+toolchild="$module/src/ToolChild.php"
+cat >"$toolchild" <<'PHP'
+<?php
+
+namespace Drupal\my_module;
+
+class ToolChild extends ToolParent
+{
+    public function __construct(Tool $tool)
+    {
+        $this->tool = $tool;
+    }
+
+    public function useTool()
+    {
+        $this->tool->work();
+    }
+}
+PHP
+toolowner="$module/src/ToolOwner.php"
+cat >"$toolowner" <<'PHP'
+<?php
+
+namespace Drupal\my_module;
+
+class ToolOwner
+{
+    protected $tool;
+
+    public function __construct(Tool $tool)
+    {
+        $this->tool = $tool;
+    }
+
+    public function useTool()
+    {
+        $this->tool->work();
     }
 }
 PHP
@@ -87,12 +162,12 @@ PHP
 
 (cd "$site" && "$PERIPLUS" map --output "$work/map.json" --format json >"$work/report.json")
 
-python3 - "$work" "$child" <<'PY'
+python3 - "$work" "$child" "$toolchild" "$toolowner" <<'PY'
 import json
 import os
 import sys
 
-work, child = sys.argv[1], sys.argv[2]
+work, child, toolchild, toolowner = sys.argv[1:5]
 lines = open(child).read().splitlines()
 document = json.load(open(os.path.join(work, "map.json")))
 report = json.load(open(os.path.join(work, "report.json")))
@@ -111,8 +186,9 @@ assert calls == [
     ("php.method::Drupal\\my_module\\Mail\\Mailer::send", [line["mailer->send"]], ["calls_through_assigned_property"]),
 ], calls
 
-sites = {node["id"]: node["state"] for node in document["nodes"] if node["type"] == "php.call_site"}
 site = "php.call_site::Drupal\\my_module\\Controller\\ChildController::notify::$this->{}"
+sites = {node["id"]: node["state"] for node in document["nodes"]
+         if node["type"] == "php.call_site" and node["id"].startswith(site[:-2])}
 assert sites == {site.format(call): "mapped" for call in line}, sites
 edges = {(edge["kind"], edge["from"], edge["to"]) for edge in document["edges"]}
 untyped = site.format("other->go")
@@ -129,10 +205,27 @@ parts = {"php.property", "php.parameter", "php.parameter_type", "php.member_assi
 states = {(node["type"], node["state"]) for node in document["nodes"] if node["type"] in parts}
 assert states == {(kind, "mapped") for kind in parts}, states
 
+work_line = {path: open(path).read().splitlines().index("        $this->tool->work();") + 1
+             for path in (toolchild, toolowner)}
+tool_calls = sorted(
+    (edge["from"], edge["to"], [place["line"] for place in edge["locations"]],
+     sorted((row["rule"], row["confidence"]) for row in edge["provenance"]))
+    for edge in document["edges"]
+    if edge["kind"] == "calls" and edge["from"].startswith("php.method::Drupal\\my_module\\Tool")
+)
+assert tool_calls == [
+    ("php.method::Drupal\\my_module\\ToolChild::useTool", "php.method::Drupal\\my_module\\Tool::work",
+     [work_line[toolchild]], [("calls_through_property_assigned_here", "inferred")]),
+    ("php.method::Drupal\\my_module\\ToolOwner::useTool", "php.method::Drupal\\my_module\\Tool::work",
+     [work_line[toolowner]],
+     [("calls_through_assigned_property", "inferred"), ("calls_through_property_assigned_here", "inferred")]),
+], tool_calls
+
 passes = [(row["pass"], sorted((fired["pack"], fired["rule"], fired["fires"]) for fired in row["fired"]))
           for row in report["map_passes"]]
 assert passes == [
-    (1, [("drupal_basic", "calls_through_service_property", 1), ("php_basic", "calls_through_assigned_property", 1)]),
+    (1, [("drupal_basic", "calls_through_service_property", 1), ("php_basic", "calls_through_assigned_property", 2),
+         ("php_basic", "calls_through_property_assigned_here", 2)]),
     (2, []),
 ], passes
 PY

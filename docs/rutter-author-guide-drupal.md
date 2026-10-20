@@ -177,15 +177,15 @@ the key itself, the service's name.
 
 `drupal_basic` claims the endings module, install, inc, theme and profile for PHP. `match.ending`
 narrows a rule to the files of one ending, or of any in a list, written without the dot. With no
-`ending`, every file the type claims passes. The rule for a theme's include files reads only `.inc`
-files, so the theme's own `.theme` file leaves no skipped row:
+`ending`, every file the type claims passes. The rule for a theme's include files reads `.inc` and
+`.theme` files. The theme's own `.theme` file has no `theme_name`, so there it leaves one skipped row:
 
 ```yaml drupal_basic@0.3.0/hook/hook_theme_include.yaml
 - rule: hook_from_theme_include
   reads: file
   in:
   - theme_root
-  match: {declaration: function_definition, name_child: name, filetype: php, ending: inc}
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: [inc, theme]}
   id: {from: declared_name, pattern: '^{theme_name}_(?<hook>\w+)$', template: '{hook}'}
   emits:
   - node:
@@ -237,6 +237,14 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   such as a CAPTCHA point, to it. Two edges join a configuration file to a form class.
 - `hook_acts_on_entity_type`, inferred from a hook named `<extension>_<type>_<operation>`, such as
   `mymod_node_presave`, to the entity type `node`.
+- `drupal.manager_call`, a node for each `getStorage`, `getViewBuilder`, `getListBuilder`,
+  `getFormObject` or `getAccessControlHandler` call on a property of `$this`, whose id carries the
+  call's argument text, as `Drupal\mymod\Typed::run::$this->etm->getStorage('node')`;
+  `manager_call_in`, from that node to the method around it. The map rule
+  `entity_call_through_typed_manager` reads the property's declared type, and when it is
+  `EntityTypeManager` or `EntityTypeManagerInterface` gives an inferred `uses_entity_type` edge from
+  the method to the entity type the quoted first argument names (check 99w-drupal-typed-manager
+  proves it).
 - `drupal.url_path`, a node for each path as written; `route_serves_path`, from a route to its
   `path`; `links_to_path`, from the class or function around `Url::fromUserInput('/x')` or
   `Url::fromUri('internal:/x')` to that path. A route and a link meet only on the same text.

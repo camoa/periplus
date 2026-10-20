@@ -27,10 +27,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #
 # Missing results:
 # - A method call on an object, $x->m(), makes nothing, except a call on a property of $this
-#   whose type the same class declares, or that the class or its nearest ancestor declaring the
-#   property assigns from a parameter typed by a class name: only plain function calls, static
-#   calls and those are read. A nullable or union parameter type, or a property assigned in a class
-#   other than the one declaring it, gives no edge; the call keeps its php.call_site node.
+#   whose type the same class declares, or that the calling class, or its nearest ancestor
+#   declaring the property, assigns from a parameter typed by a class name: only plain function
+#   calls, static calls and those are read. A property typed by a union of two or more class names,
+#   Helper|Other, gives no edge, and neither does a call in a parent class through a property only
+#   a child assigns; the call keeps its php.call_site node.
 # - A use function alias does not bind.
 pack: php_basic
 version: 0.2.0

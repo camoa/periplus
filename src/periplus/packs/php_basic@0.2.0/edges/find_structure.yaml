@@ -601,6 +601,41 @@ rules:
   emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
   confidence: declared
 
+# A union with one class name, Mailer|null; the guard is find_union_property_type's.
+- rule: union_property_typed_as
+  reads: file
+  in: [source]
+  match:
+    declaration: property_declaration
+    name_child: [property_element, name]
+    filetype: php
+    where:
+    - has_child: union_type
+    - name_matches: {child: type, pattern: '(?i)^(?:(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable)\s*\|\s*)*\\?[A-Za-z_][\w\\]*(?:\s*\|\s*(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable))*$'}
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+    normalize: [{replace: '::[^:]+$', with: ''}]
+  emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
+  confidence: declared
+
+- rule: union_promoted_property_typed_as
+  reads: file
+  in: [source]
+  match:
+    declaration: property_promotion_parameter
+    name_child: name
+    filetype: php
+    where:
+    - has_child: union_type
+    - name_matches: {child: type, pattern: '(?i)^(?:(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable)\s*\|\s*)*\\?[A-Za-z_][\w\\]*(?:\s*\|\s*(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable))*$'}
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+    normalize: [{replace: '::[^:]+$', with: ''}]
+  emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
+  confidence: declared
+
 # The docblock source is only a condition here: a property with no @var line gets no edge.
 - rule: var_property_typed_as
   reads: file
@@ -664,6 +699,27 @@ rules:
     - edge: assigned_value
     - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
     - node: 'php.parameter::{owner}::{setter}::${parameter}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+# The same walk when the call's own class assigns the property, whichever class declares it: a
+# child assigning a property its parent declares. A class that declares and assigns its own
+# property gets this rule's row and calls_through_assigned_property's on one edge. A parent's call
+# through a property only a child assigns gets no edge: no follow step walks an edge backwards.
+- rule: calls_through_property_assigned_here
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.member_assignment::{class}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
+    - node: 'php.parameter::{class}::{setter}::${parameter}'
     - edge: parameter_typed_as
     - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
     - node: 'php.call_site::{site}'

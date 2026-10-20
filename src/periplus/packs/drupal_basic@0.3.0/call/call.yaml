@@ -13,17 +13,31 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #   only when their object is written ending in entityTypeManager, as $this->entityTypeManager or
 #   \Drupal::entityTypeManager(); written $entity_type_manager; or written as the container's
 #   get('entity_type.manager') or \Drupal::service('entity_type.manager') with no space or line
-#   break inside. A manager under another name, as $etm, makes nothing. Other manager methods
-#   that take an entity type id, such as getHandler and getDefinition, make nothing.
+#   break inside. A manager under another name, reached through a property or promoted parameter
+#   of $this whose declared type is EntityTypeManager or EntityTypeManagerInterface, as
+#   $this->etm, joins by that type; one with no declared type, and a local variable such as $etm,
+#   make nothing. Other manager methods that take an entity type id, such as getHandler and
+#   getDefinition, make nothing.
 # - A \Drupal:: shortcut such as \Drupal::currentUser(), and a static call on an entity class such
 #   as User::load(1), give an edge only for a name pack.yaml's tables list. An entity class is
 #   known by its short name, so a project class named as a core one, such as Drupal\mymod\Node,
 #   gives a false entity type.
 # - get on the service container counts only when its object is written $container,
-#   $this->container or \Drupal::getContainer(). A container under another name makes nothing, and
-#   a $container or $this->container that is not Drupal's service container gives a false service.
+#   $this->container, \Drupal::getContainer(), or getContainer() on $this, static or self, through
+#   -> or ?->. A container under another name and another letter case, such as ->GET('x'), make
+#   nothing, and a $container or $this->container that is not Drupal's service container gives a
+#   false service.
+
+# A call on a property of $this to a manager method that takes an entity type id, with its
+# argument list as written: <class>::<method>::$this-><name>-><called method>(<arguments>).
+node_types:
+- name: drupal.manager_call
+  id_namespace: drupal.manager_call
 
 edge_kinds:
+- kind: manager_call_in
+  from: drupal.manager_call
+  to: php.method
 - kind: uses_service
   from: [php.function, php.method]
   to: drupal.service
@@ -50,8 +64,9 @@ rules:
       to: {from: {argument: 0}, types: [drupal.service]}
   confidence: declared
 
-# $container->get('my_module.helper') in create(), and $this->container->get('path.current') in a
-# test. Inferred: the object's name, not its type, says it is the service container.
+# $container->get('my_module.helper') in create(), $this->container->get('path.current') in a
+# test, and $this->getContainer()->get('x'), static::getContainer() or self::getContainer().
+# Inferred: the object's name, not its type, says it is the service container.
 - rule: container_get_call
   reads: file
   in: [source]
@@ -60,7 +75,25 @@ rules:
     name_child: name
     filetype: php
     where:
-    - name_matches: {child: object, pattern: '\$container|\$this->container|\\?Drupal::getContainer\(\)'}
+    - name_matches: {child: object, pattern: '\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\)'}
+    - name_matches: {child: name, pattern: get}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.service]}
+  confidence: inferred
+
+# $container?->get('my_module.helper'), as container_get_call.
+- rule: container_nullsafe_get_call
+  reads: file
+  in: [source]
+  match:
+    reference: nullsafe_member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\)'}
     - name_matches: {child: name, pattern: get}
   emits:
   - edge:
@@ -182,6 +215,96 @@ rules:
       kind: uses_entity_type
       from: enclosing_declaration
       to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+# $this->etm->getStorage('node') and the four handler methods, on any property of $this, as a
+# drupal.manager_call node that carries the argument list, and its edge to the method around it.
+# entity_call_through_typed_manager reads the property's declared type.
+- rule: manager_call
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this->\w+'}
+    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name, arguments]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
+  emits: [{node: {type: drupal.manager_call}}]
+  confidence: declared
+
+- rule: manager_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this->\w+'}
+    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name, arguments]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
+  emits: [{edge: {kind: manager_call_in, from: this_node, to: enclosing_method}}]
+  confidence: declared
+
+# $this->etm?->getStorage('node'), as manager_call.
+- rule: manager_nullsafe_call
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this->\w+'}
+    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name, arguments]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
+  emits: [{node: {type: drupal.manager_call}}]
+  confidence: declared
+
+- rule: manager_nullsafe_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this->\w+'}
+    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name, arguments]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
+  emits: [{edge: {kind: manager_call_in, from: this_node, to: enclosing_method}}]
+  confidence: declared
+
+# A manager call to the entity type its first argument names in quotes, when the call's class or
+# its nearest ancestor that declares the property types it EntityTypeManager or
+# EntityTypeManagerInterface: on the property or on a promoted constructor parameter. The edge runs
+# from the method around the call, at the call's line. Inferred, as storage_call: the declared type
+# is a claim about what runs.
+- rule: entity_call_through_typed_manager
+  reads: map
+  match:
+    node_type: drupal.manager_call
+    where: [{id_matches: '^drupal\.manager_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->\w+\(\s*[''"](?<entity>\w+)[''"].*\))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_typed_as
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::\\?(?:Drupal\\Core\\Entity\\)?EntityTypeManager(?:Interface)?$'
+    - node: 'drupal.manager_call::{call}'
+    - edge: manager_call_in
+  emits: [{edge: {kind: uses_entity_type, from: matched_node, to: {template: "{entity}", types: [drupal.entity_type]}}}]
   confidence: inferred
 
 # \Drupal::logger('my_module'), \Drupal::currentUser() and the other shortcuts, to the service the

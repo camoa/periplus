@@ -374,6 +374,18 @@ It goes up `inherits` from the call's class to the class that declares the prope
 call site node and gets no `calls` edge and no skipped row. Check 97t-typed-property-calls proves
 the three forms.
 
+A nullable type, `?Mailer`, and a union of one class name with null, false or scalars, such as
+`Mailer|null` or `string|Mailer`, also give the class. `find_nullable_property_type` and its
+promoted twin gate on `has_child: optional_type`; `find_union_property_type` and
+`find_union_promoted_property_type` gate on `has_child: union_type`. `{qualified: type}` on a union
+takes its first class-like name and skips null, false and scalars, so `Mailer|Other` would join
+`Mailer`. The union rules therefore add a guard, a `name_matches` on the `type` child that admits
+one class-like name among `null`, `false`, `true`, `int`, `float`, `string`, `bool`, `array`,
+`iterable`, `mixed` and `callable`, in any order. `union_property_typed_as` and
+`union_promoted_property_typed_as` carry the same gate and guard to the property. A union of two or
+more class names makes no node, no edge and no skipped row. Check 97v-union-property-calls proves
+the union shapes.
+
 A property that a constructor assigns from a typed parameter has no declared type. `php_basic`
 finds it the same way: small declaration rules state each part at its own line, and one
 `reads: map` rule joins them. The
@@ -416,11 +428,18 @@ that class's assignment of it, to the assigned parameter of the assigning method
 Every step names a whole id with `node:` or follows an edge, because a follow pattern cannot name
 an earlier capture. The `calls` edge runs from the method around the call to `<type>::<method>`,
 at the call site's line, inferred. `drupal_basic@0.3.0/service` holds the same walk for a
-property assigned `\Drupal::service('<id>')`: it follows `service_class` from that service to its
-class. A nullable or union parameter type, a service id in double quotes, an assignment in a
-class other than the one declaring the property, and a property set in `create()` from
-`$container->get('<id>')` give no edge. Such a call keeps its call site node, with no `calls`
-edge. Check 97s-inherited-property-calls proves the chain.
+property assigned `\Drupal::service('<id>')`, in single or double quotes: it follows
+`service_class` from that service to its class.
+
+`calls_through_property_assigned_here` is the same walk without the `php.type` node, the
+`ancestors` step, the owner `id_matches` and the property node. It follows
+`php.member_assignment::{class}::$this->{member}` in the calling class itself, so a child that
+assigns a property its parent declares joins its own calls. A class that declares and assigns its
+own property is matched by both map rules, and its edge carries two provenance rows. A call in a
+parent class through a property only a child assigns gives no edge: no follow step walks an edge
+backwards. A property typed by a union of two or more class names gives no edge either, and
+neither does a property set in `create()` from `$container->get('<id>')`. Such a call keeps its
+call site node, with no `calls` edge. Check 97s-inherited-property-calls proves the chain.
 
 ## Keys the schemas accept and the engine does not run
 
