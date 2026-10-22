@@ -364,9 +364,9 @@ The pytest suite holds 288 tests. `scripts/demo.sh` runs the 53 end-to-end check
 `scripts/demo.d` and stops at the first failure. Each check maps a small project and compares the
 result with what it expects.
 
-The CI workflow, `.github/workflows/checks.yml`, installs the package with its `dev` extra only.
-It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates every bundled pack. It
-does not run the end-to-end checks, and it never maps a Go project. The workflow has not run yet.
+The CI workflow, `.github/workflows/checks.yml`, installs the package with its `dev`
+and `js` extras for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
+every bundled pack. It does not run the end-to-end checks, and it never maps a Go project.
 
 To propose a change, read [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
