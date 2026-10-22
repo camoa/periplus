@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGE = ROOT / "docs" / "map-report-guide.md"
 README = ROOT / "README.md"
 CHECK = ROOT / "scripts" / "demo.d" / "99zd-map-report-guide.sh"
-PERIPLUS = ROOT / ".venv" / "bin" / "periplus"
+# The tool beside the interpreter running the tests, as test_map_report_guide_decisions.py takes it:
+# CI installs the package into the runner's interpreter and has no .venv.
+PERIPLUS = Path(sys.executable).parent / "periplus"
 
 FENCE = r"```[^\n]*\n(?P<body>.*?)^```$"
 FENCE_RE = re.compile(r"^```[^\n]*\n.*?^```$", re.M | re.S)
