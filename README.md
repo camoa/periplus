@@ -237,6 +237,7 @@ from this file and compares the map with the lines above.
 | [`docs/rutter-author-guide-imports.md`](docs/rutter-author-guide-imports.md) | Import paths and a call's arguments. |
 | `examples/second-stack/packs` | Three working text rutters to copy: `python_text`, `typer_text` and `speckitty`. |
 | `periplus validate <pack>` | Checks one rutter's files. It names each disagreement with the schemas, by file and place. |
+| [`docs/map-report-guide.md`](docs/map-report-guide.md) | Reading the map report: each part in the order to read it, what it means, and what to do when it is not empty. |
 
 A parse-tree rutter pins its grammar under `grammar` in `pack.yaml`, as `php_basic` does.
 Periplus installs the PHP grammar, and the Go grammar with the `go` extra. Another language needs
