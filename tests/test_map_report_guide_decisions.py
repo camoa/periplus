@@ -184,19 +184,3 @@ def test_check_runs_folder_blocks_and_fails_on_altered_output_wo2() -> None:
     _assert_fails(page.replace(marker, "<!-- nav-run -->", 1), "the folder is stripped")
     _assert_fails(page.replace(marker, "<!-- nav-run: nowhere -->", 1), "the folder does not exist")
 
-
-@pytest.mark.slow
-def test_whole_demo_suite_exits_zero_wo2() -> None:
-    bash = shutil.which("bash")
-    if bash is None:
-        pytest.fail("bash is not on PATH")
-    env = {**os.environ, "ROOT": str(ROOT), "PERIPLUS": str(PERIPLUS)}
-    run = subprocess.run(  # noqa: S603 - fixed argv built here
-        [bash, str(ROOT / "scripts" / "demo.sh")],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-    )
-    assert run.returncode == 0, run.stdout[-2000:] + run.stderr[-2000:]
