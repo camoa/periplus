@@ -1,0 +1,26 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.2.0] - 2026-10-23
+
+The first tagged release.
+
+### Added
+
+- The mapper engine and the command line tool, with `periplus init`, `periplus status`, `periplus spec`, `periplus validate` and `periplus map`.
+- Bundled rutters for PHP, Drupal, Drupal JS, Twig, YAML, Go and Laravel; the Drupal, PHP, Twig, YAML and Drupal JS rutters were rebuilt on a large Drupal site.
+- `periplus update`, which moves a project's pins to the installed rutters.
+- Install carries the tree's rutters and prints their digest.
+- Engine rule abilities: pack tables as a rule step, class constants as call arguments, `match.ending` and boundary lists.
+- File-level node links for scripts, styles, templates, config, hooks, forms, service calls and URLs.
+- Map navigation commands: `periplus types`, `periplus find`, `periplus show`, `periplus neighbors`, `periplus affected` and `periplus path`, with text or JSON output.
+- `periplus check-map`, which runs the full schema check on a written map.
+- Map rules that run in passes, so rutter rules join property calls on their own.
+- Drupal, PHP and Drupal JS rutter rules for attachments, settings, behaviors, paths and libraries.
+- Documentation: the rutter author guide, the navigation guide, the map report guide, the known limitations page and the contributor page.
+- `periplus validate` takes `name@version` and says which copy of the rutter it checks.
+- The licence is Apache 2.0.
