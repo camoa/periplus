@@ -12,7 +12,7 @@ The first tagged release.
 ### Added
 
 - The mapper engine and the command line tool, with `periplus init`, `periplus status`, `periplus spec`, `periplus validate` and `periplus map`.
-- Bundled rutters for PHP, Drupal, Drupal JS, Twig, YAML, Go and Laravel; the Drupal, PHP, Twig, YAML and Drupal JS rutters were rebuilt on a large Drupal site.
+- Twenty-four bundled rutters: five reference packs (php, drupal, twig, yaml, go), the language and framework rutters (php_basic, drupal_basic, drupal_js_basic, js_basic, twig_basic, yaml_basic, go_basic, laravel_basic), and eleven rutters for contributed Drupal modules (advancedqueue, ai, config_pages, crop, drush, eck, paragraphs, profile, salesforce, twig_tweak, webform). The Drupal, PHP, Twig, YAML and Drupal JS rutters were rebuilt on a large Drupal site.
 - `periplus update`, which moves a project's pins to the installed rutters.
 - Install carries the tree's rutters and prints their digest.
 - Engine rule abilities: pack tables as a rule step, class constants as call arguments, `match.ending` and boundary lists.
