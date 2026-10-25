@@ -79,7 +79,7 @@ def _in_section(needle: str, *pairs: tuple[str, str], word: bool = False) -> str
     return page.replace(section, mutated, 1)
 
 
-def _check_rc(text: str) -> int:
+def _check_rc(text: str, blocks: int | str | None = None) -> int:
     bash = shutil.which("bash")
     if bash is None:
         pytest.fail("bash is not on PATH")
@@ -87,6 +87,8 @@ def _check_rc(text: str) -> int:
         doc = Path(tmp) / "page.md"
         doc.write_text(text, encoding="utf-8")
         env = {**os.environ, "ROOT": str(ROOT), "PERIPLUS": str(PERIPLUS), "GUIDE_DOC": str(doc)}
+        if blocks is not None:
+            env["GUIDE_BLOCKS"] = str(blocks)
         run = subprocess.run(  # noqa: S603 - fixed argv built here
             [bash, str(CHECK)],
             cwd=ROOT,
@@ -94,46 +96,66 @@ def _check_rc(text: str) -> int:
             capture_output=True,
             text=True,
             stdin=subprocess.DEVNULL,
+            timeout=60,
         )
     return run.returncode
 
 
-def _assert_fails(text: str, label: str) -> None:
-    rc = _check_rc(text)
+def _assert_fails(text: str, label: str, blocks: int | str) -> None:
+    rc = _check_rc(text, blocks=blocks)
     assert rc not in (0, 127), f"check did not fail when {label} (exit {rc})"
 
 
 @pytest.mark.criterion(id="c2")
-def test_check_fails_when_a_limits_item_is_missing_from_the_section_c2() -> None:
+def test_check_fails_when_a_limits_item_is_missing_from_the_section_c2(
+    guide_real_page_check: subprocess.CompletedProcess[str],
+) -> None:
     page = _page()
     anchor = "known-limitations.md"
-    assert _check_rc(page) == 0, "check fails on the real page"
-    _assert_fails(_prose_replace(page, anchor, "known-limits-x.md"), "the link is gone")
-    _assert_fails(_in_section(anchor, ("skipped", "omitted"), word=True), "skipped is not named")
-    _assert_fails(_in_section(anchor, ("zero_fires", "no_fires")), "zero_fires is not named")
+    control = guide_real_page_check
+    assert control.returncode == 0, (
+        "check fails on the real page: " + control.stdout + control.stderr
+    )
+    _assert_fails(_prose_replace(page, anchor, "known-limits-x.md"), "the link is gone", "none")
     _assert_fails(
-        _in_section(anchor, ("path_in_script_string", "rule_one")), "path_in_script_string is gone"
+        _in_section(anchor, ("skipped", "omitted"), word=True), "skipped is not named", "none"
+    )
+    _assert_fails(
+        _in_section(anchor, ("zero_fires", "no_fires")), "zero_fires is not named", "none"
+    )
+    _assert_fails(
+        _in_section(anchor, ("path_in_script_string", "rule_one")),
+        "path_in_script_string is gone",
+        "none",
     )
     _assert_fails(
         _in_section(anchor, ("setting_attached_in_array", "rule_two")),
         "setting_attached_in_array is gone",
+        "none",
     )
 
 
 @pytest.mark.criterion(id="c3")
-def test_check_fails_when_a_placement_item_is_missing_from_the_section_c3() -> None:
-    page = _page()
+def test_check_fails_when_a_placement_item_is_missing_from_the_section_c3(
+    guide_real_page_check: subprocess.CompletedProcess[str],
+) -> None:
     anchor = "event_from_data_track"
-    assert _check_rc(page) == 0, "check fails on the real page"
-    _assert_fails(_in_section(anchor, (".periplus/packs", ".periplus/rutters")), "packs is gone")
+    control = guide_real_page_check
+    assert control.returncode == 0, (
+        "check fails on the real page: " + control.stdout + control.stderr
+    )
+    _assert_fails(
+        _in_section(anchor, (".periplus/packs", ".periplus/rutters")), "packs is gone", "none"
+    )
     _assert_fails(
         _in_section(anchor, ("drupal_js_basic", "other_pack"), ("drupal_basic", "other_base")),
         "no bundled rutter is named",
+        "none",
     )
     _assert_fails(
-        _in_section(anchor, ("path_in_script_string", "rule_one")), "bundled example gone"
+        _in_section(anchor, ("path_in_script_string", "rule_one")), "bundled example gone", "none"
     )
-    _assert_fails(_in_section(anchor, (anchor, "rule_two")), "project-only example gone")
+    _assert_fails(_in_section(anchor, (anchor, "rule_two")), "project-only example gone", "none")
 
 
 def _broken_run(page: str) -> str:
@@ -144,17 +166,23 @@ def _broken_run(page: str) -> str:
 
 
 @pytest.mark.criterion(id="c4")
-def test_check_fails_when_the_quoted_refusal_or_exit_code_differs_c4() -> None:
+def test_check_fails_when_the_quoted_refusal_or_exit_code_differs_c4(
+    guide_real_page_check: subprocess.CompletedProcess[str],
+) -> None:
     page = _page()
     block = _broken_run(page)
-    assert _check_rc(page) == 0, "check fails on the real page"
+    control = guide_real_page_check
+    assert control.returncode == 0, (
+        "check fails on the real page: " + control.stdout + control.stderr
+    )
     assert "(exit 26)" in block, "page does not name exit 26"
+    number = [m.group(1) for m in _RUN.finditer(page)].index("broken")
     lines = block.split("\n")
     assert len(lines) >= 6, "block holds no message line"
     changed = [*lines[:-3], lines[-3] + " (altered)", *lines[-2:]]
-    _assert_fails(page.replace(block, "\n".join(changed), 1), "the quoted message differs")
+    _assert_fails(page.replace(block, "\n".join(changed), 1), "the quoted message differs", number)
     _assert_fails(
-        page.replace(block, block.replace("(exit 26)", "(exit 27)"), 1), "exit code differs"
+        page.replace(block, block.replace("(exit 26)", "(exit 27)"), 1), "exit code differs", number
     )
 
 
@@ -171,16 +199,24 @@ def test_main_project_pins_myproject_and_shows_its_node_wo2() -> None:
     assert any("myproject.event::card-open" in body for _, body in _runs(_page()))
 
 
-def test_check_runs_folder_blocks_and_fails_on_altered_output_wo2() -> None:
+def test_check_runs_folder_blocks_and_fails_on_altered_output_wo2(
+    guide_real_page_check: subprocess.CompletedProcess[str],
+) -> None:
     page = _page()
     folder_blocks = [m.group(0) for m in _RUN.finditer(page) if m.group(1) == "joined-only"]
     assert folder_blocks, "page uses no folder marker"
-    assert _check_rc(page) == 0, "check fails on the real page"
+    control = guide_real_page_check
+    assert control.returncode == 0, (
+        "check fails on the real page: " + control.stdout + control.stderr
+    )
     block = folder_blocks[0]
+    number = [m.group(1) for m in _RUN.finditer(page)].index("joined-only")
     altered = block[: block.rindex("\n```")] + "\naltered line" + block[block.rindex("\n```") :]
-    _assert_fails(page.replace(block, altered, 1), "a folder block's output is altered")
+    _assert_fails(page.replace(block, altered, 1), "a folder block's output is altered", number)
     marker = "<!-- nav-run: joined-only -->"
     assert marker in block
-    _assert_fails(page.replace(marker, "<!-- nav-run -->", 1), "the folder is stripped")
-    _assert_fails(page.replace(marker, "<!-- nav-run: nowhere -->", 1), "the folder does not exist")
+    _assert_fails(page.replace(marker, "<!-- nav-run -->", 1), "the folder is stripped", number)
+    _assert_fails(
+        page.replace(marker, "<!-- nav-run: nowhere -->", 1), "the folder does not exist", "none"
+    )
 

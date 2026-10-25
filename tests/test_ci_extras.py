@@ -94,9 +94,11 @@ def test_install_line_extras_run_the_javascript_tests_green_c1(tmp_path: Path) -
     if UV is None:
         pytest.fail("uv is not on PATH")
     venv = tmp_path / "venv"
-    _run_or_fail([UV, "venv", str(venv)], "uv venv")
+    _run_or_fail([UV, "venv", str(venv)], "uv venv", timeout=120)
     python = _scripts_dir(venv) / ("python.exe" if os.name == "nt" else "python")
-    _run_or_fail([UV, "pip", "install", "--python", str(python), *args], "uv pip install")
+    _run_or_fail(
+        [UV, "pip", "install", "--python", str(python), *args], "uv pip install", timeout=120
+    )
     run = subprocess.run(  # noqa: S603 - fixed argv built here
         [
             str(python),
@@ -105,15 +107,23 @@ def test_install_line_extras_run_the_javascript_tests_green_c1(tmp_path: Path) -
             "-p",
             "no:cacheprovider",
             "-rA",
-            "--ignore=tests/test_ci_extras.py",
+            *EIGHT_JS_TESTS,
         ],
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
+        timeout=120,
     )
     assert run.returncode == 0, run.stdout[-3000:] + run.stderr[-1000:]
     for node in EIGHT_JS_TESTS:
         assert f"PASSED {node}" in run.stdout, f"{node} did not pass"
+    grammar = subprocess.run(  # noqa: S603 - fixed argv built here
+        [str(python), "-c", "import tree_sitter_javascript"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert grammar.returncode == 0, grammar.stdout + grammar.stderr
 
 
 @pytest.mark.criterion(id="c2")

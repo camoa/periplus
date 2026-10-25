@@ -21,6 +21,7 @@ PERIPLUS = Path(sys.executable).parent / "periplus"
 FENCE = r"```[^\n]*\n(?P<body>.*?)^```$"
 FENCE_RE = re.compile(r"^```[^\n]*\n.*?^```$", re.M | re.S)
 RUN_RE = re.compile(r"^<!-- nav-run -->\n" + FENCE, re.M | re.S)
+MARKER_RE = re.compile(r"^<!-- nav-run(?:: \S+)? -->$", re.M)
 FILE_RE = re.compile(r"^<!-- nav-file: (?P<path>\S+) -->\n" + FENCE, re.M | re.S)
 EXIT_RE = re.compile(r"^\(exit \d+\)$")
 
@@ -30,18 +31,24 @@ def _page_text() -> str:
 
 
 def _run_check(
-    doc: Path | None, root: Path = ROOT, periplus: Path = PERIPLUS
+    doc: Path | None,
+    root: Path = ROOT,
+    periplus: Path = PERIPLUS,
+    blocks: int | str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env["ROOT"] = str(root)
     env["PERIPLUS"] = str(periplus)
     env.pop("GUIDE_DOC", None)
+    env.pop("GUIDE_BLOCKS", None)
     if doc is not None:
         env["GUIDE_DOC"] = str(doc)
+    if blocks is not None:
+        env["GUIDE_BLOCKS"] = str(blocks)
     bash = shutil.which("bash") or "/bin/bash"
     return subprocess.run(  # noqa: S603 - fixed argv, repository-owned script
         [bash, str(root / "scripts" / "demo.d" / CHECK.name)],
-        env=env, cwd=root, capture_output=True, text=True, timeout=900
+        env=env, cwd=root, capture_output=True, text=True, timeout=60
     )
 
 
@@ -58,7 +65,7 @@ def _report_keys(tmp_path: Path) -> list[str]:
     (tmp_path / "userconf").mkdir()
     proc = subprocess.run(  # noqa: S603 - fixed argv
         [str(PERIPLUS), "map", "--format", "json"],
-        cwd=site, env=env, capture_output=True, text=True, timeout=300,
+        cwd=site, env=env, capture_output=True, text=True, timeout=60,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     keys = sorted(json.loads(proc.stdout))
@@ -83,6 +90,11 @@ def _runs(text: str) -> list[re.Match[str]]:
     return list(RUN_RE.finditer(text))
 
 
+def _block_index(text: str, match: re.Match[str]) -> int:
+    """The check script's number for the block of `match`: every nav-run marker before it counts."""
+    return len(MARKER_RE.findall(text, 0, match.start()))
+
+
 def _splice(text: str, match: re.Match[str], body: str) -> str:
     return text[: match.start("body")] + body + text[match.end("body"):]
 
@@ -96,7 +108,9 @@ def _output_line_index(body: str) -> int | None:
 
 
 @pytest.mark.criterion(id="c1")
-def test_readme_links_page_and_page_names_every_report_key_c1(tmp_path: Path) -> None:
+def test_readme_links_page_and_page_names_every_report_key_c1(
+    tmp_path: Path, guide_real_page_check: subprocess.CompletedProcess[str]
+) -> None:
     readme = README.read_text(encoding="utf-8")
     rows = [
         line for line in readme.splitlines()
@@ -109,7 +123,7 @@ def test_readme_links_page_and_page_names_every_report_key_c1(tmp_path: Path) ->
     missing = [k for k in _report_keys(tmp_path) if not _names_key(text, k)]
     assert missing == [], f"keys absent from the page as heading or code term: {missing}"
 
-    control = _run_check(None)
+    control = guide_real_page_check
     assert control.returncode == 0, "real tree must pass: " + control.stdout + control.stderr
     copy_root = tmp_path / "tree"
     shutil.copytree(
@@ -118,7 +132,7 @@ def test_readme_links_page_and_page_names_every_report_key_c1(tmp_path: Path) ->
             ".venv", ".git", "node_modules", "__pycache__", ".*_cache"
         ),
     )
-    copy_control = _run_check(None, root=copy_root)
+    copy_control = _run_check(None, root=copy_root, blocks="none")
     assert copy_control.returncode == 0, (
         "unchanged copy must pass: " + copy_control.stdout + copy_control.stderr
     )
@@ -127,15 +141,17 @@ def test_readme_links_page_and_page_names_every_report_key_c1(tmp_path: Path) ->
     lines = copy_readme.read_text(encoding="utf-8").splitlines(keepends=True)
     kept = [ln for ln in lines if not link.search(ln)]
     copy_readme.write_text("".join(kept), encoding="utf-8")
-    result = _run_check(None, root=copy_root)
+    result = _run_check(None, root=copy_root, blocks="none")
     assert result.returncode not in (0, 127), (
         "check passed with the README link row removed: " + result.stdout + result.stderr
     )
 
 
 @pytest.mark.criterion(id="c1")
-def test_check_fails_when_a_report_key_is_not_a_heading_or_code_term_c1(tmp_path: Path) -> None:
-    control = _run_check(None)
+def test_check_fails_when_a_report_key_is_not_a_heading_or_code_term_c1(
+    tmp_path: Path, guide_real_page_check: subprocess.CompletedProcess[str]
+) -> None:
+    control = guide_real_page_check
     assert control.returncode == 0, "unchanged page must pass: " + control.stdout + control.stderr
 
     text = _page_text()
@@ -157,10 +173,10 @@ def test_check_fails_when_a_report_key_is_not_a_heading_or_code_term_c1(tmp_path
         assert not _names_key(mutated, key), f"mutation left {key} named"
         copy = tmp_path / f"no_{key}.md"
         copy.write_text(mutated, encoding="utf-8")
-        result = _run_check(copy)
+        result = _run_check(copy, blocks="none")
         assert result.returncode not in (0, 127), f"check passed without key {key}"
 
-    missing_doc = _run_check(tmp_path / "no_such_page.md")
+    missing_doc = _run_check(tmp_path / "no_such_page.md", blocks="none")
     assert missing_doc.returncode not in (0, 127), "check passed with no page at GUIDE_DOC"
 
     wrapper = tmp_path / "periplus-extra-key"
@@ -175,7 +191,7 @@ def test_check_fails_when_a_report_key_is_not_a_heading_or_code_term_c1(tmp_path
         encoding="utf-8",
     )
     wrapper.chmod(0o755)
-    extra = _run_check(None, periplus=wrapper)
+    extra = _run_check(None, periplus=wrapper, blocks="none")
     assert extra.returncode not in (0, 127), (
         "check passed though the report holds a key the page does not name: "
         + extra.stdout + extra.stderr
@@ -183,20 +199,24 @@ def test_check_fails_when_a_report_key_is_not_a_heading_or_code_term_c1(tmp_path
 
 
 @pytest.mark.criterion(id="c5")
-def test_every_nav_run_block_prints_its_fenced_output_c5() -> None:
+def test_every_nav_run_block_prints_its_fenced_output_c5(
+    guide_real_page_check: subprocess.CompletedProcess[str],
+) -> None:
     text = _page_text()
     runs = _runs(text)
     assert len(runs) >= 2
     assert any("/path/to/project" in m.group("body") for m in runs), (
         "no fenced output holds the substituted project path"
     )
-    result = _run_check(None)
+    result = guide_real_page_check
     assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.criterion(id="c5")
-def test_changed_fenced_output_fails_the_check_c5(tmp_path: Path) -> None:
-    control = _run_check(None)
+def test_changed_fenced_output_fails_the_check_c5(
+    tmp_path: Path, guide_real_page_check: subprocess.CompletedProcess[str]
+) -> None:
+    control = guide_real_page_check
     assert control.returncode == 0, (
         "unchanged page must pass first: " + control.stdout + control.stderr
     )
@@ -225,7 +245,7 @@ def test_changed_fenced_output_fails_the_check_c5(tmp_path: Path) -> None:
             assert new_body != body
             copy = tmp_path / f"run{n}_{name}.md"
             copy.write_text(_splice(text, match, new_body), encoding="utf-8")
-            result = _run_check(copy)
+            result = _run_check(copy, blocks=_block_index(text, match))
             assert result.returncode not in (0, 127), (
                 f"check passed with nav-run block {n} changed ({name})"
             )
@@ -237,7 +257,7 @@ def test_changed_fenced_output_fails_the_check_c5(tmp_path: Path) -> None:
     cmd_lines[0] = "$ periplus nosuchsubcommand"
     copy = tmp_path / "command_changed.md"
     copy.write_text(_splice(text, first, "\n".join(cmd_lines)), encoding="utf-8")
-    result = _run_check(copy)
+    result = _run_check(copy, blocks=0)
     assert result.returncode not in (0, 127), "check passed with a command line changed"
 
     for n, match in enumerate(runs):
@@ -251,7 +271,7 @@ def test_changed_fenced_output_fails_the_check_c5(tmp_path: Path) -> None:
         assert shorter != body
         copy = tmp_path / f"run{n}_shorter.md"
         copy.write_text(_splice(text, match, shorter), encoding="utf-8")
-        result = _run_check(copy)
+        result = _run_check(copy, blocks=_block_index(text, match))
         assert result.returncode not in (0, 127), (
             f"check passed with the last output line of block {n} removed"
         )
@@ -268,7 +288,8 @@ def test_changed_fenced_output_fails_the_check_c5(tmp_path: Path) -> None:
     copy = tmp_path / "extra_block.md"
     joined = text[: last.end()] + "\n\n" + extra_block + text[last.end():]
     copy.write_text(joined, encoding="utf-8")
-    result = _run_check(copy)
+    # The added block sits right after the last plain block, so it takes the next number.
+    result = _run_check(copy, blocks=_block_index(text, last) + 1)
     assert result.returncode not in (0, 127), "check passed with one more altered block added"
 
     appender = tmp_path / "periplus-append-line"
@@ -281,7 +302,7 @@ def test_changed_fenced_output_fails_the_check_c5(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     appender.chmod(0o755)
-    result = _run_check(None, periplus=appender)
+    result = _run_check(None, periplus=appender, blocks=0)
     assert result.returncode not in (0, 127), "check passed with one more line on every command"
 
     rewriter = tmp_path / "periplus-rewrite-path"
@@ -292,5 +313,6 @@ def test_changed_fenced_output_fails_the_check_c5(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     rewriter.chmod(0o755)
-    result = _run_check(None, periplus=rewriter)
+    with_path = next(m for m in runs if "/path/to/project" in m.group("body"))
+    result = _run_check(None, periplus=rewriter, blocks=_block_index(text, with_path))
     assert result.returncode not in (0, 127), "check passed though the project path was rewritten"

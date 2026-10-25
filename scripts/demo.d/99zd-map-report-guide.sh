@@ -8,7 +8,9 @@
 # and a block after `<!-- nav-run: F -->` runs there, once F has been mapped. Every key of the map
 # command's JSON report must then appear in the page as a heading word or a code term, the three
 # decision sections must name what they are for, and the README must link the page. GUIDE_DOC
-# names the file read, the repository's by default.
+# names the file read, the repository's by default. GUIDE_BLOCKS=K runs block K alone, after a
+# quiet map of the project when K is not 0, GUIDE_BLOCKS=none runs no block, and both keep the
+# checks after the blocks.
 set -euo pipefail
 doc="${GUIDE_DOC:-$ROOT/docs/map-report-guide.md}"
 work="$(mktemp -d)"
@@ -59,8 +61,22 @@ PY
 
 [ "$(cat "$work/runs/0.cmd")" = "map" ] || { echo "the guide's first command is not periplus map"; exit 1; }
 count="$(cat "$work/runs/count")"
+sel="${GUIDE_BLOCKS:-}"
+first=0
+last=$count
+if [ "$sel" = none ]; then
+    last=0
+elif [ -n "$sel" ]; then
+    [[ "$sel" =~ ^[0-9]+$ ]] && [ "$sel" -lt "$count" ] \
+        || { echo "GUIDE_BLOCKS=$sel is neither none nor a block number below $count"; exit 1; }
+    first=$sel
+    last=$((sel + 1))
+fi
+if [ -n "$sel" ] && [ "$sel" != 0 ]; then
+    (cd "$site" && "$PERIPLUS" map >/dev/null 2>&1) || { echo "periplus map failed in the project"; exit 1; }
+fi
 declare -A mapped=()
-for ((i = 0; i < count; i++)); do
+for ((i = first; i < last; i++)); do
     cmd="$(cat "$work/runs/$i.cmd")"
     dir="$(cat "$work/runs/$i.dir")"
     here="$site"
@@ -123,4 +139,6 @@ PY
 
 grep -Eq '^\|.*\]\((\./)?docs/map-report-guide\.md(#[^)]*)?\)' "$ROOT/README.md" \
     || { echo "the README does not link the guide"; exit 1; }
+[ "$sel" != none ] || { echo "map report guide ok: checks of $count"; exit 0; }
+[ -z "$sel" ] || { echo "map report guide ok: block $sel of $count"; exit 0; }
 echo "map report guide ok: $count examples"
