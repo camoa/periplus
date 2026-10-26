@@ -1,0 +1,68 @@
+# Publishes periplus-map to PyPI through the trusted publisher registered for this repository:
+# project periplus-map, repository camoa/periplus, workflow publish.yml, environment pypi. PyPI
+# matches the file name and the environment name exactly, so renaming either breaks publishing.
+#
+# Two jobs, because only the upload needs the OIDC token. The build job runs the project's code
+# and holds no publish right; the publish job holds the right and runs none of the project's code.
+
+name: publish
+
+# A tag push is the only trigger. No branch push, pull request, schedule or manual run publishes.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: build the wheel and sdist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # The lowest interpreter the package declares, as in checks.yml's static job.
+          python-version: "3.11"
+      # The same pinned uv as checks.yml, installed from PyPI rather than a third-party action.
+      - run: python -m pip install 'uv==0.12.7'
+      # A version on PyPI can never be replaced, only yanked. A tag that disagrees with
+      # pyproject.toml stops here, before anything is built or uploaded.
+      - id: check-version
+        run: |
+          declared=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          tagged="${GITHUB_REF_NAME#v}"
+          if [ "$tagged" != "$declared" ]; then
+            echo "tag $GITHUB_REF_NAME does not match version $declared in pyproject.toml"
+            exit 1
+          fi
+      # --no-sources builds what an installer from PyPI gets, ignoring any local tool.uv.sources.
+      - run: uv build --no-sources
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: upload to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # The environment's required reviewer approves each run, so a workflow edit alone cannot
+    # publish. The trusted publisher on PyPI names this environment.
+    environment: pypi
+    # Only this job can mint the short-lived PyPI token. No secret is stored anywhere.
+    permissions:
+      id-token: write
+    # No checkout: this job uploads the files the build job made and nothing else.
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install 'uv==0.12.7'
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      # "always" fails the run when the trusted publisher is missing or mismatched, rather than
+      # falling back to asking for a credential. uv publish makes no attestations.
+      - run: uv publish --trusted-publishing always

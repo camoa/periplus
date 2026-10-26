@@ -18,6 +18,7 @@ import tarfile
 import tomllib
 import zipfile
 from collections import Counter
+from email.parser import Parser
 from pathlib import Path
 
 import pytest
@@ -739,3 +740,129 @@ def test_lockfile_confirms_the_runtime_closure_the_validator_decision_grew() -> 
         f"jsonschema's closure is now {sorted(reached)}; it was accepted as "
         f"{sorted(EXPECTED_JSONSCHEMA_CLOSURE)}, so a change here is a design question"
     )
+
+
+CHECKS_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "checks.yml"
+REPOSITORY_URL_PREFIX = "https://github.com/camoa/periplus"
+PYTHON_CLASSIFIER_PREFIX = "Programming Language :: Python :: "
+
+
+def _wheel_metadata(wheel: Path):
+    """The parsed METADATA message of ``wheel``."""
+    with zipfile.ZipFile(wheel) as archive:
+        names = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
+        assert len(names) == 1, f"expected one METADATA file, found {names}"
+        return Parser().parsestr(archive.read(names[0]).decode("utf-8"))
+
+
+def _ci_python_versions() -> list[str]:
+    """The interpreter versions the first test matrix in checks.yml runs."""
+    match = re.search(r"python-version:\s*\[([^\]]*)\]", CHECKS_WORKFLOW.read_text())
+    assert match is not None, "checks.yml holds no python-version matrix"
+    return re.findall(r"\d+\.\d+", match.group(1))
+
+
+@pytest.mark.criterion(id="c4")
+def test_the_wheel_metadata_carries_the_pypi_page_fields_c4(tmp_path: Path) -> None:
+    metadata = _wheel_metadata(_build_wheel(tmp_path))
+
+    assert metadata.get("License-Expression") == "Apache-2.0"
+    license_files = [Path(v).name for v in metadata.get_all("License-File") or []]
+    assert sorted(license_files) == ["LICENSE", "NOTICE"], license_files
+    assert metadata.get("Description-Content-Type") == "text/markdown"
+
+    urls = {}
+    for entry in metadata.get_all("Project-URL") or []:
+        label, _, url = entry.partition(",")
+        urls[label.strip()] = url.strip()
+    assert sorted(urls) == ["Changelog", "Homepage", "Issues", "Repository"], urls
+    for label, url in urls.items():
+        assert url.startswith(REPOSITORY_URL_PREFIX), f"{label}: {url}"
+
+    classifiers = metadata.get_all("Classifier") or []
+    assert "Development Status :: 4 - Beta" in classifiers
+    assert [c for c in classifiers if c.startswith("License ::")] == []
+
+    classified = sorted(
+        c[len(PYTHON_CLASSIFIER_PREFIX):]
+        for c in classifiers
+        if c.startswith(PYTHON_CLASSIFIER_PREFIX)
+    )
+    versions = [v for v in classified if re.fullmatch(r"\d+\.\d+", v)]
+    assert versions == sorted(_ci_python_versions(), key=lambda v: tuple(map(int, v.split("."))))
+
+    from packaging.specifiers import SpecifierSet
+
+    allowed = SpecifierSet(metadata["Requires-Python"])
+    assert all(v in allowed for v in versions), (versions, str(allowed))
+
+
+@pytest.mark.slow
+@pytest.mark.criterion(id="c3")
+def test_the_built_wheel_installs_and_runs_from_a_clean_environment_c3(
+    manifest: dict[str, object], tmp_path: Path
+) -> None:
+    if UV is None:
+        pytest.fail("uv is not on PATH, so the wheel install cannot be exercised")
+    project = manifest["project"]
+    assert isinstance(project, dict)
+
+    wheel = _build_wheel(tmp_path / "dist")
+    venv = tmp_path / "wheelenv"
+    _run_or_fail([UV, "venv", str(venv)], "uv venv")
+    python = _scripts_dir(venv) / ("python.exe" if os.name == "nt" else "python")
+    _run_or_fail(
+        [UV, "pip", "install", "--python", str(python), str(wheel)], "uv pip install <wheel>"
+    )
+
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    env["PERIPLUS_CONFIG_DIR"] = str(tmp_path / "config")
+    found = shutil.which("periplus", path=str(_scripts_dir(venv)))
+    assert found is not None, "the wheel installed no periplus command"
+    shown = _run([found, "--version"], check=False, env=env)
+    assert shown.returncode == 0, shown.stdout + shown.stderr
+    assert shown.stdout.strip() == str(project["version"])
+    result = _run([found, "validate", "php_basic"], check=False, env=env)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    site_dirs = list(venv.rglob("site-packages"))
+    assert site_dirs, "the environment holds no site-packages directory"
+    for site in site_dirs:
+        editable = [p.name for p in site.iterdir() if p.name.startswith("__editable__")]
+        assert editable == [], f"editable entries in {site}: {editable}"
+        for pth in site.glob("*.pth"):
+            assert str(PROJECT_ROOT) not in pth.read_text(encoding="utf-8"), (
+                f"{pth.name} points at the source tree"
+            )
+
+
+@pytest.mark.criterion(id="wo1")
+def test_python_classifiers_are_exactly_3_11_to_3_14_wo1(manifest: dict[str, object]) -> None:
+    project = manifest["project"]
+    assert isinstance(project, dict)
+    versions = sorted(
+        c[len(PYTHON_CLASSIFIER_PREFIX):]
+        for c in project["classifiers"]
+        if re.fullmatch(re.escape(PYTHON_CLASSIFIER_PREFIX) + r"\d+\.\d+", c)
+    )
+    assert versions == ["3.11", "3.12", "3.13", "3.14"], versions
+
+
+@pytest.mark.criterion(id="wo1")
+def test_lockfile_names_periplus_map_at_the_pyproject_version_wo1(manifest: dict) -> None:
+    lock = tomllib.loads((PROJECT_ROOT / "uv.lock").read_text(encoding="utf-8"))
+    ours = [p for p in lock["package"] if p["name"] == "periplus-map"]
+    assert [p["version"] for p in ours] == [manifest["project"]["version"]], ours
+
+
+@pytest.mark.slow
+@pytest.mark.criterion(id="wo1")
+def test_twine_check_passes_on_the_built_sdist_and_wheel_wo1(tmp_path: Path) -> None:
+    uvx = shutil.which("uvx")
+    if uvx is None:
+        pytest.fail("uvx is not on PATH, so twine check cannot run")
+    sdist = _build_sdist(tmp_path / "sdist")
+    wheel = _build_wheel(tmp_path / "wheel")
+    checked = _run([uvx, "twine", "check", str(sdist), str(wheel)], check=False)
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert checked.stdout.count("PASSED") == 2, checked.stdout

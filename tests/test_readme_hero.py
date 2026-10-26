@@ -255,9 +255,9 @@ def test_readme_keeps_every_command_pack_and_working_link() -> None:
         assert guide in relative, f"{guide} is not linked"
 
 
-def test_readme_makes_no_verification_pypi_or_speed_claims() -> None:
+def test_readme_makes_no_verification_or_speed_claims() -> None:
     prose = "\n".join(_outside_fences(_page()))
-    for word in ("checked by", "proven", "audited", "pypi"):
+    for word in ("checked by", "proven", "audited"):
         assert not re.search(rf"\b{word}\b", prose, re.IGNORECASE), f"the page says {word!r}"
     figures = (
         r"\d+(?:\.\d+)?\s?x faster",

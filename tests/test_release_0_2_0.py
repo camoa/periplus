@@ -3,6 +3,9 @@
 import argparse
 import datetime
 import re
+import shutil
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -71,10 +74,11 @@ def test_changelog_first_version_is_dated_release_with_real_commands_c2():
     assert text.lstrip().startswith("# "), "no top heading"
 
     line, body = _first_version_section(text)
-    full = re.fullmatch(r"## \[0\.2\.0\] - (\d{4}-\d{2}-\d{2})", line)
-    assert full is not None, f"first versioned heading is not '## [0.2.0] - YYYY-MM-DD': {line!r}"
-    version = "0.2.0"
-    assert version == _project()["version"]
+    version = _project()["version"]
+    full = re.fullmatch(r"## \[" + re.escape(version) + r"\] - (\d{4}-\d{2}-\d{2})", line)
+    assert full is not None, (
+        f"first versioned heading is not '## [{version}] - YYYY-MM-DD': {line!r}"
+    )
     datetime.date.fromisoformat(full.group(1))
 
     unreleased = re.search(r"^## \[Unreleased\]", text, re.M)
@@ -103,3 +107,40 @@ def test_changelog_makes_no_verification_claim_n7():
     # The owner's closed list: exactly these three phrases, nothing else.
     for word in ("checked by", "proven", "audited"):
         assert word not in text.lower(), word
+
+
+def _unreleased_body(text: str) -> str:
+    match = re.search(r"^## \[Unreleased\][^\n]*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    assert match is not None, "CHANGELOG.md has no Unreleased section"
+    return match.group(1)
+
+
+@pytest.mark.criterion(id="c7")
+def test_release_is_numbered_0_2_1_everywhere_and_unreleased_is_empty_c7() -> None:
+    version = _project()["version"]
+
+    script = shutil.which("periplus", path=str(Path(sys.executable).parent))
+    if script is None:
+        pytest.fail("the periplus console script is not installed beside the test interpreter")
+    shown = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
+        [script, "--version"], capture_output=True, text=True, check=False
+    )
+    assert shown.returncode == 0, shown.stdout + shown.stderr
+    assert shown.stdout.strip() == version
+
+    text = _text("CHANGELOG.md")
+    line, body = _first_version_section(text)
+    assert re.fullmatch(r"## \[" + re.escape(version) + r"\] - \d{4}-\d{2}-\d{2}", line), line
+    added = re.search(r"^### Added\s*$(.*?)(?=^### |\Z)", body, re.M | re.S)
+    assert added is not None, "the 0.2.1 entry has no ### Added section"
+    assert "pypi" in added.group(1).lower() and "readme" in added.group(1).lower()
+    assert not re.search(r"^\s*[-*] \S", _unreleased_body(text), re.M)
+
+    inside, status = False, []
+    for row in _text("README.md").splitlines():
+        if row.lstrip().startswith("```"):
+            inside = not inside
+        elif not inside and "beta" in row.lower():
+            status.append(row)
+    assert status, "no README status line says beta"
+    assert version in "\n".join(status)

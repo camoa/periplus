@@ -124,3 +124,33 @@ closed, and it is not a new defect.
 Periplus is licensed under the Apache License 2.0. See `LICENSE` and `NOTICE`. A contribution
 that you submit to this repository is licensed under the same terms, as section 5 of `LICENSE`
 states.
+
+## Making a release
+
+The workflow `.github/workflows/publish.yml` publishes Periplus to PyPI as `periplus-map`. It runs
+when a tag of the form `vX.Y.Z` is pushed, and at no other time.
+
+Set up two things once, before the first tag push:
+
+- In the repository settings, under Environments, create the environment `pypi` and add a
+  required reviewer.
+- On PyPI, add the trusted publisher: project `periplus-map`, repository `camoa/periplus`,
+  workflow `publish.yml`, environment `pypi`. These names must match the workflow exactly.
+
+Then make each release in this order:
+
+1. Bump `version` in `pyproject.toml`, and run `uv lock`.
+2. Write the `CHANGELOG.md` entry, dated the day you write it. Set the version and the test count
+   in the README status line.
+3. Merge to `main`.
+4. On `main`, create the annotated tag `vX.Y.Z` and push the tag.
+5. The publish workflow builds the wheel and sdist and publishes them to PyPI through the trusted
+   publisher. It stops if the tag does not match the version in `pyproject.toml`. GitHub asks the
+   environment's reviewer to approve the run in the `pypi` environment.
+6. Confirm that <https://pypi.org/project/periplus-map/> shows the version.
+7. Run `gh release create vX.Y.Z --verify-tag`, with notes from the changelog entry.
+   `--verify-tag` stops when the tag is not on GitHub; without it, `gh` makes a new tag from the
+   head of the default branch.
+
+A version published on PyPI can never be replaced, only yanked. To fix a mistake, release a new
+version.
