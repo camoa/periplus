@@ -8,8 +8,8 @@
 [![License](https://img.shields.io/github/license/camoa/periplus)](LICENSE)
 [![Latest tag](https://img.shields.io/github/v/tag/camoa/periplus)](https://github.com/camoa/periplus/tags)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
-<sub>The CI workflow, `.github/workflows/checks.yml`, installs the package with its `dev`
-and `js` extras for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
+<sub>The CI workflow, `.github/workflows/checks.yml`, installs the package with its `dev`,
+`js` and `go` extras for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
 Status: **beta**, version 0.3.0.
