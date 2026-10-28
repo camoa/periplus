@@ -12,7 +12,7 @@
 and `js` extras for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the end-to-end checks, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.2.1, 592 tests.
+Status: **beta**, version 0.2.1, 652 tests.
 
 </div>
 
@@ -494,7 +494,7 @@ installed version, and `periplus <command> --help` gives each command's options.
 
 ## Tests and checks
 
-The pytest suite holds 592 tests. `scripts/demo.sh` runs the 76 end-to-end checks in
+The pytest suite holds 652 tests. `scripts/demo.sh` runs the 76 end-to-end checks in
 `scripts/demo.d` and stops at the first failure. Each check maps a small project and compares the
 result with what it expects. The CI workflow behind the checks badge does not run them.
 

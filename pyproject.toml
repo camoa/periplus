@@ -57,6 +57,7 @@ dependencies = [
 # Pinned to the versions review runs. A local pass against a different version is not a pass.
 dev = [
   "pytest==9.1.1",
+  "pytest-xdist==3.8.0",
   "mypy==2.3.1",
   "ruff==0.15.0",
   # jsonschema ships no py.typed, so mypy strict reports import-untyped without these stubs.
@@ -90,7 +91,7 @@ include = ["src/periplus", "LICENSE", "NOTICE", "README.md", "pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers --strict-config"
+addopts = "-n auto --durations=25 --strict-markers --strict-config"
 # --strict-markers means an unregistered marker is an error, so it is declared here. The three
 # install tests each build a virtualenv and are slow by nature; they run by default because
 # installing is the packaging's whole point, and the marker exists so a tight inner

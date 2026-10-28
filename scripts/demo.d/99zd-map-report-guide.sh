@@ -73,7 +73,8 @@ elif [ -n "$sel" ]; then
     last=$((sel + 1))
 fi
 if [ -n "$sel" ] && [ "$sel" != 0 ]; then
-    (cd "$site" && "$PERIPLUS" map >/dev/null 2>&1) || { echo "periplus map failed in the project"; exit 1; }
+    (cd "$site" && "$PERIPLUS" map --format json >"$work/report.json" 2>/dev/null) \
+        || { echo "periplus map failed in the project"; exit 1; }
 fi
 declare -A mapped=()
 for ((i = first; i < last; i++)); do
@@ -101,8 +102,9 @@ for ((i = first; i < last; i++)); do
         || { diff "$work/runs/$i.out" "$work/got.txt" || true; echo "periplus $cmd printed what the guide does not show"; exit 1; }
 done
 
-# Every key of the JSON report is a heading word or a code term outside the fenced blocks.
-(cd "$site" && "$PERIPLUS" map --format json >"$work/report.json")
+# Every key of the JSON report is a heading word or a code term outside the fenced blocks. The
+# quiet map before a selected block already wrote the report.
+[ -f "$work/report.json" ] || (cd "$site" && "$PERIPLUS" map --format json >"$work/report.json")
 python3 - "$doc" "$work/report.json" <<'PY'
 import json
 import re

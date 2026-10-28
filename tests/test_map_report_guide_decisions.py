@@ -96,7 +96,7 @@ def _check_rc(text: str, blocks: int | str | None = None) -> int:
             capture_output=True,
             text=True,
             stdin=subprocess.DEVNULL,
-            timeout=60,
+            timeout=120,
         )
     return run.returncode
 

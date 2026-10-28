@@ -69,15 +69,18 @@ def _marker_count(text: str) -> int:
 
 
 @pytest.mark.criterion(id="c2")
-def test_selector_runs_each_block_alone_and_none_runs_only_the_checks_c2() -> None:
+@pytest.mark.parametrize("k", range(_marker_count(_page())))
+def test_selector_runs_each_block_alone_and_none_runs_only_the_checks_c2(k: int) -> None:
     n = _marker_count(_page())
     assert n >= 2, "the page holds too few nav-run markers"
-    for k in range(n):
-        run = _check(str(k))
-        assert run.returncode == 0, f"GUIDE_BLOCKS={k}: " + _out(run)
-        assert _last(run) == f"map report guide ok: block {k} of {n}", (
-            f"GUIDE_BLOCKS={k}: " + _out(run)
-        )
+    run = _check(str(k))
+    assert run.returncode == 0, f"GUIDE_BLOCKS={k}: " + _out(run)
+    assert _last(run) == f"map report guide ok: block {k} of {n}", (
+        f"GUIDE_BLOCKS={k}: " + _out(run)
+    )
+    # The checks below do not depend on the block, so one case runs them.
+    if k != 0:
+        return
     none = _check("none")
     assert none.returncode == 0, "GUIDE_BLOCKS=none: " + _out(none)
     assert _last(none) == f"map report guide ok: checks of {n}", _out(none)
@@ -204,6 +207,13 @@ def _recording_subprocess(calls: list[dict]) -> SimpleNamespace:
     )
 
 
+def _stand_in_factory(tmp_path: Path) -> SimpleNamespace:
+    """A tmp_path_factory stand-in whose shared folder (the parent of the base) is fresh."""
+    base = tmp_path / "base"
+    base.mkdir(exist_ok=True)
+    return SimpleNamespace(getbasetemp=lambda: base)
+
+
 @pytest.mark.criterion(id="c2")
 def test_guide_fixture_is_session_scoped_and_guide_controls_read_it_c2(
     request: pytest.FixtureRequest,
@@ -228,13 +238,13 @@ def test_guide_fixture_is_session_scoped_and_guide_controls_read_it_c2(
 
 @pytest.mark.criterion(id="c2")
 def test_guide_fixture_runs_the_check_once_over_the_real_page_c2(
-    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     defs = request._fixturemanager.getfixturedefs("guide_real_page_check", request.node)  # type: ignore[attr-defined]
     assert defs, "no fixture named guide_real_page_check to read the behaviour of"
     func = defs[-1].func
-    kwargs = {name: request for name in inspect.signature(func).parameters}
-    assert set(kwargs) <= {"request"}, f"the fixture asks for {sorted(kwargs)}"
+    kwargs = {name: _stand_in_factory(tmp_path) for name in inspect.signature(func).parameters}
+    assert set(kwargs) <= {"tmp_path_factory"}, f"the fixture asks for {sorted(kwargs)}"
     monkeypatch.delenv("GUIDE_DOC", raising=False)
     monkeypatch.delenv("GUIDE_BLOCKS", raising=False)
     calls: list[dict] = []
@@ -257,8 +267,48 @@ def test_guide_fixture_runs_the_check_once_over_the_real_page_c2(
     env = call["kwargs"].get("env")
     env = os.environ if env is None else env
     assert "GUIDE_DOC" not in env and "GUIDE_BLOCKS" not in env
-    assert call["kwargs"].get("timeout") == 60, call["kwargs"].get("timeout")
+    assert call["kwargs"].get("timeout") == 120, call["kwargs"].get("timeout")
     assert result is sentinel, "the fixture did not return the CompletedProcess of its run"
+
+
+def test_guide_fixture_shares_one_check_run_across_workers_wo4(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    defs = request._fixturemanager.getfixturedefs("guide_real_page_check", request.node)  # type: ignore[attr-defined]
+    assert defs, "no fixture named guide_real_page_check to read the behaviour of"
+    func = defs[-1].func
+    shared = tmp_path / "popen-shared"
+    factories = []
+    for worker in ("gw0", "gw1"):
+        base = shared / worker
+        base.mkdir(parents=True)
+        factories.append(SimpleNamespace(getbasetemp=lambda base=base: base))
+    params = list(inspect.signature(func).parameters)
+    assert set(params) <= {"tmp_path_factory"}, f"the fixture asks for {sorted(params)}"
+    calls: list[list[str]] = []
+
+    def record(argv, **kw):  # noqa: ANN001, ANN003
+        calls.append([str(a) for a in argv])
+        return subprocess.CompletedProcess(argv, 3, stdout="the stdout", stderr="the stderr")
+
+    def once(factory: SimpleNamespace) -> subprocess.CompletedProcess:
+        result = func(**{name: factory for name in params})
+        if inspect.isgenerator(result):
+            result = next(result)
+        return result
+
+    with monkeypatch.context() as m:
+        m.setattr(subprocess, "run", record)
+        first = once(factories[0])
+        second = once(factories[1])
+    script_calls = [c for c in calls if c and c[-1].endswith("99zd-map-report-guide.sh")]
+    assert len(script_calls) == 1, f"the check script ran {len(script_calls)} times in total"
+    assert (first.returncode, first.stdout, first.stderr) == (3, "the stdout", "the stderr")
+    assert (second.returncode, second.stdout, second.stderr) == (
+        first.returncode,
+        first.stdout,
+        first.stderr,
+    )
 
 
 @pytest.mark.criterion(id="c2")
@@ -290,7 +340,7 @@ def test_every_altered_page_run_in_the_guide_tests_passes_the_blocks_keyword_c2(
 
 
 @pytest.mark.criterion(id="c2")
-def test_every_call_of_the_check_script_carries_timeout_60_c2(
+def test_every_call_of_the_check_script_carries_timeout_120_c2(
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     guide, decisions = _guide_modules()
@@ -304,13 +354,13 @@ def test_every_call_of_the_check_script_carries_timeout_60_c2(
     script_calls = [c for c in calls if any("99zd-map-report-guide.sh" in a for a in c["argv"])]
     assert len(script_calls) == 2, f"expected two script calls, saw {len(script_calls)}"
     for c in script_calls:
-        assert c["kwargs"].get("timeout") == 60, f"timeout is {c['kwargs'].get('timeout')}"
+        assert c["kwargs"].get("timeout") == 120, f"timeout is {c['kwargs'].get('timeout')}"
 
     defs = request._fixturemanager.getfixturedefs("guide_real_page_check", request.node)  # type: ignore[attr-defined]
     assert defs, "no fixture named guide_real_page_check to drive for its timeout"
     func = defs[-1].func
-    kwargs = {name: request for name in inspect.signature(func).parameters}
-    assert set(kwargs) <= {"request"}, f"the fixture asks for {sorted(kwargs)}"
+    kwargs = {name: _stand_in_factory(tmp_path) for name in inspect.signature(func).parameters}
+    assert set(kwargs) <= {"tmp_path_factory"}, f"the fixture asks for {sorted(kwargs)}"
     calls.clear()
     with monkeypatch.context() as m:
         m.setattr(subprocess, "run", fake.run)
@@ -318,7 +368,7 @@ def test_every_call_of_the_check_script_carries_timeout_60_c2(
     fixture_calls = [c for c in calls if any("99zd-map-report-guide.sh" in a for a in c["argv"])]
     assert len(fixture_calls) == 1, f"the fixture made {len(fixture_calls)} script calls"
     fixture_timeout = fixture_calls[0]["kwargs"].get("timeout")
-    assert fixture_timeout == 60, fixture_timeout
+    assert fixture_timeout == 120, fixture_timeout
 
     tests_dir = Path(__file__).resolve().parent
     scanned = 0
@@ -332,8 +382,8 @@ def test_every_call_of_the_check_script_carries_timeout_60_c2(
             timeouts = [k.value for k in node.keywords if k.arg == "timeout"]
             assert len(timeouts) == 1, f"{name}:{node.lineno} subprocess.run has no timeout keyword"
             value = timeouts[0]
-            assert isinstance(value, ast.Constant) and value.value == 60, (
-                f"{name}:{node.lineno} timeout is {ast.unparse(value)}, not the literal 60"
+            assert isinstance(value, ast.Constant) and value.value == 120, (
+                f"{name}:{node.lineno} timeout is {ast.unparse(value)}, not the literal 120"
             )
     assert scanned >= 3, f"only {scanned} subprocess.run calls found in the three files"
 
@@ -535,7 +585,7 @@ COLLECTED_AT_6A191E7 = {
 @pytest.mark.criterion(id="c4")
 def test_no_collected_test_is_lost_and_the_readme_counts_the_collected_total_c4() -> None:
     run = subprocess.run(  # noqa: S603 - fixed argv
-        [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"],
+        [sys.executable, "-m", "pytest", "--collect-only", "-qq", "-p", "no:cacheprovider"],
         cwd=ROOT,
         capture_output=True,
         text=True,

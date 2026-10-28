@@ -48,7 +48,7 @@ def _run_check(
     bash = shutil.which("bash") or "/bin/bash"
     return subprocess.run(  # noqa: S603 - fixed argv, repository-owned script
         [bash, str(root / "scripts" / "demo.d" / CHECK.name)],
-        env=env, cwd=root, capture_output=True, text=True, timeout=60
+        env=env, cwd=root, capture_output=True, text=True, timeout=120
     )
 
 
@@ -65,7 +65,7 @@ def _report_keys(tmp_path: Path) -> list[str]:
     (tmp_path / "userconf").mkdir()
     proc = subprocess.run(  # noqa: S603 - fixed argv
         [str(PERIPLUS), "map", "--format", "json"],
-        cwd=site, env=env, capture_output=True, text=True, timeout=60,
+        cwd=site, env=env, capture_output=True, text=True, timeout=120,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     keys = sorted(json.loads(proc.stdout))
@@ -105,6 +105,22 @@ def _output_line_index(body: str) -> int | None:
         if lines[i] and not EXIT_RE.match(lines[i]):
             return i
     return None
+
+
+# Top-level keys of `map --format json` over the planted site of `_report_keys`, sorted.
+# test_report_keys_constant_matches_the_live_map_c3 fails when the live map differs.
+REPORT_KEYS = [
+    "differing", "edges", "excluded", "executed", "map", "map_passes", "nodes", "not_executed",
+    "opened", "packs", "parse_errors", "problems", "selected", "skipped", "unlisted", "unread",
+    "zero_fires",
+]
+# One case per output-bearing nav-run block and change: three edits and a deleted line.
+CHANGED_CASES = [
+    (n, variant)
+    for n, match in enumerate(_runs(_page_text()))
+    if _output_line_index(match.group("body")) is not None
+    for variant in ("word", "trailing-space", "blank-line", "deleted")
+]
 
 
 @pytest.mark.criterion(id="c1")
@@ -147,9 +163,15 @@ def test_readme_links_page_and_page_names_every_report_key_c1(
     )
 
 
+@pytest.mark.criterion(id="c3")
+def test_report_keys_constant_matches_the_live_map_c3(tmp_path: Path) -> None:
+    assert _report_keys(tmp_path) == REPORT_KEYS
+
+
 @pytest.mark.criterion(id="c1")
+@pytest.mark.parametrize("key", REPORT_KEYS, ids=REPORT_KEYS)
 def test_check_fails_when_a_report_key_is_not_a_heading_or_code_term_c1(
-    tmp_path: Path, guide_real_page_check: subprocess.CompletedProcess[str]
+    key: str, tmp_path: Path, guide_real_page_check: subprocess.CompletedProcess[str]
 ) -> None:
     control = guide_real_page_check
     assert control.returncode == 0, "unchanged page must pass: " + control.stdout + control.stderr
@@ -157,25 +179,27 @@ def test_check_fails_when_a_report_key_is_not_a_heading_or_code_term_c1(
     text = _page_text()
     parts = FENCE_RE.split(text)
     fences = FENCE_RE.findall(text)
-    for key in _report_keys(tmp_path):
-        word = re.escape(key)
-        changed_parts = []
-        for part in parts:
-            lines = [
-                re.sub(r"(?<![\w.])" + word + r"(?![\w.])", "ZZ", ln) if ln.startswith("#") else ln
-                for ln in part.split("\n")
-            ]
-            part = "\n".join(lines)
-            changed_parts.append(re.sub(r"`" + word + r"`", "`periplus " + key + "`", part))
-        mutated = changed_parts[0]
-        for fence, part in zip(fences, changed_parts[1:], strict=True):
-            mutated += fence + part
-        assert not _names_key(mutated, key), f"mutation left {key} named"
-        copy = tmp_path / f"no_{key}.md"
-        copy.write_text(mutated, encoding="utf-8")
-        result = _run_check(copy, blocks="none")
-        assert result.returncode not in (0, 127), f"check passed without key {key}"
+    word = re.escape(key)
+    changed_parts = []
+    for part in parts:
+        lines = [
+            re.sub(r"(?<![\w.])" + word + r"(?![\w.])", "ZZ", ln) if ln.startswith("#") else ln
+            for ln in part.split("\n")
+        ]
+        part = "\n".join(lines)
+        changed_parts.append(re.sub(r"`" + word + r"`", "`periplus " + key + "`", part))
+    mutated = changed_parts[0]
+    for fence, part in zip(fences, changed_parts[1:], strict=True):
+        mutated += fence + part
+    assert not _names_key(mutated, key), f"mutation left {key} named"
+    copy = tmp_path / f"no_{key}.md"
+    copy.write_text(mutated, encoding="utf-8")
+    result = _run_check(copy, blocks="none")
+    assert result.returncode not in (0, 127), f"check passed without key {key}"
 
+    # The checks below do not depend on the key, so one case runs them.
+    if key != REPORT_KEYS[0]:
+        return
     missing_doc = _run_check(tmp_path / "no_such_page.md", blocks="none")
     assert missing_doc.returncode not in (0, 127), "check passed with no page at GUIDE_DOC"
 
@@ -213,8 +237,11 @@ def test_every_nav_run_block_prints_its_fenced_output_c5(
 
 
 @pytest.mark.criterion(id="c5")
+@pytest.mark.parametrize(
+    ("n", "variant"), CHANGED_CASES, ids=[f"run{n}-{v}" for n, v in CHANGED_CASES]
+)
 def test_changed_fenced_output_fails_the_check_c5(
-    tmp_path: Path, guide_real_page_check: subprocess.CompletedProcess[str]
+    n: int, variant: str, tmp_path: Path, guide_real_page_check: subprocess.CompletedProcess[str]
 ) -> None:
     control = guide_real_page_check
     assert control.returncode == 0, (
@@ -224,48 +251,12 @@ def test_changed_fenced_output_fails_the_check_c5(
     text = _page_text()
     runs = _runs(text)
     assert len(runs) >= 2, "page has too few nav-run blocks"
-    tried = 0
-    for n, match in enumerate(runs):
-        body = match.group("body")
-        idx = _output_line_index(body)
-        if idx is None:
-            continue
-        lines = body.split("\n")
-        variants = {}
-        edited = list(lines)
-        edited[idx] = lines[idx] + " CHANGED"
-        variants["word"] = "\n".join(edited)
-        edited = list(lines)
-        edited[idx] = lines[idx] + " "
-        variants["trailing-space"] = "\n".join(edited)
-        edited = list(lines)
-        edited.insert(idx + 1, "")
-        variants["blank-line"] = "\n".join(edited)
-        for name, new_body in variants.items():
-            assert new_body != body
-            copy = tmp_path / f"run{n}_{name}.md"
-            copy.write_text(_splice(text, match, new_body), encoding="utf-8")
-            result = _run_check(copy, blocks=_block_index(text, match))
-            assert result.returncode not in (0, 127), (
-                f"check passed with nav-run block {n} changed ({name})"
-            )
-            tried += 1
-    assert tried >= 6, "too few output lines changed"
-
-    first = runs[0]
-    cmd_lines = first.group("body").split("\n")
-    cmd_lines[0] = "$ periplus nosuchsubcommand"
-    copy = tmp_path / "command_changed.md"
-    copy.write_text(_splice(text, first, "\n".join(cmd_lines)), encoding="utf-8")
-    result = _run_check(copy, blocks=0)
-    assert result.returncode not in (0, 127), "check passed with a command line changed"
-
-    for n, match in enumerate(runs):
-        body = match.group("body")
-        idx = _output_line_index(body)
-        if idx is None:
-            continue
-        lines = body.split("\n")
+    match = runs[n]
+    body = match.group("body")
+    idx = _output_line_index(body)
+    assert idx is not None
+    lines = body.split("\n")
+    if variant == "deleted":
         del lines[idx]
         shorter = "\n".join(lines)
         assert shorter != body
@@ -275,6 +266,34 @@ def test_changed_fenced_output_fails_the_check_c5(
         assert result.returncode not in (0, 127), (
             f"check passed with the last output line of block {n} removed"
         )
+    else:
+        if variant == "word":
+            lines[idx] += " CHANGED"
+        elif variant == "trailing-space":
+            lines[idx] += " "
+        else:
+            lines.insert(idx + 1, "")
+        new_body = "\n".join(lines)
+        assert new_body != body
+        copy = tmp_path / f"run{n}_{variant}.md"
+        copy.write_text(_splice(text, match, new_body), encoding="utf-8")
+        result = _run_check(copy, blocks=_block_index(text, match))
+        assert result.returncode not in (0, 127), (
+            f"check passed with nav-run block {n} changed ({variant})"
+        )
+
+    # The checks below do not depend on the case, so one case runs them.
+    if (n, variant) != CHANGED_CASES[0]:
+        return
+    assert sum(v != "deleted" for _, v in CHANGED_CASES) >= 6, "too few output lines changed"
+
+    first = runs[0]
+    cmd_lines = first.group("body").split("\n")
+    cmd_lines[0] = "$ periplus nosuchsubcommand"
+    copy = tmp_path / "command_changed.md"
+    copy.write_text(_splice(text, first, "\n".join(cmd_lines)), encoding="utf-8")
+    result = _run_check(copy, blocks=0)
+    assert result.returncode not in (0, 127), "check passed with a command line changed"
 
     last = runs[-1]
     block = last.group(0)
