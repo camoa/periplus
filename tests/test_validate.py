@@ -1,10 +1,10 @@
 """``periplus validate``, as tests: it names what failed, every bundled pack passes it, and the
 determinism that binds both.
 
-Every test that asserts a status or an output runs the console script in a **subprocess**. That is
-not caution about global state: the requirement is "run validate, it exits non-zero", and a
-process status is the thing a person and a CI step both read. Calling ``validate()`` in process
-would assert on a return value that no shell ever sees.
+Every test that asserts a status or an output calls ``periplus.cli.main`` in process, which
+returns the integer ``[project.scripts]`` hands the interpreter as the process status. Two tests
+start a real interpreter, each for a property this process cannot show: the same bytes under two
+hash seeds and two locales, and what a first import pulls in.
 
 **What is deliberately not tested here: CI.** "Break one pack and watch CI reject it" needs a
 push, and a test pushes nothing. A test asserting that a workflow YAML file contains a
@@ -20,6 +20,8 @@ resolve to two directories and report a duplicate before it read a single rule.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -43,39 +45,13 @@ SOURCE_PACK = "go@0.0.2"
 FIXTURE_PACK = "gofixture"
 FIXTURE_DIRECTORY = f"{FIXTURE_PACK}@0.0.2"
 
-#: The packs the wheel carries, by name. Restated here rather than read off the directory
-#: listing, for the reason ``test_packaging.BUNDLED_PACKS`` gives: a test that reads the same
-#: directory it is checking passes against an empty one.
-BUNDLED_PACK_NAMES = (
-    "advancedqueue_basic",
-    "ai_basic",
-    "config_pages_basic",
-    "crop_basic",
-    "drupal",
-    "drupal_basic",
-    "drupal_js_basic",
-    "drush_basic",
-    "eck_basic",
-    "go",
-    "go_basic",
-    "js_basic",
-    "laravel_basic",
-    "paragraphs_basic",
-    "php",
-    "php_basic",
-    "profile_basic",
-    "salesforce_basic",
-    "twig",
-    "twig_basic",
-    "twig_tweak_basic",
-    "webform_basic",
-    "yaml",
-    "yaml_basic",
+#: The packs the wheel carries, by name, read off the bundled folder.
+BUNDLED_PACK_NAMES = tuple(
+    sorted(entry.name.split("@")[0] for entry in BUNDLED_PACKS.iterdir() if entry.is_dir())
 )
 
-#: The console script, run for real. ``main`` is called rather than the installed binary so the
-#: test exercises this checkout rather than whatever is on PATH, and the status still travels
-#: through ``SystemExit`` the way ``[project.scripts]`` sends it.
+#: The console script's entry function in a fresh interpreter, for the determinism test: a hash
+#: seed and a locale are fixed when a process starts, so two calls in one process cannot differ.
 _CHILD = """
 import sys
 
@@ -144,11 +120,40 @@ def elsewhere(tmp_path: Path) -> Iterator[Project]:
     yield Project(root=root, config=config, packs=root)
 
 
-def _run(
+@dataclass(frozen=True)
+class Result:
+    """What one run of the command left behind: the status ``main`` returned and its two streams."""
+
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+def _run(args: Sequence[str], *, cwd: Path, config: Path) -> Result:
+    """Call ``periplus.cli.main`` in process, from ``cwd``, with only ``config`` as user layer.
+
+    ``PERIPLUS_CONFIG_DIR`` is set so a settings file belonging to the person running the suite
+    cannot reach the run.
+    """
+    from periplus.cli import main
+
+    out, err = io.StringIO(), io.StringIO()
+    with (
+        pytest.MonkeyPatch.context() as patch,
+        contextlib.redirect_stdout(out),
+        contextlib.redirect_stderr(err),
+    ):
+        patch.chdir(cwd)
+        patch.setenv("PERIPLUS_CONFIG_DIR", str(config))
+        status = main(list(args))
+    return Result(returncode=int(status), stdout=out.getvalue(), stderr=err.getvalue())
+
+
+def _run_in_a_process(
     args: Sequence[str], *, cwd: Path, config: Path, **overrides: str
 ) -> subprocess.CompletedProcess[str]:
-    """Run the console script in a fresh interpreter, with the environment built rather than
-    inherited.
+    """Run the console script's entry function in a fresh interpreter, with the environment built
+    rather than inherited.
 
     Built, so an inherited ``PERIPLUS_CONFIG_DIR`` or ``PYTHONPATH`` cannot put a second settings
     layer or a second copy of the package into a run that is asserting on paths.
@@ -690,9 +695,13 @@ def test_two_processes_from_two_directories_under_two_locales_emit_the_same_byte
     deeper.mkdir(parents=True)
 
     args = ["validate", FIXTURE_PACK, "--format", fmt]
-    first = _run(args, cwd=project.root, config=project.config, PYTHONHASHSEED="0", LC_ALL="C")
-    second = _run(args, cwd=deeper, config=project.config, PYTHONHASHSEED="2", LC_ALL="C")
-    third = _run(
+    first = _run_in_a_process(
+        args, cwd=project.root, config=project.config, PYTHONHASHSEED="0", LC_ALL="C"
+    )
+    second = _run_in_a_process(
+        args, cwd=deeper, config=project.config, PYTHONHASHSEED="2", LC_ALL="C"
+    )
+    third = _run_in_a_process(
         args, cwd=deeper, config=project.config, PYTHONHASHSEED="0", LC_ALL="es_ES.utf8"
     )
 
@@ -710,12 +719,12 @@ def test_two_processes_from_two_directories_under_two_locales_emit_the_same_byte
 
 
 def test_every_bundled_pack_file_declares_the_schema_it_is_written_against() -> None:
-    """Every pack file declares its schema, on all 216 files rather than the 24 manifests.
+    """Every pack file declares its schema, on every pack file rather than the manifests alone.
 
     That is wider than "a pack declares X", which means the manifest declares it everywhere else
     in this project; the wider check buys what matters, because the rules live in
-    ``service/service_autowire.yaml`` and not in ``pack.yaml``, and 24 of 216 covers the files
-    nobody edits.
+    ``service/service_autowire.yaml`` and not in ``pack.yaml``, and the manifests alone cover
+    the files nobody edits.
 
     **What is claimed is that each file states which contract it is written against. Not that any
     editor validates it** — ``periplus.dev`` has no DNS record, so nothing resolves the URL today.
@@ -736,7 +745,11 @@ def test_every_bundled_pack_file_declares_the_schema_it_is_written_against() -> 
             wrong.append(f"{path.relative_to(BUNDLED_PACKS)}: declares {declared!r}")
 
     assert wrong == [], "\n".join(wrong)
-    assert len(_bundled_pack_files()) == 222, "the bundled pack file count changed"
+    checked = _bundled_pack_files()
+    manifests = {path.parent for path in checked if path.name == "pack.yaml"}
+    assert manifests == {entry for entry in BUNDLED_PACKS.iterdir() if entry.is_dir()}, (
+        "a bundled pack directory has no manifest among the files checked, or the check saw none"
+    )
 
 
 @pytest.mark.parametrize("pack", BUNDLED_PACK_NAMES)

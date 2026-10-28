@@ -8,8 +8,7 @@
 # drupalSettings.k is a reads_setting edge from it. The controller
 # attaches a library by assignment and by array, each an attaches_library edge from its class,
 # and attaches the setting, a provides_setting edge. The template's attach_library() is a
-# template_attaches_library edge. The map and the report are byte-identical across two runs, the
-# report but for the map path it names.
+# template_attaches_library edge.
 # The grammar is the extra js. Without it, periplus map stops with a problem naming the pin, and
 # this check fails.
 set -euo pipefail
@@ -74,10 +73,7 @@ printf "<div>{{ attach_library('mymodule/widget') }}</div>\n" \
 printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - drupal_js_basic@0.0.1\n' \
     >"$site/.periplus/settings.yml"
 
-for run in one two; do
-    (cd "$site" && "$PERIPLUS" map --output "$work/$run.json" --format json >"$work/$run-report.json")
-done
-cmp "$work/one.json" "$work/two.json"
+(cd "$site" && "$PERIPLUS" map --output "$work/one.json" --format json >"$work/one-report.json")
 
 python3 - "$work" "$module" <<'PY'
 import json
@@ -104,8 +100,7 @@ def line(path, text):
     return next(n for n, found in enumerate(written, 1) if found.strip() == text)
 
 
-document, report, again = load("one.json"), load("one-report.json"), load("two-report.json")
-assert {**report, "map": ""} == {**again, "map": ""}
+document, report = load("one.json"), load("one-report.json")
 assert report["problems"] == [] and report["not_executed"] == [], report
 assert report["skipped"] == [], report["skipped"]
 

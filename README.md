@@ -10,9 +10,9 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
 <sub>The CI workflow, `.github/workflows/checks.yml`, installs the package with its `dev`
 and `js` extras for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
-every bundled pack. It does not run the end-to-end checks, and it never maps a Go project.</sub>
+every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.2.1, 673 tests.
+Status: **beta**, version 0.2.1.
 
 </div>
 
@@ -177,9 +177,9 @@ An unresolved node from a map of a Drupal site, shortened:
 
 Each edge has `from`, `to`, `kind`, its locations, an `occurrences` count and its provenance.
 
-**Determinism.** The check `scripts/demo.d/99j-readme-example.sh` maps the example under
-[Write a rutter](#write-a-rutter) twice in one folder, and the two maps are byte-identical. This
-ran on one Linux machine. The design aims for identical maps across machines, but no test has
+**Determinism.** `tests/test_demo_b_map_determinism.py` maps one project in separate processes
+under different hash seeds and locales, and the maps are byte-identical. This ran on one Linux
+machine. The design aims for identical maps across machines, but no test has
 compared two machines or two operating systems yet.
 
 ### The rutters provided
@@ -498,9 +498,11 @@ installed version, and `periplus <command> --help` gives each command's options.
 
 ## Tests and checks
 
-The pytest suite holds 673 tests. `scripts/demo.sh` runs the 76 end-to-end checks in
-`scripts/demo.d` and stops at the first failure. Each check maps a small project and compares the
-result with what it expects. The CI workflow behind the checks badge does not run them.
+The pytest suite tests the engine and the bundled rutters. `scripts/demo.sh` runs the acceptance
+scripts in `scripts/demo.d` and stops at the first failure: one for each command, one for each
+bundled stack family, and the README and guide examples. Each script maps a small project and
+compares the result with what it expects. A person runs them at the end of a task. The CI workflow
+behind the checks badge does not run them.
 
 To propose a change, read [`CONTRIBUTING.md`](CONTRIBUTING.md).
 

@@ -1,7 +1,7 @@
 # Reading the Drupal rutters
 
 Read [Writing a rutter](rutter-author-guide.md) first. Each block below is copied from the file
-its fence names, in src/periplus/packs; each check named is a file in scripts/demo.d. The Drupal
+its fence names, in src/periplus/packs; each test named is a file in tests. The Drupal
 map states what a site declares: configuration, services, routes, plugins, hooks, templates and
 libraries, and the PHP classes behind them. `php_basic` is the language half: classes, interfaces,
 traits, enums, functions, methods and their edges. `drupal_basic` is the framework half. It depends
@@ -197,7 +197,7 @@ narrows a rule to the files of one ending, or of any in a list, written without 
 A declaration, text or reference rule takes `ending`. An ending that no loaded pack claims refuses
 the map with exit 26, and the problem lists the endings that are claimed. `periplus map` checks
 this, and `periplus validate` does not. An ending that only another file type claims passes the
-check and reads nothing. Check 99m-drupal-hooks proves the rule.
+check and reads nothing.
 
 ## From a library to a behavior, and between templates
 
@@ -208,21 +208,19 @@ Its second edge reads a key that starts with one `/` from the path value `drupal
 folder above the first `modules`, `themes` or `profiles` folder.
 `js_basic` makes that node for every script and a `script_declares_function` edge to each function
 in it; `behavior_from_assignment_in_file` makes a `script_declares_behavior` edge to each
-`Drupal.behaviors.name = {...}`. So `periplus` follows library, script, behavior (check
-99w-library-scripts proves the chain).
+`Drupal.behaviors.name = {...}`. So `periplus` follows library, script, behavior.
 
 A library attachment or a `drupalSettings` key in the array form, `'#attached' => ['library' =>
 [...], 'drupalSettings' => [...]]`, is read as text. `drupal_php_text` declares the spans
 `function_body`, whose `name` is the function's name, and `settings_list`, the array after
 `'drupalSettings' =>`. A rule reads the function's name with `{enclosing: function_body, capture:
 name}` and starts its edge at `{template: '{fn}', types: [php.function]}`, so a hook in a
-`.module` file attaches the library or provides the key (check 98g-js-module-attachments proves
-it).
+`.module` file attaches the library or provides the key.
 
 `drupal_basic` links a template to what it names: an include, extends, embed, import or from of a
 `.html.twig` file is a `template_includes` edge, and `theme:name` in an include or embed is a
 `template_includes_component` edge to the component's name. A call in a Twig comment gives
-nothing (check 99x-twig-relations proves it). Two themes with a template or component of one name
+nothing. Two themes with a template or component of one name
 meet at one node. A third party gets the same links from a project-local pack
 ([Tree references](rutter-author-guide-references.md#an-edge-from-the-file-enclosing_file)).
 
@@ -254,8 +252,7 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   `manager_call_in`, from that node to the method around it. The map rule
   `entity_call_through_typed_manager` reads the property's declared type, and when it is
   `EntityTypeManager` or `EntityTypeManagerInterface` gives an inferred `uses_entity_type` edge from
-  the method to the entity type the quoted first argument names (check 99w-drupal-typed-manager
-  proves it).
+  the method to the entity type the quoted first argument names.
 - `drupal.url_path`, a node for each path as written; `route_serves_path`, from a route to its
   `path`; `links_to_path`, from the class or function around `Url::fromUserInput('/x')` or
   `Url::fromUri('internal:/x')` to that path. A route and a link meet only on the same text.
@@ -290,5 +287,5 @@ not listed. `skipped` names matches that made nothing. An `unresolved` node is a
   file type, a second one claiming the ending php and read as text; then both readers run.
 - A resolution or a token exclusion. The pack-file keys `resolution` and `excluded_tokens` pass
   the schemas and do not run. One in a rutter refuses the map: a problem names the key and its
-  file, and the run exits with no map, as check 91-unexecuted-keys proves. The manifest's
+  file, and the run exits with no map. The manifest's
   `boundary` block runs; [Tree references](rutter-author-guide-references.md) shows it.

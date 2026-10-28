@@ -2,8 +2,7 @@
 
 Read [Writing a rutter](rutter-author-guide.md) first. This page covers the keys a text rutter uses
 for nested regions of a file, for a node's line, and for a path below a folder; and the two rows
-a map report adds when a rule fires and makes less than it names. Check 98d-laravel-pack proves
-each key on `laravel_basic`, and `tests/test_spans.py` on a planted rutter.
+a map report adds when a rule fires and makes less than it names.
 
 ## Spans
 

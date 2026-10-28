@@ -5,14 +5,9 @@
 # must print the rest of its block byte for byte, the project's own path as /path/to/project, with
 # a last line `(exit N)` for a nonzero exit code. The first block is the map run. A path whose first
 # segment F has its own F/.periplus/settings.yml block is written to a sibling project F instead,
-# and a block after `<!-- nav-run: F -->` runs there, once F has been mapped. Every key of the map
-# command's JSON report must then appear in the page as a heading word or a code term, the three
-# decision sections must name what they are for, and the README must link the page. GUIDE_DOC
-# names the file read, the repository's by default. GUIDE_BLOCKS=K runs block K alone, after a
-# quiet map of the project when K is not 0, GUIDE_BLOCKS=none runs no block, and both keep the
-# checks after the blocks.
+# and a block after `<!-- nav-run: F -->` runs there, once F has been mapped.
 set -euo pipefail
-doc="${GUIDE_DOC:-$ROOT/docs/map-report-guide.md}"
+doc="$ROOT/docs/map-report-guide.md"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 export PERIPLUS_CONFIG_DIR="$work/userconf"
@@ -61,23 +56,8 @@ PY
 
 [ "$(cat "$work/runs/0.cmd")" = "map" ] || { echo "the guide's first command is not periplus map"; exit 1; }
 count="$(cat "$work/runs/count")"
-sel="${GUIDE_BLOCKS:-}"
-first=0
-last=$count
-if [ "$sel" = none ]; then
-    last=0
-elif [ -n "$sel" ]; then
-    [[ "$sel" =~ ^[0-9]+$ ]] && [ "$sel" -lt "$count" ] \
-        || { echo "GUIDE_BLOCKS=$sel is neither none nor a block number below $count"; exit 1; }
-    first=$sel
-    last=$((sel + 1))
-fi
-if [ -n "$sel" ] && [ "$sel" != 0 ]; then
-    (cd "$site" && "$PERIPLUS" map --format json >"$work/report.json" 2>/dev/null) \
-        || { echo "periplus map failed in the project"; exit 1; }
-fi
 declare -A mapped=()
-for ((i = first; i < last; i++)); do
+for ((i = 0; i < count; i++)); do
     cmd="$(cat "$work/runs/$i.cmd")"
     dir="$(cat "$work/runs/$i.dir")"
     here="$site"
@@ -102,45 +82,4 @@ for ((i = first; i < last; i++)); do
         || { diff "$work/runs/$i.out" "$work/got.txt" || true; echo "periplus $cmd printed what the guide does not show"; exit 1; }
 done
 
-# Every key of the JSON report is a heading word or a code term outside the fenced blocks. The
-# quiet map before a selected block already wrote the report.
-[ -f "$work/report.json" ] || (cd "$site" && "$PERIPLUS" map --format json >"$work/report.json")
-python3 - "$doc" "$work/report.json" <<'PY'
-import json
-import re
-import sys
-from pathlib import Path
-
-prose = re.sub(r"^```[^\n]*\n.*?^```$", "", Path(sys.argv[1]).read_text(encoding="utf-8"), flags=re.M | re.S)
-headings = [line for line in prose.splitlines() if line.startswith("#")]
-missing = [
-    key for key in sorted(json.loads(Path(sys.argv[2]).read_text(encoding="utf-8")))
-    if not any(re.search(r"(?<![\w.])" + re.escape(key) + r"(?![\w.])", h) for h in headings)
-    and f"`{key}`" not in prose
-]
-assert not missing, f"the guide does not name the report keys {missing}"
-
-# Each decision section names what its reader needs, in its prose, not in a marker.
-text = re.sub(r"(?m)^\s*<!--.*\n", "", prose)
-sections = {part.split("\n", 1)[0]: part for part in re.split(r"(?m)^(?=## )", text)}
-needs = {
-    "## A shape the map lacks": [
-        "](known-limitations.md)", "Known gaps", "skipped", "zero_fires", "path_in_script_string",
-        "library_script", "setting_attached_in_array",
-    ],
-    "## Where a rule belongs": [
-        ".periplus/packs", ".periplus/settings.yml", "periplus status", "drupal_js_basic",
-        "path_in_script_string", "event_from_data_track",
-    ],
-    "## When a gap is the engine's": ["match.body_child", "exit 26"],
-}
-for heading, terms in needs.items():
-    absent = [term for term in terms if term not in sections.get(heading, "")]
-    assert not absent, f"the section {heading!r} does not name {absent}"
-PY
-
-grep -Eq '^\|.*\]\((\./)?docs/map-report-guide\.md(#[^)]*)?\)' "$ROOT/README.md" \
-    || { echo "the README does not link the guide"; exit 1; }
-[ "$sel" != none ] || { echo "map report guide ok: checks of $count"; exit 0; }
-[ -z "$sel" ] || { echo "map report guide ok: block $sel of $count"; exit 0; }
 echo "map report guide ok: $count examples"

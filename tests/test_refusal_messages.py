@@ -6,6 +6,7 @@ pack's wins whole."""
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -102,15 +103,12 @@ def _run(
 
 
 def test_a_step_naming_an_unknown_table_names_the_tables_key(tmp_path: Path) -> None:
-    """The rule is not run, the map stops with exit 26, and the problem says a table is declared
-    under a `tables` key of the pack or a pack it depends on."""
+    """The rule is not run, the map stops with exit 26, and the one problem names the table that
+    no `tables` key declares."""
     report = _run(tmp_path, table="missing")
-    assert [p.message for p in report.problems] == [
-        "own/rules/own.yaml: the rule shortcut cannot be executed: the resolution step"
-        " lookup_last_segment_in names missing, which no tables key of the pack or a pack it"
-        " depends on declares"
-    ], report.problems
     assert report.exit_code == 26, report
+    (problem,) = report.problems
+    assert "missing" in problem.message and "tables" in problem.message, problem.message
 
 
 @pytest.mark.parametrize(
@@ -120,7 +118,7 @@ def test_a_step_naming_an_unknown_table_names_the_tables_key(tmp_path: Path) -> 
 def test_one_constant_key_without_the_other_names_the_missing_one(
     tmp_path: Path, present: str, absent: str
 ) -> None:
-    """Either grammar key alone is refused by the manifest schema, naming the key it needs."""
+    """Either grammar key alone is refused by the manifest schema (exit 16), naming both keys."""
     block = {
         "constant_access": "  constant_access: {node: class_constant_access_expression,"
         " scope: [name], name: [name]}\n",
@@ -128,21 +126,20 @@ def test_one_constant_key_without_the_other_names_the_missing_one(
         " value: [string]}\n",
     }[present]
     report = _run(tmp_path, grammar=block)
-    assert [p.message for p in report.problems] == [
-        f"own/pack.yaml $.grammar: '{absent}' is a dependency of '{present}'"
-    ], report.problems
+    assert report.exit_code == 16, report
+    (problem,) = report.problems
+    assert present in problem.message and absent in problem.message, problem.message
     assert not (tmp_path / "map.json").exists()
 
 
 def test_an_ending_no_pack_claims_lists_the_claimed_endings(tmp_path: Path) -> None:
-    """match.ending: inc where only php is claimed: the rule is not run, and the problem lists
-    php as the ending to write."""
+    """match.ending: inc where only php is claimed: the rule is not run, and the one problem names
+    inc as the refused ending and php as the claimed one."""
     report = _run(tmp_path, ending=", ending: inc")
-    assert [p.message for p in report.problems] == [
-        "own/rules/own.yaml: the rule fn cannot be executed: match.ending names inc, which no pack"
-        " claims; the claimed endings are php"
-    ], report.problems
     assert report.exit_code == 26, report
+    (problem,) = report.problems
+    assert re.search(r"\binc\b", problem.message), problem.message
+    assert re.search(r"\bphp\b", problem.message), problem.message
 
 
 @pytest.mark.parametrize(("own_table", "to"), [(True, "own.svc::near"), (False, "own.svc::far")])

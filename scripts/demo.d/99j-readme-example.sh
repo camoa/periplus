@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The README's example rutter, run from the README's own text. Each fenced block after a marker
 # `<!-- example: <path> -->` is written to that path in a new project; the pack is validated and
-# mapped twice, the two maps are byte-identical, and the map holds exactly the nodes and edges the
+# mapped, and the map holds exactly the nodes and edges the
 # block after `<!-- example-map -->` states, with their states and locations. README names the file
 # read, the repository's by default, so a broken copy can be run.
 set -euo pipefail
@@ -44,8 +44,6 @@ pack="$(cat "$work/pack.txt")"
 (cd "$site" && "$PERIPLUS" validate "$pack" >"$work/validate.txt") \
     || { cat "$work/validate.txt"; echo "the README's example rutter does not validate"; exit 1; }
 (cd "$site" && "$PERIPLUS" map --output "$work/map.json" --format json >"$work/report.json")
-(cd "$site" && "$PERIPLUS" map --output "$work/again.json" --format json >/dev/null)
-cmp "$work/map.json" "$work/again.json"
 
 python3 - "$work/map.json" "$work/report.json" "$work/expected.txt" <<'PY'
 import json

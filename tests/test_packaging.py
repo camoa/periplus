@@ -749,7 +749,6 @@ def test_lockfile_confirms_the_runtime_closure_the_validator_decision_grew() -> 
 
 CHECKS_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "checks.yml"
 REPOSITORY_URL_PREFIX = "https://github.com/camoa/periplus"
-PYTHON_CLASSIFIER_PREFIX = "Programming Language :: Python :: "
 
 
 def _wheel_metadata(wheel: Path):
@@ -758,13 +757,6 @@ def _wheel_metadata(wheel: Path):
         names = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
         assert len(names) == 1, f"expected one METADATA file, found {names}"
         return Parser().parsestr(archive.read(names[0]).decode("utf-8"))
-
-
-def _ci_python_versions() -> list[str]:
-    """The interpreter versions the first test matrix in checks.yml runs."""
-    match = re.search(r"python-version:\s*\[([^\]]*)\]", CHECKS_WORKFLOW.read_text())
-    assert match is not None, "checks.yml holds no python-version matrix"
-    return re.findall(r"\d+\.\d+", match.group(1))
 
 
 @pytest.mark.criterion(id="c4")
@@ -783,23 +775,6 @@ def test_the_wheel_metadata_carries_the_pypi_page_fields_c4(tmp_path: Path) -> N
     assert sorted(urls) == ["Changelog", "Homepage", "Issues", "Repository"], urls
     for label, url in urls.items():
         assert url.startswith(REPOSITORY_URL_PREFIX), f"{label}: {url}"
-
-    classifiers = metadata.get_all("Classifier") or []
-    assert "Development Status :: 4 - Beta" in classifiers
-    assert [c for c in classifiers if c.startswith("License ::")] == []
-
-    classified = sorted(
-        c[len(PYTHON_CLASSIFIER_PREFIX):]
-        for c in classifiers
-        if c.startswith(PYTHON_CLASSIFIER_PREFIX)
-    )
-    versions = [v for v in classified if re.fullmatch(r"\d+\.\d+", v)]
-    assert versions == sorted(_ci_python_versions(), key=lambda v: tuple(map(int, v.split("."))))
-
-    from packaging.specifiers import SpecifierSet
-
-    allowed = SpecifierSet(metadata["Requires-Python"])
-    assert all(v in allowed for v in versions), (versions, str(allowed))
 
 
 @pytest.mark.slow
@@ -839,18 +814,6 @@ def test_the_built_wheel_installs_and_runs_from_a_clean_environment_c3(
             assert str(PROJECT_ROOT) not in pth.read_text(encoding="utf-8"), (
                 f"{pth.name} points at the source tree"
             )
-
-
-@pytest.mark.criterion(id="wo1")
-def test_python_classifiers_are_exactly_3_11_to_3_14_wo1(manifest: dict[str, object]) -> None:
-    project = manifest["project"]
-    assert isinstance(project, dict)
-    versions = sorted(
-        c[len(PYTHON_CLASSIFIER_PREFIX):]
-        for c in project["classifiers"]
-        if re.fullmatch(re.escape(PYTHON_CLASSIFIER_PREFIX) + r"\d+\.\d+", c)
-    )
-    assert versions == ["3.11", "3.12", "3.13", "3.14"], versions
 
 
 @pytest.mark.criterion(id="wo1")

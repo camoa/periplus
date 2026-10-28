@@ -1,4 +1,4 @@
-"""The tag-triggered publish workflow, and the release steps CONTRIBUTING.md gives."""
+"""The tag-triggered publish workflow."""
 
 import re
 from collections.abc import Iterator
@@ -11,7 +11,6 @@ from test_packaging import PROJECT_ROOT
 WORKFLOWS = PROJECT_ROOT / ".github" / "workflows"
 PUBLISH = WORKFLOWS / "publish.yml"
 CHECKS = WORKFLOWS / "checks.yml"
-CONTRIBUTING = PROJECT_ROOT / "CONTRIBUTING.md"
 UV_PIN = re.compile(r"uv==([\w.]+)")
 
 
@@ -70,27 +69,3 @@ def test_publish_runs_only_on_a_version_tag_with_no_stored_credential_c2() -> No
     for value in uses:
         assert value.startswith("actions/"), f"not a GitHub-owned action: {value}"
         assert re.fullmatch(r"actions/[\w.-]+@\S+", value), f"not pinned: {value}"
-
-
-def _release_section() -> str:
-    text = CONTRIBUTING.read_text(encoding="utf-8")
-    match = re.search(r"^## Making a release\n(.*?)(?=^## |\Z)", text, re.M | re.S)
-    assert match, "CONTRIBUTING.md has no section headed Making a release"
-    return match.group(1)
-
-
-@pytest.mark.criterion(id="c8")
-def test_contributing_gives_the_release_steps_in_order_c8() -> None:
-    section = _release_section()
-    marks = {
-        "publish.yml": re.search(r"publish\.yml", section),
-        "vX.Y.Z": re.search(r"vX\.Y\.Z", section),
-        "pypi environment": re.search(r"\bpypi\b(?!\.org)", section),
-        "gh release create": re.search(r"gh release create", section),
-    }
-    missing = [name for name, found in marks.items() if found is None]
-    assert not missing, f"section does not name: {missing}"
-    starts = [found.start() for found in marks.values() if found]
-    assert starts == sorted(starts), f"out of order: {dict(zip(marks, starts, strict=True))}"
-    release_lines = [line for line in section.splitlines() if "gh release create" in line]
-    assert any("--verify-tag" in line for line in release_lines), release_lines

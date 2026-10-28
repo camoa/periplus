@@ -139,5 +139,3 @@ Map rule passes:
   pass 2: fleet ask_through_part fired 1
   pass 3: none
 ```
-
-Check `scripts/demo.d/97r-map-rules.sh` maps this example from this page.

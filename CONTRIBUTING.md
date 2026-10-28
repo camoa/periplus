@@ -20,8 +20,12 @@ A pull request for a rutter contains:
 - The rutter folder, with `pack.yaml` and its pack files.
 - A list of known gaps at the top of `pack.yaml`, as comments. `laravel_basic@0.0.5/pack.yaml`
   and `go_basic@0.0.3/pack.yaml` show the form.
-- An end-to-end check in `scripts/demo.d` that maps a small project and compares the result with
-  what it expects. `98c-go-pack.sh` and `98d-laravel-pack.sh` are examples.
+- In-process pytest tests of the rutter's rule shapes. Each test plants a small project and maps it
+  by calling the code in the test process, not by running the `periplus` program or a script.
+- When the rutter adds a stack family, one acceptance script in `scripts/demo.d` that maps a small
+  project and compares the result with what it expects. `98c-go-pack.sh` and
+  `98d-laravel-pack.sh` are examples. A rutter for a family that has a script updates that script
+  and adds none.
 - A row in the README table of rutters, with what the rutter finds and how it was checked.
 
 Run `periplus validate <pack>` before you open the pull request. A rutter that does not validate
@@ -55,22 +59,22 @@ Run the static checks that the CI workflow runs:
 .venv/bin/python -m mypy
 ```
 
-Run the end-to-end checks:
+Run the acceptance scripts:
 
 ```
 ROOT=$PWD PERIPLUS=$PWD/.venv/bin/periplus bash scripts/demo.sh
 ```
 
 `scripts/demo.sh` runs each executable file in `scripts/demo.d` in name order. It stops at the
-first check that fails. `PERIPLUS` names the command the checks run. A new check must be
-executable, or `demo.sh` does not run it. The checks need `python3` on the path.
+first script that fails. `PERIPLUS` names the command the scripts run. A new script must be
+executable, or `demo.sh` does not run it. The scripts need `python3` on the path.
 
-Several checks find Python by reading the first line of the `PERIPLUS` script. When the path to
-`.venv` is longer than 127 bytes, uv writes a `/bin/sh` launcher there, and those checks fail.
+Several scripts find Python by reading the first line of the `PERIPLUS` script. When the path to
+`.venv` is longer than 127 bytes, uv writes a `/bin/sh` launcher there, and those scripts fail.
 Clone the repository into a short path.
 
-The CI workflow, `.github/workflows/checks.yml`, does not run the end-to-end checks. Run them
-yourself before you open a pull request.
+The CI workflow, `.github/workflows/checks.yml`, does not run the acceptance scripts. The demo run
+is a person's check at the end of a task: run it yourself before you open a pull request.
 
 ## The rules a rutter holds
 
@@ -119,6 +123,17 @@ so give a case that anybody can run:
 If the rutter's gap list already states the case, say so. The issue then asks for the gap to be
 closed, and it is not a new defect.
 
+## Reviewer checklist
+
+Check each item by hand before you merge. No test checks them.
+
+- The README badges and the tagline are current.
+- The classifiers in `pyproject.toml` match the Python versions the CI workflow tests.
+- A release has a `CHANGELOG.md` entry.
+- Each command, rutter and link that the README names exists.
+- Public text makes no verification claim, such as "checked by", "proven" or "audited".
+- The release steps below stay in order.
+
 ## License
 
 Periplus is licensed under the Apache License 2.0. See `LICENSE` and `NOTICE`. A contribution
@@ -140,8 +155,8 @@ Set up two things once, before the first tag push:
 Then make each release in this order:
 
 1. Bump `version` in `pyproject.toml`, and run `uv lock`.
-2. Write the `CHANGELOG.md` entry, dated the day you write it. Set the version and the test count
-   in the README status line.
+2. Write the `CHANGELOG.md` entry, dated the day you write it. Set the version in the README status
+   line.
 3. Merge to `main`.
 4. On `main`, create the annotated tag `vX.Y.Z` and push the tag.
 5. The publish workflow builds the wheel and sdist and publishes them to PyPI through the trusted

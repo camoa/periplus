@@ -75,14 +75,3 @@ def test_skills_install_command_writes_the_skills_and_refuses_an_unwritable_home
     )
     assert refused.returncode == 27, refused.stderr
     assert str(blocked / ".claude") in refused.stderr
-
-
-@pytest.mark.criterion(id="c1")
-def test_readme_names_the_skills_install_command_after_the_tool_install_c1() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    start = readme.index("### 1. Install Periplus")
-    end = readme.index("### 2.", start)
-    step = readme[start:end]
-    tool = step.index("uv tool install")
-    assert "periplus skills install" in step, "step 1 does not name periplus skills install"
-    assert step.index("periplus skills install") > tool

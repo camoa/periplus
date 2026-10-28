@@ -2,9 +2,7 @@
 
 A tree rule can test the text of any child of its match, not only the name. A tree declaration
 rule can also require that its id source fit a pattern, and start or end an edge at the node
-another rule declares at the same match. No worked example below is Drupal. The check
-`scripts/demo.d/97p-ability-examples.sh` runs each one from this page and gets the result stated
-there. The last section reads a class constant as a call's argument.
+another rule declares at the same match. No worked example below is Drupal. `tests/test_demo_b_tree_rules.py`, `tests/test_declared_end.py` and `tests/test_property_type_sources.py` map planted rutters that use these abilities. The last section reads a class constant as a call's argument.
 
 ## A call tested on its class and its method
 
@@ -356,7 +354,7 @@ source is then only a condition, and an edge rule can use it to start at the pro
 ## A class constant as a call's argument
 
 This section is not a worked example. Its block is copied from the Drupal pack's manifest, in
-src/periplus/packs, and check 99u-drupal-guide-fences compares the two.
+src/periplus/packs, and `tests/test_demo_c_drupal.py` maps a class constant argument.
 
 `{argument: N}` reads a text literal. A Drupal module often names an entity type by a class
 constant, `getStorage(MyType::ENTITY_TYPE)`, declared once as text. Two keys of the manifest's

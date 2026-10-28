@@ -132,32 +132,27 @@ def _damaged(name: str) -> dict[str, Any]:
     return document
 
 
-# Each command with ids that make it read the damaged field. Left out because the command never
-# reads that field: path on either node-type defect, find on the edge without a kind, and types,
-# find, affected and path on the dangling edge end.
+# One case per command, and every kind of damage at least once. Each command wraps its own field
+# reads, so each needs a case; a second case on the same command and wrapper reaches the same
+# branch. Each case names ids that make its command read the damaged field.
 _DAMAGED_CASES = [
     ("node without type", ["types"]),
-    ("node without type", ["find", "Foo"]),
-    ("node without type", ["show", _BAR]),
-    ("node without type", ["neighbors", _FOO]),
-    ("node without type", ["affected", _BAZ]),
-    ("edge without kind", ["types"]),
-    ("edge without kind", ["show", _BAR]),
-    ("edge without kind", ["neighbors", _BAR]),
-    ("edge without kind", ["affected", _BAZ]),
-    ("edge without kind", ["path", _BAR, _BAZ]),
-    ("node type is an int", ["types"]),
     ("node type is an int", ["find", "Foo"]),
-    ("node type is an int", ["show", _BAR]),
-    ("node type is an int", ["neighbors", _FOO]),
-    ("node type is an int", ["affected", _BAZ]),
-    ("node ids mix int and str", ["show", "nope"]),
-    ("node ids mix int and str", ["neighbors", "nope"]),
-    ("node ids mix int and str", ["affected", "nope"]),
-    ("node ids mix int and str", ["path", _BAZ, "nope"]),
-    ("edge end names no node", ["show", _BAR]),
+    ("edge without kind", ["show", _BAR]),
     ("edge end names no node", ["neighbors", _BAR]),
+    ("node ids mix int and str", ["affected", "nope"]),
+    ("edge without kind", ["path", _BAR, _BAZ]),
 ]
+
+
+# The error a report names for each damage: the exception kind, and the field or value it names.
+_DAMAGE_NAMED = {
+    "node without type": ("KeyError", "type"),
+    "edge without kind": ("KeyError", "kind"),
+    "node type is an int": ("TypeError", "int"),
+    "node ids mix int and str": ("TypeError", "int"),
+    "edge end names no node": ("KeyError", "nowhere"),
+}
 
 
 @pytest.mark.parametrize(("name", "argv"), _DAMAGED_CASES)
@@ -203,7 +198,7 @@ def test_a_navigation_library_run_returns_not_a_map_for_a_damaged_map(
 
     assert report.exit_code == ExitCode.NOT_A_MAP
     (problem,) = report.problems
-    assert problem.message.startswith(
-        f"{map_path} is damaged: a node or edge field is missing or malformed ("
-    )
-    assert problem.message.endswith("); run periplus check-map for the exact error")
+    kind, field = _DAMAGE_NAMED[name]
+    assert str(map_path) in problem.message
+    assert f"{kind}:" in problem.message and field in problem.message, problem.message
+    assert "check-map" in problem.message

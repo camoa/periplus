@@ -1,10 +1,16 @@
-"""Shared helpers for the skill tests: block extraction and the example project."""
+"""Shared helpers for the skill tests: block extraction, the example project, an in-process run."""
 
 from __future__ import annotations
 
 import re
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
+from typing import NamedTuple
+
+import pytest
+
+from periplus.cli import main
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -43,3 +49,23 @@ def example_project(tmp_path: Path) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(body, encoding="utf-8")
     return root
+
+
+class Ran(NamedTuple):
+    code: int
+    out: str
+    err: str
+
+
+def run_periplus(
+    args: Sequence[str],
+    project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> Ran:
+    """Run `periplus ARGS` in-process from `project`, with a config folder beside it."""
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("PERIPLUS_CONFIG_DIR", str(project.parent / "config"))
+    code = main(list(args))
+    captured = capsys.readouterr()
+    return Ran(code, captured.out, captured.err)

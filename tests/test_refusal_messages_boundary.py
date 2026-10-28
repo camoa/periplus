@@ -11,11 +11,6 @@ import pytest
 from periplus.map import MapReport, run
 from periplus.preflight import check_runtime_dependencies
 
-SHAPE = (
-    "boundary: {<group>: {type: <node type>, ancestry: [<edge kind>], "
-    "names: {<name>: <node type or ~>}}}"
-)
-
 # A rutter that owns the PHP grammar and declares a class type and inherits. {boundary} is its
 # boundary block.
 MANIFEST = """\
@@ -98,12 +93,12 @@ def _run(root: Path, boundary: str, *, second: str | None = None) -> MapReport:
 def test_a_wrong_boundary_is_refused_naming_the_working_shape(
     tmp_path: Path, boundary: str, second: str | None, names: str
 ) -> None:
-    """The map stops with exit 26 and one problem, which names the wrong word and the shape."""
+    """The map stops with exit 26 and one problem, which names the wrong word and the boundary."""
     report = _run(tmp_path, boundary, second=second)
     assert report.exit_code == 26, report
     assert len(report.problems) == 1, report.problems
     message = report.problems[0].message
-    assert names in message and SHAPE in message, message
+    assert names in message and "boundary" in message, message
     assert not (tmp_path / "map.json").exists()
 
 

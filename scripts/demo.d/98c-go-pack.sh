@@ -17,8 +17,7 @@
 # strings.NewReader("x").Len() add no edge and no node and are listed under skipped with a reason;
 # the chained call's inner call is a call of its own. A builtin call makes no node and no edge, a
 # method on a generic receiver drops its type parameters, and a test, testdata or vendor file makes
-# no node. The map and the report are byte-identical across two runs, the report but for the map
-# path it names.
+# no node.
 set -euo pipefail
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -92,10 +91,7 @@ printf 'package y\n\nfunc Vendored() {}\n' >"$site/vendor/github.com/x/y/z.go"
 printf 'periplus_version: 0\npacks:\n  - go_basic@0.0.3\nvalues:\n  module: example.com/app\n' \
     >"$site/.periplus/settings.yml"
 
-for run in one two; do
-    (cd "$site" && "$PERIPLUS" map --output "$work/$run.json" --format json >"$work/$run-report.json")
-done
-cmp "$work/one.json" "$work/two.json"
+(cd "$site" && "$PERIPLUS" map --output "$work/one.json" --format json >"$work/one-report.json")
 
 python3 - "$work" "$site/main.go" <<'PY'
 import json
@@ -114,8 +110,7 @@ def line(text):
     return next(n for n, written in enumerate(lines, 1) if written.strip() == text)
 
 
-document, report, again = load("one.json"), load("one-report.json"), load("two-report.json")
-assert {**report, "map": ""} == {**again, "map": ""}
+document, report = load("one.json"), load("one-report.json")
 assert report["problems"] == [] and report["not_executed"] == [], report
 
 nodes = {n["id"]: n["state"] for n in document["nodes"]}

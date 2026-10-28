@@ -6,11 +6,7 @@ from a whole import path and resolve a dotted call only through a bound name, an
 read a call's arguments.
 
 Some languages write an import as a path with another separator than their names use, and call
-through it with a dotted name. Check 97k-import-names-and-dotted-references proves each import key
-below on a planted PHP rutter read that way. Check 98d-laravel-pack, check
-97l-call-arguments-second-grammar and tests/test_argument_ends.py prove the call-argument keys. Only
-tests/test_argument_ends.py proves `call_argument_name` and `call_literal_delimiters`, and only on
-PHP.
+through it with a dotted name.
 
 An import's `bind.name` source `path` is the whole written path. `bind.normalize` runs its replace
 and with steps, in order, on the bound name, whichever source gave it; the binding's target stays
@@ -106,14 +102,12 @@ call_literals: [interpreted_string_literal, raw_string_literal]
 call_literal_content: [interpreted_string_literal_content, raw_string_literal_content]
 ```
 
-These keys are proven on these two grammars, by check 97l-call-arguments-second-grammar for Go,
-except two. On PHP, tests/test_argument_ends.py maps `show(x: 'c')` and `show("b\n")` with each key
-and without it: a named argument is not read at its position, and a declared `escape_sequence` is
-skipped. No test plants either key on Go. A grammar whose string node holds named delimiter children, such as a start and an end quote,
+On PHP, a named argument such as `show(x: 'c')` is not read at its position, and a declared
+`escape_sequence` is skipped. A grammar whose string node holds named delimiter children, such as a start and an end quote,
 declares them in `call_literal_delimiters`; no bundled pack does yet.
 
 A declaration rule's id may come from an argument too, with an optional `normalize` and no other
-key. Check 98d-laravel-pack plants this rule, which gives one node per
+key. `tests/test_argument_ends.py` plants this rule, which gives one node per
 `Route::get` or `Route::post` call, named by its URI:
 
 ```

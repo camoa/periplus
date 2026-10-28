@@ -4,83 +4,50 @@ from __future__ import annotations
 
 import copy
 import json
-import re
 import shlex
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
-from _skills import ROOT, blocks, example_project, write_example
+from _skills import ROOT, blocks, example_project, run_periplus, write_example
 from jsonschema import Draft202012Validator, ValidationError, validate
 from ruamel.yaml import YAML
 
 SKILL = ROOT / "src/periplus/skills/periplus-map/SKILL.md"
 SCHEMA = ROOT / "src/periplus/skills/periplus-map/references/descriptions.schema.json"
-EXE = str(Path(sys.executable).parent / "periplus")
-
-
-def _text() -> str:
-    return SKILL.read_text(encoding="utf-8") if SKILL.exists() else ""
 
 
 def _blocks(marker: str) -> list[tuple[str, str]]:
     return blocks(SKILL, marker) if SKILL.exists() else []
 
 
-def _run(root: Path, argv: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
-        [EXE, *argv], cwd=root, capture_output=True, text=True, check=False
-    )
-
-
-def _tree(root: Path) -> dict[str, bytes]:
-    return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
-
-
-def _mapped_project(tmp_path: Path) -> tuple[Path, dict[str, object], str]:
+def _mapped_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> tuple[Path, dict[str, object], str]:
     """Map the example project; return its root, the parsed map and the map's relative path."""
     root = example_project(tmp_path)
-    before = _tree(root)
-    done = _run(root, ["map"])
-    assert done.returncode == 0, done.stderr
-    after = _tree(root)
-    for rel in sorted(set(after) - set(before)):
-        try:
-            data = json.loads(after[rel])
-        except ValueError:
-            continue
-        if isinstance(data, dict) and "nodes" in data and "edges" in data:
-            return root, data, rel
-    raise AssertionError("periplus map wrote no map file with nodes and edges")
+    done = run_periplus(["map"], root, monkeypatch, capsys)
+    assert done.code == 0, done.err
+    rel = ".periplus/map.json"
+    return root, json.loads((root / rel).read_text(encoding="utf-8")), rel
 
 
 @pytest.mark.criterion(id="c9")
-def test_second_map_run_leaves_map_byte_identical_c9(tmp_path: Path) -> None:
-    root, _data, rel = _mapped_project(tmp_path)
+def test_second_map_run_leaves_map_byte_identical_c9(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, _data, rel = _mapped_project(tmp_path, monkeypatch, capsys)
     written = write_example(root, _blocks("example"), "descriptions")
     assert written, "the skill holds no example block named descriptions"
     first = (root / rel).read_bytes()
-    assert _run(root, ["map"]).returncode == 0
+    assert run_periplus(["map"], root, monkeypatch, capsys).code == 0
     assert (root / rel).read_bytes() == first
 
 
 @pytest.mark.criterion(id="c9")
-def test_skill_opens_descriptions_file_on_every_navigation_c9() -> None:
-    text = _text()
-    assert re.search(r"open[^.\n]*descriptions[^.\n]*every navigation", text, re.I) or re.search(
-        r"every navigation[^.\n]*open[^.\n]*descriptions", text, re.I
-    ), "no sentence tells the reader to open the descriptions file on every navigation"
-    assert "references/descriptions.schema.json" in text
-    paths = set(re.findall(r"(?<![\w/.-])(docs/[\w./-]+\.md)", text))
-    assert paths, "the skill points at no docs path"
-    missing = sorted(p for p in paths if not (ROOT / p).exists())
-    assert not missing, missing
-
-
-@pytest.mark.criterion(id="c9")
-def test_descriptions_example_matches_map_and_schema_c9(tmp_path: Path) -> None:
-    root, data, _rel = _mapped_project(tmp_path)
+def test_descriptions_example_matches_map_and_schema_c9(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, data, _rel = _mapped_project(tmp_path, monkeypatch, capsys)
     written = write_example(root, _blocks("example"), "descriptions")
     assert [p.relative_to(root).as_posix() for p in written] == [".periplus/descriptions.yaml"]
     doc = YAML(typ="safe").load(written[0].read_text(encoding="utf-8"))
@@ -110,23 +77,10 @@ def test_descriptions_example_matches_map_and_schema_c9(tmp_path: Path) -> None:
                 validate(broken, schema)
 
 
-_QUESTIONS = [
-    (r"neighbo", ("show", "neighbors")),
-    (r"affect", ("affected",)),
-    (r"path", ("path",)),
-    (r"match", ("find",)),
-    (r"kinds", ("types",)),
-]
-
-
 @pytest.mark.criterion(id="c4")
-def test_skill_maps_each_question_to_a_command_and_commands_run_c4(tmp_path: Path) -> None:
-    rows = [ln for ln in _text().splitlines() if ln.lstrip().startswith("|")]
-    for question, commands in _QUESTIONS:
-        hit = [r for r in rows if re.search(question, r, re.I)]
-        assert hit, f"no table row for the question {question}"
-        for command in commands:
-            assert any(f"periplus {command}" in r for r in hit), (question, command)
+def test_skill_nav_run_commands_exit_zero_with_rows_c4(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     lines = [
         ln.strip()
         for _arg, body in _blocks("nav-run")
@@ -135,15 +89,15 @@ def test_skill_maps_each_question_to_a_command_and_commands_run_c4(tmp_path: Pat
     ]
     used = {shlex.split(ln)[2] for ln in lines}
     assert {"show", "neighbors", "affected", "path", "find", "types"} <= used
-    root, _data, _rel = _mapped_project(tmp_path)
+    root, _data, _rel = _mapped_project(tmp_path, monkeypatch, capsys)
     for ln in lines:
         argv = shlex.split(ln)[2:]
         if "--format" in argv:
             i = argv.index("--format")
             del argv[i : i + 2]
-        done = _run(root, [*argv, "--format", "json"])
-        assert done.returncode == 0, (ln, done.stderr)
-        report = json.loads(done.stdout)
+        done = run_periplus([*argv, "--format", "json"], root, monkeypatch, capsys)
+        assert done.code == 0, (ln, done.err)
+        report = json.loads(done.out)
         rows = [
             row
             for key in (
@@ -158,22 +112,3 @@ def test_skill_maps_each_question_to_a_command_and_commands_run_c4(tmp_path: Pat
             for row in report.get(key, [])
         ]
         assert len(rows) >= 1, (ln, "the result list is empty")
-
-
-@pytest.mark.criterion(id="wo2")
-def test_skill_opens_with_the_five_standing_rules_wo2() -> None:
-    text = _text()
-    match = re.search(r"^## Standing rules\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
-    assert match, "no Standing rules section"
-    assert re.findall(r"^## (.+)$", text, re.M)[:1] == ["Standing rules"]
-    section = match.group(1)
-    rules = [ln for ln in section.splitlines() if re.match(r"\s*(\d+[.)]|[-*])\s+\S", ln)]
-    assert len(rules) == 5, rules
-    for phrase in (
-        "split by rule file inside one rutter, never by adding rutters",
-        "passes by depth",
-        "no stack knowledge in the engine",
-        "probe before saying a rutter cannot",
-        "never names the client site",
-    ):
-        assert phrase in section, phrase

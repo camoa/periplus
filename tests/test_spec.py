@@ -1,10 +1,10 @@
 """``periplus spec``: what it publishes, what it refuses to claim, and what it must not vary with.
 
-Four properties are tested here and each one gets the cheapest tier that can answer it. Whether the
-contract is emitted whole is a question about bytes and is answered in this process. Whether it is
-emitted identically from two directories under two locales is a question about a process's
-environment and needs two of them. Whether it reaches a user at all is a question about packaging
-and needs a real install, which is the one test here that builds a virtualenv.
+Three properties are tested here and each one gets the cheapest tier that can answer it. Whether
+the contract is emitted whole is a question about bytes and is answered in this process. Whether it
+is emitted identically from two directories under two locales is a question about a process's
+environment and needs two of them. Whether an install carries it is ``tests/test_contract.py``'s
+question.
 
 The fifth-gap test is the sharp one and it is deliberately not a claim in a docstring: it copies
 the shipped contract into a temporary directory, appends a bullet to ``spec/rules.md``, and asserts
@@ -25,7 +25,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from test_packaging import PROJECT_ROOT, UV, _run_or_fail, _scripts_dir
+from test_packaging import PROJECT_ROOT
 
 from periplus.errors import ExitCode
 from periplus.manifest import resolve_pack_order
@@ -401,12 +401,9 @@ def test_a_pack_name_no_directory_carries_exits_fifteen_and_names_what_is_there(
     assert report.inherited is None
     assert report.documents, "a bad pack name suppressed the contract"
     problem = next(p for p in report.problems if p.code is ExitCode.PACK_UNKNOWN)
-    assert problem.detail["available"] == (
-        "advancedqueue_basic, ai_basic, config_pages_basic, crop_basic, drupal, drupal_basic, "
-        "drupal_js_basic, drush_basic, eck_basic, go, go_basic, js_basic, laravel_basic, "
-        "paragraphs_basic, php, php_basic, profile_basic, salesforce_basic, twig, twig_basic, "
-        "twig_tweak_basic, webform_basic, yaml, yaml_basic"
-    )
+    bundled = (SRC / "periplus" / "packs").iterdir()
+    on_disk = {entry.name.split("@")[0] for entry in bundled if entry.is_dir()}
+    assert set(str(problem.detail["available"]).split(", ")) == on_disk
 
 
 def test_the_json_form_carries_the_documents_and_keeps_unread_apart_from_empty(
@@ -468,50 +465,31 @@ def test_the_spec_format_choices_are_exactly_the_renderers_the_spec_module_offer
     assert parser.parse_args(["spec", "php"]).pack == "php"
 
 
-@pytest.mark.slow
-def test_the_contract_is_publishable_out_of_an_installed_wheel(tmp_path: Path) -> None:
-    """End to end: the installed console script publishes the contract from anywhere.
-
-    Not editable, and run from a working directory nowhere near the project, for the reason
-    ``tests/test_contract.py`` gives: ``uv pip install -e .`` leaves the package pointing at
-    ``src/periplus``, and every read would come back out of the working tree while the wheel could
-    be shipping nothing at all.
+def test_the_command_publishes_the_contract_from_a_directory_that_is_not_a_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``periplus spec`` run from anywhere exits 0 and prints the contract with no user config.
 
     ``PERIPLUS_CONFIG_DIR`` points at a directory that does not exist and the working directory is
-    not a project, so there is no settings file and no pack root anywhere except the install's own.
-    A run that needed either would have nothing to find; this one exits 0 and prints the contract,
-    which is what "without reading anything outside the installed package" means for a person.
+    not a project, so there is no settings file and no pack root anywhere except the package's own.
+    A run that needed either would have nothing to find. That the wheel carries the contract is
+    ``tests/test_contract.py``'s question; this one is whether the command prints it.
     """
-    if UV is None:
-        pytest.fail("uv is not on PATH, so the contract cannot be published from a real install")
+    from periplus.cli import main
 
-    venv = tmp_path / "venv"
-    _run_or_fail([UV, "venv", str(venv)], "uv venv")
-    python = _scripts_dir(venv) / ("python.exe" if os.name == "nt" else "python")
-    _run_or_fail(
-        [UV, "pip", "install", "--python", str(python), str(PROJECT_ROOT)],
-        "uv pip install . (not -e)",
-    )
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.setenv("PERIPLUS_CONFIG_DIR", str(tmp_path / "no-such-directory"))
 
-    result = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-        [str(_scripts_dir(venv) / ("periplus.exe" if os.name == "nt" else "periplus")), "spec"],
-        capture_output=True,
-        text=True,
-        cwd=str(elsewhere),
-        env={
-            "PATH": os.environ.get("PATH", ""),
-            "PERIPLUS_CONFIG_DIR": str(tmp_path / "no-such-directory"),
-        },
-        check=False,
-    )
+    status = main(["spec"])
 
-    assert result.returncode == 0, f"{result.stdout}{result.stderr}"
+    captured = capsys.readouterr()
+    assert status == 0, f"{captured.out}{captured.err}"
     for phrase in ("supplementary", "complementary", "reads: file", "reads: map"):
-        assert phrase in result.stdout, f"an install does not publish {phrase!r}"
+        assert phrase in captured.out, f"the command does not publish {phrase!r}"
     for name in ("schema/pack-file.schema.json", "spec/engine.md", "spec/rules.md"):
-        assert _shipped(name) in result.stdout, f"an install does not publish {name} in full"
+        assert _shipped(name) in captured.out, f"the command does not publish {name} in full"
 
 
 def test_a_document_with_no_open_section_contributes_no_gaps(tmp_path: Path) -> None:

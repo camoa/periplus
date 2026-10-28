@@ -5,8 +5,7 @@
 # plugin and is listed under skipped, and the same annotation on a class outside that folder makes
 # nothing. A webform's config file makes the bundle webform_submission.<id> with its label read
 # from the key title, a configured_by edge to its config file and a bundle_of edge to the entity
-# type webform_submission, which no file declares and so stays referenced. The map and the report
-# are byte-identical across two runs, the report but for the map path it names.
+# type webform_submission, which no file declares and so stays referenced.
 set -euo pipefail
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -66,10 +65,7 @@ EOF
 printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - webform_basic@0.0.1\n' \
     >"$site/.periplus/settings.yml"
 
-for run in one two; do
-    (cd "$site" && "$PERIPLUS" map --output "$work/$run.json" --format json >"$work/$run-report.json")
-done
-cmp "$work/one.json" "$work/two.json"
+(cd "$site" && "$PERIPLUS" map --output "$work/one.json" --format json >"$work/one-report.json")
 
 python3 - "$work" "$site" <<'PY'
 import json
@@ -93,8 +89,7 @@ def line(path, text):
     return next(n for n, found in enumerate(written, 1) if found.strip().lstrip("* ") == text)
 
 
-document, report, again = load("one.json"), load("one-report.json"), load("two-report.json")
-assert {**report, "map": ""} == {**again, "map": ""}
+document, report = load("one.json"), load("one-report.json")
 assert report["problems"] == [] and report["not_executed"] == [], report
 
 nodes = {n["id"]: (n["state"], n.get("attributes", {}).get("label")) for n in document["nodes"]}

@@ -4,7 +4,7 @@ Read [Writing a rutter](rutter-author-guide.md) and [Reading the Drupal
 rutters](rutter-author-guide-drupal.md) first. A reference is a use of a thing in a body, as a call.
 A tree rutter states one with a reference rule. `php_basic` has two for PHP calls, of a kind with
 [php.function, php.method] at each end; each block below is from the file its fence names, in
-src/periplus/packs. Check 67b-php-calls proves the two rules.
+src/periplus/packs.
 
 ```yaml php_basic@0.2.0/edges/find_structure.yaml
 - rule: calls_function
@@ -130,7 +130,7 @@ service that no mapped file declares is `referenced`. The rule `entity_class_sta
 looks a class's short name up in the table `entity_classes`, for `load`, `loadMultiple` and
 `create`. A short name is not a class: a project class named like a core one, such as a module's
 own `User`, gives a false `uses_entity_type` edge, and a `load` or `create` call on any other
-capitalised class leaves a skipped row. Check 99s-drupal-table-step proves the two rules.
+capitalised class leaves a skipped row.
 
 ## Where the framework begins: boundary
 
@@ -175,8 +175,7 @@ gets one row: `<id>: classification <value> from <boundary id> does not descend 
 declaring pack declares, an `ancestry` kind that no loaded pack declares, and one id that two
 packs list. Each problem names the shape to write. The
 path-based keys of earlier releases, `applies_to_paths`, `emit_boundary_nodes` and
-`type_hierarchy`, fail the manifest schema with exit 16. Check 99v-drupal-boundary proves the
-Drupal groups.
+`type_hierarchy`, fail the manifest schema with exit 16.
 
 ## Two declaration rules on one tree node
 
@@ -273,7 +272,7 @@ rule made a node for the file, the edge is skipped and `skipped` says
 ```
 
 A pack outside the bundle uses both this end and the key filter above with no engine change:
-check 99y-third-party-file-links maps a project-local pack that has them and gets the same nodes
+`tests/test_demo_d_library_files.py` maps a project-local pack that has them and gets the same nodes
 and edges as the bundled rutters.
 
 ## An edge end from the file's path alone: from: []
@@ -336,7 +335,7 @@ rules:
 
 `config/mymod.settings.yml` gives the edge `app.config::mymod.settings` to `app.module::mymod`, a
 referenced node, since no rule maps the module. A file whose name the pattern does not fit has no
-`owner` value and gives no edge. Check 99z-template-only-end maps these two blocks as written here.
+`owner` value and gives no edge. `tests/test_demo_d_template_rules.py` maps a rutter of this shape.
 
 ## A call on a property of the enclosing object
 
@@ -371,8 +370,7 @@ A `property_typed_as` edge runs from each property to its type node. The map rul
 It goes up `inherits` from the call's class to the class that declares the property, through
 `property_typed_as` to its type, and emits `calls` from the method around the call to
 `<type>::<method>`, at the call site's line, inferred. A property with no declared type keeps its
-call site node and gets no `calls` edge and no skipped row. Check 97t-typed-property-calls proves
-the three forms.
+call site node and gets no `calls` edge and no skipped row.
 
 A nullable type, `?Mailer`, and a union of one class name with null, false or scalars, such as
 `Mailer|null` or `string|Mailer`, also give the class. `find_nullable_property_type` and its
@@ -383,8 +381,7 @@ takes its first class-like name and skips null, false and scalars, so `Mailer|Ot
 one class-like name among `null`, `false`, `true`, `int`, `float`, `string`, `bool`, `array`,
 `iterable`, `mixed` and `callable`, in any order. `union_property_typed_as` and
 `union_promoted_property_typed_as` carry the same gate and guard to the property. A union of two or
-more class names makes no node, no edge and no skipped row. Check 97v-union-property-calls proves
-the union shapes.
+more class names makes no node, no edge and no skipped row.
 
 A property that a constructor assigns from a typed parameter has no declared type. `php_basic`
 finds it the same way: small declaration rules state each part at its own line, and one
@@ -439,7 +436,7 @@ own property is matched by both map rules, and its edge carries two provenance r
 parent class through a property only a child assigns gives no edge: no follow step walks an edge
 backwards. A property typed by a union of two or more class names gives no edge either, and
 neither does a property set in `create()` from `$container->get('<id>')`. Such a call keeps its
-call site node, with no `calls` edge. Check 97s-inherited-property-calls proves the chain.
+call site node, with no `calls` edge.
 
 ## Keys the schemas accept and the engine does not run
 

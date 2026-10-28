@@ -352,7 +352,7 @@ def test_the_settings_flag_reaches_the_resolution_and_anchors_the_project_root(
     assert document["settings"]["periplus_version"]["value"] == 7
 
 
-def test_the_subcommands_are_exactly_the_twelve_listed_below() -> None:
+def test_the_subcommands_are_exactly_the_set_listed_below() -> None:
     """The surface, asserted as a set rather than by trying names one at a time.
 
     ``resolve`` named a function rather than what a person is asking for, and it is gone rather
@@ -537,36 +537,43 @@ def test_a_terminal_receives_the_same_bytes_as_a_pipe_and_no_escape_sequence(
 
 
 def test_init_runs_to_completion_with_stdin_closed_and_refuses_a_second_run(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Init needs no terminal, and a second run's refusal status, at the surface a person types.
 
-    ``init`` asks nothing, so it needs no terminal. ``stdin=subprocess.DEVNULL`` rather than the
-    inherited descriptor: inherited, fd 0 is pytest's capture artefact and the assertion would be
-    about that rather than about a closed stdin.
+    ``init`` asks nothing, so it needs no terminal. ``sys.stdin`` is a closed stream, so a read
+    from it raises instead of returning whatever pytest's capture left in its place.
 
     The same command run a second time refuses, and leaves the first run's file byte-identical.
     """
-    body = (
-        "import os\n"
-        f"os.chdir({str(tmp_path)!r})\n"
-        "from periplus.cli import main\n"
-        "raise SystemExit(main(['init']))\n"
-    )
+    from periplus.cli import main
 
-    first = _run_child(body, isolated=False, stdin=subprocess.DEVNULL)
-    before = (tmp_path / ".periplus" / "settings.yml").read_bytes()
-    second = _run_child(body, isolated=False, stdin=subprocess.DEVNULL)
+    config = tmp_path / "userconf"
+    config.mkdir()
+    project = tmp_path / "project"
+    project.mkdir()
+    closed = io.StringIO()
+    closed.close()
+    monkeypatch.setattr(sys, "stdin", closed)
+    monkeypatch.setenv("PERIPLUS_CONFIG_DIR", str(config))
+    monkeypatch.chdir(project)
+    settings = project / ".periplus" / "settings.yml"
 
-    assert first.returncode == 0, f"{first.stdout}{first.stderr}"
-    assert (tmp_path / ".periplus" / "settings.yml").is_file()
-    assert (tmp_path / ".periplus" / "packs").is_dir()
-    assert ".periplus" in first.stdout
+    first_status = main(["init"])
+    first = capsys.readouterr()
+    before = settings.read_bytes()
+    second_status = main(["init"])
+    second = capsys.readouterr()
 
-    assert second.returncode == 10
-    assert (tmp_path / ".periplus" / "settings.yml").read_bytes() == before
-    assert str(tmp_path) in second.stdout, "the refusal names the file that stopped it"
-    assert second.stderr == "", "a refusal is part of the report, so it goes to stdout"
+    assert first_status == 0, f"{first.out}{first.err}"
+    assert settings.is_file()
+    assert (project / ".periplus" / "packs").is_dir()
+    assert ".periplus" in first.out
+
+    assert second_status == 10
+    assert settings.read_bytes() == before
+    assert str(project) in second.out, "the refusal names the file that stopped it"
+    assert second.err == "", "a refusal is part of the report, so it goes to stdout"
 
 
 def test_status_reports_the_project_pack_root_only_once_init_has_made_one(tmp_path: Path) -> None:
@@ -620,40 +627,34 @@ def test_status_reports_the_project_pack_root_only_once_init_has_made_one(tmp_pa
     assert str(project / ".periplus" / "packs") in str(project_roots[0]["display"])
 
 
-def test_a_non_ascii_working_directory_survives_an_ascii_console(tmp_path: Path) -> None:
+def test_a_non_ascii_working_directory_survives_an_ascii_console(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`_pin_the_output_stream()` leads, and this is the run that would fail if it did not.
 
     Both subcommands print paths taken from the working directory. Under a console whose encoding
-    cannot represent them -- `PYTHONIOENCODING=ascii` is how that is reached deliberately -- an
-    unpinned stdout raises `UnicodeEncodeError` and the command dies with a traceback instead of
-    printing the path. The pin reconfigures stdout to UTF-8 before anything writes, and it was
-    moved above every branch during this build after the `init` branch was found writing beneath
-    it.
+    cannot represent them an unpinned stdout raises `UnicodeEncodeError` and the command dies with
+    a traceback instead of printing the path. The pin reconfigures stdout to UTF-8 before anything
+    writes, and it was moved above every branch during this build after the `init` branch was
+    found writing beneath it. The console here is a text stream over bytes with the `ascii`
+    encoding, which is what `PYTHONIOENCODING=ascii` gives the program.
     """
-    script = shutil.which("periplus", path=str(Path(sys.executable).parent))
-    assert script is not None, "run `uv pip install -e '.[dev]'` into this interpreter"
+    from periplus.cli import main
 
     project = tmp_path / "café-π"
     project.mkdir()
     config = tmp_path / "userconf"
     config.mkdir()
-    env = {
-        **os.environ,
-        "PYTHONIOENCODING": "ascii",
-        "PERIPLUS_CONFIG_DIR": str(config),
-    }
+    console = io.TextIOWrapper(io.BytesIO(), encoding="ascii")
+    monkeypatch.setattr(sys, "stdout", console)
+    monkeypatch.setenv("PERIPLUS_CONFIG_DIR", str(config))
+    monkeypatch.chdir(project)
 
-    finished = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-        [script, "init"],
-        capture_output=True,
-        cwd=project,
-        env=env,
-        check=False,
-        timeout=60,
-    )
+    status = main(["init"])
 
-    assert finished.returncode == 0, f"{finished.stdout!r}{finished.stderr!r}"
-    assert b"Traceback" not in finished.stderr
+    console.flush()
+    assert status == 0
+    assert "café-π".encode() in console.buffer.getvalue()  # type: ignore[attr-defined]
     assert (project / ".periplus" / "settings.yml").is_file()
 
 
