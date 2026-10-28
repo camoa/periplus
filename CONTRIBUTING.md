@@ -154,7 +154,9 @@ Set up two things once, before the first tag push:
 
 Then make each release in this order:
 
-1. Bump `version` in `pyproject.toml`, and run `uv lock`.
+1. Bump `version` in `pyproject.toml`, and run `uv lock`. Change the tag in the skill links, the
+   text `blob/vX.Y.Z/` in each `src/periplus/skills/*/SKILL.md`, to the new version. The tag does
+   not exist until step 4, so those links fail until then.
 2. Write the `CHANGELOG.md` entry, dated the day you write it. Set the version in the README status
    line.
 3. Merge to `main`.

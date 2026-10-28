@@ -11,7 +11,7 @@ description: Navigate a Periplus map by the question being asked, and record wha
 2. A rutter reads the code in passes by depth: structure first, then one layer inside each class, then joins in the map.
 3. There is no stack knowledge in the engine; what a stack means lives in its rutter.
 4. Run a rule and read the engine's message: probe before saying a rutter cannot.
-5. The product never names the client site, in code, rules, examples or prose.
+5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose.
 
 ## Pick the command by the question
 
@@ -25,9 +25,9 @@ Run `periplus map` first. Then pick the one command that answers the question.
 | Which ids match a name? | `periplus find TEXT` |
 | Which kinds of node and edge does the map hold? | `periplus types` |
 
-Each command's options, output and exit codes are in docs/navigation.md. Take an id from
-`periplus find` before passing it to the other commands. On the project in that guide's worked
-example, these run as shown:
+Each command's options, output and exit codes are in [Navigation](https://github.com/camoa/periplus/blob/v0.3.0/docs/navigation.md). Take an id from
+`periplus find` before passing it to the other commands. On the project in the Navigation
+guide's worked example, these run as shown:
 
 <!-- nav-run -->
 ```console

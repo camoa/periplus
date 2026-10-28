@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-28
+
+### Added
+
+- Three Claude skills ship with the package: `periplus-rutter` for writing a rutter, `periplus-map` for reading a map, and `periplus-gaps` for working through the gaps in a map report.
+- `periplus skills install` copies the skills into `~/.claude/skills`, and replaces older copies when you run it again after an update.
+- A README section on using the skills with Codex CLI, Gemini CLI, GitHub Copilot in VS Code and Cursor.
+- A page, `docs/rutters.md`, that lists every bundled rutter with its version, what it maps and the rutters it depends on. The README and the rutter author guide link to it.
+- A reviewer checklist in `CONTRIBUTING.md` for the items that no test covers.
+
+### Changed
+
+- Contributors: the test suite runs in parallel and in the test process, the end-to-end checks in `scripts/demo.d` are a short set of acceptance scripts, and `CONTRIBUTING.md` describes the new layout and release steps.
+
 ## [0.2.1] - 2026-10-26
 
 ### Added

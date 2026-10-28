@@ -7,6 +7,7 @@ import contextlib
 import io
 import re
 import shlex
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -15,9 +16,15 @@ from periplus.cli import build_parser
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps")
-BODIES = {
+_PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+_VERSION = _PYPROJECT["project"]["version"]
+_LINK_PREFIX = f"https://github.com/camoa/periplus/blob/v{_VERSION}/"
+RAW = {
     s: (ROOT / "src/periplus/skills" / s / "SKILL.md").read_text(encoding="utf-8") for s in SKILLS
 }
+# An installed skill points at the pages of its own version; the checks below read each link as the
+# repository path it names.
+BODIES = {s: body.replace(_LINK_PREFIX, "") for s, body in RAW.items()}
 
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _EXAMPLE_BLOCK = re.compile(r"<!-- example [^>]*-->\s*\n```.*?\n```", re.DOTALL)
@@ -98,6 +105,32 @@ def test_every_repository_path_a_skill_names_exists_c7() -> None:
     count, dead = _dead_paths(BODIES)
     assert count, "no repository path found in any skill body"
     assert dead == [], f"paths named in skills that do not exist: {dead}"
+
+
+@pytest.mark.criterion(id="c7")
+def test_every_repository_page_a_skill_names_is_a_tag_pinned_link_c7() -> None:
+    """The wheel ships only src/periplus, so a bare repository path would point at nothing."""
+    bare = {
+        s: _PATH.findall(_without_example_projects(body.replace(_LINK_PREFIX, "")))
+        for s, body in RAW.items()
+    }
+    unlinked = {
+        s: [p for p in paths if f"({_LINK_PREFIX}{p}" not in RAW[s] and "references/" not in p]
+        for s, paths in bare.items()
+    }
+    assert {s: p for s, p in unlinked.items() if p} == {}
+
+
+@pytest.mark.criterion(id="c7")
+def test_every_skill_link_carries_the_package_version_c7() -> None:
+    """A version bump without a link change would leave an installed skill on old pages."""
+    links = {
+        s: re.findall(r"https://github\.com/camoa/periplus/blob/(v[^/]+)/", body)
+        for s, body in RAW.items()
+    }
+    assert all(links.values()), "a skill holds no repository link"
+    stale = {s: sorted(set(v) - {f"v{_VERSION}"}) for s, v in links.items()}
+    assert {s: v for s, v in stale.items() if v} == {}
 
 
 @pytest.mark.criterion(id="c7")

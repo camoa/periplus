@@ -14,7 +14,7 @@ PHRASES = (
     "passes by depth",
     "no stack knowledge in the engine",
     "probe before saying a rutter cannot",
-    "never names the client site",
+    "never names the project it was built on",
 )
 
 

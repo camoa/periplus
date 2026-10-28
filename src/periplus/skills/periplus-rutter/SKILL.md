@@ -11,22 +11,24 @@ description: Write or change a Periplus rutter, the pack of data that tells Peri
 2. A rutter reads in passes by depth: order 1 is the structure, order 2 one layer inside each class as nodes at their lines, order 3 joins in the map with map rules.
 3. There is no stack knowledge in the engine: a new stack is a rutter, never engine code, even where a request seems to ask for engine code.
 4. Probe before saying a rutter cannot do something: write the rule, run it, and quote the engine's message before you call it an engine gap.
-5. A rutter in the product never names the client site it was built on; what only one site needs stays in that site's own rutter.
+5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose.
 
 ## Where the detail lives
 
 This skill gives the steps. Each rule shape, and what the format cannot say, is in the rutter
 author guides; read the section the step names instead of guessing a key:
 
-- `docs/rutter-author-guide.md`: the files of a rutter, one rule of each shape, how to check a rutter.
-- `docs/rutter-author-guide-text.md`: text spans, nested regions of a text file.
-- `docs/rutter-author-guide-abilities.md`: a call's class and method in one rule, id patterns.
-- `docs/rutter-author-guide-references.md`: reference rules on a parse tree, and the keys the engine does not run.
-- `docs/rutter-author-guide-imports.md`: imports and bindings.
-- `docs/rutter-author-guide-map-rules.md`: map rules, which join what earlier passes found.
-- `docs/rutter-author-guide-drupal.md`: the PHP and Drupal rutters, read as worked examples.
+- [Rutter author guide](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide.md): the files of a rutter, one rule of each shape, how to check a rutter.
+- [Rutter author guide: text](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-text.md): text spans, nested regions of a text file.
+- [Rutter author guide: abilities](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-abilities.md): a call's class and method in one rule, id patterns.
+- [Rutter author guide: references](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-references.md): reference rules on a parse tree, and the keys the engine does not run.
+- [Rutter author guide: imports](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-imports.md): imports and bindings.
+- [Rutter author guide: map rules](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-map-rules.md): map rules, which join what earlier passes found.
+- [Rutter author guide: Drupal](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-drupal.md): the PHP and Drupal rutters, read as worked examples.
 
-The README section "Write a rutter" and `CONTRIBUTING.md` give the loop: write the rutter in the
+[Bundled rutters](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutters.md) lists every rutter that ships with Periplus.
+
+The [README](https://github.com/camoa/periplus/blob/v0.3.0/README.md) section "Write a rutter" and [CONTRIBUTING](https://github.com/camoa/periplus/blob/v0.3.0/CONTRIBUTING.md) give the loop: write the rutter in the
 project's own `.periplus/packs` first, and map that project until the map holds what the code holds.
 
 ## Write a rule
@@ -43,7 +45,7 @@ project's own `.periplus/packs` first, and map that project until the map holds 
    confidence: the first is `declared`, the second `inferred`.
 
 The example adds a rule file to `python_text` in a project that already holds the
-`examples/second-stack` rutters. A module-level name in capitals is a constant only by convention,
+[second-stack example](https://github.com/camoa/periplus/blob/v0.3.0/examples/second-stack) rutters. A module-level name in capitals is a constant only by convention,
 so the rule is `inferred`:
 
 <!-- example write-rule: .periplus/packs/python_text@0.1.0/rules/constants.yaml -->

@@ -5,6 +5,8 @@ engine decides what must be done: which files are read, how a match becomes a no
 edge end is unresolved. The rutter decides how: which folders, which file types, which patterns
 and which names. A new stack is a new rutter, never engine code.
 
+[Bundled rutters](rutters.md) lists the rutters that ship with Periplus.
+
 The three rutters in `examples/second-stack/packs` are the worked example. `python_text` maps
 Python modules, top-level classes and functions, and imports. `typer_text` depends on it and maps
 Typer apps, commands and mounts. `speckitty` maps spec-kitty's missions and their templates.

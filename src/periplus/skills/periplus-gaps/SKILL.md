@@ -11,14 +11,15 @@ description: Read a Periplus map and the code behind it, list what the map lacks
 2. A rutter reads its stack in passes by depth: structure first, then one layer inside each class, then joins in the map.
 3. There is no stack knowledge in the engine; a stack's shape is a rule in a rutter.
 4. Write the rule and run it: probe before saying a rutter cannot, and quote the engine's message.
-5. The product never names the client site; a rule tied to one site stays in that site's own rutter.
+5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose.
 
 ## Where the detail lives
 
-- docs/navigation.md holds the signature, output rows and exit codes of each command used here.
-- docs/map-report-guide.md holds the full choice of destination, under "Where a rule belongs" and
-  "When a gap is the engine's".
-- docs/rutter-author-guide.md and the rutter skill hold how a rule is written and a rutter started.
+- [Navigation](https://github.com/camoa/periplus/blob/v0.3.0/docs/navigation.md) holds the signature, output rows and exit codes of each command used here.
+- [Where a rule belongs](https://github.com/camoa/periplus/blob/v0.3.0/docs/map-report-guide.md#where-a-rule-belongs) and
+  [When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.3.0/docs/map-report-guide.md#when-a-gap-is-the-engines) hold the full choice of destination.
+- [The rutter author guide](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide.md) and the rutter skill hold how a rule is written and a rutter started.
+- [Bundled rutters](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutters.md) lists every rutter that ships with Periplus.
 
 ## Find the gaps
 
@@ -46,14 +47,11 @@ $ periplus find :: --limit 0 --format json
 
 ## Where a rule belongs
 
-A rule for a convention only this project uses stays in the project's own rutter, a folder under
-`.periplus/packs` named `<pack>@<version>` with a `pack.yaml`. A rule for a shape any project on
-the stack can hold goes to the bundled rutter for that stack.
-When a bundled rutter already covers the stack, that rule is a new rule file in it, or a rule
-added to one of its rule files.
-When no bundled rutter covers the stack at all, start that new rutter first with the rutter skill,
-then write the rule in it.
-Write a rule in the project first, and move it once a second project needs it.
-A gap is the engine's only when `periplus validate` or `periplus map` refuses the rule with an
-engine message; any other gap is a rule not yet written. The detail is in
-docs/map-report-guide.md, under "Where a rule belongs" and "When a gap is the engine's".
+Write the rule in the project's own rutter first: a rutter folder in the project's
+`.periplus/packs`. When any other project on the stack could use it, move it to the bundled
+rutter for that stack, as a new rule file or a rule added to one, once a second project needs it.
+When no bundled rutter covers the stack at all, start a new rutter with the rutter skill, then
+write the rule in it.
+A gap is the engine's when the engine refuses the rule you wrote and no other rule can state the
+shape. The test and the message to quote are in
+[When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.3.0/docs/map-report-guide.md#when-a-gap-is-the-engines).

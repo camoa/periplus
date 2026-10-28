@@ -12,7 +12,7 @@
 and `js` extras for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.2.1.
+Status: **beta**, version 0.3.0.
 
 </div>
 
@@ -65,7 +65,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.2.1
+uv tool install git+https://github.com/camoa/periplus@v0.3.0
 ```
 
 To install from a local copy of this repository:
@@ -76,6 +76,22 @@ uv tool install /path/to/periplus           # or: pip install /path/to/periplus
 
 After any of these installs, run `periplus skills install` to copy the Claude skills Periplus
 ships into `~/.claude/skills`. Run it again after an update to replace the older copies.
+
+#### Use the skills with other agents
+
+The skills follow the [Agent Skills](https://agentskills.io) format: a folder with a `SKILL.md`
+file. After `periplus skills install`, the folders `periplus-gaps`, `periplus-map` and
+`periplus-rutter` are in `~/.claude/skills`. Copy them to the folder the agent reads, and copy them
+again after each update. The folder `~/.agents/skills` serves four agents at once:
+
+```
+mkdir -p ~/.agents/skills && rsync -a --delete ~/.claude/skills/periplus-* ~/.agents/skills/
+```
+
+- [Codex CLI](https://learn.chatgpt.com/docs/build-skills): `~/.agents/skills`, or `.agents/skills` in a repository.
+- [Gemini CLI](https://geminicli.com/docs/cli/skills/): `~/.gemini/skills` or `~/.agents/skills`, or `.gemini/skills` or `.agents/skills` in a workspace.
+- [GitHub Copilot in VS Code](https://code.visualstudio.com/docs/copilot/customization/agent-skills): `~/.copilot/skills`, `~/.agents/skills` or `~/.claude/skills`, so the Claude install already works. A repository can use `.github/skills`.
+- [Cursor](https://cursor.com/docs/context/skills): `~/.cursor/skills` or `~/.agents/skills`, and it also reads `~/.claude/skills`. A repository can use `.cursor/skills`.
 
 To update a local install, pull the repository and run `uv tool install /path/to/periplus` again. A
 local directory is rebuilt when `pyproject.toml` changes or a file under `src/periplus` does. Run
@@ -187,14 +203,16 @@ compared two machines or two operating systems yet.
 What the map holds depends on the rutters loaded. Bundled rutters load by name. Example rutters
 are copied into a project's `.periplus/packs`. The tables group them by language and by framework.
 
+[`docs/rutters.md`](docs/rutters.md) lists every bundled rutter with its dependencies.
+
 <details>
 <summary><strong>Languages and file types</strong></summary>
 
 | Rutter | Version | What it finds |
 |---|---|---|
-| `php_basic` | 0.2.0 | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interfaces, traits, containment, and plain and static calls; a call to a PHP builtin function makes nothing. Reads a parse tree. |
-| `js_basic` | 0.0.1 | JavaScript functions that have a name of their own, each under its script's path. Reads a parse tree. Needs the `js` extra. |
-| `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. Reads a parse tree. Needs the `go` extra. |
+| `php_basic` | 0.2.0 | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interfaces, traits, containment, properties and parameters with their types, and call sites. Plain and static calls, and method calls through a typed or assigned property; a call to a PHP builtin function makes nothing. Reads a parse tree. |
+| `js_basic` | 0.0.1 | JavaScript scripts, and the functions that have a name of their own, each under its script's path. It reads `.js` files only and maps no calls. Reads a parse tree. Needs the `js` extra. |
+| `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. It skips test files and `vendor`, and needs the module path in the settings as `values.module`. Reads a parse tree. Needs the `go` extra. |
 | `yaml_basic` | 0.1.0 | Claims `.yml` and `.yaml` files for rutters that depend on it. No rules of its own. |
 | `twig_basic` | 0.1.0 | Claims `.twig` files for rutters that depend on it. No rules of its own. |
 
@@ -220,7 +238,7 @@ beside `drupal_basic` when the site uses that module.
 | `profile_basic` | 0.0.1 | Each Profile type, from its config file, as a bundle of the entity type `profile`. |
 | `salesforce_basic` | 0.0.1 | Salesforce mapping field plugins; each mapping with its Salesforce object and its edges to the bundle, entity type and fields it maps; the Salesforce events that subscribers name. |
 | `twig_tweak_basic` | 0.0.1 | The block plugins, menus, entity types and field storages that Twig Tweak functions such as `drupal_block('x')` name in templates. |
-| `webform_basic` | 0.0.1 | Webform handler plugins, by annotation, and each webform, from its config file, as a bundle of `webform_submission`. |
+| `webform_basic` | 0.0.1 | Webform handler plugins, by annotation, each joined to its class, and each webform, from its config file, as a bundle of `webform_submission`. |
 
 </details>
 
@@ -229,7 +247,7 @@ beside `drupal_basic` when the site uses that module.
 
 | Rutter | Version | What it finds |
 |---|---|---|
-| `laravel_basic` | 0.0.5 | Laravel routes with the prefixes and names of `Route::prefix()->name()->group()` groups, their controller methods, controllers, models, migrations, Blade views with their includes and component tags, and configuration files with the text keys of the array each returns. The views and keys that `view('x')` and `config('x.y')` calls name in PHP functions and methods. Depends on `php_basic`. Reads text, and a parse tree for the calls. |
+| `laravel_basic` | 0.0.5 | Laravel routes with the prefixes and names of `Route::prefix()->name()->group()` groups, each joined to its controller method, its resource controller or the view it renders, controllers, models, migrations, Blade views with their includes, extends and component tags, and configuration files with the text keys of the array each returns. The views and keys that `view('x')` and `config('x.y')` calls name in PHP functions and methods. Depends on `php_basic`. Reads text, and a parse tree for the calls. |
 
 </details>
 
@@ -280,15 +298,9 @@ To map a Laravel application, pin `php_basic@0.2.0` and `laravel_basic@0.0.5` an
 at the application's root. The default Laravel folders need no settings. To move the templates,
 set `views_root` under `folders`; a template is named by its path below `views_root`.
 
-New in this release: `drupal_basic` 0.3.0, the 11 contributed-module rutters listed after it in
-the Drupal table, and the two JavaScript rutters, `js_basic` and `drupal_js_basic`. The AI and
-Advanced Queue plugins moved out of `drupal_basic` into their own rutters. Three new rutter
-shapes: a resolution step that looks a written name up in a table the rutter declares under
-`tables`, a call argument written as a class constant read through the grammar's
-`constant_access` and `constant_declaration` keys, and a rule narrowed to one file ending by
-`match.ending`. A rutter's `boundary` lists the framework classes the map never reads. Each one
-an edge reaches becomes a `declared` node, and a class that descends from one may take the type
-the list gives it. Settings `values` pass project facts, such as a Go module path, to a rutter.
+New in this release: three Claude skills, `periplus-rutter`, `periplus-map` and `periplus-gaps`,
+installed with `periplus skills install`; steps to use them with other agents; and a page,
+[`docs/rutters.md`](docs/rutters.md), that lists every bundled rutter.
 
 ## Write a rutter
 
