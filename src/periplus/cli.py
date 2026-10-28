@@ -365,6 +365,17 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="the project settings file to read, instead of the one the project root implies",
     )
+    skills = subcommands.add_parser(
+        "skills",
+        help="manage the Claude skills this package ships",
+        description="Manage the Claude skills this package ships.",
+    )
+    skills_actions = skills.add_subparsers(dest="skills_command", required=True)
+    skills_actions.add_parser(
+        "install",
+        help="copy the skills into ~/.claude/skills, replacing older copies",
+        description="Copy every shipped skill into ~/.claude/skills, and stop.",
+    )
     return parser
 
 
@@ -430,6 +441,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
             )
         return ExitCode.MISSING_DEPENDENCY
+
+    if args.command == "skills":
+        from periplus.skills_install import SkillsUnwritable, install_skills
+
+        try:
+            installed = install_skills(home=Path.home())
+        except SkillsUnwritable as error:
+            print(f"{parser.prog}: {error}", file=sys.stderr)
+            return error.problem().code
+        for folder in installed:
+            print(folder)
+        return ExitCode.OK
 
     # This lazy import is load-bearing, not tidiness. `init.py` imports `_escape`
     # from `periplus.report`, which pulls `resolution`, `settings` and `packs` behind it, so

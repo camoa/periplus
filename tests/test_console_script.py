@@ -386,6 +386,7 @@ def test_the_subcommands_are_exactly_the_twelve_listed_below() -> None:
         "neighbors",
         "affected",
         "path",
+        "skills",
     }
 
 

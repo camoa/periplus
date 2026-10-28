@@ -127,6 +127,11 @@ EXPECTED_MODULE_FILES = {
     "periplus/engine/tree.py",
     "periplus/validate.py",
     "periplus/update.py",
+    "periplus/skills_install.py",
+    "periplus/skills/periplus-rutter/SKILL.md",
+    "periplus/skills/periplus-map/SKILL.md",
+    "periplus/skills/periplus-map/references/descriptions.schema.json",
+    "periplus/skills/periplus-gaps/SKILL.md",
 }
 
 # The contract, which is data the way the packs are data: four JSON Schemas that define what a

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Periplus descriptions file",
+  "description": "The hand-written .periplus/descriptions.yaml beside the map: what a node or edge does, and where the reader read it.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "nodes": {
+      "description": "Node id, as the map writes it, to its entry.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/entry" }
+    },
+    "edges": {
+      "description": "Edge entries, each keyed by the edge's from, kind and to as the map writes them.",
+      "type": "array",
+      "items": {
+        "allOf": [
+          { "$ref": "#/$defs/entry" },
+          {
+            "type": "object",
+            "required": ["from", "kind", "to"],
+            "properties": {
+              "from": { "type": "string", "minLength": 1 },
+              "kind": { "type": "string", "minLength": 1 },
+              "to": { "type": "string", "minLength": 1 }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["text", "file", "line"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

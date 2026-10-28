@@ -12,7 +12,7 @@
 and `js` extras for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the end-to-end checks, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.2.1, 652 tests.
+Status: **beta**, version 0.2.1, 673 tests.
 
 </div>
 
@@ -73,6 +73,9 @@ To install from a local copy of this repository:
 ```
 uv tool install /path/to/periplus           # or: pip install /path/to/periplus
 ```
+
+After any of these installs, run `periplus skills install` to copy the Claude skills Periplus
+ships into `~/.claude/skills`. Run it again after an update to replace the older copies.
 
 To update a local install, pull the repository and run `uv tool install /path/to/periplus` again. A
 local directory is rebuilt when `pyproject.toml` changes or a file under `src/periplus` does. Run
@@ -469,6 +472,7 @@ periplus show ID                   # show one node and the edges at it
 periplus neighbors ID              # list the items an item's edges lead to
 periplus affected ID               # list the items whose edges lead to an item
 periplus path FROM TO              # show every shortest chain of edges from one item to another
+periplus skills install            # copy the Claude skills Periplus ships into ~/.claude/skills
 ```
 
 `periplus validate` takes a bare `name`, or `name@version` to pick one of several copies.
@@ -494,7 +498,7 @@ installed version, and `periplus <command> --help` gives each command's options.
 
 ## Tests and checks
 
-The pytest suite holds 652 tests. `scripts/demo.sh` runs the 76 end-to-end checks in
+The pytest suite holds 673 tests. `scripts/demo.sh` runs the 76 end-to-end checks in
 `scripts/demo.d` and stops at the first failure. Each check maps a small project and compares the
 result with what it expects. The CI workflow behind the checks badge does not run them.
 

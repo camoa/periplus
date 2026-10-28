@@ -186,7 +186,7 @@ def test_readme_sections_follow_the_designed_order_and_shape() -> None:
 
     block = _first_fenced_block(_section(page, "cli reference"))
     assert block, "CLI reference holds no fenced block"
-    assert len(_subcommands()) == 13
+    assert len(_subcommands()) == 14
     for name in _subcommands():
         assert any(
             re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", line) and " # " in line
@@ -225,7 +225,7 @@ def test_readme_states_the_true_version_and_test_count_and_no_stale_phrase() -> 
 def test_readme_keeps_every_command_pack_and_working_link() -> None:
     page = _page()
     names = _subcommands()
-    assert len(names) == 13, f"parsed {len(names)} subcommands from cli.py: {names}"
+    assert len(names) == 14, f"parsed {len(names)} subcommands from cli.py: {names}"
     block = _first_fenced_block(_section(page, "cli reference"))
     for name in names:
         assert re.search(rf"periplus {re.escape(name)}(?![\w-])", block), (
