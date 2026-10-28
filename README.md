@@ -93,6 +93,18 @@ mkdir -p ~/.agents/skills && rsync -a --delete ~/.claude/skills/periplus-* ~/.ag
 - [GitHub Copilot in VS Code](https://code.visualstudio.com/docs/copilot/customization/agent-skills): `~/.copilot/skills`, `~/.agents/skills` or `~/.claude/skills`, so the Claude install already works. A repository can use `.github/skills`.
 - [Cursor](https://cursor.com/docs/context/skills): `~/.cursor/skills` or `~/.agents/skills`, and it also reads `~/.claude/skills`. A repository can use `.cursor/skills`.
 
+To upgrade an install from PyPI, use the tool you installed with:
+
+```
+uv tool upgrade periplus-map                # keeps the extras you installed
+pipx upgrade periplus-map
+pip install -U 'periplus-map[go,js]'        # pip needs the extras named again
+```
+
+Then run `periplus skills install` again, and repeat the copy above for any other agent. Read the
+[changelog](CHANGELOG.md) before you upgrade: when a bundled rutter's version changes, update the
+pins in your project's settings with `periplus update` and map again.
+
 To update a local install, pull the repository and run `uv tool install /path/to/periplus` again. A
 local directory is rebuilt when `pyproject.toml` changes or a file under `src/periplus` does. Run
 `uv tool install --reinstall /path/to/periplus` for the form that always rebuilds. The command
