@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
-from periplus.navigate.listing import Listing, cut, footer, payload
+from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place
 from periplus.navigate.mapfile import MapIndex, as_text, load_map, reading_fields
-from periplus.report import _escape
+from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "FindReport", "render_json", "render_text", "run"]
 
@@ -20,7 +20,7 @@ __all__ = ["RENDERERS", "FindReport", "render_json", "render_text", "run"]
 class FindReport:
     """The matching nodes as rows (id, type, state, first location), and what went wrong."""
 
-    matches: Listing = Listing((), 0, 0, False)
+    matches: Listing = NONE
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
 
@@ -60,7 +60,7 @@ def _with_subtypes(index: MapIndex, type_name: str) -> set[str]:
 def _location(node: Mapping[str, Any]) -> str | None:
     """The node's first location as ``file:line``, or ``None`` when it has none."""
     locations = node["locations"]
-    return f"{locations[0]['file']}:{locations[0]['line']}" if locations else None
+    return place(locations[0]) if locations else None
 
 
 def run(
@@ -132,10 +132,7 @@ def render_json(report: FindReport) -> str:
     document = {
         **payload(report.matches),
         "warnings": list(report.warnings),
-        "problems": [
-            {"code": int(p.code), "message": p.message, "detail": dict(p.detail)}
-            for p in report.problems
-        ],
+        "problems": [_json_problem(p) for p in report.problems],
     }
     return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 

@@ -10,13 +10,11 @@ from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
-from periplus.navigate.listing import Listing, cut, footer, payload
+from periplus.navigate.listing import NONE, Listing, cut, footer, kind_warnings, payload
 from periplus.navigate.mapfile import MapIndex, as_text, load_map, reading_fields
-from periplus.report import _escape
+from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "WalkReport", "render_json", "render_text", "run"]
-
-_NONE = Listing((), 0, 0, False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,7 +23,7 @@ class WalkReport:
 
     start: str = ""
     direction: str = "out"
-    rows: Listing = _NONE
+    rows: Listing = NONE
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
 
@@ -94,9 +92,7 @@ def run(
             held = {edge["kind"] for edge in index.edges}
     except HarnessError as error:
         return WalkReport(problems=(error.problem(),))
-    warnings = tuple(
-        f"the map holds no edge of kind {kind!r}" for kind in sorted(set(kinds) - held)
-    )
+    warnings = kind_warnings(kinds, held)
     return WalkReport(node_id, direction, cut(rows, limit), warnings)
 
 
@@ -106,11 +102,13 @@ def render_text(report: WalkReport) -> str:
     lines = [f"periplus {verb} {_escape(report.start)}" if report.start else f"periplus {verb}"]
     if report.start:
         lines.append(f"{report.rows.total} items")
+    # An affected row's edge points to the item the walk came from.
+    toward = "from" if report.direction == "out" else "to"
     for row in report.rows.items:
         lines.append(
             f"  {row['depth']}  {_escape(row['id'])}  {_escape(row['type'])}"
             f"  {_escape(row['state'])}"
-            f"  via {_escape(row['kind'])} from {_escape(row['via'])}"
+            f"  via {_escape(row['kind'])} {toward} {_escape(row['via'])}"
         )
     note = footer(report.rows)
     if note:
@@ -127,10 +125,7 @@ def render_json(report: WalkReport) -> str:
         "direction": report.direction,
         "rows": payload(report.rows),
         "warnings": list(report.warnings),
-        "problems": [
-            {"code": int(p.code), "message": p.message, "detail": dict(p.detail)}
-            for p in report.problems
-        ],
+        "problems": [_json_problem(p) for p in report.problems],
     }
     return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 

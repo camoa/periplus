@@ -106,6 +106,7 @@ EXPECTED_MODULE_FILES = {
     "periplus/init.py",
     "periplus/layout.py",
     "periplus/map.py",
+    "periplus/mapshared.py",
     "periplus/checkmap.py",
     "periplus/navigate/__init__.py",
     "periplus/navigate/find.py",

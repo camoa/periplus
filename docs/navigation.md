@@ -94,8 +94,8 @@ direction. Without a chain it prints `no path`, and exits 0. `--kind K` follows 
 |---|---|
 | 0 | The report printed. An empty result is still 0. |
 | 2 | A bad option, such as `--depth 0`. |
-| 29 | No map: no project above the working directory, or no file at the path. Run `periplus map`. |
-| 30 | The file is not a map: not JSON, or missing the outline (`periplus_map_version`, `nodes`, `edges`). |
+| 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
+| 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. |
 | 31 | An id names no node in the map. |
 
 ## Checking the map
@@ -226,8 +226,8 @@ See what leads to the helper:
 $ periplus affected python.function::shop.tools.helper
 periplus affected python.function::shop.tools.helper
 2 items
-  1  python.module::shop.cli  python.module  mapped  via calls from python.function::shop.tools.helper
-  1  python.module::shop.tools  python.module  mapped  via contains from python.function::shop.tools.helper
+  1  python.module::shop.cli  python.module  mapped  via calls to python.function::shop.tools.helper
+  1  python.module::shop.tools  python.module  mapped  via contains to python.function::shop.tools.helper
 ```
 
 Find the chain from the module to the helper. Edges are followed in their own direction, so the

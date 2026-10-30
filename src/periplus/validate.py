@@ -54,9 +54,10 @@ from ruamel.yaml.error import YAMLError
 
 from periplus.errors import ExitCode, Problem
 from periplus.manifest import MANIFEST_FILENAME, resolve_pack_order
+from periplus.mapshared import _section
 from periplus.packs import PackCandidate, match_pins
 from periplus.preflight import DependencyStatus
-from periplus.report import _escape
+from periplus.report import _escape, _json_problem
 from periplus.resolution import resolve
 from periplus.spec import _unknown_pack, contract_root
 
@@ -541,15 +542,6 @@ def render_text(report: ValidationReport) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _section(heading: str, rows: Sequence[str]) -> list[str]:
-    """One block: a blank line, its heading, and its rows indented under it.
-
-    The same shape as ``spec._section``, and empty prints ``none`` for the same reason: a section
-    a reader cannot find is indistinguishable from a section that does not exist.
-    """
-    return ["", f"{heading}:", *[f"  {row}".rstrip() for row in rows or ["none"]]]
-
-
 def _pack_lines(report: ValidationReport) -> list[str]:
     """What was asked about and where it was found, with each label padded to a fixed width."""
     return [
@@ -618,14 +610,7 @@ def render_json(report: ValidationReport) -> str:
         "version": report.version,
         "checked": list(report.checked),
         "errors": [_json_error(error) for error in report.errors],
-        "problems": [
-            {
-                "code": int(problem.code),
-                "message": problem.message,
-                "detail": dict(problem.detail),
-            }
-            for problem in report.problems
-        ],
+        "problems": [_json_problem(problem) for problem in report.problems],
     }
     return json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 

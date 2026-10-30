@@ -1341,14 +1341,7 @@ def _names(node: Node, rule: Rule, grammar: Grammar, parsed: ParsedFile) -> dict
             return None
         written = found.group(group)
         values[group] = (
-            resolve_name(
-                written,
-                grammar.resolve or (("as_written", ""),),
-                grammar.separator,
-                parsed.imports.get(parsed.block_at(before.start_byte), {}),
-                {"namespace": parsed.namespace_at(before)},
-                tables={},
-            )
+            parsed.resolve(before, grammar, written)
             if rule.docblock_qualified and before is not None
             else None
         ) or written

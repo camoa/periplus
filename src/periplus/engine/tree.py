@@ -212,15 +212,16 @@ class ParsedFile:
             found = index
         return found
 
-    def resolve(self, written: Node, grammar: Grammar) -> str | None:
+    def resolve(self, written: Node, grammar: Grammar, text: str | None = None) -> str | None:
         """The full name a written name stands for, by the grammar's resolution steps; ``None``
         when no step holds, and the name as written when the grammar declares none.
 
         The bindings are the imports of the name's namespace block, and the value ``namespace``
-        is the namespace in force.
+        is the namespace in force. ``text`` stands for the name when it is not the node's own text,
+        as a name matched inside a comment node.
         """
         return resolve_name(
-            text_of(written),
+            text_of(written) if text is None else text,
             grammar.resolve or (("as_written", ""),),
             grammar.separator,
             self.imports.get(self.block_at(written.start_byte), {}),

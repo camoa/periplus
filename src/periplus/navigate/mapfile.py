@@ -16,6 +16,8 @@ from typing import Any
 
 from periplus.errors import ExitCode, HarnessError
 from periplus.layout import PROJECT_MARKER
+from periplus.mapshared import _DEFAULT_MAP
+from periplus.mapshared import MAP_SCHEMA as MAP_SCHEMA
 from periplus.settings import find_project_root
 
 __all__ = [
@@ -29,12 +31,6 @@ __all__ = [
     "reading_fields",
 ]
 
-#: The shipped schema ``periplus check-map`` checks a map against; ``periplus map`` checks its
-#: output with the same one.
-MAP_SCHEMA = "schema/map.schema.json"
-
-_DEFAULT_MAP = "map.json"
-
 
 class MapNotFound(HarnessError):
     """No map file is there to read."""
@@ -43,7 +39,7 @@ class MapNotFound(HarnessError):
 
 
 class NotAMap(HarnessError):
-    """The file is not JSON, or is JSON without a map's outline."""
+    """The file is not JSON, has no map's outline, or holds a malformed node, edge or type row."""
 
     code = ExitCode.NOT_A_MAP
 
@@ -126,7 +122,7 @@ def load_map(start: Path, env: Mapping[str, str], map_path: Path | None) -> MapI
         return MapIndex(document)
     except (KeyError, TypeError) as error:
         raise NotAMap(
-            f"{path} is not a periplus map: a node, edge or type_hierarchy row is malformed "
+            f"{path} is damaged: a node, edge or type_hierarchy row is malformed "
             f"({type(error).__name__}: {error})",
             {"path": str(path)},
         ) from error

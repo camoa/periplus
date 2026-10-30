@@ -54,6 +54,28 @@ __all__ = ["build_parser", "main"]
 _COLOUR: dict[str, Any] = {"color": False} if sys.version_info >= (3, 14) else {}
 
 
+def add_map(parser: argparse.ArgumentParser, help_text: str) -> None:
+    """Add ``--map`` to a subcommand; ``help_text`` says what the command does with the file."""
+    parser.add_argument(
+        "--map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=f"{help_text} (default: .periplus/map.json under the project root)",
+    )
+
+
+def add_limit(parser: argparse.ArgumentParser, default: int, noun: str) -> None:
+    """Add ``--limit`` to a subcommand: how many ``noun`` to show, 0 for all."""
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=default,
+        metavar="N",
+        help=f"{noun} to show; 0 shows all (default: {default})",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the argument parser.
 
@@ -191,13 +213,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="how to print the report (default: text)",
     )
-    types.add_argument(
-        "--map",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="the map file to read (default: .periplus/map.json under the project root)",
-    )
+    add_map(types, "the map file to read")
     check = subcommands.add_parser(
         "check-map",
         help="check the written map against the map schema",
@@ -211,13 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="how to print the report (default: text)",
     )
-    check.add_argument(
-        "--map",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="the map file to check (default: .periplus/map.json under the project root)",
-    )
+    add_map(check, "the map file to check")
     find = subcommands.add_parser(
         "find",
         help="find the nodes whose id holds a text",
@@ -225,16 +235,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     find.add_argument("text", metavar="TEXT", help="the text to look for in node ids")
     find.add_argument("--type", default=None, metavar="T", help="keep type T and its subtypes")
-    find.add_argument(
-        "--limit", type=int, default=50, metavar="N", help="rows to show; 0 shows all (default: 50)"
-    )
-    find.add_argument(
-        "--map",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="the map file to read (default: .periplus/map.json under the project root)",
-    )
+    add_limit(find, 50, "rows")
+    add_map(find, "the map file to read")
     find.add_argument(
         "--format",
         # A literal for the reason `types`' is; a test asserts it equals `tuple(find.RENDERERS)`.
@@ -248,16 +250,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Show the node ID and every edge leaving or arriving at it, and stop.",
     )
     show.add_argument("id", metavar="ID", help="the node id, as periplus find prints it")
-    show.add_argument(
-        "--limit", type=int, default=50, metavar="N", help="rows to show; 0 shows all (default: 50)"
-    )
-    show.add_argument(
-        "--map",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="the map file to read (default: .periplus/map.json under the project root)",
-    )
+    add_limit(show, 50, "rows")
+    add_map(show, "the map file to read")
     show.add_argument(
         "--format",
         # A literal for the reason `types`' is; a test asserts it equals `tuple(show.RENDERERS)`.
@@ -285,20 +279,8 @@ def build_parser() -> argparse.ArgumentParser:
             metavar="K",
             help="keep only edges of kind K; repeat for several",
         )
-        walking.add_argument(
-            "--limit",
-            type=int,
-            default=50,
-            metavar="N",
-            help="rows to show; 0 shows all (default: 50)",
-        )
-        walking.add_argument(
-            "--map",
-            type=Path,
-            default=None,
-            metavar="PATH",
-            help="the map file to read (default: .periplus/map.json under the project root)",
-        )
+        add_limit(walking, 50, "rows")
+        add_map(walking, "the map file to read")
         walking.add_argument(
             "--format",
             # A literal for the reason `types`' is; a test asserts it equals the RENDERERS.
@@ -320,20 +302,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="K",
         help="follow only edges of kind K; repeat for several",
     )
-    path.add_argument(
-        "--limit",
-        type=int,
-        default=10,
-        metavar="N",
-        help="chains to show; 0 shows all (default: 10)",
-    )
-    path.add_argument(
-        "--map",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="the map file to read (default: .periplus/map.json under the project root)",
-    )
+    add_limit(path, 10, "chains")
+    add_map(path, "the map file to read")
     path.add_argument(
         "--format",
         # A literal for the reason `types`' is; a test asserts it equals `tuple(path.RENDERERS)`.

@@ -10,13 +10,12 @@ from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
-from periplus.navigate.listing import Listing, footer, payload
+from periplus.navigate.listing import NONE, Listing, footer, kind_warnings, payload
 from periplus.navigate.mapfile import MapIndex, as_text, load_map, reading_fields
-from periplus.report import _escape
+from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "PathReport", "render_json", "render_text", "run"]
 
-_NONE = Listing((), 0, 0, False)
 
 Step = tuple[str, str, str]
 
@@ -27,7 +26,7 @@ class PathReport:
 
     source: str = ""
     target: str = ""
-    chains: Listing = _NONE
+    chains: Listing = NONE
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
 
@@ -117,9 +116,7 @@ def run(
             chains, total = shortest_chains(index, from_id, to_id, set(kinds), limit)
     except HarnessError as error:
         return PathReport(problems=(error.problem(),))
-    warnings = tuple(
-        f"the map holds no edge of kind {kind!r}" for kind in sorted(set(kinds) - held)
-    )
+    warnings = kind_warnings(kinds, held)
     listing = Listing(tuple(chains), total, len(chains), len(chains) < total)
     return PathReport(from_id, to_id, listing, warnings)
 
@@ -164,10 +161,7 @@ def render_json(report: PathReport) -> str:
         "to": report.target,
         "chains": payload(chains),
         "warnings": list(report.warnings),
-        "problems": [
-            {"code": int(p.code), "message": p.message, "detail": dict(p.detail)}
-            for p in report.problems
-        ],
+        "problems": [_json_problem(p) for p in report.problems],
     }
     return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 

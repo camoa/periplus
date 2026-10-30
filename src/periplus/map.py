@@ -28,18 +28,15 @@ from periplus.engine.select import Selection, files_in, holds_double_star, resol
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER, SETTINGS_FILENAME
 from periplus.manifest import resolve_pack_order
+from periplus.mapshared import _DEFAULT_MAP as _DEFAULT_MAP
+from periplus.mapshared import MAP_SCHEMA as MAP_SCHEMA
+from periplus.mapshared import _section as _section
 from periplus.preflight import DependencyStatus
-from periplus.report import _escape
+from periplus.report import _escape, _json_problem
 from periplus.resolution import resolve
 from periplus.validate import _schema
 
 __all__ = ["RENDERERS", "MapReport", "render_json", "render_text", "run"]
-
-#: The shipped schema the built document is checked against before anything is written.
-MAP_SCHEMA = "schema/map.schema.json"
-
-#: The map's default home, under the project root.
-_DEFAULT_MAP = "map.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,11 +240,6 @@ def _failed(problems: Sequence[Problem]) -> MapReport:
     )
 
 
-def _section(heading: str, rows: Sequence[str]) -> list[str]:
-    """A blank line, a heading, and the rows indented under it; ``none`` when there are none."""
-    return ["", f"{heading}:", *[f"  {row}".rstrip() for row in rows or ["none"]]]
-
-
 def render_text(report: MapReport) -> str:
     """The report as lines a person reads. Every outside string goes through ``_escape``."""
     lines = ["periplus map"]
@@ -348,10 +340,7 @@ def render_json(report: MapReport) -> str:
             {"pass": n, "fired": [{"pack": p, "rule": r, "fires": k} for p, r, k in rows]}
             for n, rows in report.map_passes
         ],
-        "problems": [
-            {"code": int(p.code), "message": p.message, "detail": dict(p.detail)}
-            for p in report.problems
-        ],
+        "problems": [_json_problem(p) for p in report.problems],
     }
     return json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 

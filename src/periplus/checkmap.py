@@ -14,8 +14,9 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from periplus.errors import ExitCode, HarnessError, Problem
-from periplus.navigate.mapfile import MAP_SCHEMA, _read
-from periplus.report import _escape
+from periplus.mapshared import MAP_SCHEMA
+from periplus.navigate.mapfile import _read
+from periplus.report import _escape, _json_problem
 from periplus.validate import _schema
 
 __all__ = ["RENDERERS", "CheckReport", "render_json", "render_text", "run"]
@@ -64,10 +65,7 @@ def render_json(report: CheckReport) -> str:
     payload = {
         "map": report.map_path,
         "valid": not report.problems,
-        "problems": [
-            {"code": int(p.code), "message": p.message, "detail": dict(p.detail)}
-            for p in report.problems
-        ],
+        "problems": [_json_problem(p) for p in report.problems],
     }
     return json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 

@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from periplus.errors import ExitCode, HarnessError, Problem
+from periplus.mapshared import _section
 from periplus.navigate.mapfile import as_text, load_map, reading_fields
-from periplus.report import _escape
+from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "TypesReport", "render_json", "render_text", "run"]
 
@@ -47,11 +48,6 @@ def run(start: Path, env: Mapping[str, str], map_path: Path | None) -> TypesRepo
         return TypesReport((), (), (error.problem(),))
 
 
-def _section(heading: str, rows: list[str]) -> list[str]:
-    """A blank line, a heading, and the rows indented under it; ``none`` when there are none."""
-    return ["", f"{heading}:", *[f"  {row}".rstrip() for row in rows or ["none"]]]
-
-
 def render_text(report: TypesReport) -> str:
     """The report as lines a person reads. Every outside string goes through ``_escape``."""
     lines = ["periplus types"]
@@ -72,10 +68,7 @@ def render_json(report: TypesReport) -> str:
     payload = {
         "node_types": [{"type": t, "count": n, "parent": p} for t, n, p in report.node_types],
         "edge_kinds": [{"kind": k, "count": n} for k, n in report.edge_kinds],
-        "problems": [
-            {"code": int(p.code), "message": p.message, "detail": dict(p.detail)}
-            for p in report.problems
-        ],
+        "problems": [_json_problem(p) for p in report.problems],
     }
     return json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 

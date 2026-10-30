@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["Listing", "cut", "footer", "payload"]
+__all__ = ["NONE", "Listing", "cut", "footer", "kind_warnings", "payload", "place"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +17,20 @@ class Listing:
     total: int
     shown: int
     truncated: bool
+
+
+#: The listing of a report that stopped before it listed anything.
+NONE = Listing((), 0, 0, False)
+
+
+def place(location: Mapping[str, Any]) -> str:
+    """A location as ``file:line``."""
+    return f"{location['file']}:{location['line']}"
+
+
+def kind_warnings(kinds: Collection[str], held: set[str]) -> tuple[str, ...]:
+    """One warning for each asked kind the map holds no edge of, in sorted order."""
+    return tuple(f"the map holds no edge of kind {kind!r}" for kind in sorted(set(kinds) - held))
 
 
 def cut(items: Sequence[Any], limit: int) -> Listing:

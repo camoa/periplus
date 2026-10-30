@@ -10,13 +10,11 @@ from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
-from periplus.navigate.listing import Listing, cut, footer, payload
+from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place
 from periplus.navigate.mapfile import MapIndex, as_text, load_map, reading_fields
-from periplus.report import _escape
+from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "ShowReport", "render_json", "render_text", "run"]
-
-_NONE = Listing((), 0, 0, False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,8 +28,8 @@ class ShowReport:
     attributes: Mapping[str, Any] | None = None
     locations: tuple[Mapping[str, Any], ...] = ()
     provenance: tuple[Mapping[str, Any], ...] = ()
-    outgoing: Listing = _NONE
-    incoming: Listing = _NONE
+    outgoing: Listing = NONE
+    incoming: Listing = NONE
     problems: tuple[Problem, ...] = ()
 
     @property
@@ -100,14 +98,10 @@ def run(
         return ShowReport(problems=(error.problem(),))
 
 
-def _place(location: Mapping[str, Any]) -> str:
-    return f"{location['file']}:{location['line']}"
-
-
 def _placed(locations: Any) -> Any:
     """``locations`` unchanged, once each has the file and line the text report prints."""
     for location in locations:
-        _place(location)
+        place(location)
     return locations
 
 
@@ -118,7 +112,7 @@ def _edge_lines(listing: Listing) -> list[str]:
         if row["kind"] != kind:
             kind = row["kind"]
             lines.append(f"  {_escape(kind)}:")
-        where = ", ".join(_place(loc) for loc in row["locations"]) or "no location"
+        where = ", ".join(place(loc) for loc in row["locations"]) or "no location"
         count = f"  x{row['occurrences']}" if row["occurrences"] else ""
         confidences = ",".join(_escape(c) for c in row["confidences"]) or "no confidence"
         lines.append(
@@ -140,7 +134,7 @@ def render_text(report: ShowReport) -> str:
             lines.append(f"roles: {_escape(', '.join(report.roles))}")
         for key, value in sorted((report.attributes or {}).items()):
             lines.append(f"attribute {_escape(key)}: {_escape(json.dumps(value, sort_keys=True))}")
-        lines += [f"location: {_escape(_place(loc))}" for loc in report.locations]
+        lines += [f"location: {_escape(place(loc))}" for loc in report.locations]
         for p in report.provenance:
             lines.append(
                 f"provenance: {_escape(p['pack'])}:{_escape(p['rule'])}"
@@ -164,10 +158,7 @@ def render_json(report: ShowReport) -> str:
         "provenance": list(report.provenance),
         "outgoing": payload(report.outgoing),
         "incoming": payload(report.incoming),
-        "problems": [
-            {"code": int(p.code), "message": p.message, "detail": dict(p.detail)}
-            for p in report.problems
-        ],
+        "problems": [_json_problem(p) for p in report.problems],
     }
     return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 
