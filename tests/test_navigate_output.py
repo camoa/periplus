@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _navigate import _edge as _plain_edge
+from _navigate import _node as _plain_node
 from jsonschema import Draft202012Validator
 
 SRC = Path(__file__).resolve().parent.parent / "src"
@@ -54,23 +56,11 @@ HIERARCHY |= {"t.mid": "t.leaf", "t.sink": "t.mid"}
 
 
 def _node(id: str) -> dict[str, Any]:
-    return {
-        "id": id,
-        "type": TYPE_OF[id],
-        "state": "mapped",
-        "locations": [{"file": "a.php", "line": 1}],
-        "provenance": [{"pack": "p", "rule": "r", "confidence": "declared", "sets": []}],
-    }
+    return _plain_node(id, TYPE_OF[id], line=1)
 
 
 def _edge(kind: str, source: str, target: str) -> dict[str, Any]:
-    return {
-        "kind": kind,
-        "from": source,
-        "to": target,
-        "locations": [{"file": "a.php", "line": 2}],
-        "provenance": [{"pack": "p", "rule": "r", "confidence": "declared", "sets": []}],
-    }
+    return _plain_edge(kind, source, target, 2)
 
 
 def _write_map(path: Path) -> None:

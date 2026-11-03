@@ -14,19 +14,25 @@ from periplus.navigate.listing import NONE, Listing, footer, kind_warnings, payl
 from periplus.navigate.mapfile import MapIndex, as_text, load_map, reading_fields
 from periplus.report import _escape, _json_problem
 
-__all__ = ["RENDERERS", "PathReport", "render_json", "render_text", "run"]
+__all__ = ["RENDERERS", "PathReport", "Step", "render_json", "render_text", "run"]
 
 
-Step = tuple[str, str, str]
+@dataclass(frozen=True, slots=True)
+class Step:
+    """One edge of a chain: the item it leaves, its kind, and the item it reaches."""
+
+    start: str
+    kind: str
+    end: str
 
 
 @dataclass(frozen=True, slots=True)
 class PathReport:
-    """The shortest chains from ``source`` to ``target`` as a ``Listing`` of step lists."""
+    """The shortest chains from ``source`` to ``target`` as a ``Listing`` of step tuples."""
 
     source: str = ""
     target: str = ""
-    chains: Listing = NONE
+    chains: Listing[tuple[Step, ...]] = NONE
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
 
@@ -37,14 +43,14 @@ class PathReport:
 
 
 def _steps(index: MapIndex, node: str, kinds: Collection[str]) -> list[Step]:
-    """The steps leaving ``node`` as (from, kind, to), distinct and sorted."""
+    """The steps leaving ``node``, distinct and sorted by kind, then end."""
     return sorted(
         {
-            (node, as_text(e["kind"]), as_text(e["to"]))
+            Step(node, as_text(e["kind"]), as_text(e["to"]))
             for e in index.outgoing(node)
             if not kinds or e["kind"] in kinds
         },
-        key=lambda s: (s[1], s[2]),
+        key=lambda s: (s.kind, s.end),
     )
 
 
@@ -60,10 +66,10 @@ def shortest_chains(
     while layer and target not in distance:
         reached: list[str] = []
         for item in layer:
-            for _, _, other in _steps(index, item, kinds):
-                if other not in distance:
-                    distance[other] = distance[item] + 1
-                    reached.append(other)
+            for step in _steps(index, item, kinds):
+                if step.end not in distance:
+                    distance[step.end] = distance[item] + 1
+                    reached.append(step.end)
         layer = reached
         layers.append(layer)
     if target not in distance:
@@ -73,9 +79,9 @@ def shortest_chains(
     for layer in reversed(layers[: distance[target]]):
         for item in layer:
             ways[item] = sum(
-                ways.get(other, 0)
-                for _, _, other in _steps(index, item, kinds)
-                if distance.get(other) == distance[item] + 1
+                ways.get(step.end, 0)
+                for step in _steps(index, item, kinds)
+                if distance.get(step.end) == distance[item] + 1
             )
     chains: list[list[Step]] = []
 
@@ -86,9 +92,9 @@ def shortest_chains(
             chains.append(list(head))
             return
         for step in _steps(index, node, kinds):
-            if distance.get(step[2]) == distance[node] + 1 and ways.get(step[2]):
+            if distance.get(step.end) == distance[node] + 1 and ways.get(step.end):
                 head.append(step)
-                extend(step[2], head)
+                extend(step.end, head)
                 head.pop()
 
     extend(source, [])
@@ -117,14 +123,16 @@ def run(
     except HarnessError as error:
         return PathReport(problems=(error.problem(),))
     warnings = kind_warnings(kinds, held)
-    listing = Listing(tuple(chains), total, len(chains), len(chains) < total)
+    listing = Listing(
+        tuple(tuple(chain) for chain in chains), total, len(chains), len(chains) < total
+    )
     return PathReport(from_id, to_id, listing, warnings)
 
 
-def _chain_lines(chain: list[Step]) -> list[str]:
+def _chain_lines(chain: tuple[Step, ...]) -> list[str]:
     if not chain:
         return ["    (same item)"]
-    return [f"    {_escape(a)} --{_escape(kind)}--> {_escape(b)}" for a, kind, b in chain]
+    return [f"    {_escape(s.start)} --{_escape(s.kind)}--> {_escape(s.end)}" for s in chain]
 
 
 def render_text(report: PathReport) -> str:
@@ -146,20 +154,16 @@ def render_text(report: PathReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _json_chain(chain: tuple[Step, ...]) -> list[dict[str, str]]:
+    return [{"from": s.start, "kind": s.kind, "to": s.end} for s in chain]
+
+
 def render_json(report: PathReport) -> str:
     """The report as one JSON document, keys sorted, ``ensure_ascii=True``."""
-    chains = Listing(
-        tuple(
-            [{"from": a, "kind": k, "to": b} for a, k, b in chain] for chain in report.chains.items
-        ),
-        report.chains.total,
-        report.chains.shown,
-        report.chains.truncated,
-    )
     document: dict[str, Any] = {
         "from": report.source,
         "to": report.target,
-        "chains": payload(chains),
+        "chains": payload(report.chains, _json_chain),
         "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
     }

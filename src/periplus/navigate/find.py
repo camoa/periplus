@@ -13,14 +13,24 @@ from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place
 from periplus.navigate.mapfile import MapIndex, as_text, load_map, reading_fields
 from periplus.report import _escape, _json_problem
 
-__all__ = ["RENDERERS", "FindReport", "render_json", "render_text", "run"]
+__all__ = ["RENDERERS", "FindReport", "FindRow", "render_json", "render_text", "run"]
+
+
+@dataclass(frozen=True, slots=True)
+class FindRow:
+    """One matching node: its id, type, state and first location as ``file:line``."""
+
+    id: str
+    type: str
+    state: str
+    location: str | None
 
 
 @dataclass(frozen=True, slots=True)
 class FindReport:
     """The matching nodes as rows (id, type, state, first location), and what went wrong."""
 
-    matches: Listing = NONE
+    matches: Listing[FindRow] = NONE
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
 
@@ -97,15 +107,7 @@ def _find(index: MapIndex, text: str, type_name: str | None, limit: int) -> Find
         if rank is not None and (wanted is None or node["type"] in wanted):
             ranked.append((rank, node_id, node))
     ranked.sort(key=lambda row: (row[0], row[1]))
-    rows = [
-        {
-            "id": i,
-            "type": as_text(n["type"]),
-            "state": as_text(n["state"]),
-            "location": _location(n),
-        }
-        for _, i, n in ranked
-    ]
+    rows = [FindRow(i, as_text(n["type"]), as_text(n["state"]), _location(n)) for _, i, n in ranked]
     return FindReport(cut(rows, limit), warnings)
 
 
@@ -113,10 +115,9 @@ def render_text(report: FindReport) -> str:
     """The report as lines a person reads. Every outside string goes through ``_escape``."""
     lines = ["periplus find", ""]
     for row in report.matches.items:
-        where = row["location"] or "no location"
+        where = row.location or "no location"
         lines.append(
-            f"{_escape(row['id'])}  {_escape(row['type'])}"
-            f"  {_escape(row['state'])}  {_escape(where)}"
+            f"{_escape(row.id)}  {_escape(row.type)}  {_escape(row.state)}  {_escape(where)}"
         )
     if not report.matches.items:
         lines.append("no matches")
@@ -127,10 +128,14 @@ def render_text(report: FindReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _json_row(row: FindRow) -> dict[str, Any]:
+    return {"id": row.id, "type": row.type, "state": row.state, "location": row.location}
+
+
 def render_json(report: FindReport) -> str:
     """The report as one JSON document, keys sorted, ``ensure_ascii=True``."""
     document = {
-        **payload(report.matches),
+        **payload(report.matches, _json_row),
         "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
     }

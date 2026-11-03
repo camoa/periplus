@@ -8,38 +8,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _navigate import _edge, _node, _prov
 
 from periplus.cli import build_parser, main
 from periplus.errors import ExitCode
 from periplus.navigate import show
-
-
-def _prov(confidence: str, rule: str = "r") -> dict[str, Any]:
-    return {"pack": "php", "rule": rule, "confidence": confidence, "sets": []}
-
-
-def _node(id: str, type: str, state: str = "mapped", **extra: Any) -> dict[str, Any]:
-    where = [{"file": "src/a.php", "line": 3}] if state == "mapped" else []
-    return {
-        "id": id,
-        "type": type,
-        "state": state,
-        "locations": where,
-        "provenance": [_prov("declared")],
-        **extra,
-    }
-
-
-def _edge(kind: str, source: str, target: str, line: int, *prov: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "kind": kind,
-        "from": source,
-        "to": target,
-        "locations": [{"file": "src/a.php", "line": line}],
-        "provenance": list(prov) or [_prov("inferred")],
-        "occurrences": 2,
-    }
-
 
 DOCUMENT: dict[str, Any] = {
     "periplus_map_version": 0,
@@ -47,11 +20,15 @@ DOCUMENT: dict[str, Any] = {
     "roots": ["."],
     "nodes": [
         _node(
-            "php.method::A::go", "php.method", roles=["entry"], attributes={"visibility": "public"}
+            "php.method::A::go",
+            "php.method",
+            line=3,
+            roles=["entry"],
+            attributes={"visibility": "public"},
         ),
-        _node("php.method::B::run", "php.method"),
+        _node("php.method::B::run", "php.method", line=3),
         _node("php.method::C::run", "php.method", "referenced"),
-        _node("php.type::A", "php.type"),
+        _node("php.type::A", "php.type", line=3),
     ],
     "edges": [
         _edge("calls", "php.method::A::go", "php.method::C::run", 9, _prov("inferred", "x")),
@@ -89,29 +66,29 @@ def test_the_node_is_shown_with_its_roles_attributes_and_provenance(tmp_path: Pa
 def test_outgoing_edges_are_grouped_by_kind_then_other_end(tmp_path: Path) -> None:
     report = show.run(tmp_path, {}, "php.method::A::go", 50, _map(tmp_path))
 
-    assert [(r["kind"], r["other"]) for r in report.outgoing.items] == [
+    assert [(r.kind, r.other) for r in report.outgoing.items] == [
         ("calls", "php.method::B::run"),
         ("calls", "php.method::C::run"),
     ]
     first = report.outgoing.items[0]
-    assert first["other_type"] == "php.method"
-    assert first["other_state"] == "mapped"
-    assert first["locations"] == [{"file": "src/a.php", "line": 7}]
-    assert first["occurrences"] == 2
-    assert first["confidences"] == ["declared", "inferred"]
-    assert first["rules"] == ["php:x", "php:y"]
+    assert first.other_type == "php.method"
+    assert first.other_state == "mapped"
+    assert [(loc.file, loc.line) for loc in first.locations] == [("src/a.php", 7)]
+    assert first.occurrences == 2
+    assert first.confidences == ("declared", "inferred")
+    assert first.rules == ("php:x", "php:y")
 
 
 def test_the_other_end_state_shows_a_call_that_leaves_the_mapped_code(tmp_path: Path) -> None:
     report = show.run(tmp_path, {}, "php.method::A::go", 50, _map(tmp_path))
 
-    assert report.outgoing.items[1]["other_state"] == "referenced"
+    assert report.outgoing.items[1].other_state == "referenced"
 
 
 def test_incoming_edges_name_the_other_end_that_arrives(tmp_path: Path) -> None:
     report = show.run(tmp_path, {}, "php.method::A::go", 50, _map(tmp_path))
 
-    assert [(r["kind"], r["other"]) for r in report.incoming.items] == [
+    assert [(r.kind, r.other) for r in report.incoming.items] == [
         ("calls", "php.method::B::run"),
         ("defines", "php.type::A"),
     ]

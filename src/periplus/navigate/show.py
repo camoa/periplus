@@ -11,10 +11,32 @@ from typing import Any
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place
-from periplus.navigate.mapfile import MapIndex, as_text, load_map, reading_fields
+from periplus.navigate.mapfile import MapIndex, as_text, is_whole, load_map, reading_fields
 from periplus.report import _escape, _json_problem
 
-__all__ = ["RENDERERS", "ShowReport", "render_json", "render_text", "run"]
+__all__ = ["RENDERERS", "EdgeRow", "Location", "ShowReport", "render_json", "render_text", "run"]
+
+
+@dataclass(frozen=True, slots=True)
+class Location:
+    """A file and the line in it."""
+
+    file: str
+    line: int | float
+
+
+@dataclass(frozen=True, slots=True)
+class EdgeRow:
+    """One edge at the shown node: its kind, the other end, where it is, and why it is there."""
+
+    kind: str
+    other: str
+    other_type: str
+    other_state: str
+    locations: tuple[Location, ...]
+    occurrences: int | float | None
+    confidences: tuple[str, ...]
+    rules: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,8 +50,8 @@ class ShowReport:
     attributes: Mapping[str, Any] | None = None
     locations: tuple[Mapping[str, Any], ...] = ()
     provenance: tuple[Mapping[str, Any], ...] = ()
-    outgoing: Listing = NONE
-    incoming: Listing = NONE
+    outgoing: Listing[EdgeRow] = NONE
+    incoming: Listing[EdgeRow] = NONE
     problems: tuple[Problem, ...] = ()
 
     @property
@@ -38,29 +60,39 @@ class ShowReport:
         return min((problem.code for problem in self.problems), default=ExitCode.OK)
 
 
-def _first(locations: list[dict[str, Any]]) -> tuple[str, int]:
-    return (locations[0]["file"], locations[0]["line"]) if locations else ("", 0)
+def _first(locations: tuple[Location, ...]) -> tuple[str, int | float]:
+    return (locations[0].file, locations[0].line) if locations else ("", 0)
 
 
-def _rows(index: MapIndex, edges: list[dict[str, Any]], end: str) -> list[dict[str, Any]]:
+def _whole(value: Any) -> int | float:
+    """``value``, which a report prints as a count or line; a ``TypeError`` when it is not whole."""
+    if not is_whole(value):
+        raise TypeError(f"expected a whole number, got {type(value).__name__} {value!r}")
+    return value
+
+
+def _rows(index: MapIndex, edges: list[dict[str, Any]], end: str) -> list[EdgeRow]:
     """Edge rows sorted by kind, then other-end id, then first location."""
     rows = []
     for edge in edges:
         other = index.nodes[edge[end]]
         confidences = {as_text(p["confidence"]) for p in edge["provenance"] if "confidence" in p}
+        occurrences = edge.get("occurrences")
         rows.append(
-            {
-                "kind": as_text(edge["kind"]),
-                "other": as_text(other["id"]),
-                "other_type": as_text(other["type"]),
-                "other_state": as_text(other["state"]),
-                "locations": _placed(edge["locations"]),
-                "occurrences": edge.get("occurrences"),
-                "confidences": sorted(confidences),
-                "rules": sorted({f"{p['pack']}:{p['rule']}" for p in edge["provenance"]}),
-            }
+            EdgeRow(
+                as_text(edge["kind"]),
+                as_text(other["id"]),
+                as_text(other["type"]),
+                as_text(other["state"]),
+                tuple(
+                    Location(as_text(loc["file"]), _whole(loc["line"])) for loc in edge["locations"]
+                ),
+                None if occurrences is None else _whole(occurrences),
+                tuple(sorted(confidences)),
+                tuple(sorted({f"{p['pack']}:{p['rule']}" for p in edge["provenance"]})),
+            )
         )
-    return sorted(rows, key=lambda r: (r["kind"], r["other"], _first(r["locations"])))
+    return sorted(rows, key=lambda r: (r.kind, r.other, _first(r.locations)))
 
 
 def run(
@@ -105,21 +137,38 @@ def _placed(locations: Any) -> Any:
     return locations
 
 
-def _edge_lines(listing: Listing) -> list[str]:
+def _json_location(location: Location) -> dict[str, Any]:
+    return {"file": location.file, "line": location.line}
+
+
+def _json_row(row: EdgeRow) -> dict[str, Any]:
+    return {
+        "kind": row.kind,
+        "other": row.other,
+        "other_type": row.other_type,
+        "other_state": row.other_state,
+        "locations": [_json_location(loc) for loc in row.locations],
+        "occurrences": row.occurrences,
+        "confidences": list(row.confidences),
+        "rules": list(row.rules),
+    }
+
+
+def _edge_lines(listing: Listing[EdgeRow]) -> list[str]:
     lines = []
     kind = None
     for row in listing.items:
-        if row["kind"] != kind:
-            kind = row["kind"]
+        if row.kind != kind:
+            kind = row.kind
             lines.append(f"  {_escape(kind)}:")
-        where = ", ".join(place(loc) for loc in row["locations"]) or "no location"
-        count = f"  x{row['occurrences']}" if row["occurrences"] else ""
-        confidences = ",".join(_escape(c) for c in row["confidences"]) or "no confidence"
+        where = ", ".join(f"{loc.file}:{loc.line}" for loc in row.locations) or "no location"
+        count = f"  x{row.occurrences}" if row.occurrences else ""
+        confidences = ",".join(_escape(c) for c in row.confidences) or "no confidence"
         lines.append(
-            f"    {_escape(row['other'])}  {_escape(row['other_type'])}"
-            f"  {_escape(row['other_state'])}"
+            f"    {_escape(row.other)}  {_escape(row.other_type)}"
+            f"  {_escape(row.other_state)}"
             f"  {_escape(where)}{count}  {confidences}"
-            f"  {_escape(', '.join(row['rules']))}"
+            f"  {_escape(', '.join(row.rules))}"
         )
     note = footer(listing)
     return lines + ([f"  {note}"] if note else []) or ["  none"]
@@ -156,8 +205,8 @@ def render_json(report: ShowReport) -> str:
         "attributes": dict(report.attributes or {}),
         "locations": list(report.locations),
         "provenance": list(report.provenance),
-        "outgoing": payload(report.outgoing),
-        "incoming": payload(report.incoming),
+        "outgoing": payload(report.outgoing, _json_row),
+        "incoming": payload(report.incoming, _json_row),
         "problems": [_json_problem(p) for p in report.problems],
     }
     return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"

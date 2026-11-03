@@ -8,21 +8,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _navigate import _edge, _node
 
 from periplus.cli import build_parser, main
 from periplus.errors import ExitCode
 from periplus.navigate import types
-
-PROV = {"pack": "php", "rule": "r", "sets": []}
-
-
-def _node(id: str, type: str) -> dict[str, Any]:
-    return {"id": id, "type": type, "state": "mapped", "locations": [], "provenance": [PROV]}
-
-
-def _edge(kind: str, source: str, target: str) -> dict[str, Any]:
-    return {"kind": kind, "from": source, "to": target, "locations": [], "provenance": [PROV]}
-
 
 DOCUMENT: dict[str, Any] = {
     "periplus_map_version": 0,
@@ -61,10 +51,13 @@ def test_every_type_and_kind_present_is_counted_with_its_parent(tmp_path: Path) 
     report = _report(tmp_path)
 
     assert report.node_types == (
-        ("php.method", 2, "php.symbol"),
-        ("php.type", 1, "php.symbol"),
+        types.NodeTypeRow(type="php.method", count=2, parent="php.symbol"),
+        types.NodeTypeRow(type="php.type", count=1, parent="php.symbol"),
     )
-    assert report.edge_kinds == (("calls", 1), ("defines", 2))
+    assert report.edge_kinds == (
+        types.EdgeKindRow(kind="calls", count=1),
+        types.EdgeKindRow(kind="defines", count=2),
+    )
     assert report.exit_code is ExitCode.OK
 
 
@@ -72,7 +65,7 @@ def test_a_type_absent_from_the_map_is_not_listed(tmp_path: Path) -> None:
     # php.symbol is in the hierarchy but no node has it.
     report = _report(tmp_path)
 
-    assert "php.symbol" not in [t for t, _, _ in report.node_types]
+    assert "php.symbol" not in [row.type for row in report.node_types]
     assert json.loads(types.render_json(report))["node_types"][0]["type"] == "php.method"
 
 

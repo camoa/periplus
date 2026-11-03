@@ -12,7 +12,7 @@ from collections import defaultdict
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from periplus.errors import ExitCode, HarnessError
 from periplus.layout import PROJECT_MARKER
@@ -27,6 +27,7 @@ __all__ = [
     "NotAMap",
     "as_text",
     "damaged",
+    "is_whole",
     "load_map",
     "reading_fields",
 ]
@@ -64,9 +65,10 @@ class MapIndex:
         self._parents: dict[str, str | None] = {}
         self._subtypes: dict[str, list[str]] = defaultdict(list)
         for row in document.get("type_hierarchy", []):
-            self._parents[row["type"]] = row["parent"]
-            if row["parent"] is not None:
-                self._subtypes[row["parent"]].append(row["type"])
+            parent = row.get("parent")
+            self._parents[row["type"]] = parent
+            if parent is not None:
+                self._subtypes[parent].append(row["type"])
         self.edges: list[dict[str, Any]] = list(document["edges"])
 
     def outgoing(self, id: str) -> list[dict[str, Any]]:
@@ -108,8 +110,7 @@ def load_map(start: Path, env: Mapping[str, str], map_path: Path | None) -> MapI
     path, document = _read(start, map_path)
     version = document.get("periplus_map_version") if isinstance(document, dict) else None
     if not (
-        isinstance(version, int)
-        and not isinstance(version, bool)
+        is_whole(version)
         and version >= 0
         and isinstance(document.get("nodes"), list)
         and isinstance(document.get("edges"), list)
@@ -121,18 +122,14 @@ def load_map(start: Path, env: Mapping[str, str], map_path: Path | None) -> MapI
     try:
         return MapIndex(document)
     except (KeyError, TypeError) as error:
-        raise NotAMap(
-            f"{path} is damaged: a node, edge or type_hierarchy row is malformed "
-            f"({type(error).__name__}: {error})",
-            {"path": str(path)},
-        ) from error
+        raise damaged(start, map_path, error) from error
 
 
 def damaged(start: Path, map_path: Path | None, error: Exception) -> NotAMap:
     """The ``NotAMap`` for a field a navigation command read from a map ``load_map`` accepted."""
     path = _locate(start, map_path)
     return NotAMap(
-        f"{path} is damaged: a node or edge field is missing or malformed "
+        f"{path} is damaged: a node, edge or type_hierarchy row or field is missing or malformed "
         f"({type(error).__name__}: {error}); run periplus check-map for the exact error",
         {"path": str(path)},
     )
@@ -156,6 +153,16 @@ def as_text(value: Any) -> str:
     if not isinstance(value, str):
         raise TypeError(f"expected a string, got {type(value).__name__} {value!r}")
     return value
+
+
+def is_whole(value: object) -> TypeGuard[int | float]:
+    """Whether ``value`` is a whole number, as the schema's ``integer`` is; a ``bool`` is not.
+
+    A float with a whole value such as ``7.0`` counts, and is not converted.
+    """
+    if isinstance(value, bool):
+        return False
+    return isinstance(value, int) or (isinstance(value, float) and value.is_integer())
 
 
 def _locate(start: Path, map_path: Path | None) -> Path:

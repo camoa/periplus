@@ -5,32 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
+
+from _navigate import _edge, _node
 
 from periplus.cli import build_parser, main
 from periplus.errors import ExitCode
 from periplus.navigate import walk
-
-
-def _node(id: str) -> dict[str, Any]:
-    return {
-        "id": id,
-        "type": "t.x",
-        "state": "mapped",
-        "locations": [{"file": "a.php", "line": 1}],
-        "provenance": [{"pack": "p", "rule": "r", "sets": []}],
-    }
-
-
-def _edge(kind: str, source: str, target: str) -> dict[str, Any]:
-    return {
-        "kind": kind,
-        "from": source,
-        "to": target,
-        "locations": [],
-        "provenance": [{"pack": "p", "rule": "r", "sets": []}],
-    }
-
 
 # a -calls-> b -calls-> c -calls-> a (a cycle); a -uses-> c; c -calls-> d; weird\n -calls-> a
 NAMES = ["x::a", "x::b", "x::c", "x::d", "x::e\n"]
@@ -49,7 +29,7 @@ def _map(root: Path) -> Path:
         "periplus_map_version": 0,
         "packs": [{"pack": "p", "version": "0.1.0"}],
         "roots": ["."],
-        "nodes": [_node(n) for n in sorted(NAMES)],
+        "nodes": [_node(n, line=1) for n in sorted(NAMES)],
         "edges": [_edge(*e) for e in sorted(EDGES, key=lambda e: (e[0], e[1], e[2]))],
     }
     path = root / "map.json"
@@ -58,7 +38,7 @@ def _map(root: Path) -> Path:
 
 
 def _ids(report: walk.WalkReport) -> list[tuple[str, int, str, str]]:
-    return [(r["id"], r["depth"], r["kind"], r["via"]) for r in report.rows.items]
+    return [(r.id, r.depth, r.kind, r.via) for r in report.rows.items]
 
 
 def test_neighbors_at_depth_one_lists_direct_targets_with_the_edge_that_reached_them(
@@ -84,7 +64,7 @@ def test_depth_goes_further_and_each_item_appears_once_at_its_nearest_depth(
 def test_a_cycle_back_to_the_start_never_lists_the_start(tmp_path: Path) -> None:
     report = walk.run(tmp_path, {}, "x::b", "out", 9, [], 50, _map(tmp_path))
 
-    assert [r["id"] for r in report.rows.items] == ["x::c", "x::a", "x::d"]
+    assert [r.id for r in report.rows.items] == ["x::c", "x::a", "x::d"]
 
 
 def test_kind_keeps_only_the_named_edge_kinds(tmp_path: Path) -> None:

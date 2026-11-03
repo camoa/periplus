@@ -7,22 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _navigate import _edge, _node
 
 from periplus.cli import main
 from periplus.errors import ExitCode
 from periplus.navigate.listing import cut, footer, payload
 from periplus.navigate.mapfile import MapNotFound, NodeNotFound, NotAMap, load_map
-
-PROV = {"pack": "php", "rule": "r", "sets": []}
-
-
-def _node(id: str, type: str) -> dict[str, Any]:
-    return {"id": id, "type": type, "state": "mapped", "locations": [], "provenance": [PROV]}
-
-
-def _edge(kind: str, source: str, target: str) -> dict[str, Any]:
-    return {"kind": kind, "from": source, "to": target, "locations": [], "provenance": [PROV]}
-
 
 DOCUMENT: dict[str, Any] = {
     "periplus_map_version": 0,
@@ -176,7 +166,12 @@ def test_a_known_id_returns_its_node(tmp_path: Path) -> None:
 def test_a_cut_below_the_item_count_reports_total_shown_and_truncated() -> None:
     listing = cut(["a", "b", "c"], 2)
 
-    assert payload(listing) == {"items": ["a", "b"], "total": 3, "shown": 2, "truncated": True}
+    assert payload(listing, lambda item: {"name": item}) == {
+        "items": [{"name": "a"}, {"name": "b"}],
+        "total": 3,
+        "shown": 2,
+        "truncated": True,
+    }
     assert footer(listing) == "showing 2 of 3"
 
 

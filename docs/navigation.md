@@ -100,9 +100,11 @@ direction. Without a chain it prints `no path`, and exits 0. `--kind K` follows 
 
 ## Checking the map
 
-The six commands check only the map's outline: a JSON object with a supported
-`periplus_map_version` and lists `nodes` and `edges`. They do not check every node and edge, so
-a map with a fault deeper in is still read. When you want the full check, run:
+The six commands check the map only as far as they need to answer. They first check the outline:
+a JSON object whose `periplus_map_version` is a non-negative integer and whose `nodes` and `edges`
+are lists. A map damaged below the outline may stop a command with exit 30 and a message that
+points to `periplus check-map`, or a wrong-typed value may print as it is. Only
+`periplus check-map` checks the whole map. To run it:
 
 ```
 periplus check-map [--map PATH] [--format text|json]

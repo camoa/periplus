@@ -14,7 +14,19 @@ from periplus.navigate.listing import NONE, Listing, cut, footer, kind_warnings,
 from periplus.navigate.mapfile import MapIndex, as_text, load_map, reading_fields
 from periplus.report import _escape, _json_problem
 
-__all__ = ["RENDERERS", "WalkReport", "render_json", "render_text", "run"]
+__all__ = ["RENDERERS", "WalkReport", "WalkRow", "render_json", "render_text", "run"]
+
+
+@dataclass(frozen=True, slots=True)
+class WalkRow:
+    """One item reached: its id, type and state, the depth, and the edge kind and end it came by."""
+
+    id: str
+    type: str
+    state: str
+    depth: int
+    kind: str
+    via: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +35,7 @@ class WalkReport:
 
     start: str = ""
     direction: str = "out"
-    rows: Listing = NONE
+    rows: Listing[WalkRow] = NONE
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
 
@@ -35,7 +47,7 @@ class WalkReport:
 
 def walk(
     index: MapIndex, start: str, direction: str, depth: int, kinds: Collection[str]
-) -> list[dict[str, Any]]:
+) -> list[WalkRow]:
     """Breadth-first rows, each item once at its nearest depth with the first edge that reached it.
 
     A layer's items are expanded in id order and each item's edges in (kind, other end) order, so
@@ -45,7 +57,7 @@ def walk(
     other = "from" if end == "to" else "to"
     seen = {start}
     frontier = [start]
-    rows: list[dict[str, Any]] = []
+    rows: list[WalkRow] = []
     for level in range(1, depth + 1):
         reached: list[str] = []
         for item in sorted(frontier):
@@ -59,17 +71,17 @@ def walk(
                 # Indexed, not index.node: a dangling end is a damaged map, not an unknown id.
                 node = index.nodes[target]
                 rows.append(
-                    {
-                        "id": as_text(target),
-                        "type": as_text(node["type"]),
-                        "state": as_text(node["state"]),
-                        "depth": level,
-                        "kind": as_text(edge["kind"]),
-                        "via": as_text(edge[other]),
-                    }
+                    WalkRow(
+                        as_text(target),
+                        as_text(node["type"]),
+                        as_text(node["state"]),
+                        level,
+                        as_text(edge["kind"]),
+                        as_text(edge[other]),
+                    )
                 )
         frontier = reached
-    return sorted(rows, key=lambda r: (r["depth"], r["id"]))
+    return sorted(rows, key=lambda r: (r.depth, r.id))
 
 
 def run(
@@ -106,9 +118,9 @@ def render_text(report: WalkReport) -> str:
     toward = "from" if report.direction == "out" else "to"
     for row in report.rows.items:
         lines.append(
-            f"  {row['depth']}  {_escape(row['id'])}  {_escape(row['type'])}"
-            f"  {_escape(row['state'])}"
-            f"  via {_escape(row['kind'])} {toward} {_escape(row['via'])}"
+            f"  {row.depth}  {_escape(row.id)}  {_escape(row.type)}"
+            f"  {_escape(row.state)}"
+            f"  via {_escape(row.kind)} {toward} {_escape(row.via)}"
         )
     note = footer(report.rows)
     if note:
@@ -118,12 +130,23 @@ def render_text(report: WalkReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _json_row(row: WalkRow) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "type": row.type,
+        "state": row.state,
+        "depth": row.depth,
+        "kind": row.kind,
+        "via": row.via,
+    }
+
+
 def render_json(report: WalkReport) -> str:
     """The report as one JSON document, keys sorted, ``ensure_ascii=True``."""
     document = {
         "start": report.start,
         "direction": report.direction,
-        "rows": payload(report.rows),
+        "rows": payload(report.rows, _json_row),
         "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
     }

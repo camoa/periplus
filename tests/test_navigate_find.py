@@ -8,18 +8,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _navigate import _node
 
 from periplus.cli import build_parser, main
 from periplus.errors import ExitCode
 from periplus.navigate import find
-
-PROV = {"pack": "php", "rule": "r", "sets": []}
-
-
-def _node(id: str, type: str, line: int | None = None) -> dict[str, Any]:
-    where = [{"file": "src/a.php", "line": line}] if line else []
-    return {"id": id, "type": type, "state": "mapped", "locations": where, "provenance": [PROV]}
-
 
 DOCUMENT: dict[str, Any] = {
     "periplus_map_version": 0,
@@ -32,12 +25,12 @@ DOCUMENT: dict[str, Any] = {
         {"type": "yaml.key", "parent": None},
     ],
     "nodes": [
-        _node("php.method::Foo::cache", "php.method", 3),
-        _node("php.type::Cache", "php.type", 1),
-        _node("php.type::CacheBackend", "php.type", 9),
+        _node("php.method::Foo::cache", "php.method", line=3),
+        _node("php.type::Cache", "php.type", line=1),
+        _node("php.type::CacheBackend", "php.type", line=9),
         _node("php.type::MyCache", "php.type"),
         _node("php.type::Cache::Zed", "php.type"),
-        _node("yaml.key::cache", "yaml.key", 2),
+        _node("yaml.key::cache", "yaml.key", line=2),
     ],
     "edges": [],
 }
@@ -50,7 +43,7 @@ def _map(root: Path) -> Path:
 
 
 def _ids(report: find.FindReport) -> list[str]:
-    return [row["id"] for row in report.matches.items]
+    return [row.id for row in report.matches.items]
 
 
 def test_matches_are_closest_first_with_ties_broken_by_id(tmp_path: Path) -> None:
@@ -71,15 +64,15 @@ def test_a_row_carries_type_state_and_first_location(tmp_path: Path) -> None:
     report = find.run(tmp_path, {}, "CacheBackend", None, 50, _map(tmp_path))
 
     assert report.matches.items == (
-        {
-            "id": "php.type::CacheBackend",
-            "type": "php.type",
-            "state": "mapped",
-            "location": "src/a.php:9",
-        },
+        find.FindRow(
+            id="php.type::CacheBackend",
+            type="php.type",
+            state="mapped",
+            location="src/a.php:9",
+        ),
     )
     assert (
-        find.run(tmp_path, {}, "MyCache", None, 50, _map(tmp_path)).matches.items[0]["location"]
+        find.run(tmp_path, {}, "MyCache", None, 50, _map(tmp_path)).matches.items[0].location
         is None
     )
 

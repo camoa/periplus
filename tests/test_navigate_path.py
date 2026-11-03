@@ -5,22 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
+
+from _navigate import _edge, _node
 
 from periplus.cli import build_parser, main
 from periplus.errors import ExitCode
 from periplus.navigate import path
-
-PROV = [{"pack": "p", "rule": "r", "sets": []}]
-
-
-def _node(id: str) -> dict[str, Any]:
-    return {"id": id, "type": "t.x", "state": "mapped", "locations": [], "provenance": PROV}
-
-
-def _edge(kind: str, source: str, target: str) -> dict[str, Any]:
-    return {"kind": kind, "from": source, "to": target, "locations": [], "provenance": PROV}
-
 
 # a->b->d, a->c->d, a->b->d via two kinds (calls, uses), a->d is absent; d->e; z is isolated.
 EDGES = [
@@ -51,11 +41,13 @@ def test_every_shortest_chain_is_listed_in_order_and_the_total_is_exact(tmp_path
     report = path.run(tmp_path, {}, "x::a", "x::d", [], 10, _map(tmp_path))
 
     assert report.chains.total == 3
-    assert report.chains.items == (
+    assert [
+        [(step.start, step.kind, step.end) for step in chain] for chain in report.chains.items
+    ] == [
         [("x::a", "calls", "x::b"), ("x::b", "calls", "x::d")],
         [("x::a", "calls", "x::b"), ("x::b", "uses", "x::d")],
         [("x::a", "calls", "x::c"), ("x::c", "calls", "x::d")],
-    )
+    ]
 
 
 def test_the_limit_cuts_the_chains_but_the_total_counts_them_all(tmp_path: Path) -> None:
@@ -99,7 +91,7 @@ def test_no_chain_is_an_empty_listing_a_line_saying_so_and_exit_zero(tmp_path: P
 def test_the_same_item_is_one_chain_of_no_steps(tmp_path: Path) -> None:
     report = path.run(tmp_path, {}, "x::a", "x::a", [], 10, _map(tmp_path))
 
-    assert report.chains.items == ([],)
+    assert [len(chain) for chain in report.chains.items] == [0]
     assert report.chains.total == 1
 
 
