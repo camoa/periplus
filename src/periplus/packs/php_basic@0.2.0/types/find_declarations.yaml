@@ -184,7 +184,8 @@ rules:
     filetype: php
     where:
     - has_child: union_type
-    - name_matches: {child: type, pattern: '(?i)^(?:(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable)\s*\|\s*)*\\?[A-Za-z_][\w\\]*(?:\s*\|\s*(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable))*$'}
+    - &union_guard
+      name_matches: {child: type, pattern: '(?i)^(?:(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable)\s*\|\s*)*\\?[A-Za-z_][\w\\]*(?:\s*\|\s*(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable))*$'}
   id:
     from: [enclosing_type, declared_name, {qualified: type}]
     template: "{enclosing_type}::{declared_name}::{type}"
@@ -200,7 +201,7 @@ rules:
     filetype: php
     where:
     - has_child: union_type
-    - name_matches: {child: type, pattern: '(?i)^(?:(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable)\s*\|\s*)*\\?[A-Za-z_][\w\\]*(?:\s*\|\s*(?:null|false|true|int|float|string|bool|array|iterable|mixed|callable))*$'}
+    - *union_guard
   id:
     from: [enclosing_type, declared_name, {qualified: type}]
     template: "{enclosing_type}::{declared_name}::{type}"

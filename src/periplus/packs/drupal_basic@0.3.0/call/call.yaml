@@ -75,7 +75,7 @@ rules:
     name_child: name
     filetype: php
     where:
-    - name_matches: {child: object, pattern: '\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\)'}
+    - name_matches: {child: object, pattern: &container_object '\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\)'}
     - name_matches: {child: name, pattern: get}
   emits:
   - edge:
@@ -93,7 +93,7 @@ rules:
     name_child: name
     filetype: php
     where:
-    - name_matches: {child: object, pattern: '\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\)'}
+    - name_matches: {child: object, pattern: *container_object}
     - name_matches: {child: name, pattern: get}
   emits:
   - edge:
@@ -227,10 +227,10 @@ rules:
     declaration: member_call_expression
     name_child: object
     filetype: php
-    where:
+    where: &manager_where
     - name_matches: {child: object, pattern: '\$this->\w+'}
     - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
-  id:
+  id: &manager_id
     from: [enclosing_type, enclosing_method, declared_name, name, arguments]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
   emits: [{node: {type: drupal.manager_call}}]
@@ -243,12 +243,8 @@ rules:
     declaration: member_call_expression
     name_child: object
     filetype: php
-    where:
-    - name_matches: {child: object, pattern: '\$this->\w+'}
-    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
-  id:
-    from: [enclosing_type, enclosing_method, declared_name, name, arguments]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
+    where: *manager_where
+  id: *manager_id
   emits: [{edge: {kind: manager_call_in, from: this_node, to: enclosing_method}}]
   confidence: declared
 
@@ -260,12 +256,8 @@ rules:
     declaration: nullsafe_member_call_expression
     name_child: object
     filetype: php
-    where:
-    - name_matches: {child: object, pattern: '\$this->\w+'}
-    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
-  id:
-    from: [enclosing_type, enclosing_method, declared_name, name, arguments]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
+    where: *manager_where
+  id: *manager_id
   emits: [{node: {type: drupal.manager_call}}]
   confidence: declared
 
@@ -276,12 +268,8 @@ rules:
     declaration: nullsafe_member_call_expression
     name_child: object
     filetype: php
-    where:
-    - name_matches: {child: object, pattern: '\$this->\w+'}
-    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
-  id:
-    from: [enclosing_type, enclosing_method, declared_name, name, arguments]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
+    where: *manager_where
+  id: *manager_id
   emits: [{edge: {kind: manager_call_in, from: this_node, to: enclosing_method}}]
   confidence: declared
 

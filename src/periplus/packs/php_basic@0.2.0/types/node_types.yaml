@@ -36,6 +36,7 @@ node_types:
 # The parts of a call through a property of the enclosing object, $this->mailer->send(), that
 # edges/find_structure.yaml joins in the map rule calls_through_assigned_property. Each is found at
 # its own line by a rule in types/find_declarations.yaml; its id is shaped there.
+# The node type php.property_type is declared in types/find_declarations.yaml.
 - name: php.property
   id_namespace: php.property
 

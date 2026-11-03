@@ -26,7 +26,8 @@ edge_kinds:
   from: [php.function, php.method]
   to: [php.function, php.method]
 
-# The joins of a call through a property; edges/find_structure.yaml finds them.
+# The joins of a call through a property; edges/find_structure.yaml finds them. The edge
+# property_typed_as, from a property to its declared type, is declared in edges/find_structure.yaml.
 - kind: declares_property
   from: php.class_like
   to: php.property

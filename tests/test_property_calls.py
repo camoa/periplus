@@ -152,3 +152,111 @@ def test_a_project_local_pack_with_the_same_grammar_gives_the_same_edges(tmp_pat
         ("php.method::App\\Service\\Mailer::send", 20, "inferred"),
         ("php.method::App\\Service\\Store::get", 22, "inferred"),
     ], _calls(document)
+
+
+VAR_FORMS = """\
+<?php
+namespace App\\Web;
+
+use App\\Service\\{Mailer, Clock, Store};
+
+class Forms
+{
+  /** @var ?Mailer */
+  protected $optional;
+
+  /** @var \\App\\Service\\Clock|null */
+  protected $union;
+
+  /** @var Store*/
+  protected $tight;
+
+  public function run(): void
+  {
+    $this->optional->send();
+    $this->union->now();
+    $this->tight->get();
+  }
+}
+"""
+
+TWICE_SERVICE = "<?php\nnamespace App\\Service;\n\nclass Tool\n{\n  public function work() {}\n}\n"
+TWICE_PAGE = """\
+<?php
+namespace App\\Web;
+
+use App\\Service\\Tool;
+
+class Twice
+{
+  private Tool $tool;
+
+  public function run(): void
+  {
+    $this->tool->work();
+    $this->tool->work();
+  }
+}
+"""
+
+
+def _map_files(root: Path, files: dict[str, str]) -> dict[str, Any]:
+    (root / ".periplus").mkdir()
+    (root / ".periplus" / "settings.yml").write_text(
+        "periplus_version: 0\npacks: [php_basic@0.2.0]\n"
+    )
+    for name, text in files.items():
+        (root / "src" / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / "src" / name).write_text(text)
+    report = run(
+        start=root,
+        env={"PERIPLUS_CONFIG_DIR": str(root / "config")},
+        dependencies=check_runtime_dependencies(),
+        output=Path("map.json"),
+    )
+    assert report.problems == (), report
+    return json.loads((root / "map.json").read_text())  # type: ignore[no-any-return]
+
+
+def test_each_var_docblock_form_gives_type_node_typed_as_edge_and_call_c2(
+    tmp_path: Path,
+) -> None:
+    """?Box, a namespaced name or null, and no space before the comment end: each property gets a
+    property type node, a typed-as edge and a calls edge through it."""
+    document = _map_files(
+        tmp_path, {**{f"Service/{n}": t for n, t in SERVICES.items()}, "Web/Forms.php": VAR_FORMS}
+    )
+    types = [n for n in document["nodes"] if n["type"] == "php.property_type"]
+    typed_as = [e for e in document["edges"] if e["kind"] == "property_typed_as"]
+    run_id = "php.method::App\\Web\\Forms::run"
+    calls = sorted(
+        str(e["to"])
+        for e in document["edges"]
+        if e["kind"] == "calls"
+        and e["from"] == run_id
+        and any(p["rule"] == "calls_through_typed_property" for p in e["provenance"])
+    )
+    assert len(types) == 3, types
+    assert len(typed_as) == 3, typed_as
+    assert calls == [
+        "php.method::App\\Service\\Clock::now",
+        "php.method::App\\Service\\Mailer::send",
+        "php.method::App\\Service\\Store::get",
+    ], calls
+
+
+def test_the_same_call_on_two_lines_lists_both_lines_c3(tmp_path: Path) -> None:
+    """$this->tool->work(); on two lines of one method: one calls edge from the method, listing
+    both lines."""
+    document = _map_files(
+        tmp_path, {"Service/Tool.php": TWICE_SERVICE, "Web/Twice.php": TWICE_PAGE}
+    )
+    edges = [
+        e
+        for e in document["edges"]
+        if e["kind"] == "calls"
+        and e["from"] == "php.method::App\\Web\\Twice::run"
+        and e["to"] == "php.method::App\\Service\\Tool::work"
+    ]
+    assert len(edges) == 1, edges
+    assert sorted(loc["line"] for loc in edges[0]["locations"]) == [12, 13], edges[0]

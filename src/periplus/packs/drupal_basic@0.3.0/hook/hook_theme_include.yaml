@@ -6,8 +6,14 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # file's. The rules read files claimed by the .inc and .theme endings, so a file such as
 # helpers.inc is read too. theme_name is absent for the theme's own .theme file, which
 # hook_from_function_name reads; there each rule leaves one skipped row. Inferred, because a name
-# is a convention, and because Drupal 12 collects legacy hooks only from the theme's own .theme
-# file, so a function in an included file fires only when the theme includes that file.
+# is a convention. Core's theme hook collector differs by line. On 11.x,
+# core/lib/Drupal/Core/Hook/ThemeHookCollectorPass.php reads .inc files under the theme folder
+# (outside the folders it skips), the .theme file and theme-settings.php, and leaves out functions
+# marked #[LegacyHook]. On main, the Drupal 12 line, as read on 2026-11-03, the same file passes
+# only the theme's own .theme file to the file walker in HookCollectorBase.php, so a function in
+# an .inc file the theme includes is not collected there. The release state of main was not read,
+# and drupal.org change record 3613767 could not be read. The rule stays because Periplus keeps
+# compatibility with Drupal 11, where these functions are collected.
 
 rules:
 - rule: hook_from_theme_include
