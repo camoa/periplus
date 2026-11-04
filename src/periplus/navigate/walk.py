@@ -53,16 +53,22 @@ def walk(
     A layer's items are expanded in id order and each item's edges in (kind, other end) order, so
     the edge that wins a tie is the same on every run.
     """
-    follow, end = (index.outgoing, "to") if direction == "out" else (index.incoming, "from")
-    other = "from" if end == "to" else "to"
+    ways = {"out": (("to", index.outgoing),), "in": (("from", index.incoming),)}.get(
+        direction, (("to", index.outgoing), ("from", index.incoming))
+    )
     seen = {start}
     frontier = [start]
     rows: list[WalkRow] = []
     for level in range(1, depth + 1):
         reached: list[str] = []
         for item in sorted(frontier):
-            edges = [e for e in follow(item) if not kinds or e["kind"] in kinds]
-            for edge in sorted(edges, key=lambda e: (e["kind"], e[end])):
+            edges = [
+                (e, end)
+                for end, follow in ways
+                for e in follow(item)
+                if not kinds or e["kind"] in kinds
+            ]
+            for edge, end in sorted(edges, key=lambda p: (p[0]["kind"], p[0][p[1]])):
                 target = edge[end]
                 if target in seen:
                     continue
@@ -77,7 +83,7 @@ def walk(
                         as_text(node["state"]),
                         level,
                         as_text(edge["kind"]),
-                        as_text(edge[other]),
+                        as_text(edge["from" if end == "to" else "to"]),
                     )
                 )
         frontier = reached

@@ -34,8 +34,10 @@ class ExportReport:
         return min((problem.code for problem in self.problems), default=ExitCode.OK)
 
 
-def _attr(value: str) -> str:
-    return escape(value, {'"': "&quot;"})
+def _tokens(document: Mapping[str, Any]) -> dict[str, str]:
+    """One name token per node, n0, n1 and so on in document order, for the formats whose node
+    ids must be name tokens."""
+    return {node["id"]: f"n{n}" for n, node in enumerate(document["nodes"])}
 
 
 def _graphml(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
@@ -47,7 +49,9 @@ def _graphml(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
         ("edge", "kind", "string"),
         ("edge", "file", "string"),
         ("edge", "line", "int"),
+        ("node", "label", "string"),
     )
+    token = _tokens(document)
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<graphml xmlns="http://graphml.graphdrawing.org/xmlns">',
@@ -66,7 +70,8 @@ def _graphml(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
         where = first_location(node)
         if where:
             values += [("file", where["file"]), ("line", str(where["line"]))]
-        lines.append(f'    <node id="{_attr(node["id"])}">')
+        values.append(("label", node["id"]))
+        lines.append(f'    <node id="{token[node["id"]]}">')
         lines += data("node", values)
         lines.append("    </node>")
     for edge in document["edges"]:
@@ -74,7 +79,8 @@ def _graphml(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
         where = first_location(edge)
         if where:
             values += [("file", where["file"]), ("line", str(where["line"]))]
-        lines.append(f'    <edge source="{_attr(edge["from"])}" target="{_attr(edge["to"])}">')
+        ends = f'source="{token[edge["from"]]}" target="{token[edge["to"]]}"'
+        lines.append(f"    <edge {ends}>")
         lines += data("edge", values)
         lines.append("    </edge>")
     lines += ["  </graph>", "</graphml>"]
@@ -107,7 +113,7 @@ def _mermaid_text(value: str) -> str:
 
 
 def _mermaid(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
-    token = {node["id"]: f"n{n}" for n, node in enumerate(document["nodes"])}
+    token = _tokens(document)
     lines = ["flowchart LR"]
     for node in document["nodes"]:
         label = _mermaid_text(f"{node['id']} ({node['type']})")

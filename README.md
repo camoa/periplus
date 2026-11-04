@@ -489,15 +489,16 @@ periplus export --format graphml|dot|mermaid [--map PATH]
 ```
 
 `slice` starts from the ids you name and from every node whose first file starts with `--path PREFIX`, and follows edges
-from them. `--direction` picks edges out of the items, into them or both (default `both`).
+from them. `--direction out` and `in` follow edges one way; `both` follows an edge either way at every hop (default `both`).
 `--depth N` sets how many edges to follow (default 1), and `--kind K` keeps only edges of kind `K`;
 repeat it for several. `--limit N` stops the slice when it would hold more than `N` items (default
 500, `0` for no limit): the command exits 32 and writes nothing. An unknown id, or a prefix that
 matches nothing, exits 31. `--out` is required, and a slice is a smaller map, so name it so it
 cannot replace the full map.
 
-`export` prints to standard output and its warnings to standard error. GraphML carries the node type and state, the edge kind, and the file and line where there is
-one. DOT and Mermaid label each node with its id and type.
+`export` prints to standard output and its warnings to standard error. GraphML names each node by a generated token and carries the map id as its label, with the
+node type and state, the edge kind, and the file and line where there is one. DOT and Mermaid
+label each node with its id and type.
 
 ```
 periplus slice --path src/Billing/ --out billing.map.json

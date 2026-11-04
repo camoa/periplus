@@ -77,8 +77,7 @@ def run(
                 starts |= under
             kept = set(starts)
             for item in sorted(starts):
-                for way in ("out", "in") if direction == "both" else (direction,):
-                    kept.update(row.id for row in walk(index, item, way, depth, set(kinds)))
+                kept.update(row.id for row in walk(index, item, direction, depth, set(kinds)))
             held = {edge["kind"] for edge in index.edges}
             if limit and len(kept) > limit:
                 message = f"the slice reaches {len(kept)} items, over the limit of {limit}"

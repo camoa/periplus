@@ -330,7 +330,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--direction",
         choices=("out", "in", "both"),
         default="both",
-        help="follow edges out of the items, into them, or both (default: both)",
+        help=(
+            "out or in follows one direction; both follows an edge either way at every hop "
+            "(default: both)"
+        ),
     )
     add_walk(cut)
     cut.add_argument(

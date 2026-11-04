@@ -106,7 +106,8 @@ periplus slice [ID ...] [--path PREFIX] --out FILE [--direction out|in|both] [--
 Writes the items around some start items to a map file of their own. Name the start items as
 `ID`s, with `--path PREFIX` (every node whose first file starts with `PREFIX`), or both; one of
 the two is required. `--out FILE` is required, and exits 27 when it is the map being read.
-`--direction` follows edges out of the items, into them, or both (default `both`). `--depth N`
+`--direction out` and `in` follow edges one way; `both` follows an edge either way at every hop
+(default `both`). `--depth N`
 sets how many edges to follow (default 1). `--kind K` keeps only edges of kind `K`; repeat it for
 several kinds. `--limit N` is the most items the slice may hold (default 500, `0` for no limit).
 It prints `wrote FILE: N nodes, M edges`.
@@ -121,7 +122,8 @@ periplus slice ID --depth 2 --out foo.map.json
 periplus export --format graphml|dot|mermaid [--map PATH]
 ```
 
-Prints the map in another format to standard output. `--format` is required. Warnings go to
+Prints the map in another format to standard output. In GraphML the node id is a generated
+token (`n0`, `n1`) and the map id is the node's `label`. `--format` is required. Warnings go to
 standard error: Mermaid warns above 500 edges or 50,000 characters.
 
 ```

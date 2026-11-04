@@ -206,7 +206,7 @@ def _data(element: ET.Element, keys: dict[str, tuple[str, str, str]]) -> dict[st
 
 
 @pytest.mark.criterion(id="c3")
-def test_graphml_holds_seven_keys_and_locations_only_where_present_c3() -> None:
+def test_graphml_holds_eight_keys_and_locations_only_where_present_c3() -> None:
     from periplus.navigate.export import WRITERS
 
     nodes = [
@@ -242,9 +242,10 @@ def test_graphml_holds_seven_keys_and_locations_only_where_present_c3() -> None:
             ("edge", "kind", "string"),
             ("edge", "file", "string"),
             ("edge", "line", "int"),
+            ("node", "label", "string"),
         ]
     )
-    assert len(keys) == 7
+    assert len(keys) == 8
 
     graphs = root.findall(f"{GRAPHML_NS}graph")
     assert len(graphs) == 1
@@ -256,7 +257,12 @@ def test_graphml_holds_seven_keys_and_locations_only_where_present_c3() -> None:
     assert len(node_elements) == 3
     assert len(edge_elements) == 2
 
-    by_id = {element.attrib["id"]: _data(element, keys) for element in node_elements}
+    by_id = {}
+    token_of = {}
+    for element in node_elements:
+        data = _data(element, keys)
+        token_of[data["label"]] = element.attrib["id"]
+        by_id[data.pop("label")] = data
     assert by_id["py.module::a$b"] == {
         "type": "py.module",
         "state": "mapped",
@@ -273,8 +279,8 @@ def test_graphml_holds_seven_keys_and_locations_only_where_present_c3() -> None:
 
     got = sorted(
         (
-            element.attrib["source"],
-            element.attrib["target"],
+            next(i for i, t in token_of.items() if t == element.attrib["source"]),
+            next(i for i, t in token_of.items() if t == element.attrib["target"]),
             tuple(sorted(_data(element, keys).items())),
         )
         for element in edge_elements
@@ -287,6 +293,50 @@ def test_graphml_holds_seven_keys_and_locations_only_where_present_c3() -> None:
         ),
         ("x->y::z", 'say "hi"::q', (("kind", "imports"),)),
     ]
+
+
+@pytest.mark.criterion(id="c4")
+def test_graphml_ids_are_name_tokens_and_the_map_id_is_the_label_data_c4() -> None:
+    from periplus.navigate.export import WRITERS
+
+    ids = ("a b::c", "x/y\\z::q", "p$q::r", 'say "hi"::s', "it's::t")
+    nodes = [_node(i, "t.x", "mapped") for i in ids]
+    edges = [
+        _edge("calls", ids[0], ids[1]),
+        _edge("imports", ids[2], ids[3]),
+        _edge("uses", ids[4], ids[0]),
+    ]
+    root = ET.fromstring(WRITERS["graphml"](_document(nodes, edges))[0])  # noqa: S314 -- own output
+    keys = _graphml_keys(root)
+    label_keys = [k for k, (scope, name, _t) in keys.items() if scope == "node" and name == "label"]
+    assert len(label_keys) == 1
+
+    token = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
+    graph = root.findall(f"{GRAPHML_NS}graph")[0]
+    token_of: dict[str, str] = {}
+    for element in graph.findall(f"{GRAPHML_NS}node"):
+        assert token.match(element.attrib["id"])
+        labels = [
+            d.text for d in element.findall(f"{GRAPHML_NS}data") if d.attrib["key"] == label_keys[0]
+        ]
+        assert len(labels) == 1
+        token_of[labels[0] or ""] = element.attrib["id"]
+    assert sorted(token_of) == sorted(ids)
+    assert len(set(token_of.values())) == 5
+
+    got = []
+    for element in graph.findall(f"{GRAPHML_NS}edge"):
+        assert token.match(element.attrib["source"])
+        assert token.match(element.attrib["target"])
+        kind = _data(element, keys)["kind"]
+        got.append((element.attrib["source"], element.attrib["target"], kind))
+    assert sorted(got) == sorted(
+        [
+            (token_of[ids[0]], token_of[ids[1]], "calls"),
+            (token_of[ids[2]], token_of[ids[3]], "imports"),
+            (token_of[ids[4]], token_of[ids[0]], "uses"),
+        ]
+    )
 
 
 @pytest.mark.criterion(id="wo2")
@@ -303,6 +353,7 @@ def test_graphml_writes_each_elements_data_in_one_fixed_order_wo2() -> None:
     key_order = [
         (keys[key.attrib["id"]][0], keys[key.attrib["id"]][1])
         for key in root.findall(f"{GRAPHML_NS}key")
+        if keys[key.attrib["id"]][1] != "label"
     ]
     assert key_order == [
         ("node", "type"),
@@ -317,7 +368,7 @@ def test_graphml_writes_each_elements_data_in_one_fixed_order_wo2() -> None:
     graph = root.findall(f"{GRAPHML_NS}graph")[0]
     for element in graph.findall(f"{GRAPHML_NS}node"):
         order = [keys[d.attrib["key"]][1] for d in element.findall(f"{GRAPHML_NS}data")]
-        assert order == ["type", "state", "file", "line"]
+        assert [name for name in order if name != "label"] == ["type", "state", "file", "line"]
     for element in graph.findall(f"{GRAPHML_NS}edge"):
         order = [keys[d.attrib["key"]][1] for d in element.findall(f"{GRAPHML_NS}data")]
         assert order == ["kind", "file", "line"]
