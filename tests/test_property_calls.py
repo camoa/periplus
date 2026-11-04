@@ -54,23 +54,9 @@ RUN = "php.method::App\\Web\\Page::run"
 
 
 def _map(root: Path) -> tuple[MapReport, dict[str, Any]]:
-    (root / ".periplus").mkdir()
-    (root / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [php_basic@0.2.0]\n"
+    return _map_files(
+        root, {**{f"Service/{n}": t for n, t in SERVICES.items()}, "Web/Page.php": PAGE}
     )
-    (root / "src" / "Service").mkdir(parents=True)
-    (root / "src" / "Web").mkdir()
-    for name, text in SERVICES.items():
-        (root / "src" / "Service" / name).write_text(text)
-    (root / "src" / "Web" / "Page.php").write_text(PAGE)
-    report = run(
-        start=root,
-        env={"PERIPLUS_CONFIG_DIR": str(root / "config")},
-        dependencies=check_runtime_dependencies(),
-        output=Path("map.json"),
-    )
-    assert report.problems == (), report
-    return report, json.loads((root / "map.json").read_text())
 
 
 def _calls(document: dict[str, Any]) -> list[tuple[str, int, str]]:
@@ -131,22 +117,12 @@ def test_a_project_local_pack_with_the_same_grammar_gives_the_same_edges(tmp_pat
     manifest = manifest.replace("pack: php_basic\nversion: 0.2.0\n", "pack: own\nversion: 0.0.1\n")
     assert "pack: own\n" in manifest
     (pack / "pack.yaml").write_text(manifest)
-    (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [own@0.0.1]\n"
+    report, document = _map_files(
+        tmp_path,
+        {**{f"Service/{n}": t for n, t in SERVICES.items()}, "Web/Page.php": PAGE},
+        pack="own@0.0.1",
     )
-    (tmp_path / "src" / "Service").mkdir(parents=True)
-    (tmp_path / "src" / "Web").mkdir()
-    for name, text in SERVICES.items():
-        (tmp_path / "src" / "Service" / name).write_text(text)
-    (tmp_path / "src" / "Web" / "Page.php").write_text(PAGE)
-    report = run(
-        start=tmp_path,
-        env={"PERIPLUS_CONFIG_DIR": str(tmp_path / "config")},
-        dependencies=check_runtime_dependencies(),
-        output=Path("map.json"),
-    )
-    assert report.problems == () and report.not_executed == (), report
-    document = json.loads((tmp_path / "map.json").read_text())
+    assert report.not_executed == (), report
     assert _calls(document) == [
         ("php.method::App\\Service\\Clock::now", 21, "inferred"),
         ("php.method::App\\Service\\Mailer::send", 20, "inferred"),
@@ -200,11 +176,11 @@ class Twice
 """
 
 
-def _map_files(root: Path, files: dict[str, str]) -> dict[str, Any]:
-    (root / ".periplus").mkdir()
-    (root / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [php_basic@0.2.0]\n"
-    )
+def _map_files(
+    root: Path, files: dict[str, str], pack: str = "php_basic@0.2.0"
+) -> tuple[MapReport, dict[str, Any]]:
+    (root / ".periplus").mkdir(exist_ok=True)
+    (root / ".periplus" / "settings.yml").write_text(f"periplus_version: 0\npacks: [{pack}]\n")
     for name, text in files.items():
         (root / "src" / name).parent.mkdir(parents=True, exist_ok=True)
         (root / "src" / name).write_text(text)
@@ -215,40 +191,45 @@ def _map_files(root: Path, files: dict[str, str]) -> dict[str, Any]:
         output=Path("map.json"),
     )
     assert report.problems == (), report
-    return json.loads((root / "map.json").read_text())  # type: ignore[no-any-return]
+    return report, json.loads((root / "map.json").read_text())
 
 
-def test_each_var_docblock_form_gives_type_node_typed_as_edge_and_call_c2(
+def test_each_var_form_property_has_its_own_type_node_typed_as_edge_and_call_c3(
     tmp_path: Path,
 ) -> None:
-    """?Box, a namespaced name or null, and no space before the comment end: each property gets a
-    property type node, a typed-as edge and a calls edge through it."""
-    document = _map_files(
+    """``@var ?Mailer`` (optional ?), ``@var \\App\\Service\\Clock|null`` (namespaced name or
+    null) and ``@var Store*/`` (no space before the comment end): each property has its own
+    php.property_type node, its own property_typed_as edge and its own calls edge."""
+    _, document = _map_files(
         tmp_path, {**{f"Service/{n}": t for n, t in SERVICES.items()}, "Web/Forms.php": VAR_FORMS}
     )
+    run_id = "php.method::App\\Web\\Forms::run"
+    wanted = {
+        "optional": "php.method::App\\Service\\Mailer::send",
+        "union": "php.method::App\\Service\\Clock::now",
+        "tight": "php.method::App\\Service\\Store::get",
+    }
     types = [n for n in document["nodes"] if n["type"] == "php.property_type"]
     typed_as = [e for e in document["edges"] if e["kind"] == "property_typed_as"]
-    run_id = "php.method::App\\Web\\Forms::run"
-    calls = sorted(
-        str(e["to"])
+    calls = [
+        e
         for e in document["edges"]
         if e["kind"] == "calls"
         and e["from"] == run_id
         and any(p["rule"] == "calls_through_typed_property" for p in e["provenance"])
-    )
-    assert len(types) == 3, types
-    assert len(typed_as) == 3, typed_as
-    assert calls == [
-        "php.method::App\\Service\\Clock::now",
-        "php.method::App\\Service\\Mailer::send",
-        "php.method::App\\Service\\Store::get",
-    ], calls
+    ]
+    for prop, target in wanted.items():
+        mine = [n for n in types if f"::${prop}::" in n["id"]]
+        assert len(mine) == 1, (prop, types)
+        edges = [e for e in typed_as if mine[0]["id"] in (e["from"], e["to"])]
+        assert len(edges) == 1, (prop, typed_as)
+        assert [e["to"] for e in calls if e["to"] == target] == [target], (prop, calls)
 
 
 def test_the_same_call_on_two_lines_lists_both_lines_c3(tmp_path: Path) -> None:
     """$this->tool->work(); on two lines of one method: one calls edge from the method, listing
     both lines."""
-    document = _map_files(
+    _, document = _map_files(
         tmp_path, {"Service/Tool.php": TWICE_SERVICE, "Web/Twice.php": TWICE_PAGE}
     )
     edges = [

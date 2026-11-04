@@ -161,7 +161,7 @@ def _edge_lines(listing: Listing[EdgeRow]) -> list[str]:
         if row.kind != kind:
             kind = row.kind
             lines.append(f"  {_escape(kind)}:")
-        where = ", ".join(f"{loc.file}:{loc.line}" for loc in row.locations) or "no location"
+        where = ", ".join(place(_json_location(loc)) for loc in row.locations) or "no location"
         count = f"  x{row.occurrences}" if row.occurrences else ""
         confidences = ",".join(_escape(c) for c in row.confidences) or "no confidence"
         lines.append(

@@ -130,7 +130,7 @@ rules:
     name_child: name
     filetype: php
     where:
-    - name_matches: {child: object, pattern: '(?s).*entityTypeManager(?:\(\))?'}
+    - name_matches: {child: object, pattern: &manager_object '(?s).*entityTypeManager(?:\(\))?'}
     - name_matches: {child: name, pattern: getStorage}
   emits:
   - edge:
@@ -148,7 +148,7 @@ rules:
     name_child: name
     filetype: php
     where:
-    - name_matches: {child: object, pattern: '(?s).*entityTypeManager(?:\(\))?'}
+    - name_matches: {child: object, pattern: *manager_object}
     - name_matches: {child: name, pattern: getStorage}
   emits:
   - edge:
@@ -168,7 +168,7 @@ rules:
     name_child: name
     filetype: php
     where:
-    - name_matches: {child: object, pattern: '(?s).*entityTypeManager(?:\(\))?'}
+    - name_matches: {child: object, pattern: *manager_object}
     - name_matches: {child: name, pattern: 'getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
   emits:
   - edge:

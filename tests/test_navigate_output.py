@@ -13,8 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _navigate import _edge as _plain_edge
-from _navigate import _node as _plain_node
+from _navigate import _edge, _node
 from jsonschema import Draft202012Validator
 
 SRC = Path(__file__).resolve().parent.parent / "src"
@@ -55,14 +54,6 @@ HIERARCHY = {"t.x": None, "t.hub": "t.x", "t.café": "t.x", "t.leaf": "t.x"}
 HIERARCHY |= {"t.mid": "t.leaf", "t.sink": "t.mid"}
 
 
-def _node(id: str) -> dict[str, Any]:
-    return _plain_node(id, TYPE_OF[id], line=1)
-
-
-def _edge(kind: str, source: str, target: str) -> dict[str, Any]:
-    return _plain_edge(kind, source, target, 2)
-
-
 def _write_map(path: Path) -> None:
     names = sorted({HUB, SINK, ACCENTED, *LEAVES, *MIDDLES})
     document = {
@@ -70,8 +61,14 @@ def _write_map(path: Path) -> None:
         "packs": [{"pack": "p", "version": "0.1.0"}],
         "roots": ["."],
         "type_hierarchy": [{"type": t, "parent": p} for t, p in sorted(HIERARCHY.items())],
-        "nodes": [_node(n) for n in names],
-        "edges": [_edge(*e) for e in sorted(EDGES)],
+        "nodes": [
+            _node(n, TYPE_OF[n], line=1, file="a.php", confidence="declared", pack="p")
+            for n in names
+        ],
+        "edges": [
+            _edge(*e, line=2, file="a.php", confidence="declared", pack="p", occurrences=None)
+            for e in sorted(EDGES)
+        ],
     }
     path.write_text(json.dumps(document), encoding="utf-8")
 
