@@ -33,7 +33,7 @@ A ninth command, `periplus check-map`, checks the whole map against the map sche
 - Output is the same on every run for the same map.
 
 The six question commands report ids and nothing else. They have no `between` query, and they
-print no source spans: a location is a file and a line. `export` labels each node with its id (DOT and Mermaid add its type).
+print no source spans: a location is a file and a line. `export` labels each node with its id (DOT and Mermaid add its type); GraphML labels it with the short name instead.
 
 A slice is a smaller map, told apart from the full map by its file name. `slice` and `export`
 read it with `--map`, like any other map. Do not give `--out` the path of the map you read: the
@@ -112,6 +112,11 @@ sets how many edges to follow (default 1). `--kind K` keeps only edges of kind `
 several kinds. `--limit N` is the most items the slice may hold (default 500, `0` for no limit).
 It prints `wrote FILE: N nodes, M edges`.
 
+A kind is the type of an edge: it says how two items relate. A slice that follows edges either
+way widens through a hub, an item many others share, such as a service every feature uses or a
+permission many routes require, and can reach far more than the feature. `--kind` keeps the
+slice to the edges of the feature.
+
 ```
 periplus slice ID --depth 2 --out foo.map.json
 ```
@@ -123,8 +128,10 @@ periplus export --format graphml|dot|mermaid [--map PATH]
 ```
 
 Prints the map in another format to standard output. In GraphML the node id is a generated
-token (`n0`, `n1`) and the map id is the node's `label`. `--format` is required. Warnings go to
-standard error: Mermaid warns above 500 edges or 50,000 characters.
+token (`n0`, `n1`), the node's `label` is its short name (the id without its type prefix and
+without namespaces) and the map id is in the node's `id` data; each edge's `label` is its kind.
+`--format` is required. Warnings go to standard error: Mermaid warns above 500 edges or 50,000
+characters.
 
 ```
 periplus export --format dot --map foo.map.json > foo.dot

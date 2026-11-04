@@ -497,9 +497,10 @@ repeat it for several. `--limit N` stops the slice when it would hold more than 
 matches nothing, exits 31. `--out` is required, and a slice is a smaller map, so name it so it
 cannot replace the full map.
 
-`export` prints to standard output and its warnings to standard error. GraphML names each node by a generated token and carries the map id as its label, with the
-node type and state, the edge kind, and the file and line where there is one. DOT and Mermaid
-label each node with its id and type.
+`export` prints to standard output and its warnings to standard error. GraphML names each node by
+a generated token, labels it with a short name and carries the map id as its `id` data, with the
+node type and state, the edge kind as the edge label, and the file and line where there is one.
+DOT and Mermaid label each node with its id and type.
 
 ```
 periplus slice --path src/Billing/ --out billing.map.json

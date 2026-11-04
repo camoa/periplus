@@ -40,6 +40,12 @@ def _tokens(document: Mapping[str, Any]) -> dict[str, str]:
     return {node["id"]: f"n{n}" for n, node in enumerate(document["nodes"])}
 
 
+def short_name(map_id: str) -> str:
+    """The id without its type prefix and without the namespace of each ``::`` segment."""
+    _, sep, rest = map_id.partition("::")
+    return "::".join(part.rsplit("\\", 1)[-1] for part in rest.split("::")) if sep else map_id
+
+
 def _graphml(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     keys = (
         ("node", "type", "string"),
@@ -50,6 +56,8 @@ def _graphml(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
         ("edge", "file", "string"),
         ("edge", "line", "int"),
         ("node", "label", "string"),
+        ("node", "id", "string"),
+        ("edge", "label", "string"),
     )
     token = _tokens(document)
     lines = [
@@ -70,7 +78,7 @@ def _graphml(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
         where = first_location(node)
         if where:
             values += [("file", where["file"]), ("line", str(where["line"]))]
-        values.append(("label", node["id"]))
+        values += [("label", short_name(node["id"])), ("id", node["id"])]
         lines.append(f'    <node id="{token[node["id"]]}">')
         lines += data("node", values)
         lines.append("    </node>")
@@ -79,6 +87,7 @@ def _graphml(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
         where = first_location(edge)
         if where:
             values += [("file", where["file"]), ("line", str(where["line"]))]
+        values.append(("label", edge["kind"]))
         ends = f'source="{token[edge["from"]]}" target="{token[edge["to"]]}"'
         lines.append(f"    <edge {ends}>")
         lines += data("edge", values)

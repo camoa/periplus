@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- In the GraphML export each node's `label` is now the short form of its map id, the id without its type prefix and without namespaces, and the full map id is in the node's `id` data; each edge carries a `label` equal to its kind, beside `kind`. A reader that took the map id from `label` reads `id` instead.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added
