@@ -25,7 +25,7 @@ Run `periplus map` first. Then pick the one command that answers the question.
 | Which ids match a name? | `periplus find TEXT` |
 | Which kinds of node and edge does the map hold? | `periplus types` |
 
-Each command's options, output and exit codes are in [Navigation](https://github.com/camoa/periplus/blob/v0.3.0/docs/navigation.md). Take an id from
+Each command's options, output and exit codes are in [Navigation](https://github.com/camoa/periplus/blob/v0.4.0/docs/navigation.md). Take an id from
 `periplus find` before passing it to the other commands. On the project in the Navigation
 guide's worked example, these run as shown:
 

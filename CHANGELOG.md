@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-04
+
+### Added
+
+- `periplus slice` writes the items around some ids, or under a path prefix, and what they reach along edges to a depth, into a map file of their own. `--direction out` and `in` follow edges one way; `both` follows an edge either way at every hop. It refuses a slice over `--limit` and an `--out` that is the map it reads, writing nothing.
+- `periplus export --format graphml|dot|mermaid` prints a map or a slice for Gephi, yEd, Graphviz or Mermaid. GraphML names each node by a generated token and carries the map id as the node's `label`; DOT quotes every id; Mermaid uses generated node tokens and escapes angle brackets in labels.
+- The Drupal rutter maps a route name written in a PHP call, `Url::fromRoute`, `Link::createFromRoute` or `$this->redirect`, to the route it names, with a `links_to_route` edge from the class or function around the call.
+- A README section on upgrading an install from PyPI.
+
+### Changed
+
+- Every damaged-map error names `periplus check-map`, exit 29 names a map that cannot be read and exit 30 a damaged one, and `periplus affected` reads "via <kind> to <item>".
+- `periplus show` formats an edge's locations as it formats a node's.
+- `periplus update` refuses one rutter pinned at one version in two roots, and prints each root whole.
+- Contributors: the bundled rutters write a repeated rule pattern once, with a YAML anchor, and rule files reuse it. The map output does not change.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added

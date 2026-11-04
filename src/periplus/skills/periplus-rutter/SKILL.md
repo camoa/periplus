@@ -18,17 +18,17 @@ description: Write or change a Periplus rutter, the pack of data that tells Peri
 This skill gives the steps. Each rule shape, and what the format cannot say, is in the rutter
 author guides; read the section the step names instead of guessing a key:
 
-- [Rutter author guide](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide.md): the files of a rutter, one rule of each shape, how to check a rutter.
-- [Rutter author guide: text](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-text.md): text spans, nested regions of a text file.
-- [Rutter author guide: abilities](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-abilities.md): a call's class and method in one rule, id patterns.
-- [Rutter author guide: references](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-references.md): reference rules on a parse tree, and the keys the engine does not run.
-- [Rutter author guide: imports](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-imports.md): imports and bindings.
-- [Rutter author guide: map rules](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-map-rules.md): map rules, which join what earlier passes found.
-- [Rutter author guide: Drupal](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutter-author-guide-drupal.md): the PHP and Drupal rutters, read as worked examples.
+- [Rutter author guide](https://github.com/camoa/periplus/blob/v0.4.0/docs/rutter-author-guide.md): the files of a rutter, one rule of each shape, how to check a rutter.
+- [Rutter author guide: text](https://github.com/camoa/periplus/blob/v0.4.0/docs/rutter-author-guide-text.md): text spans, nested regions of a text file.
+- [Rutter author guide: abilities](https://github.com/camoa/periplus/blob/v0.4.0/docs/rutter-author-guide-abilities.md): a call's class and method in one rule, id patterns.
+- [Rutter author guide: references](https://github.com/camoa/periplus/blob/v0.4.0/docs/rutter-author-guide-references.md): reference rules on a parse tree, and the keys the engine does not run.
+- [Rutter author guide: imports](https://github.com/camoa/periplus/blob/v0.4.0/docs/rutter-author-guide-imports.md): imports and bindings.
+- [Rutter author guide: map rules](https://github.com/camoa/periplus/blob/v0.4.0/docs/rutter-author-guide-map-rules.md): map rules, which join what earlier passes found.
+- [Rutter author guide: Drupal](https://github.com/camoa/periplus/blob/v0.4.0/docs/rutter-author-guide-drupal.md): the PHP and Drupal rutters, read as worked examples.
 
-[Bundled rutters](https://github.com/camoa/periplus/blob/v0.3.0/docs/rutters.md) lists every rutter that ships with Periplus.
+[Bundled rutters](https://github.com/camoa/periplus/blob/v0.4.0/docs/rutters.md) lists every rutter that ships with Periplus.
 
-The [README](https://github.com/camoa/periplus/blob/v0.3.0/README.md) section "Write a rutter" and [CONTRIBUTING](https://github.com/camoa/periplus/blob/v0.3.0/CONTRIBUTING.md) give the loop: write the rutter in the
+The [README](https://github.com/camoa/periplus/blob/v0.4.0/README.md) section "Write a rutter" and [CONTRIBUTING](https://github.com/camoa/periplus/blob/v0.4.0/CONTRIBUTING.md) give the loop: write the rutter in the
 project's own `.periplus/packs` first, and map that project until the map holds what the code holds.
 
 ## Write a rule
@@ -45,7 +45,7 @@ project's own `.periplus/packs` first, and map that project until the map holds 
    confidence: the first is `declared`, the second `inferred`.
 
 The example adds a rule file to `python_text` in a project that already holds the
-[second-stack example](https://github.com/camoa/periplus/blob/v0.3.0/examples/second-stack) rutters. A module-level name in capitals is a constant only by convention,
+[second-stack example](https://github.com/camoa/periplus/blob/v0.4.0/examples/second-stack) rutters. A module-level name in capitals is a constant only by convention,
 so the rule is `inferred`:
 
 <!-- example write-rule: .periplus/packs/python_text@0.1.0/rules/constants.yaml -->
