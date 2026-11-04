@@ -269,9 +269,8 @@ def test_the_map_format_choices_and_default_are_exactly_the_map_renderers() -> N
 
 def test_the_export_format_choices_are_exactly_the_export_writers_wo2() -> None:
     """``export --format``'s choices name the formats ``export.WRITERS`` holds, in its order."""
-    from periplus.navigate.export import WRITERS
-
     from periplus.cli import build_parser
+    from periplus.navigate.export import WRITERS
 
     parser = build_parser()
     subcommands = next(
