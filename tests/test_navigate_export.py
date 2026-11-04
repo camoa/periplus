@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 from typing import Any
 
 import pytest
+from _navigate import _edge, _node
 
 # Ids built to break a careless writer: the namespace separator, a dollar sign, an arrow, quotes.
 NASTY_IDS = (
@@ -18,30 +19,9 @@ NASTY_IDS = (
     "x->y::z",
     'say "hi"::q',
     "plain::one",
+    "tpl::<b>bold</b>",
 )
 GRAPHML_NS = "{http://graphml.graphdrawing.org/xmlns}"
-
-
-def _node(
-    node_id: str, node_type: str, state: str, locations: list[dict[str, Any]]
-) -> dict[str, Any]:
-    return {
-        "id": node_id,
-        "type": node_type,
-        "state": state,
-        "locations": locations,
-        "provenance": [{"pack": "core", "rule": "r", "confidence": "declared"}],
-    }
-
-
-def _edge(kind: str, source: str, target: str, locations: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "kind": kind,
-        "from": source,
-        "to": target,
-        "locations": locations,
-        "provenance": [{"pack": "core", "rule": "r", "confidence": "declared"}],
-    }
 
 
 def _document(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dict[str, Any]:
@@ -55,15 +35,15 @@ def _document(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dict[
 
 
 def _nasty_map() -> dict[str, Any]:
-    types = ("t.alpha", "t.beta", "t.gamma", "t.delta")
+    types = ("t.alpha", "t.beta", "t.gamma", "t.delta", "t.epsilon")
     nodes = [
-        _node(NASTY_IDS[i], types[i], "mapped", [{"file": f"src/f{i}.py", "line": i + 1}])
-        for i in range(4)
+        _node(NASTY_IDS[i], types[i], "mapped", line=i + 1, file=f"src/f{i}.py") for i in range(5)
     ]
     edges = [
-        _edge("calls", NASTY_IDS[0], NASTY_IDS[1], [{"file": "src/f0.py", "line": 7}]),
-        _edge("imports", NASTY_IDS[1], NASTY_IDS[2], []),
-        _edge("extends", NASTY_IDS[3], NASTY_IDS[2], [{"file": "src/f3.py", "line": 2}]),
+        _edge("calls", NASTY_IDS[0], NASTY_IDS[1], 7, file="src/f0.py"),
+        _edge("imports", NASTY_IDS[1], NASTY_IDS[2]),
+        _edge("extends", NASTY_IDS[3], NASTY_IDS[2], 2, file="src/f3.py"),
+        _edge("uses", NASTY_IDS[4], NASTY_IDS[0]),
     ]
     return _document(nodes, edges)
 
@@ -115,6 +95,12 @@ def test_dot_quotes_every_id_and_labels_nodes_with_id_and_type_and_edges_with_ki
     assert [(a, b, k) for a, b, k in got] == want
 
 
+def _unescape_mermaid(label: str) -> str:
+    for entity, char in (("#quot;", '"'), ("#35;", "#"), ("#lt;", "<"), ("#gt;", ">")):
+        label = label.replace(entity, char)
+    return label
+
+
 def _mermaid_parts(text: str) -> tuple[dict[str, str], list[str]]:
     """Return token -> label for each node line, and the edge lines, with the head line removed."""
     nodes: dict[str, str] = {}
@@ -145,6 +131,8 @@ def test_mermaid_uses_generated_node_tokens_with_quoted_id_and_type_labels_c4() 
     assert len(nodes) == len(document["nodes"])
     assert len(edge_lines) == len(document["edges"])
 
+    # Mermaid reads labels as HTML, so a raw angle bracket would be markup.
+    assert not any("<" in label or ">" in label for label in nodes.values())
     for token in nodes:
         assert not any(piece in token for node in document["nodes"] for piece in (node["id"],))
     token_of: dict[str, str] = {}
@@ -152,7 +140,7 @@ def test_mermaid_uses_generated_node_tokens_with_quoted_id_and_type_labels_c4() 
         matches = [
             token
             for token, label in nodes.items()
-            if all(piece in label for piece in node["id"].split('"')) and node["type"] in label
+            if node["id"] in _unescape_mermaid(label) and node["type"] in _unescape_mermaid(label)
         ]
         assert len(matches) == 1, node["id"]
         token_of[node["id"]] = matches[0]
@@ -178,8 +166,8 @@ def test_mermaid_uses_generated_node_tokens_with_quoted_id_and_type_labels_c4() 
 def test_mermaid_above_500_edges_carries_a_warning_naming_the_limit_c4() -> None:
     from periplus.navigate.export import WRITERS
 
-    nodes = [_node("m::a", "t.x", "mapped", []), _node("m::b", "t.x", "mapped", [])]
-    edges = [_edge("calls", "m::a", "m::b", []) for _ in range(501)]
+    nodes = [_node("m::a", "t.x", "mapped"), _node("m::b", "t.x", "mapped")]
+    edges = [_edge("calls", "m::a", "m::b") for _ in range(501)]
     text, warnings = WRITERS["mermaid"](_document(nodes, edges))
 
     assert text.lstrip().startswith("flowchart")
@@ -195,8 +183,8 @@ def test_mermaid_above_50000_characters_carries_a_warning_naming_the_limit_c4() 
     from periplus.navigate.export import WRITERS
 
     long_id = "m::" + "x" * 2000
-    nodes = [_node(f"{long_id}{i}", "t.x", "mapped", []) for i in range(30)]
-    edges = [_edge("calls", nodes[0]["id"], nodes[1]["id"], [])]
+    nodes = [_node(f"{long_id}{i}", "t.x", "mapped") for i in range(30)]
+    edges = [_edge("calls", nodes[0]["id"], nodes[1]["id"])]
     text, warnings = WRITERS["mermaid"](_document(nodes, edges))
 
     assert len(text) > 50000
@@ -226,14 +214,14 @@ def test_graphml_holds_seven_keys_and_locations_only_where_present_c3() -> None:
             "py.module::a$b",
             "py.module",
             "mapped",
-            [{"file": "src/a.py", "line": 3}, {"file": "src/second.py", "line": 9}],
+            locations=[{"file": "src/a.py", "line": 3}, {"file": "src/second.py", "line": 9}],
         ),
-        _node("x->y::z", "py.func", "referenced", []),
-        _node('say "hi"::q', "py.func", "declared", [{"file": "src/q.py", "line": 12}]),
+        _node("x->y::z", "py.func", "referenced"),
+        _node('say "hi"::q', "py.func", "declared", line=12, file="src/q.py"),
     ]
     edges = [
-        _edge("calls", "py.module::a$b", "x->y::z", [{"file": "src/a.py", "line": 5}]),
-        _edge("imports", "x->y::z", 'say "hi"::q', []),
+        _edge("calls", "py.module::a$b", "x->y::z", 5, file="src/a.py"),
+        _edge("imports", "x->y::z", 'say "hi"::q'),
     ]
     document = _document(nodes, edges)
     text, warnings = WRITERS["graphml"](document)
@@ -306,11 +294,8 @@ def test_graphml_writes_each_elements_data_in_one_fixed_order_wo2() -> None:
     from periplus.navigate.export import WRITERS
 
     ids = ("c::three", "a::one", "b::two")
-    nodes = [
-        _node(i, "t.x", "mapped", [{"file": f"src/{n}.py", "line": n + 1}])
-        for n, i in enumerate(ids)
-    ]
-    edges = [_edge("calls", ids[0], ids[1], [{"file": "src/e.py", "line": 4}])]
+    nodes = [_node(i, "t.x", "mapped", line=n + 1, file=f"src/{n}.py") for n, i in enumerate(ids)]
+    edges = [_edge("calls", ids[0], ids[1], 4, file="src/e.py")]
     document = _document(nodes, edges)
 
     root = ET.fromstring(WRITERS["graphml"](document)[0])  # noqa: S314 -- own writer output

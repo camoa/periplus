@@ -101,7 +101,9 @@ def _dot(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
 
 
 def _mermaid_text(value: str) -> str:
-    return value.replace("#", "#35;").replace('"', "#quot;")
+    return (
+        value.replace("#", "#35;").replace('"', "#quot;").replace("<", "#lt;").replace(">", "#gt;")
+    )
 
 
 def _mermaid(document: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:

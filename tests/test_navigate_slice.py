@@ -90,7 +90,7 @@ def planted(tmp_path: Path) -> Path:
 
 
 def _call(tmp_path: Path, map_path: Path, out: Path, **kw: Any) -> tuple[Any, str]:
-    """Run the slice; give back the exit code and the text of what it said, raised or returned."""
+    """Run the slice; give back the exit code and the text of what it said."""
     from periplus.navigate import slice as slicing
 
     args: dict[str, Any] = {
@@ -102,10 +102,7 @@ def _call(tmp_path: Path, map_path: Path, out: Path, **kw: Any) -> tuple[Any, st
         "limit": 500,
     }
     args.update(kw)
-    try:
-        report = slicing.run(tmp_path, {}, out=out, map_path=map_path, **args)
-    except Exception as error:  # noqa: BLE001 - a raised NodeNotFound is one of the outcomes
-        return getattr(error, "code", None), f"{error} {getattr(error, 'details', '')}"
+    report = slicing.run(tmp_path, {}, out=out, map_path=map_path, **args)
     return report.exit_code, repr(report.problems) + repr(report.warnings)
 
 
