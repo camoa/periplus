@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
-from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place
+from periplus.navigate.listing import NONE, Listing, cut, first_location, footer, payload, place
 from periplus.navigate.mapfile import MapIndex, as_text, load_map, reading_fields
 from periplus.report import _escape, _json_problem
 
@@ -69,8 +69,8 @@ def _with_subtypes(index: MapIndex, type_name: str) -> set[str]:
 
 def _location(node: Mapping[str, Any]) -> str | None:
     """The node's first location as ``file:line``, or ``None`` when it has none."""
-    locations = node["locations"]
-    return place(locations[0]) if locations else None
+    loc = first_location(node)
+    return place(loc) if loc else None
 
 
 def run(

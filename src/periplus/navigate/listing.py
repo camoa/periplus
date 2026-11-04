@@ -6,7 +6,16 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Generic, Never, TypeVar
 
-__all__ = ["NONE", "Listing", "cut", "footer", "kind_warnings", "payload", "place"]
+__all__ = [
+    "NONE",
+    "Listing",
+    "cut",
+    "first_location",
+    "footer",
+    "kind_warnings",
+    "payload",
+    "place",
+]
 
 
 Row_co = TypeVar("Row_co", covariant=True)
@@ -25,6 +34,12 @@ class Listing(Generic[Row_co]):
 
 #: The listing of a report that stopped before it listed anything.
 NONE: Listing[Never] = Listing((), 0, 0, False)
+
+
+def first_location(item: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """The item's first location, or ``None`` when it has none."""
+    locations = item["locations"]
+    return locations[0] if locations else None
 
 
 def place(location: Mapping[str, Any]) -> str:

@@ -28,6 +28,7 @@ __all__ = [
     "as_text",
     "damaged",
     "is_whole",
+    "load_document",
     "load_map",
     "reading_fields",
 ]
@@ -100,12 +101,13 @@ class MapIndex:
         )
 
 
-def load_map(start: Path, env: Mapping[str, str], map_path: Path | None) -> MapIndex:
+def load_document(start: Path, env: Mapping[str, str], map_path: Path | None) -> tuple[Path, Any]:
     """Read the map at ``map_path``, or at ``<root>/.periplus/map.json`` when none is given.
 
-    Only the outline is checked: the full schema check took 3.1 s of a 3.8 s run on a real site's
-    map, and ``periplus check-map`` runs it. ``env`` is accepted so every navigation entry point
-    has one signature; the map's place does not depend on it.
+    Returns the path and the parsed document. Only the outline is checked: the full schema check
+    took 3.1 s of a 3.8 s run on a real site's map, and ``periplus check-map`` runs it. ``env`` is
+    accepted so every navigation entry point has one signature; the map's place does not depend
+    on it.
     """
     path, document = _read(start, map_path)
     version = document.get("periplus_map_version") if isinstance(document, dict) else None
@@ -119,8 +121,13 @@ def load_map(start: Path, env: Mapping[str, str], map_path: Path | None) -> MapI
             f"{path} is not a periplus map: it needs periplus_map_version, nodes and edges",
             {"path": str(path)},
         )
+    return path, document
+
+
+def load_map(start: Path, env: Mapping[str, str], map_path: Path | None) -> MapIndex:
+    """Read the map as ``load_document`` does and index it in memory."""
     try:
-        return MapIndex(document)
+        return MapIndex(load_document(start, env, map_path)[1])
     except (KeyError, TypeError) as error:
         raise damaged(start, map_path, error) from error
 

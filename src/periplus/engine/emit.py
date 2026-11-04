@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -13,7 +13,15 @@ from periplus.engine.rules import FoundEdge, FoundNode, Skipped
 from periplus.errors import ExitCode, HarnessError
 from periplus.manifest import LoadedPack
 
-__all__ = ["EdgeIllegal", "TypeCollision", "build_document", "render", "type_chain"]
+__all__ = [
+    "EdgeIllegal",
+    "TypeCollision",
+    "build_document",
+    "counts",
+    "hierarchy",
+    "render",
+    "type_chain",
+]
 
 
 class TypeCollision(HarnessError):
@@ -162,16 +170,25 @@ def build_document(
         ),
         "settings": settings,
         "roots": ["."],
-        "type_hierarchy": _hierarchy({str(node["type"]) for node in ordered}, types),
-        "counts": {
-            "nodes": len(ordered),
-            "edges": len(written),
-            "edges_by_kind": dict(sorted(Counter(str(edge["kind"]) for edge in written).items())),
-            "nodes_by_state": dict(sorted(Counter(str(n["state"]) for n in ordered).items())),
-            "nodes_by_type": dict(sorted(Counter(str(node["type"]) for node in ordered).items())),
-        },
+        "type_hierarchy": hierarchy(
+            {str(node["type"]) for node in ordered}, lambda name: types[name].parent
+        ),
+        "counts": counts(ordered, written),
         "nodes": ordered,
         "edges": written,
+    }
+
+
+def counts(
+    nodes: Sequence[Mapping[str, Any]], edges: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """The document's ``counts`` for these nodes and edges."""
+    return {
+        "nodes": len(nodes),
+        "edges": len(edges),
+        "edges_by_kind": dict(sorted(Counter(str(edge["kind"]) for edge in edges).items())),
+        "nodes_by_state": dict(sorted(Counter(str(n["state"]) for n in nodes).items())),
+        "nodes_by_type": dict(sorted(Counter(str(node["type"]) for node in nodes).items())),
     }
 
 
@@ -349,7 +366,9 @@ def _edge(
     }
 
 
-def _hierarchy(used: set[str], types: Mapping[str, TypeInfo]) -> list[dict[str, str | None]]:
+def hierarchy(
+    used: set[str], parent_of: Callable[[str], str | None]
+) -> list[dict[str, str | None]]:
     """The used types and every ancestor of them, each with its parent, sorted by type."""
     closure: set[str] = set()
     pending = sorted(used)
@@ -357,10 +376,10 @@ def _hierarchy(used: set[str], types: Mapping[str, TypeInfo]) -> list[dict[str, 
         name = pending.pop()
         if name not in closure:
             closure.add(name)
-            parent = types[name].parent
+            parent = parent_of(name)
             if parent is not None:
                 pending.append(parent)
-    return [{"type": name, "parent": types[name].parent} for name in sorted(closure)]
+    return [{"type": name, "parent": parent_of(name)} for name in sorted(closure)]
 
 
 def render(document: Mapping[str, object]) -> str:

@@ -36,7 +36,24 @@ from periplus.report import _escape, _json_problem
 from periplus.resolution import resolve
 from periplus.validate import _schema
 
-__all__ = ["RENDERERS", "MapReport", "render_json", "render_text", "run"]
+__all__ = ["RENDERERS", "MapReport", "render_json", "render_text", "run", "write_document"]
+
+
+def write_document(document: Mapping[str, object], target: Path) -> tuple[Problem, ...]:
+    """Check ``document`` against the map schema and write it; the problems found, if any."""
+    invalid = sorted(
+        Draft202012Validator(_schema(MAP_SCHEMA)).iter_errors(document),
+        key=lambda found: (list(map(str, found.absolute_path)), found.message),
+    )
+    if invalid:
+        message = f"the map does not match its schema: {invalid[0].message}"
+        return (Problem(ExitCode.MAP_INVALID, message, {}),)
+    try:
+        target.write_bytes(render(document).encode("utf-8"))
+    except OSError as error:
+        message = f"the map cannot be written to {target}: {error.strerror or error}"
+        return (Problem(ExitCode.OUTPUT_UNWRITABLE, message, {"path": str(target)}),)
+    return ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,20 +201,10 @@ def run(
         )
         detail = {"problem": "UNDECLARED_ID_NAMESPACE", "id": undeclared[0]}
         return _failed([Problem(ExitCode.MAP_INVALID, message, detail)])
-    invalid = sorted(
-        Draft202012Validator(_schema(MAP_SCHEMA)).iter_errors(document),
-        key=lambda found: (list(map(str, found.absolute_path)), found.message),
-    )
-    if invalid:
-        message = f"the built map does not match its schema: {invalid[0].message}"
-        return _failed([Problem(ExitCode.MAP_INVALID, message, {})])
-
     target = start / output if output is not None else root / PROJECT_MARKER / _DEFAULT_MAP
-    try:
-        target.write_bytes(render(document).encode("utf-8"))
-    except OSError as error:
-        message = f"the map cannot be written to {target}: {error.strerror or error}"
-        return _failed([Problem(ExitCode.OUTPUT_UNWRITABLE, message, {"path": str(target)})])
+    unwritten = write_document(document, target)
+    if unwritten:
+        return _failed(unwritten)
     return MapReport(
         map_path=str(target),
         nodes=len(document["nodes"]),

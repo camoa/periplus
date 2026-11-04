@@ -76,6 +76,24 @@ def add_limit(parser: argparse.ArgumentParser, default: int, noun: str) -> None:
     )
 
 
+def add_walk(parser: argparse.ArgumentParser) -> None:
+    """Add ``--depth`` and ``--kind``, the options of a command that follows edges."""
+    parser.add_argument(
+        "--depth",
+        type=int,
+        default=1,
+        metavar="N",
+        help="edges to follow, 1 or more (default: 1)",
+    )
+    parser.add_argument(
+        "--kind",
+        action="append",
+        default=[],
+        metavar="K",
+        help="keep only edges of kind K; repeat for several",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the argument parser.
 
@@ -265,20 +283,7 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         walking = subcommands.add_parser(name, help=helptext, description=f"{helptext}, and stop.")
         walking.add_argument("id", metavar="ID", help="the node id, as periplus find prints it")
-        walking.add_argument(
-            "--depth",
-            type=int,
-            default=1,
-            metavar="N",
-            help="edges to follow, 1 or more (default: 1)",
-        )
-        walking.add_argument(
-            "--kind",
-            action="append",
-            default=[],
-            metavar="K",
-            help="keep only edges of kind K; repeat for several",
-        )
+        add_walk(walking)
         add_limit(walking, 50, "rows")
         add_map(walking, "the map file to read")
         walking.add_argument(
@@ -311,6 +316,44 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="how to print the report (default: text)",
     )
+    cut = subcommands.add_parser(
+        "slice",
+        help="write the items around some items or a path into a map file of their own",
+        description="Write a piece of the map to a map file, and stop.",
+    )
+    cut.add_argument("id", metavar="ID", nargs="*", help="a node id to start from")
+    cut.add_argument(
+        "--path", metavar="PREFIX", help="also start from nodes whose first file starts with PREFIX"
+    )
+    cut.add_argument("--out", type=Path, required=True, metavar="FILE", help="the file to write")
+    cut.add_argument(
+        "--direction",
+        choices=("out", "in", "both"),
+        default="both",
+        help="follow edges out of the items, into them, or both (default: both)",
+    )
+    add_walk(cut)
+    cut.add_argument(
+        "--limit",
+        type=int,
+        default=500,
+        metavar="N",
+        help="most items the slice may hold; 0 for no limit (default: 500)",
+    )
+    add_map(cut, "the map file to read")
+    export = subcommands.add_parser(
+        "export",
+        help="print the map as GraphML, DOT or Mermaid",
+        description="Print the map in another format, and stop.",
+    )
+    export.add_argument(
+        "--format",
+        # A literal for the reason `types`' is; a test asserts it equals `tuple(export.WRITERS)`.
+        choices=("graphml", "dot", "mermaid"),
+        required=True,
+        help="the format to print",
+    )
+    add_map(export, "the map file to read")
     status = subcommands.add_parser(
         "status",
         help="report the settings, the pack search path and the directories on it",
@@ -524,6 +567,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if getattr(args, "limit", 0) < 0:
         parser.error("--limit must be 0 or more")
+    if getattr(args, "depth", 1) < 1:
+        parser.error("--depth must be 1 or more")
 
     # Imported here for the reason `map` is: `periplus.navigate` imports `jsonschema`.
     if args.command == "types":
@@ -575,8 +620,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         from periplus.navigate.walk import RENDERERS as WALK_RENDERERS
         from periplus.navigate.walk import run as run_walk
 
-        if args.depth < 1:
-            parser.error("--depth must be 1 or more")
         walked = run_walk(
             start=Path.cwd(),
             env=os.environ,
@@ -589,6 +632,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         sys.stdout.write(WALK_RENDERERS[args.format](walked))
         return walked.exit_code
+
+    if args.command == "slice":
+        from periplus.navigate.slice import RENDERERS as SLICE_RENDERERS
+        from periplus.navigate.slice import run as run_slice
+
+        sliced = run_slice(
+            start=Path.cwd(),
+            env=os.environ,
+            ids=args.id,
+            prefix=args.path,
+            direction=args.direction,
+            depth=args.depth,
+            kinds=args.kind,
+            limit=args.limit,
+            out=args.out,
+            map_path=args.map,
+        )
+        sys.stdout.write(SLICE_RENDERERS["text"](sliced))
+        return sliced.exit_code
+
+    if args.command == "export":
+        from periplus.navigate.export import render_text as export_text
+        from periplus.navigate.export import run as run_export
+
+        exported = run_export(
+            start=Path.cwd(), env=os.environ, format=args.format, map_path=args.map
+        )
+        sys.stdout.write(exported.text)
+        sys.stderr.write(export_text(exported))
+        return exported.exit_code
 
     if args.command == "path":
         from periplus.navigate.path import RENDERERS as PATH_RENDERERS

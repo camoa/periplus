@@ -267,6 +267,23 @@ def test_the_map_format_choices_and_default_are_exactly_the_map_renderers() -> N
     assert fmt.default == next(iter(RENDERERS))
 
 
+def test_the_export_format_choices_are_exactly_the_export_writers_wo2() -> None:
+    """``export --format``'s choices name the formats ``export.WRITERS`` holds, in its order."""
+    from periplus.navigate.export import WRITERS
+
+    from periplus.cli import build_parser
+
+    parser = build_parser()
+    subcommands = next(
+        action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+    )
+    fmt = next(
+        action for action in subcommands.choices["export"]._actions if action.dest == "format"
+    )
+
+    assert tuple(fmt.choices or ()) == tuple(WRITERS) == ("graphml", "dot", "mermaid")
+
+
 def test_the_check_map_format_choices_and_default_are_exactly_the_check_map_renderers() -> None:
     """``check-map --format`` names the formats ``checkmap.RENDERERS`` holds, as ``map``'s does."""
     from periplus.checkmap import RENDERERS
@@ -387,6 +404,8 @@ def test_the_subcommands_are_exactly_the_set_listed_below() -> None:
         "affected",
         "path",
         "skills",
+        "slice",
+        "export",
     }
 
 

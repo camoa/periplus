@@ -478,6 +478,37 @@ map holds and nothing more. `periplus check-map` runs the full schema check that
 skip. The [navigation guide](docs/navigation.md) gives each command's options, output and exit
 codes, with an example you can run.
 
+### Slice and export
+
+`periplus slice` writes a piece of the map to a map file of its own. `periplus export` prints the
+whole map as GraphML, DOT or Mermaid. To draw a part of the map, slice it, then export the slice.
+
+```
+periplus slice [ID ...] [--path PREFIX] --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH]
+periplus export --format graphml|dot|mermaid [--map PATH]
+```
+
+`slice` starts from the ids you name and from every node whose first file starts with `--path PREFIX`, and follows edges
+from them. `--direction` picks edges out of the items, into them or both (default `both`).
+`--depth N` sets how many edges to follow (default 1), and `--kind K` keeps only edges of kind `K`;
+repeat it for several. `--limit N` stops the slice when it would hold more than `N` items (default
+500, `0` for no limit): the command exits 32 and writes nothing. An unknown id, or a prefix that
+matches nothing, exits 31. `--out` is required, and a slice is a smaller map, so name it so it
+cannot replace the full map.
+
+`export` prints to standard output and its warnings to standard error. GraphML carries the node type and state, the edge kind, and the file and line where there is
+one. DOT and Mermaid label each node with its id and type.
+
+```
+periplus slice --path src/Billing/ --out billing.map.json
+periplus export --format graphml --map billing.map.json > billing.graphml   # open in Gephi Lite
+periplus export --format dot --map billing.map.json > billing.dot           # render with Graphviz
+periplus export --format mermaid --map billing.map.json > billing.mmd       # wrap in a mermaid code fence in a pull request
+```
+
+Gephi Lite handles light graphs; use Gephi for more than about 10,000 nodes. Mermaid on GitHub may
+not draw a graph above 500 edges or 50,000 characters, and the export warns when it passes either.
+
 ## CLI reference
 
 Run each command in the project folder.
@@ -496,12 +527,14 @@ periplus show ID                   # show one node and the edges at it
 periplus neighbors ID              # list the items an item's edges lead to
 periplus affected ID               # list the items whose edges lead to an item
 periplus path FROM TO              # show every shortest chain of edges from one item to another
+periplus slice ID --out FILE       # write the items around some items or a path to a smaller map
+periplus export --format F         # print the map as graphml, dot or mermaid
 periplus skills install            # copy the Claude skills Periplus ships into ~/.claude/skills
 ```
 
 `periplus validate` takes a bare `name`, or `name@version` to pick one of several copies.
-`periplus update` leaves project-local and unknown pins as they are. Every command but `init`
-takes `--format json`. The seven commands that read a map take `--map PATH`; the
+`periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `slice`
+and `export` takes `--format json`. The nine commands that read a map take `--map PATH`; the
 [navigation guide](docs/navigation.md) gives their other options. `periplus --version` prints the
 installed version, and `periplus <command> --help` gives each command's options.
 
@@ -548,7 +581,6 @@ lists the rest, each rutter's among them.
 - **An unresolved end takes its first candidate type.** For example, `pathlib.Path` becomes a
   `python.function`. The map states a type it cannot know.
 - **One JSON file, and every run is a full run.** There is no split map and no incremental run.
-- **No export.** There is no GraphML, Mermaid or DOT output yet.
 
 ## License
 

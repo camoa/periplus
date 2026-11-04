@@ -63,12 +63,12 @@ class ExitCode(IntEnum):
     choosing between them. Pin matching itself opens nothing inside a pack directory and could not
     make the check; the reader that could is not its owner.
 
-    All of them are declared here although nothing in this package raises ``INTERNAL`` and nothing
-    returns ``USAGE`` as a value — both are statuses the process produces anyway, an uncaught
-    exception through the interpreter and a usage error through ``parser.error``. A code table
-    costs nothing to declare and withholding members would mean editing this enum in five later
-    components — which is the edit the open-closed principle says should never be needed. What
-    each member traces to is written beside it.
+    All of them are declared here although nothing in this package raises ``INTERNAL``: it is the
+    status an uncaught exception produces through the interpreter. ``USAGE`` is what
+    ``parser.error`` exits with for a bad option, and ``slice.run`` also returns it as a value, for
+    a call with no start items. A code table costs nothing to declare and withholding members would
+    mean editing this enum in five later components — which is the edit the open-closed principle
+    says should never be needed. What each member traces to is written beside it.
 
     7 and 8 are absent rather than free. They were declared for a folder component, forecasting
     ``FOLDER_UNKNOWN`` and ``FOLDER_CYCLE``, and were deleted because nothing
@@ -265,6 +265,9 @@ class ExitCode(IntEnum):
 
     #: An id given to a navigation command names no node in the map.
     NODE_NOT_FOUND = 31
+
+    #: A slice reached more items than ``--limit`` allows, so no file was written.
+    SLICE_TOO_LARGE = 32
 
 
 @dataclass(frozen=True, slots=True)
