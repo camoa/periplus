@@ -1,0 +1,72 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route named in a PHP call, joined to that route. A class or a function that builds a link from
+# a route name gives a links_to_route edge to the route: Url::fromRoute('x'),
+# Link::createFromRoute('t', 'x') and $this->redirect('x'). The first two are declared: a static
+# call on a named class says what it is. $this->redirect is inferred: the object's name, not its
+# type, says the class redirects to routes, as a controller or a form does. A route no mapped
+# routing file declares ends at a referenced node.
+#
+# Limits:
+# - A call in a method links from the class around it, and one in a function from the function. A
+#   call in a trait, an enum or an interface gives no edge and goes under skipped.
+# - A route name that is not a text literal, such as a variable or a concatenation, goes under
+#   skipped and gives no edge.
+# - $this->redirect is matched on $this only.
+# - Url and Link are matched by their short name or written in full, with or without a leading
+#   backslash.
+
+rules:
+# Url::fromRoute('my.route').
+- rule: route_call_from_url
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '(?:\\?Drupal\\Core\\)?Url'}
+    - name_matches: {child: name, pattern: fromRoute}
+  emits:
+  - edge:
+      kind: links_to_route
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.route]}
+  confidence: declared
+
+# Link::createFromRoute('Text', 'my.route'): the route name is the second argument.
+- rule: route_call_from_link
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '(?:\\?Drupal\\Core\\)?Link'}
+    - name_matches: {child: name, pattern: createFromRoute}
+  emits:
+  - edge:
+      kind: links_to_route
+      from: enclosing_declaration
+      to: {from: {argument: 1}, types: [drupal.route]}
+  confidence: declared
+
+# $this->redirect('my.route') in a controller or a form.
+- rule: route_call_from_redirect
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this'}
+    - name_matches: {child: name, pattern: redirect}
+  emits:
+  - edge:
+      kind: links_to_route
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.route]}
+  confidence: inferred

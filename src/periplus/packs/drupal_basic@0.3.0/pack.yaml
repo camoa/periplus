@@ -68,8 +68,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   settings name, as a config_names_form edge; each hook named <extension>_<type>_<operation>,
 #   as an inferred hook_acts_on_entity_type edge to <type>; each route's path, as a
 #   route_serves_path edge to a drupal.url_path node, and each path Url::fromUserInput or
-#   Url::fromUri('internal:...') names, as a links_to_path edge. The rule files' headers name
-#   their limits.
+#   Url::fromUri('internal:...') names, as a links_to_path edge; each route name Url::fromRoute,
+#   Link::createFromRoute or $this->redirect names, as a links_to_route edge. The rule files'
+#   headers name their limits.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An

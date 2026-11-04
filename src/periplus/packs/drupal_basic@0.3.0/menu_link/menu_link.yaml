@@ -1,7 +1,7 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# A menu link, named by its key in a links.menu file. links_to_route starts at a menu link or a
-# local action.
+# A menu link, named by its key in a links.menu file. links_to_route starts at a menu link, a
+# local action, or a class or function that names a route in a call (route/route_call.yaml).
 
 node_types:
 - name: drupal.menu_link
@@ -12,6 +12,8 @@ edge_kinds:
   from:
   - drupal.menu_link
   - drupal.local_action
+  - php.class
+  - php.function
   to: drupal.route
 - kind: child_of_link
   from: drupal.menu_link
