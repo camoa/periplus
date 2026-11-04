@@ -12,7 +12,7 @@
 `js` and `go` extras for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.4.0.
+Status: **beta**, version 0.4.1.
 
 </div>
 
@@ -65,7 +65,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.4.0
+uv tool install git+https://github.com/camoa/periplus@v0.4.1
 ```
 
 To install from a local copy of this repository:
@@ -310,10 +310,9 @@ To map a Laravel application, pin `php_basic@0.2.0` and `laravel_basic@0.0.5` an
 at the application's root. The default Laravel folders need no settings. To move the templates,
 set `views_root` under `folders`; a template is named by its path below `views_root`.
 
-New in this release: `periplus slice` cuts a map down to the neighbourhood of a node and
-`periplus export` writes a map or slice as GraphML, Mermaid or DOT; `slice --direction both`
-follows edges either way and GraphML labels name each node; and the Drupal rutter maps a route
-name written in a PHP call to its route.
+New in this release: the GraphML export labels each node with the short form of its map id,
+with the full id under the `id` key, and labels each edge with its kind; the navigation guide
+has a paragraph on the kind.
 
 ## Write a rutter
 
