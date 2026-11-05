@@ -171,6 +171,7 @@ packs:
 ```yaml
 name: billing
 image: billing:1.4
+stack: shop
 ```
 
 <!-- example custom-rutter: .periplus/packs/app_config@0.1.0/pack.yaml -->
@@ -187,6 +188,10 @@ folders:
 node_types:
 - name: app.service
   id_namespace: app.service
+edge_kinds:
+- kind: part_of
+  from: app.service
+  to: app.service
 rules:
 - rule: service
   reads: file
@@ -197,6 +202,13 @@ rules:
   - node: {type: app.service}
   - attribute: {name: image, from: {key: image}}
   confidence: declared
+- rule: service_in_stack
+  reads: file
+  in: [app_config]
+  match: {file: services, filetype: yaml}
+  id: {from: file_stem}
+  emits: [{edge: {kind: part_of, from: this_node, to: {from: {key: stack}}}}]
+  confidence: declared
 ```
 
 Check the custom rutter, then map; the node's provenance names `app_config`:
@@ -206,3 +218,128 @@ Check the custom rutter, then map; the node's provenance names `app_config`:
 $ periplus validate app_config
 $ periplus map
 ```
+
+## Measure what the rule added
+
+Report what a rule added as numbers read from two maps, never as a number predicted from the rows
+the rule would match. A prediction counts every row the rule fires on; a correct edge may already
+sit beside each false one, so the map can gain far fewer edges than the rule fires on.
+
+1. Keep a copy of the map before the rule. Copy `.periplus/map.json` to a path outside the project:
+   the folder you name or, by default, the system temp folder under a `periplus` subfolder named
+   after the project folder. Say the path after you write it.
+
+   ```console
+   $ mkdir -p /tmp/periplus/<project-folder> && cp .periplus/map.json /tmp/periplus/<project-folder>/before.json
+   ```
+2. Write or change the rule, check it with `periplus validate`, and run `periplus map`.
+3. Run the block with the copy as `sys.argv[1]`, the live `.periplus/map.json` as `sys.argv[2]`
+   and, to list what one rule made, `<pack>/<rule>` as `sys.argv[3]`. It prints `Measured`, one
+   line per changed count of `counts.nodes_by_state`, `counts.nodes_by_type` and
+   `counts.edges_by_kind`, the nodes and edges added, and with a rule the nodes and edges whose
+   provenance names it.
+
+   Save the gap-read block below to a file, such as `/tmp/periplus/<project-folder>/gap_read.py`,
+   then run it with the two map paths and the optional rule:
+
+   ```console
+   $ python3 /tmp/periplus/<project-folder>/gap_read.py /tmp/periplus/<project-folder>/before.json .periplus/map.json [<pack>/<rule>]
+   ```
+
+Read bundled rules through `periplus status` (the pack roots and the matched rutters with paths)
+and `periplus spec <pack>`, never through a repository path.
+The block below does not copy the map: make the step 1 copy first, or `periplus map` overwrites
+the before map.
+
+<!-- nav-run -->
+```console
+$ periplus status
+$ periplus spec python_text
+$ periplus map
+```
+
+<!-- gap-read -->
+```python
+import json
+import sys
+
+
+def load(path):
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def provs(item):
+    value = item.get("provenance") or []
+    return value if isinstance(value, list) else [value]
+
+
+before, after = load(sys.argv[1]), load(sys.argv[2])
+rule = sys.argv[3] if len(sys.argv) > 3 else None
+print("Measured")
+for group, key in (
+    ("state", "nodes_by_state"),
+    ("type", "nodes_by_type"),
+    ("kind", "edges_by_kind"),
+):
+    was, now = before["counts"].get(key, {}), after["counts"].get(key, {})
+    for name in sorted(set(was) | set(now)):
+        a, b = was.get(name, 0), now.get(name, 0)
+        if a != b:
+            print(f"{group}  {name}  {a}  {b}  {b - a:+d}")
+old_nodes = {n["id"] for n in before["nodes"]}
+old_edges = {(e["from"], e["kind"], e["to"]) for e in before["edges"]}
+print("added nodes ", len([n for n in after["nodes"] if n["id"] not in old_nodes]))
+print("added edges ", len([e for e in after["edges"] if (e["from"], e["kind"], e["to"]) not in old_edges]))
+if rule:
+    pack, _, name = rule.partition("/")
+
+    def named(item):
+        return any(p.get("pack") == pack and p.get("rule") == name for p in provs(item))
+
+    for node_id in sorted(n["id"] for n in after["nodes"] if named(n)):
+        print(f"node  {node_id}")
+    for row in sorted((e["from"], e["kind"], e["to"]) for e in after["edges"] if named(e)):
+        print("edge  " + "  ".join(row))
+```
+
+## Offer the next rule
+
+After the measurement, read what is left and offer one rule per turn until the person says stop or
+the gap is accepted.
+
+1. Run `periplus map --format json` and read `skipped` for the rows whose `rule` names the new
+   rule: each is a match the rule could not turn into a node or edge, with its reason.
+2. Read the `edge  <from>  <kind>  <to>` lines of the measurement. Run
+   `periplus find :: --limit 0 --format json` and look up the `to` ids there: the referenced and
+   unresolved nodes the new edges end on are what the next rule has to define.
+3. Offer one next rule from those rows, in plain words, and write it only when the person agrees.
+
+<!-- nav-run -->
+```console
+$ periplus map --format json
+$ periplus find :: --limit 0 --format json
+```
+
+## Stop with an accepted unknown
+
+The loop stops on the person's word, or on an entry under `accepted_unknowns` in
+`.periplus/settings.yml`. An entry holds `id`, `rule`, `reason`, `accepted_by` and `accepted_on`;
+the commented stub in the settings file shows the shape. Name the entry as the stop, add it only
+when the person accepts the gap, and offer no further rule for it.
+
+## Draft the upstream issue
+
+When `periplus validate` or `periplus map` refuses a shape with a message, or a bundled rule made a
+wrong node or edge (its provenance names the bundled rutter), the fix belongs in the bundled
+rutter, not in the project's rutter. Never work around a bundled rule's defect inside the project
+rutter. The same draft serves a rule any project on the stack could use, as a contribution.
+
+Write the draft to a file outside the project, in the scratch folder from the measurement, and
+say the path. Never file the issue. Five parts, in this order:
+
+1. The rule name and the rutter version, from the `packs` list of the map file.
+2. One minimal example of the shape, written fresh. Quote no site file.
+3. The measured counts, from the measurement.
+4. The engine message, verbatim.
+5. A link to [When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.4.1/docs/map-report-guide.md#when-a-gap-is-the-engines).

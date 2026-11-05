@@ -207,3 +207,50 @@ def test_every_periplus_command_line_in_a_skill_is_accepted_by_the_parser_c7() -
     checked, rejected = _rejected_commands(BODIES)
     assert checked, "no periplus command found in any skill body"
     assert rejected == [], f"command lines the parser refuses: {rejected}"
+
+
+_PINNED_LINK = re.compile(re.escape(_LINK_PREFIX) + r"[^\s)]*")
+_LOCAL_PATH = re.compile(
+    r"(?:~|\$\{?HOME\}?|/home|/Users|/opt|/root)(?:/[\w./~@-]*)?"
+    r"|(?<![\w.-])(?:\./)?(?:[\w.-]+/)*(?:docs|examples|src/periplus|tests|scripts)/[\w./@*-]*"
+    r"|(?<![\w./-])[\w-]+\.(?:toml|lock)\b"
+)
+
+
+def _local_repository_paths(bodies: dict[str, str]) -> list[str]:
+    """Paths a skill step names as a local place to open; a tag-pinned link is no such place."""
+    found: set[str] = set()
+    for skill, body in bodies.items():
+        text = _without_example_projects(_PINNED_LINK.sub("", body))
+        found.update(f"{skill}: {p.rstrip('./,;:)')}" for p in _LOCAL_PATH.findall(text))
+    return sorted(found)
+
+
+@pytest.mark.criterion(id="c1")
+def test_a_skill_step_naming_a_local_repository_path_fails_the_no_checkout_check_c1() -> None:
+    body = (
+        "# Skill\n\n"
+        "1. Read the rule format in src/periplus/rutters/php/rutter.yaml.\n"
+        "2. Then open ~/workspace/periplus/docs/navigation.md.\n"
+        "3. Or open $HOME/workspace/periplus/docs/navigation.md.\n"
+        "4. Or open periplus/src/periplus/packs/php_basic@0.2.0/pack.yaml.\n"
+        "5. Or open /opt/periplus/src/periplus/packs/pack.yaml.\n"
+        "6. Check pyproject.toml for the version.\n"
+        f"7. See [Navigation]({_LINK_PREFIX}docs/navigation.md) for the options.\n"
+    )
+    flagged = _local_repository_paths({"periplus-bad": body})
+    assert "periplus-bad: src/periplus/rutters/php/rutter.yaml" in flagged
+    assert any(p.startswith("periplus-bad: ~/workspace/periplus") for p in flagged)
+    assert any(p.startswith("periplus-bad: $HOME/workspace/periplus") for p in flagged)
+    assert any(p.startswith("periplus-bad: periplus/src/periplus/packs") for p in flagged)
+    assert any(p.startswith("periplus-bad: /opt/periplus") for p in flagged)
+    assert "periplus-bad: pyproject.toml" in flagged
+    assert not any(
+        p.endswith("docs/navigation.md") and "~" not in p and "HOME" not in p for p in flagged
+    ), flagged
+
+
+@pytest.mark.criterion(id="c1")
+def test_the_three_shipped_skills_pass_the_no_checkout_check_c1() -> None:
+    assert set(RAW) == set(SKILLS)
+    assert _local_repository_paths(RAW) == []
