@@ -8,7 +8,8 @@ from collections.abc import Sequence
 __all__ = ["compile_pattern", "reshape"]
 
 #: A named group written ``(?<name>``, which ``re`` spells ``(?P<name>``; lookbehind stays alone.
-_NAMED_GROUP = re.compile(r"(?<!\\)\(\?<(?![=!])")
+#: Group 1 is an even run of backslashes, which escapes nothing; an odd run leaves a literal paren.
+_NAMED_GROUP = re.compile(r"(?<!\\)((?:\\\\)*)\(\?<(?![=!])")
 
 
 def compile_pattern(expression: str) -> re.Pattern[str]:
@@ -16,7 +17,7 @@ def compile_pattern(expression: str) -> re.Pattern[str]:
 
     The pack format names RE2; this uses Python's ``re`` engine instead.
     """
-    return re.compile(_NAMED_GROUP.sub("(?P<", expression))
+    return re.compile(_NAMED_GROUP.sub(r"\1(?P<", expression))
 
 
 def reshape(value: str, normalize: Sequence[tuple[re.Pattern[str], str]], case: str = "") -> str:
