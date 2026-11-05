@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-05
+
+### Changed
+
+- The gaps skill reports in two halves. Resolution gaps: referenced and unresolved items, the skipped rows of the map report, and inferred edges. Detail gaps: items a catch-all rule made, grouped by what would tell them apart, groups under a generic parent type that has children for other groups and none for this one, and referenced classes and modules ranked by how much first-party code leans on each. Each half says which rows are first-party, and a thing the map is right about but the site has wrong, such as a method called that no class defines, is listed under its own heading, never as a missing rule.
+- The rutter skill measures what a rule added by mapping before and after, offers the next gap its rule uncovered until the person stops or records an accepted unknown in the settings file, and drafts an upstream issue, with a minimal example and the engine's message, when a gap is a bundled rule's defect or a shape the engine refuses.
+- Every step of the three skills works from the installed tool: a step that reads a bundled rule or the rule format names `periplus status` or `periplus spec`, never a repository path.
+
+### Fixed
+
+- A rule pattern may hold an escaped backslash right before a named group, such as `Drupal\\(?<ns>\w+)`. The named-group rewrite counts the backslashes before the group: an even run keeps the group under its name, an odd run keeps the paren literal, and lookbehinds are left as they were. Such a pattern was refused before.
+
 ## [0.4.1] - 2026-11-04
 
 ### Changed
