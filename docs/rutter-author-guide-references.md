@@ -228,6 +228,23 @@ with a list of sources, an id from a call's argument, or a pattern on a text or 
 A class whose name the pattern does not fit gives its members no enclosing type, and an enclosing
 declaration it does not fit is passed for the next one out.
 
+## A constant attribute on a declaration rule's node
+
+An annotation or key-file rule reads an attribute with `{name, from}`, and a text rule fills one
+with `{name, template}`. A declaration rule that emits a node may also carry attribute entries
+`{name, template}`, where the template is constant text and the name a lowercase word. The node
+gets the value under that name, and its provenance row lists the name in `sets`. A template with a
+placeholder refuses the map with exit 26: a declaration rule's attribute template is constant text.
+
+The map schema declares one such mark, `resolution: runtime`, the unknown boundary: a rule read
+this call site, but its target or argument is built at run time, and no rule will draw the edge.
+
+```yaml
+  emits:
+  - node: {type: own.call_site}
+  - attribute: {name: resolution, template: runtime}
+```
+
 ## The grammar's node kinds
 
 No page lists a grammar's node types and fields. Print the tree of a sample file with the

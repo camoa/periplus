@@ -768,6 +768,7 @@ def _declarations(
                     pack=rule.pack,
                     rule=rule.name,
                     confidence=rule.confidence,
+                    attributes=tuple((name, text, line) for name, text in rule.templates),
                 )
             )
         for spec in rule.edges:

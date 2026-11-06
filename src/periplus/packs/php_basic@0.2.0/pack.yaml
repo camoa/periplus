@@ -32,6 +32,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   calls, static calls and those are read. A property typed by a union of two or more class names,
 #   Helper|Other, gives no edge, and neither does a call in a parent class through a property only
 #   a child assigns; the call keeps its php.call_site node.
+# - A call whose method name or callee is a variable, $x->$name(), $x?->$name(), self::$name() or
+#   $fn(), gets no calls edge: inside a class method it keeps a php.call_site node marked
+#   resolution: runtime (types/find_runtime_calls.yaml); elsewhere it makes nothing.
 # - A use function alias does not bind.
 pack: php_basic
 version: 0.2.0

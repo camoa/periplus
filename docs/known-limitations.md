@@ -19,7 +19,10 @@ a list of its known gaps.
   was not loaded when the list was taken is not listed. A project's own function named like a
   built-in, `function strlen()` in its namespace, gets no edge from an unqualified call. Drupal's
   global functions, such as `t()`, are not built-ins and give an unresolved function.
-  `skip_names` matches the exact case, so `ISSET(` still gives an unresolved function.
+  `skip_names` matches the exact case, so `ISSET(` still gives an unresolved function. A call
+  whose method name or callee is built at run time, such as `$this->$name()` or `$fn()`, gives no
+  edge; inside a class method it is kept as a `php.call_site` marked `resolution: runtime`,
+  instead of leaving nothing, and elsewhere it makes nothing.
 - **Drupal:** a template name held in a variable, a concatenation or a list gives no edge. A contributed module's plugins and
   bundle config files are mapped only by that module's rutter, listed below. Without one, its
   bundle config file stays a plain config object and its bundle is `referenced`, with no label.
@@ -52,7 +55,9 @@ a list of its known gaps.
   class. A service or entity type named by a variable or a concatenation gives no edge and goes
   under skipped, and so does a class constant that no mapped file declares as text. So does
   `parent::X`, even when a mapped file declares it: Drupal reads only `self` and `static` as the
-  enclosing class.
+  enclosing class. Inside a class method, a call whose route, service or entity type argument is
+  built at run time keeps its skipped row and is also kept as a `php.call_site` marked
+  `resolution: runtime`.
   `getStorage('x')` on a property or promoted parameter with no declared type, unless it is named
   `entityTypeManager`, `get('x')` on a container with another name, and other entity type manager
   methods such as `getHandler('x')` give no edge. A local variable, such as `$etm->getStorage('x')`

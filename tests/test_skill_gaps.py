@@ -13,7 +13,7 @@ import pytest
 from _skills import ROOT, blocks, example_project, run_periplus
 
 SKILL = ROOT / "src" / "periplus" / "skills" / "periplus-gaps" / "SKILL.md"
-HEADINGS = ("Resolution gaps", "Detail gaps", "Site faults")
+HEADINGS = ("Resolution gaps", "Detail gaps", "Site faults", "Unknown boundaries")
 
 
 def _nav_commands() -> list[list[str]]:
@@ -375,3 +375,68 @@ def test_site_faults_print_apart_with_file_and_line_and_never_as_rule_gaps_c3(
     assert [m[:2] for m in modules] == [["far", "1"]], f"fault nodes counted as gaps: {detail}"
     for fault in faults:
         assert fault[0] not in "\n".join(detail), f"{fault[0]} listed as a missing rule: {detail}"
+
+
+@pytest.mark.criterion(id="c5")
+def test_unknown_boundaries_heading_prints_after_site_faults_on_the_example_map_c5(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = example_project(tmp_path)
+    mapped = run_periplus(["map"], project, monkeypatch, capsys)
+    assert mapped.code == 0, mapped.out + mapped.err
+    out = _run_gap_read(tmp_path, project / ".periplus" / "map.json", monkeypatch, capsys)
+    assert "Unknown boundaries" in HEADINGS
+    printed = [line.strip().lstrip("#").strip().rstrip(":") for line in out.splitlines()]
+    assert "Unknown boundaries" in printed, f"printed {out!r}"
+    assert printed.index("Unknown boundaries") > printed.index("Site faults"), out
+    unknown = _section(out, "Unknown boundaries")
+    others = "\n".join(x for h in HEADINGS[:3] for x in _section(out, h))
+    assert unknown, f"nothing under the heading: {out!r}"
+    assert not set(unknown) & set(others.splitlines()), unknown
+    assert 0 in {_count(x) for x in unknown}, f"no count line of 0: {unknown}"
+
+
+@pytest.mark.criterion(id="c5")
+def test_unknown_boundaries_list_each_marked_node_with_file_line_and_rule_c5(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def marked(node_id: str, file: str | None, line: int) -> dict[str, Any]:
+        node = _node(node_id, "php.call_site", rule="find_call_site", pack="php", file=file)
+        node["locations"] = [{"file": file, "line": line}] if file else []
+        node["attributes"] = {"resolution": "runtime"}
+        node["provenance"].append(
+            {
+                "confidence": "declared",
+                "pack": "php",
+                "rule": "find_runtime_member_call",
+                "sets": ["id", "resolution"],
+            }
+        )
+        return node
+
+    nodes = [
+        marked("php.call_site::App\\Page::run::$this->$name", "src/Page.php", 17),
+        marked("php.call_site::App\\Page::run::$fn", "src/Page.php", 23),
+        marked("php.call_site::App\\Page::run::$far", None, 0),
+        _node("php.call_site::App\\Page::run::$this->helper->go", "php.call_site", rule="x"),
+        _node("php.method::App\\Page::gone", "php.method", "referenced", "call", "php", None),
+        _node("php.method::App\\Page::lost", "php.method", "unresolved", "call", "php", None),
+    ]
+    map_file = _write_map(tmp_path / "map.json", nodes)
+    out = _run_gap_read(tmp_path, map_file, monkeypatch, capsys)
+    unknown = _section(out, "Unknown boundaries")
+    rows = sorted(_fields(x) for x in unknown if len(_fields(x)) == 3 and ":" in _fields(x)[1])
+    assert rows == [
+        ["php.call_site::App\\Page::run::$fn", "src/Page.php:23", "find_runtime_member_call"],
+        [
+            "php.call_site::App\\Page::run::$this->$name",
+            "src/Page.php:17",
+            "find_runtime_member_call",
+        ],
+    ], unknown
+    assert 3 in {_count(x) for x in unknown}, f"no count line of 3: {unknown}"
+    assert _first_party_lines(unknown) == [(2, 1)], f"first-party split: {unknown}"
+    listed = "\n".join(unknown)
+    for other in ("App\\Page::gone", "App\\Page::lost", "run::$this->helper->go"):
+        assert other not in listed, f"{other} listed as an unknown boundary: {unknown}"
+    assert _state_lines(_section(out, "Resolution gaps")).get("referenced") == 1, out

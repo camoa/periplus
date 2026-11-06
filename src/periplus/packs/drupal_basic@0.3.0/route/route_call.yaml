@@ -10,8 +10,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # Limits:
 # - A call in a method links from the class around it, and one in a function from the function. A
 #   call in a trait, an enum or an interface gives no edge and goes under skipped.
-# - A route name that is not a text literal, such as a variable or a concatenation, goes under
-#   skipped and gives no edge.
+# - A route name that is not a text literal gives no edge. One built at run time from a variable,
+#   in a method, is kept by call/runtime_argument.yaml as a php.call_site marked resolution
+#   runtime; a constant, and a variable in a function, go under skipped.
 # - $this->redirect is matched on $this only.
 # - Url and Link are matched by their short name or written in full, with or without a leading
 #   backslash.

@@ -1,0 +1,283 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A call that a rule of call/call.yaml or route/route_call.yaml reads a text literal from, where
+# that argument holds a variable instead: the route, service id or entity type id is built at run
+# time. Each such call is kept as a php.call_site node marked resolution runtime, with its edges to
+# and from the method around it, and no edge to a route, a service or an entity type. Each twin
+# matches as the rule it twins, and fires only when a variable stands in the argument that rule
+# reads. A $this->container->get() or $this->entityTypeManager->getStorage() call's id ends in
+# (runtime), so it stays apart from the node php_basic's find_call_site gives the same callee; a
+# static call's id is the method around it and the callee as written.
+#
+# Limits:
+# - A call in a method only. One in a function or a .module hook stays under skipped.
+# - A constant, a class constant or a quoted literal in the argument gives no node.
+# - A variable that sits after a comma inside a nested call in the argument, such as foo(1, $b),
+#   gives no node.
+# - Two such calls to one callee in one method share one node with two locations.
+
+rules:
+# Url::fromRoute('my.' . $name), as route_call_from_url.
+- rule: runtime_route_call_from_url
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: &url_where
+    - name_matches: {child: scope, pattern: '(?:\\?Drupal\\Core\\)?Url'}
+    - name_matches: {child: name, pattern: fromRoute}
+    - name_matches: {child: arguments, pattern: &first_variable '(?s)\(\s*[^,$]*\$.*'}
+  id: &scoped_id
+    from: [enclosing_type, enclosing_method, scope, name]
+    template: "{enclosing_type}::{enclosing_method}::{scope}::{name}"
+  emits: &runtime_node
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: runtime_route_call_from_url_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: *url_where
+  id: *scoped_id
+  emits: &runtime_edges
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+# Link::createFromRoute($text, $route), as route_call_from_link: the second argument.
+- rule: runtime_route_call_from_link
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: &link_where
+    - name_matches: {child: scope, pattern: '(?:\\?Drupal\\Core\\)?Link'}
+    - name_matches: {child: name, pattern: createFromRoute}
+    - name_matches: {child: arguments, pattern: '(?s)\((?:[^,()]|\([^()]*\))*,\s*[^,$]*\$.*'}
+  id: *scoped_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_route_call_from_link_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: *link_where
+  id: *scoped_id
+  emits: *runtime_edges
+  confidence: declared
+
+# $this->redirect($route), as route_call_from_redirect.
+- rule: runtime_route_call_from_redirect
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &redirect_where
+    - name_matches: {child: object, pattern: '\$this'}
+    - name_matches: {child: name, pattern: redirect}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: &member_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_route_call_from_redirect_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *redirect_where
+  id: *member_id
+  emits: *runtime_edges
+  confidence: declared
+
+# \Drupal::service($id), as service_call.
+- rule: runtime_service_call
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: &service_where
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: service}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *scoped_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_service_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: *service_where
+  id: *scoped_id
+  emits: *runtime_edges
+  confidence: declared
+
+# $container->get($id), as container_get_call.
+- rule: runtime_container_get_call
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &container_where
+    - name_matches: {child: object, pattern: &container_object '\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\)'}
+    - name_matches: {child: name, pattern: get}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: &member_runtime_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}(runtime)"
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_container_get_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *container_where
+  id: *member_runtime_id
+  emits: *runtime_edges
+  confidence: declared
+
+# $container?->get($id), as container_nullsafe_get_call. The id writes ?-> so it does not merge
+# with a -> call to the same callee.
+- rule: runtime_container_nullsafe_get_call
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where: &container_nullsafe_where
+    - name_matches: {child: object, pattern: *container_object}
+    - name_matches: {child: name, pattern: get}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: &nullsafe_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}?->{name}"
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_container_nullsafe_get_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where: *container_nullsafe_where
+  id: *nullsafe_id
+  emits: *runtime_edges
+  confidence: declared
+
+# \Drupal::entityQuery($type), as entity_query_call.
+- rule: runtime_entity_query_call
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: &entity_query_where
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: 'entityQuery(?:Aggregate)?'}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *scoped_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_entity_query_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: *entity_query_where
+  id: *scoped_id
+  emits: *runtime_edges
+  confidence: declared
+
+# $this->entityTypeManager->getStorage($type), as storage_call.
+- rule: runtime_storage_call
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &storage_where
+    - name_matches: {child: object, pattern: &manager_object '(?s).*entityTypeManager(?:\(\))?'}
+    - name_matches: {child: name, pattern: getStorage}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *member_runtime_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_storage_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *storage_where
+  id: *member_runtime_id
+  emits: *runtime_edges
+  confidence: declared
+
+# $this->entityTypeManager?->getStorage($type), as storage_nullsafe_call.
+- rule: runtime_storage_nullsafe_call
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where: &storage_nullsafe_where
+    - name_matches: {child: object, pattern: *manager_object}
+    - name_matches: {child: name, pattern: getStorage}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *nullsafe_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_storage_nullsafe_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where: *storage_nullsafe_where
+  id: *nullsafe_id
+  emits: *runtime_edges
+  confidence: declared

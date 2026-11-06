@@ -1,8 +1,10 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A PHP function or method that names a service or an entity type by a text literal in a call. The
-# end is the call's first argument as written: a variable, a constant or a concatenation gives no
-# edge and goes under skipped. A service or an entity type that no mapped file declares, such as
+# end is the call's first argument as written: a constant gives no edge and goes under skipped. A
+# variable, or a concatenation holding one, is built at run time: in a method,
+# call/runtime_argument.yaml keeps the call as a php.call_site marked resolution runtime, with no
+# edge. A service or an entity type that no mapped file declares, such as
 # config.factory or node, ends at a referenced node: Drupal core and contributed modules are
 # outside the mapped code. A misspelled name reads referenced too.
 #

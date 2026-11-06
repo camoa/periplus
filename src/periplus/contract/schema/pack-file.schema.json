@@ -970,8 +970,17 @@
             },
             "template": {
               "type": "string",
-              "description": "The value, filled from captures, path values and values."
+              "description": "The value, filled from captures, path values and values. On a declaration rule, constant text with no placeholder, set on the rule's node."
             }
+          },
+          "if": {
+            "required": ["name"],
+            "properties": {"name": {"const": "resolution"}}
+          },
+          "then": {
+            "required": ["template"],
+            "properties": {"template": {"anyOf": [{"const": "runtime"}, {"pattern": "\\{\\w+\\}"}]}},
+            "description": "The resolution mark is runtime, the only value the map schema allows. A template with a placeholder is left to the loader."
           }
         },
         "binding": {

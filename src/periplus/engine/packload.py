@@ -1641,12 +1641,30 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         )
     nodes = node_types(item)
     edges = [_read_tree_edge(emit["edge"]) for emit in emits if "edge" in emit]
+    attributes = [emit["attribute"] for emit in emits if "attribute" in emit]
     if (
-        len(nodes) + len(edges) != len(emits)
+        len(nodes) + len(edges) + len(attributes) != len(emits)
         or len(nodes) > 1
+        or (attributes and not nodes)
         or any(emit["node"].keys() != {"type"} for emit in emits if "node" in emit)
     ):
         raise _Unsupported("a declaration rule emits one node with a type, or edges only")
+    if not all(
+        isinstance(a, Mapping)
+        and set(a) == {"name", "template"}
+        and isinstance(a["name"], str)
+        and re.fullmatch(r"[a-z][a-z0-9_]*", a["name"])
+        and isinstance(a["template"], str)
+        and not PLACEHOLDER.search(a["template"])
+        for a in attributes
+    ):
+        raise _Unsupported("a declaration rule's attribute template is constant text")
+    if any(a["name"] == "resolution" and a["template"] != "runtime" for a in attributes):
+        raise PackRulesUnreadable(
+            f"a declaration rule of {pack} gives the resolution attribute a template other "
+            "than runtime, the only value the map schema allows",
+            {"pack": pack},
+        )
     block = item.get("id", {})
     argument = _argument(block.get("from"), "argument") if isinstance(block, Mapping) else None
     if argument is not None and not set(block) <= {"from", "normalize"}:
@@ -1681,6 +1699,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         node_type=nodes[0] if nodes else "",
         confidence=item["confidence"],
         edges=tuple(edges),
+        templates=tuple((a["name"], a["template"]) for a in attributes),
         id_template=template,
         id_pattern=pattern,
         id_source=str(block["from"]) if pattern else "",

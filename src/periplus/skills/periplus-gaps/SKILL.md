@@ -24,7 +24,7 @@ description: Read a Periplus map and the code behind it, list what the map lacks
 ## Find the gaps
 
 Run the steps in the project root, after `periplus map`. The report has two halves, resolution
-gaps and detail gaps, and a third list apart from both, site faults.
+gaps and detail gaps, and two lists apart from both, site faults and unknown boundaries.
 
 1. Check the map and see what it holds. `periplus check-map` exits 0 on a valid map; fix any
    fault it names before you read further. `periplus types` counts the node types and edge kinds.
@@ -220,6 +220,15 @@ for e in edges:
 for i in sorted(faults):
     where = first.get(i, {})
     print(f"{i}  {where.get('file', '-')}:{where.get('line', 0)}  {faults[i]}")
+
+print("Unknown boundaries")
+marked = [n for n in m["nodes"] if (n.get("attributes") or {}).get("resolution") == "runtime"]
+print(f"runtime  {len(marked)}")
+print(split(marked))
+for n in sorted(marked, key=lambda n: n["id"]):
+    where = ", ".join(f"{x['file']}:{x['line']}" for x in n["locations"]) or "-"
+    rule = next((p["rule"] for p in n["provenance"] if "resolution" in p.get("sets", [])), "-")
+    print(f"{n['id']}  {where}  {rule}")
 ```
 
 ## Detail gaps
@@ -263,6 +272,21 @@ place that should define the name is itself in the mapped code.
 
 When a class or trait in the chain is referenced, outside the mapped code, the name stays a resolution gap:
 the missing rule is the PHP rutter's, never a site fault.
+
+## Unknown boundaries
+
+An unknown boundary is a place where static reading stops: a call whose method name, callee or
+argument is built at run time. A rule marks it with the node attribute `resolution` set to
+`runtime` and gives it no target, because any target would be invented. The program prints a
+`runtime  <count>` line, the `first-party` split, then one line per marked node as
+`<id>  <file>:<line>  <rule>`, with every location of the node and the rule that set the mark. The
+`referenced` and `unresolved` lists never hold it.
+
+It is not a gap for a new rule to fill, unless the mark is wrong: the code there is not a run-time
+call. Read the code at each location, then accept the place or leave it for the next rule. To
+accept it, add an entry under `accepted_unknowns` in `.periplus/settings.yml` with the node id as
+`id` and the marking rule as `rule`, written `<pack>.<rule name>`, with the `reason`,
+`accepted_by` and `accepted_on` the entry needs.
 
 ## Where a rule belongs
 

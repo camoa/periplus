@@ -69,7 +69,15 @@
           "description": "Normally one. Sometimes several: Go assembles a package from declarations in any file, and Elixir writes one function as multiple clauses. Measured: one package node in gopkg.in/yaml.v2 carries 13 locations from 13 files. A node with zero locations is a boundary node the map never read."
         },
 
-        "attributes": {"type": "object", "description": "Values a rule read or computed. No prose."},
+        "attributes": {
+          "type": "object", "description": "Values a rule read or computed. No prose.",
+          "properties": {
+            "resolution": {
+              "enum": ["runtime"],
+              "description": "The unknown-boundary mark: a rule read this call site, its target or argument is built at run time, and no rule will ever draw the edge."
+            }
+          }
+        },
 
         "provenance": {
           "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/provenance"},

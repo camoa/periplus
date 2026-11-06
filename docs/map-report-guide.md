@@ -271,6 +271,24 @@ Rules executed:
   drupal_basic route_options_from_routing_file_edges fired 0
   drupal_basic route_requirements_from_routing_file fired 0
   drupal_basic route_requirements_from_routing_file_edges fired 0
+  drupal_basic runtime_container_get_call fired 0
+  drupal_basic runtime_container_get_call_in fired 0
+  drupal_basic runtime_container_nullsafe_get_call fired 0
+  drupal_basic runtime_container_nullsafe_get_call_in fired 0
+  drupal_basic runtime_entity_query_call fired 0
+  drupal_basic runtime_entity_query_call_in fired 0
+  drupal_basic runtime_route_call_from_link fired 0
+  drupal_basic runtime_route_call_from_link_in fired 0
+  drupal_basic runtime_route_call_from_redirect fired 0
+  drupal_basic runtime_route_call_from_redirect_in fired 0
+  drupal_basic runtime_route_call_from_url fired 0
+  drupal_basic runtime_route_call_from_url_in fired 0
+  drupal_basic runtime_service_call fired 0
+  drupal_basic runtime_service_call_in fired 0
+  drupal_basic runtime_storage_call fired 0
+  drupal_basic runtime_storage_call_in fired 0
+  drupal_basic runtime_storage_nullsafe_call fired 0
+  drupal_basic runtime_storage_nullsafe_call_in fired 0
   drupal_basic service_alias_from_services_file fired 0
   drupal_basic service_call fired 0
   drupal_basic service_from_services_file fired 0
@@ -364,6 +382,10 @@ Rules executed:
   php_basic find_promoted_property_type fired 0
   php_basic find_property fired 0
   php_basic find_property_type fired 0
+  php_basic find_runtime_function_call fired 0
+  php_basic find_runtime_member_call fired 0
+  php_basic find_runtime_nullsafe_member_call fired 0
+  php_basic find_runtime_scoped_call fired 0
   php_basic find_trait fired 0
   php_basic find_union_promoted_property_type fired 0
   php_basic find_union_property_type fired 0
@@ -376,6 +398,10 @@ Rules executed:
   php_basic parameter_typed_as fired 0
   php_basic promoted_property_typed_as fired 0
   php_basic property_typed_as fired 0
+  php_basic runtime_function_call_method fired 0
+  php_basic runtime_member_call_method fired 0
+  php_basic runtime_nullsafe_member_call_method fired 0
+  php_basic runtime_scoped_call_method fired 0
   php_basic union_promoted_property_typed_as fired 0
   php_basic union_property_typed_as fired 0
   php_basic var_property_typed_as fired 0
@@ -510,6 +536,24 @@ Rules that fired zero times:
   drupal_basic route_options_from_routing_file_edges
   drupal_basic route_requirements_from_routing_file
   drupal_basic route_requirements_from_routing_file_edges
+  drupal_basic runtime_container_get_call
+  drupal_basic runtime_container_get_call_in
+  drupal_basic runtime_container_nullsafe_get_call
+  drupal_basic runtime_container_nullsafe_get_call_in
+  drupal_basic runtime_entity_query_call
+  drupal_basic runtime_entity_query_call_in
+  drupal_basic runtime_route_call_from_link
+  drupal_basic runtime_route_call_from_link_in
+  drupal_basic runtime_route_call_from_redirect
+  drupal_basic runtime_route_call_from_redirect_in
+  drupal_basic runtime_route_call_from_url
+  drupal_basic runtime_route_call_from_url_in
+  drupal_basic runtime_service_call
+  drupal_basic runtime_service_call_in
+  drupal_basic runtime_storage_call
+  drupal_basic runtime_storage_call_in
+  drupal_basic runtime_storage_nullsafe_call
+  drupal_basic runtime_storage_nullsafe_call_in
   drupal_basic service_alias_from_services_file
   drupal_basic service_call
   drupal_basic service_from_services_file
@@ -587,6 +631,10 @@ Rules that fired zero times:
   php_basic find_promoted_property_type
   php_basic find_property
   php_basic find_property_type
+  php_basic find_runtime_function_call
+  php_basic find_runtime_member_call
+  php_basic find_runtime_nullsafe_member_call
+  php_basic find_runtime_scoped_call
   php_basic find_trait
   php_basic find_union_promoted_property_type
   php_basic find_union_property_type
@@ -599,6 +647,10 @@ Rules that fired zero times:
   php_basic parameter_typed_as
   php_basic promoted_property_typed_as
   php_basic property_typed_as
+  php_basic runtime_function_call_method
+  php_basic runtime_member_call_method
+  php_basic runtime_nullsafe_member_call_method
+  php_basic runtime_scoped_call_method
   php_basic union_promoted_property_typed_as
   php_basic union_property_typed_as
   php_basic var_property_typed_as
@@ -973,6 +1025,24 @@ Rules executed:
   drupal_basic route_options_from_routing_file_edges fired 0
   drupal_basic route_requirements_from_routing_file fired 0
   drupal_basic route_requirements_from_routing_file_edges fired 0
+  drupal_basic runtime_container_get_call fired 0
+  drupal_basic runtime_container_get_call_in fired 0
+  drupal_basic runtime_container_nullsafe_get_call fired 0
+  drupal_basic runtime_container_nullsafe_get_call_in fired 0
+  drupal_basic runtime_entity_query_call fired 0
+  drupal_basic runtime_entity_query_call_in fired 0
+  drupal_basic runtime_route_call_from_link fired 0
+  drupal_basic runtime_route_call_from_link_in fired 0
+  drupal_basic runtime_route_call_from_redirect fired 0
+  drupal_basic runtime_route_call_from_redirect_in fired 0
+  drupal_basic runtime_route_call_from_url fired 0
+  drupal_basic runtime_route_call_from_url_in fired 0
+  drupal_basic runtime_service_call fired 0
+  drupal_basic runtime_service_call_in fired 0
+  drupal_basic runtime_storage_call fired 0
+  drupal_basic runtime_storage_call_in fired 0
+  drupal_basic runtime_storage_nullsafe_call fired 0
+  drupal_basic runtime_storage_nullsafe_call_in fired 0
   drupal_basic service_alias_from_services_file fired 0
   drupal_basic service_call fired 0
   drupal_basic service_from_services_file fired 0
@@ -1065,6 +1135,10 @@ Rules executed:
   php_basic find_promoted_property_type fired 0
   php_basic find_property fired 0
   php_basic find_property_type fired 0
+  php_basic find_runtime_function_call fired 0
+  php_basic find_runtime_member_call fired 0
+  php_basic find_runtime_nullsafe_member_call fired 0
+  php_basic find_runtime_scoped_call fired 0
   php_basic find_trait fired 0
   php_basic find_union_promoted_property_type fired 0
   php_basic find_union_property_type fired 0
@@ -1077,6 +1151,10 @@ Rules executed:
   php_basic parameter_typed_as fired 0
   php_basic promoted_property_typed_as fired 0
   php_basic property_typed_as fired 0
+  php_basic runtime_function_call_method fired 0
+  php_basic runtime_member_call_method fired 0
+  php_basic runtime_nullsafe_member_call_method fired 0
+  php_basic runtime_scoped_call_method fired 0
   php_basic union_promoted_property_typed_as fired 0
   php_basic union_property_typed_as fired 0
   php_basic var_property_typed_as fired 0
@@ -1217,6 +1295,24 @@ Rules that fired zero times:
   drupal_basic route_options_from_routing_file_edges
   drupal_basic route_requirements_from_routing_file
   drupal_basic route_requirements_from_routing_file_edges
+  drupal_basic runtime_container_get_call
+  drupal_basic runtime_container_get_call_in
+  drupal_basic runtime_container_nullsafe_get_call
+  drupal_basic runtime_container_nullsafe_get_call_in
+  drupal_basic runtime_entity_query_call
+  drupal_basic runtime_entity_query_call_in
+  drupal_basic runtime_route_call_from_link
+  drupal_basic runtime_route_call_from_link_in
+  drupal_basic runtime_route_call_from_redirect
+  drupal_basic runtime_route_call_from_redirect_in
+  drupal_basic runtime_route_call_from_url
+  drupal_basic runtime_route_call_from_url_in
+  drupal_basic runtime_service_call
+  drupal_basic runtime_service_call_in
+  drupal_basic runtime_storage_call
+  drupal_basic runtime_storage_call_in
+  drupal_basic runtime_storage_nullsafe_call
+  drupal_basic runtime_storage_nullsafe_call_in
   drupal_basic service_alias_from_services_file
   drupal_basic service_call
   drupal_basic service_from_services_file
@@ -1308,6 +1404,10 @@ Rules that fired zero times:
   php_basic find_promoted_property_type
   php_basic find_property
   php_basic find_property_type
+  php_basic find_runtime_function_call
+  php_basic find_runtime_member_call
+  php_basic find_runtime_nullsafe_member_call
+  php_basic find_runtime_scoped_call
   php_basic find_trait
   php_basic find_union_promoted_property_type
   php_basic find_union_property_type
@@ -1320,6 +1420,10 @@ Rules that fired zero times:
   php_basic parameter_typed_as
   php_basic promoted_property_typed_as
   php_basic property_typed_as
+  php_basic runtime_function_call_method
+  php_basic runtime_member_call_method
+  php_basic runtime_nullsafe_member_call_method
+  php_basic runtime_scoped_call_method
   php_basic union_promoted_property_typed_as
   php_basic union_property_typed_as
   php_basic var_property_typed_as
@@ -1528,6 +1632,24 @@ Rules executed:
   drupal_basic route_options_from_routing_file_edges fired 0
   drupal_basic route_requirements_from_routing_file fired 0
   drupal_basic route_requirements_from_routing_file_edges fired 0
+  drupal_basic runtime_container_get_call fired 0
+  drupal_basic runtime_container_get_call_in fired 0
+  drupal_basic runtime_container_nullsafe_get_call fired 0
+  drupal_basic runtime_container_nullsafe_get_call_in fired 0
+  drupal_basic runtime_entity_query_call fired 0
+  drupal_basic runtime_entity_query_call_in fired 0
+  drupal_basic runtime_route_call_from_link fired 0
+  drupal_basic runtime_route_call_from_link_in fired 0
+  drupal_basic runtime_route_call_from_redirect fired 0
+  drupal_basic runtime_route_call_from_redirect_in fired 0
+  drupal_basic runtime_route_call_from_url fired 0
+  drupal_basic runtime_route_call_from_url_in fired 0
+  drupal_basic runtime_service_call fired 0
+  drupal_basic runtime_service_call_in fired 0
+  drupal_basic runtime_storage_call fired 0
+  drupal_basic runtime_storage_call_in fired 0
+  drupal_basic runtime_storage_nullsafe_call fired 0
+  drupal_basic runtime_storage_nullsafe_call_in fired 0
   drupal_basic service_alias_from_services_file fired 0
   drupal_basic service_call fired 0
   drupal_basic service_from_services_file fired 0
@@ -1621,6 +1743,10 @@ Rules executed:
   php_basic find_promoted_property_type fired 0
   php_basic find_property fired 0
   php_basic find_property_type fired 0
+  php_basic find_runtime_function_call fired 0
+  php_basic find_runtime_member_call fired 0
+  php_basic find_runtime_nullsafe_member_call fired 0
+  php_basic find_runtime_scoped_call fired 0
   php_basic find_trait fired 0
   php_basic find_union_promoted_property_type fired 0
   php_basic find_union_property_type fired 0
@@ -1633,6 +1759,10 @@ Rules executed:
   php_basic parameter_typed_as fired 0
   php_basic promoted_property_typed_as fired 0
   php_basic property_typed_as fired 0
+  php_basic runtime_function_call_method fired 0
+  php_basic runtime_member_call_method fired 0
+  php_basic runtime_nullsafe_member_call_method fired 0
+  php_basic runtime_scoped_call_method fired 0
   php_basic union_promoted_property_typed_as fired 0
   php_basic union_property_typed_as fired 0
   php_basic var_property_typed_as fired 0
@@ -1767,6 +1897,24 @@ Rules that fired zero times:
   drupal_basic route_options_from_routing_file_edges
   drupal_basic route_requirements_from_routing_file
   drupal_basic route_requirements_from_routing_file_edges
+  drupal_basic runtime_container_get_call
+  drupal_basic runtime_container_get_call_in
+  drupal_basic runtime_container_nullsafe_get_call
+  drupal_basic runtime_container_nullsafe_get_call_in
+  drupal_basic runtime_entity_query_call
+  drupal_basic runtime_entity_query_call_in
+  drupal_basic runtime_route_call_from_link
+  drupal_basic runtime_route_call_from_link_in
+  drupal_basic runtime_route_call_from_redirect
+  drupal_basic runtime_route_call_from_redirect_in
+  drupal_basic runtime_route_call_from_url
+  drupal_basic runtime_route_call_from_url_in
+  drupal_basic runtime_service_call
+  drupal_basic runtime_service_call_in
+  drupal_basic runtime_storage_call
+  drupal_basic runtime_storage_call_in
+  drupal_basic runtime_storage_nullsafe_call
+  drupal_basic runtime_storage_nullsafe_call_in
   drupal_basic service_alias_from_services_file
   drupal_basic service_call
   drupal_basic service_from_services_file
@@ -1844,6 +1992,10 @@ Rules that fired zero times:
   php_basic find_promoted_property_type
   php_basic find_property
   php_basic find_property_type
+  php_basic find_runtime_function_call
+  php_basic find_runtime_member_call
+  php_basic find_runtime_nullsafe_member_call
+  php_basic find_runtime_scoped_call
   php_basic find_trait
   php_basic find_union_promoted_property_type
   php_basic find_union_property_type
@@ -1856,6 +2008,10 @@ Rules that fired zero times:
   php_basic parameter_typed_as
   php_basic promoted_property_typed_as
   php_basic property_typed_as
+  php_basic runtime_function_call_method
+  php_basic runtime_member_call_method
+  php_basic runtime_nullsafe_member_call_method
+  php_basic runtime_scoped_call_method
   php_basic union_promoted_property_typed_as
   php_basic union_property_typed_as
   php_basic var_property_typed_as

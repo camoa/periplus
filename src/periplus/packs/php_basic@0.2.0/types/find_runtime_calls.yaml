@@ -1,0 +1,141 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A call whose method name or callee is a variable, $this->$name(), $obj?->$name(), self::$name()
+# or $fn(), keeps a php.call_site node marked resolution: runtime. The callee is built at run time,
+# so no rule draws a calls edge from it. Each rule fires inside a class method only; one node per
+# callee per method holds one location per call. A twin rule joins each node to its method.
+#
+# Limits: only a callee written as a plain variable is read. $o->{$x}(), $o->$$m(), and a
+# function callee that is a subscript, a call, a parenthesized expression or a string make
+# nothing, and so does a variable call in a plain function or at file level.
+rules:
+
+# Same id as find_call_site, so $this->helper->$name() marks the node that rule makes.
+- rule: find_runtime_member_call
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits:
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: find_runtime_nullsafe_member_call
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits:
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: find_runtime_scoped_call
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, scope, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{scope}::{declared_name}"
+  emits:
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: find_runtime_function_call
+  reads: file
+  in: [source]
+  match:
+    declaration: function_call_expression
+    name_child: function
+    filetype: php
+    where: [{name_matches: {child: function, pattern: '\$\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
+  emits:
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+# The twins, as call_site_method: each marked site to and from the method around it.
+- rule: runtime_member_call_method
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+- rule: runtime_nullsafe_member_call_method
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+- rule: runtime_scoped_call_method
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, scope, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{scope}::{declared_name}"
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+- rule: runtime_function_call_method
+  reads: file
+  in: [source]
+  match:
+    declaration: function_call_expression
+    name_child: function
+    filetype: php
+    where: [{name_matches: {child: function, pattern: '\$\w+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
