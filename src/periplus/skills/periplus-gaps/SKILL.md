@@ -227,7 +227,10 @@ print(f"runtime  {len(marked)}")
 print(split(marked))
 for n in sorted(marked, key=lambda n: n["id"]):
     where = ", ".join(f"{x['file']}:{x['line']}" for x in n["locations"]) or "-"
-    rule = next((p["rule"] for p in n["provenance"] if "resolution" in p.get("sets", [])), "-")
+    rule = next(
+        (f"{p['pack']}.{p['rule']}" for p in n["provenance"] if "resolution" in p.get("sets", [])),
+        "-",
+    )
     print(f"{n['id']}  {where}  {rule}")
 ```
 
@@ -279,8 +282,9 @@ An unknown boundary is a place where static reading stops: a call whose method n
 argument is built at run time. A rule marks it with the node attribute `resolution` set to
 `runtime` and gives it no target, because any target would be invented. The program prints a
 `runtime  <count>` line, the `first-party` split, then one line per marked node as
-`<id>  <file>:<line>  <rule>`, with every location of the node and the rule that set the mark. The
-`referenced` and `unresolved` lists never hold it.
+`<id>  <file>:<line>  <pack>.<rule>`, with every location of the node and the rule that set the
+mark, named as an `accepted_unknowns` entry names it. The `referenced` and `unresolved` lists never
+hold it.
 
 It is not a gap for a new rule to fill, unless the mark is wrong: the code there is not a run-time
 call. Read the code at each location, then accept the place or leave it for the next rule. To

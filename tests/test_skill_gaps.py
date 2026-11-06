@@ -427,11 +427,11 @@ def test_unknown_boundaries_list_each_marked_node_with_file_line_and_rule_c5(
     unknown = _section(out, "Unknown boundaries")
     rows = sorted(_fields(x) for x in unknown if len(_fields(x)) == 3 and ":" in _fields(x)[1])
     assert rows == [
-        ["php.call_site::App\\Page::run::$fn", "src/Page.php:23", "find_runtime_member_call"],
+        ["php.call_site::App\\Page::run::$fn", "src/Page.php:23", "php.find_runtime_member_call"],
         [
             "php.call_site::App\\Page::run::$this->$name",
             "src/Page.php:17",
-            "find_runtime_member_call",
+            "php.find_runtime_member_call",
         ],
     ], unknown
     assert 3 in {_count(x) for x in unknown}, f"no count line of 3: {unknown}"

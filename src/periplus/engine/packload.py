@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -1406,6 +1406,16 @@ def _build_rule(pack: str, item: Any, tables: frozenset[str]) -> Rule:
     )
 
 
+def _refuse_resolution_value(pack: str, kind: str, templates: Iterable[tuple[str, str]]) -> None:
+    """The resolution mark takes the one value the map schema allows, whatever rule sets it."""
+    if any(name == "resolution" and template != "runtime" for name, template in templates):
+        raise PackRulesUnreadable(
+            f"a {kind} rule of {pack} gives the resolution attribute a template other "
+            "than runtime, the only value the map schema allows",
+            {"pack": pack},
+        )
+
+
 def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> Rule:
     """A rule that reads its file as text and fires on each match of ``match.text``. The id comes
     from one capture or a template; each attribute from one capture, one value or a template; each
@@ -1468,6 +1478,7 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
             )
         if "template" in attribute and isinstance(attribute["template"], str):
             templates.append((name, attribute["template"]))
+            _refuse_resolution_value(pack, "text", templates[-1:])
         elif isinstance(source, Mapping) and set(source) == {"value"} and source["value"] in named:
             read.append((name, str(source["value"])))
         else:
@@ -1659,12 +1670,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         for a in attributes
     ):
         raise _Unsupported("a declaration rule's attribute template is constant text")
-    if any(a["name"] == "resolution" and a["template"] != "runtime" for a in attributes):
-        raise PackRulesUnreadable(
-            f"a declaration rule of {pack} gives the resolution attribute a template other "
-            "than runtime, the only value the map schema allows",
-            {"pack": pack},
-        )
+    _refuse_resolution_value(pack, "declaration", ((a["name"], a["template"]) for a in attributes))
     block = item.get("id", {})
     argument = _argument(block.get("from"), "argument") if isinstance(block, Mapping) else None
     if argument is not None and not set(block) <= {"from", "normalize"}:

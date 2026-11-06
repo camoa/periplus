@@ -14,80 +14,69 @@ rules:
 - rule: find_runtime_member_call
   reads: file
   in: [source]
-  match:
+  match: &member_match
     declaration: member_call_expression
     name_child: object
     filetype: php
-    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
-  id:
+    where: [{name_matches: {child: name, pattern: &variable_name '\$\w+'}}]
+  id: &member_id
     from: [enclosing_type, enclosing_method, declared_name, name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
-  emits:
+  emits: &runtime_node
   - node: {type: php.call_site}
   - attribute: {name: resolution, template: runtime}
   confidence: declared
 
+# Written ?->, so a nullsafe call and a plain call to one callee keep separate nodes.
 - rule: find_runtime_nullsafe_member_call
   reads: file
   in: [source]
-  match:
+  match: &nullsafe_match
     declaration: nullsafe_member_call_expression
     name_child: object
     filetype: php
-    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
-  id:
+    where: [{name_matches: {child: name, pattern: *variable_name}}]
+  id: &nullsafe_id
     from: [enclosing_type, enclosing_method, declared_name, name]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
-  emits:
-  - node: {type: php.call_site}
-  - attribute: {name: resolution, template: runtime}
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}?->{name}"
+  emits: *runtime_node
   confidence: declared
 
 - rule: find_runtime_scoped_call
   reads: file
   in: [source]
-  match:
+  match: &scoped_match
     declaration: scoped_call_expression
     name_child: name
     filetype: php
-    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
-  id:
+    where: [{name_matches: {child: name, pattern: *variable_name}}]
+  id: &scoped_id
     from: [enclosing_type, enclosing_method, scope, declared_name]
     template: "{enclosing_type}::{enclosing_method}::{scope}::{declared_name}"
-  emits:
-  - node: {type: php.call_site}
-  - attribute: {name: resolution, template: runtime}
+  emits: *runtime_node
   confidence: declared
 
 - rule: find_runtime_function_call
   reads: file
   in: [source]
-  match:
+  match: &function_match
     declaration: function_call_expression
     name_child: function
     filetype: php
-    where: [{name_matches: {child: function, pattern: '\$\w+'}}]
-  id:
+    where: [{name_matches: {child: function, pattern: *variable_name}}]
+  id: &function_id
     from: [enclosing_type, enclosing_method, declared_name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}"
-  emits:
-  - node: {type: php.call_site}
-  - attribute: {name: resolution, template: runtime}
+  emits: *runtime_node
   confidence: declared
 
 # The twins, as call_site_method: each marked site to and from the method around it.
 - rule: runtime_member_call_method
   reads: file
   in: [source]
-  match:
-    declaration: member_call_expression
-    name_child: object
-    filetype: php
-    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
-  id:
-    from: [enclosing_type, enclosing_method, declared_name, name]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
-  emits:
+  match: *member_match
+  id: *member_id
+  emits: &runtime_edges
   - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
   - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
   confidence: declared
@@ -95,47 +84,23 @@ rules:
 - rule: runtime_nullsafe_member_call_method
   reads: file
   in: [source]
-  match:
-    declaration: nullsafe_member_call_expression
-    name_child: object
-    filetype: php
-    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
-  id:
-    from: [enclosing_type, enclosing_method, declared_name, name]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
-  emits:
-  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
-  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  match: *nullsafe_match
+  id: *nullsafe_id
+  emits: *runtime_edges
   confidence: declared
 
 - rule: runtime_scoped_call_method
   reads: file
   in: [source]
-  match:
-    declaration: scoped_call_expression
-    name_child: name
-    filetype: php
-    where: [{name_matches: {child: name, pattern: '\$\w+'}}]
-  id:
-    from: [enclosing_type, enclosing_method, scope, declared_name]
-    template: "{enclosing_type}::{enclosing_method}::{scope}::{declared_name}"
-  emits:
-  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
-  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  match: *scoped_match
+  id: *scoped_id
+  emits: *runtime_edges
   confidence: declared
 
 - rule: runtime_function_call_method
   reads: file
   in: [source]
-  match:
-    declaration: function_call_expression
-    name_child: function
-    filetype: php
-    where: [{name_matches: {child: function, pattern: '\$\w+'}}]
-  id:
-    from: [enclosing_type, enclosing_method, declared_name]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
-  emits:
-  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
-  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  match: *function_match
+  id: *function_id
+  emits: *runtime_edges
   confidence: declared

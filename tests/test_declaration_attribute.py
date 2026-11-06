@@ -10,38 +10,12 @@ from typing import Any
 
 import jsonschema
 import pytest
+from _own_pack import plant
 
 from periplus.cli import main
 from periplus.map import run
 from periplus.preflight import check_runtime_dependencies
 
-PACK = ".periplus/packs/own@0.0.1"
-MANIFEST = """\
-pack: own
-version: 0.0.1
-depends: []
-folders:
-  source: src
-grammar:
-  provider: tree-sitter
-  provider_version: 0.26.0
-  language: php
-  grammar_version: 0.24.1
-files:
-  types:
-    php:
-      endings: [php]
-      reader: tree
-identity:
-  qualified_name:
-    parts: [namespace, declared_name]
-    separator: "\\\\"
-  namespace:
-    declaration: namespace_definition
-    name_child: name
-  written_names: [name, qualified_name]
-"""
-SOURCE = "<?php\nclass Thing {\n  public function run() {\n    $this->go();\n  }\n}\n"
 RULES = """\
 node_types:
 - name: own.thing
@@ -66,16 +40,7 @@ MARK = "  - attribute:\n      name: resolution\n      template: {template}\n"
 
 
 def _plant(root: Path, attribute: str = "") -> None:
-    files = {
-        ".periplus/settings.yml": "periplus_version: 0\npacks:\n  - own@0.0.1\n",
-        f"{PACK}/pack.yaml": MANIFEST,
-        f"{PACK}/rules/own.yaml": RULES.format(attribute=attribute),
-        "src/Thing.php": SOURCE,
-    }
-    for name, text in files.items():
-        target = root / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text)
+    plant(root, RULES.format(attribute=attribute))
 
 
 @pytest.mark.criterion(id="wo1")
@@ -99,7 +64,7 @@ def test_constant_attribute_lands_on_the_found_node_and_its_provenance_wo1(tmp_p
 def test_attribute_template_with_a_placeholder_is_refused_at_load_wo1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    _plant(tmp_path, MARK.format(template="'{name}'"))
+    _plant(tmp_path, "  - attribute:\n      name: kind\n      template: '{name}'\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("PERIPLUS_CONFIG_DIR", str(tmp_path / "config-home"))
     code = main(["map", "--output", "bad.json"])

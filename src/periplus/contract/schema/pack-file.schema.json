@@ -979,8 +979,8 @@
           },
           "then": {
             "required": ["template"],
-            "properties": {"template": {"anyOf": [{"const": "runtime"}, {"pattern": "\\{\\w+\\}"}]}},
-            "description": "The resolution mark is runtime, the only value the map schema allows. A template with a placeholder is left to the loader."
+            "properties": {"template": {"const": "runtime"}},
+            "description": "The resolution mark is runtime, the only value the map schema allows, on every kind of rule."
           }
         },
         "binding": {
