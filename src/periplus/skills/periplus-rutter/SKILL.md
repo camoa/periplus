@@ -1,17 +1,17 @@
 ---
 name: periplus-rutter
-description: Write or change a Periplus rutter, the pack of data that tells Periplus how to find one stack's things in real files. Use to write a rule, to start a rutter for a new stack, or to make a custom rutter in a project's .periplus/packs that extends a bundled one. Each task ends with periplus validate and periplus map.
+description: Writes or changes a Periplus rutter, the pack of data that tells Periplus how to find one stack's things in real files. Use when the user says the map misses something, add a rule, support this framework, or map this stack, to start a rutter for a new stack, or to make a custom rutter in a project's .periplus/packs that extends a bundled one. Each task ends with periplus validate and periplus map.
 ---
 
 # Writing a Periplus rutter
 
 ## Standing rules
 
-1. Rules are small and add to each other: split by rule file inside one rutter, never by adding rutters for one stack.
-2. A rutter reads in passes by depth: order 1 is the structure, order 2 one layer inside each class as nodes at their lines, order 3 joins in the map with map rules.
-3. There is no stack knowledge in the engine: a new stack is a rutter, never engine code, even where a request seems to ask for engine code.
-4. Probe before saying a rutter cannot do something: write the rule, run it, and quote the engine's message before you call it an engine gap.
-5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose.
+1. Rules are small and add to each other: one rule solves one case, and several cases are several rules. Split by rule file inside one rutter, never by adding rutters for one stack; a new rutter repeats the file types and folders the covering one already holds, and a small rule can be read, tested and removed alone.
+2. A rutter reads in passes by depth: order 1 is the structure, order 2 one layer inside each class as nodes at their lines, order 3 joins in the map with map rules. Each pass reads what the one before it found, so no rule has to look a thing up itself.
+3. There is no stack knowledge in the engine: a new stack is a rutter, never engine code, even where a request seems to ask for engine code. The engine then stays the same for every stack, and a third-party rutter can do all a built-in one does.
+4. Probe before saying a rutter cannot do something: write the rule, run it, and quote the engine's message before you call it an engine gap. A guess about the format's limits has been wrong before; the message is the evidence.
+5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose. The name leaks the project and ties the rule to one site.
 
 ## Where the detail lives
 
@@ -36,11 +36,14 @@ project's own `.periplus/packs` first, and map that project until the map holds 
 1. Find the rutter that already covers the stack. Put the new rule in a rule file of that rutter,
    not in a new rutter: a new rule file inside the covering rutter adds to its rules and keeps one
    set of file types and folders.
-2. Declare each node type and edge kind the rule emits, in that rule file or in a pack the rutter
+2. Write one rule for one case. When a request holds several cases, write several rules, even where
+   they emit the same type: in `php_basic`, `find_declarations.yaml` and `find_runtime_calls.yaml`
+   each find `php.call_site` in their own way, and neither file's rules are stretched over the other's case.
+3. Declare each node type and edge kind the rule emits, in that rule file or in a pack the rutter
    depends on. A rule may name only those types.
-3. Pick the shape from the guide: a whole-file rule, a text rule, a binding rule, a reference rule
+4. Pick the shape from the guide: a whole-file rule, a text rule, a binding rule, a reference rule
    or a map rule.
-4. Set the confidence. Confidence is declared on the rule, not decided at runtime. A rule firing on
+5. Set the confidence. Confidence is declared on the rule, not decided at runtime. A rule firing on
    an explicit declaration and a rule firing on a naming convention cannot emit the same
    confidence: the first is `declared`, the second `inferred`.
 
@@ -269,11 +272,6 @@ def load(path):
         return json.load(handle)
 
 
-def provs(item):
-    value = item.get("provenance") or []
-    return value if isinstance(value, list) else [value]
-
-
 before, after = load(sys.argv[1]), load(sys.argv[2])
 rule = sys.argv[3] if len(sys.argv) > 3 else None
 print("Measured")
@@ -295,7 +293,7 @@ if rule:
     pack, _, name = rule.partition("/")
 
     def named(item):
-        return any(p.get("pack") == pack and p.get("rule") == name for p in provs(item))
+        return any(p.get("pack") == pack and p.get("rule") == name for p in item["provenance"])
 
     for node_id in sorted(n["id"] for n in after["nodes"] if named(n)):
         print(f"node  {node_id}")

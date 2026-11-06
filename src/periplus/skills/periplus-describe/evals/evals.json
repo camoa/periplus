@@ -1,0 +1,24 @@
+{
+  "skill_name": "periplus-describe",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "The map of this project has nodes with no description. Describe them.",
+      "expected_output": "Descriptions written from the code at each node's location, in the project's .periplus/descriptions.yaml.",
+      "expectations": [
+        "Reads the code at a node's location before describing it",
+        "Writes entries under nodes in .periplus/descriptions.yaml, keyed by node id",
+        "Leaves .periplus/map.json unchanged"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Add a description for the node of a class that has no location in the map.",
+      "expected_output": "The answer says the code for that node is not in the mapped files, and writes no description that guesses what the class does.",
+      "expectations": [
+        "Checks the node's state and location first",
+        "Invents no behaviour for code it could not read"
+      ]
+    }
+  ]
+}

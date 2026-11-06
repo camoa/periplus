@@ -1,0 +1,25 @@
+{
+  "skill_name": "periplus-map",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Map this project with Periplus and tell me what the map holds.",
+      "expected_output": "A map built with periplus map, checked with periplus check-map, and a summary of its node types and edge kinds taken from the commands' output.",
+      "expectations": [
+        "Runs periplus map from the project root",
+        "Runs periplus check-map on the result",
+        "Reports counts that the commands printed, not estimates"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Which code reaches the function that sends the invoice email? Use the map.",
+      "expected_output": "The answer finds the node with periplus find, then lists what reaches it from the map's query commands, with file and line.",
+      "expectations": [
+        "Queries the map through the periplus CLI",
+        "Names each result with its file and line from the map",
+        "Says so when the map holds no such node, and invents none"
+      ]
+    }
+  ]
+}

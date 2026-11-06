@@ -1,17 +1,17 @@
 ---
 name: periplus-describe
-description: Writes descriptions for a Periplus slice, the smaller map cut with periplus slice, into the descriptions file beside the map. Use when the user asks to describe, document or explain the items of a slice or a feature of the map, to fill the descriptions file before a change, or mentions descriptions.yaml.
+description: Writes what each node and edge of a Periplus slice does into .periplus/descriptions.yaml, after reading the code at its file and line. Use when the user says describe this feature, document these nodes, explain what this part of the map does, or fill the descriptions before a change, and when a slice file made with periplus slice is the working set.
 ---
 
 # Describe the items of a slice
 
 ## Standing rules
 
-1. Rules are small and add to each other: split by rule file inside one rutter, never by adding rutters.
-2. A rutter reads its stack in passes by depth: structure first, then one layer inside each class, then joins in the map.
-3. There is no stack knowledge in the engine; a stack's shape is a rule in a rutter.
-4. Write the rule and run it: probe before saying a rutter cannot, and quote the engine's message.
-5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose.
+1. Rules are small and add to each other: one rule solves one case, and several cases are several rules. Split by rule file inside one rutter, never by adding rutters; a new rutter repeats the file types and folders the covering one already holds, and a small rule can be read, tested and removed alone.
+2. A rutter reads its stack in passes by depth: structure first, then one layer inside each class, then joins in the map. Each pass reads what the one before it found, so no rule has to look a thing up itself.
+3. There is no stack knowledge in the engine; a stack's shape is a rule in a rutter. The engine then stays the same for every stack, and a third-party rutter can do all a built-in one does.
+4. Write the rule and run it: probe before saying a rutter cannot, and quote the engine's message. A guess about the format's limits has been wrong before; the message is the evidence.
+5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose. The name leaks the project and ties the rule to one site.
 
 ## Where the detail lives
 

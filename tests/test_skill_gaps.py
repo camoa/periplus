@@ -1,4 +1,4 @@
-"""The gaps skill: its runnable commands and its gap-read programs."""
+"""The gaps skill: its runnable commands and its shipped gap-read program."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _skills import ROOT, blocks, example_project, run_periplus
+from _skills import HEADINGS, ROOT, _section, blocks, example_project, run_periplus
 
 SKILL = ROOT / "src" / "periplus" / "skills" / "periplus-gaps" / "SKILL.md"
-HEADINGS = ("Resolution gaps", "Detail gaps", "Site faults", "Unknown boundaries")
+GAP_READ = SKILL.parent / "scripts" / "gap_read.py"
 
 
 def _nav_commands() -> list[list[str]]:
@@ -25,39 +25,11 @@ def _nav_commands() -> list[list[str]]:
     ]
 
 
-def _run_gap_read(
-    tmp_path: Path,
-    map_file: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> str:
-    """Run every gap-read block in-process on `map_file`; return what they printed."""
-    printed = []
-    for index, (_, body) in enumerate(blocks(SKILL, "gap-read")):
-        script = tmp_path / f"gap_read_{index}.py"
-        script.write_text(body)
-        monkeypatch.setattr("sys.argv", [str(script), str(map_file)])
-        capsys.readouterr()
-        try:
-            runpy.run_path(str(script), run_name="__main__")
-        except SystemExit as stop:
-            assert stop.code in (None, 0), f"block {index} exited {stop.code}"
-        printed.append(capsys.readouterr().out)
-    return "\n".join(printed)
-
-
-def _section(out: str, heading: str) -> list[str]:
-    """The lines printed under `heading`, up to the next report heading."""
-    inside: list[str] = []
-    active = False
-    for line in out.splitlines():
-        bare = line.strip().lstrip("#").strip().rstrip(":")
-        if bare in HEADINGS:
-            active = bare == heading
-            continue
-        if active and line.strip():
-            inside.append(line)
-    return inside
+def _run_gap_read(map_file: Path, capsys: pytest.CaptureFixture[str]) -> str:
+    """Run the shipped gap-read program in-process on `map_file`; return what it printed."""
+    capsys.readouterr()
+    runpy.run_path(str(GAP_READ), run_name="gap_read")["main"]([str(map_file)])
+    return capsys.readouterr().out
 
 
 def _fields(line: str) -> list[str]:
@@ -171,14 +143,14 @@ def test_gaps_skill_nav_run_commands_exit_zero_with_rows_wo1(
 
 
 @pytest.mark.criterion(id="wo1")
-def test_gap_read_blocks_run_on_the_example_map_and_print_counted_lists_wo1(
+def test_gap_read_runs_on_the_example_map_and_print_counted_lists_wo1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     project = example_project(tmp_path)
     mapped = run_periplus(["map"], project, monkeypatch, capsys)
     assert mapped.code == 0, mapped.out + mapped.err
     map_file = project / ".periplus" / "map.json"
-    out = _run_gap_read(tmp_path, map_file, monkeypatch, capsys)
+    out = _run_gap_read(map_file, capsys)
     assert [h for h in HEADINGS if h not in out] == [], f"printed {out!r}"
     real = json.loads(map_file.read_text())
     states = [n["state"] for n in real["nodes"]]
@@ -194,7 +166,7 @@ def test_gap_read_blocks_run_on_the_example_map_and_print_counted_lists_wo1(
 
 @pytest.mark.criterion(id="c2")
 def test_resolution_gaps_count_each_state_with_a_first_party_split_c2(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     nodes = [_node(f"python.module::m{i}", "python.module", rule="module") for i in range(2)]
     nodes.append(_node("python.module::m2", "python.module", rule="module", file=None))
@@ -215,7 +187,7 @@ def test_resolution_gaps_count_each_state_with_a_first_party_split_c2(
         _edge("python.module::m0", "python.module::m1", "imports", "declared"),
     ]
     map_file = _write_map(tmp_path / "map.json", nodes, edges)
-    out = _run_gap_read(tmp_path, map_file, monkeypatch, capsys)
+    out = _run_gap_read(map_file, capsys)
     resolution = _section(out, "Resolution gaps")
     assert _state_lines(resolution) == {"referenced": 3, "unresolved": 2, "inferred": 5}, out
     splits = _first_party_lines(resolution)
@@ -228,7 +200,7 @@ def test_resolution_gaps_count_each_state_with_a_first_party_split_c2(
 
 @pytest.mark.criterion(id="c2")
 def test_detail_gaps_group_nodes_by_rule_and_the_discriminator_for_that_rule_c2(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     nodes = [
         _node(f"drupal.config::eca.model_{i}", "drupal.config", rule="any_config_file")
@@ -242,7 +214,7 @@ def test_detail_gaps_group_nodes_by_rule_and_the_discriminator_for_that_rule_c2(
         _node("php.class::Loose", "php.class", rule="class_decl"),
     ]
     nodes += [_node(f"php.function::f{i}", "php.function", rule="function_decl") for i in range(2)]
-    out = _run_gap_read(tmp_path, _write_map(tmp_path / "map.json", nodes), monkeypatch, capsys)
+    out = _run_gap_read(_write_map(tmp_path / "map.json", nodes), capsys)
     rows = [_fields(x) for x in _section(out, "Detail gaps")]
     triples = {
         tuple(r)
@@ -261,7 +233,7 @@ def test_detail_gaps_group_nodes_by_rule_and_the_discriminator_for_that_rule_c2(
 
 @pytest.mark.criterion(id="c2")
 def test_detail_gaps_list_each_parent_type_with_present_children_and_none_c2(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     nodes = [_node(f"generic.a::item{i}", "generic.a", rule="a_rule") for i in range(2)]
     hierarchy: list[dict[str, Any]] = [
@@ -271,7 +243,7 @@ def test_detail_gaps_list_each_parent_type_with_present_children_and_none_c2(
         {"parent": None, "type": "generic.lonely"},
     ]
     map_file = _write_map(tmp_path / "map.json", nodes, hierarchy=hierarchy)
-    out = _run_gap_read(tmp_path, map_file, monkeypatch, capsys)
+    out = _run_gap_read(map_file, capsys)
     rows = [_fields(x) for x in _section(out, "Detail gaps")]
     child_rows = {tuple(r) for r in rows if len(r) == 3 and r[0].startswith("generic.")}
     assert ("generic.thing", "generic.a", "2") in child_rows, rows
@@ -281,7 +253,7 @@ def test_detail_gaps_list_each_parent_type_with_present_children_and_none_c2(
 
 @pytest.mark.criterion(id="c2")
 def test_detail_gaps_rank_referenced_modules_by_distinct_leaning_nodes_and_pack_c2(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     nodes = [_node(f"php.class::m{i}", "php.class", rule="class_decl") for i in range(3)]
     nodes += [
@@ -307,7 +279,7 @@ def test_detail_gaps_rank_referenced_modules_by_distinct_leaning_nodes_and_pack_
         edges,
         packs=["python_text", "ecalike", "eca_first", "eca_second", "token", "views_ui"],
     )
-    out = _run_gap_read(tmp_path, map_file, monkeypatch, capsys)
+    out = _run_gap_read(map_file, capsys)
     modules = [_fields(x) for x in _section(out, "Detail gaps") if "rutter:" in x]
     assert modules == [
         ["views", "3", "rutter: views_ui"],
@@ -319,7 +291,7 @@ def test_detail_gaps_rank_referenced_modules_by_distinct_leaning_nodes_and_pack_
 
 @pytest.mark.criterion(id="c3")
 def test_site_faults_print_apart_with_file_and_line_and_never_as_rule_gaps_c3(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     def call(src: str, dst: str, file: str, line: int) -> dict[str, Any]:
         return _edge(src, dst, "calls", file=file, line=line)
@@ -361,7 +333,7 @@ def test_site_faults_print_apart_with_file_and_line_and_never_as_rule_gaps_c3(
         call("php.method::a_caller", "php.type::Drupal\\far\\Thing", "src/use.php", 32),
     ]
     map_file = _write_map(tmp_path / "map.json", nodes, edges)
-    out = _run_gap_read(tmp_path, map_file, monkeypatch, capsys)
+    out = _run_gap_read(map_file, capsys)
     faults = [_fields(x) for x in _section(out, "Site faults")]
     assert sorted(faults) == sorted(
         [
@@ -384,7 +356,7 @@ def test_unknown_boundaries_heading_prints_after_site_faults_on_the_example_map_
     project = example_project(tmp_path)
     mapped = run_periplus(["map"], project, monkeypatch, capsys)
     assert mapped.code == 0, mapped.out + mapped.err
-    out = _run_gap_read(tmp_path, project / ".periplus" / "map.json", monkeypatch, capsys)
+    out = _run_gap_read(project / ".periplus" / "map.json", capsys)
     assert "Unknown boundaries" in HEADINGS
     printed = [line.strip().lstrip("#").strip().rstrip(":") for line in out.splitlines()]
     assert "Unknown boundaries" in printed, f"printed {out!r}"
@@ -398,7 +370,7 @@ def test_unknown_boundaries_heading_prints_after_site_faults_on_the_example_map_
 
 @pytest.mark.criterion(id="c5")
 def test_unknown_boundaries_list_each_marked_node_with_file_line_and_rule_c5(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     def marked(node_id: str, file: str | None, line: int) -> dict[str, Any]:
         node = _node(node_id, "php.call_site", rule="find_call_site", pack="php", file=file)
@@ -423,7 +395,7 @@ def test_unknown_boundaries_list_each_marked_node_with_file_line_and_rule_c5(
         _node("php.method::App\\Page::lost", "php.method", "unresolved", "call", "php", None),
     ]
     map_file = _write_map(tmp_path / "map.json", nodes)
-    out = _run_gap_read(tmp_path, map_file, monkeypatch, capsys)
+    out = _run_gap_read(map_file, capsys)
     unknown = _section(out, "Unknown boundaries")
     rows = sorted(_fields(x) for x in unknown if len(_fields(x)) == 3 and ":" in _fields(x)[1])
     assert rows == [

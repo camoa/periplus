@@ -1,0 +1,35 @@
+{
+  "skill_name": "periplus-rutter",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "My map misses the routes declared in routes.yml files, in two forms: a path with a controller, and a path with a form. Write the rules for this shape.",
+      "expected_output": "One small rule per case, two rules in all, added to the project's own rutter and run with periplus map. Never one combined rule.",
+      "expectations": [
+        "Writes one small rule for each of the two cases",
+        "Does not write one combined rule for both cases",
+        "Runs periplus map and shows the new nodes or edges"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The stack I want to map has no bundled rutter. Start one.",
+      "expected_output": "A new rutter in the project's .periplus/packs, with its first small rule run against real files.",
+      "expectations": [
+        "Creates the rutter under .periplus/packs in the project",
+        "Keeps stack knowledge in the rutter and asks for no engine change",
+        "Names no real project in the rutter's rules, examples or prose"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I think a rutter cannot express this call shape, so the engine needs changing. Can you confirm?",
+      "expected_output": "The answer writes the rule and runs it first, and only calls the gap the engine's when the engine refuses the rule, quoting its message.",
+      "expectations": [
+        "Writes the rule and runs it before answering",
+        "Quotes the engine's message if it refuses the rule",
+        "Does not claim the rutter cannot without that failed probe"
+      ]
+    }
+  ]
+}

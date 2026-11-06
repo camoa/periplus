@@ -13,6 +13,7 @@ import pytest
 from periplus.cli import main
 
 ROOT = Path(__file__).resolve().parents[1]
+HEADINGS = ("Resolution gaps", "Detail gaps", "Site faults", "Unknown boundaries")
 
 _BLOCK = r"<!--\s*{marker}(?![\w-])\s*:?\s*(.*?)\s*-->[ \t]*\n```[^\n]*\n(.*?)\n```"
 
@@ -22,6 +23,20 @@ def blocks(path: Path, marker: str) -> list[tuple[str, str]]:
     text = path.read_text(encoding="utf-8")
     pattern = re.compile(_BLOCK.format(marker=re.escape(marker)), re.DOTALL)
     return [(m.group(1), m.group(2) + "\n") for m in pattern.finditer(text)]
+
+
+def _section(out: str, heading: str) -> list[str]:
+    """The lines printed under `heading`, up to the next report heading."""
+    inside: list[str] = []
+    active = False
+    for line in out.splitlines():
+        bare = line.strip().lstrip("#").strip().rstrip(":")
+        if bare in HEADINGS:
+            active = bare == heading
+            continue
+        if active and line.strip():
+            inside.append(line)
+    return inside
 
 
 def write_example(root: Path, found: list[tuple[str, str]], name: str) -> list[Path]:

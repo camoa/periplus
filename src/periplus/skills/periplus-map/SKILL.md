@@ -1,17 +1,17 @@
 ---
 name: periplus-map
-description: Navigate a Periplus map by the question being asked, and record what a node or edge does in the descriptions file beside the map.
+description: Navigates a Periplus map by the question being asked, and records what a node or edge does in the descriptions file beside the map. Use when the user asks what calls this, what a change would affect, how two things connect, where something is defined, or what a node does, and when a project has a .periplus/map.json to read.
 ---
 
 # Navigate a Periplus map
 
 ## Standing rules
 
-1. A rutter grows by small rules that add to each other: split by rule file inside one rutter, never by adding rutters.
-2. A rutter reads the code in passes by depth: structure first, then one layer inside each class, then joins in the map.
-3. There is no stack knowledge in the engine; what a stack means lives in its rutter.
-4. Run a rule and read the engine's message: probe before saying a rutter cannot.
-5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose.
+1. Rules are small and add to each other: one rule solves one case, and several cases are several rules. Split by rule file inside one rutter, never by adding rutters; a new rutter repeats the file types and folders the covering one already holds, and a small rule can be read, tested and removed alone.
+2. A rutter reads its stack in passes by depth: structure first, then one layer inside each class, then joins in the map. Each pass reads what the one before it found, so no rule has to look a thing up itself.
+3. There is no stack knowledge in the engine; a stack's shape is a rule in a rutter. The engine then stays the same for every stack, and a third-party rutter can do all a built-in one does.
+4. Write the rule and run it: probe before saying a rutter cannot, and quote the engine's message. A guess about the format's limits has been wrong before; the message is the evidence.
+5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose. The name leaks the project and ties the rule to one site.
 
 ## Pick the command by the question
 

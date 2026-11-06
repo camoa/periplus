@@ -7,27 +7,22 @@ import contextlib
 import io
 import re
 import shlex
-import tomllib
 from pathlib import Path
 
 import pytest
+from _no_checkout import LINK_PREFIX, VERSION, without_example_projects
 
 from periplus.cli import build_parser
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps", "periplus-describe")
-_PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-_VERSION = _PYPROJECT["project"]["version"]
-_LINK_PREFIX = f"https://github.com/camoa/periplus/blob/v{_VERSION}/"
 RAW = {
     s: (ROOT / "src/periplus/skills" / s / "SKILL.md").read_text(encoding="utf-8") for s in SKILLS
 }
 # An installed skill points at the pages of its own version; the checks below read each link as the
 # repository path it names.
-BODIES = {s: body.replace(_LINK_PREFIX, "") for s, body in RAW.items()}
+BODIES = {s: body.replace(LINK_PREFIX, "") for s, body in RAW.items()}
 
-_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
-_EXAMPLE_BLOCK = re.compile(r"<!-- example [^>]*-->\s*\n```.*?\n```", re.DOTALL)
 _FENCE = re.compile(r"```.*?\n```", re.DOTALL)
 _PATH = re.compile(
     r"(?<![\w./-])((?:docs|examples|src/periplus|tests|scripts|references)/[\w./@-]*[\w/]"
@@ -37,11 +32,6 @@ _ANCHOR = re.compile(r"(?<![\w./-])((?:docs/)?[\w./-]+\.md)#([\w-]+)")
 _MD = re.compile(r"(?<![\w./-])((?:docs/)?[\w./-]+\.md)\b")
 _OPTION = re.compile(r"(?<![\w-])(--[a-z][\w-]*)")
 _QUOTED = re.compile(r"[\"“]([^\"”\n]+)[\"”]")
-
-
-def _without_example_projects(body: str) -> str:
-    """Example blocks hold project files; their PATH is project-relative."""
-    return _COMMENT.sub("", _EXAMPLE_BLOCK.sub("", body))
 
 
 def _slug(heading: str) -> str:
@@ -67,7 +57,7 @@ def _resolve(skill: str, name: str) -> Path:
 def _dead_paths(bodies: dict[str, str]) -> tuple[int, list[str]]:
     named: set[tuple[str, str]] = set()
     for skill, body in bodies.items():
-        for found in _PATH.findall(_without_example_projects(body)):
+        for found in _PATH.findall(without_example_projects(body)):
             named.add((skill, found.rstrip("./,;:)")))
     return len(named), sorted(f"{s}: {p}" for s, p in named if not _resolve(s, p).exists())
 
@@ -76,7 +66,7 @@ def _dead_sections(bodies: dict[str, str]) -> tuple[int, list[str]]:
     checked = 0
     dead: list[str] = []
     for skill, body in bodies.items():
-        text = _without_example_projects(body)
+        text = without_example_projects(body)
         for md, anchor in _ANCHOR.findall(text):
             checked += 1
             path = _resolve(skill, md)
@@ -111,11 +101,11 @@ def test_every_repository_path_a_skill_names_exists_c7() -> None:
 def test_every_repository_page_a_skill_names_is_a_tag_pinned_link_c7() -> None:
     """The wheel ships only src/periplus, so a bare repository path would point at nothing."""
     bare = {
-        s: _PATH.findall(_without_example_projects(body.replace(_LINK_PREFIX, "")))
+        s: _PATH.findall(without_example_projects(body.replace(LINK_PREFIX, "")))
         for s, body in RAW.items()
     }
     unlinked = {
-        s: [p for p in paths if f"({_LINK_PREFIX}{p}" not in RAW[s] and "references/" not in p]
+        s: [p for p in paths if f"({LINK_PREFIX}{p}" not in RAW[s] and "references/" not in p]
         for s, paths in bare.items()
     }
     assert {s: p for s, p in unlinked.items() if p} == {}
@@ -129,7 +119,7 @@ def test_every_skill_link_carries_the_package_version_c7() -> None:
         for s, body in RAW.items()
     }
     assert all(links.values()), "a skill holds no repository link"
-    stale = {s: sorted(set(v) - {f"v{_VERSION}"}) for s, v in links.items()}
+    stale = {s: sorted(set(v) - {f"v{VERSION}"}) for s, v in links.items()}
     assert {s: v for s, v in stale.items() if v} == {}
 
 
@@ -207,53 +197,6 @@ def test_every_periplus_command_line_in_a_skill_is_accepted_by_the_parser_c7() -
     checked, rejected = _rejected_commands(BODIES)
     assert checked, "no periplus command found in any skill body"
     assert rejected == [], f"command lines the parser refuses: {rejected}"
-
-
-_PINNED_LINK = re.compile(re.escape(_LINK_PREFIX) + r"[^\s)]*")
-_LOCAL_PATH = re.compile(
-    r"(?:~|\$\{?HOME\}?|/home|/Users|/opt|/root)(?:/[\w./~@-]*)?"
-    r"|(?<![\w.-])(?:\./)?(?:[\w.-]+/)*(?:docs|examples|src/periplus|tests|scripts)/[\w./@*-]*"
-    r"|(?<![\w./-])[\w-]+\.(?:toml|lock)\b"
-)
-
-
-def _local_repository_paths(bodies: dict[str, str]) -> list[str]:
-    """Paths a skill step names as a local place to open; a tag-pinned link is no such place."""
-    found: set[str] = set()
-    for skill, body in bodies.items():
-        text = _without_example_projects(_PINNED_LINK.sub("", body))
-        found.update(f"{skill}: {p.rstrip('./,;:)')}" for p in _LOCAL_PATH.findall(text))
-    return sorted(found)
-
-
-@pytest.mark.criterion(id="c1")
-def test_a_skill_step_naming_a_local_repository_path_fails_the_no_checkout_check_c1() -> None:
-    body = (
-        "# Skill\n\n"
-        "1. Read the rule format in src/periplus/rutters/php/rutter.yaml.\n"
-        "2. Then open ~/workspace/periplus/docs/navigation.md.\n"
-        "3. Or open $HOME/workspace/periplus/docs/navigation.md.\n"
-        "4. Or open periplus/src/periplus/packs/php_basic@0.2.0/pack.yaml.\n"
-        "5. Or open /opt/periplus/src/periplus/packs/pack.yaml.\n"
-        "6. Check pyproject.toml for the version.\n"
-        f"7. See [Navigation]({_LINK_PREFIX}docs/navigation.md) for the options.\n"
-    )
-    flagged = _local_repository_paths({"periplus-bad": body})
-    assert "periplus-bad: src/periplus/rutters/php/rutter.yaml" in flagged
-    assert any(p.startswith("periplus-bad: ~/workspace/periplus") for p in flagged)
-    assert any(p.startswith("periplus-bad: $HOME/workspace/periplus") for p in flagged)
-    assert any(p.startswith("periplus-bad: periplus/src/periplus/packs") for p in flagged)
-    assert any(p.startswith("periplus-bad: /opt/periplus") for p in flagged)
-    assert "periplus-bad: pyproject.toml" in flagged
-    assert not any(
-        p.endswith("docs/navigation.md") and "~" not in p and "HOME" not in p for p in flagged
-    ), flagged
-
-
-@pytest.mark.criterion(id="c1")
-def test_the_shipped_skills_pass_the_no_checkout_check_c1() -> None:
-    assert set(RAW) == set(SKILLS)
-    assert _local_repository_paths(RAW) == []
 
 
 @pytest.mark.criterion(id="c4")

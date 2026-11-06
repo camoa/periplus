@@ -1,0 +1,36 @@
+{
+  "skill_name": "periplus-gaps",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I just ran periplus map on my PHP project. What does the map lack, and what should I do about each gap?",
+      "expected_output": "A gap report from the shipped program, each gap read against its code and marked as a new rule, a new rutter or a site fault.",
+      "expectations": [
+        "Runs periplus check-map before reading the map",
+        "Runs the shipped gap_read.py on .periplus/map.json from the project root",
+        "Does not paste or save a copy of the program in the project",
+        "Names a destination for each gap that needs a rule"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The report lists Suit::from under Site faults, and Suit is an enum. Is that a bug in the report? Should I write a rule for it?",
+      "expected_output": "The answer reads the enum declaration: a pure enum has no from, so the site is at fault and no rule is needed; a backed enum would not print there.",
+      "expectations": [
+        "States that PHP builds from and tryFrom only into a backed enum",
+        "Opens the enum declaration at the file the map names",
+        "Says to fix the site and write no rule"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "A method called on my class is missing from Site faults, and the class implements an interface from a vendor package. Why does it stay under the resolution gaps?",
+      "expected_output": "The answer explains that an interface outside the mapped code makes the chain unknown, so the name stays a resolution gap.",
+      "expectations": [
+        "Names the chain of parents, traits and interfaces the program walks",
+        "States that an outside interface keeps the name a resolution gap",
+        "Does not call the name a site fault"
+      ]
+    }
+  ]
+}

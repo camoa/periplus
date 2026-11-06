@@ -1,17 +1,17 @@
 ---
 name: periplus-gaps
-description: Read a Periplus map and the code behind it, list what the map lacks, and say for each gap whether it needs a new rule or a new rutter, and where that rule belongs.
+description: Reads a Periplus map and the code behind it, lists what the map lacks, and says for each gap whether it needs a new rule, a new rutter or the engine, and where the rule belongs. Use when the user asks what the map is missing, why a thing is not in the map, whether the map is complete, or what to write next, and after periplus map when unresolved names or unknown boundaries show.
 ---
 
 # Find the gaps in a map
 
 ## Standing rules
 
-1. Rules are small and add to each other: split by rule file inside one rutter, never by adding rutters.
-2. A rutter reads its stack in passes by depth: structure first, then one layer inside each class, then joins in the map.
-3. There is no stack knowledge in the engine; a stack's shape is a rule in a rutter.
-4. Write the rule and run it: probe before saying a rutter cannot, and quote the engine's message.
-5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose.
+1. Rules are small and add to each other: one rule solves one case, and several cases are several rules. Split by rule file inside one rutter, never by adding rutters; a new rutter repeats the file types and folders the covering one already holds, and a small rule can be read, tested and removed alone.
+2. A rutter reads its stack in passes by depth: structure first, then one layer inside each class, then joins in the map. Each pass reads what the one before it found, so no rule has to look a thing up itself.
+3. There is no stack knowledge in the engine; a stack's shape is a rule in a rutter. The engine then stays the same for every stack, and a third-party rutter can do all a built-in one does.
+4. Write the rule and run it: probe before saying a rutter cannot, and quote the engine's message. A guess about the format's limits has been wrong before; the message is the evidence.
+5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose. The name leaks the project and ties the rule to one site.
 
 ## Where the detail lives
 
@@ -34,9 +34,9 @@ gaps and detail gaps, and two lists apart from both, site faults and unknown bou
    failed) is where a missing rule shows, except an id step 4 prints under Site faults.
 3. Read the rows the map skipped. `periplus map --format json` prints the map report; read its
    `skipped` rows, each a file, line, rule and reason, for code a rule matched and could not use.
-4. Print the report from the map file. The program below reads `.periplus/map.json` with the
-   standard library, so pass it that path: `python3 gap-read.py .periplus/map.json` after saving
-   the block as `gap-read.py`. Under Resolution gaps it prints the count of `referenced` nodes,
+4. Print the report from the map file. The program ships with this skill and needs only the
+   standard library. Run it from the project root:
+   `python3 ${CLAUDE_SKILL_DIR}/scripts/gap_read.py .periplus/map.json`. Under Resolution gaps it prints the count of `referenced` nodes,
    of `unresolved` nodes and of edges whose confidence is `inferred`, each followed by a
    `first-party` split. A node is first-party when its state is `mapped` and it has a location,
    so a `referenced` or `unresolved` node is always outside; for those two lists a
@@ -58,180 +58,6 @@ $ periplus check-map
 $ periplus types
 $ periplus find :: --limit 0 --format json
 $ periplus map --format json
-```
-
-<!-- gap-read -->
-```python
-import json
-import sys
-
-m = json.load(open(sys.argv[1]))
-nodes = {n["id"]: n for n in m["nodes"]}
-edges = m["edges"]
-
-
-def name(i):
-    return i.split("::", 1)[1]
-
-
-def module_of(ns):
-    p = ns.split("\\")
-    return p[1] if len(p) > 2 and p[0] == "Drupal" else None
-
-
-def mapped(i):
-    return i in nodes and nodes[i]["state"] == "mapped"
-
-
-def chain(c):
-    seen, todo = [], [c]
-    while todo:
-        x = todo.pop()
-        if x in seen:
-            continue
-        if not mapped(x):
-            return None
-        seen.append(x)
-        todo += [e["to"] for e in edges if e["kind"] in ("inherits", "mixes_in") and e["from"] == x]
-    return seen
-
-
-def defines(c, meth):
-    return any(
-        e["kind"] == "contains" and e["from"] == c and name(e["to"]).split("::")[-1] == meth
-        and e["to"] in nodes and e["to"].startswith("php.method::")
-        for e in edges
-    )
-
-
-def fault(n):
-    t, nm = n["type"], name(n["id"])
-    if t == "php.method" and "::" in nm:
-        cls, meth = nm.rsplit("::", 1)
-        for c in (chain(k + "::" + cls) for k in ("php.type", "php.class")):
-            if c is not None:
-                enum = any(nodes[x]["type"] == "php.enum" for x in c)
-                if enum and meth in ("cases", "from", "tryFrom"):
-                    return None
-                return None if any(defines(x, meth) for x in c) else "method no class defines"
-        return None
-    if t == "drupal.library":
-        k, kind = nm.split("/")[0], "library no libraries file defines"
-    elif n["id"].startswith("php.type::"):
-        k, kind = module_of(nm), "class no file holds"
-    else:
-        return None
-    return kind if k and mapped("drupal.module::" + k) else None
-
-
-faults = {n["id"]: fault(n) for n in m["nodes"] if n["state"] in ("referenced", "unresolved")}
-faults = {i: k for i, k in faults.items() if k}
-gaps = [n for n in m["nodes"] if n["id"] not in faults]
-
-
-def first_party(n):
-    return n["state"] == "mapped" and bool(n["locations"])
-
-
-def split(found):
-    inside = sum(first_party(n) for n in found)
-    return f"first-party {inside}  outside {len(found) - inside}"
-
-
-reached = {e["to"] for e in edges if first_party(nodes[e["from"]])}
-
-print("Resolution gaps")
-lists = {
-    "referenced": [n for n in gaps if n["state"] == "referenced"],
-    "unresolved": [n for n in gaps if n["state"] == "unresolved"],
-    "inferred": [
-        nodes[e["from"]]
-        for e in edges
-        if any(p["confidence"] == "inferred" for p in e["provenance"])
-    ],
-}
-for word, found in lists.items():
-    print(f"{word}  {len(found)}")
-    print(split(found))
-    if word != "inferred":
-        print(f"reached from first-party {sum(n['id'] in reached for n in found)}")
-
-
-def group(n):
-    if (n.get("provenance") or [{}])[0].get("rule") == "any_config_file":
-        return name(n["id"]).split(".")[0]
-    if n["type"] == "php.class":
-        return module_of(name(n["id"])) or "none"
-    return "-"
-
-
-print("Detail gaps")
-groups = {}
-for n in gaps:
-    rule = (n.get("provenance") or [{}])[0].get("rule")
-    if rule:
-        groups.setdefault((rule, group(n)), []).append(n)
-for (rule, d), found in sorted(groups.items()):
-    print(f"{rule}  {d}  {len(found)}")
-    print(split(found))
-
-present = {}
-for n in gaps:
-    present.setdefault(n["type"], []).append(n)
-roots = {r["type"] for r in m["type_hierarchy"] if not r["parent"]}
-children = {r["type"]: [] for r in m["type_hierarchy"]}
-for r in m["type_hierarchy"]:
-    if r["parent"]:
-        children.setdefault(r["parent"], []).append(r["type"])
-for parent in sorted(children):
-    if parent in roots or children[parent]:
-        for child in sorted(children[parent]) or ["none"]:
-            found = present.get(child, [])
-            print(f"{parent}  {child}  {len(found)}")
-            if found:
-                print(split(found))
-    own = {}
-    for n in present.get(parent, []) if children[parent] else []:
-        own.setdefault(group(n), []).append(n)
-    for d, found in sorted(own.items()):
-        print(f"{parent}  own {d}  {len(found)}")
-        print(split(found))
-
-group_of = {}
-for n in gaps:
-    if n["state"] == "referenced" and n["type"] == "drupal.module":
-        group_of[n["id"]] = name(n["id"])
-    elif n["state"] == "referenced" and n["id"].startswith("php.type::"):
-        group_of[n["id"]] = module_of(name(n["id"]))
-leaning = {g: set() for g in group_of.values() if g}
-for e in edges:
-    g = group_of.get(e["to"])
-    if g and mapped(e["from"]):
-        leaning[g].add(e["from"])
-names = [p["pack"] for p in m["packs"]]
-for g in sorted(leaning, key=lambda g: (-len(leaning[g]), g)):
-    pack = next((p for p in names if p == g or p.startswith(g + "_")), "none")
-    print(f"{g}  {len(leaning[g])}  rutter: {pack}")
-
-print("Site faults")
-first = {}
-for e in edges:
-    first.setdefault(e["to"], (e["locations"] or [{}])[0])
-for i in sorted(faults):
-    where = first.get(i, {})
-    print(f"{i}  {where.get('file', '-')}:{where.get('line', 0)}  {faults[i]}")
-
-print("Unknown boundaries")
-marked = [n for n in m["nodes"] if (n.get("attributes") or {}).get("resolution") == "runtime"]
-print(f"runtime  {len(marked)}")
-print(split(marked))
-for n in sorted(marked, key=lambda n: n["id"]):
-    where = ", ".join(f"{x['file']}:{x['line']}" for x in n["locations"]) or "-"
-    rule = next(
-        (f"{p['pack']}.{p['rule']}" for p in n["provenance"] if "resolution" in p.get("sets", [])),
-        "-",
-    )
-    print(f"{n['id']}  {where}  {rule}")
 ```
 
 ## Detail gaps
@@ -265,16 +91,23 @@ A site fault is a name the map was right about and the site has wrong. It prints
 site, not the rules; no site fault needs a rule. The program prints three kinds, each only when the
 place that should define the name is itself in the mapped code.
 
-- `method no class defines`: a method called on a mapped class where the class, every class it
-  inherits from and every trait it mixes in are mapped, and none contains a method of that name.
-  The methods PHP builds into every enum, `cases`, `from` and `tryFrom`, are never a fault.
+- `method no class defines`: a method called on a mapped class or enum whose chain is mapped and
+  holds no method of that name. The chain is the class, every class it inherits from, every trait
+  it mixes in and every interface it implements. A chain that declares `__call` or `__callStatic`
+  defines every method, on a class and on an enum.
+  PHP builds `cases` into every enum, so it is never a fault. PHP builds `from` and `tryFrom` only
+  into a backed enum, one declared with a colon and a type after its name, so on a pure enum they
+  print as this fault. The map does not hold the backing: the program reads the declaration at the
+  enum's location, relative to the project root. When it cannot, it names the file in one stderr
+  line and the name stays a resolution gap.
 - `library no libraries file defines`: a library attached whose module is mapped and whose libraries
   file has no such library.
 - `class no file holds`: a class named under `Drupal\<module>\` whose module is mapped and which no
   file holds.
 
-When a class or trait in the chain is referenced, outside the mapped code, the name stays a resolution gap:
-the missing rule is the PHP rutter's, never a site fault.
+When a class, trait or interface in the chain is referenced, outside the mapped code, the name stays a resolution gap:
+the missing rule is the PHP rutter's, never a site fault. An enum is concrete, so an outside
+interface gives it no method: on an enum only an outside trait keeps the name a resolution gap.
 
 ## Unknown boundaries
 
