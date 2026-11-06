@@ -80,7 +80,7 @@ ships into `~/.claude/skills`. Run it again after an update to replace the older
 #### Use the skills with other agents
 
 The skills follow the [Agent Skills](https://agentskills.io) format: a folder with a `SKILL.md`
-file. After `periplus skills install`, the folders `periplus-gaps`, `periplus-map` and
+file. After `periplus skills install`, the folders `periplus-describe`, `periplus-gaps`, `periplus-map` and
 `periplus-rutter` are in `~/.claude/skills`. Copy them to the folder the agent reads, and copy them
 again after each update. The folder `~/.agents/skills` serves four agents at once:
 

@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A describe skill, `periplus-describe`, takes a slice file as its working set and writes one entry per located item to the descriptions file: text, file and line, read from the code. It keeps every existing entry and reports a stale one, and it reports an item with no location instead of writing an entry for it.
+
 ## [0.4.2] - 2026-11-05
 
 ### Changed

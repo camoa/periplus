@@ -135,6 +135,7 @@ EXPECTED_MODULE_FILES = {
     "periplus/skills/periplus-map/SKILL.md",
     "periplus/skills/periplus-map/references/descriptions.schema.json",
     "periplus/skills/periplus-gaps/SKILL.md",
+    "periplus/skills/periplus-describe/SKILL.md",
 }
 
 # The contract, which is data the way the packs are data: four JSON Schemas that define what a

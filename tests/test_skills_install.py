@@ -10,10 +10,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from ruamel.yaml import YAML
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS_SRC = ROOT / "src" / "periplus" / "skills"
-SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps")
+SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps", "periplus-describe")
 SCRIPT = Path(sys.executable).parent / "periplus"
 
 
@@ -23,7 +24,7 @@ def _front_matter(text: str) -> str:
 
 
 @pytest.mark.criterion(id="c1")
-def test_install_skills_writes_three_skill_folders_and_replaces_stale_files_c1(
+def test_install_skills_writes_every_skill_folder_and_replaces_stale_files_c1(
     tmp_path: Path,
 ) -> None:
     install_skills = importlib.import_module("periplus.skills_install").install_skills
@@ -75,3 +76,19 @@ def test_skills_install_command_writes_the_skills_and_refuses_an_unwritable_home
     )
     assert refused.returncode == 27, refused.stderr
     assert str(blocked / ".claude") in refused.stderr
+
+
+@pytest.mark.criterion(id="c1")
+def test_install_on_an_empty_home_writes_the_describe_skill_with_name_and_description_c1(
+    tmp_path: Path,
+) -> None:
+    install_skills = importlib.import_module("periplus.skills_install").install_skills
+    install_skills(home=tmp_path)
+
+    skill_file = tmp_path / ".claude" / "skills" / "periplus-describe" / "SKILL.md"
+    text = skill_file.read_text(encoding="utf-8") if skill_file.is_file() else ""
+    head = YAML(typ="safe").load(_front_matter(text)) or {}
+    assert head.get("name") == "periplus-describe"
+    description = head.get("description")
+    assert isinstance(description, str)
+    assert description.strip() != ""

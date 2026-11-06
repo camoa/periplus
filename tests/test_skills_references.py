@@ -15,7 +15,7 @@ import pytest
 from periplus.cli import build_parser
 
 ROOT = Path(__file__).resolve().parent.parent
-SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps")
+SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps", "periplus-describe")
 _PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 _VERSION = _PYPROJECT["project"]["version"]
 _LINK_PREFIX = f"https://github.com/camoa/periplus/blob/v{_VERSION}/"
@@ -251,6 +251,21 @@ def test_a_skill_step_naming_a_local_repository_path_fails_the_no_checkout_check
 
 
 @pytest.mark.criterion(id="c1")
-def test_the_three_shipped_skills_pass_the_no_checkout_check_c1() -> None:
+def test_the_shipped_skills_pass_the_no_checkout_check_c1() -> None:
     assert set(RAW) == set(SKILLS)
     assert _local_repository_paths(RAW) == []
+
+
+@pytest.mark.criterion(id="c4")
+def test_a_dead_path_or_unknown_option_planted_in_the_describe_skill_is_caught_c4() -> None:
+    clean = BODIES["periplus-describe"]
+    checked, clean_rejected = _rejected_commands({"periplus-describe": clean})
+    assert checked, "no periplus command found in the describe skill"
+    assert clean_rejected == []
+    _, clean_dead = _dead_paths({"periplus-describe": clean})
+    assert clean_dead == []
+
+    planted_option = clean + "\nRun `periplus map --no-such-option` first.\n"
+    assert _rejected_commands({"periplus-describe": planted_option})[1] != []
+    planted_path = clean + "\nSee docs/no-such-page.md for more.\n"
+    assert _dead_paths({"periplus-describe": planted_path})[1] != []
