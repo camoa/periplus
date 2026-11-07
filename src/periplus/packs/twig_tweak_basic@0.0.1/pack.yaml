@@ -15,8 +15,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   not at the entity. A config entity named by its id, such as the webform x, is not reached.
 # - drupal_field ends at the field storage. The bundle and the field instance are not named by
 #   the call and get no edge.
-# - A Twig file not named .html.twig, such as a component's <name>.twig: no edge, since it is
-#   no template node. On the site this pack was written on, such files hold no call.
+# - A component's own components/<name>/<name>.twig gives each of these edges from
+#   drupal.component::<name>, under the mirror kinds component_renders_block,
+#   component_renders_menu, component_renders_entity_type, component_renders_entity_form and
+#   component_renders_field. Any other Twig file not named .html.twig: no edge.
 # - A call inside a Twig comment makes nothing. A call inside a quoted text or a verbatim block
 #   still gives an edge.
 # - Two templates of one name, in two modules, are one template node, so their edges join.

@@ -41,8 +41,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - '#attached' => ['drupalSettings' => ['key' => ...]] is read as text the same way: a setting
 #   node for each first-level key, from the class or the function. A key named by a variable, or
 #   below the first level, makes nothing.
-# - A component's components/<name>/<name>.twig is an edge from drupal.component::<name>. Any
-#   other Twig file not named .html.twig: no edge.
+# - A component's components/<name>/<name>.twig gives its attach_library edge from
+#   drupal.component::<name>, under the mirror kind component_attaches_library; the path value
+#   component_name is drupal_basic's. Any other Twig file not named .html.twig: no edge.
 # - A call inside a Twig comment makes nothing. A call inside a quoted text or a verbatim block
 #   still gives an edge.
 # - A script a library lists under js: is an edge from the library to the script's js.file node.
@@ -93,15 +94,6 @@ files:
         drupal_root:
           pattern: '^(?<root>.*?)/(?:modules|themes|profiles)/'
           template: '{root}'
-    # drupal_basic's type drupal_template_text, given the path value component_name: the name of a
-    # single-directory component whose folder components/<name>/ holds the file <name>.twig.
-    drupal_template_text:
-      endings: [twig]
-      reader: text
-      path_values:
-        component_name:
-          pattern: '^(?:.*/)?components/(?<name>[^/]+)/(?P=name)\.twig$'
-          template: '{name}'
     # drupal_basic's type drupal_php_text, given more spans: the array after each quoted,
     # constant or variable key and =>, to any depth. The array-form setting rules read the keys
     # around a match from it.

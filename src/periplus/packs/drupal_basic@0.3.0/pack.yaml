@@ -115,8 +115,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A template is known by its file stem, and a component by its name without the theme: two
 #   themes that define a component of one name meet at one node, as templates of one name do.
 #   A template or component named by a variable, a concatenation or a list gives no edge. Only
-#   a name ending in .html.twig gives a template edge, and only a .html.twig file is read, so
-#   a component's own .twig and story files give none.
+#   a name ending in .html.twig gives a template edge. A component's own
+#   components/<name>/<name>.twig gives its include, route and path edges from
+#   drupal.component::<name>, under the mirror kinds component_includes_template,
+#   component_includes_component and component_links_route, and links_to_path. A story file and
+#   any other Twig file not named .html.twig give none.
 # - A function in a module file named other than its module, such as includes/helpers.inc
 #   holding mymod_ functions, gives no hook. A theme's inc file, and a theme file named other than
 #   its theme, such as includes/content.theme, is read by the name of the folder directly below
@@ -294,7 +297,7 @@ files:
     # engine lets one text type claim a file ending across all packs; drupal_js_basic, drush_basic,
     # salesforce_basic and twig_tweak_basic read them. A dependent rutter may declare a type again
     # under the same name to add path values or spans, which merge into it, as drupal_js_basic
-    # does for both types.
+    # does for drupal_php_text.
     # Templates read as text with their own name as a value, beside the reading twig_basic
     # gives them. A match that starts inside a Twig comment makes nothing.
     drupal_template_text:
@@ -311,6 +314,11 @@ files:
           template: '{entity}.{bundle}'
           normalize:
           - {replace: '-', with: '_'}
+        # The name of a single-directory component whose folder components/<name>/ holds the
+        # file <name>.twig. Absent for any other file.
+        component_name:
+          pattern: '^(?:.*/)?components/(?<name>[^/]+)/(?P=name)\.twig$'
+          template: '{name}'
       sections:
       - name: comment
         open: '\{#'
