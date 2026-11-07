@@ -25,6 +25,7 @@ __all__ = [
     "MapNotFound",
     "NodeNotFound",
     "NotAMap",
+    "as_json",
     "as_text",
     "damaged",
     "is_whole",
@@ -153,6 +154,11 @@ def reading_fields(start: Path, map_path: Path | None) -> Iterator[None]:
         yield
     except (KeyError, TypeError, AttributeError) as error:
         raise damaged(start, map_path, error) from error
+
+
+def as_json(document: Any) -> str:
+    """``document`` as a navigation command's ``--json`` output prints it."""
+    return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 
 
 def as_text(value: Any) -> str:

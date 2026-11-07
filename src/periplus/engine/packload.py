@@ -53,6 +53,9 @@ _RESOLVE = (
 #: The key paths, below a rule's id or edge end, of the steps that look a name up in a table.
 _TABLE_STEPS = (".resolve.*.lookup_last_segment_in",)
 
+#: The steps of a map rule's follow.
+_FOLLOW_STEPS = ("edge", "ancestors", "node", "id_matches", "try")
+
 #: Every key path of the two pack schemas that the engine or the pack check executes. ``*`` is one
 #: key or item. A path starts with the document it sits in: ``manifest.`` or ``file.``.
 EXECUTED_KEYS = frozenset(
@@ -118,7 +121,7 @@ EXECUTED_KEYS = frozenset(
                 *("node_type", "follow"),
             )
         ),
-        *(f"{_RULE}match.follow.*.{k}" for k in ("edge", "ancestors", "node", "id_matches", "try")),
+        *(f"{_RULE}match.follow.*.{k}" for k in _FOLLOW_STEPS),
         *(
             f"{_RULE}match.where.*.{k}"
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
@@ -149,8 +152,11 @@ EXECUTED_KEYS = frozenset(
                 ".where.*.not_matches",
                 *(".from.*.key", ".from.*.each", ".types", ".declared", *_RESOLVE),
                 *_TABLE_STEPS,
-                *(".fallback", ".fallback.*.full_if_prefixed", ".fallback.*.prefix_with"),
-                *(".fallback.*.prefix_bare_with", ".fallback.*.lookup_last_segment_in"),
+                *(
+                    k.replace(".resolve", ".fallback", 1)
+                    for k in (*_RESOLVE, *_TABLE_STEPS)
+                    if k.startswith(".resolve")
+                ),
             )
         ),
     }
@@ -1802,12 +1808,13 @@ def _read_follow(steps: list[Mapping[str, Any]]) -> list[tuple[str, Any]]:
         elif name == "ancestors":
             value = tuple(value)
         elif name == "try":
-            steps_named = {"edge", "ancestors", "node", "id_matches", "try"}
             if (
                 not isinstance(value, list)
                 or not value
                 or not all(
-                    isinstance(inner, Mapping) and len(inner) == 1 and set(inner) <= steps_named
+                    isinstance(inner, Mapping)
+                    and len(inner) == 1
+                    and set(inner) <= set(_FOLLOW_STEPS)
                     for inner in value
                 )
             ):

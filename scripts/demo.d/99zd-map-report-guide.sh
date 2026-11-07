@@ -3,9 +3,10 @@
 # fenced block after `<!-- nav-file: PATH -->` is written to PATH in a new project, which pins the
 # bundled Drupal rutters; every fenced block after `<!-- nav-run -->` is run in it, in order, and
 # must print the rest of its block byte for byte, the project's own path as /path/to/project, with
-# a last line `(exit N)` for a nonzero exit code. The first block is the map run. A path whose first
-# segment F has its own F/.periplus/settings.yml block is written to a sibling project F instead,
-# and a block after `<!-- nav-run: F -->` runs there, once F has been mapped.
+# a last line `(exit N)` for a nonzero exit code; a line `...` stands for any run of lines. The
+# first block is the map run. A path whose first segment F has its own F/.periplus/settings.yml
+# block is written to a sibling project F instead, and a block after `<!-- nav-run: F -->` runs
+# there, once F has been mapped.
 set -euo pipefail
 doc="$ROOT/docs/map-report-guide.md"
 work="$(mktemp -d)"
@@ -78,8 +79,17 @@ for ((i = 0; i < count; i++)); do
     sed -i "s#$here#/path/to/project#g" "$work/got.txt"
     [ "$code" = "$(cat "$work/runs/$i.code")" ] \
         || { cat "$work/got.txt"; echo "periplus $cmd exited $code, the guide says $(cat "$work/runs/$i.code")"; exit 1; }
-    cmp -s "$work/got.txt" "$work/runs/$i.out" \
+    python3 - "$work/runs/$i.out" "$work/got.txt" <<'PY' \
         || { diff "$work/runs/$i.out" "$work/got.txt" || true; echo "periplus $cmd printed what the guide does not show"; exit 1; }
+import re
+import sys
+from pathlib import Path
+
+want, got = (Path(path).read_text(encoding="utf-8") for path in sys.argv[1:])
+lines = want.splitlines(keepends=True)
+pattern = "".join("(?:.*\n)*" if line == "...\n" else re.escape(line) for line in lines)
+sys.exit(0 if re.fullmatch(pattern, got) else 1)
+PY
 done
 
 echo "map report guide ok: $count examples"

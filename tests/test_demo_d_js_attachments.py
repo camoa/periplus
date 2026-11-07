@@ -221,6 +221,16 @@ def test_a_class_method_in_an_inc_file_gives_no_edge_and_the_procedural_edges_st
     settings = [
         (f, t) for f, t in _ends(inc_document, "provides_setting") if f in (PREPROCESS, BUILD, TWO)
     ]
-    assert len(settings) == 11
-    assert (PREPROCESS, "drupal.js_setting::bracketKey") in settings
-    assert (TWO, "drupal.js_setting::k2") in settings
+    assert settings == [
+        (BUILD, "drupal.js_setting::arrayKey"),
+        (BUILD, "drupal.js_setting::callKey"),
+        (BUILD, "drupal.js_setting::castKey"),
+        (BUILD, "drupal.js_setting::deepKey"),
+        (BUILD, "drupal.js_setting::listKey"),
+        (BUILD, "drupal.js_setting::nextKey"),
+        (BUILD, "drupal.js_setting::oldKey"),
+        (BUILD, "drupal.js_setting::ternKey"),
+        (PREPROCESS, "drupal.js_setting::bracketKey"),
+        (TWO, "drupal.js_setting::k1"),
+        (TWO, "drupal.js_setting::k2"),
+    ]

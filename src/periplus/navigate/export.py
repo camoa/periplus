@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +10,7 @@ from xml.sax.saxutils import escape
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.listing import first_location
-from periplus.navigate.mapfile import load_document, reading_fields
+from periplus.navigate.mapfile import as_json, load_document, reading_fields
 from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "WRITERS", "ExportReport", "render_json", "render_text", "run"]
@@ -179,7 +178,7 @@ def render_json(report: ExportReport) -> str:
         "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
     }
-    return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
+    return as_json(document)
 
 
 RENDERERS = {"text": render_text, "json": render_json}

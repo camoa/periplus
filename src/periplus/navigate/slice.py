@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,7 +12,7 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.map import write_document
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import first_location, kind_warnings
-from periplus.navigate.mapfile import MapIndex, NodeNotFound, load_document, reading_fields
+from periplus.navigate.mapfile import MapIndex, NodeNotFound, as_json, load_document, reading_fields
 from periplus.navigate.walk import walk
 from periplus.report import _escape, _json_problem
 
@@ -119,7 +118,7 @@ def render_json(report: SliceReport) -> str:
         "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
     }
-    return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
+    return as_json(document)
 
 
 RENDERERS = {"text": render_text, "json": render_json}

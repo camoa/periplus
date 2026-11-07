@@ -11,7 +11,7 @@ from typing import Any
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place
-from periplus.navigate.mapfile import MapIndex, as_text, is_whole, load_map, reading_fields
+from periplus.navigate.mapfile import MapIndex, as_json, as_text, is_whole, load_map, reading_fields
 from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "EdgeRow", "Location", "ShowReport", "render_json", "render_text", "run"]
@@ -209,7 +209,7 @@ def render_json(report: ShowReport) -> str:
         "incoming": payload(report.incoming, _json_row),
         "problems": [_json_problem(p) for p in report.problems],
     }
-    return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
+    return as_json(document)
 
 
 RENDERERS = {"text": render_text, "json": render_json}

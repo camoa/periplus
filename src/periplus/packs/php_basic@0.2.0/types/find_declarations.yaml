@@ -217,7 +217,7 @@ rules:
     from:
     - enclosing_type
     - declared_name
-    - qualified: {docblock: '@var\s+\??(?:null\|)?(?<type>(?!(?:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|resource|never)\b)\\?[A-Za-z_][A-Za-z0-9_\\]*)(?:\|null)?(?:\s|\*)'}
+    - qualified: {docblock: '@var\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|resource|never)\b)\\?[A-Za-z_][A-Za-z0-9_\\]*)(?i:\|null)?(?:\s|\*)'}
     template: "{enclosing_type}::{declared_name}::{type}"
   emits: [{node: {type: php.property_type}}]
   confidence: declared

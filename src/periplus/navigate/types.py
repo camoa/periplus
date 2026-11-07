@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -11,7 +10,7 @@ from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.mapshared import _section
-from periplus.navigate.mapfile import as_text, load_map, reading_fields
+from periplus.navigate.mapfile import as_json, as_text, load_map, reading_fields
 from periplus.report import _escape, _json_problem
 
 __all__ = [
@@ -107,7 +106,7 @@ def render_json(report: TypesReport) -> str:
         "edge_kinds": [_json_edge_kind(row) for row in report.edge_kinds],
         "problems": [_json_problem(p) for p in report.problems],
     }
-    return json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
+    return as_json(payload)
 
 
 RENDERERS = {"text": render_text, "json": render_json}
