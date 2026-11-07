@@ -114,7 +114,7 @@ EXECUTED_KEYS = frozenset(
             for k in (
                 *("file", "ending", "filetype", "each", "where", "declaration", "name_child"),
                 *("reference", "skip_names", "whole_written"),
-                *("body_child", "attribute", "annotation", "text", "reads_sections"),
+                *("body_child", "holder", "attribute", "annotation", "text", "reads_sections"),
                 *("node_type", "follow"),
             )
         ),
@@ -220,7 +220,7 @@ _RULE_KEYS = {"rule", "reads", "in", "match", "id", "emits", "confidence"}
 
 #: The match keys of a rule that reads a parse tree.
 _DECLARATION_MATCH = {
-    *("declaration", "name_child", "body_child", "where", "filetype", "file", "ending"),
+    *("declaration", "name_child", "body_child", "holder", "where", "filetype", "file", "ending"),
 }
 
 #: The names the engine fills for a declaration rule's id. Any other name its template holds is a
@@ -393,6 +393,8 @@ class Rule:
     docblock: re.Pattern[str] | None = None
     docblock_qualified: bool = False
     body_child: str = ""
+    #: A declaration rule: the tree node type its nearest enclosing holder must be; ``""`` for any.
+    holder: str = ""
     #: A declaration rule: the tree node types the match must have as direct children, and the
     #: fields of the matched node its id names.
     has_child: tuple[str, ...] = ()
@@ -1335,6 +1337,8 @@ def _read_rule(pack: str, item: Any, tables: frozenset[str] = frozenset()) -> Ru
 
 
 def _build_rule(pack: str, item: Any, tables: frozenset[str]) -> Rule:
+    if "holder" in item.get("match", {}) and "declaration" not in item["match"]:
+        raise _Unsupported("only a tree declaration rule takes match.holder")
     if item.get("reads") == "map":
         return _build_map(pack, item)
     if (
@@ -1637,7 +1641,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
     ):
         raise _Unsupported(
             "a declaration rule is not a file rule with in, match.filetype and no match keys "
-            "beyond declaration, name_child, body_child, where, file and ending"
+            "beyond declaration, name_child, body_child, holder, where, file and ending"
         )
     where = match.get("where", [])
     if not isinstance(where, list) or not all(
@@ -1718,6 +1722,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         name_child="" if path else name_child,
         name_path=path,
         body_child=match.get("body_child", ""),
+        holder=match.get("holder", ""),
         has_child=tuple(c["has_child"] for c in where if "has_child" in c),
         id_argument=argument or "",
         name_matches=_name_matches(where, None if path else name_child or None),

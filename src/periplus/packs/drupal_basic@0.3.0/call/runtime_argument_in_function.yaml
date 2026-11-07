@@ -1,0 +1,294 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The twins of call/runtime_argument.yaml for a call in a function of a module-family file, such
+# as a hook in a .module file. A function there holds what its body holds, as a class does, so the
+# enclosing type of a call in it is the function. Each twin matches as the method twin it mirrors,
+# and its id is that twin's without the method part. $this->redirect() has no twin: it needs $this.
+#
+# Limits:
+# - Module-family files only. A plain function in a .php file stays under skipped, because there a
+#   twin keyed on the enclosing type would fire inside every method of a class and merge them.
+# - A class method in a module-family file is matched by the method twins alone: each twin here
+#   carries holder: function_definition, so it fires only when its nearest holder is a function.
+
+rules:
+# The node is the one php_basic's find_function makes; drupal_js_basic's php_function_holds_body
+# emits it in every PHP file.
+- rule: php_function_holds_module_body
+  reads: file
+  in: [source]
+  match:
+    declaration: function_definition
+    name_child: name
+    body_child: body
+    filetype: php
+    ending: &module_endings [module, install, theme, inc, profile]
+  id: {from: qualified_name}
+  emits: [{node: {type: php.function}}]
+  confidence: declared
+
+# Url::fromRoute('my.' . $name).
+- rule: runtime_route_call_from_url_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: &url_where
+    - name_matches: {child: scope, pattern: '(?:\\?Drupal\\Core\\)?Url'}
+    - name_matches: {child: name, pattern: fromRoute}
+    - name_matches: {child: arguments, pattern: &first_variable '(?s)\(\s*[^,$]*\$.*'}
+  id: &scoped_id
+    from: [enclosing_type, scope, name]
+    template: "{enclosing_type}::{scope}::{name}"
+  emits: &runtime_node
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: runtime_route_call_from_url_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *url_where
+  id: *scoped_id
+  emits: &runtime_edges
+  - edge: {kind: has_call_site, from: enclosing_class, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_class}
+  confidence: declared
+
+# Link::createFromRoute($text, $route): the second argument.
+- rule: runtime_route_call_from_link_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: &link_where
+    - name_matches: {child: scope, pattern: '(?:\\?Drupal\\Core\\)?Link'}
+    - name_matches: {child: name, pattern: createFromRoute}
+    - name_matches: {child: arguments, pattern: '(?s)\((?:[^,()]|\([^()]*\))*,\s*[^,$]*\$.*'}
+  id: *scoped_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_route_call_from_link_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *link_where
+  id: *scoped_id
+  emits: *runtime_edges
+  confidence: declared
+
+# \Drupal::service($id).
+- rule: runtime_service_call_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: &service_where
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: service}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *scoped_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_service_call_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *service_where
+  id: *scoped_id
+  emits: *runtime_edges
+  confidence: declared
+
+# \Drupal::getContainer()->get($id).
+- rule: runtime_container_get_call_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: &container_where
+    - name_matches: {child: object, pattern: &container_object '\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\)'}
+    - name_matches: {child: name, pattern: get}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: &member_runtime_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::{declared_name}->{name}(runtime)"
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_container_get_call_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *container_where
+  id: *member_runtime_id
+  emits: *runtime_edges
+  confidence: declared
+
+# \Drupal::getContainer()?->get($id).
+- rule: runtime_container_nullsafe_get_call_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: &container_nullsafe_where
+    - name_matches: {child: object, pattern: *container_object}
+    - name_matches: {child: name, pattern: get}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: &nullsafe_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::{declared_name}?->{name}"
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_container_nullsafe_get_call_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *container_nullsafe_where
+  id: *nullsafe_id
+  emits: *runtime_edges
+  confidence: declared
+
+# \Drupal::entityQuery($type).
+- rule: runtime_entity_query_call_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: &entity_query_where
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: 'entityQuery(?:Aggregate)?'}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *scoped_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_entity_query_call_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *entity_query_where
+  id: *scoped_id
+  emits: *runtime_edges
+  confidence: declared
+
+# \Drupal::entityTypeManager()->getStorage($type).
+- rule: runtime_storage_call_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: &storage_where
+    - name_matches: {child: object, pattern: &manager_object '(?s).*entityTypeManager(?:\(\))?'}
+    - name_matches: {child: name, pattern: getStorage}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *member_runtime_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_storage_call_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *storage_where
+  id: *member_runtime_id
+  emits: *runtime_edges
+  confidence: declared
+
+# \Drupal::entityTypeManager()?->getStorage($type).
+- rule: runtime_storage_nullsafe_call_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: &storage_nullsafe_where
+    - name_matches: {child: object, pattern: *manager_object}
+    - name_matches: {child: name, pattern: getStorage}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *nullsafe_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_storage_nullsafe_call_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *storage_nullsafe_where
+  id: *nullsafe_id
+  emits: *runtime_edges
+  confidence: declared

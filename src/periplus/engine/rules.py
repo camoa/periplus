@@ -732,9 +732,11 @@ def _declarations(
             continue
         line = values.pop("line", None) or line_of(match)
         holder = _holder(match, holders, rule_set, grammar, parsed)
+        if rule.holder and (holder is None or holder[2] != rule.holder):
+            continue
         holder_id = None
         if holder is not None:
-            values["enclosing_type"], holder_id = holder
+            values["enclosing_type"], holder_id, _ = holder
         method = None
         if needs_method:
             enclosing = holder[0] if holder else None
@@ -1377,8 +1379,9 @@ def _holder(
     rule_set: RuleSet,
     grammar: Grammar,
     parsed: ParsedFile,
-) -> tuple[str, str] | None:
-    """The full name and the node id of the nearest enclosing type declaration, or ``None``.
+) -> tuple[str, str, str] | None:
+    """The full name, the node id and the tree node type of the nearest enclosing type
+    declaration, or ``None``.
 
     A type declaration is a tree node a declaration rule with a ``body_child`` fires on, and that
     rule mints its id. A nearer node that holds such a body but no rule fires on, an anonymous
@@ -1394,7 +1397,7 @@ def _holder(
             if values is None or node_id is None or "qualified_name" not in values:
                 return None
             namespace = namespace_of(rule_set.types, rule.node_type)
-            return values["qualified_name"], f"{namespace}::{node_id}"
+            return values["qualified_name"], f"{namespace}::{node_id}", parent.type
         if any(child.type in bodies for child in parent.children):
             return None
         parent = parent.parent

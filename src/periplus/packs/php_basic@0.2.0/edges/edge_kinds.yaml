@@ -41,9 +41,9 @@ edge_kinds:
   to: php.member_assignment_value
 
 - kind: has_call_site
-  from: php.method
+  from: [php.method, php.function]
   to: php.call_site
 
 - kind: call_site_in
   from: php.call_site
-  to: php.method
+  to: [php.method, php.function]

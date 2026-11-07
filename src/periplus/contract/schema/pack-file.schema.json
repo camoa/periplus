@@ -496,6 +496,10 @@
           "type": "string",
           "description": "Which child holds the body. Differs per construct, and getting it wrong makes a whole family of declarations invisible without an error."
         },
+        "holder": {
+          "type": "string",
+          "description": "On a tree declaration rule: the grammar node type its nearest enclosing holder must be, such as function_definition; a match under a holder of another type, or under none, is passed and is no fire."
+        },
         "filetype": {
           "type": "string",
           "description": "What kind of file this rule reads, named explicitly rather than left as a suffix on the glob. Required with `file`. It says which pack's grammar or loader handles the contents, so `.yml` and `.yaml` are one rule rather than two, and a glob can never accidentally match a file of another type that happens to share a name."

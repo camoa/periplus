@@ -20,6 +20,7 @@ from typing import NamedTuple
 
 import pytest
 from _skills import ROOT, blocks
+from ruamel.yaml import YAML
 
 from periplus.cli import main
 
@@ -28,6 +29,25 @@ from periplus.cli import main
 PAGES = {"map-report-guide": False, "navigation": True}
 SETTINGS = "/.periplus/settings.yml"
 EXIT_LINE = re.compile(r"^\(exit (\d+)\)\n\Z", re.M)
+
+
+ELISION = "..."
+
+
+def matches(output: str, expected: str) -> bool:
+    """Whether the output equals the expected block, a line that is exactly `...` standing for
+    any run of zero or more output lines there."""
+    got = output.splitlines(keepends=True)
+    want = expected.splitlines(keepends=True)
+
+    def fits(i: int, j: int) -> bool:
+        if j == len(want):
+            return i == len(got)
+        if want[j].rstrip("\n") == ELISION:
+            return any(fits(k, j + 1) for k in range(i, len(got) + 1))
+        return i < len(got) and got[i] == want[j] and fits(i + 1, j + 1)
+
+    return fits(0, 0)
 
 
 class Example(NamedTuple):
@@ -139,4 +159,54 @@ def test_example_prints_what_the_page_shows(
     code, output = ran(name)[n]
     command = " ".join(example.command)
     assert code == example.code, f"periplus {command} exited {code}, the page says {example.code}"
-    assert output == example.output, f"periplus {command} printed what the page does not show"
+    shown = f"periplus {command} printed what the page does not show"
+    assert matches(output, example.output), shown
+
+
+@pytest.mark.criterion(id="c3")
+def test_elision_line_matches_any_run_and_a_changed_line_still_fails_c3() -> None:
+    expected = "head\n...\ntail\n"
+    assert matches("head\nx\ny\nz\ntail\n", expected) is True
+    assert matches("head\ntail\n", expected) is True
+    assert matches("head\nx\nchanged\n", expected) is False
+    assert matches("changed\nx\ntail\n", expected) is False
+    assert matches("head\nx\ntail\nextra\n", expected) is False
+    two = "a\n...\nb\n...\nc\n"
+    assert matches("a\n1\nb\n2\n3\nc\n", two) is True
+    assert matches("a\n1\nB\n2\n3\nc\n", two) is False
+
+
+@pytest.mark.criterion(id="c3")
+def test_first_map_report_example_survives_a_rule_that_fires_on_nothing_c3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Append a rule that matches no text to the project rutter the page already loads."""
+    planted: list[Path] = []
+    real_invoke = _invoke
+
+    def invoke_with_rule(command: list[str], here: Path, config: Path) -> tuple[int, str]:
+        if not planted:
+            target = here / ".periplus" / "packs" / "myproject@0.0.1" / "event.yaml"
+            loader = YAML(typ="safe")
+            loader.default_flow_style = False
+            doc = loader.load(target.read_text(encoding="utf-8"))
+            rule = dict(next(r for r in doc["rules"] if "node" in str(r.get("emits"))))
+            match = dict(rule["match"])
+            match["text"] = match.get("text", "") + r"\b\B"
+            rule.update(rule="never_fires_zz", match=match)
+            doc["rules"].append(rule)
+            out = io.StringIO()
+            loader.dump(doc, out)
+            target.write_text(out.getvalue(), encoding="utf-8")
+            planted.append(target)
+        return real_invoke(command, here, config)
+
+    monkeypatch.setitem(globals(), "_invoke", invoke_with_rule)
+    results = _run_page("map-report-guide", tmp_path.resolve())
+    examples = _examples("map-report-guide")
+    assert planted
+    assert re.search(r"^\s+\S+ never_fires_zz fired 0$", results[0][1], re.M), results[0][1]
+    for example, (code, output) in zip(examples, results, strict=True):
+        command = " ".join(example.command)
+        assert code == example.code, f"periplus {command} exited {code}: {output}"
+        assert matches(output, example.output) is True, f"periplus {command}: {output}"

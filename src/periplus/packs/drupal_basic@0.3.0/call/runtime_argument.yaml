@@ -10,7 +10,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # static call's id is the method around it and the callee as written.
 #
 # Limits:
-# - A call in a method only. One in a function or a .module hook stays under skipped.
+# - A call in a method only. One in a function of a module-family file is marked by
+#   call/runtime_argument_in_function.yaml.
 # - A constant, a class constant or a quoted literal in the argument gives no node.
 # - A variable that sits after a comma inside a nested call in the argument, such as foo(1, $b),
 #   gives no node.
