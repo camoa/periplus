@@ -7,7 +7,7 @@ rules:
   reads: file
   in: [source]
   match: {declaration: assignment_expression, name_child: left, filetype: php}
-  id: {from: declared_name, pattern: '\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"]drupalSettings[''"]\s*\]\s*\[\s*[''"](?<key>[\w.-]+)[''"]\s*\]', template: '{key}'}
+  id: &tree_id {from: declared_name, pattern: '\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"]drupalSettings[''"]\s*\]\s*\[\s*[''"](?<key>[\w.-]+)[''"]\s*\]', template: '{key}'}
   emits: [{node: {type: drupal.js_setting}}]
   confidence: declared
 # The same assignment in a method: the class provides the setting.
@@ -15,7 +15,7 @@ rules:
   reads: file
   in: [source]
   match: {declaration: assignment_expression, name_child: left, filetype: php}
-  id: {from: declared_name, pattern: '\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"]drupalSettings[''"]\s*\]\s*\[\s*[''"](?<key>[\w.-]+)[''"]\s*\]', template: '{key}'}
+  id: *tree_id
   emits: [{edge: {kind: provides_setting, from: enclosing_class, to: this_node}}]
   confidence: declared
 # '#attached' => ['drupalSettings' => ['key' => ...]]: each first-level key is a setting. level is
@@ -27,13 +27,13 @@ rules:
   match:
     file: '**'
     filetype: drupal_php_text
-    text: '[\[,]\s*[''"](?<key>(?!drupalSettings[''"])[\w.-]+)[''"]\s*=>(?=\s*(?<arr>\[?))'
+    text: &setting_text '[\[,]\s*[''"](?<key>(?!drupalSettings[''"])[\w.-]+)[''"]\s*=>(?=\s*(?<arr>\[?))'
   values:
-    in_attached: {from: {enclosing: attached, capture: mark}}
-    in_settings: {from: {enclosing: settings_list, capture: mark}}
-    chain: {from: {enclosing: keyed_array, capture: key}, join: '|'}
-    level: {template: '{chain}#{arr}', normalize: [{replace: '^(?:.*\|)?[''"]drupalSettings[''"](?:\|[^|]+#\[|#)$', with: first}, {replace: '^(?!first$).*', with: ''}]}
-  id:
+    in_attached: &in_attached {from: {enclosing: attached, capture: mark}}
+    in_settings: &in_settings {from: {enclosing: settings_list, capture: mark}}
+    chain: &chain {from: {enclosing: keyed_array, capture: key}, join: '|'}
+    level: &level {template: '{chain}#{arr}', normalize: [{replace: '^(?:.*\|)?[''"]drupalSettings[''"](?:\|[^|]+#\[|#)$', with: first}, {replace: '^(?!first$).*', with: ''}]}
+  id: &setting_id
     template: '{in_attached}|{in_settings}|{level}|{key}'
     normalize:
     - {replace: '^.*\|', with: ''}
@@ -47,16 +47,13 @@ rules:
   match:
     file: '**'
     filetype: drupal_php_text
-    text: '[\[,]\s*[''"](?<key>(?!drupalSettings[''"])[\w.-]+)[''"]\s*=>(?=\s*(?<arr>\[?))'
+    text: *setting_text
   values:
-    in_attached: {from: {enclosing: attached, capture: mark}}
-    in_settings: {from: {enclosing: settings_list, capture: mark}}
-    chain: {from: {enclosing: keyed_array, capture: key}, join: '|'}
-    level: {template: '{chain}#{arr}', normalize: [{replace: '^(?:.*\|)?[''"]drupalSettings[''"](?:\|[^|]+#\[|#)$', with: first}, {replace: '^(?!first$).*', with: ''}]}
-  id:
-    template: '{in_attached}|{in_settings}|{level}|{key}'
-    normalize:
-    - {replace: '^.*\|', with: ''}
+    in_attached: *in_attached
+    in_settings: *in_settings
+    chain: *chain
+    level: *level
+  id: *setting_id
   line: {capture: key}
   emits:
   - edge:
@@ -72,17 +69,16 @@ rules:
     file: '**'
     filetype: drupal_php_text
     ending: [module, theme, inc, install, profile]
-    text: '[\[,]\s*[''"](?<key>(?!drupalSettings[''"])[\w.-]+)[''"]\s*=>(?=\s*(?<arr>\[?))'
+    text: *setting_text
   values:
-    in_attached: {from: {enclosing: attached, capture: mark}}
-    in_settings: {from: {enclosing: settings_list, capture: mark}}
-    chain: {from: {enclosing: keyed_array, capture: key}, join: '|'}
-    level: {template: '{chain}#{arr}', normalize: [{replace: '^(?:.*\|)?[''"]drupalSettings[''"](?:\|[^|]+#\[|#)$', with: first}, {replace: '^(?!first$).*', with: ''}]}
-    fn: {from: {enclosing: function_body, capture: name}}
-  id:
-    template: '{in_attached}|{in_settings}|{level}|{key}'
-    normalize:
-    - {replace: '^.*\|', with: ''}
+    in_attached: *in_attached
+    in_settings: *in_settings
+    chain: *chain
+    level: *level
+    fn_name: {from: {enclosing: function_body, capture: name}}
+    in_class: {from: {enclosing: class_body, capture: mark}}
+    fn: {template: '{in_class}|{fn_name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+  id: *setting_id
   line: {capture: key}
   emits:
   - edge:

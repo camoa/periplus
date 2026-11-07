@@ -155,3 +155,72 @@ def test_a_behavior_that_reads_a_key_meets_the_node_the_php_side_made(
     assert _ends(document, "reads_setting") == [
         ("drupal.js_behavior::mymoduleOne", "drupal.js_setting::arrayKey")
     ]
+
+
+INC_FILE = """\
+<?php
+
+class Panel {
+  public function buildPanel() {
+    $build['#attached']['library'][] = 'mymodule/incLib';
+    return ['#attached' => ['library' => ['mymodule/incArrayLib'], 'drupalSettings' => ['incKey' => ['w' => 1]]]];
+  }
+}
+"""  # noqa: E501
+
+
+@pytest.fixture
+def inc_document(tmp_path: Path) -> dict[str, list[dict[str, object]]]:
+    module = tmp_path / MODULE
+    (module / "js").mkdir(parents=True)
+    (tmp_path / ".periplus").mkdir()
+    (tmp_path / ".periplus" / "settings.yml").write_text(
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - js_basic@0.0.1\n"
+        "  - drupal_js_basic@0.0.1\n"
+    )
+    (module / "mymodule.info.yml").write_text(
+        "name: My module\ntype: module\ncore_version_requirement: ^10\n"
+    )
+    (module / "mymodule.libraries.yml").write_text(
+        "one:\n  js:\n    js/one.js: {}\ntwo: {}\nincLib: {}\nincArrayLib: {}\n"
+    )
+    (module / "mymodule.module").write_text(MODULE_FILE)
+    (module / "mymodule.inc").write_text(INC_FILE)
+    (module / "js" / "one.js").write_text(SCRIPT)
+    report = run(
+        start=tmp_path,
+        env={"PERIPLUS_CONFIG_DIR": str(tmp_path / "cfg")},
+        dependencies=check_runtime_dependencies(),
+        output=Path("map.json"),
+    )
+    assert report.problems == (), report.problems
+    assert report.map_path is not None
+    return json.loads(Path(report.map_path).read_text())  # type: ignore[no-any-return]
+
+
+def test_a_class_method_in_an_inc_file_gives_no_edge_and_the_procedural_edges_stay_c3(
+    inc_document: dict[str, list[dict[str, object]]],
+) -> None:
+    method = "php.function::buildPanel"
+    from_method = [
+        (str(e["kind"]), str(e["to"]))
+        for e in inc_document["edges"]
+        if str(e["from"]) == method and e["kind"] in ("attaches_library", "provides_setting")
+    ]
+    assert from_method == []
+    assert "drupal.js_setting::incKey" in {str(n["id"]) for n in inc_document["nodes"]}
+    procedural = [
+        (f, t)
+        for f, t in _ends(inc_document, "attaches_library")
+        if f in (PREPROCESS, BUILD, TWO)
+    ]
+    assert procedural == [
+        (BUILD, "drupal.library::mymodule/two"),
+        (PREPROCESS, "drupal.library::mymodule/one"),
+    ]
+    settings = [
+        (f, t) for f, t in _ends(inc_document, "provides_setting") if f in (PREPROCESS, BUILD, TWO)
+    ]
+    assert len(settings) == 11
+    assert (PREPROCESS, "drupal.js_setting::bracketKey") in settings
+    assert (TWO, "drupal.js_setting::k2") in settings

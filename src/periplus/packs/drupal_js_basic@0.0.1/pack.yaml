@@ -23,7 +23,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   attach(context, settings) { settings.key }: no edge.
 #
 # The two text file types this pack reads, drupal_template_text and drupal_php_text, are declared
-# by drupal_basic, so every Drupal pack reads them the same way.
+# by drupal_basic, so every Drupal pack reads them the same way. This pack declares them again to
+# add a path value and the spans its rules read.
 #
 # Library attachments. In PHP, $build['#attached']['library'][] = 'module/library' is an edge
 # from the class or the function around it. The array form,
@@ -68,7 +69,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # no edge and is listed under skipped: no value for enclosing_class. In PHP an attachment in a
 # function, such as a hook in a .module file, starts at the function, and one in a method starts
 # at the class, not at the method. An attachment outside both makes no edge and is listed the
-# same way; its setting node is still made.
+# same way; its setting node is still made. In a procedural file, such as a .module or .inc file,
+# an attachment in the array form inside a class method now makes no edge and one skipped row,
+# no value for fn, as one outside any class or function does; its setting node is still made.
 pack: drupal_js_basic
 version: 0.0.1
 depends: [js_basic, drupal_basic]
@@ -99,13 +102,26 @@ files:
         component_name:
           pattern: '^(?:.*/)?components/(?<name>[^/]+)/(?P=name)\.twig$'
           template: '{name}'
-    # drupal_basic's type drupal_php_text, given one more span: the array after each quoted,
+    # drupal_basic's type drupal_php_text, given more spans: the array after each quoted,
     # constant or variable key and =>, to any depth. The array-form setting rules read the keys
     # around a match from it.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
       reader: text
       spans:
+      # The body of a named function; name is the name as written.
+      - name: function_body
+        open: '\b(?<mark>function)\s+(?<name>\w+)\s*\([^)]*\)[^{;]*(?=\{)'
+        balance: ['{', '}']
+      # The body of a named class, trait, interface or enum, so a rule can tell a method from a
+      # function in a file that has no PSR-4 class.
+      - name: class_body
+        open: '(?<![$:>])\b(?<mark>class|trait|interface|enum)\s+\w+[^{;]*(?=\{)'
+        balance: ['{', '}']
+      # The array after 'drupalSettings' =>.
+      - name: settings_list
+        open: '[\[,(\s][''"](?<mark>drupalSettings)[''"]\s*=>\s*(?=\[)'
+        balance: ['[', ']']
       - name: keyed_array
         open: '[\[,]\s*(?<key>[''"][\w.-]+[''"]|[^\s\[\](),''"=>|]+(?:\[[^\[\]]*\])*)\s*=>\s*(?=\[)'
         balance: ['[', ']']

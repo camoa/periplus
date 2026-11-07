@@ -10,11 +10,11 @@ rules:
   match:
     file: '**'
     filetype: drupal_php_text
-    text: '[\[,\s][''"](?<library>[A-Za-z0-9_]+/[\w.-]+)[''"]\s*[,\]]'
+    text: &library_text '[\[,\s][''"](?<library>[A-Za-z0-9_]+/[\w.-]+)[''"]\s*[,\]]'
   values:
-    in_attached: {from: {enclosing: attached, capture: mark}}
-    in_library: {from: {enclosing: library_list, capture: mark}}
-  id:
+    in_attached: &in_attached {from: {enclosing: attached, capture: mark}}
+    in_library: &in_library {from: {enclosing: library_list, capture: mark}}
+  id: &library_id
     template: '{in_attached}|{in_library}|{library}'
     normalize:
     - {replace: '^.*\|', with: ''}
@@ -34,15 +34,14 @@ rules:
     file: '**'
     filetype: drupal_php_text
     ending: [module, theme, inc, install, profile]
-    text: '[\[,\s][''"](?<library>[A-Za-z0-9_]+/[\w.-]+)[''"]\s*[,\]]'
+    text: *library_text
   values:
-    in_attached: {from: {enclosing: attached, capture: mark}}
-    in_library: {from: {enclosing: library_list, capture: mark}}
-    fn: {from: {enclosing: function_body, capture: name}}
-  id:
-    template: '{in_attached}|{in_library}|{library}'
-    normalize:
-    - {replace: '^.*\|', with: ''}
+    in_attached: *in_attached
+    in_library: *in_library
+    fn_name: {from: {enclosing: function_body, capture: name}}
+    in_class: {from: {enclosing: class_body, capture: mark}}
+    fn: {template: '{in_class}|{fn_name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+  id: *library_id
   line: {capture: library}
   emits:
   - edge:

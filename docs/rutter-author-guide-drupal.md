@@ -211,11 +211,13 @@ in it; `behavior_from_assignment_in_file` makes a `script_declares_behavior` edg
 `Drupal.behaviors.name = {...}`. So `periplus` follows library, script, behavior.
 
 A library attachment or a `drupalSettings` key in the array form, `'#attached' => ['library' =>
-[...], 'drupalSettings' => [...]]`, is read as text. `drupal_php_text` declares the spans
-`function_body`, whose `name` is the function's name, and `settings_list`, the array after
-`'drupalSettings' =>`. A rule reads the function's name with `{enclosing: function_body, capture:
-name}` and starts its edge at `{template: '{fn}', types: [php.function]}`, so a hook in a
-`.module` file attaches the library or provides the key.
+[...], 'drupalSettings' => [...]]`, is read as text. `drupal_js_basic` declares, on
+`drupal_php_text`, the spans `function_body`, whose `name` is the function's name, and
+`settings_list`, the array after `'drupalSettings' =>`. A rule reads the function's name as
+`fn_name` from `{enclosing: function_body, capture: name}` and the class's mark as `in_class` from
+`{enclosing: class_body, capture: mark}`. It empties `fn` through `normalize` when a class holds
+the function, so a method makes no edge. It starts its edge at `{template: '{fn}', types:
+[php.function]}`, so a hook in a `.module` file attaches the library or provides the key.
 
 `drupal_basic` links a template to what it names: an include, extends, embed, import or from of a
 `.html.twig` file is a `template_includes` edge, and `theme:name` in an include or embed is a

@@ -290,9 +290,11 @@ files:
 
     # Two text readings, beside the tree readings twig_basic and php_basic give the same files,
     # for what a tree rule cannot reach: a call inside a template, the array form of an
-    # attachment, a docblock tag, a class constant used as an array key. Declared here, once,
-    # because the engine lets one text type claim a file ending across all packs; drupal_js_basic,
-    # drush_basic, salesforce_basic and twig_tweak_basic read them.
+    # attachment, a docblock tag, a class constant used as an array key. Declared here because the
+    # engine lets one text type claim a file ending across all packs; drupal_js_basic, drush_basic,
+    # salesforce_basic and twig_tweak_basic read them. A dependent rutter may declare a type again
+    # under the same name to add path values or spans, which merge into it, as drupal_js_basic
+    # does for both types.
     # Templates read as text with their own name as a value, beside the reading twig_basic
     # gives them. A match that starts inside a Twig comment makes nothing.
     drupal_template_text:
@@ -314,8 +316,9 @@ files:
         open: '\{#'
         close: '#\}'
     # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
-    # attachment. The sections are the comments and the strings. A span is the array after
-    # '#attached' =>, and the array after 'library' =>.
+    # attachment. The sections are the comments and the strings. The spans kept here are attached,
+    # the array after '#attached' =>, library_list, the array after 'library' =>, and
+    # hook_theme_body.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
       reader: text
@@ -358,13 +361,6 @@ files:
       - name: hook_theme_body
         open: '\b(?<mark>function)\s+(?:\w+_)?theme\s*\([^)]*\)[^{;]*(?=\{)'
         balance: ['{', '}']
-      # The body of a named function; name is the name as written.
-      - name: function_body
-        open: '\b(?<mark>function)\s+(?<name>\w+)\s*\([^)]*\)[^{;]*(?=\{)'
-        balance: ['{', '}']
-      - name: settings_list
-        open: '[\[,(\s][''"](?<mark>drupalSettings)[''"]\s*=>\s*(?=\[)'
-        balance: ['[', ']']
 
 grammar:
   provider: tree-sitter
