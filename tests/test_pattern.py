@@ -57,6 +57,14 @@ def test_lookbehinds_are_not_rewritten_c1() -> None:
     assert negative.search("xy") is None
 
 
+def test_a_group_opener_inside_a_character_class_is_left_alone() -> None:
+    # [(?<] is a class of three literal characters; only the group after x is a named group.
+    pattern = compile_pattern("[(?<]x(?<rest>y)")
+    assert pattern.pattern == "[(?<]x(?P<rest>y)"
+    found = pattern.search("<xy")
+    assert found is not None and found.group("rest") == "y"
+
+
 def test_single_backslash_leaves_the_paren_literal_c1() -> None:
     # \(?<n> is an optional literal paren, then the text <n>: the ? quantifies the paren.
     pattern = compile_pattern("\\(?<n>")

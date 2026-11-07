@@ -15,7 +15,7 @@ description: Writes what each node and edge of a Periplus slice does into .perip
 
 ## Where the detail lives
 
-- The map skill, under its heading Read and write the descriptions file, holds the file's two keys, the rest of the entry rules and the worked example of the file.
+- [The map skill, under its heading Read and write the descriptions file](https://github.com/camoa/periplus/blob/v0.4.2/src/periplus/skills/periplus-map/SKILL.md#read-and-write-the-descriptions-file), holds the file's two keys, the rest of the entry rules and the worked example of the file.
 - [The descriptions schema](https://github.com/camoa/periplus/blob/v0.4.2/src/periplus/skills/periplus-map/references/descriptions.schema.json) holds the exact shape of the file.
 - [Navigation](https://github.com/camoa/periplus/blob/v0.4.2/docs/navigation.md) holds the signature, output rows and exit codes of `periplus slice`.
 

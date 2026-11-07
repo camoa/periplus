@@ -200,15 +200,22 @@ def test_every_periplus_command_line_in_a_skill_is_accepted_by_the_parser_c7() -
 
 
 @pytest.mark.criterion(id="c4")
-def test_a_dead_path_or_unknown_option_planted_in_the_describe_skill_is_caught_c4() -> None:
+def test_a_dead_path_section_or_unknown_option_planted_in_the_describe_skill_is_caught_c4() -> None:
     clean = BODIES["periplus-describe"]
     checked, clean_rejected = _rejected_commands({"periplus-describe": clean})
     assert checked, "no periplus command found in the describe skill"
     assert clean_rejected == []
     _, clean_dead = _dead_paths({"periplus-describe": clean})
     assert clean_dead == []
+    sections, clean_sections = _dead_sections({"periplus-describe": clean})
+    assert sections, "no guide section found in the describe skill"
+    assert clean_sections == []
 
     planted_option = clean + "\nRun `periplus map --no-such-option` first.\n"
     assert _rejected_commands({"periplus-describe": planted_option})[1] != []
     planted_path = clean + "\nSee docs/no-such-page.md for more.\n"
     assert _dead_paths({"periplus-describe": planted_path})[1] != []
+    planted_section = (
+        clean + "\nSee src/periplus/skills/periplus-map/SKILL.md#no-such-heading too.\n"
+    )
+    assert _dead_sections({"periplus-describe": planted_section})[1] != []

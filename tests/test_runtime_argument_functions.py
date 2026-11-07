@@ -1,23 +1,10 @@
 """A variable route, service or entity type argument in a module-file function is marked."""
 
-import json
 from pathlib import Path
 from typing import Any
 
 import pytest
-
-from periplus.map import run
-from periplus.preflight import check_runtime_dependencies
-
-MODULE = Path("web/modules/custom/mymod")
-
-ROUTING = """mymod.page:
-  path: '/my/path'
-  defaults:
-    _controller: '\\Drupal\\mymod\\Controller\\LinkController::page'
-  requirements:
-    _access: 'TRUE'
-"""
+from test_runtime_arguments import MODULE, ROUTING, _lines, _map, _marked
 
 SOURCE = """<?php
 use Drupal\\Core\\Url;
@@ -63,33 +50,9 @@ def _plant(root: Path) -> None:
     (root / MODULE / "mymod.module").write_text(SOURCE)
 
 
-def _map(root: Path) -> dict[str, Any]:
-    _plant(root)
-    report = run(
-        start=root,
-        env={"PERIPLUS_CONFIG_DIR": str(root / "config")},
-        dependencies=check_runtime_dependencies(),
-        output=Path("map.json"),
-    )
-    assert report.problems == ()
-    return json.loads(Path(report.map_path).read_text())
-
-
 def _line(needle: str, nth: int = 0) -> int:
     rows = [i for i, row in enumerate(SOURCE.splitlines(), 1) if needle in row]
     return rows[nth]
-
-
-def _lines(item: dict[str, Any]) -> set[int]:
-    return {loc["line"] for loc in item["locations"]}
-
-
-def _marked(document: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        n
-        for n in document["nodes"]
-        if n["type"] == "php.call_site" and n.get("attributes", {}).get("resolution") == "runtime"
-    ]
 
 
 def _holder(document: dict[str, Any], kind: str, name: str) -> str:
@@ -113,11 +76,12 @@ def _variable_lines() -> dict[str, list[int]]:
 def test_variable_arguments_in_hook_and_plain_function_are_marked_and_joined_c2(
     tmp_path: Path,
 ) -> None:
+    _plant(tmp_path)
     document = _map(tmp_path)
     for name, lines in _variable_lines().items():
         holder = _holder(document, "php.function", name)
         for line in lines:
-            nodes = [n for n in _marked(document) if _lines(n) == {line}]
+            nodes = [n for n in _marked(document) if _lines(n["locations"]) == {line}]
             assert len(nodes) == 1, f"{name}: {len(nodes)} marked nodes at line {line}"
             node = nodes[0]
             assert any(
@@ -129,11 +93,14 @@ def test_variable_arguments_in_hook_and_plain_function_are_marked_and_joined_c2(
             assert {e["to"] for e in leaving} == {holder}
     reached = {"links_to_route", "uses_service", "uses_entity_type"}
     flagged = {line for lines in _variable_lines().values() for line in lines}
-    assert not [e for e in document["edges"] if e["kind"] in reached and _lines(e) & flagged]
+    assert not [
+        e for e in document["edges"] if e["kind"] in reached and _lines(e["locations"]) & flagged
+    ]
 
 
 @pytest.mark.criterion(id="c2")
 def test_literal_siblings_and_class_method_keep_their_edges_c2(tmp_path: Path) -> None:
+    _plant(tmp_path)
     document = _map(tmp_path)
     for name, first in (("mymod_cron", 0), ("mymod_helper", 1)):
         holder = _holder(document, "php.function", name)
@@ -144,13 +111,13 @@ def test_literal_siblings_and_class_method_keep_their_edges_c2(tmp_path: Path) -
         ):
             line = _line(needle, first)
             assert any(
-                e["kind"] == kind and e["from"] == holder and line in _lines(e)
+                e["kind"] == kind and e["from"] == holder and line in _lines(e["locations"])
                 for e in document["edges"]
             ), f"{name} lost its {kind} edge"
     method = _holder(document, "php.method", "go")
     method_lines = [_line("$m = "), _line("$n = "), _line("$o = ")]
     for line in method_lines:
-        nodes = [n for n in _marked(document) if _lines(n) == {line}]
+        nodes = [n for n in _marked(document) if _lines(n["locations"]) == {line}]
         assert len(nodes) == 1, f"line {line}: {len(nodes)} marked nodes"
         leaving = [e for e in document["edges"] if e["from"] == nodes[0]["id"]]
         assert [(e["kind"], e["to"]) for e in leaving] == [("call_site_in", method)]
