@@ -250,20 +250,6 @@ def test_write_document_checks_the_schema_then_writes_the_file_wo1(tmp_path: Pat
     assert len(mapping.write_document(bad, tmp_path / "bad.json")) >= 1
 
 
-def test_slice_has_no_format_option_wo1(tmp_path: Path, planted: Path) -> None:
-    from periplus.cli import main
-
-    out = tmp_path / "piece.json"
-    with pytest.raises(SystemExit) as accepted:
-        main(["slice", "--help"])
-    assert accepted.value.code == 0
-
-    with pytest.raises(SystemExit) as refused:
-        main(["slice", "py::a1", "--out", str(out), "--map", str(planted), "--format", "json"])
-    assert refused.value.code == 2
-    assert not out.exists()
-
-
 def test_the_map_file_is_unchanged_by_the_shared_counts_and_write_functions_wo1(
     tmp_path: Path,
 ) -> None:

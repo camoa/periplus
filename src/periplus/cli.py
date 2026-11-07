@@ -344,6 +344,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="most items the slice may hold; 0 for no limit (default: 500)",
     )
     add_map(cut, "the map file to read")
+    cut.add_argument(
+        "--format",
+        # A literal for the reason `types`' is; a test asserts it equals `tuple(slice.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
     export = subcommands.add_parser(
         "export",
         help="print the map as GraphML, DOT or Mermaid",
@@ -357,6 +364,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="the format to print",
     )
     add_map(export, "the map file to read")
+    export.add_argument(
+        "--report",
+        # A literal for the reason `types`' is; a test asserts it equals `tuple(export.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the warnings and problems to standard error (default: text)",
+    )
     status = subcommands.add_parser(
         "status",
         help="report the settings, the pack search path and the directories on it",
@@ -652,18 +666,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             out=args.out,
             map_path=args.map,
         )
-        sys.stdout.write(SLICE_RENDERERS["text"](sliced))
+        sys.stdout.write(SLICE_RENDERERS[args.format](sliced))
         return sliced.exit_code
 
     if args.command == "export":
-        from periplus.navigate.export import render_text as export_text
+        from periplus.navigate.export import RENDERERS as EXPORT_RENDERERS
         from periplus.navigate.export import run as run_export
 
         exported = run_export(
             start=Path.cwd(), env=os.environ, format=args.format, map_path=args.map
         )
         sys.stdout.write(exported.text)
-        sys.stderr.write(export_text(exported))
+        sys.stderr.write(EXPORT_RENDERERS[args.report](exported))
         return exported.exit_code
 
     if args.command == "path":

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,9 +15,9 @@ from periplus.navigate.ids import resolve
 from periplus.navigate.listing import first_location, kind_warnings
 from periplus.navigate.mapfile import MapIndex, NodeNotFound, load_document, reading_fields
 from periplus.navigate.walk import walk
-from periplus.report import _escape
+from periplus.report import _escape, _json_problem
 
-__all__ = ["RENDERERS", "SliceReport", "render_text", "run"]
+__all__ = ["RENDERERS", "SliceReport", "render_json", "render_text", "run"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,4 +110,16 @@ def render_text(report: SliceReport) -> str:
     return "\n".join(lines) + "\n"
 
 
-RENDERERS = {"text": render_text}
+def render_json(report: SliceReport) -> str:
+    """The report as one JSON document, keys sorted, ``ensure_ascii=True``."""
+    document = {
+        "out": report.out,
+        "nodes": report.nodes,
+        "edges": report.edges,
+        "warnings": list(report.warnings),
+        "problems": [_json_problem(p) for p in report.problems],
+    }
+    return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
+
+
+RENDERERS = {"text": render_text, "json": render_json}

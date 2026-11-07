@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://periplus.dev/schema/0/navigation.schema.json",
   "title": "Periplus navigation result",
-  "description": "What `--format json` prints for the navigation commands: types, find, show, neighbors, affected and path. Each command has one definition under $defs, and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
+  "description": "What `--format json` prints for the navigation commands: types, find, show, neighbors, affected, path and slice, and what `export --report json` prints to standard error. Each command has one definition under $defs, and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
 
   "anyOf": [
     {"$ref": "#/$defs/types"},
@@ -10,7 +10,9 @@
     {"$ref": "#/$defs/show"},
     {"$ref": "#/$defs/neighbors"},
     {"$ref": "#/$defs/affected"},
-    {"$ref": "#/$defs/path"}
+    {"$ref": "#/$defs/path"},
+    {"$ref": "#/$defs/slice"},
+    {"$ref": "#/$defs/export"}
   ],
 
   "$defs": {
@@ -192,6 +194,26 @@
             }
           }
         },
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "slice": {
+      "type": "object", "additionalProperties": false, "required": ["out", "nodes", "edges", "warnings", "problems"],
+      "properties": {
+        "out": {"type": ["string", "null"]},
+        "nodes": {"type": "integer", "minimum": 0},
+        "edges": {"type": "integer", "minimum": 0},
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "export": {
+      "type": "object", "additionalProperties": false, "required": ["format", "warnings", "problems"],
+      "properties": {
+        "format": {"type": "string"},
         "warnings": {"$ref": "#/$defs/warnings"},
         "problems": {"$ref": "#/$defs/problems"}
       }

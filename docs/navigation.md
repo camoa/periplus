@@ -22,10 +22,10 @@ A ninth command, `periplus check-map`, checks the whole map against the map sche
 
 - `--map PATH` names the map file. Without it, the command reads `.periplus/map.json` under the
   project root, found by walking up from the working directory.
-- The six question commands take `--format text|json` to pick the report (default `text`). The JSON
-  report has sorted keys and is described by the shipped `navigation.schema.json`, which
-  `periplus spec` also emits. `slice` prints a short text report and `export` prints the graph
-  itself.
+- The six question commands and `slice` take `--format text|json` to pick the report (default
+  `text`). The JSON report has sorted keys and is described by the shipped
+  `navigation.schema.json`, which `periplus spec` also emits. `export` prints the graph itself and
+  takes `--report text|json` for the warnings and problems it writes to standard error.
 - `--limit N` caps the rows shown (`find`, `show`, `neighbors`, `affected`: default 50; `path`:
   default 10). `--limit 0` shows all. A cut list ends with `showing N of TOTAL` in text, and has
   `"truncated": true` in JSON. For `slice`, the limit (default 500) is the most items the slice
@@ -100,7 +100,7 @@ direction. Without a chain it prints `no path`, and exits 0. `--kind K` follows 
 ### slice
 
 ```
-periplus slice [ID ...] [--path PREFIX] --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH]
+periplus slice [ID ...] [--path PREFIX] --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH] [--format text|json]
 ```
 
 Writes the items around some start items to a map file of their own. Name the start items as
@@ -110,7 +110,9 @@ the two is required. `--out FILE` is required, and exits 27 when it is the map b
 (default `both`). `--depth N`
 sets how many edges to follow (default 1). `--kind K` keeps only edges of kind `K`; repeat it for
 several kinds. `--limit N` is the most items the slice may hold (default 500, `0` for no limit).
-It prints `wrote FILE: N nodes, M edges`.
+It prints `wrote FILE: N nodes, M edges`. `--format json` prints one JSON document to standard output instead:
+`out` (the file written, or null), `nodes`, `edges`, `warnings` and `problems`. Problems stay in that
+document, with the report.
 
 A kind is the type of an edge: it says how two items relate. A slice that follows edges either
 way widens through a hub, an item many others share, such as a service every feature uses or a
@@ -124,14 +126,15 @@ periplus slice ID --depth 2 --out foo.map.json
 ### export
 
 ```
-periplus export --format graphml|dot|mermaid [--map PATH]
+periplus export --format graphml|dot|mermaid [--map PATH] [--report text|json]
 ```
 
 Prints the map in another format to standard output. In GraphML the node id is a generated
 token (`n0`, `n1`), the node's `label` is its short name (the id without its type prefix and
 without namespaces) and the map id is in the node's `id` data; each edge's `label` is its kind.
 `--format` is required. Warnings go to standard error: Mermaid warns above 500 edges or 50,000
-characters.
+characters. `--report json` writes them to standard error as one JSON document instead: `format`,
+`warnings` and `problems`.
 
 ```
 periplus export --format dot --map foo.map.json > foo.dot
