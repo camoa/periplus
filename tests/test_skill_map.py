@@ -8,27 +8,32 @@ import shlex
 from pathlib import Path
 
 import pytest
-from _skills import ROOT, blocks, example_project, run_periplus, write_example
-from jsonschema import Draft202012Validator, ValidationError, validate
+from _skills import (
+    MAP,
+    ROOT,
+    mapped_project,
+    remap_keeps_bytes,
+    run_periplus,
+    skill_blocks,
+    validate_descriptions,
+    write_example,
+)
+from jsonschema import ValidationError, validate
 from ruamel.yaml import YAML
 
 SKILL = ROOT / "src/periplus/skills/periplus-map/SKILL.md"
-SCHEMA = ROOT / "src/periplus/skills/periplus-map/references/descriptions.schema.json"
 
 
 def _blocks(marker: str) -> list[tuple[str, str]]:
-    return blocks(SKILL, marker) if SKILL.exists() else []
+    return skill_blocks(SKILL, marker)
 
 
 def _mapped_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> tuple[Path, dict[str, object], str]:
     """Map the example project; return its root, the parsed map and the map's relative path."""
-    root = example_project(tmp_path)
-    done = run_periplus(["map"], root, monkeypatch, capsys)
-    assert done.code == 0, done.err
-    rel = ".periplus/map.json"
-    return root, json.loads((root / rel).read_text(encoding="utf-8")), rel
+    root = mapped_project(tmp_path, monkeypatch, capsys)
+    return root, json.loads((root / MAP).read_text(encoding="utf-8")), MAP
 
 
 @pytest.mark.criterion(id="c9")
@@ -38,9 +43,7 @@ def test_second_map_run_leaves_map_byte_identical_c9(
     root, _data, rel = _mapped_project(tmp_path, monkeypatch, capsys)
     written = write_example(root, _blocks("example"), "descriptions")
     assert written, "the skill holds no example block named descriptions"
-    first = (root / rel).read_bytes()
-    assert run_periplus(["map"], root, monkeypatch, capsys).code == 0
-    assert (root / rel).read_bytes() == first
+    assert remap_keeps_bytes(root, monkeypatch, capsys)
 
 
 @pytest.mark.criterion(id="c9")
@@ -54,10 +57,7 @@ def test_descriptions_example_matches_map_and_schema_c9(
     assert isinstance(doc, dict)
     assert doc.get("nodes"), "no node entry"
     assert doc.get("edges"), "no edge entry"
-    assert SCHEMA.exists(), "the schema file is absent"
-    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(schema)
-    validate(doc, schema)
+    schema = validate_descriptions(doc)
     node_ids = {n["id"] for n in data["nodes"]}  # type: ignore[attr-defined]
     assert set(doc["nodes"]) <= node_ids
     edges = {(e["from"], e["kind"], e["to"]) for e in data["edges"]}  # type: ignore[attr-defined]

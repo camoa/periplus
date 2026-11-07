@@ -48,15 +48,17 @@ def test_lookbehinds_are_not_rewritten_c1() -> None:
     positive = compile_pattern("(?<=x)y")
     negative = compile_pattern("(?<!x)y")
     plain = compile_pattern("\\\\(?<=x)y")
+    plain_negative = compile_pattern("\\\\(?<!x)y")
     assert positive.pattern == "(?<=x)y"
     assert negative.pattern == "(?<!x)y"
     assert plain.pattern == "\\\\(?<=x)y"
+    assert plain_negative.pattern == "\\\\(?<!x)y"
     assert positive.search("xy") is not None
     assert negative.search("xy") is None
 
 
 def test_single_backslash_leaves_the_paren_literal_c1() -> None:
-    # \(?<n> is a literal paren, an optional "<", then the text n>.
+    # \(?<n> is an optional literal paren, then the text <n>: the ? quantifies the paren.
     pattern = compile_pattern("\\(?<n>")
     assert pattern.groupindex == {}
     assert pattern.search("(<n>") is not None

@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from collections.abc import Sequence
 from pathlib import Path
 from typing import NamedTuple
 
+import jsonschema
 import pytest
+from jsonschema import Draft202012Validator
 
 from periplus.cli import main
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADINGS = ("Resolution gaps", "Detail gaps", "Site faults", "Unknown boundaries")
+MAP = ".periplus/map.json"
+DESCRIPTIONS_SCHEMA = ROOT / "src/periplus/skills/periplus-map/references/descriptions.schema.json"
 
 _BLOCK = r"<!--\s*{marker}(?![\w-])\s*:?\s*(.*?)\s*-->[ \t]*\n```[^\n]*\n(.*?)\n```"
 
@@ -23,6 +28,11 @@ def blocks(path: Path, marker: str) -> list[tuple[str, str]]:
     text = path.read_text(encoding="utf-8")
     pattern = re.compile(_BLOCK.format(marker=re.escape(marker)), re.DOTALL)
     return [(m.group(1), m.group(2) + "\n") for m in pattern.finditer(text)]
+
+
+def skill_blocks(skill: Path, marker: str) -> list[tuple[str, str]]:
+    """`blocks` of a skill file, or nothing when the file is absent."""
+    return blocks(skill, marker) if skill.is_file() else []
 
 
 def _section(out: str, heading: str) -> list[str]:
@@ -84,3 +94,30 @@ def run_periplus(
     code = main(list(args))
     captured = capsys.readouterr()
     return Ran(code, captured.out, captured.err)
+
+
+def mapped_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> Path:
+    """The example project after one clean `periplus map`."""
+    root = example_project(tmp_path)
+    done = run_periplus(["map"], root, monkeypatch, capsys)
+    assert done.code == 0, done.err
+    return root
+
+
+def remap_keeps_bytes(
+    root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> bool:
+    """Whether a second `periplus map` leaves the map file byte-identical."""
+    first = (root / MAP).read_bytes()
+    assert run_periplus(["map"], root, monkeypatch, capsys).code == 0
+    return (root / MAP).read_bytes() == first
+
+
+def validate_descriptions(doc: object) -> dict[str, object]:
+    """Check `doc` against the descriptions schema, after checking the schema itself."""
+    schema: dict[str, object] = json.loads(DESCRIPTIONS_SCHEMA.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    jsonschema.validate(doc, schema)
+    return schema

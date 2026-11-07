@@ -6,32 +6,30 @@ import json
 import shlex
 from pathlib import Path
 
-import jsonschema
 import pytest
-from _skills import ROOT, blocks, example_project, run_periplus, write_example
-from jsonschema import Draft202012Validator
+from _skills import (
+    ROOT,
+    blocks,
+    mapped_project,
+    remap_keeps_bytes,
+    run_periplus,
+    skill_blocks,
+    validate_descriptions,
+    write_example,
+)
 from ruamel.yaml import YAML
 
 SKILL = ROOT / "src" / "periplus" / "skills" / "periplus-describe" / "SKILL.md"
-SKILLS_DIR = ROOT / "src" / "periplus" / "skills"
-SCHEMA = SKILLS_DIR / "periplus-map" / "references" / "descriptions.schema.json"
-MAP = ".periplus/map.json"
+MAP_SKILL = ROOT / "src" / "periplus" / "skills" / "periplus-map" / "SKILL.md"
 
 
-def _blocks(marker: str) -> list[tuple[str, str]]:
-    return blocks(SKILL, marker) if SKILL.is_file() else []
-
-
-def _mapped(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> Path:
-    root = example_project(tmp_path)
-    assert run_periplus(["map"], root, monkeypatch, capsys).code == 0
-    return root
+def _example() -> list[tuple[str, str]]:
+    """The worked example lives in the map skill; this skill points at it."""
+    return blocks(MAP_SKILL, "example")
 
 
 def _slice_lines() -> list[str]:
-    runs = _blocks("nav-run")
+    runs = skill_blocks(SKILL, "nav-run")
     return [ln for _, body in runs for ln in body.splitlines() if ln.startswith("$ periplus slice")]
 
 
@@ -47,34 +45,30 @@ def _cut_slice(
 def test_writing_the_example_descriptions_leaves_the_map_byte_identical_c2(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = _mapped(tmp_path, monkeypatch, capsys)
+    root = mapped_project(tmp_path, monkeypatch, capsys)
     lines = _slice_lines()
     assert lines != []
     _cut_slice(lines[0], root, monkeypatch, capsys)
-    written = write_example(root, _blocks("example"), "descriptions")
+    written = write_example(root, _example(), "descriptions")
     assert written != []
-    first = (root / MAP).read_bytes()
-    assert run_periplus(["map"], root, monkeypatch, capsys).code == 0
-    assert (root / MAP).read_bytes() == first
+    assert remap_keeps_bytes(root, monkeypatch, capsys)
 
 
 @pytest.mark.criterion(id="c2")
 def test_example_descriptions_describe_items_of_the_slice_at_their_locations_c2(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = _mapped(tmp_path, monkeypatch, capsys)
+    root = mapped_project(tmp_path, monkeypatch, capsys)
 
     lines = _slice_lines()
     assert len(lines) == 1, lines
     sliced = _cut_slice(lines[0], root, monkeypatch, capsys)
 
-    written = write_example(root, _blocks("example"), "descriptions")
+    written = write_example(root, _example(), "descriptions")
     assert [p.relative_to(root).as_posix() for p in written] == [".periplus/descriptions.yaml"]
     doc = YAML(typ="safe").load(written[0].read_text(encoding="utf-8"))
 
-    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(schema)
-    jsonschema.validate(doc, schema)
+    validate_descriptions(doc)
 
     assert doc["nodes"], "no node entry"
     assert doc["edges"], "no edge entry"

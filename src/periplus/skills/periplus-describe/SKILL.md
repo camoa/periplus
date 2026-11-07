@@ -15,7 +15,7 @@ description: Writes what each node and edge of a Periplus slice does into .perip
 
 ## Where the detail lives
 
-- The map skill, under its heading Read and write the descriptions file, holds the file's two keys and the rest of the entry rules.
+- The map skill, under its heading Read and write the descriptions file, holds the file's two keys, the rest of the entry rules and the worked example of the file.
 - [The descriptions schema](https://github.com/camoa/periplus/blob/v0.4.2/src/periplus/skills/periplus-map/references/descriptions.schema.json) holds the exact shape of the file.
 - [Navigation](https://github.com/camoa/periplus/blob/v0.4.2/docs/navigation.md) holds the signature, output rows and exit codes of `periplus slice`.
 
@@ -35,22 +35,6 @@ Work through the slice item by item, in the project root.
 2. Report each item whose `locations` list is empty, such as an unresolved name, to the person, and write no entry for it: an entry needs a file and a line. An edge has its own location even when its target has none.
 3. For each item with a location, open the code at that file and line and read it. An item with several locations takes one entry, at the location you read.
 4. Write one entry per located item in `.periplus/descriptions.yaml`. Every entry carries `text`, one or more sentences on what the code does, and the `file` and `line` you read. A node is keyed by its id under `nodes`. An edge entry in `edges` carries `from`, `kind` and `to` exactly as the slice writes them.
-5. Keep every entry already in the file. Leave it alone unless the person asks for a rewrite. When an existing entry looks stale against the code, report it and do not change it.
+5. Keep every entry already in the file. Leave it alone unless the person asks for a rewrite. When an existing entry looks stale against the code, report it and do not change it. The map skill's rule to rewrite a stale entry does not apply here.
 6. When the code at a location no longer matches the item, the map is stale. Write nothing more, and tell the person to run `periplus map` and cut the slice again. Never edit the map or the slice.
-7. Write only `.periplus/descriptions.yaml`; no other file.
-
-<!-- example descriptions: .periplus/descriptions.yaml -->
-```yaml
-nodes:
-  python.function::shop.tools.helper:
-    text: Returns the constant 1. It reads nothing and changes nothing.
-    file: shop/tools.py
-    line: 1
-edges:
-  - from: python.module::shop.cli
-    kind: calls
-    to: python.function::shop.tools.helper
-    text: The hello command's greet function calls helper and discards the result.
-    file: shop/cli.py
-    line: 9
-```
+7. Write only `.periplus/descriptions.yaml` yourself. The slice file is the one other file this work makes, and `periplus slice` writes it, not you.
