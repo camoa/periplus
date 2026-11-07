@@ -17,6 +17,10 @@ and an optional `follow`, a list of steps from that node:
   node those kinds reach that gives a result: a member found on a class or its nearest ancestor.
 - `node: <template>` moves to the node whose whole id the template gives from the captures.
 - `id_matches: <pattern>` keeps a node whose whole id the pattern fits, and adds its captures.
+- `try: [<steps>]` holds steps of these kinds. The steps inside run from the current node, and
+  when they reach nothing the walk goes on from that node with the captures it had, so a lookup
+  that may fail (a method on an ancestor the map does not hold) leaves the end to `on_miss`. When
+  they reach a node, an `id_matches` inside rebinds the captures it names.
 
 It emits edges whose ends are `this_node`, the node it matched, `matched_node`, the node its
 `follow` reached, or one template end filled from the captures, with `type` or `types` and

@@ -51,8 +51,10 @@ rules:
 # or parent, a call on a variable and a call outside any function or method make nothing and go
 # under skipped. A method call on an object, member_call_expression, is stated only by the map
 # rules below, for a call on a property of the enclosing object: the class of $x in $x->m() is
-# known only when the code runs. A function imported by use function x as y is not bound, because the imports bind type names only, so y() resolves under the namespace as y;
-# and PHP's fallback of an unqualified call to a global function is not read.
+# known only when the code runs. A function imported by use function x as y is not bound, because the imports bind type names only, so y() resolves under the namespace as y.
+# PHP's fallback of an unqualified call to a global function is read: the to end of an unqualified
+# call tries the namespaced name first and the name as written second, fallback: [as_written]. A
+# name holding a backslash never falls back, so calls_qualified_function has no fallback.
 # skip_names lists PHP's language constructs, as written: grammar 0.24.1 parses isset(, empty(,
 # die( and eval( as function calls, and the rest are listed in case a release does too. After them
 # come the functions PHP reports as internal, so strlen() makes nothing; pack.yaml names the run
@@ -64,7 +66,8 @@ rules:
     reference: function_call_expression
     name_child: function
     filetype: php
-    skip_names: [isset, empty, unset, list, array, echo, print, exit, die, eval, include, require,
+    where: [{name_matches: {child: function, pattern: '[^\\]+'}}]
+    skip_names: &calls_skip_names [isset, empty, unset, list, array, echo, print, exit, die, eval, include, require,
       include_once, require_once, _, abs, acos, acosh, addcslashes, addslashes, array_all,
       array_any, array_change_key_case, array_chunk, array_column, array_combine,
       array_count_values, array_diff, array_diff_assoc, array_diff_key, array_diff_uassoc,
@@ -508,6 +511,18 @@ rules:
       zip_entry_close, zip_entry_compressedsize, zip_entry_compressionmethod, zip_entry_filesize,
       zip_entry_name, zip_entry_open, zip_entry_read, zip_open, zip_read, zlib_decode, zlib_encode,
       zlib_get_coding_type]
+  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.function], fallback: [as_written], on_miss: unresolved}}}]
+  confidence: declared
+
+- rule: calls_qualified_function
+  reads: file
+  in: [source]
+  match:
+    reference: function_call_expression
+    name_child: function
+    filetype: php
+    where: [{name_matches: {child: function, pattern: '.*\\.*'}}]
+    skip_names: *calls_skip_names
   emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.function], on_miss: unresolved}}}]
   confidence: declared
 
@@ -637,7 +652,8 @@ rules:
   emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
   confidence: declared
 
-# The docblock source is only a condition here: a property with no @var line gets no edge.
+# The docblock source is only a condition here: a property with no @var line gets no edge. The
+# pattern is find_var_property_type's, so @var null|Helper gives the edge as @var ?Helper does.
 - rule: var_property_typed_as
   reads: file
   in: [source]
@@ -646,7 +662,7 @@ rules:
     from:
     - enclosing_type
     - declared_name
-    - docblock: '@var\s+\??(?<type>\\?[A-Za-z_][A-Za-z0-9_\\]*)(?:\|null)?(?:\s|\*)'
+    - docblock: '@var\s+\??(?:null\|)?(?<type>(?!(?:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|resource|never)\b)\\?[A-Za-z_][A-Za-z0-9_\\]*)(?:\|null)?(?:\s|\*)'
     template: "{enclosing_type}::{declared_name}"
   emits: [{edge: {kind: property_typed_as, from: this_node, to: {declared: php.property_type}}}]
   confidence: declared
@@ -685,7 +701,10 @@ rules:
 # that declares the property assigns it, $this->mailer = $mailer, from a typed parameter of the
 # assigning method. The edge runs from the method around the call, at the call's line. Inferred:
 # another assignment may give the property another object. A call no rule types keeps its call
-# site and gets no edge.
+# site and gets no edge. In this rule and the two below, the try step looks the method up on the
+# type and then its ancestors, so the edge lands on the nearest class that declares it; a class
+# outside the map, or a method no class in the map declares, lands unresolved under the property's
+# own type.
 - rule: calls_through_assigned_property
   reads: map
   match:
@@ -701,10 +720,15 @@ rules:
     - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
     - node: 'php.parameter::{owner}::{setter}::${parameter}'
     - edge: parameter_typed_as
-    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try:
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
     - node: 'php.call_site::{site}'
     - edge: call_site_in
-  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
   confidence: inferred
 
 # The same walk when the call's own class assigns the property, whichever class declares it: a
@@ -722,10 +746,15 @@ rules:
     - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
     - node: 'php.parameter::{class}::{setter}::${parameter}'
     - edge: parameter_typed_as
-    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try:
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
     - node: 'php.call_site::{site}'
     - edge: call_site_in
-  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
   confidence: inferred
 
 # A call site $this->mailer->send() to Mailer::send, when the call's class or its nearest ancestor
@@ -744,8 +773,13 @@ rules:
     - id_matches: '^php\.type::(?<owner>.+)$'
     - node: 'php.property::{owner}::${member}'
     - edge: property_typed_as
-    - id_matches: '^php\.property_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try:
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
     - node: 'php.call_site::{site}'
     - edge: call_site_in
-  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
   confidence: inferred

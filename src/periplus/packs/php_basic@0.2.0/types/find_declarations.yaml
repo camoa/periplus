@@ -114,8 +114,9 @@ rules:
 # parameter; or in the @var line of the docblock before the property. A nullable class type,
 # ?Mailer, gives the class, and so does a union of one class name with null, false or scalars,
 # Mailer|null. A scalar, ?int, or a union of two class names, Mailer|Other, gives none, and so does
-# a @var of several types or of an array; a @var of a scalar, such as string, is read as a class
-# name. A declaration of several properties in one
+# a @var of several types or of an array. A @var takes one class name, alone or beside null as
+# |null or null|: a scalar word, @var string, and a second class name, @var Helper|Other, give
+# none. A declaration of several properties in one
 # statement names its first only. find_structure.yaml's property_typed_as reaches each.
 - rule: find_property_type
   reads: file
@@ -216,7 +217,7 @@ rules:
     from:
     - enclosing_type
     - declared_name
-    - qualified: {docblock: '@var\s+\??(?<type>\\?[A-Za-z_][A-Za-z0-9_\\]*)(?:\|null)?(?:\s|\*)'}
+    - qualified: {docblock: '@var\s+\??(?:null\|)?(?<type>(?!(?:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|resource|never)\b)\\?[A-Za-z_][A-Za-z0-9_\\]*)(?:\|null)?(?:\s|\*)'}
     template: "{enclosing_type}::{declared_name}::{type}"
   emits: [{node: {type: php.property_type}}]
   confidence: declared

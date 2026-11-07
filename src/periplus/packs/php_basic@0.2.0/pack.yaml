@@ -20,8 +20,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - The names are compared with the text as written. A builtin called with a leading backslash,
 #   \strlen(), or in another letter case, StrLen(), still gives an unresolved function node.
 # - A function the project declares under a builtin name, function strlen() in its namespace, gets
-#   no calls edge from an unqualified call to it: no rule can yet try the namespaced name and then
-#   the bare one in order.
+#   no calls edge from an unqualified call to it: the name is in calls_function's skip list. Other
+#   unqualified calls read PHP's fallback, the namespaced function first and the global one second.
+# - A use function alias does not bind: y() after use function x as y resolves as y.
 # - Drupal's global functions, such as t(), drupal_flush_all_caches() and theme_get_setting(), are
 #   not PHP builtins: a call to one still gives an unresolved function node.
 #
@@ -35,7 +36,6 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A call whose method name or callee is a variable, $x->$name(), $x?->$name(), self::$name() or
 #   $fn(), gets no calls edge: inside a class method it keeps a php.call_site node marked
 #   resolution: runtime (types/find_runtime_calls.yaml); elsewhere it makes nothing.
-# - A use function alias does not bind.
 pack: php_basic
 version: 0.2.0
 depends: []

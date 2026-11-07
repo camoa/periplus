@@ -158,8 +158,12 @@ def test_plain_and_static_calls_give_a_calls_edge_by_exact_value(tmp_path: Path)
     assert min(n for ls, _ in expected.values() for n in ls if n > 20) > 256
     assert _calls(document) == {k: sorted(ls) for k, (ls, _) in expected.items()}
     for edge in (e for e in document["edges"] if e["kind"] == "calls"):
-        rule = "calls_static_method" if "::" in edge["to"].split("::", 1)[1] else "calls_function"
-        assert edge["provenance"] == [{"confidence": "declared", "pack": "php_basic", "rule": rule}]
+        static = "::" in edge["to"].split("::", 1)[1]
+        function_rules = {"calls_function", "calls_qualified_function"}
+        rules = {"calls_static_method"} if static else function_rules
+        (provenance,) = edge["provenance"]
+        assert provenance["rule"] in rules, edge
+        assert (provenance["confidence"], provenance["pack"]) == ("declared", "php_basic"), edge
     nodes = {n["id"]: n for n in document["nodes"]}
     for (_, end), (_, searched) in expected.items():
         if searched is None:
@@ -242,7 +246,8 @@ def test_a_rutter_can_narrow_php_basics_source_and_read_an_extra_folder_by_its_o
     want = {
         (e["from"], e["to"]): sorted(loc["line"] for loc in e["locations"])
         for e in plain["edges"]
-        if e["kind"] == "calls" and e["provenance"][0]["rule"] == "calls_function"
+        if e["kind"] == "calls"
+        and e["provenance"][0]["rule"] in ("calls_function", "calls_qualified_function")
     }
     assert _calls(document, "calls_planted") == want
     nodes = {n["id"]: n for n in document["nodes"]}

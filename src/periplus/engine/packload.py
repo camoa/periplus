@@ -118,7 +118,7 @@ EXECUTED_KEYS = frozenset(
                 *("node_type", "follow"),
             )
         ),
-        *(f"{_RULE}match.follow.*.{k}" for k in ("edge", "ancestors", "node", "id_matches")),
+        *(f"{_RULE}match.follow.*.{k}" for k in ("edge", "ancestors", "node", "id_matches", "try")),
         *(
             f"{_RULE}match.where.*.{k}"
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
@@ -149,6 +149,8 @@ EXECUTED_KEYS = frozenset(
                 ".where.*.not_matches",
                 *(".from.*.key", ".from.*.each", ".types", ".declared", *_RESOLVE),
                 *_TABLE_STEPS,
+                *(".fallback", ".fallback.*.full_if_prefixed", ".fallback.*.prefix_with"),
+                *(".fallback.*.prefix_bare_with", ".fallback.*.lookup_last_segment_in"),
             )
         ),
     }
@@ -481,6 +483,8 @@ class EdgeSpec:
     #: A text rule's end: its resolution steps and their separator.
     resolve: tuple[Step, ...] = ()
     separator: str = ""
+    #: The steps that resolve the written name a second time; its ids follow the first name's.
+    fallback: tuple[Step, ...] = ()
     #: The composed end's candidate types, in order, in place of ``to_type``; ``to_type`` is the
     #: first of them.
     types: tuple[str, ...] = ()
@@ -887,7 +891,10 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
             "no capture, value, path value or settings value the rule has",
         )
     if rule.text is not None:
-        steps = [*rule.id_resolve, *(step for edge in rule.edges for step in edge.resolve)]
+        steps = [
+            *rule.id_resolve,
+            *(s for edge in rule.edges for s in edge.resolve + edge.fallback),
+        ]
         prefixing = ("prefix_with", "prefix_bare_with")
         named = {argument for kind, argument in steps if kind in prefixing} - known
         if any(not edge.resolve for edge in rule.edges):
@@ -1497,7 +1504,7 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
             or "this_node" not in (edge.get("from"), edge.get("to"))
             or not isinstance(end, Mapping)
             or not set(end)
-            <= {"from", "template", "type", "types", "on_miss", "resolve", "separator"}
+            <= {"from", "template", "type", "types", "on_miss", "resolve", "fallback", "separator"}
             or not {"from", "template"} & set(end)
             or not isinstance(end.get("template", ""), str)
             or not _types_ok(end)
@@ -1522,6 +1529,7 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
                 on_miss="on_miss" in end,
                 resolve=_read_steps(end.get("resolve", []), tables),
                 separator=str(end.get("separator", "")),
+                fallback=_read_fallback(end, tables),
                 types=tuple(end.get("types", ())),
             )
         )
@@ -1583,6 +1591,15 @@ def _read_steps(steps: object, tables: frozenset[str] = frozenset()) -> tuple[St
             )
         read.append((kind, text))
     return tuple(read)
+
+
+def _read_fallback(end: Mapping[str, Any], tables: frozenset[str]) -> tuple[Step, ...]:
+    """An end's fallback steps, or none without the key."""
+    if "fallback" not in end:
+        return ()
+    if not isinstance(end["fallback"], list):
+        raise _Unsupported("fallback is not a list of resolve steps")
+    return _read_steps(end["fallback"], tables)
 
 
 def _read_value(name: str, spec: object, path: bool = False) -> Value:
@@ -1744,14 +1761,7 @@ def _build_map(pack: str, item: Mapping[str, Any]) -> Rule:
     where = _read_where(match.get("where", []))
     if not all(isinstance(condition, IdMatches) for condition in where):
         raise _Unsupported("the match.where of a map rule holds only id_matches conditions")
-    follow: list[tuple[str, Any]] = []
-    for step in match.get("follow", []):
-        ((name, value),) = step.items()
-        if name == "id_matches":
-            value = _regex(value)
-        elif name == "ancestors":
-            value = tuple(value)
-        follow.append((name, value))
+    follow = _read_follow(match.get("follow", []))
     nodes = node_types(item)
     edges = [_read_map_edge(emit["edge"], bool(follow)) for emit in emits if "edge" in emit]
     block = item.get("id")
@@ -1780,6 +1790,31 @@ def _build_map(pack: str, item: Mapping[str, Any]) -> Rule:
         matches_type=str(match["node_type"]),
         follow=tuple(follow),
     )
+
+
+def _read_follow(steps: list[Mapping[str, Any]]) -> list[tuple[str, Any]]:
+    """A map rule's follow steps, each as its name and value; a ``try`` holds its own steps."""
+    follow: list[tuple[str, Any]] = []
+    for step in steps:
+        ((name, value),) = step.items()
+        if name == "id_matches":
+            value = _regex(value)
+        elif name == "ancestors":
+            value = tuple(value)
+        elif name == "try":
+            steps_named = {"edge", "ancestors", "node", "id_matches", "try"}
+            if (
+                not isinstance(value, list)
+                or not value
+                or not all(
+                    isinstance(inner, Mapping) and len(inner) == 1 and set(inner) <= steps_named
+                    for inner in value
+                )
+            ):
+                raise _Unsupported("try is not a list of follow steps")
+            value = tuple(_read_follow(value))
+        follow.append((name, value))
+    return follow
 
 
 #: The ends of a map rule's edge that name a node: the node it matched, and the node its follow
@@ -1887,7 +1922,7 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
             or (start != "enclosing_declaration" and not _template_end(start))
             or not isinstance(end, Mapping)
             or not set(end)
-            <= {"type", "types", "on_miss", "resolve", "separator", "from", "template"}
+            <= {"type", "types", "on_miss", "resolve", "fallback", "separator", "from", "template"}
             or ("from" in end and argument is None)
             or not _types_ok(end)
         ):
@@ -1923,6 +1958,7 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
                 on_miss="on_miss" in end,
                 resolve=_read_steps(end.get("resolve", []), tables),
                 separator=str(end.get("separator", "")),
+                fallback=_read_fallback(end, tables),
                 # The one-type form is a list of that one type.
                 types=tuple(end.get("types", ())) or tuple(end.get("type", "").split()),
                 from_template=from_template,

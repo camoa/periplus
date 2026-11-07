@@ -88,6 +88,9 @@ edge php.method::App\Http\Controllers\HomeController::show reads_config laravel.
 fires config_facade_get 1
 ```
 
+The `to` end takes the keys of any reference rule's end, `fallback` among them, as
+[Tree references](rutter-author-guide-references.md) describes.
+
 ## An id that must start with a setting
 
 WordPress asks a plugin to prefix its functions with its own name. In the plugin `acme`,

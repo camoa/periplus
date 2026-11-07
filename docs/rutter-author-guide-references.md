@@ -63,13 +63,22 @@ in the order tried. An end of one type may be written `type` in place of a one-i
 Confidence is `declared`: the call is written in the file. The grammar's imports resolve the name;
 [Import paths](rutter-author-guide-imports.md) binds slashed paths; the next section lists gaps.
 
+`fallback` lists resolve steps run on the name as written, after the first name is settled. The
+first name is what the grammar's identity `resolve` and the end's own `resolve` make of the written
+name; the fallback name is what the `fallback` steps make of the name as written, with neither of
+those applied. The end lands on the first mapped id of the first name under each candidate type,
+then of the fallback name under each. PHP falls back from a namespaced function to the global one:
+under `php_basic`, whose identity already resolves `helper()` in namespace `App` to `App\helper`,
+the end needs only `fallback: [as_written]` to land on `App\helper`, else on `helper`; a pack whose
+identity does not prefix the namespace writes `resolve: [prefix_with: namespace]` beside it. When
+neither is mapped, `on_miss` applies under the first name, `App\helper`. A `fallback` that is not a
+list of resolve steps refuses the rule.
+
 ## What a tree reference cannot say today
 
 - A method call on an object, `$x->m()` or `$this->m()`, whose class is known only at run time.
 - A function imported by `use function x as y`. The imports bind type names only, so `y()` is an
   unresolved `y` in the namespace: one table would merge a function and a class PHP keeps apart.
-- PHP's fallback to a global function. In a namespace, `strlen()` resolves to
-  `<namespace>\strlen` and is unresolved, where PHP calls the global `strlen`.
 - A call in a class constant or a property default, which no function or method holds: skipped.
 - A call on a variable function or class, `$f()` or `$class::m()`. The name is not written.
 - A variable or parameter called by name, Go's `fn()`: an unresolved function of the namespace.

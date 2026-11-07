@@ -23,7 +23,7 @@ author guides; read the section the step names instead of guessing a key:
 - [Rutter author guide: abilities](https://github.com/camoa/periplus/blob/v0.4.2/docs/rutter-author-guide-abilities.md): a call's class and method in one rule, id patterns.
 - [Rutter author guide: references](https://github.com/camoa/periplus/blob/v0.4.2/docs/rutter-author-guide-references.md): reference rules on a parse tree, and the keys the engine does not run.
 - [Rutter author guide: imports](https://github.com/camoa/periplus/blob/v0.4.2/docs/rutter-author-guide-imports.md): imports and bindings.
-- [Rutter author guide: map rules](https://github.com/camoa/periplus/blob/v0.4.2/docs/rutter-author-guide-map-rules.md): map rules, which join what earlier passes found.
+- [Rutter author guide: map rules](https://github.com/camoa/periplus/blob/v0.4.2/docs/rutter-author-guide-map-rules.md): map rules, which join what earlier passes found. Its follow steps are `edge`, `ancestors`, `node`, `id_matches` and `try`: the steps inside a `try` run from the current node, and when they reach nothing the walk goes on from that node with the captures it had, so a lookup that may fail (a method on an ancestor the map does not hold) leaves the end to `on_miss`.
 - [Rutter author guide: Drupal](https://github.com/camoa/periplus/blob/v0.4.2/docs/rutter-author-guide-drupal.md): the PHP and Drupal rutters, read as worked examples.
 
 [Bundled rutters](https://github.com/camoa/periplus/blob/v0.4.2/docs/rutters.md) lists every rutter that ships with Periplus.
@@ -311,6 +311,12 @@ the gap is accepted.
 2. Read the `edge  <from>  <kind>  <to>` lines of the measurement. Run
    `periplus find :: --limit 0 --format json` and look up the `to` ids there: the referenced and
    unresolved nodes the new edges end on are what the next rule has to define.
+   An end that misses only because the stack tries a second name can list that second resolution
+   in `fallback`, run on the name as written after the first name is settled: under `php_basic`,
+   whose identity resolves `helper()` in namespace `App` to `App\helper`, `fallback: [as_written]`
+   alone lands the call on `App\helper`, else on `helper`, and `on_miss` applies under `App\helper`
+   when neither is mapped. A pack whose identity does not prefix the namespace writes
+   `resolve: [prefix_with: namespace]` beside it.
 3. Offer one next rule from those rows, in plain words, and write it only when the person agrees.
 
 <!-- nav-run -->

@@ -441,6 +441,7 @@
             "properties": {
               "edge": {"type": "string", "description": "Move to each node an edge of this declared kind runs to from the current node."},
               "ancestors": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "Run the steps after this one from the current node, else from the nearest node reached by edges of these declared kinds, breadth first, that gives a result: a member found on a class or else on its nearest ancestor."},
+              "try": {"items": {"type": "object", "minProperties": 1, "maxProperties": 1}, "description": "A list of follow steps of the kinds above, try included. The steps inside run from the current node, and when they reach nothing the walk goes on from that node with the captures it had, so a lookup that may fail (a method on an ancestor the map does not hold) leaves the end to on_miss. An id_matches inside a try that reaches a node rebinds its captures. The engine, not this schema, refuses a value that is not a list or an empty list."},
               "node": {"type": "string", "description": "Move to the node whose whole id this template gives, filled from the captures before it; nothing when no rule found such a node or an edge end."},
               "id_matches": {"type": "string", "description": "RE2 searched in the current node's whole id; a node it does not fit gives nothing, and its named captures join the values."}
             }
@@ -1110,6 +1111,11 @@
               "items": {"$ref": "#/$defs/resolveStep"},
               "minItems": 1,
               "description": "The steps that turn the written name into a full one, in order; the first whose condition holds gives the name, and the name then takes on_miss. Without it the name is used as written."
+            },
+            "fallback": {
+              "items": {"$ref": "#/$defs/resolveStep"},
+              "minItems": 1,
+              "description": "Resolve steps run on the name as written, after the first name is settled by the grammar's identity resolve and this end's resolve. The end lands on the first mapped id of the first name under each candidate type, then of the fallback name under each; when none is mapped, on_miss applies under the first name. Under a grammar whose identity prefixes the namespace, fallback: [as_written] alone tries App\\helper, then helper. The engine, not this schema, refuses a value that is not a list, naming the rule and the key."
             },
             "separator": {
               "type": "string",

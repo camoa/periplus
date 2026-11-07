@@ -363,10 +363,14 @@ def _follow(
 ) -> list[tuple[str, dict[str, str]]]:
     """Each id the steps reach from the id ``at``, in order, with the values its ``id_matches``
     steps captured. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
-    ids its kinds reach, breadth first, that give any."""
+    ids its kinds reach, breadth first, that give any. A ``try`` step runs its steps and the steps
+    after it from ``at``, else the steps after it from ``at`` with the values it had."""
     if not steps:
         return [(at, values)]
     (name, value), rest = steps[0], steps[1:]
+    if name == "try":
+        tried = _follow((*value, *rest), at, values, known, out)
+        return tried or _follow(rest, at, values, known, out)
     if name == "edge":
         return [
             r
@@ -533,6 +537,11 @@ def _texts(
                     skipped.append((file, line, rule.name, row))
                 continue
             steps = spec if spec.resolve else info
+            fallback = None
+            if spec.fallback:
+                fallback = resolve_name(
+                    end, spec.fallback, steps.separator, names, present, tables=tables
+                )
             if steps.resolve:
                 end = resolve_name(
                     end, steps.resolve, steps.separator, names, present, tables=tables
@@ -542,7 +551,9 @@ def _texts(
                 skipped.append((file, line, rule.name, f"edge {spec.kind}: {reason}"))
                 continue
             at = lines[spec.key] if spec.key else line
-            edges.extend(_edges(rule, rule_set, spec, file, node_id, [(end, at)]))
+            edges.extend(
+                _edges(rule, rule_set, spec, file, node_id, [(end, at)], fallback=fallback)
+            )
         if (
             len(nodes) + len(edges) == before
             and len(skipped) == written
@@ -1484,6 +1495,7 @@ def _edges(
     node_id: str,
     ends: list[tuple[str, int]],
     whole: str = "",
+    fallback: str | None = None,
 ) -> list[FoundEdge]:
     """One edge per composed end and its line, between it and the fire's own node, or the node of
     the id ``whole`` when it is given.
@@ -1506,7 +1518,7 @@ def _edges(
     other = next(iter(namespaces(types, far)), None)
     found = []
     for end, at in ends:
-        candidates = () if spec.full_id else _candidates(spec, types, end)
+        candidates = () if spec.full_id else _candidates(spec, types, end, fallback, other)
         if not spec.full_id and other is None and not candidates:
             continue
         this, composed = whole or f"{own}::{node_id}", end if spec.full_id else f"{other}::{end}"
@@ -1532,9 +1544,22 @@ def _edges(
     return found
 
 
-def _candidates(spec: EdgeSpec, types: Mapping[str, Any], end: str) -> tuple[str, ...]:
-    """The id of the end under each of the spec's candidate types, in order."""
-    return tuple(f"{namespace_of(types, name)}::{end}" for name in spec.types)
+def _candidates(
+    spec: EdgeSpec,
+    types: Mapping[str, Any],
+    end: str,
+    fallback: str | None = None,
+    far: str | None = None,
+) -> tuple[str, ...]:
+    """The id of the end under each of the spec's candidate types, in order, then the id of a
+    different ``fallback`` name under each. An end of one type, or of none, takes ``to_type`` or
+    else the namespace ``far`` as its one candidate when it has a fallback name."""
+    spaces = [namespace_of(types, name) for name in spec.types]
+    if fallback is None or fallback == end:
+        return tuple(f"{space}::{end}" for space in spaces)
+    if not spaces:
+        spaces = [namespace_of(types, spec.to_type)] if spec.to_type else [far] if far else []
+    return tuple(f"{space}::{name}" for name in (end, fallback) for space in spaces)
 
 
 def _within(pack: str, packs: Sequence[LoadedPack]) -> frozenset[str]:
@@ -1627,11 +1652,12 @@ def _references(
             if templated
             else {}
         )
-        names, reasons, starts = [], [], []
+        names, reasons, starts, fallbacks = [], [], [], []
         for spec in rule.edges:
             separator = spec.separator or grammar.separator
             reason = f"no resolution step holds for {rule.name_child}"
             start = source if spec.from_template is None else _fill(spec.from_template, values)
+            as_written = None
             if spec.template is not None or start is None:
                 name = _fill(spec.template, values) if start is not None else None
                 reason = "no enclosing type is mapped"
@@ -1643,11 +1669,19 @@ def _references(
                 reason = reason if name is not None else row
             else:
                 name = parsed.resolve(written, grammar)
+                as_written = text_of(written)
                 if name is not None and member is not None:
                     name = separator.join((name, text_of(member)))
+                    as_written = separator.join((as_written, text_of(member)))
+            fallback = None
+            if name is not None and spec.fallback:
+                fallback = resolve_name(
+                    as_written or name, spec.fallback, separator, bindings, known, tables=tables
+                )
             if name is not None and spec.resolve:
                 name = resolve_name(name, spec.resolve, separator, bindings, known, tables=tables)
             names.append(name)
+            fallbacks.append(fallback)
             reasons.append(reason)
             starts.append(start)
         if names and not any(names):
@@ -1655,13 +1689,16 @@ def _references(
                 skipped.append((file, line, rule.name, reason))
             continue
         fired += 1
-        for spec, name, reason, start in zip(rule.edges, names, reasons, starts, strict=True):
+        rows = zip(rule.edges, names, reasons, starts, fallbacks, strict=True)
+        for spec, name, reason, start, fallback in rows:
             if not name or start is None:
                 skipped.append((file, line, rule.name, f"edge {spec.kind}: {reason}"))
                 continue
             kind = rule_set.edge_kinds[spec.kind]
-            candidates = () if spec.full_id else _candidates(spec, rule_set.types, name)
             far = next(iter(namespaces(rule_set.types, kind.to_types)), None)
+            candidates = (
+                () if spec.full_id else _candidates(spec, rule_set.types, name, fallback, far)
+            )
             if spec.from_template is not None:
                 start = f"{next(iter(namespaces(rule_set.types, kind.from_types)))}::{start}"
             edges.append(
