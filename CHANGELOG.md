@@ -5,10 +5,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-07
+
 ### Added
 
-- Three bundled rutters read TypeScript as text: `typescript@0.1.0` maps modules, imports, packages, functions and their calls; `react@0.1.0` maps components, hooks, renders and hook uses; `nextjs@0.2.0` maps App Router pages, layouts, route handlers, middleware, fetches of a route and links to a page. Two bundled Drupal rutters join them: `drupal_more@0.1.0` maps base fields, field use by name, entity handlers, job creation and permission checks; `drupal_next@0.1.0` maps the next module's sites and settings, Drupal endpoints and the TypeScript calls to them, JSON:API resources and OAuth scopes.
+- Three bundled rutters read TypeScript as text: `typescript@0.1.0` maps modules, imports, packages, functions and their calls; `react@0.1.0` maps components, hooks, renders and hook uses; `nextjs@0.2.0` maps App Router pages, layouts, route handlers, middleware, fetches of a route and links to a page. Two bundled Drupal rutters join them: `drupal_more@0.1.0` maps base fields, field use by name, entity handlers, job creation and permission checks; `drupal_next@0.1.0` maps the next module's sites and settings, Drupal endpoints and the TypeScript calls to them, JSON:API resources and OAuth scopes. A function, component or hook declared inside another function gets its own node, and a call or render inside it starts there.
 - A describe skill, `periplus-describe`, takes a slice file as its working set and writes one entry per located item to the descriptions file: text, file and line, read from the code. It keeps every existing entry and reports a stale one, and it reports an item with no location instead of writing an entry for it.
+- Two keys for a rutter's map rules. An edge end takes `fallback: [<resolve steps>]`, a second name tried under each candidate type after the first, resolved from the name as written. A follow takes `try: [<steps>]`, a sub-walk that may reach nothing, after which the walk goes on from the current node with the captures it had, so an end with `on_miss` still marks the call. A bad value of either key is refused at load with a message naming the rule.
+- A declaration rule may set a constant attribute on the node it emits, and a match may name the grammar node type its nearest holder must be, with `holder`. A call whose method name, callee or literal argument is built at run time is kept at its line as a call-site node marked `resolution: runtime`, with no invented target; the PHP and Drupal rutters place that mark, and the gaps skill reports those sites under an Unknown boundaries heading.
+- `periplus slice --format json` prints its report as one JSON document, and `periplus export` streams a JSON report, with the same exit codes as the text forms.
+- A single-directory component's own template, `<name>.twig` beside `<name>.component.yml`, gives the edges an `.html.twig` template gives, from the component node.
+
+### Changed
+
+- The PHP rutter resolves a call through a typed property to the nearest class that declares the method, through `try`, and keeps its unresolved mark when the class or the method is outside the map. An unqualified function call inside a namespace resolves to the namespaced function first and the global one second; a qualified call never falls back. A `@var` doc-comment of a scalar word or a two-class union makes no type node and no method node on a fake class.
+- The Drupal JavaScript rutter declares its own text spans, with a class-body span and a class guard, so an attachment or settings array returned by a class method is read where it sits. The Drupal rutter marks a route, service or entity-type argument built at run time in plain functions and hooks as it does in class methods.
+- The rutter skill and the rutter author guides carry the lessons of five rutters written outside the project: how a type is named, when a whole-file rule needs `\A` and which sections it reads, the shapes of twin rules, declared versus inferred marks, and where a second path value belongs. The gaps skill ships its read program as a script, and each skill says when to load it and why each standing rule stands.
+- `periplus validate` in CI runs over every bundled rutter, the five new ones included.
+
+### Fixed
+
+- A rule pattern's named groups are rewritten by a scanner that copies escaped pairs and character classes as they are, so `[(?<]` stays a class of three characters.
+- Seven navigation commands share one JSON writer; the loader names the follow steps once and builds the `fallback` paths from its resolve lists; the map report demo honours a guide line of `...`.
 
 ## [0.4.2] - 2026-11-05
 
