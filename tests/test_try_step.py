@@ -144,6 +144,19 @@ def test_try_that_is_not_a_list_of_steps_refuses_the_rule_wo3(tmp_path, value):
     )
 
 
+TRY_UNCAPTURED = r"""try:
+      - node: 'php.type::{declarer}'
+      - node: 'php.method::{nobody}::{method}'"""
+
+
+def test_a_try_step_naming_a_name_no_id_matches_captures_is_not_executed(tmp_path):
+    rules = RULE.replace("TRYSTEP", TRY_UNCAPTURED)
+    report, _ = _map(tmp_path, rules, {"c.php": HOLDER % "Mailer"})
+    assert "reaches_declaring_method" not in [r for _, r, _ in report.executed]
+    messages = [p.message for p in report.problems if "reaches_declaring_method" in p.message]
+    assert messages and "inside try names nobody, which no id_matches captures" in messages[0]
+
+
 FALLBACK_RULES = """node_types:
 - {name: own.function, id_namespace: own.function}
 edge_kinds:

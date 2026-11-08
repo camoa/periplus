@@ -1,0 +1,32 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A const whose value is a useCallback or useMemo call holds a function: its node, and the module's
+# edge to it. Named as function_arrow names a function: not a component, not a hook. A declaration inside another function takes that function's name in its id
+# (`module:Outer:name`), the names the function_body spans give, so two nested declarations with one
+# name in one file stay apart and a call inside the nested one starts at it.
+
+rules:
+- rule: function_node_hook_const
+  reads: file
+  in: [typescript_source]
+  match: &function_hook_const_match
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>(?!use[A-Z])(?![A-Z]\w*[a-z])\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:React\.)?(?:useCallback|useMemo)\b\s*(?:<[^()]*?>)?\('
+  values: &nested_name
+    outer: {from: {enclosing: function_body, capture: name, excluding_own: true}, join: ':'}
+    qualified: {template: '{outer}:{name}', normalize: [{replace: '^:', with: ''}]}
+  id: {template: '{module}:{qualified}'}
+  line: {capture: name}
+  emits: [{node: {type: typescript.function}}]
+  confidence: declared
+- rule: function_edge_hook_const
+  reads: file
+  in: [typescript_source]
+  match: *function_hook_const_match
+  values: *nested_name
+  id: {template: '{module}'}
+  line: {capture: name}
+  emits: [{edge: {kind: declares_callable, from: this_node, to: {template: '{module}:{qualified}'}}}]
+  confidence: declared

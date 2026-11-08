@@ -9,11 +9,11 @@ rules:
   reads: file
   in:
   - module_root
-  match:
+  match: &m0
     file: '*.routing'
     filetype: drupal_next_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:\s*\[\s*['"]?(?<m>[A-Z]+)
-  values:
+  values: &v0
     target:
       template: '{path}'
       normalize:
@@ -33,18 +33,8 @@ rules:
   reads: file
   in:
   - module_root
-  match:
-    file: '*.routing'
-    filetype: drupal_next_yml_text
-    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:\s*\[\s*['"]?(?<m>[A-Z]+)
-  values:
-    target:
-      template: '{path}'
-      normalize:
-      - replace: \{[^}]+\}
-        with: '{}'
-      - replace: (?<=.)/$
-        with: ''
+  match: *m0
+  values: *v0
   id:
     template: 'drupal{target}|{m}'
   line:

@@ -55,7 +55,7 @@ MIRROR = {
     "template_includes": "component_includes_template",
     "template_includes_component": "component_includes_component",
     "template_links_route": "component_links_route",
-    "links_to_path": "links_to_path",
+    "links_to_path": "component_links_path",
 }
 
 

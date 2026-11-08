@@ -1,0 +1,21 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The handler classes a content entity annotation names, one has_handler edge per key: storage,
+# storage_schema, access, list_builder, view_builder, views_data and translation, the form
+# operations default, add, edit and delete inside the "form" block, and html inside the
+# "route_provider" block. A key is read wherever it stands in the annotation, so a "default" key
+# outside the form block would match too; the engine's text matches cannot overlap, which is why
+# the form block is not anchored.
+
+rules:
+- rule: handler
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^ \*\s+"(?<h>storage|storage_schema|access|list_builder|view_builder|views_data|translation|default|add|edit|delete|html)"\s*=\s*"(?<c>Drupal\\[\w\\]+)"'
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: has_handler, from: this_node, to: {template: '{c}'}}}]
+  confidence: declared

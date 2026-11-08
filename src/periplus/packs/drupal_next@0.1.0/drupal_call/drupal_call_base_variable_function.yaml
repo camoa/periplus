@@ -15,6 +15,7 @@ rules:
   values:
     fn:
       from: {enclosing: function_body, capture: name}
+      join: ':'
     target:
       template: '{path}'
       normalize:

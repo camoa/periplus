@@ -21,6 +21,7 @@ rules:
       from:
         enclosing: oauth_scope_string
         capture: mark
+        excluding_own: true
   id:
     template: '{in_scope}|simple_oauth.oauth2_scope.{word}'
     normalize:

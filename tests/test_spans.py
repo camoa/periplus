@@ -49,6 +49,16 @@ rules:
   line: {capture: name}
   emits: [{node: {type: blocks.item}}, {attribute: {name: path, from: {value: path}}}]
   confidence: declared
+- rule: opener
+  reads: file
+  in: [src]
+  match: {file: '*', filetype: blk, text: 'group (?<name>\\w+)'}
+  values:
+    path: {from: {enclosing: group, capture: prefix, excluding_own: true}, join: '/'}
+  id: {template: 'g-{name}'}
+  line: {capture: name}
+  emits: [{node: {type: blocks.item}}, {attribute: {name: path, from: {value: path}}}]
+  confidence: declared
 - rule: whole
   reads: file
   in: [src]
@@ -133,7 +143,21 @@ def test_an_enclosing_value_joins_each_holding_span_outermost_first(tmp_path: Pa
         "blocks.item::three": ("a/b", 5),
         "blocks.item::four": ("a", 8),
         "blocks.item::five": ("", 12),
+        "blocks.item::g-a": ("", 1),
+        "blocks.item::g-b": ("a", 4),
     }, items
+
+
+def test_a_match_at_a_spans_own_opening_is_held_by_the_spans_around_it_only(tmp_path: Path) -> None:
+    """The rule that matches the opening of a group starts where the span starts; with
+    excluding_own that span is left out: `group a` has no prefix and `group b` has `a`."""
+    _, document = _map(_site(tmp_path))
+    openers = {
+        n["id"]: n["attributes"]["path"]
+        for n in document["nodes"]
+        if n["id"].startswith("blocks.item::g-")
+    }
+    assert openers == {"blocks.item::g-a": "", "blocks.item::g-b": "a"}, openers
 
 
 def test_a_relative_path_value_strips_the_folder_and_is_absent_outside_it(tmp_path: Path) -> None:

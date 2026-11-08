@@ -15,9 +15,7 @@ rules:
     # Nested functions join their names; the innermost one is the caller.
     fn:
       from: {enclosing: function_body, capture: name}
-      join: '|'
-      normalize:
-      - {replace: '^.*\|', with: ''}
+      join: ':'
   id: {template: '{module}:{fn}'}
   line: {capture: callee}
   emits:

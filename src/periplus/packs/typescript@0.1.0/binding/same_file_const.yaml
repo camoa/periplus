@@ -1,6 +1,7 @@
 $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
-# A const holding an arrow, function or wrapped component binds its own name to this module.
+# A const holding an arrow, function, wrapped component or hook-wrapped function binds its own
+# name to this module; one declared inside a function binds to the nested node.
 
 rules:
 - rule: same_file_const
@@ -10,7 +11,10 @@ rules:
     file: '**'
     filetype: typescript
     reads_sections: [string]
-    text: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b[^=\n]*=\s*(?:async\s*)?(?:(?:<[^()]*?>\s*)?\((?s:[^()]*)\)\s*(?::[^=;{]*)?=>|\w+\s*=>|function\b|forwardRef\b|memo\b|React\.)'
+    text: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b[^=\n]*=\s*(?:async\s*)?(?:(?:<[^()]*?>\s*)?\((?s:[^()]*)\)\s*(?::[^=;{]*)?=>|\w+\s*=>|function\b|forwardRef\b|memo\b|useCallback\b|useMemo\b|React\.)'
+  values: 
+    outer: {from: {enclosing: function_body, capture: name, excluding_own: true}, join: ':'}
+    qualified: {template: '{outer}:{name}', normalize: [{replace: '^:', with: ''}]}
   emits:
-  - binding: {name: '{name}', target: '{module}:{name}'}
+  - binding: {name: '{name}', target: '{module}:{qualified}'}
   confidence: inferred

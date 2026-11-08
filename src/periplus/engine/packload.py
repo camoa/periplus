@@ -106,7 +106,7 @@ EXECUTED_KEYS = frozenset(
         *(f"{_RULE}{k}" for k in ("rule", "reads", "in", "confidence", "match", "id", "emits")),
         *(f"{_RULE}line{k}" for k in ("", ".capture")),
         *(f"{_RULE}values{k}" for k in ("", ".*.from", ".*.from.capture", ".*.template")),
-        *(f"{_RULE}values.*{k}" for k in (".from.enclosing", ".join")),
+        *(f"{_RULE}values.*{k}" for k in (".from.enclosing", ".from.excluding_own", ".join")),
         *(
             f"{_RULE}values.*{k}"
             for k in (".normalize", ".normalize.*.replace", ".normalize.*.with")
@@ -323,7 +323,7 @@ class Value:
     captures; with ``relative_to``, a folder name, the pattern is searched in the path below the
     deepest directory of that folder that holds the file. ``enclosing`` names a span and one
     capture of its opening: the value joins that capture of each span holding the match with
-    ``join``."""
+    ``join``; with ``excluding_own`` a span that opens where the match starts is left out."""
 
     name: str
     capture: str
@@ -334,6 +334,7 @@ class Value:
     relative_to: str = ""
     enclosing: tuple[str, str] | None = None
     join: str = ""
+    excluding_own: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -937,13 +938,28 @@ def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
     known = set(values)
     for condition in rule.where:
         known |= set(condition.pattern.groupindex) if isinstance(condition, IdMatches) else set()
-    for name, value in rule.follow:
-        if name == "id_matches":
-            known |= set(value.groupindex)
-        elif name == "node" and set(PLACEHOLDER.findall(value)) - known:
-            lacking = ", ".join(sorted(set(PLACEHOLDER.findall(value)) - known))
-            reason = f"the follow step node {value} names {lacking}, which no id_matches captures"
-            return replace(rule, supported=False, reason=reason + " before it")
+
+    def walk(steps: Sequence[tuple[str, Any]], inside: str) -> str | None:
+        """The reason the first node step names a capture nothing before it made, or None; a
+        ``try`` is walked in place, its captures known to the steps after it."""
+        for name, value in steps:
+            if name == "id_matches":
+                known.update(value.groupindex)
+            elif name == "try":
+                reason = walk(value, " inside try")
+                if reason:
+                    return reason
+            elif name == "node" and set(PLACEHOLDER.findall(value)) - known:
+                lacking = ", ".join(sorted(set(PLACEHOLDER.findall(value)) - known))
+                return (
+                    f"the follow step node {value}{inside} names {lacking}, "
+                    "which no id_matches captures before it"
+                )
+        return None
+
+    reason = walk(rule.follow, "")
+    if reason:
+        return replace(rule, supported=False, reason=reason)
     templates = [rule.id_template, *(edge.template or "" for edge in rule.edges)]
     missing = sorted({name for t in templates for name in PLACEHOLDER.findall(t)} - known)
     if missing:
@@ -1615,7 +1631,11 @@ def _read_value(name: str, spec: object, path: bool = False) -> Value:
     keys = set(spec) - {"normalize", "case"} if isinstance(spec, Mapping) else set()
     source = spec.get("from") if isinstance(spec, Mapping) else None
     span = (
-        source if isinstance(source, Mapping) and set(source) == {"enclosing", "capture"} else None
+        source
+        if isinstance(source, Mapping)
+        and {"enclosing", "capture"} <= set(source) <= {"enclosing", "capture", "excluding_own"}
+        and isinstance(source.get("excluding_own", False), bool)
+        else None
     )
     enclosing = span is not None
     if path:
@@ -1642,6 +1662,7 @@ def _read_value(name: str, spec: object, path: bool = False) -> Value:
         str(spec.get("relative_to", "")),
         (str(span["enclosing"]), str(span["capture"])) if span is not None else None,
         str(spec.get("join", "")),
+        bool(span.get("excluding_own", False)) if span is not None else False,
     )
 
 

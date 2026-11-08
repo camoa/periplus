@@ -29,7 +29,10 @@ edge_kinds:
   from: drupal.route
   to: drupal.url_path
 - kind: links_to_path
-  from: [php.class, php.function, drupal.template, drupal.component]
+  from: [php.class, php.function, drupal.template]
+  to: drupal.url_path
+- kind: component_links_path
+  from: drupal.component
   to: drupal.url_path
 
 rules:
@@ -87,8 +90,8 @@ rules:
   emits: [{edge: {kind: links_to_path, from: {template: '{template_name}', types: [drupal.template]}, to: this_node}}]
   confidence: declared
 
-# The same attribute in a component's <name>.twig links from the component. A file with no
-# component_name makes nothing.
+# The same attribute in a component's <name>.twig links from the component, keyed on the component
+# so the rule fires once per component file. A file with no component_name makes nothing.
 - rule: path_in_component_attribute
   reads: file
   in: [module_root, theme_root]
@@ -96,6 +99,6 @@ rules:
     file: '*'
     filetype: drupal_template_text
     text: '\s[\w:.-]+=["''](?<path>/[^/\s"''{}<>][^\s"''{}<>]*)["'']'
-  id: {from: {capture: path}}
-  emits: [{edge: {kind: links_to_path, from: {template: '{component_name}', types: [drupal.component]}, to: this_node}}]
+  id: {template: '{component_name}'}
+  emits: [{edge: {kind: component_links_path, from: this_node, to: {template: '{path}'}}}]
   confidence: declared

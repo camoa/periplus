@@ -65,7 +65,10 @@ A text rule's value may read a capture of every span that holds the match:
 
 `from: {enclosing: group, capture: prefix}` takes the `prefix` capture of each `group` span whose
 region holds the start of the match, outermost first, and joins them with `join`, empty by
-default, so nested `function_body` spans give `outerinner`. To take the innermost name, use `join: '|'` with `normalize: [{replace: '^.*\|', with: ''}]`, which gives `inner`. A span whose capture took no part, or is empty, adds nothing. No such span gives the
+default, so nested `function_body` spans give `outerinner`. A span that opens at that very start
+is held too, which is how a key that opens an array reads itself as the last segment of its path;
+`excluding_own: true` beside `capture` leaves it out, so a declaration that opens a
+`function_body` span reads only the functions around it. To take the innermost name, use `join: '|'` with `normalize: [{replace: '^.*\|', with: ''}]`, which gives `inner`. A span whose capture took no part, or is empty, adds nothing. No such span gives the
 empty value. Then `normalize` and `case` run, as for any value. Each step runs once, so climbing two `../` levels takes the step twice. The `/` route above gets the
 prefix `admin/v1`: `admin` and `/v1/` joined, then each run of slashes made one and the outer
 slashes trimmed.

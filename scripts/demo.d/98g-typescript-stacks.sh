@@ -101,11 +101,11 @@ if not any(target.endswith("GET") for target in handles):
 def edge(kind, src, dst):
     return any(e["kind"] == kind and e["from"].endswith(src) and e["to"].endswith(dst)
                for e in document["edges"])
-if not edge("renders_component", "components/List:List", "components/List:Row"):
+if not edge("renders_component", "components/List:List", "components/List:List:Row"):
     missing.append("renders_component from List to its nested Row, written right after >")
-if not edge("renders_component", "components/List:Row", "components/Card:Card"):
+if not edge("renders_component", "components/List:List:Row", "components/Card:Card"):
     missing.append("renders_component from the nested Row to Card")
-if not any(e["kind"] == "function_calls_route" and e["from"].endswith("lib/load:inner") for e in document["edges"]):
+if not any(e["kind"] == "function_calls_route" and e["from"].endswith("lib/load:loadItems:inner") for e in document["edges"]):
     missing.append("function_calls_route from the nested function inner")
 if missing:
     sys.exit(f"typescript stacks: the map lacks {', '.join(missing)}")

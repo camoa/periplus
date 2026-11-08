@@ -237,7 +237,7 @@
               "from": {
                 "oneOf": [
                   {"$ref": "#/$defs/listedSource"},
-                  {"type": "object", "additionalProperties": false, "required": ["enclosing", "capture"], "properties": {"enclosing": {"type": "string"}, "capture": {"type": "string"}}}
+                  {"type": "object", "additionalProperties": false, "required": ["enclosing", "capture"], "properties": {"enclosing": {"type": "string"}, "capture": {"type": "string"}, "excluding_own": {"type": "boolean", "description": "True leaves out a span that opens where the match starts: the span the match itself opens."}}}
                 ]
               },
               "join": {"type": "string", "description": "With from: {enclosing: ...}, the text between two spans' captures."},

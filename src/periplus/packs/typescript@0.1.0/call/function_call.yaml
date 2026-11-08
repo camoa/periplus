@@ -12,12 +12,10 @@ rules:
     reads_sections: [string]
     text: '(?<![.\w$])(?<!function )(?<!function  )(?<callee>(?!use[A-Z])[A-Za-z_$][\w$]*)(?:<[^()\n]*>)?\('
   values:
-    # Nested functions join their names; the innermost one is the caller.
+    # Nested functions join their names with ':', the id shape the declaration rules give them.
     fn:
       from: {enclosing: function_body, capture: name}
-      join: '|'
-      normalize:
-      - {replace: '^.*\|', with: ''}
+      join: ':'
   id: {template: '{module}:{fn}'}
   line: {capture: callee}
   emits:

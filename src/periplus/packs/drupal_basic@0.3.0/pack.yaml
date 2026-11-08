@@ -332,11 +332,13 @@ files:
       reader: text
       path_values:
         # The class a file under src holds, by Drupal's PSR-4 layout: <module>/src/A/B.php is
-        # Drupal\<module>\A\B.
+        # Drupal\<module>\A\B, and <module>/tests/src/A/B.php is Drupal\Tests\<module>\A\B. The
+        # prefix is matched lazily, so the module is the folder right before src or tests/src.
         psr4_class:
-          pattern: '^(?:.*/)?(?<module>[^/]+)/src/(?<rest>.+)\.php$'
-          template: 'Drupal\{module}\{rest}'
+          pattern: '^(?:.*?/)?(?<module>[^/]+)/(?<tests>(?:tests/)?)src/(?<rest>.+)\.php$'
+          template: 'Drupal\{tests}{module}\{rest}'
           normalize:
+          - {replace: '^Drupal\\tests/', with: 'Drupal\Tests\'}
           - {replace: '/', with: '\'}
       sections:
       - name: heredoc

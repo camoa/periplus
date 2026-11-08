@@ -9,6 +9,6 @@ rules:
   reads: file
   in: [source]
   match: {file: '**', filetype: drupal_php_text, text: '->hasPermission\(\s*''(?<p>[^'']+)''(?!\s*(?:,[^)]*)?\)\s*->(?:will|should))'}
-  id: {template: '{class_or_test_class}'}
+  id: {template: '{psr4_class}'}
   emits: [{edge: {kind: checks_permission, from: this_node, to: {template: '{p}'}}}]
   confidence: declared

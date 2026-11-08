@@ -10,11 +10,11 @@ rules:
 - rule: endpoint_method_listed_first_node
   reads: file
   in: [module_root]
-  match:
+  match: &m0
     file: '*.routing'
     filetype: drupal_next_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
-  values:
+  values: &v0
     target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
   id: {template: 'drupal{target}|{m}'}
   line: {capture: m}
@@ -24,12 +24,8 @@ rules:
 - rule: endpoint_method_listed_first
   reads: file
   in: [module_root]
-  match:
-    file: '*.routing'
-    filetype: drupal_next_yml_text
-    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
-  values:
-    target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
+  match: *m0
+  values: *v0
   id: {template: 'drupal{target}|{m}'}
   line: {capture: m}
   emits:
@@ -38,11 +34,11 @@ rules:
 - rule: endpoint_method_listed_second_node
   reads: file
   in: [module_root]
-  match:
+  match: &m1
     file: '*.routing'
     filetype: drupal_next_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){1}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
-  values:
+  values: &v1
     target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
   id: {template: 'drupal{target}|{m}'}
   line: {capture: m}
@@ -52,12 +48,8 @@ rules:
 - rule: endpoint_method_listed_second
   reads: file
   in: [module_root]
-  match:
-    file: '*.routing'
-    filetype: drupal_next_yml_text
-    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){1}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
-  values:
-    target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
+  match: *m1
+  values: *v1
   id: {template: 'drupal{target}|{m}'}
   line: {capture: m}
   emits:
@@ -66,11 +58,11 @@ rules:
 - rule: endpoint_method_listed_third_node
   reads: file
   in: [module_root]
-  match:
+  match: &m2
     file: '*.routing'
     filetype: drupal_next_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){2}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
-  values:
+  values: &v2
     target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
   id: {template: 'drupal{target}|{m}'}
   line: {capture: m}
@@ -80,12 +72,8 @@ rules:
 - rule: endpoint_method_listed_third
   reads: file
   in: [module_root]
-  match:
-    file: '*.routing'
-    filetype: drupal_next_yml_text
-    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){2}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
-  values:
-    target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
+  match: *m2
+  values: *v2
   id: {template: 'drupal{target}|{m}'}
   line: {capture: m}
   emits:

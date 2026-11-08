@@ -73,11 +73,15 @@ files:
         open: '(?m)^[ \t]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(?<name>\w+)\s*(?:<[^()]*?>\s*)?\((?s:.{0,800}?)\)(?::(?:[^{};]|\{[^{}]*\})*?)?(?<=[\w>\]\)}''"`])\s*(?=\{)'
         balance: ['{', '}']
       - name: function_body
-        open: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?:(?:<[^()]*?>\s*)?\((?:[^()]|\([^()]*\))*\)(?::(?:[^{};]|\{[^{}]*\})*?)?|\w+)\s*=>\s*(?=\{)'
+        open: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?!(?:React\.)?(?:forwardRef|memo|useCallback|useMemo)\b)(?:(?:<[^()]*?>\s*)?\((?:[^()]|\([^()]*\))*\)(?::(?:[^{};]|\{[^{}]*\})*?)?|\w+)\s*=>\s*(?=\{)'
         balance: ['{', '}']
       - name: function_body
-        open: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?:(?:<[^()]*?>\s*)?\((?:[^()]|\([^()]*\))*\)(?::(?:[^{};]|\{[^{}]*\})*?)?|\w+)\s*=>\s*(?=(?:new\s+)?[\w.]*\s*\()'
+        open: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?!(?:React\.)?(?:forwardRef|memo|useCallback|useMemo)\b)(?:(?:<[^()]*?>\s*)?\((?:[^()]|\([^()]*\))*\)(?::(?:[^{};]|\{[^{}]*\})*?)?|\w+)\s*=>\s*(?=(?:new\s+)?[\w.]*\s*\()'
         balance: ['(', ')']
       - name: function_body
         open: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:React\.)?(?:forwardRef|memo)\b(?:<[^()]*?>)?(?=\()'
+        balance: ['(', ')']
+      # A const whose value is a useCallback or useMemo call: the call's parentheses hold the function.
+      - name: function_body
+        open: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:React\.)?(?:useCallback|useMemo)\b\s*(?:<[^()]*?>)?(?=\()'
         balance: ['(', ')']

@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A TypeScript const whose value is a `useCallback` or `useMemo` call is a function: it gets a `typescript.function` node, a `declares_callable` edge and a binding, and the calls inside it start at it.
+- The Drupal rutter gives a component's path attribute its own edge kind, `component_links_path`, from the component node, so the rule fires once per component file; `links_to_path` keeps classes, functions and templates.
+- The Drupal entity handler rule reads every handler key: storage, storage schema, access, list builder, view builder, views data, translation, the four form operations and the route provider's html handler.
+
+### Changed
+
+- A function, component or hook declared inside another function takes the enclosing names in its id, `module:Outer:name`, so two nested declarations with one name in one file stay apart and a call inside one starts at the right node. The TypeScript, React, Next.js and Drupal-next rules that name the enclosing function join the whole path with `:`.
+- A value read from the enclosing spans takes `excluding_own: true` to leave out the span that opens where the match starts, the one the match itself opens: a declaration that opens a `function_body` span then reads only the functions around it, and the key word that opens an OAuth scope string is no longer read as a scope.
+- The loader checks the names a `try` block's steps use the same way as the steps outside it, and refuses a rule whose step names a capture nothing before it made.
+- The Drupal rutter's `psr4_class` reads `<module>/tests/src/A.php` as `Drupal\Tests\<module>\A`, so the second path value that worked around it goes, and the permission-check edge no longer starts at interfaces, which have no body.
+- Twin rules that share one match live in one file with a YAML anchor: the TypeScript function rules, the React component and hook rules and the Drupal-next endpoint method rules.
+
 ## [0.5.0] - 2026-11-07
 
 ### Added

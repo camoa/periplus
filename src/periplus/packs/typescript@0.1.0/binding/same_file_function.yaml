@@ -11,6 +11,9 @@ rules:
     filetype: typescript
     reads_sections: [string]
     text: '(?m)^[ \t]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(?<name>\w+)\b'
+  values: 
+    outer: {from: {enclosing: function_body, capture: name, excluding_own: true}, join: ':'}
+    qualified: {template: '{outer}:{name}', normalize: [{replace: '^:', with: ''}]}
   emits:
-  - binding: {name: '{name}', target: '{module}:{name}'}
+  - binding: {name: '{name}', target: '{module}:{qualified}'}
   confidence: inferred

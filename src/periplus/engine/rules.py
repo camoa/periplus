@@ -472,7 +472,7 @@ def _texts(
         values.update(paths)
         for value in rule.values:
             if value.enclosing is not None:
-                held = _held(spans, value.enclosing, found.start())
+                held = _held(spans, value.enclosing, found.start(), value.excluding_own)
                 values[value.name] = _reshape(value.join.join(held), value.normalize, value.case)
                 continue
             made = _value(value, values)
@@ -660,14 +660,19 @@ def _spans(
     return sorted(found, key=lambda span: (span[1], span[2], span[0]))
 
 
-def _held(spans: list[Span], enclosing: tuple[str, str], at: int) -> list[str]:
+def _held(
+    spans: list[Span], enclosing: tuple[str, str], at: int, excluding_own: bool = False
+) -> list[str]:
     """The capture of each span of the name that holds the offset, outermost first; a span whose
-    capture is absent or empty adds nothing."""
+    capture is absent or empty adds nothing. With ``excluding_own``, a span that opens at the
+    offset itself is the match's own and is left out, so a declaration that opens a span reads
+    only the spans around it."""
     name, capture = enclosing
     return [
         captured[capture]
         for span, begin, end, captured in spans
         if span == name and begin <= at < end and captured.get(capture)
+        and not (excluding_own and begin == at)
     ]
 
 

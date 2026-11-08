@@ -21,9 +21,7 @@ rules:
     # Nested functions join their names; the innermost one is the caller.
     fn:
       from: {enclosing: function_body, capture: name}
-      join: '|'
-      normalize:
-      - {replace: '^.*\|', with: ''}
+      join: ':'
   id: {template: '{module}:{fn}'}
   line: {capture: url}
   emits: [{edge: {kind: function_calls_route, from: this_node, to: {template: '{target}'}}}]

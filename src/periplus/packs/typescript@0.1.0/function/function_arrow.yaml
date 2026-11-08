@@ -1,17 +1,32 @@
 $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
-# An arrow const that is neither component nor hook.
+# An arrow const that is neither component nor hook: its node, and the module's edge to it, from
+# one match. A declaration inside another function takes that function's name in its id
+# (`module:Outer:name`), the names the function_body spans give, so two nested declarations with one
+# name in one file stay apart and a call inside the nested one starts at it.
 
 rules:
 - rule: function_node_arrow
   reads: file
   in: [typescript_source]
-  match:
+  match: &function_arrow_match
     file: '**'
     filetype: typescript
     reads_sections: [string]
-    text: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>(?!use[A-Z])(?![A-Z]\w*[a-z])\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?:<[^()]*?>\s*)?(?:\((?:[^()]|\([^()]*\))*\)\s*(?::\s*[^=\n]+)?\s*=>|\w+\s*=>)'
-  id: {template: '{module}:{name}'}
+    text: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>(?!use[A-Z])(?![A-Z]\w*[a-z])\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?!(?:React\.)?(?:forwardRef|memo|useCallback|useMemo)\b)(?:<[^()]*?>\s*)?(?:\((?:[^()]|\([^()]*\))*\)\s*(?::\s*[^=\n]+)?\s*=>|\w+\s*=>)'
+  values: &nested_name
+    outer: {from: {enclosing: function_body, capture: name, excluding_own: true}, join: ':'}
+    qualified: {template: '{outer}:{name}', normalize: [{replace: '^:', with: ''}]}
+  id: {template: '{module}:{qualified}'}
   line: {capture: name}
   emits: [{node: {type: typescript.function}}]
+  confidence: declared
+- rule: function_edge_arrow
+  reads: file
+  in: [typescript_source]
+  match: *function_arrow_match
+  values: *nested_name
+  id: {template: '{module}'}
+  line: {capture: name}
+  emits: [{edge: {kind: declares_callable, from: this_node, to: {template: '{module}:{qualified}'}}}]
   confidence: declared

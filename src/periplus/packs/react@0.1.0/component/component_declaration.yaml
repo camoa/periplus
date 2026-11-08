@@ -1,17 +1,31 @@
 $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
-# A function declaration named as a component.
+# A function declaration named as a component: its node, and the module's edge to it, from one
+# match. # A component or hook declared inside another function takes that function's name in its id
+# (`module:Outer:Name`), so two nested declarations with one name in one file stay apart.
 
 rules:
 - rule: component_node_declaration
   reads: file
   in: [typescript_source]
-  match:
+  match: &component_declaration_match
     file: '**'
     filetype: typescript
     reads_sections: [string]
     text: '(?m)^[ \t]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(?<name>(?=\w*[a-z])[A-Z]\w*)\b'
-  id: {template: '{module}:{name}'}
+  values: &nested_name
+    outer: {from: {enclosing: function_body, capture: name, excluding_own: true}, join: ':'}
+    qualified: {template: '{outer}:{name}', normalize: [{replace: '^:', with: ''}]}
+  id: {template: '{module}:{qualified}'}
   line: {capture: name}
   emits: [{node: {type: react.component}}]
+  confidence: inferred
+- rule: component_edge_declaration
+  reads: file
+  in: [typescript_source]
+  match: *component_declaration_match
+  values: *nested_name
+  id: {template: '{module}'}
+  line: {capture: name}
+  emits: [{edge: {kind: declares_component, from: this_node, to: {template: '{module}:{qualified}'}}}]
   confidence: inferred
