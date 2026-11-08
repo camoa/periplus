@@ -99,7 +99,8 @@ jobs:
           for pack in advancedqueue_basic ai_basic config_pages_basic crop_basic drupal \
             drupal_basic drupal_js_basic drush_basic eck_basic go go_basic js_basic laravel_basic \
             paragraphs_basic php php_basic profile_basic salesforce_basic twig twig_basic \
-            twig_tweak_basic webform_basic yaml yaml_basic; do
+            twig_tweak_basic webform_basic yaml yaml_basic \
+            typescript react nextjs drupal_more drupal_next; do
             echo "== $pack"
             periplus validate "$pack" || status=1
           done

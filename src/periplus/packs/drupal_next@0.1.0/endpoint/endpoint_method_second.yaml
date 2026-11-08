@@ -1,7 +1,7 @@
 $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
-# The second method a route lists: the POST of methods: [GET, POST]. A third method, and a methods list written
-# one item per line is not read.
+# The second method a route lists: the POST of methods: [GET, POST]. endpoint_method_third reads
+# a third; endpoint_method_listed reads a list written one item per line.
 
 rules:
 - rule: endpoint_method_second_node

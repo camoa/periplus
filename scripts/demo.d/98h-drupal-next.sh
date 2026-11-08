@@ -60,6 +60,24 @@ printf 'id: demo\nlabel: Demo\nbase_url: https://example.com\npreview_url: https
     >"$site/config/sync/next.next_site.demo.yml"
 printf 'id: node.article\nsite_resolver: site_selector\nconfiguration:\n  sites:\n    demo: demo\n' \
     >"$site/config/sync/next.next_entity_type_config.node.article.yml"
+cat >"$module/mymodule.routing.yml" <<'YML'
+mymodule.items:
+  path: '/api/items'
+  defaults:
+    _controller: '\Drupal\mymodule\Controller\Items::list'
+  methods: [GET, POST, PATCH]
+  requirements:
+    _permission: 'access content'
+mymodule.item:
+  path: '/api/items/{id}'
+  defaults:
+    _controller: '\Drupal\mymodule\Controller\Items::one'
+  methods:
+    - PUT
+    - DELETE
+  requirements:
+    _permission: 'access content'
+YML
 cat >"$site/frontend/lib/items.ts" <<'TS'
 export async function loadNode(drupal: { fetch: (path: string) => Promise<Response> }) {
   return drupal.fetch('/node/1');
@@ -96,7 +114,9 @@ types = {n["type"] for n in document["nodes"]}
 kinds = {e["kind"] for e in document["edges"]}
 missing = [t for t in ("drupal_more.base_field", "drupal_next.site") if t not in types]
 missing += [k for k in ("has_handler", "checks_permission", "next_config_for_bundle",
-                        "calls_endpoint") if k not in kinds]
+                        "calls_endpoint", "endpoint_method_served_by") if k not in kinds]
+methods = {n["id"].rsplit("|", 1)[-1] for n in document["nodes"] if n["type"] == "drupal_next.endpoint_method"}
+missing += [f"endpoint_method {m}" for m in ("GET", "POST", "PATCH", "PUT", "DELETE") if m not in methods]
 if missing:
     sys.exit(f"drupal next: the map lacks {', '.join(missing)}")
 PY

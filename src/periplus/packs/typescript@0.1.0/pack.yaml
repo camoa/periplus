@@ -65,8 +65,8 @@ files:
       - name: import_named_relative
         open: '(?m)^import\s+(?:type\s+)?(?:\w+\s*,\s*)?(?=\{[^}]*\}\s*from\s*[''"](?<src>\.{1,2}(?:/[^''"]*)?)[''"])'
         balance: ['{', '}']
-      # The parameter list of an arrow cannot hold a `) =>`, so an expression-bodied arrow does not
-      # reach the next callback's body.
+      # An arrow's parameter list is matched as balanced parentheses, so the open consumes exactly
+      # that list and an expression-bodied arrow does not reach the next callback's body.
       # The function a declaration or const opens, so a call can name the function it sits in. Each
       # open match consumes the parameter list and return type, so the span starts at the body.
       - name: function_body

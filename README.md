@@ -234,9 +234,9 @@ are copied into a project's `.periplus/packs`. The tables group them by language
 </details>
 
 <details>
-<summary><strong>Drupal: 4 core rutters and 11 contributed-module rutters</strong></summary>
+<summary><strong>Drupal: 3 core rutters and 12 contributed-module rutters</strong></summary>
 
-The four core rutters come first. Each contributed module has a rutter of its own, pinned
+The three core rutters come first. Each contributed module has a rutter of its own, pinned
 beside `drupal_basic` when the site uses that module.
 
 | Rutter | Version | What it finds |
@@ -244,11 +244,11 @@ beside `drupal_basic` when the site uses that module.
 | `drupal_basic` | 0.3.0 | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays and plugins. The services and entity types that `\Drupal::service('x')`, `$container->get('x')`, `\Drupal::entityQuery('x')` and an entity type manager's `getStorage('x')` name in PHP functions and methods. Hooks from `Hook` attribute methods, and from procedural functions named by their file's name, such as `mymod_cron` in `mymod.module`. Depends on `php_basic`, `yaml_basic` and `twig_basic`. |
 | `drupal_js_basic` | 0.0.1 | Drupal behaviors and the behaviors they attach, `drupalSettings` keys that PHP attaches and behaviors read, and the libraries that PHP and templates attach. Depends on `js_basic` and `drupal_basic`. |
 | `drupal_more` | 0.1.0 | Base fields an entity class defines and the entity type a reference field targets, the PHP class or trait that reads or writes a field by name, the handler classes an entity annotation names, `Job::create('type')` calls, and `->hasPermission('literal')` checks. Depends on `drupal_basic` and `advancedqueue_basic`. |
-| `drupal_next` | 0.1.0 | The next module's sites, per-bundle settings and four plugin kinds, the site's preview and revalidate handlers in the Next.js app, Drupal endpoints with their HTTP methods from routing files and REST resources, the TypeScript calls to an endpoint, JSON:API resources and OAuth scopes. Depends on `drupal_basic`, `php_basic`, `typescript`, `react` and `nextjs`. |
 | `ai_basic` | 0.0.1 | The AI module's agent plugins and function call plugins, by attribute, each joined to its class. |
 | `advancedqueue_basic` | 0.0.1 | The Advanced Queue module's job type plugins, by attribute or annotation, each joined to its class. |
 | `config_pages_basic` | 0.0.1 | Each Config Pages type, from its config file, as a bundle of the entity type `config_pages`. |
 | `crop_basic` | 0.0.1 | Each Crop API crop type, from its config file, as a bundle of the entity type `crop`. |
+| `drupal_next` | 0.1.0 | The next module's sites, per-bundle settings and four plugin kinds, the site's preview and revalidate handlers in the Next.js app, Drupal endpoints with their HTTP methods from routing files and REST resources, the TypeScript calls to an endpoint, JSON:API resources and OAuth scopes. Depends on `drupal_basic`, `php_basic`, `typescript`, `react` and `nextjs`. |
 | `drush_basic` | 0.0.1 | Drush commands in the custom modules, from the `Command` attribute or the `@command` tag, each joined to its method and class. |
 | `eck_basic` | 0.0.1 | Each Entity Construction Kit entity type, and each of its bundles, from their config files. |
 | `paragraphs_basic` | 0.0.1 | Each paragraph type, from its config file, as a bundle of the entity type `paragraph`. |

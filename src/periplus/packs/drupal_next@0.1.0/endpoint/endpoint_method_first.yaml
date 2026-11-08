@@ -1,7 +1,8 @@
 $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
-# The first method a route lists: methods: [GET] or methods: [GET, POST]. A methods list written
-# one item per line is not read.
+# The first method a route lists: methods: [GET] or methods: [GET, POST]. endpoint_method_second
+# and endpoint_method_third read the next two; endpoint_method_listed reads a list written one
+# item per line.
 
 rules:
 - rule: endpoint_method_first_node

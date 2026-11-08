@@ -20,8 +20,11 @@ cat >"$site/lib/load.ts" <<'TS'
 import { formatItem } from './format';
 
 export async function loadItems(): Promise<string[]> {
-  const response = await fetch('/api/items');
-  const items: string[] = await response.json();
+  async function inner(): Promise<string[]> {
+    const response = await fetch('/api/items');
+    return response.json();
+  }
+  const items: string[] = await inner();
   return items.map(formatItem);
 }
 TS
@@ -36,7 +39,10 @@ import { useItems } from './useItems';
 
 export function List() {
   const items = useItems();
-  return <div><Card name={items[0]} /></div>;
+  const Row = () => {
+    return <li><Card name={items[0]} /></li>;
+  };
+  return <ul><Row /></ul>;
 }
 TS
 cat >"$site/components/useItems.ts" <<'TS'
@@ -92,6 +98,15 @@ missing += [k for k in ("imports", "uses_hook", "renders_component", "calls_rout
             if k not in kinds]
 if not any(target.endswith("GET") for target in handles):
     missing.append("handles_method for GET")
+def edge(kind, src, dst):
+    return any(e["kind"] == kind and e["from"].endswith(src) and e["to"].endswith(dst)
+               for e in document["edges"])
+if not edge("renders_component", "components/List:List", "components/List:Row"):
+    missing.append("renders_component from List to its nested Row, written right after >")
+if not edge("renders_component", "components/List:Row", "components/Card:Card"):
+    missing.append("renders_component from the nested Row to Card")
+if not any(e["kind"] == "function_calls_route" and e["from"].endswith("lib/load:inner") for e in document["edges"]):
+    missing.append("function_calls_route from the nested function inner")
 if missing:
     sys.exit(f"typescript stacks: the map lacks {', '.join(missing)}")
 PY
