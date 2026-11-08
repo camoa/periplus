@@ -1,0 +1,26 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# More Drupal PHP reading, on drupal_basic's PHP text type: base fields an entity class defines,
+# the PHP that reads and writes a field by name, and the handler classes an entity type names.
+# It adds no file type and no folder; drupal_basic's source and entity_type_classes folders and
+# its drupal_php_text type serve every rule.
+
+pack: drupal_more
+version: 0.1.0
+depends: [drupal_basic, advancedqueue_basic]
+
+files:
+  types:
+    # drupal_basic's psr4_class reads tests/src/X as Drupal\tests\X, a class that exists nowhere.
+    # This value reads a test file as Drupal\Tests\<module>\X and any other file under src as
+    # psr4_class does. The empty-or-tests/ capture always takes part, so the value is never absent.
+    drupal_php_text:
+      endings: [php, module, theme, inc, install, profile]
+      reader: text
+      path_values:
+        class_or_test_class:
+          pattern: '^(?:.*?/)?(?<module>[^/]+)/(?<tests>(?:tests/)?)src/(?<rest>.+)\.php$'
+          template: 'Drupal\{tests}{module}\{rest}'
+          normalize:
+          - {replace: '^Drupal\\tests/', with: 'Drupal\Tests\'}
+          - {replace: '/', with: '\'}

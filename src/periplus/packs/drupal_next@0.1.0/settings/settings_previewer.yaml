@@ -1,0 +1,27 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The site previewer next.settings picks for the whole site.
+
+edge_kinds:
+- kind: next_settings_uses_previewer
+  from: drupal.config_object
+  to: drupal_next.site_previewer
+rules:
+- rule: next_settings_previewer
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: next.settings
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: next_settings_uses_previewer
+      from: this_node
+      to:
+        from:
+          key: site_previewer
+  confidence: declared

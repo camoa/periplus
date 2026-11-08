@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A top-level function's use of a JSON:API resource.
+
+edge_kinds:
+- kind: function_uses_jsonapi_resource
+  from: [react.component, react.hook, typescript.function]
+  to: drupal_next.jsonapi_resource

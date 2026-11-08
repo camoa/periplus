@@ -1,0 +1,42 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# Declared by the SiteResolver docblock annotation on its class. Two rules, because a rule that emits an
+# edge emits no node.
+
+rules:
+- rule: next_site_resolver_from_annotation
+  reads: file
+  in:
+  - next_site_resolver_classes
+  match:
+    annotation: SiteResolver
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal_next.site_resolver
+  confidence: declared
+- rule: next_site_resolver_from_annotation_edges
+  reads: file
+  in:
+  - next_site_resolver_classes
+  match:
+    annotation: SiteResolver
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      annotation_key: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared

@@ -1,0 +1,16 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A const holding an arrow, function or wrapped component binds its own name to this module.
+
+rules:
+- rule: same_file_const
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b[^=\n]*=\s*(?:async\s*)?(?:(?:<[^()]*?>\s*)?\((?s:[^()]*)\)\s*(?::[^=;{]*)?=>|\w+\s*=>|function\b|forwardRef\b|memo\b|React\.)'
+  emits:
+  - binding: {name: '{name}', target: '{module}:{name}'}
+  confidence: inferred

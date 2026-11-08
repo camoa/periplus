@@ -1,0 +1,32 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A JSX tag inside a function body that the file binds to a component.
+
+rules:
+- rule: component_render
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?<![\w.)\]])<(?<callee>[A-Z]\w*)(?=[\s/>])'
+  values:
+    # Nested functions join their names; the innermost one is the caller.
+    fn:
+      from: {enclosing: function_body, capture: name}
+      join: '|'
+      normalize:
+      - {replace: '^.*\|', with: ''}
+  id: {template: '{module}:{fn}'}
+  line: {capture: callee}
+  emits:
+  - edge:
+      kind: renders_component
+      from: this_node
+      to:
+        from: {capture: callee}
+        types: [react.component]
+        resolve: [bound_first_segment]
+        separator: ':'
+  confidence: inferred

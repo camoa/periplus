@@ -1,0 +1,27 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The preview URL generator next.settings picks for the whole site.
+
+edge_kinds:
+- kind: next_settings_uses_url_generator
+  from: drupal.config_object
+  to: drupal_next.preview_url_generator
+rules:
+- rule: next_settings_url_generator
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: next.settings
+    filetype: yaml
+  id:
+    from: file_stem
+  emits:
+  - edge:
+      kind: next_settings_uses_url_generator
+      from: this_node
+      to:
+        from:
+          key: preview_url_generator
+  confidence: declared

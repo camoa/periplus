@@ -1,0 +1,23 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# Joins a resource to its entity type.
+
+edge_kinds:
+- kind: resource_is_entity_type
+  from: drupal_next.jsonapi_resource
+  to: drupal.entity_type
+rules:
+- rule: resource_to_entity_type
+  reads: map
+  match:
+    node_type: drupal_next.jsonapi_resource
+    where:
+    - id_matches: ^drupal_next\.jsonapi_resource::(?<entity>[a-z_]+)--(?<bundle>[a-z_-]+)$
+    follow:
+    - node: drupal.entity_type::{entity}
+  emits:
+  - edge:
+      kind: resource_is_entity_type
+      from: this_node
+      to: matched_node
+  confidence: declared

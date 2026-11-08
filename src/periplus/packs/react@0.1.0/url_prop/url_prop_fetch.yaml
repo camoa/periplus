@@ -1,0 +1,12 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# fetch(url) where url may be a prop: the name is the prop's, shared across modules.
+
+rules:
+- rule: fetch_prop_name
+  reads: file
+  in: [typescript_source]
+  match: {file: '**', filetype: typescript, text: '(?<![.\w])fetch\(\s*(?<var>\w+)!?\s*[,)]'}
+  id: {template: '{module}'}
+  emits: [{edge: {kind: fetches_name, from: this_node, to: {template: 'prop|{var}'}}}]
+  confidence: inferred

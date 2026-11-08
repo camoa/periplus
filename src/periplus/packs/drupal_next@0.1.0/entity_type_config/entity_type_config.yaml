@@ -1,0 +1,7 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A next_entity_type_config says how one bundle reaches its sites.
+
+node_types:
+- name: drupal_next.entity_type_config
+  id_namespace: drupal_next.entity_type_config

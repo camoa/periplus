@@ -1,0 +1,9 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+node_types:
+- name: drupal_next.module_absent
+  id_namespace: drupal_next.module_absent
+edge_kinds:
+- kind: inert_because
+  from: drupal.rest_resource
+  to: drupal_next.module_absent

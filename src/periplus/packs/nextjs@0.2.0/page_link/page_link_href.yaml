@@ -1,0 +1,25 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# An href on a link or an anchor, as a string or a template. Inferred, as the pattern reads a name, not what the
+# name is bound to.
+
+rules:
+- rule: link_to_page_href
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '\bhref=\{?[`''"](?<url>/(?:[^/`''"\s][^`''"\s]*)?)[`''"]'
+  values:
+    target:
+      template: '{url}'
+      normalize:
+      - {replace: '[?#].*$', with: ''}
+      - {replace: '\$\{[^}]*\}', with: '[]'}
+      - {replace: '(?<=.)/$', with: ''}
+  id: {template: '{module}'}
+  line: {capture: url}
+  emits: [{edge: {kind: links_to_page, from: this_node, to: {template: '{target}'}}}]
+  confidence: inferred

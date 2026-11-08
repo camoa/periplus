@@ -1,0 +1,17 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The module's edge to the component that component_arrow finds.
+
+rules:
+- rule: component_edge_arrow
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>(?=\w*[a-z])[A-Z]\w*)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?:<[^()]*?>\s*)?(?:\((?:[^()]|\([^()]*\))*\)\s*(?::\s*[^=\n]+)?\s*=>|\w+\s*=>)'
+  id: {template: '{module}'}
+  line: {capture: name}
+  emits: [{edge: {kind: declares_component, from: this_node, to: {template: '{module}:{name}'}}}]
+  confidence: inferred

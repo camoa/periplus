@@ -1,0 +1,57 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A route mints its endpoint, so an endpoint left referenced is a call no mapped route serves: a
+# contrib route, or a call to nothing.
+
+rules:
+- rule: endpoint_from_routing
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t]+.*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \{[^}]+\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: drupal{target}
+  line:
+    capture: path
+  emits:
+  - node:
+      type: drupal_next.endpoint
+  confidence: declared
+- rule: endpoint_served_by_route
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t]+.*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \{[^}]+\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: '{route}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: endpoint_served_by
+      from:
+        template: drupal{target}
+      to: this_node
+  confidence: declared

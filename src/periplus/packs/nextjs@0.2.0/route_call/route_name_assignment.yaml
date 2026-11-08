@@ -1,0 +1,26 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A URL assigned to a variable or given as a default, const x = '/api/...'. Writing a URL is not
+# calling it, so the edge is names_route. Inferred: the pattern reads a name, not what the value is
+# later used for.
+
+rules:
+- rule: names_route_assignment
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?<=\s)=(?![=>])\s*[`''"](?<url>/api/[^`''"\s]*)[`''"]'
+  values:
+    target:
+      template: '{url}'
+      normalize:
+      - {replace: '[?#].*$', with: ''}
+      - {replace: '\$\{[^}]*\}', with: '[]'}
+      - {replace: '(?<=.)/$', with: ''}
+  id: {template: '{module}'}
+  line: {capture: url}
+  emits: [{edge: {kind: names_route, from: this_node, to: {template: '{target}'}}}]
+  confidence: inferred

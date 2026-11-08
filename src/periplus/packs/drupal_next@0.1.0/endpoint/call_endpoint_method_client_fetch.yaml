@@ -1,0 +1,38 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# drupal.fetch('/path', { method: 'POST' }): the client is known by its variable name only.
+
+rules:
+- rule: call_endpoint_method_client_fetch
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: |-
+      \bdrupal\w*\.fetch\(\s*[`'\"](?<path>/(?!jsonapi\b)[^`'\"?]*)[`'\"]\s*,\s*\{(?:[^{}]|\{[^{}]*\})*?\bmethod:\s*['\"](?<m>[A-Z]+)
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \$\{[^}]*$
+        with: ''
+      - replace: (?<=[^/])\$\{[^}]*\}$
+        with: ''
+      - replace: \$\{[^}]*\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: '{module}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: calls_endpoint_method
+      from: this_node
+      to:
+        template: 'drupal{target}|{m}'
+  confidence: inferred

@@ -1,0 +1,30 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# route_call_fetch, from the function that makes the call. A fetch outside any function makes nothing.
+
+rules:
+- rule: fetch_own_route_in_function
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: (?<![.\w])fetch\(\s*[`'"](?<url>/[^`'"\s]*)[`'"]
+  values:
+    target:
+      template: '{url}'
+      normalize:
+      - {replace: '[?#].*$', with: ''}
+      - {replace: '\$\{[^}]*\}', with: '[]'}
+      - {replace: '(?<=.)/$', with: ''}
+    # Nested functions join their names; the innermost one is the caller.
+    fn:
+      from: {enclosing: function_body, capture: name}
+      join: '|'
+      normalize:
+      - {replace: '^.*\|', with: ''}
+  id: {template: '{module}:{fn}'}
+  line: {capture: url}
+  emits: [{edge: {kind: function_calls_route, from: this_node, to: {template: '{target}'}}}]
+  confidence: inferred

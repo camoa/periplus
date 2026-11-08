@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# loading, error, not-found, template, default and global-error, named by their module so that two
+# of one kind on one URL stay apart.
+
+node_types:
+- name: nextjs.special_file
+  id_namespace: nextjs.special_file

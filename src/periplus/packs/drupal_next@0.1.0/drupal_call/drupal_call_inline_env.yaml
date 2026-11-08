@@ -1,0 +1,37 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The env var written inside the template itself.
+
+rules:
+- rule: call_through_inline_env
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '`\$\{process\.env\.NEXT_PUBLIC_DRUPAL_BASE_URL\}(?<path>/(?!jsonapi\b)[^`?]*)'
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \$\{[^}]*$
+        with: ''
+      - replace: (?<=[^/])\$\{[^}]*\}$
+        with: ''
+      - replace: \$\{[^}]*\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: '{module}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: calls_endpoint
+      from: this_node
+      to:
+        template: drupal{target}
+  confidence: inferred

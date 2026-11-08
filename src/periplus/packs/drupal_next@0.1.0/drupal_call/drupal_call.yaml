@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A Next.js module's call to a Drupal endpoint.
+
+edge_kinds:
+- kind: calls_endpoint
+  from: typescript.module
+  to: drupal_next.endpoint

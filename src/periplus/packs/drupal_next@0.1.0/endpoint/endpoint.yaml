@@ -1,0 +1,13 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# An endpoint is one path on the Drupal server, with each parameter written {}, because Drupal
+# writes {item_uuid} where the caller writes ${uuid}. The edge runs from the endpoint to the route,
+# so periplus path follows it from caller to controller.
+
+node_types:
+- name: drupal_next.endpoint
+  id_namespace: drupal_next.endpoint
+edge_kinds:
+- kind: endpoint_served_by
+  from: drupal_next.endpoint
+  to: drupal.route

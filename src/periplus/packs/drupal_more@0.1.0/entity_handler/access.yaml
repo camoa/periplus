@@ -1,0 +1,16 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The access control handler a content entity annotation names.
+
+rules:
+- rule: handler_access
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^ \*\s+"(?<h>access)"\s*=\s*"(?<c>Drupal\\[\w\\]+)"'
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: has_handler, from: this_node, to: {template: '{c}'}}}]
+  confidence: declared

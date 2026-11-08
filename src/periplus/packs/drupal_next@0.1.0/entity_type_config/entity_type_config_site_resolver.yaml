@@ -1,0 +1,30 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The site resolver plugin the config names.
+
+edge_kinds:
+- kind: next_config_uses_site_resolver
+  from: drupal_next.entity_type_config
+  to: drupal_next.site_resolver
+rules:
+- rule: next_entity_type_config_site_resolver
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: next.next_entity_type_config.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - replace: ^next\.next_entity_type_config\.
+      with: ''
+  emits:
+  - edge:
+      kind: next_config_uses_site_resolver
+      from: this_node
+      to:
+        from:
+          key: site_resolver
+  confidence: declared

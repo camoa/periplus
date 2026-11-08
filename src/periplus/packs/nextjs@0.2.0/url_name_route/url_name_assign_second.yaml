@@ -1,0 +1,19 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The same name also holds the route after a colon.
+
+rules:
+- rule: url_name_assign_second
+  reads: file
+  in: [typescript_source]
+  match: {file: '**', filetype: typescript, text: '(?:const|let)\s+(?<var>\w+)\s*(?::\s*\w+\s*)?=\s*[^;\n]*?[`''"]/api/[^`''"\s]*[`''"][^;\n]*?:\s*[`''"](?<url>/api/[^`''"\s]*)[`''"]'}
+  values:
+    target:
+      template: '{url}'
+      normalize:
+      - {replace: '[?#].*$', with: ''}
+      - {replace: '\$\{[^}]*\}', with: '[]'}
+      - {replace: '(?<=.)/$', with: ''}
+  id: {template: '{module}|{var}'}
+  emits: [{edge: {kind: name_holds_route, from: this_node, to: {template: '{target}'}}}]
+  confidence: inferred

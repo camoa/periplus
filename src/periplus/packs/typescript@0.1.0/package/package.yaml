@@ -1,0 +1,11 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# An npm package a module imports.
+
+node_types:
+- name: typescript.package
+  id_namespace: typescript.package
+edge_kinds:
+- kind: uses_package
+  from: typescript.module
+  to: typescript.package

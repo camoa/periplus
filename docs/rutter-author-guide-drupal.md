@@ -6,6 +6,7 @@ map states what a site declares: configuration, services, routes, plugins, hooks
 libraries, and the PHP classes behind them. `php_basic` is the language half: classes, interfaces,
 traits, enums, functions, methods and their edges. `drupal_basic` is the framework half. It depends
 on `yaml_basic`, `php_basic` and `twig_basic`, so its rules may name their types and file types.
+A bundled path value that misreads a path is fixed in its own pack, never shadowed by a second value.
 
 ## The manifest of php_basic
 
@@ -132,7 +133,8 @@ constant id, which goes under `skipped`.
 
 An annotation rule, `block_plugin_from_annotation`, reads the docblock before a class. It
 differs from the attribute rule in its match and id: it takes the id from the `id` key, and also
-records `admin_label` on the node.
+records `admin_label` on the node. Probe `annotation_key` before reading a docblock key as text on
+the guess that the grammar cannot reach it.
 
 ```yaml drupal_basic@0.3.0/block_plugin/block_plugin_annotation.yaml
 match:
@@ -149,7 +151,9 @@ id:
 A data rule reads a YAML file as data. `each` fires once per key under `services`. `where` lists
 conditions that must all hold: `id_matches` tests that key against a pattern, here no leading
 underscore, and `key` tests a value below it, here that `alias` is set. `id` with `from: key` takes
-the key itself, the service's name.
+the key itself, the service's name. YAML read as text to reshape a value, or to take a list's first
+and second item, misreads this: `route_definition.yaml` reshapes a key's value with `pattern` and
+`template`, and `each` walks every item.
 
 ```yaml drupal_basic@0.3.0/service/service_definition.yaml
 - rule: service_alias_from_services_file

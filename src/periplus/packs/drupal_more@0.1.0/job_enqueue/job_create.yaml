@@ -1,0 +1,23 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Job::create('type', ...) or \Drupal\advancedqueue\Job::create('type', ...). A type given by a
+# variable makes nothing and is listed under skipped. A call outside any mapped method or function
+# is listed under skipped too.
+
+rules:
+- rule: job_create
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?(?:Drupal\\advancedqueue\\)?Job'}
+    - name_matches: {child: name, pattern: 'create'}
+  emits:
+  - edge:
+      kind: enqueues_job
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.queue_job_type]}
+  confidence: declared

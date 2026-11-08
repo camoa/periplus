@@ -1,0 +1,9 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# One module importing another. A name that resolves to no file, such as a stylesheet, stays a
+# referenced node.
+
+edge_kinds:
+- kind: imports
+  from: typescript.module
+  to: typescript.module

@@ -1,0 +1,25 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A next-drupal client method called with the resource name.
+
+rules:
+- rule: resource_call_literal
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: \.(?:getResource|getResourceCollection|createResource|updateResource|deleteResource|getResourceCollectionPathSegments)(?:<[^>(]*>)?\(\s*['"](?<resource>[a-z_]+--[a-z_-]+)['"]
+  id:
+    template: '{module}'
+  line:
+    capture: resource
+  emits:
+  - edge:
+      kind: uses_jsonapi_resource
+      from: this_node
+      to:
+        template: '{resource}'
+  confidence: declared

@@ -1,0 +1,12 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# <Widget endpointUrl={url} />: the prop is given the name held in this module.
+
+rules:
+- rule: prop_given_name
+  reads: file
+  in: [typescript_source]
+  match: {file: '**', filetype: typescript, text: '(?<![\w.])(?<prop>\w*(?:[Uu]rl|[Ee]ndpoint|[Pp]ath))=\{(?<var>\w+)\}'}
+  id: {template: 'prop|{prop}'}
+  emits: [{edge: {kind: prop_given_name, from: this_node, to: {template: '{module}|{var}'}}}]
+  confidence: inferred

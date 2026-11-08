@@ -1,0 +1,39 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A word in a string assigned to a name ending in scope is taken to be a scope, so this is inferred.
+
+edge_kinds:
+- kind: uses_oauth_scope
+  from: typescript.module
+  to: drupal.config_object
+rules:
+- rule: oauth_scope_in_string
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: \b(?<word>[a-z][a-z0-9_]*)\b
+  values:
+    in_scope:
+      from:
+        enclosing: oauth_scope_string
+        capture: mark
+  id:
+    template: '{in_scope}|simple_oauth.oauth2_scope.{word}'
+    normalize:
+    - replace: ^.*\|
+      with: ''
+  line:
+    capture: word
+  emits:
+  - edge:
+      kind: uses_oauth_scope
+      from:
+        template: '{module}'
+        types:
+        - typescript.module
+      to: this_node
+  confidence: inferred

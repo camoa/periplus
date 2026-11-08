@@ -1,0 +1,23 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# Joins a resource to its bundle, so a resource with no bundle keeps no false edge.
+
+edge_kinds:
+- kind: resource_is_bundle
+  from: drupal_next.jsonapi_resource
+  to: drupal.bundle
+rules:
+- rule: resource_to_bundle
+  reads: map
+  match:
+    node_type: drupal_next.jsonapi_resource
+    where:
+    - id_matches: ^drupal_next\.jsonapi_resource::(?<entity>[a-z_]+)--(?<bundle>[a-z_-]+)$
+    follow:
+    - node: drupal.bundle::{entity}.{bundle}
+  emits:
+  - edge:
+      kind: resource_is_bundle
+      from: this_node
+      to: matched_node
+  confidence: declared

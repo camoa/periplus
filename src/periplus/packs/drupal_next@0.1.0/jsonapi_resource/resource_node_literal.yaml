@@ -1,0 +1,22 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A resource name written as a string.
+
+rules:
+- rule: resource_node_from_literal
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: "['\"](?<resource>[a-z_]+--[a-z_-]+)['\"]"
+  id:
+    template: '{resource}'
+  line:
+    capture: resource
+  emits:
+  - node:
+      type: drupal_next.jsonapi_resource
+  confidence: inferred

@@ -1,0 +1,37 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# fetch('/api/...') with the URL written as a string or a template, so a URL held in a variable makes
+# nothing. Inferred: the pattern reads a call's name, not what the name is bound to. A fetch method
+# on an object is refused, because a client object's fetch goes to another server.
+
+rules:
+- rule: fetch_own_route
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: (?<![.\w])fetch\(\s*[`'"](?<url>/[^`'"\s]*)[`'"]
+  values:
+    target:
+      template: '{url}'
+      normalize:
+      - replace: '[?#].*$'
+        with: ''
+      - replace: \$\{[^}]*\}
+        with: '[]'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: '{module}'
+  line:
+    capture: url
+  emits:
+  - edge:
+      kind: calls_route
+      from: this_node
+      to:
+        template: '{target}'
+  confidence: inferred

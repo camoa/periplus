@@ -1,0 +1,11 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A JSON:API resource as a caller names it, entity--bundle.
+
+node_types:
+- name: drupal_next.jsonapi_resource
+  id_namespace: drupal_next.jsonapi_resource
+edge_kinds:
+- kind: uses_jsonapi_resource
+  from: typescript.module
+  to: drupal_next.jsonapi_resource

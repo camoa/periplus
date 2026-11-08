@@ -1,0 +1,93 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The first three methods of a methods list written one item per line, as
+# methods:
+#   - GET
+#   - POST
+# A fourth item is not read.
+
+rules:
+- rule: endpoint_method_listed_first_node
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
+  values:
+    target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
+  id: {template: 'drupal{target}|{m}'}
+  line: {capture: m}
+  emits:
+  - node: {type: drupal_next.endpoint_method}
+  confidence: declared
+- rule: endpoint_method_listed_first
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
+  values:
+    target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
+  id: {template: 'drupal{target}|{m}'}
+  line: {capture: m}
+  emits:
+  - edge: {kind: endpoint_method_served_by, from: this_node, to: {template: '{route}'}}
+  confidence: declared
+- rule: endpoint_method_listed_second_node
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){1}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
+  values:
+    target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
+  id: {template: 'drupal{target}|{m}'}
+  line: {capture: m}
+  emits:
+  - node: {type: drupal_next.endpoint_method}
+  confidence: declared
+- rule: endpoint_method_listed_second
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){1}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
+  values:
+    target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
+  id: {template: 'drupal{target}|{m}'}
+  line: {capture: m}
+  emits:
+  - edge: {kind: endpoint_method_served_by, from: this_node, to: {template: '{route}'}}
+  confidence: declared
+- rule: endpoint_method_listed_third_node
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){2}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
+  values:
+    target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
+  id: {template: 'drupal{target}|{m}'}
+  line: {capture: m}
+  emits:
+  - node: {type: drupal_next.endpoint_method}
+  confidence: declared
+- rule: endpoint_method_listed_third
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){2}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
+  values:
+    target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
+  id: {template: 'drupal{target}|{m}'}
+  line: {capture: m}
+  emits:
+  - edge: {kind: endpoint_method_served_by, from: this_node, to: {template: '{route}'}}
+  confidence: declared

@@ -1,0 +1,17 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# One HTTP method on one endpoint, written <endpoint>|<METHOD>, as drupal/api/items|POST. A route
+# that lists no method accepts every method and has no method node. A caller that passes no method
+# calls GET. The edge from the method to the route lets periplus path tell two methods of one path
+# apart.
+
+node_types:
+- name: drupal_next.endpoint_method
+  id_namespace: drupal_next.endpoint_method
+edge_kinds:
+- kind: endpoint_method_served_by
+  from: drupal_next.endpoint_method
+  to: drupal.route
+- kind: calls_endpoint_method
+  from: typescript.module
+  to: drupal_next.endpoint_method

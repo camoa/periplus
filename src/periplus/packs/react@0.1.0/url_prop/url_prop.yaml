@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A prop that hands a URL name to the component that fetches it.
+
+edge_kinds:
+- kind: prop_given_name
+  from: typescript.url_name
+  to: typescript.url_name

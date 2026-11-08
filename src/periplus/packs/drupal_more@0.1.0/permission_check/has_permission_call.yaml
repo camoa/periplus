@@ -1,0 +1,14 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# ->hasPermission('access content'). The match needs a quote after the bracket, so a call that
+# passes a variable matches nothing and leaves no skipped row. A Prophecy stub, ->willReturn or
+# ->shouldBeCalled after the call, sets a permission up and checks nothing. Comments are not read.
+
+rules:
+- rule: has_permission_call
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '->hasPermission\(\s*''(?<p>[^'']+)''(?!\s*(?:,[^)]*)?\)\s*->(?:will|should))'}
+  id: {template: '{class_or_test_class}'}
+  emits: [{edge: {kind: checks_permission, from: this_node, to: {template: '{p}'}}}]
+  confidence: declared

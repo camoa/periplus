@@ -1,0 +1,18 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# One base field of an entity class: $fields['name'] = BaseFieldDefinition::create('type'). The id
+# is the class and the name, so two classes with one field name make two nodes.
+
+node_types:
+- {name: drupal_more.base_field, id_namespace: drupal_more.base_field}
+
+rules:
+- rule: base_field
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\$fields\[''(?<f>\w+)''\]\s*=\s*BaseFieldDefinition::create\(''(?<t>\w+)''\)'}
+  id: {template: '{psr4_class}|{f}'}
+  emits:
+  - node: {type: drupal_more.base_field}
+  - attribute: {name: field_type, from: {capture: t}}
+  confidence: declared

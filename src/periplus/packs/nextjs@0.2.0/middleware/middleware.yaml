@@ -1,0 +1,11 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The file Next.js runs before a request: middleware.ts, or proxy.ts.
+
+node_types:
+- name: nextjs.middleware
+  id_namespace: nextjs.middleware
+edge_kinds:
+- kind: middleware_in_module
+  from: nextjs.middleware
+  to: typescript.module

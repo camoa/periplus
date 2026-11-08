@@ -1,0 +1,42 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# Next.js on Drupal, both directions. config and plugin read the Drupal next module: its Next.js
+# sites, its per-bundle settings and its four plugin kinds. connect joins a Next.js module to the
+# Drupal route, bundle or scope it calls, and a Next.js site to the handlers Drupal calls. Site
+# secrets are never read into the map.
+
+pack: drupal_next
+version: 0.1.0
+depends: [drupal_basic, php_basic, typescript, react, nextjs]
+
+folders:
+  next_revalidator_classes: "{module_root}/src/Plugin/Next/Revalidator/**"
+  next_site_previewer_classes: "{module_root}/src/Plugin/Next/SitePreviewer/**"
+  next_site_resolver_classes: "{module_root}/src/Plugin/Next/SiteResolver/**"
+  next_preview_url_generator_classes: "{module_root}/src/Plugin/Next/PreviewUrlGenerator/**"
+
+files:
+  types:
+    # typescript's type, given one span: a scope string, which holds several scope names.
+    typescript:
+      endings: [ts, tsx]
+      reader: text
+      spans:
+      # The span runs from the name to the end of its line: the typescript strings are sections, so
+      # a closing quote can no longer end it. The first balance character is one no source holds,
+      # because the two must differ.
+      - name: oauth_scope_string
+        open: '(?<mark>\w*(?:SCOPE|scope))\b\s*[:=]\s*(?=["''`])'
+        balance: ["\x01", "\n"]
+    # Drupal's YAML read as text, because a rule can reshape a value only on a text match. The
+    # path values name the file a rule reads.
+    drupal_next_yml_text:
+      endings: [yml]
+      reader: text
+      path_values:
+        next_site:
+          pattern: '^(?:.*/)?next\.next_site\.(?<id>[^/]+)\.yml$'
+          template: '{id}'
+        oauth_scope:
+          pattern: '^(?:.*/)?(?<id>simple_oauth\.oauth2_scope\.[^/]+)\.yml$'
+          template: '{id}'

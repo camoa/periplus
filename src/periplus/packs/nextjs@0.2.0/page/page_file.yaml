@@ -1,0 +1,36 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A file named page under app.
+
+rules:
+- rule: page_file
+  reads: file
+  in:
+  - nextjs_app
+  match:
+    file: page
+    filetype: typescript
+  id:
+    template: '{route}'
+  emits:
+  - node:
+      type: nextjs.page
+  confidence: declared
+- rule: page_file_edges
+  reads: file
+  in:
+  - nextjs_app
+  match:
+    file: page
+    filetype: typescript
+    reads_sections: [string, block_comment, line_comment]
+    text: '\A'
+  id:
+    template: '{route}'
+  emits:
+  - edge:
+      kind: page_in_module
+      from: this_node
+      to:
+        template: '{module}'
+  confidence: declared

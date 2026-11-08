@@ -1,0 +1,42 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The base variable call, from the function that makes it.
+
+rules:
+- rule: call_through_base_variable_in_function
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '`\$\{(?<var>\w+)\}(?<path>/(?!jsonapi\b)[^`?]*)'
+  values:
+    fn:
+      from: {enclosing: function_body, capture: name}
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \$\{[^}]*$
+        with: ''
+      - replace: (?<=[^/])\$\{[^}]*\}$
+        with: ''
+      - replace: \$\{[^}]*\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: '{module}:{fn}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: function_calls_endpoint
+      from: this_node
+      to:
+        template: '{var}{target}'
+        resolve:
+        - bound_first_segment
+        separator: /
+  confidence: inferred

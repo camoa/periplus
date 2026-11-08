@@ -118,7 +118,7 @@ emits:
 ```
 
 Sections are spans of a file type's text that a text rule does not read. A match that starts
-inside one gives nothing. Python's sections are its strings and its comments, the first being:
+inside one gives nothing, unless the rule lists its name, as `match: {reads_sections: [string]}`. Python's sections are its strings and its comments, the first being:
 
 ```yaml python_text@0.1.0/pack.yaml
 sections:
@@ -231,3 +231,4 @@ filled only by whole ids, such as `{declared: <type>}`, may list types of differ
 - An edge from a text rule whose two ends are both templates. One end must be `this_node`, which
   takes no `on_miss`, so a mount is stated by two rules, one for each end.
 - An edge from a whole-file rule on a text file. A template's edge is a text rule on `\A`.
+  A word such as `\bexport\b` in its place fires the edge once per word.

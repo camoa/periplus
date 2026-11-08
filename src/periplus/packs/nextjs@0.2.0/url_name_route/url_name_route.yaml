@@ -1,0 +1,6 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+edge_kinds:
+- kind: name_holds_route
+  from: typescript.url_name
+  to: nextjs.route_handler

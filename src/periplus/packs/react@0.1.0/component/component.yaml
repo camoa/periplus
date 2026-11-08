@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A React component, known by its name: a capital first letter and a lowercase letter after it.
+
+node_types:
+- name: react.component
+  parent: typescript.callable
+  id_namespace: typescript.callable

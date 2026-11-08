@@ -1,0 +1,32 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A call inside a function body to a name the file binds to a hook.
+
+rules:
+- rule: hook_use
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?<![.\w$])(?<!function )(?<!function  )(?<callee>use[A-Z]\w*)(?:<[^()\n]*>)?\('
+  values:
+    # Nested functions join their names; the innermost one is the caller.
+    fn:
+      from: {enclosing: function_body, capture: name}
+      join: '|'
+      normalize:
+      - {replace: '^.*\|', with: ''}
+  id: {template: '{module}:{fn}'}
+  line: {capture: callee}
+  emits:
+  - edge:
+      kind: uses_hook
+      from: this_node
+      to:
+        from: {capture: callee}
+        types: [react.hook]
+        resolve: [bound_first_segment]
+        separator: ':'
+  confidence: inferred

@@ -1,0 +1,57 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The first method a route lists: methods: [GET] or methods: [GET, POST]. A methods list written
+# one item per line is not read.
+
+rules:
+- rule: endpoint_method_first_node
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:\s*\[\s*['"]?(?<m>[A-Z]+)
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \{[^}]+\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: 'drupal{target}|{m}'
+  line:
+    capture: m
+  emits:
+  - node:
+      type: drupal_next.endpoint_method
+  confidence: declared
+- rule: endpoint_method_first
+  reads: file
+  in:
+  - module_root
+  match:
+    file: '*.routing'
+    filetype: drupal_next_yml_text
+    text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:\s*\[\s*['"]?(?<m>[A-Z]+)
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \{[^}]+\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: 'drupal{target}|{m}'
+  line:
+    capture: m
+  emits:
+  - edge:
+      kind: endpoint_method_served_by
+      from: this_node
+      to:
+        template: '{route}'
+  confidence: declared

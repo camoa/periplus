@@ -1,0 +1,19 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# const RESOURCE = 'entity--bundle', for a call that names the constant.
+
+rules:
+- rule: resource_constant_binding
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: const\s+(?<var>[A-Z][A-Z0-9_]*)\s*=\s*['"](?<resource>[a-z_]+--[a-z_-]+)['"]
+  emits:
+  - binding:
+      name: '{var}'
+      target: '{resource}'
+  confidence: declared

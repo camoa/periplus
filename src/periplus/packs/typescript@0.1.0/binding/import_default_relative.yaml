@@ -1,0 +1,26 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A default import from a relative path binds its name to the module's name of that same word.
+
+rules:
+- rule: import_default_relative
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^import\s+(?:type\s+)?(?![A-Z][A-Z0-9_]*\b)(?<name>[A-Za-z_]\w*)\s*(?:,\s*\{[^}]*\}\s*)?from\s*[''\"](?<src>\.{1,2}(?:/[^''\"]*)?)[''\"]'
+  values:
+    mod:
+      template: '{dir}/{src}'
+      normalize:
+      - {replace: '/\./', with: '/'}
+      - {replace: '[^/]+/\.\./', with: ''}
+      - {replace: '[^/]+/\.\./', with: ''}
+      - {replace: '[^/]+/\.\./', with: ''}
+      - {replace: '[^/]+/\.\./', with: ''}
+      - {replace: '/index$', with: ''}
+  emits:
+  - binding: {name: '{name}', target: '{mod}:{name}'}
+  confidence: inferred

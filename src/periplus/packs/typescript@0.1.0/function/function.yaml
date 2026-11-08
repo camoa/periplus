@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A function, top-level or nested, that is neither a component nor a hook, such as a route method GET.
+
+node_types:
+- name: typescript.function
+  parent: typescript.callable
+  id_namespace: typescript.callable

@@ -1,0 +1,7 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The edge kind of ->hasPermission('literal') in a class. A permission held in a variable or read
+# from a call, such as $this->entityType->getAdminPermission(), is not read.
+
+edge_kinds:
+- {kind: checks_permission, from: [php.class, php.trait, php.interface], to: drupal.permission}

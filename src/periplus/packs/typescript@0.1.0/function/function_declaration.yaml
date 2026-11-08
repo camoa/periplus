@@ -1,0 +1,17 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A function declaration that is neither component nor hook.
+
+rules:
+- rule: function_node_declaration
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^[ \t]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(?<name>(?!use[A-Z])(?![A-Z]\w*[a-z])\w+)\b'
+  id: {template: '{module}:{name}'}
+  line: {capture: name}
+  emits: [{node: {type: typescript.function}}]
+  confidence: declared

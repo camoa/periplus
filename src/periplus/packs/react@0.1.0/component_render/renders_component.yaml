@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A function, component or hook rendering a component.
+
+edge_kinds:
+- kind: renders_component
+  from: typescript.callable
+  to: react.component

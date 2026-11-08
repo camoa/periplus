@@ -1,0 +1,31 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# Each site the config lists.
+
+edge_kinds:
+- kind: next_config_uses_site
+  from: drupal_next.entity_type_config
+  to: drupal_next.site
+rules:
+- rule: next_entity_type_config_sites
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: next.next_entity_type_config.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - replace: ^next\.next_entity_type_config\.
+      with: ''
+  emits:
+  - edge:
+      kind: next_config_uses_site
+      from: this_node
+      to:
+        from:
+          key: configuration.sites
+        each: true
+  confidence: declared

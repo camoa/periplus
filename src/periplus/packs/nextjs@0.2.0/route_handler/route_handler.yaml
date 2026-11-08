@@ -1,0 +1,11 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A route handler: the URL a route file serves, joined to the module that holds its code.
+
+node_types:
+- name: nextjs.route_handler
+  id_namespace: nextjs.route_handler
+edge_kinds:
+- kind: handler_in_module
+  from: nextjs.route_handler
+  to: typescript.module

@@ -1,0 +1,15 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field known by its name alone, the end that a base field and a PHP read of a field meet on.
+
+node_types:
+- {name: drupal_more.field_name, id_namespace: drupal_more.field_name}
+
+rules:
+- rule: base_field_name
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\$fields\[''(?<f>\w+)''\]\s*=\s*BaseFieldDefinition::create\('}
+  id: {template: '{f}'}
+  emits: [{node: {type: drupal_more.field_name}}]
+  confidence: declared

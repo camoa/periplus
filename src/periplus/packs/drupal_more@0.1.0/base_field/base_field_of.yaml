@@ -1,0 +1,15 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The class that defines a base field.
+
+edge_kinds:
+- {kind: base_field_of, from: drupal_more.base_field, to: php.class}
+
+rules:
+- rule: base_field_of
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\$fields\[''(?<f>\w+)''\]\s*=\s*BaseFieldDefinition::create\('}
+  id: {template: '{psr4_class}|{f}'}
+  emits: [{edge: {kind: base_field_of, from: this_node, to: {template: '{psr4_class}'}}}]
+  confidence: declared

@@ -1,0 +1,7 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The edge kind of Job::create('type'): a method or function that builds a job of a queue job type.
+# Building is not enqueueing, but the build is the only place the type name is written.
+
+edge_kinds:
+- {kind: enqueues_job, from: [php.method, php.function], to: drupal.queue_job_type}

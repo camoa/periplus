@@ -1,0 +1,12 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The class is the test class for a file under tests/src. ->get('field_x'), ->set('field_x', ...) and ->hasField('field_x') in a class.
+
+rules:
+- rule: field_get_call
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '->(?:get|set|hasField)\(\s*''(?<f>field_\w+)'''}
+  id: {template: '{class_or_test_class}'}
+  emits: [{edge: {kind: uses_field, from: this_node, to: {template: '{f}'}}}]
+  confidence: inferred

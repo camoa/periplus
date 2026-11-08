@@ -1,0 +1,26 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A next_entity_type_config config file.
+
+rules:
+- rule: next_entity_type_config_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: next.next_entity_type_config.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - replace: ^next\.next_entity_type_config\.
+      with: ''
+  emits:
+  - node:
+      type: drupal_next.entity_type_config
+  - attribute:
+      name: draft_enabled
+      from:
+        key: draft_enabled
+  confidence: declared

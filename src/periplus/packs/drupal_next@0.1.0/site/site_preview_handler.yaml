@@ -1,0 +1,30 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# Drupal to Next.js: a site's preview URL, with the origin removed, is a handler Drupal sends
+# people to. A URL with no path makes nothing.
+
+edge_kinds:
+- kind: next_site_previews_at
+  from: drupal_next.site
+  to: nextjs.route_handler
+rules:
+- rule: next_site_preview_handler
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: next.next_site.*
+    filetype: drupal_next_yml_text
+    text: (?m)^preview_url:\s*['"]?https?://[^/'"\s]+(?<path>/[^'"\s?]*)
+  id:
+    template: '{next_site}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: next_site_previews_at
+      from: this_node
+      to:
+        template: '{path}'
+  confidence: declared

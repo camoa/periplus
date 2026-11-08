@@ -13,6 +13,9 @@ Each entry below gives the rutter, its version, what it maps and the rutters it 
 | `go_basic@0.0.3` | Go functions, methods, structs and interfaces, each under its package's import path. Calls inside one package, and calls through an import. It skips test files and `vendor`, and needs the module path in the settings as `values.module`. Needs the `go` extra. | none |
 | `yaml_basic@0.1.0` | Claims `.yml` and `.yaml` files for the rutters that depend on it. It has no rules of its own. | none |
 | `twig_basic@0.1.0` | Claims `.twig` files for the rutters that depend on it. It has no rules of its own. | none |
+| `typescript@0.1.0` | TypeScript modules, imports, packages and functions in `.ts` and `.tsx` files, and calls from one function to a function the file binds by name. It reads the files as text and needs no extra; the project sets the folder the `@/` alias points at as `typescript_alias_root`. | none |
+| `react@0.1.0` | React components and hooks, named by convention, the components a function renders, the hooks it uses, and the `use client` or `use server` directive. It reads the files as text. | `typescript` |
+| `nextjs@0.2.0` | Next.js App Router pages, layouts, route handlers with their HTTP methods, middleware and special files under `app`. A `fetch` of a route, a link to a page, and a name or prop that holds a route URL. It reads the files as text. | `react` |
 
 ## Drupal core
 
@@ -20,6 +23,8 @@ Each entry below gives the rutter, its version, what it maps and the rutters it 
 |---|---|---|
 | `drupal_basic@0.3.0` | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays, forms, roles, block placements and plugins such as blocks, actions, field widgets and formatters, queue workers and REST resources. The services and entity types that PHP code names in calls such as `\Drupal::service('x')`. | `php_basic`, `yaml_basic`, `twig_basic` |
 | `drupal_js_basic@0.0.1` | Drupal JavaScript behaviors and the behaviors they attach, the `drupalSettings` keys that PHP attaches and behaviors read, the libraries that PHP, templates and components attach, the library scripts and stylesheets, and the paths that script strings write. Needs the `js` extra. | `js_basic`, `drupal_basic` |
+| `drupal_more@0.1.0` | Base fields an entity class defines and the entity type a reference field targets, the PHP class or trait that reads or writes a field by name, the handler classes an entity annotation names, `Job::create('type')` calls, and `->hasPermission('literal')` checks. | `drupal_basic`, `advancedqueue_basic` |
+| `drupal_next@0.1.0` | The next module's sites, per-bundle settings and four plugin kinds, the site's preview and revalidate handlers in the Next.js app, Drupal endpoints with their HTTP methods from routing files and REST resources, the TypeScript calls to an endpoint, JSON:API resources and OAuth scopes. | `drupal_basic`, `php_basic`, `typescript`, `react`, `nextjs` |
 
 ## Drupal contributed modules
 

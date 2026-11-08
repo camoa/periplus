@@ -1,0 +1,12 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A name that a URL is held under: a variable in this module, or a prop. A fetch of the name reaches
+# the URL the name holds.
+
+node_types:
+- name: typescript.url_name
+  id_namespace: typescript.url_name
+edge_kinds:
+- kind: fetches_name
+  from: typescript.module
+  to: typescript.url_name

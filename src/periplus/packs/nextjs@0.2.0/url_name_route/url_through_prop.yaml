@@ -1,0 +1,15 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A module that fetches a prop reaches the route of the name another module gives that prop.
+
+rules:
+- rule: fetch_through_prop
+  reads: map
+  match:
+    node_type: typescript.module
+    follow:
+    - {edge: fetches_name}
+    - {edge: prop_given_name}
+    - {edge: name_holds_route}
+  emits: [{edge: {kind: calls_route, from: this_node, to: matched_node}}]
+  confidence: inferred

@@ -1,0 +1,39 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The inline env call, from the function that makes it.
+
+rules:
+- rule: call_through_inline_env_in_function
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '`\$\{process\.env\.NEXT_PUBLIC_DRUPAL_BASE_URL\}(?<path>/(?!jsonapi\b)[^`?]*)'
+  values:
+    fn:
+      from: {enclosing: function_body, capture: name}
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \$\{[^}]*$
+        with: ''
+      - replace: (?<=[^/])\$\{[^}]*\}$
+        with: ''
+      - replace: \$\{[^}]*\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: '{module}:{fn}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: function_calls_endpoint
+      from: this_node
+      to:
+        template: drupal{target}
+  confidence: inferred

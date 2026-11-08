@@ -1,0 +1,25 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A file-level directive starts at the first column. One inside a function is indented, and a
+# comment above the directive is allowed.
+
+rules:
+- rule: module_directive
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: (?m)^['"]use (?<directive>client|server)['"]
+  id:
+    template: '{module}'
+  emits:
+  - node:
+      type: typescript.module
+  - attribute:
+      name: directive
+      from:
+        capture: directive
+  confidence: declared

@@ -1,0 +1,29 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A renamed name in an import list from a relative path binds the new name to the old name in that module.
+
+rules:
+- rule: import_renamed_relative
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?<![\w$])(?![A-Z][A-Z0-9_]*\b)(?<name>[A-Za-z_$][\w$]*)\s+as\s+(?<alias>[A-Za-z_$][\w$]*)'
+  values:
+    src: {from: {enclosing: import_named_relative, capture: src}}
+    mod:
+      template: '{dir}/{src}:{name}'
+      normalize:
+      - {replace: '/\./', with: '/'}
+      - {replace: '[^/]+/\.\./', with: ''}
+      - {replace: '[^/]+/\.\./', with: ''}
+      - {replace: '[^/]+/\.\./', with: ''}
+      - {replace: '[^/]+/\.\./', with: ''}
+      - {replace: '/index:', with: ':'}
+      # A name outside an import list has no source, so no binding is made.
+      - {replace: '^[^:]*/:.*$', with: ''}
+  emits:
+  - binding: {name: '{alias}', target: '{mod}'}
+  confidence: inferred

@@ -1,0 +1,23 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The path the next-drupal library calls for enableDraftMode.
+
+rules:
+- rule: call_draft_validation
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: \benableDraftMode\(
+  id:
+    template: '{module}'
+  emits:
+  - edge:
+      kind: calls_endpoint
+      from: this_node
+      to:
+        template: drupal/next/draft-url
+  confidence: declared

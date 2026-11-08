@@ -1,0 +1,83 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# TypeScript, read as text, because Periplus ships no TypeScript grammar, so a rule sees what a
+# pattern sees and claims no more than that. Modules, imports, packages and functions.
+#
+# The project sets one value, typescript_alias_root: the folder the @/ import alias points at.
+
+pack: typescript
+version: 0.1.0
+depends: []
+
+folders:
+  # Every TypeScript file of the application.
+  typescript_source: ./**
+
+files:
+  exclude:
+  - '**/node_modules/**'
+  types:
+    typescript:
+      endings: [ts, tsx]
+      reader: text
+      path_values:
+        # A file's name as an import writes it: no ending, and no /index.
+        module:
+          pattern: '^(?<file>.+?)(?:/index)?\.tsx?$'
+          template: '{file}'
+        dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
+        # Set only on a test, story or fixture-folder file, or a file under a tests or test folder.
+        test_file:
+          pattern: '^(?<f>.+?(?:\.test|\.spec|\.stories)|.*__tests__/.+?|(?:.*/)?tests?/.+?)(?:/index)?\.tsx?$'
+          template: '{f}'
+        # Set only on a file of test tooling: a storybook folder file, or a test runner config, setup or shims file.
+        tooling_file:
+          pattern: '^(?<f>(?:.*/)?\.storybook/.+?|(?:.*/)?(?:vitest|jest|playwright|cypress)[^/]*\.config|(?:.*/)?[^/]+\.(?:setup|shims)(?:\.d)?)\.tsx?$'
+          template: '{f}'
+      sections:
+      - name: block_comment
+        open: '/\*'
+        close: '\*/'
+      - name: line_comment
+        open: '//'
+        close: '\n'
+      # Strings and regex literals, so a // or a brace inside one is not read as code. A text rule
+      # that must read inside one names `string` or `regex` under reads_sections.
+      - name: string
+        open: ''''
+        close: '(?:[^''\\\n]|\\.)*(?:''|(?=\n))'
+      - name: string
+        open: '"'
+        close: '(?:[^"\\\n]|\\.)*(?:"|(?=\n))'
+      - name: string
+        open: '`'
+        close: '(?:[^`\\]|\\(?s:.))*`'
+      - name: regex
+        open: '(?<=[=(,:;!&|?{\[])\s*/(?![/*])'
+        close: '(?:[^/\\\n\[]|\\.|\[(?:[^\]\\\n]|\\.)*\])*(?:/|(?=\n))'
+      spans:
+      # The braces of an import list, with the path they import from, so a name in it can bind.
+      - name: import_named_alias
+        open: '(?m)^import\s+(?:type\s+)?(?:\w+\s*,\s*)?(?=\{[^}]*\}\s*from\s*[''"]@/(?<src>[^''"]+)[''"])'
+        balance: ['{', '}']
+      - name: import_named_relative
+        open: '(?m)^import\s+(?:type\s+)?(?:\w+\s*,\s*)?(?=\{[^}]*\}\s*from\s*[''"](?<src>\.{1,2}(?:/[^''"]*)?)[''"])'
+        balance: ['{', '}']
+      # The parameter list of an arrow cannot hold a `) =>`, so an expression-bodied arrow does not
+      # reach the next callback's body.
+      # The function a declaration or const opens, so a call can name the function it sits in. Each
+      # open match consumes the parameter list and return type, so the span starts at the body.
+      - name: function_body
+        open: '(?m)^[ \t]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(?<name>\w+)\s*(?:<[^()]*?>\s*)?\((?s:.{0,800}?)\)(?::(?:[^{};]|\{[^{}]*\})*?)?(?<=[\w>\]\)}''"`])\s*(?=\{)'
+        balance: ['{', '}']
+      - name: function_body
+        open: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?:(?:<[^()]*?>\s*)?\((?:[^()]|\([^()]*\))*\)(?::(?:[^{};]|\{[^{}]*\})*?)?|\w+)\s*=>\s*(?=\{)'
+        balance: ['{', '}']
+      - name: function_body
+        open: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?:(?:<[^()]*?>\s*)?\((?:[^()]|\([^()]*\))*\)(?::(?:[^{};]|\{[^{}]*\})*?)?|\w+)\s*=>\s*(?=(?:new\s+)?[\w.]*\s*\()'
+        balance: ['(', ')']
+      - name: function_body
+        open: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>\w+)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:React\.)?(?:forwardRef|memo)\b(?:<[^()]*?>)?(?=\()'
+        balance: ['(', ')']

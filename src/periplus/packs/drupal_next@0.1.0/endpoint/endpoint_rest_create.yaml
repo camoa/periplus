@@ -1,0 +1,60 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The "create" path in a REST resource's docblock uri_paths. The annotation is read as text because
+# its keys are not an array entry the grammar reaches. Both rules are inferred: the map cannot tell
+# whether the plugin is enabled, so a path here is declared and not known to be served.
+
+rules:
+- rule: endpoint_from_rest_resource_create
+  reads: file
+  in:
+  - rest_resource_classes
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?s)@RestResource\((?:(?!\*/).)*?\bid\s*=\s*"(?<id>\w+)"(?:(?!\*/).)*?"create"\s*=\s*"(?<path>/[^"]*)"'
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \{[^}]+\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: drupal{target}
+  line:
+    capture: path
+  emits:
+  - node:
+      type: drupal_next.endpoint
+  confidence: inferred
+- rule: endpoint_served_by_rest_resource_create
+  reads: file
+  in:
+  - rest_resource_classes
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?s)@RestResource\((?:(?!\*/).)*?\bid\s*=\s*"(?<id>\w+)"(?:(?!\*/).)*?"create"\s*=\s*"(?<path>/[^"]*)"'
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \{[^}]+\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: '{id}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: endpoint_served_by_rest_resource
+      from:
+        template: drupal{target}
+      to: this_node
+  confidence: inferred

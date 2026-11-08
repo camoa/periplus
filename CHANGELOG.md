@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Three bundled rutters read TypeScript as text: `typescript@0.1.0` maps modules, imports, packages, functions and their calls; `react@0.1.0` maps components, hooks, renders and hook uses; `nextjs@0.2.0` maps App Router pages, layouts, route handlers, middleware, fetches of a route and links to a page. Two bundled Drupal rutters join them: `drupal_more@0.1.0` maps base fields, field use by name, entity handlers, job creation and permission checks; `drupal_next@0.1.0` maps the next module's sites and settings, Drupal endpoints and the TypeScript calls to them, JSON:API resources and OAuth scopes.
 - A describe skill, `periplus-describe`, takes a slice file as its working set and writes one entry per located item to the descriptions file: text, file and line, read from the code. It keeps every existing entry and reports a stale one, and it reports an item with no location instead of writing an entry for it.
 
 ## [0.4.2] - 2026-11-05

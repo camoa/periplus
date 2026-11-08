@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A module's link to one of the application's pages.
+
+edge_kinds:
+- kind: links_to_page
+  from: typescript.module
+  to: nextjs.page

@@ -1,0 +1,25 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A raw /jsonapi/entity/bundle path.
+
+rules:
+- rule: resource_call_path
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: /jsonapi/(?<entity>[a-z_]+)/(?<bundle>[a-z_-]+)
+  id:
+    template: '{module}'
+  line:
+    capture: entity
+  emits:
+  - edge:
+      kind: uses_jsonapi_resource
+      from: this_node
+      to:
+        template: '{entity}--{bundle}'
+  confidence: declared

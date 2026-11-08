@@ -1,0 +1,11 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A layout, named by its module: a layout in a route group serves the same URL as its parent.
+
+node_types:
+- name: nextjs.layout
+  id_namespace: nextjs.layout
+edge_kinds:
+- kind: layout_in_module
+  from: nextjs.layout
+  to: typescript.module

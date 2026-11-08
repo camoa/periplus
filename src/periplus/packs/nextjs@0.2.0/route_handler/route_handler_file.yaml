@@ -1,0 +1,36 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A file named route under app.
+
+rules:
+- rule: route_handler_file
+  reads: file
+  in:
+  - nextjs_app
+  match:
+    file: route
+    filetype: typescript
+  id:
+    template: '{route}'
+  emits:
+  - node:
+      type: nextjs.route_handler
+  confidence: declared
+- rule: route_handler_file_edges
+  reads: file
+  in:
+  - nextjs_app
+  match:
+    file: route
+    filetype: typescript
+    reads_sections: [string, block_comment, line_comment]
+    text: '\A'
+  id:
+    template: '{route}'
+  emits:
+  - edge:
+      kind: handler_in_module
+      from: this_node
+      to:
+        template: '{module}'
+  confidence: declared

@@ -1,0 +1,17 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# An arrow const named as a hook.
+
+rules:
+- rule: hook_node_arrow
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^[ \t]*(?:export\s+)?const\s+(?<name>use[A-Z]\w*)\b(?:\s*:\s*[^=\n]+)?\s*=\s*(?:async\s+)?(?:<[^()]*?>\s*)?(?:\((?:[^()]|\([^()]*\))*\)\s*(?::\s*[^=\n]+)?\s*=>|\w+\s*=>)'
+  id: {template: '{module}:{name}'}
+  line: {capture: name}
+  emits: [{node: {type: react.hook}}]
+  confidence: inferred

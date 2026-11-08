@@ -1,0 +1,28 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A next-drupal client method called with a constant bound in the same file.
+
+rules:
+- rule: resource_call_constant
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: \.(?:getResource|getResourceCollection|createResource|updateResource|deleteResource)(?:<[^>(]*>)?\(\s*(?<constant>[A-Z][A-Z0-9_]*)\b
+  id:
+    template: '{module}'
+  line:
+    capture: constant
+  emits:
+  - edge:
+      kind: uses_jsonapi_resource
+      from: this_node
+      to:
+        template: '{constant}'
+        resolve:
+        - bound_first_segment
+        separator: /
+  confidence: declared

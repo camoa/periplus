@@ -1,0 +1,28 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The role a scope grants.
+
+edge_kinds:
+- kind: oauth_scope_grants_role
+  from: drupal.config_object
+  to: drupal.config_object
+rules:
+- rule: oauth_scope_role
+  reads: file
+  in:
+  - config
+  match:
+    file: simple_oauth.oauth2_scope.*
+    filetype: drupal_next_yml_text
+    text: (?m)^granularity_configuration:\n[ \t]+role:[ \t]*(?<role>[\w-]+)
+  id:
+    template: '{oauth_scope}'
+  line:
+    capture: role
+  emits:
+  - edge:
+      kind: oauth_scope_grants_role
+      from: this_node
+      to:
+        template: user.role.{role}
+  confidence: declared

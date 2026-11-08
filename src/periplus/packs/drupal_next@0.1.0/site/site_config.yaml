@@ -1,0 +1,34 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A next_site config file.
+
+rules:
+- rule: next_site_from_config
+  reads: file
+  in:
+  - config
+  - module_config
+  match:
+    file: next.next_site.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - replace: ^next\.next_site\.
+      with: ''
+  emits:
+  - node:
+      type: drupal_next.site
+  - attribute:
+      name: base_url
+      from:
+        key: base_url
+  - attribute:
+      name: preview_url
+      from:
+        key: preview_url
+  - attribute:
+      name: revalidate_url
+      from:
+        key: revalidate_url
+  confidence: declared

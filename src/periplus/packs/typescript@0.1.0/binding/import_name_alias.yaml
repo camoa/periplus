@@ -1,0 +1,24 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A name in an import list from a @/ path binds to that module's name.
+
+rules:
+- rule: import_name_alias
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?<!as )(?<![\w$])(?![A-Z][A-Z0-9_]*\b)(?<name>[A-Za-z_$][\w$]*)(?=\s*(?:,|\}|\n))'
+  values:
+    src: {from: {enclosing: import_named_alias, capture: src}}
+    mod:
+      template: '{typescript_alias_root}/{src}:{name}'
+      normalize:
+      - {replace: '/index:', with: ':'}
+      # A name outside an import list has no source, so no binding is made.
+      - {replace: '^[^:]*/:.*$', with: ''}
+  emits:
+  - binding: {name: '{name}', target: '{mod}'}
+  confidence: inferred

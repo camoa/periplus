@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A module's call to the application's own route handler.
+
+edge_kinds:
+- kind: calls_route
+  from: typescript.module
+  to: nextjs.route_handler

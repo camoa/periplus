@@ -1,0 +1,20 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A variable counts as the Drupal base URL only when the same file assigns it the env var the next
+# module emits, so a local baseUrl holding a Next.js path makes nothing.
+
+rules:
+- rule: drupal_base_binding
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: (?:const|let)\s+(?<var>\w+)(?:\s*:\s*\w+)?\s*=\s*process\.env\.NEXT_PUBLIC_DRUPAL_BASE_URL\b
+  emits:
+  - binding:
+      name: '{var}'
+      target: drupal
+  confidence: declared

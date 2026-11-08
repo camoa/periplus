@@ -1,0 +1,11 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# One HTTP method of a route handler.
+
+node_types:
+- name: nextjs.route_method
+  id_namespace: nextjs.route_method
+edge_kinds:
+- kind: handles_method
+  from: nextjs.route_handler
+  to: nextjs.route_method

@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A top-level function's call to a Drupal endpoint.
+
+edge_kinds:
+- kind: function_calls_endpoint
+  from: [react.component, react.hook, typescript.function]
+  to: drupal_next.endpoint

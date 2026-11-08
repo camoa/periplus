@@ -1,0 +1,12 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# $entity->field_x->value and $entity->field_x->target_id.
+
+rules:
+- rule: field_magic_property
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '->(?<f>field_\w+)->'}
+  id: {template: '{class_or_test_class}'}
+  emits: [{edge: {kind: uses_field, from: this_node, to: {template: '{f}'}}}]
+  confidence: inferred

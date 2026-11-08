@@ -1,0 +1,9 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A Revalidator plugin of the next module. One that a contrib module ships stays a referenced node when
+# that module is not mapped.
+
+node_types:
+- name: drupal_next.revalidator
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.next_revalidator

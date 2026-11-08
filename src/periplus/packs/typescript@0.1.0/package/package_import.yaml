@@ -1,0 +1,26 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# import ... from 'package' or '@scope/package/sub'.
+
+rules:
+- rule: import_package
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: (?:\bfrom\s+|\bimport\s+|\bimport\(\s*)['"](?<package>@[a-z0-9][^/'"]*/[^/'"]+|[a-z0-9][^/'"]*)(?:/[^'"]*)?['"]
+  id:
+    template: '{module}'
+  line:
+    capture: package
+  emits:
+  - edge:
+      kind: uses_package
+      from: this_node
+      to:
+        from:
+          capture: package
+  confidence: declared

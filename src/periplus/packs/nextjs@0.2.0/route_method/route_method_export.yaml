@@ -1,0 +1,44 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# export async function GET, and export const GET = ...
+
+rules:
+- rule: route_method
+  reads: file
+  in:
+  - nextjs_app
+  match:
+    file: route
+    filetype: typescript
+    reads_sections: [string]
+    text: (?m)^export\s+(?:async\s+function|function|const)\s+(?<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b
+  id:
+    template: '{route} {method}'
+  line:
+    capture: method
+  emits:
+  - node:
+      type: nextjs.route_method
+  confidence: declared
+- rule: route_method_edges
+  reads: file
+  in:
+  - nextjs_app
+  match:
+    file: route
+    filetype: typescript
+    reads_sections: [string]
+    text: (?m)^export\s+(?:async\s+function|function|const)\s+(?<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b
+  id:
+    template: '{route} {method}'
+  line:
+    capture: method
+  emits:
+  - edge:
+      kind: handles_method
+      from:
+        template: '{route}'
+        types:
+        - nextjs.route_handler
+      to: this_node
+  confidence: declared

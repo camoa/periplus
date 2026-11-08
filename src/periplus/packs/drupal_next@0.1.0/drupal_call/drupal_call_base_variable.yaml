@@ -1,0 +1,41 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# `${baseUrl}/path` through a bound variable. A variable set in another file is missed. Inferred:
+# the path is written, but that the variable is Drupal rests on the env name.
+
+rules:
+- rule: call_through_base_variable
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '`\$\{(?<var>\w+)\}(?<path>/(?!jsonapi\b)[^`?]*)'
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \$\{[^}]*$
+        with: ''
+      - replace: (?<=[^/])\$\{[^}]*\}$
+        with: ''
+      - replace: \$\{[^}]*\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: '{module}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: calls_endpoint
+      from: this_node
+      to:
+        template: '{var}{target}'
+        resolve:
+        - bound_first_segment
+        separator: /
+  confidence: inferred

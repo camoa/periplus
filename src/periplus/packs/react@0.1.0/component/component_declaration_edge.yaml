@@ -1,0 +1,17 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The module's edge to the component that component_declaration finds.
+
+rules:
+- rule: component_edge_declaration
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^[ \t]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(?<name>(?=\w*[a-z])[A-Z]\w*)\b'
+  id: {template: '{module}'}
+  line: {capture: name}
+  emits: [{edge: {kind: declares_component, from: this_node, to: {template: '{module}:{name}'}}}]
+  confidence: inferred

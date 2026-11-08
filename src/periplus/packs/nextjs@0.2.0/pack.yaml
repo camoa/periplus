@@ -1,0 +1,49 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# Next.js, App Router, on React and TypeScript read as text.
+#
+# A route id is its URL with route groups removed and each dynamic segment written []. A fetch
+# written `/api/items/${id}` reduces to the same id as app/api/items/[id]/route.ts, and that shared
+# id is what joins them.
+
+pack: nextjs
+version: 0.2.0
+depends: [react]
+
+folders:
+  nextjs_app:
+  - ./app/**
+  - ./src/app/**
+  # The folder that holds middleware.ts or proxy.ts.
+  nextjs_root:
+  - .
+  - ./src
+
+files:
+  types:
+    # typescript's type, given the path values and the span only the router reads.
+    typescript:
+      endings: [ts, tsx]
+      reader: text
+      path_values:
+        # Set only on a file with one of these names, so a rule that names it reads no other file.
+        special:
+          pattern: '^(?<file>(?:.*/)?(?:loading|error|not-found|template|default|global-error))\.tsx?$'
+          template: '{file}'
+        middleware:
+          pattern: '^(?<file>(?:.*/)?(?:middleware|proxy))\.ts$'
+          template: '{file}'
+        # The URL a file under app serves.
+        route:
+          pattern: '^(?:.*?/)?app(?<segments>(?:/.*)?)/[^/]+\.tsx?$'
+          template: '{segments}'
+          normalize:
+          - {replace: '/\([^/)]*\)', with: ''}
+          - {replace: '/@[^/]+', with: ''}
+          - {replace: '\[[^/\]]*\]+', with: '[]'}
+          - {replace: '^$', with: '/'}
+      spans:
+      # export const { GET, POST } = handlers
+      - name: exported_names
+        open: '(?<mark>export\s+const)\s*(?=\{)'
+        balance: ['{', '}']

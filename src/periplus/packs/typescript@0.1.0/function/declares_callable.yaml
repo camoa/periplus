@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A module's function, top-level or nested.
+
+edge_kinds:
+- kind: declares_callable
+  from: typescript.module
+  to: typescript.function

@@ -1,0 +1,13 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A REST resource plugin is inert while the rest module is absent.
+
+rules:
+- rule: rest_resource_inert
+  reads: map
+  match:
+    node_type: drupal.rest_resource
+    follow:
+    - {node: 'drupal_next.module_absent::rest'}
+  emits: [{edge: {kind: inert_because, from: this_node, to: matched_node}}]
+  confidence: declared

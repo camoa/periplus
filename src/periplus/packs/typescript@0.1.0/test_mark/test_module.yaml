@@ -1,0 +1,14 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A test, spec or story file marks its module, so a query can tell tests from code.
+
+rules:
+- rule: test_module
+  reads: file
+  in: [typescript_source]
+  match: {file: '**', filetype: typescript, text: '\A', reads_sections: [block_comment, line_comment]}
+  id: {template: '{test_file}'}
+  emits:
+  - node: {type: typescript.module}
+  - attribute: {name: test_file, template: 'true'}
+  confidence: declared

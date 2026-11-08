@@ -29,7 +29,8 @@ src/periplus/packs.
 
 `match.reference` names a tree node type. The rule fires once on each node of that type in each
 file of its `filetype` under its `in` folders; `file` may narrow it by glob. A reference rule has
-no `id`, and each of its emits is an edge whose `from` is `enclosing_declaration`.
+no `id`, and each of its emits is an edge whose `from` is `enclosing_declaration`. An edge rule may
+emit several edges from one match, as `route_definition.yaml` does, so one match is one rule.
 
 The from end is the nearest declaration around the call that a declaration rule maps. That rule must
 belong to this pack or to a pack it depends on, read the same file type, select this file, and emit
@@ -283,7 +284,8 @@ A declaration rule's edge may start or end at the file that holds the match, `fr
 beside `this_node` and `enclosing_class`. The end is the node that a declaration rule on the file's
 root made for that file, in this pack or in a pack it depends on; `js_basic` makes a `js.file`
 node from `program`. The rule
-needs a twin node rule with the same match and id, since a rule makes a node or an edge. When no
+needs a twin node rule with the same match and id, since a rule makes a node or an edge. Keep the
+twins in one file and share the match through a YAML anchor: `match: &m {...}`, then `match: *m`. When no
 rule made a node for the file, the edge is skipped and `skipped` says
 `no value for enclosing_file`. This is `drupal_js_basic` linking a script to its behavior:
 

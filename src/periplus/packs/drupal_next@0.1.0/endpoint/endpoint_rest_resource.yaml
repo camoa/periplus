@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The edge runs from the endpoint to the plugin, as endpoint_served_by runs to the route.
+
+edge_kinds:
+- kind: endpoint_served_by_rest_resource
+  from: drupal_next.endpoint
+  to: drupal.rest_resource

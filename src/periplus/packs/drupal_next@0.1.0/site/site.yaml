@@ -1,0 +1,7 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A next_site names one Next.js application. Its secrets are never read into the map.
+
+node_types:
+- name: drupal_next.site
+  id_namespace: drupal_next.site

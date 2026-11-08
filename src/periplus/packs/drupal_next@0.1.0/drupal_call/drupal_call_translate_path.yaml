@@ -1,0 +1,23 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# The path the next-drupal library calls for translatePath and getResourceByPath.
+
+rules:
+- rule: call_translate_path
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: \.(?:translatePath|getResourceByPath)(?:<[^>(]*>)?\(
+  id:
+    template: '{module}'
+  emits:
+  - edge:
+      kind: calls_endpoint
+      from: this_node
+      to:
+        template: drupal/router/translate-path
+  confidence: declared

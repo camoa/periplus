@@ -1,0 +1,8 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# React, on TypeScript read as text. Components, hooks and the client directive. A component is a
+# capitalised function and a hook a use-prefixed one, both conventions, so both are inferred.
+
+pack: react
+version: 0.1.0
+depends: [typescript]

@@ -1,0 +1,27 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A JSX attribute given the URL as a string or a template, dataEndpoint="/api/...". Writing a URL is
+# not calling it, so the edge is names_route. Inferred: the pattern reads a name, not what the
+# component does with it. A line that opens with it, test or describe holds a test title, not a
+# JSX attribute, so it is skipped.
+
+rules:
+- rule: names_route_attribute
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^(?![ \t]*(?:it|test|describe)\b)[^\n]*?(?<![\w.])\w+=\{?\s*[`''"](?<url>/api/[^`''"\s]*)[`''"]'
+  values:
+    target:
+      template: '{url}'
+      normalize:
+      - {replace: '[?#].*$', with: ''}
+      - {replace: '\$\{[^}]*\}', with: '[]'}
+      - {replace: '(?<=.)/$', with: ''}
+  id: {template: '{module}'}
+  line: {capture: url}
+  emits: [{edge: {kind: names_route, from: this_node, to: {template: '{target}'}}}]
+  confidence: inferred

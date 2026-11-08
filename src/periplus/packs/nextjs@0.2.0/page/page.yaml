@@ -1,0 +1,11 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A page: the URL a page file serves, joined to the module that holds its code.
+
+node_types:
+- name: nextjs.page
+  id_namespace: nextjs.page
+edge_kinds:
+- kind: page_in_module
+  from: nextjs.page
+  to: typescript.module

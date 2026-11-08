@@ -1,0 +1,36 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A file with one of those names in the root folder.
+
+rules:
+- rule: middleware_file
+  reads: file
+  in:
+  - nextjs_root
+  match:
+    file: '*'
+    filetype: typescript
+  id:
+    template: '{middleware}'
+  emits:
+  - node:
+      type: nextjs.middleware
+  confidence: declared
+- rule: middleware_file_edges
+  reads: file
+  in:
+  - nextjs_root
+  match:
+    file: '*'
+    filetype: typescript
+    reads_sections: [string, block_comment, line_comment]
+    text: '\A'
+  id:
+    template: '{middleware}'
+  emits:
+  - edge:
+      kind: middleware_in_module
+      from: this_node
+      to:
+        template: '{module}'
+  confidence: declared

@@ -1,0 +1,14 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A test tooling file marks its module as a test file does.
+
+rules:
+- rule: tooling_module
+  reads: file
+  in: [typescript_source]
+  match: {file: '**', filetype: typescript, text: '\A', reads_sections: [block_comment, line_comment]}
+  id: {template: '{tooling_file}'}
+  emits:
+  - node: {type: typescript.module}
+  - attribute: {name: test_file, template: 'true'}
+  confidence: declared

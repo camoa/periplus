@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A function, component or hook calling a hook.
+
+edge_kinds:
+- kind: uses_hook
+  from: typescript.callable
+  to: react.hook

@@ -1,0 +1,41 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# fetch(`${base}/path`) or fetch(`${base}/path`, { headers }) with no method: a GET.
+
+rules:
+- rule: call_endpoint_method_base_variable_get
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: |-
+      fetch\(\s*`\$\{(?<var>\w+)\}(?<path>/(?!jsonapi\b)[^`?]*)[^`]*`\s*(?:\)|,\s*\{(?!(?:[^{}]|\{[^{}]*\})*?\bmethod\b\s*[:,}]))
+  values:
+    target:
+      template: '{path}'
+      normalize:
+      - replace: \$\{[^}]*$
+        with: ''
+      - replace: (?<=[^/])\$\{[^}]*\}$
+        with: ''
+      - replace: \$\{[^}]*\}
+        with: '{}'
+      - replace: (?<=.)/$
+        with: ''
+  id:
+    template: '{module}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: calls_endpoint_method
+      from: this_node
+      to:
+        template: '{var}{target}|GET'
+        resolve:
+        - bound_first_segment
+        separator: /
+  confidence: inferred

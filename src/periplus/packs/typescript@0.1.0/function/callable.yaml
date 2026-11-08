@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# What a call or a render starts from: a function, or a component or hook a rutter above this one
+# defines. They share one id namespace, so one edge kind can start at any of them.
+
+node_types:
+- name: typescript.callable
+  id_namespace: typescript.callable

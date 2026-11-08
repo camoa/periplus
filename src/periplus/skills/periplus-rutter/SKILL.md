@@ -7,10 +7,10 @@ description: Writes or changes a Periplus rutter, the pack of data that tells Pe
 
 ## Standing rules
 
-1. Rules are small and add to each other: one rule solves one case, and several cases are several rules. Split by rule file inside one rutter, never by adding rutters for one stack; a new rutter repeats the file types and folders the covering one already holds, and a small rule can be read, tested and removed alone.
+1. Rules are small and add to each other: one rule solves one case, and several cases are several rules. Split by rule file inside one rutter, never by adding rutters for one stack; a new rutter repeats the file types and folders the covering one already holds, and a small rule can be read, tested and removed alone. A case is not a literal: four files that differ only in a quoted key are one rule with an alternation.
 2. A rutter reads in passes by depth: order 1 is the structure, order 2 one layer inside each class as nodes at their lines, order 3 joins in the map with map rules. Each pass reads what the one before it found, so no rule has to look a thing up itself.
 3. There is no stack knowledge in the engine: a new stack is a rutter, never engine code, even where a request seems to ask for engine code. The engine then stays the same for every stack, and a third-party rutter can do all a built-in one does.
-4. Probe before saying a rutter cannot do something: write the rule, run it, and quote the engine's message before you call it an engine gap. A guess about the format's limits has been wrong before; the message is the evidence.
+4. Probe before saying a rutter cannot do something: write the rule, run it, and quote the engine's message before you call it an engine gap. A guess about the format's limits has been wrong before; the message is the evidence. A text rule on a method call, written because a variable argument seemed to leave no row, is the misreading: a reference rule lists that call under `skipped`.
 5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose. The name leaks the project and ties the rule to one site.
 
 ## Where the detail lives
@@ -40,7 +40,7 @@ project's own `.periplus/packs` first, and map that project until the map holds 
    they emit the same type: in `php_basic`, `find_declarations.yaml` and `find_runtime_calls.yaml`
    each find `php.call_site` in their own way, and neither file's rules are stretched over the other's case.
 3. Declare each node type and edge kind the rule emits, in that rule file or in a pack the rutter
-   depends on. A rule may name only those types.
+   depends on. A rule may name only those types. Name a contributed-module type for its module, as `drupal.webform_handler` does, so a later `drupal_basic` type cannot collide.
 4. Pick the shape from the guide: a whole-file rule, a text rule, a binding rule, a reference rule
    or a map rule.
 5. Set the confidence. Confidence is declared on the rule, not decided at runtime. A rule firing on

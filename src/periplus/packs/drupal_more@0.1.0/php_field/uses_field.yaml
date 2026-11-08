@@ -1,0 +1,7 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The edge kind of the two PHP field reads. A field name starting with field_ is a naming
+# convention, so both rules are inferred.
+
+edge_kinds:
+- {kind: uses_field, from: [php.class, php.trait], to: drupal_more.field_name}

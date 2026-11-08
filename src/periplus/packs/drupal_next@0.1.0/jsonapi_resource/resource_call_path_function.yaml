@@ -1,0 +1,28 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A raw JSON:API path, from the function that uses it.
+
+rules:
+- rule: resource_call_path_in_function
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: /jsonapi/(?<entity>[a-z_]+)/(?<bundle>[a-z_-]+)
+  values:
+    fn:
+      from: {enclosing: function_body, capture: name}
+  id:
+    template: '{module}:{fn}'
+  line:
+    capture: entity
+  emits:
+  - edge:
+      kind: function_uses_jsonapi_resource
+      from: this_node
+      to:
+        template: '{entity}--{bundle}'
+  confidence: declared

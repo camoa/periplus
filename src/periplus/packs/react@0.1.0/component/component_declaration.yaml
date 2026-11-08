@@ -1,0 +1,17 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A function declaration named as a component.
+
+rules:
+- rule: component_node_declaration
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^[ \t]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(?<name>(?=\w*[a-z])[A-Z]\w*)\b'
+  id: {template: '{module}:{name}'}
+  line: {capture: name}
+  emits: [{node: {type: react.component}}]
+  confidence: inferred

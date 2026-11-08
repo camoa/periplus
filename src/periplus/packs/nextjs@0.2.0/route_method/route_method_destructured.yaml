@@ -1,0 +1,60 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# export const { GET, POST } = handlers
+
+rules:
+- rule: route_method_destructured
+  reads: file
+  in:
+  - nextjs_app
+  match:
+    file: route
+    filetype: typescript
+    reads_sections: [string]
+    text: \b(?<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b
+  values:
+    in_names:
+      from:
+        enclosing: exported_names
+        capture: mark
+  id:
+    template: '{in_names}|{route} {method}'
+    normalize:
+    - replace: ^.*\|
+      with: ''
+  line:
+    capture: method
+  emits:
+  - node:
+      type: nextjs.route_method
+  confidence: declared
+- rule: route_method_destructured_edges
+  reads: file
+  in:
+  - nextjs_app
+  match:
+    file: route
+    filetype: typescript
+    reads_sections: [string]
+    text: \b(?<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b
+  values:
+    in_names:
+      from:
+        enclosing: exported_names
+        capture: mark
+  id:
+    template: '{in_names}|{route} {method}'
+    normalize:
+    - replace: ^.*\|
+      with: ''
+  line:
+    capture: method
+  emits:
+  - edge:
+      kind: handles_method
+      from:
+        template: '{route}'
+        types:
+        - nextjs.route_handler
+      to: this_node
+  confidence: declared

@@ -1,0 +1,8 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A React hook, known by its name: use, then a capital.
+
+node_types:
+- name: react.hook
+  parent: typescript.callable
+  id_namespace: typescript.callable

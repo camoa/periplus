@@ -1,0 +1,16 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The entity type an entity_reference base field points at, from its target_type setting. The match
+# stops at the next $fields[ so a setting of a later field is not read.
+
+edge_kinds:
+- {kind: base_field_targets, from: drupal_more.base_field, to: drupal.entity_type}
+
+rules:
+- rule: base_field_targets
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '(?s)\$fields\[''(?<f>\w+)''\]\s*=\s*BaseFieldDefinition::create\(''entity_reference''\)(?:(?!\$fields\[).)*?->setSetting\(''target_type'',\s*''(?<t>\w+)''\)'}
+  id: {template: '{psr4_class}|{f}'}
+  emits: [{edge: {kind: base_field_targets, from: this_node, to: {template: '{t}'}}}]
+  confidence: declared

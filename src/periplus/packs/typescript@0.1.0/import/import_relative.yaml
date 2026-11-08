@@ -1,0 +1,45 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# import ... from './thing' or '../thing', read from the importing file's folder.
+
+rules:
+- rule: import_relative
+  reads: file
+  in:
+  - typescript_source
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: (?:\bfrom\s+|\bimport\s+|\bimport\(\s*)['"](?<path>\.\.?(?:/[^'"]*)?)['"]
+  values:
+    target:
+      template: '{dir}/{path}'
+      normalize:
+      - replace: /\./
+        with: /
+      - replace: /\.$
+        with: ''
+      - replace: '[^/]+/\.\./'
+        with: ''
+      - replace: '[^/]+/\.\./'
+        with: ''
+      - replace: '[^/]+/\.\./'
+        with: ''
+      - replace: '[^/]+/\.\./'
+        with: ''
+      - replace: /[^/]+/\.\.$
+        with: ''
+      - replace: /index$
+        with: ''
+  id:
+    template: '{module}'
+  line:
+    capture: path
+  emits:
+  - edge:
+      kind: imports
+      from: this_node
+      to:
+        template: '{target}'
+  confidence: declared

@@ -1,0 +1,19 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# <Widget endpointUrl="/api/items" />: the prop holds the route.
+
+rules:
+- rule: url_prop_literal
+  reads: file
+  in: [typescript_source]
+  match: {file: '**', filetype: typescript, text: '(?<![\w.])(?<prop>\w+)=\{?\s*[`''"](?<url>/api/[^`''"\s]*)[`''"]'}
+  values:
+    target:
+      template: '{url}'
+      normalize:
+      - {replace: '[?#].*$', with: ''}
+      - {replace: '\$\{[^}]*\}', with: '[]'}
+      - {replace: '(?<=.)/$', with: ''}
+  id: {template: 'prop|{prop}'}
+  emits: [{edge: {kind: name_holds_route, from: this_node, to: {template: '{target}'}}}]
+  confidence: inferred

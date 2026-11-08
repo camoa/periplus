@@ -1,0 +1,23 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# Joins a resource to its jsonapi_extras config.
+
+edge_kinds:
+- kind: resource_configured_by
+  from: drupal_next.jsonapi_resource
+  to: drupal.config_object
+rules:
+- rule: resource_to_extras_config
+  reads: map
+  match:
+    node_type: drupal_next.jsonapi_resource
+    where:
+    - id_matches: ^drupal_next\.jsonapi_resource::(?<resource>[a-z_-]+)$
+    follow:
+    - node: drupal.config::jsonapi_extras.jsonapi_resource_config.{resource}
+  emits:
+  - edge:
+      kind: resource_configured_by
+      from: this_node
+      to: matched_node
+  confidence: declared

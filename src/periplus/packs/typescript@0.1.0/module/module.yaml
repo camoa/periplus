@@ -1,0 +1,7 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# Every TypeScript file is a module.
+
+node_types:
+- name: typescript.module
+  id_namespace: typescript.module

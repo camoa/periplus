@@ -1,0 +1,16 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A function declared in this file binds its own name, so a call to it resolves to this module.
+
+rules:
+- rule: same_file_function
+  reads: file
+  in: [typescript_source]
+  match:
+    file: '**'
+    filetype: typescript
+    reads_sections: [string]
+    text: '(?m)^[ \t]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(?<name>\w+)\b'
+  emits:
+  - binding: {name: '{name}', target: '{module}:{name}'}
+  confidence: inferred

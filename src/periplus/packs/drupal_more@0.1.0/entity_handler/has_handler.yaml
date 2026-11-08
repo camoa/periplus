@@ -1,0 +1,6 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The edge kind of the handler rules: an entity class to a class its annotation names as a handler.
+
+edge_kinds:
+- {kind: has_handler, from: php.class, to: php.class}

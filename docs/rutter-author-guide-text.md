@@ -48,6 +48,9 @@ inner span holds only the `/` route. A closure route and the if block each balan
 and `'})}'` is a string section, so neither ends the group. A same-kind counter of `});` would
 end the group at the closure route.
 
+A match outside every span still fires. To drop it, name the span's value in the id, then strip
+it with `normalize`, as `{scope}|{name}` with `^.*\|`.
+
 ## A value from the enclosing spans
 
 A text rule's value may read a capture of every span that holds the match:
@@ -62,8 +65,8 @@ A text rule's value may read a capture of every span that holds the match:
 
 `from: {enclosing: group, capture: prefix}` takes the `prefix` capture of each `group` span whose
 region holds the start of the match, outermost first, and joins them with `join`, empty by
-default. A span whose capture took no part, or is empty, adds nothing. No such span gives the
-empty value. Then `normalize` and `case` run, as for any value. The `/` route above gets the
+default, so nested `function_body` spans give `outerinner`. To take the innermost name, use `join: '|'` with `normalize: [{replace: '^.*\|', with: ''}]`, which gives `inner`. A span whose capture took no part, or is empty, adds nothing. No such span gives the
+empty value. Then `normalize` and `case` run, as for any value. Each step runs once, so climbing two `../` levels takes the step twice. The `/` route above gets the
 prefix `admin/v1`: `admin` and `/v1/` joined, then each run of slashes made one and the outer
 slashes trimmed.
 
@@ -80,7 +83,8 @@ tell the two cases apart: with no prefix the leading space goes and the URI stay
 
 and the attribute reads `from: {value: full_name}`, so the `/` route is named `admin.v1.root`.
 A rule names only a span its file type declares and a capture its `open` holds, or it is not
-executed, and the report says which.
+executed, and the report says which. A value reads only its own file: a variable set in another
+file is not followed.
 
 ## The line of a node
 
