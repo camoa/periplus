@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-07
+
 ### Added
 
 - A TypeScript const whose value is a `useCallback` or `useMemo` call is a function: it gets a `typescript.function` node, a `declares_callable` edge and a binding, and the calls inside it start at it.
