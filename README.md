@@ -8,11 +8,11 @@
 [![License](https://img.shields.io/github/license/camoa/periplus)](LICENSE)
 [![Latest tag](https://img.shields.io/github/v/tag/camoa/periplus)](https://github.com/camoa/periplus/tags)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
-<sub>The CI workflow, `.github/workflows/checks.yml`, installs the package with its `dev`,
-`js` and `go` extras for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
+<sub>The CI workflow, `.github/workflows/checks.yml`, installs the package with its `dev`
+extra for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.5.1.
+Status: **beta**, version 0.5.2.
 
 </div>
 
@@ -57,15 +57,13 @@ Install it from PyPI:
 
 ```
 uv tool install periplus-map                # or: pip install periplus-map
-uv tool install 'periplus-map[go,js]'       # adds the grammars that go_basic and js_basic need
-pip install 'periplus-map[go,js]'           # the same with pip
 periplus --version
 ```
 
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.5.1
+uv tool install git+https://github.com/camoa/periplus@v0.5.2
 ```
 
 To install from a local copy of this repository:
@@ -96,9 +94,9 @@ mkdir -p ~/.agents/skills && rsync -a --delete ~/.claude/skills/periplus-* ~/.ag
 To upgrade an install from PyPI, use the tool you installed with:
 
 ```
-uv tool upgrade periplus-map                # keeps the extras you installed
+uv tool upgrade periplus-map
 pipx upgrade periplus-map
-pip install -U 'periplus-map[go,js]'        # pip needs the extras named again
+pip install -U periplus-map
 ```
 
 Then run `periplus skills install` again, and repeat the copy above for any other agent. Read the
@@ -110,11 +108,11 @@ local directory is rebuilt when `pyproject.toml` changes or a file under `src/pe
 `uv tool install --reinstall /path/to/periplus` for the form that always rebuilds. The command
 `periplus status` prints a `rutters:` digest of the bundled rutters, so you can compare two installs.
 
-The distribution name is `periplus-map`. Its five runtime dependencies are pinned exactly. One
+The distribution name is `periplus-map`. Its seven runtime dependencies are pinned exactly. One
 package that `jsonschema` brings is compiled, so your platform needs a prebuilt wheel or Rust.
 
 To work on Periplus itself, run `uv sync --frozen --all-extras` in the repository. This installs
-the development tools and the Go grammar into `.venv`.
+the development tools into `.venv`.
 
 ### 2. Pin a rutter
 
@@ -223,11 +221,11 @@ are copied into a project's `.periplus/packs`. The tables group them by language
 | Rutter | Version | What it finds |
 |---|---|---|
 | `php_basic` | 0.2.0 | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interfaces, traits, containment, properties and parameters with their types, and call sites. Plain and static calls, and method calls through a typed or assigned property; a call to a PHP builtin function makes nothing. Reads a parse tree. |
-| `js_basic` | 0.0.1 | JavaScript scripts, and the functions that have a name of their own, each under its script's path. It reads `.js` files only and maps no calls. Reads a parse tree. Needs the `js` extra. |
-| `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. It skips test files and `vendor`, and needs the module path in the settings as `values.module`. Reads a parse tree. Needs the `go` extra. |
+| `js_basic` | 0.0.1 | JavaScript scripts, and the functions that have a name of their own, each under its script's path. It reads `.js` files only and maps no calls. Reads a parse tree. |
+| `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. It skips test files and `vendor`, and needs the module path in the settings as `values.module`. Reads a parse tree. |
 | `yaml_basic` | 0.1.0 | Claims `.yml` and `.yaml` files for rutters that depend on it. No rules of its own. |
 | `twig_basic` | 0.1.0 | Claims `.twig` files for rutters that depend on it. No rules of its own. |
-| `typescript` | 0.1.0 | TypeScript modules, imports, packages and functions in `.ts` and `.tsx` files, and calls from one function to a function the file binds by name. It reads the files as text and needs no extra; the project sets the folder the `@/` alias points at as `typescript_alias_root`. |
+| `typescript` | 0.1.0 | TypeScript modules, imports, packages and functions in `.ts` and `.tsx` files, and calls from one function to a function the file binds by name. It reads the files as text; the project sets the folder the `@/` alias points at as `typescript_alias_root`. |
 | `react` | 0.1.0 | React components and hooks, named by convention, the components a function renders, the hooks it uses, and the `use client` or `use server` directive. It reads the files as text. |
 | `nextjs` | 0.2.0 | Next.js App Router pages, layouts, route handlers with their HTTP methods, middleware and special files under `app`. A `fetch` of a route, a link to a page, and a name or prop that holds a route URL. It reads the files as text. |
 
@@ -300,7 +298,7 @@ The bundled rutters are in `src/periplus/packs`. The examples are in
 `yaml_basic`, `twig_basic`, the examples and the reference packs, opens with a list of its known
 gaps.
 
-To map a Go module, install the `go` extra and run Periplus at the module's root. Give the module
+To map a Go module, run Periplus at the module's root. Give the module
 path in the settings, because Periplus does not read `go.mod`:
 
 ```yaml
@@ -315,11 +313,9 @@ To map a Laravel application, pin `php_basic@0.2.0` and `laravel_basic@0.0.5` an
 at the application's root. The default Laravel folders need no settings. To move the templates,
 set `views_root` under `folders`; a template is named by its path below `views_root`.
 
-New in this release: a function, component or hook declared inside another function has its own
-id, `module:Outer:name`, and the calls inside it start there; a const wrapped in `useCallback` or
-`useMemo` is a function; a value read from the enclosing spans can leave out the span the match
-itself opens; the Drupal rutter reads a test class under `Drupal\Tests`, links a component's path
-attribute from the component, and reads every handler key of an entity annotation.
+New in this release: one install serves every bundled rutter. The Go and JavaScript grammars
+are dependencies of the package, so `go_basic`, `js_basic` and `drupal_js_basic` map without a
+second install, and the `go` and `js` extras are gone.
 
 ## Write a rutter
 
@@ -469,8 +465,8 @@ from this file and compares the map with the lines above.
 | [`docs/map-report-guide.md`](docs/map-report-guide.md) | Reading the map report: each part in the order to read it, what it means, and what to do when it is not empty. |
 
 A parse-tree rutter pins its grammar under `grammar` in `pack.yaml`, as `php_basic` does.
-Periplus installs the PHP grammar, and the Go grammar with the `go` extra. Another language needs
-its `tree-sitter-<language>` package installed beside Periplus, or the map stops at exit 28.
+Periplus installs the PHP, Go and JavaScript grammars. Another language needs its
+`tree-sitter-<language>` package installed beside Periplus, or the map stops at exit 28.
 
 An AI that writes a rutter reads `periplus spec` first, then the guide pages in the order above.
 Then it runs the loop. The map's `referenced` and `unresolved` nodes say which rule to write next.
@@ -556,8 +552,8 @@ installed version, and `periplus <command> --help` gives each command's options.
 - **`periplus map` stops at exit 28: a grammar mismatch.** A rutter's `grammar` in `pack.yaml`
   pins a parser runtime or a grammar version other than the one installed, or one that is not
   installed. The message names the rutter, the package, the version pinned and the version
-  found. Install the `go` or `js` extra for `go_basic` or `js_basic`. For another language,
-  install its `tree-sitter-<language>` package at the pinned version. The check runs before any
+  found. For a language other than PHP, Go and JavaScript, install its `tree-sitter-<language>`
+  package at the pinned version. The check runs before any
   source file is opened.
 - **A navigation command stops at exit 29, 30 or 31.** It found no map, the file is not a map,
   or the id names no node. The [navigation guide](docs/navigation.md) gives the remedy for each.

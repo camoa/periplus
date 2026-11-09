@@ -25,7 +25,7 @@ classifiers = [
 # Declared here and nowhere else. src/periplus/__init__.py reads it back at runtime through
 # importlib.metadata.version(), so the number is written once and `periplus --version` prints
 # what this file says by construction rather than by two places agreeing.
-version = "0.5.1"
+version = "0.5.2"
 
 # Five runtime distributions. The count is still a decision, not an accident, and this comment
 # said "two runtime distributions, zero transitive" until `periplus validate` needed a validator.
@@ -48,9 +48,12 @@ dependencies = [
   "ruamel.yaml==0.19.1",
   "platformdirs==4.11.5",
   "jsonschema==4.26.0",
-  # The fourth and fifth: the parser runtime, and the grammar the bundled pack php_basic pins.
+  # The fourth: the parser runtime. Then the grammars the bundled packs php_basic, go_basic and
+  # js_basic pin, so one install serves every bundled rutter.
   "tree-sitter==0.26.0",
   "tree-sitter-php==0.24.1",
+  "tree-sitter-go==0.25.0",
+  "tree-sitter-javascript==0.25.0",
 ]
 
 [project.optional-dependencies]
@@ -63,11 +66,6 @@ dev = [
   # jsonschema ships no py.typed, so mypy strict reports import-untyped without these stubs.
   "types-jsonschema==4.26.0.20260518",
 ]
-# The grammar the bundled pack go_basic pins. Optional, because only a Go project reads it.
-go = ["tree-sitter-go==0.25.0"]
-# The grammar the bundled pack js_basic pins. Optional, because only a project with JavaScript
-# reads it.
-js = ["tree-sitter-javascript==0.25.0"]
 
 [project.scripts]
 periplus = "periplus.cli:main"

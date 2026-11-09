@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-09
+
+### Changed
+
+- The Go and JavaScript grammars, `tree-sitter-go` and `tree-sitter-javascript`, are dependencies of the package. One `pip install periplus-map` serves every bundled rutter, so `go_basic`, `js_basic` and `drupal_js_basic` map without a second install. The `go` and `js` extras are gone: `periplus-map[go,js]` still installs, and pip warns that the extras do not exist.
+
 ## [0.5.1] - 2026-11-07
 
 ### Added

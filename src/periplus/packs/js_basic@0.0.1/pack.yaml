@@ -16,8 +16,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - An import or an export: no rule. A script in a .mjs, .cjs, .jsx or .ts file is not read.
 # - The script path is the path from the project folder, so the same script mapped from another
 #   folder gets another id.
-# The grammar is not a dependency of periplus-map. Without it, periplus map stops with a problem
-# that names the pin; install periplus with the extra js, which pins tree-sitter-javascript 0.25.0.
+# The grammar is a dependency of periplus-map, pinned at tree-sitter-javascript 0.25.0. With
+# another version installed, periplus map stops with a problem that names the pin.
 pack: js_basic
 version: 0.0.1
 depends: []

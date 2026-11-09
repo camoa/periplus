@@ -25,6 +25,8 @@ RUNTIME_DEPENDENCIES = [
     "jsonschema==4.26.0",
     "tree-sitter==0.26.0",
     "tree-sitter-php==0.24.1",
+    "tree-sitter-go==0.25.0",
+    "tree-sitter-javascript==0.25.0",
 ]
 
 

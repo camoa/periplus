@@ -261,11 +261,9 @@ def test_runtime_dependencies_are_exactly_the_three_the_design_decided(
     from periplus.preflight import REQUIRED
 
     # The grammar a bundled rutter pins is declared by the package and is not a start-up
-    # requirement. The only exceptions are the reference packs go and yaml, whose grammars the
-    # package does not declare, go_basic, whose grammar is installed with the extra go, and
-    # js_basic, whose grammar is installed with the extra js; each must still pin one, so the list
-    # cannot outlive its reason.
-    undeclared = {"go", "go_basic", "js_basic", "yaml"}
+    # requirement. The one exception is the reference pack yaml, whose grammar the package does
+    # not declare; it must still pin one, so the list cannot outlive its reason.
+    undeclared = {"yaml"}
     pinned, excepted = set(), {}
     for path in sorted((PROJECT_ROOT / "src" / "periplus" / "packs").glob("*@*/pack.yaml")):
         document = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8"))
@@ -695,7 +693,7 @@ EXPECTED_JSONSCHEMA_CLOSURE = {
 
 
 def test_lockfile_confirms_the_runtime_closure_the_validator_decision_grew() -> None:
-    """The three runtime distributions, and exactly the transitive closure the decision bought.
+    """The seven runtime distributions, and exactly the transitive closure the decision bought.
 
     **This test used to be called ``..._is_two_packages`` and asserted that every runtime
     dependency had zero transitive dependencies.** Its own failure message said that posture was
@@ -731,6 +729,8 @@ def test_lockfile_confirms_the_runtime_closure_the_validator_decision_grew() -> 
             "ruamel-yaml",
             "tree-sitter",
             "tree-sitter-php",
+            "tree-sitter-go",
+            "tree-sitter-javascript",
         }
 
     for name in ("platformdirs", "ruamel-yaml"):

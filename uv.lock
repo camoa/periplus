@@ -338,13 +338,15 @@ wheels = [
 
 [[package]]
 name = "periplus-map"
-version = "0.5.1"
+version = "0.5.2"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
     { name = "platformdirs" },
     { name = "ruamel-yaml" },
     { name = "tree-sitter" },
+    { name = "tree-sitter-go" },
+    { name = "tree-sitter-javascript" },
     { name = "tree-sitter-php" },
 ]
 
@@ -355,12 +357,6 @@ dev = [
     { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "types-jsonschema" },
-]
-go = [
-    { name = "tree-sitter-go" },
-]
-js = [
-    { name = "tree-sitter-javascript" },
 ]
 
 [package.metadata]
@@ -373,12 +369,12 @@ requires-dist = [
     { name = "ruamel-yaml", specifier = "==0.19.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.0" },
     { name = "tree-sitter", specifier = "==0.26.0" },
-    { name = "tree-sitter-go", marker = "extra == 'go'", specifier = "==0.25.0" },
-    { name = "tree-sitter-javascript", marker = "extra == 'js'", specifier = "==0.25.0" },
+    { name = "tree-sitter-go", specifier = "==0.25.0" },
+    { name = "tree-sitter-javascript", specifier = "==0.25.0" },
     { name = "tree-sitter-php", specifier = "==0.24.1" },
     { name = "types-jsonschema", marker = "extra == 'dev'", specifier = "==4.26.0.20260518" },
 ]
-provides-extras = ["dev", "go", "js"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "platformdirs"

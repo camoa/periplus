@@ -9,8 +9,8 @@
 # attaches a library by assignment and by array, each an attaches_library edge from its class,
 # and attaches the setting, a provides_setting edge. The template's attach_library() is a
 # template_attaches_library edge.
-# The grammar is the extra js. Without it, periplus map stops with a problem naming the pin, and
-# this check fails.
+# The grammar is a dependency of periplus-map. With another version installed, periplus map stops
+# with a problem naming the pin, and this check fails.
 set -euo pipefail
 
 work="$(mktemp -d)"

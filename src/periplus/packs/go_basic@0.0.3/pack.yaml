@@ -51,8 +51,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # a subfolder of the project, that folder's name becomes part of every package path: name the
 # folder as the module path's last segment and set values.module to the path without it, or move
 # the settings to the module's root.
-# The grammar is the optional extra go. Without it, periplus map exits 28 with "pins
-# tree-sitter-go 0.25.0, and the version found is none"; install periplus-map[go].
+# The grammar is a dependency of periplus-map. With another version installed, periplus map exits
+# 28 with "pins tree-sitter-go 0.25.0, and the version found is <that version>".
 pack: go_basic
 version: 0.0.3
 depends: []
