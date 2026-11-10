@@ -250,7 +250,7 @@ def run_file_rules(
                 node_id = _fill(rule.id_template, values)
                 if node_id is None:
                     continue
-                node_id = _reshape(node_id, rule.normalize)
+                node_id = _reshape(node_id, rule.normalize, values=values)
                 fire = (key, line)
                 lists = (nodes, edges, skipped)
                 _found(rule, rule_set, file, node_id, fire, scope, *lists, paths[own])
@@ -473,7 +473,9 @@ def _texts(
         for value in rule.values:
             if value.enclosing is not None:
                 held = _held(spans, value.enclosing, found.start(), value.excluding_own)
-                values[value.name] = _reshape(value.join.join(held), value.normalize, value.case)
+                values[value.name] = _reshape(
+                    value.join.join(held), value.normalize, value.case, values
+                )
                 continue
             made = _value(value, values)
             if made is not None:
@@ -495,7 +497,7 @@ def _texts(
             )
         if not node_id:
             continue
-        node_id = _reshape(node_id, rule.normalize)
+        node_id = _reshape(node_id, rule.normalize, values=values)
         fired += 1
         before = len(nodes) + len(edges)
         if rule.node_type:
@@ -679,7 +681,7 @@ def _held(
 def _value(value: Value, known: Mapping[str, str]) -> str | None:
     """The value made from the values known, reshaped; ``None`` when what it names is absent."""
     found = known.get(value.capture) if value.capture else _fill(value.template, known)
-    return None if found is None else _reshape(found, value.normalize, value.case)
+    return None if found is None else _reshape(found, value.normalize, value.case, known)
 
 
 def _path_values(
@@ -773,7 +775,7 @@ def _declarations(
                     skipped.append((file, line, rule.name, f"the id source {name} is absent"))
                 continue
         else:
-            node_id = _reshape("", rule.normalize)
+            node_id = _reshape("", rule.normalize, values=values)
         fired += 1
         before, silent, written = len(nodes) + len(edges), 0, len(skipped)
         if rule.node_type:
@@ -1225,7 +1227,7 @@ def _call_id(
     """The bare id the rule's call argument gives at the node, ``None`` when it holds no text;
     and the skipped row for no text."""
     _, literal, row = _argument(node, rule.id_argument, grammar, parsed, holder, call=True)
-    return (_reshape(literal, rule.normalize) if literal else None), row
+    return (_reshape(literal, rule.normalize, values=parsed.values) if literal else None), row
 
 
 def _holder_rules(
@@ -1949,7 +1951,7 @@ def _node_id(rule: Rule, values: Mapping[str, str], *, empty_ok: bool = False) -
     filled = _fill(rule.id_template, values)
     if filled is None or not (filled or empty_ok):
         return None
-    return _reshape(filled, rule.normalize)
+    return _reshape(filled, rule.normalize, values=values)
 
 
 def _id_pattern(rule: Rule, values: Mapping[str, str]) -> re.Pattern[str] | None:

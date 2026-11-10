@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
-__all__ = ["compile_pattern", "reshape"]
+__all__ = ["PATTERN_VALUE", "compile_pattern", "reshape"]
+
+#: A ``{name}`` in an id pattern or a normalize step's pattern: a path or settings value, filled
+#: as literal text. A name starts with a letter, so a quantifier such as ``{2}`` stays one.
+PATTERN_VALUE = re.compile(r"\{([A-Za-z]\w*)\}")
 
 
 def _named_groups(expression: str) -> str:
@@ -54,9 +58,22 @@ def compile_pattern(expression: str) -> re.Pattern[str]:
     return re.compile(_named_groups(expression))
 
 
-def reshape(value: str, normalize: Sequence[tuple[re.Pattern[str], str]], case: str = "") -> str:
+def reshape(
+    value: str,
+    normalize: Sequence[tuple[re.Pattern[str], str]],
+    case: str = "",
+    values: Mapping[str, str] | None = None,
+) -> str:
     """The value with each normalize step applied in order, then set to ``lower`` or ``upper``
-    case."""
+    case. Each ``{name}`` in a step's pattern is filled with that one of ``values`` as literal
+    text; a step naming a value ``values`` lacks matches nothing."""
+    known = values or {}
     for step, replacement in normalize:
+        names = PATTERN_VALUE.findall(step.pattern)
+        if not all(name in known for name in names):
+            continue
+        if names:
+            filled = PATTERN_VALUE.sub(lambda found: re.escape(known[found.group(1)]), step.pattern)
+            step = re.compile(filled)
         value = step.sub(replacement.replace("\\", "\\\\"), value)
     return value.lower() if case == "lower" else value.upper() if case == "upper" else value

@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - `periplus validate` runs the checks `periplus map` runs on the rutter and its dependencies once its files pass the schemas, so a rule the engine cannot execute is reported before a map. It also gives map's folder refusals; inside a project it resolves folders against every pinned rutter, as map does. A rutter declares the settings values its rules read in its manifest's `values`; outside a project, a rule may rely only on a value its rutter or a rutter it depends on declares. `periplus map`, and `periplus validate` inside a project, refuse a project whose settings do not give one.
+- A `{name}` in a normalize step's `replace` pattern is a path value or a settings value, filled in as literal text, escaped, as an id pattern's is; it was matched as the literal text `{name}`. A name that is neither is refused when the pack loads. A quantifier such as `{2}` stays a quantifier.
 
 ## [0.5.2] - 2026-11-09
 

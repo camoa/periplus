@@ -315,13 +315,16 @@ def parse_file(
     for rule in grammar.imports:
         for declaration in by_type.get(rule.declaration, []):
             block = parsed.block_at(declaration.start_byte)
-            imports.setdefault(block, {}).update(_bound(declaration, rule, grammar))
+            imports.setdefault(block, {}).update(_bound(declaration, rule, grammar, values))
     return replace(parsed, imports=imports)
 
 
-def _bound(declaration: Node, rule: ImportRule, grammar: Grammar) -> dict[str, str]:
+def _bound(
+    declaration: Node, rule: ImportRule, grammar: Grammar, values: Mapping[str, str]
+) -> dict[str, str]:
     """Each name one import declaration binds, to the path it is written with, as the rule's
-    ``bind`` says; a clause no name source gives a name binds nothing."""
+    ``bind`` says; a clause no name source gives a name binds nothing. ``values`` fill the
+    normalize steps."""
     facts = dict(rule.facts)
     skip = facts.get(rule.skip_when, "")
     if skip and declaration.child_by_field_name(skip) is not None:
@@ -366,7 +369,7 @@ def _bound(declaration: Node, rule: ImportRule, grammar: Grammar) -> dict[str, s
                 name = path if source == "path" else path.rsplit(grammar.separator, 1)[-1]
                 break
         if name is not None:
-            bound[reshape(name, rule.normalize)] = path
+            bound[reshape(name, rule.normalize, values=values)] = path
     return bound
 
 

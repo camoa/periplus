@@ -102,6 +102,13 @@ values:
     case: lower
 ```
 
+A `replace` pattern may name a path value or a settings value as `{name}`. The engine fills in the
+value as literal text, escaped, so a dot in the value matches only a dot. With the settings value
+`app_prefix: shop`, `{replace: '^{app_prefix}\.', with: ''}` turns `shop.cart.Basket` into
+`cart.Basket`. A path value's own normalize may name settings values only. A name that is neither
+is refused when the pack loads: exit 26 for a rule, exit 19 for a path value. A quantifier such as
+`{2}` stays a quantifier. A step naming a value a file lacks does not run on that file.
+
 A binding rule names what a file's imports bind. It emits only bindings, has no id, writes nothing
 to the map, and serves no tree rule. Its values pick the bound name and target from one capture:
 

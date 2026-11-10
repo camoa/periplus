@@ -7,7 +7,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from periplus.engine.pattern import compile_pattern
+from periplus.engine.pattern import PATTERN_VALUE, compile_pattern
 from periplus.engine.select import FileTypes, FolderUnresolved, holds_double_star
 from periplus.engine.tree import STEPS, Grammar, ImportRule, Step, _parser
 from periplus.errors import ExitCode, HarnessError, Problem
@@ -253,10 +253,6 @@ _WHOLE_ENDS = {"enclosing_declaration", "enclosing_class", "enclosing_method", "
 
 #: A ``{name}`` in an id or edge template.
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
-
-#: A ``{name}`` in an id pattern: a path or settings value, filled as literal text. A name starts
-#: with a letter, so a quantifier such as ``{2}`` stays one.
-PATTERN_VALUE = re.compile(r"\{([A-Za-z]\w*)\}")
 
 #: The key path an edge source ``text`` reads: an entry whose value is text holds it under this key
 #: alone, which no other key path reaches.
@@ -559,10 +555,10 @@ def load_rules(
     type declared twice, and a supported rule that emits a type with no id namespace. An edge kind
     declared twice with different ends is left in ``RuleSet.conflicts``, so the run can report it
     beside the other problems of the packs, and so is a name the settings ``values`` and a pack
-    both give, a path value template naming a value nothing gives, and a declaration rule's id
-    naming a name that is no field of its grammar and no value, and so is a boundary group whose
-    type, classifying type or ancestry kind the run cannot use. ``origins`` names the settings
-    file of each settings value. Every pack given has passed its schema.
+    both give, a path value template or normalize pattern naming a value nothing gives, and a
+    declaration rule's id naming a name that is no field of its grammar and no value, and so is a
+    boundary group whose type, classifying type or ancestry kind the run cannot use. ``origins``
+    names the settings file of each settings value. Every pack given has passed its schema.
     """
     values = dict(values or {})
     types: dict[str, TypeInfo] = {}
@@ -630,6 +626,18 @@ def load_rules(
         if rules[index].supported and rule.annotation and not grammars[rule.filetype].comment:
             missing = f"the grammar for {rule.filetype} declares no identity.comment"
             rules[index] = replace(rule, supported=False, reason=missing)
+        if rules[index].supported and tree:
+            paths = {value.name for value in files.get(rule.filetype, FileInfo()).path_values}
+            entries = grammars[rule.filetype].imports
+            patterns = [step for entry in entries for step, _ in entry.normalize]
+            unnamed = {n for step in patterns for n in PATTERN_VALUE.findall(step.pattern)}
+            unnamed -= paths | set(known[rule.pack])
+            if unnamed:
+                unknown = (
+                    f"an import's normalize pattern names {', '.join(sorted(unnamed))}, which is "
+                    "no path value or settings value"
+                )
+                rules[index] = replace(rule, supported=False, reason=unknown)
     for rule in rules:
         if (
             rule.supported
@@ -859,11 +867,19 @@ def _closing(close: object, opening: object) -> str:
 
 
 def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
-    """The rule, marked not executed when a template names a value nothing gives, a value's
-    template names a value defined after it, or the match reads a section its file type does not
-    declare. A declaration rule is given the fields its id names."""
+    """The rule, marked not executed when a template or a normalize pattern names a value nothing
+    gives, a value's template names a value defined after it, or the match reads a section its
+    file type does not declare. A declaration rule is given the fields its id names."""
     tree = rule.declaration or rule.attribute or rule.annotation or rule.reference
     known = {value.name for value in info.path_values} | set(values)
+    normalize = [*rule.normalize, *(step for value in rule.values for step in value.normalize)]
+    unnamed = {n for step, _ in normalize for n in PATTERN_VALUE.findall(step.pattern)} - known
+    if rule.supported and unnamed:
+        reason = (
+            f"a normalize pattern names {', '.join(sorted(unnamed))}, which is no path value or "
+            "settings value"
+        )
+        return replace(rule, supported=False, reason=reason)
     if rule.supported and rule.declaration:
         captures = set(compile_pattern(PATTERN_VALUE.sub("", rule.id_pattern)).groupindex)
         clash = captures & (_TREE_FILLED | known)
@@ -1022,10 +1038,10 @@ def _collisions(
     """Each path value name that the engine fills already (on a tree file type, also the names it
     fills for a declaration rule and ``line``), that a rule on its file type captures or names as
     a value, or that a settings value gives or a pack declares; each such settings value name
-    the engine fills, or a rule captures or names as a value; and each path value template
+    the engine fills, or a rule captures or names as a value; each path value template
     naming a name that is no capture of its pattern and no settings value, declared or given,
-    or both: a problem naming the pack, the file and the names, and the settings file of a
-    settings value."""
+    or both; and each path value normalize pattern naming a name that is no settings value: a
+    problem naming the pack, the file and the names, and the settings file of a settings value."""
     problems: list[Problem] = []
     tree_filled = {"file_stem", "key", "line", *_TREE_FILLED}
     settings = set(values) | declared_names
@@ -1067,6 +1083,13 @@ def _collisions(
                         f"{both}, both a capture of its pattern and a settings value"
                     )
                     problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
+                for step in value.get("normalize", []):
+                    for missing in sorted(set(PATTERN_VALUE.findall(step["replace"])) - settings):
+                        message = (
+                            f"{where}type {kind} has the normalize pattern {step['replace']}, "
+                            f"which names {missing}, no settings value"
+                        )
+                        problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
     for rule, source in zip(rules, sources, strict=True):
         names = {value.name for value in files.get(rule.filetype, FileInfo()).path_values}
         given = {*(rule.text.groupindex if rule.text is not None else ())}
