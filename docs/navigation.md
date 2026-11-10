@@ -69,7 +69,9 @@ Prints the node's type, state, location and provenance, then its outgoing and in
 grouped by kind. Each edge row names the other end, the first location, the occurrence count, the
 confidence and the rule. `--limit` applies to each of the two edge lists. Take `ID` from `find`.
 
-`show` also reads `descriptions.yaml` beside the map file, when it exists. It prints the node's
+`show` also reads the project's `.periplus/descriptions.yaml`, when it exists. It finds the project
+by walking up from the folder of the `--map` file, or of the default map when no `--map` is given.
+When no project is found, it reads the `descriptions.yaml` beside the map file. It prints the node's
 entry as `description: <text> (<file>:<line>)`, or `description: none` when the node has none. An
 edge with an entry gets the same line, indented, under its row. JSON puts the entry, or `null`, in
 a `description` key. A descriptions file that is not YAML, or not the shape the `periplus-map`
@@ -156,7 +158,7 @@ periplus export --format dot --map foo.map.json > foo.dot
 | 17 | The slice does not pass the map schema, because the map it was cut from does not. Run `periplus check-map` on that map. |
 | 27 | `slice --out` names the map being read, or the file cannot be written. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
-| 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. |
+| 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. Also a descriptions file `show` reads that is not YAML or does not match the descriptions schema. |
 | 31 | An id names no node in the map. |
 | 32 | The slice reaches more items than `--limit` allows. |
 

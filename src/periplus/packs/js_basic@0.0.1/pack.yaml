@@ -7,7 +7,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # Each script is a js.file node named by its path, and each function above has a
 # script_declares_function edge from its script.
 # What it does not map, today:
-# - A member call, a.b(): no edge.
+# - A member call, a.b(): no edge. Each one is a row of the map report's matches skipped.
+# - A call to a function another script declares: it stays an unresolved end named in the
+#   calling script, <script path>:<name>.
 # - A generator, function* name() {}, a class and a class method: no node.
 # - A function that is a member of an object, { name() {} }, { name: function () {} } or
 #   { name: () => {} }, and a function passed as an argument: no node. A call inside one of

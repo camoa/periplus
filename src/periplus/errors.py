@@ -245,6 +245,7 @@ class ExitCode(IntEnum):
     RULE_DUPLICATED = 25
 
     #: A rule has a shape the engine cannot execute, so the run is refused rather than partial.
+    #: Also a rutter that reads a declared settings value the project settings do not give.
     RULE_NOT_EXECUTABLE = 26
 
     #: The map could not be written to the path asked for.
@@ -260,9 +261,10 @@ class ExitCode(IntEnum):
     MAP_NOT_FOUND = 29
 
     #: The file a navigation command read is not JSON, lacks the map's outline, or is damaged
-    #: below the outline: a node, edge or type_hierarchy row is malformed. Also the
-    #: ``descriptions.yaml`` beside the map that ``periplus show`` reads, when it is not valid
-    #: YAML or does not match the descriptions schema.
+    #: below the outline: a node, edge or type_hierarchy row is malformed. Also the descriptions
+    #: file ``periplus show`` reads, when it is not valid YAML or does not match the descriptions
+    #: schema: the project's ``.periplus/descriptions.yaml``, found by walking up from the map
+    #: file's folder, or the one beside the map file when no project is found.
     NOT_A_MAP = 30
 
     #: An id given to a navigation command names no node in the map.

@@ -89,9 +89,9 @@ jobs:
       # checking passes against an empty one.
       #
       # Every pack is validated before the job fails, so one run names every broken pack rather
-      # than the first. `periplus validate` exits 16 when a pack file disagrees with its schema.
-      # The five reference packs hold rules the engine does not execute, which validate reports,
-      # so they fail the job only on a schema error.
+      # than the first. The five reference packs hold rules the engine does not execute, which
+      # validate reports with the codes map gives: 18, 19, 22, 26 and 28. Any other non-zero exit,
+      # a schema error's 16 among them, fails the job.
       - name: validate every bundled pack
         run: |
           set -u
@@ -108,6 +108,9 @@ jobs:
             echo "== $pack"
             code=0
             periplus validate "$pack" || code=$?
-            if [ "$code" -eq 16 ]; then status=1; fi
+            case "$code" in
+              0|18|19|22|26|28) ;;
+              *) status=1 ;;
+            esac
           done
           exit $status

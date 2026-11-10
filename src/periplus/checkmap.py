@@ -14,7 +14,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from periplus.errors import ExitCode, HarnessError, Problem
-from periplus.mapshared import MAP_SCHEMA
+from periplus.mapshared import MAP_SCHEMA, first_error
 from periplus.navigate.mapfile import _read
 from periplus.report import _escape, _json_problem
 from periplus.validate import _schema
@@ -42,12 +42,9 @@ def run(start: Path, env: Mapping[str, str], map_path: Path | None) -> CheckRepo
     except HarnessError as error:
         found = error.detail.get("path")
         return CheckReport(str(found) if found is not None else None, (error.problem(),))
-    invalid = sorted(
-        Draft202012Validator(_schema(MAP_SCHEMA)).iter_errors(document),
-        key=lambda found: (list(map(str, found.absolute_path)), found.message),
-    )
-    if invalid:
-        message = f"{path} does not match the map schema: {invalid[0].message}"
+    invalid = first_error(Draft202012Validator(_schema(MAP_SCHEMA)).iter_errors(document))
+    if invalid is not None:
+        message = f"{path} does not match the map schema: {invalid.message}"
         problem = Problem(ExitCode.NOT_A_MAP, message, {"path": str(path)})
         return CheckReport(str(path), (problem,))
     return CheckReport(str(path), ())

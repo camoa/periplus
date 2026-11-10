@@ -22,7 +22,7 @@ from jsonschema import Draft202012Validator
 
 import periplus
 from periplus.engine.check import checked
-from periplus.engine.emit import build_document, render
+from periplus.engine.emit import LeftOut, build_document, render
 from periplus.engine.rules import MapPass, run_file_rules, run_map_rules
 from periplus.engine.select import Selection, files_in, folder_problems, resolve_folders
 from periplus.errors import ExitCode, HarnessError, Problem
@@ -31,9 +31,10 @@ from periplus.manifest import resolve_pack_order
 from periplus.mapshared import _DEFAULT_MAP as _DEFAULT_MAP
 from periplus.mapshared import MAP_SCHEMA as MAP_SCHEMA
 from periplus.mapshared import _section as _section
+from periplus.mapshared import first_error
 from periplus.preflight import DependencyStatus
 from periplus.report import _escape, _json_problem
-from periplus.resolution import resolve
+from periplus.resolution import folder_overrides, resolve, settings_values
 from periplus.validate import _schema
 
 __all__ = ["RENDERERS", "MapReport", "render_json", "render_text", "run", "write_document"]
@@ -41,12 +42,9 @@ __all__ = ["RENDERERS", "MapReport", "render_json", "render_text", "run", "write
 
 def write_document(document: Mapping[str, object], target: Path) -> tuple[Problem, ...]:
     """Check ``document`` against the map schema and write it; the problems found, if any."""
-    invalid = sorted(
-        Draft202012Validator(_schema(MAP_SCHEMA)).iter_errors(document),
-        key=lambda found: (list(map(str, found.absolute_path)), found.message),
-    )
-    if invalid:
-        message = f"the map does not match its schema: {invalid[0].message}"
+    invalid = first_error(Draft202012Validator(_schema(MAP_SCHEMA)).iter_errors(document))
+    if invalid is not None:
+        message = f"the map does not match its schema: {invalid.message}"
         return (Problem(ExitCode.MAP_INVALID, message, {}),)
     try:
         target.write_bytes(render(document).encode("utf-8"))
@@ -80,7 +78,7 @@ class MapReport:
     #: Each pass of the map rules, the last one adding nothing; empty when no map rule runs.
     map_passes: tuple[MapPass, ...] = ()
     #: The nodes and the edges of an internal type the written map leaves out.
-    internal: tuple[int, int] = (0, 0)
+    internal: LeftOut = LeftOut()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -136,9 +134,7 @@ def run(
     if pack_problems:
         return _failed(pack_problems)
     root = project.root
-    given = resolution.settings.values
-    values = {name: setting.value for name, setting in given.items()}
-    origins = {name: setting.sources[-1].name for name, setting in given.items()}
+    values, origins = settings_values(resolution.settings)
     rule_set, refused = checked(packs, values, origins)
     try:
         if rule_set is None or refused:
@@ -148,7 +144,7 @@ def run(
         )
         # A path value relative to a folder needs its directories; the unread walk stays on rules.
         relative = {v.relative_to for i in rule_set.files.values() for v in i.path_values}
-        overrides = {n: setting.value for n, setting in resolution.settings.folders.items()}
+        overrides = folder_overrides(resolution.settings)
         settings = resolution.settings
         first_party = settings.first_party.value if settings.first_party else None
         selection = Selection.build(
@@ -175,8 +171,7 @@ def run(
         directories = sorted({path for name in wanted for path in folders[name]})
         listed, unlisted = files_in(root, directories, selection)
         unread = sorted(set(listed) - read)
-        left_out: dict[str, int] = {}
-        document = build_document(
+        document, left_out = build_document(
             [*found_nodes, *map_nodes],
             [*found_edges, *map_edges],
             rule_set.types,
@@ -186,7 +181,6 @@ def run(
             Path(os.path.relpath(project.path, root)).as_posix(),
             boundary=rule_set.boundary,
             skipped=skipped,
-            left_out=left_out,
         )
     except HarnessError as error:
         return _failed([error.problem()])
@@ -227,7 +221,7 @@ def run(
         unread=tuple(unread),
         unlisted=tuple(unlisted),
         map_passes=tuple(map_passes),
-        internal=(left_out["nodes"], left_out["edges"]),
+        internal=left_out,
     )
 
 
@@ -259,8 +253,11 @@ def render_text(report: MapReport) -> str:
             f"{'nodes':<8}{report.nodes}",
             f"{'edges':<8}{report.edges}",
             *(
-                [f"internal: {report.internal[0]} nodes and {report.internal[1]} edges left out"]
-                if any(report.internal)
+                [
+                    f"internal: {report.internal.nodes} nodes and {report.internal.edges} edges "
+                    "left out"
+                ]
+                if report.internal.nodes or report.internal.edges
                 else []
             ),
         ],
@@ -334,7 +331,7 @@ def render_json(report: MapReport) -> str:
         "map": report.map_path,
         "nodes": report.nodes,
         "edges": report.edges,
-        "internal": {"nodes": report.internal[0], "edges": report.internal[1]},
+        "internal": {"nodes": report.internal.nodes, "edges": report.internal.edges},
         "packs": [{"pack": p, "version": v} for p, v in report.packs],
         "executed": [{"pack": p, "rule": r, "fires": n} for p, r, n in report.executed],
         "zero_fires": [{"pack": p, "rule": r} for p, r in report.idle],

@@ -1,4 +1,4 @@
-"""``periplus validate``, as tests: it names what failed, every bundled pack passes it, and the
+"""``periplus validate``, as tests: it names what failed, every bundled rutter passes it, and the
 determinism that binds both.
 
 Every test that asserts a status or an output calls ``periplus.cli.main`` in process, which
@@ -303,8 +303,8 @@ def test_an_unmodified_bundled_pack_validates_clean_and_says_what_it_opened(
     report carries that field. A ``validate`` that resolved the pack, opened nothing and reported
     no errors would exit 0 and satisfy the requirement's words exactly; the set of files it says it
     opened is the only thing that separates "found nothing wrong" from "looked at nothing". The
-    expected set is read off the source tree, so a pack file added to ``go`` fails here until it
-    has been validated too.
+    expected set is read off the source tree, so a pack file added to that rutter fails here until
+    it has been validated too.
     """
     expected = {
         path.relative_to(BUNDLED_PACKS / CLEAN_RUTTER_DIRECTORY).as_posix()
@@ -345,9 +345,7 @@ def test_a_missing_required_key_exits_sixteen_naming_the_key_and_its_path(
 
     assert result.returncode == 16, f"{result.stdout}{result.stderr}"
     payload = json.loads(result.stdout)
-    assert [
-        (error["file"], error["pointer"], error["message"]) for error in payload["errors"]
-    ] == [
+    assert [(error["file"], error["pointer"], error["message"]) for error in payload["errors"]] == [
         (
             "types/find_declarations.yaml",
             "$.rules[0]",
@@ -636,9 +634,7 @@ def test_the_errors_come_out_sorted_rather_than_in_the_order_they_were_found(
     _drop_confidence(pack)
     _add_an_out_of_order_file(pack)
 
-    schema = json.loads(
-        (SCHEMA_DIRECTORY / "pack-file.schema.json").read_text(encoding="utf-8")
-    )
+    schema = json.loads((SCHEMA_DIRECTORY / "pack-file.schema.json").read_text(encoding="utf-8"))
     declared = list(schema["properties"])
     assert declared.index("needs") < declared.index("edge_kinds"), (
         "the schema no longer declares `needs` above `edge_kinds`, so the found order and the "
@@ -725,7 +721,7 @@ def test_two_processes_from_two_directories_under_two_locales_emit_the_same_byte
 
 
 # ---------------------------------------------------------------------------------------------
-# Every bundled pack declares $schema, and every bundled pack validates
+# Every bundled pack declares $schema, and every bundled rutter validates
 # ---------------------------------------------------------------------------------------------
 
 
@@ -764,13 +760,15 @@ def test_every_bundled_pack_file_declares_the_schema_it_is_written_against() -> 
 
 
 @pytest.mark.parametrize("pack", RUTTER_NAMES)
-def test_every_bundled_pack_validates_against_the_shipped_schemas(
+def test_every_bundled_rutter_validates_against_the_shipped_schemas(
     elsewhere: Project, pack: str
 ) -> None:
-    """Every bundled pack validates, run locally, as a substitute for watching CI reject one.
+    """Every bundled rutter validates, run locally, as a substitute for watching CI reject one.
 
-    **Asserted:** the exact command a CI step would run exits 0 for each bundled pack,
-    on this machine, now.
+    **Asserted:** the exact command a CI step would run exits 0 for each bundled rutter, on this
+    machine, now. The five reference packs are left out: they hold rules the engine does not
+    execute, so ``validate`` reports problems for them, and
+    ``test_validate_engine_checks.py`` checks those against ``map``.
 
     **Not asserted:** that CI rejects a broken pack. Nothing is pushed, and no test in this file can
     observe a workflow run. A test reading a workflow YAML file and asserting it
@@ -778,7 +776,7 @@ def test_every_bundled_pack_validates_against_the_shipped_schemas(
     fired.
 
     Parametrized per pack rather than looped, so a failure names which pack rather than which
-    iteration, and so ``drupal`` — the only one resolving a ``depends`` chain — is visibly covered.
+    iteration, and so each rutter that resolves a ``depends`` chain is visibly covered.
     """
     result = _run(
         ["validate", pack, "--format", "json"], cwd=elsewhere.root, config=elsewhere.config
@@ -833,7 +831,7 @@ def test_a_reference_rule_with_a_receiver_condition_is_refused(project: Project)
 def test_a_deliberately_broken_pack_is_rejected_by_the_command_ci_would_run(
     project: Project,
 ) -> None:
-    """"Break one pack and watch it be rejected", with the local run standing in for CI.
+    """ "Break one pack and watch it be rejected", with the local run standing in for CI.
 
     The same command as the test above and the opposite verdict, which is the pair that says the
     check can fire at all. Without this, five packs exiting 0 is equally consistent with a
@@ -897,9 +895,7 @@ def test_the_format_choices_are_exactly_the_renderers_the_validator_offers() -> 
 
     parser = build_parser()
     subcommands = next(
-        action
-        for action in parser._actions
-        if action.__class__.__name__ == "_SubParsersAction"
+        action for action in parser._actions if action.__class__.__name__ == "_SubParsersAction"
     )
     assert "validate" in subcommands.choices, "the console script has no `validate` subcommand"
     validate_parser = subcommands.choices["validate"]

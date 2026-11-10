@@ -603,9 +603,16 @@ def load_rules(
     file_types = FileTypes.build(packs, {})
     rules = [_check_ending(_check_reader(rule, file_types), file_types) for rule in rules]
     files = _file_info(packs)
-    declared = {name for pack in packs for name in declared_values(pack)}
-    known = {**dict.fromkeys(declared, ""), **values}
-    rules = [_check_names(rule, files.get(rule.filetype, FileInfo()), known) for rule in rules]
+    own = {pack.name.pack: declared_values(pack) for pack in packs}
+    declared = {name for names in own.values() for name in names}
+    # A rule may rely on a value its pack, or a pack it depends on, declares; a given one is shared.
+    known = {
+        pack: {**dict.fromkeys((n for p in walk for n in own.get(p, [])), ""), **values}
+        for pack, walk in _visible_packs(packs).items()
+    }
+    rules = [
+        _check_names(rule, files.get(rule.filetype, FileInfo()), known[rule.pack]) for rule in rules
+    ]
     conflicts.extend(_collisions(rules, sources, files, packs, values, origins or {}, declared))
     grammars: dict[str, Grammar] = {}
     for index, rule in enumerate(rules):
@@ -1024,6 +1031,11 @@ def _collisions(
     settings = set(values) | declared_names
 
     def setting(name: str) -> str:
+        if name not in values:
+            return (
+                f"the settings value {name} (a loaded rutter declares it, and the project "
+                "settings do not give it)"
+            )
         origin = f" of {origins[name]}" if name in origins else ""
         return f"the settings value {name}{origin}"
 

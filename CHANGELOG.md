@@ -10,10 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `js_basic` maps a call written `f(x)` as a `js_calls` edge, from the function that holds it, or from the script at its top level, to the function it names; a name the script does not declare is an unresolved end.
 - A node type marked `internal: true` serves the map rules and stays out of the written map, with every edge that has an end on one; the map report counts what it left out.
 - `periplus show` prints the entry `.periplus/descriptions.yaml` holds for the node and for each edge, in text and JSON, and `description: none` for a node without one.
+- `periplus slice --path` may repeat, and a prefix that matches no node is refused.
+- The `periplus-map` skill answers a question about a feature in steps: find the candidates, show each, and cut one slice from every confirmed start. It writes a missing description entry for a node or edge whose code it read.
 
 ### Changed
 
-- `periplus validate` runs the checks `periplus map` runs on the rutter and its dependencies once its files pass the schemas, so a rule the engine cannot execute is reported before a map. A rutter declares the settings values its rules read in its manifest's `values`, and `periplus map` refuses a project whose settings do not give one.
+- `periplus validate` runs the checks `periplus map` runs on the rutter and its dependencies once its files pass the schemas, so a rule the engine cannot execute is reported before a map. It also gives map's folder refusals; inside a project it resolves folders against every pinned rutter, as map does. A rutter declares the settings values its rules read in its manifest's `values`; outside a project, a rule may rely only on a value its rutter or a rutter it depends on declares. `periplus map`, and `periplus validate` inside a project, refuse a project whose settings do not give one.
 
 ## [0.5.2] - 2026-11-09
 

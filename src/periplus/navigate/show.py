@@ -15,6 +15,7 @@ from ruamel.yaml.error import YAMLError
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER
+from periplus.mapshared import first_error
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place
 from periplus.navigate.mapfile import (
@@ -28,12 +29,34 @@ from periplus.navigate.mapfile import (
 )
 from periplus.report import _escape, _json_problem
 from periplus.settings import find_project_root
+from periplus.skills_install import SKILLS_DIRECTORY
 
-__all__ = ["RENDERERS", "EdgeRow", "Location", "ShowReport", "render_json", "render_text", "run"]
+__all__ = [
+    "RENDERERS",
+    "Description",
+    "EdgeRow",
+    "Location",
+    "ShowReport",
+    "render_json",
+    "render_text",
+    "run",
+]
 
-#: The hand-written file beside the map that says what a node or edge does.
+#: The hand-written file that says what a node or edge does: the project's
+#: ``.periplus/descriptions.yaml``, found by walking up from the map file's folder, or the one
+#: beside the map file when no project is found.
 DESCRIPTIONS = "descriptions.yaml"
-_DESCRIPTIONS_SCHEMA = "skills/periplus-map/references/descriptions.schema.json"
+#: Below the skills folder, one segment each: ``joinpath`` need not accept a separator.
+_DESCRIPTIONS_SCHEMA = ("periplus-map", "references", "descriptions.schema.json")
+
+
+@dataclass(frozen=True, slots=True)
+class Description:
+    """A descriptions entry as show reports it: its text, and the file and line it names."""
+
+    text: str
+    file: str
+    line: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +79,7 @@ class EdgeRow:
     occurrences: int | float | None
     confidences: tuple[str, ...]
     rules: tuple[str, ...]
-    description: Mapping[str, Any] | None = None
+    description: Description | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +93,7 @@ class ShowReport:
     attributes: Mapping[str, Any] | None = None
     locations: tuple[Mapping[str, Any], ...] = ()
     provenance: tuple[Mapping[str, Any], ...] = ()
-    description: Mapping[str, Any] | None = None
+    description: Description | None = None
     outgoing: Listing[EdgeRow] = NONE
     incoming: Listing[EdgeRow] = NONE
     problems: tuple[Problem, ...] = ()
@@ -93,7 +116,10 @@ def _whole(value: Any) -> int | float:
 
 
 def _rows(
-    index: MapIndex, edges: list[dict[str, Any]], end: str, described: Mapping[Any, Any]
+    index: MapIndex,
+    edges: list[dict[str, Any]],
+    end: str,
+    described: Mapping[tuple[str, str, str], Description],
 ) -> list[EdgeRow]:
     """Edge rows sorted by kind, then other-end id, then first location."""
     rows = []
@@ -175,27 +201,30 @@ def _descriptions(map_file: Path) -> tuple[Mapping[str, Any], tuple[Problem, ...
     except (YAMLError, OSError, UnicodeDecodeError) as error:
         detail = {"path": str(path), "detail": str(error)}
         return {}, (Problem(ExitCode.NOT_A_MAP, f"{path} is not readable YAML", detail),)
-    schema = json.loads(files("periplus").joinpath(_DESCRIPTIONS_SCHEMA).read_text("utf-8"))
-    invalid = min(
-        Draft202012Validator(schema).iter_errors(document),
-        key=lambda found: (list(map(str, found.absolute_path)), found.message),
-        default=None,
-    )
+    node = files("periplus") / SKILLS_DIRECTORY
+    for segment in _DESCRIPTIONS_SCHEMA:
+        node = node / segment
+    schema = json.loads(node.read_text(encoding="utf-8"))
+    invalid = first_error(Draft202012Validator(schema).iter_errors(document))
     if invalid is None:
         return document, ()
     message = f"{path} does not match the descriptions schema: {invalid.message}"
     return {}, (Problem(ExitCode.NOT_A_MAP, message, {"path": str(path)}),)
 
 
-def _entry(entry: Mapping[str, Any]) -> dict[str, Any]:
+def _entry(entry: Mapping[str, Any]) -> Description:
     """A descriptions entry as show reports it: its text, file and line."""
-    return {"text": entry["text"], "file": entry["file"], "line": entry["line"]}
+    return Description(entry["text"], entry["file"], entry["line"])
 
 
-def _described(entry: Mapping[str, Any] | None) -> str:
+def _described(entry: Description | None) -> str:
     if entry is None:
         return "none"
-    return f"{_escape(entry['text'])} ({_escape(entry['file'])}:{entry['line']})"
+    return f"{_escape(entry.text)} ({_escape(entry.file)}:{entry.line})"
+
+
+def _json_description(entry: Description | None) -> dict[str, Any] | None:
+    return None if entry is None else {"text": entry.text, "file": entry.file, "line": entry.line}
 
 
 def _placed(locations: Any) -> Any:
@@ -219,7 +248,7 @@ def _json_row(row: EdgeRow) -> dict[str, Any]:
         "occurrences": row.occurrences,
         "confidences": list(row.confidences),
         "rules": list(row.rules),
-        "description": row.description,
+        "description": _json_description(row.description),
     }
 
 
@@ -277,7 +306,7 @@ def render_json(report: ShowReport) -> str:
         "attributes": dict(report.attributes or {}),
         "locations": list(report.locations),
         "provenance": list(report.provenance),
-        "description": report.description,
+        "description": _json_description(report.description),
         "outgoing": payload(report.outgoing, _json_row),
         "incoming": payload(report.incoming, _json_row),
         "problems": [_json_problem(p) for p in report.problems],

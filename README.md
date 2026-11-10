@@ -342,8 +342,9 @@ project, read what the map cannot explain, and write the next rule.
    `packs` in the settings. To build on a bundled rutter, name it in `depends`, as
    `depends: [php_basic]`. Your rutter may then use its folders, file types and types, and add
    rules. The bundled rutter's own files stay as installed.
-5. Run `periplus validate <pack>`. It names each file and place that disagrees with the schemas. A
-   rutter that does not validate stops the map.
+5. Run `periplus validate <pack>`. It names each file and place that disagrees with the schemas,
+   and reports what `periplus map` refuses the rutter for before it reads a file. A rutter that
+   does not validate stops the map.
 6. Map again. The unknowns you covered disappear. Go back to step 3.
 
 ### Where a rutter and its settings live
@@ -465,7 +466,7 @@ from this file and compares the map with the lines above.
 | [`docs/rutter-author-guide-abilities.md`](docs/rutter-author-guide-abilities.md) | A condition on a second child, an id that must fit a pattern, a declared end, and a class constant as a call's argument. |
 | [`docs/rutter-author-guide-map-rules.md`](docs/rutter-author-guide-map-rules.md) | Map rules: rules that read the map the file rules made, run in passes, one hop each. |
 | `examples/second-stack/packs` | Three working text rutters to copy: `python_text`, `typer_text` and `speckitty`. |
-| `periplus validate <pack>` | Checks one rutter's files. It names each disagreement with the schemas, by file and place. |
+| `periplus validate <pack>` | Checks one rutter's files. It names each disagreement with the schemas, by file and place, and what `periplus map` refuses the rutter for before it reads a file. |
 | [`docs/map-report-guide.md`](docs/map-report-guide.md) | Reading the map report: each part in the order to read it, what it means, and what to do when it is not empty. |
 
 A parse-tree rutter pins its grammar under `grammar` in `pack.yaml`, as `php_basic` does.
@@ -526,7 +527,7 @@ Run each command in the project folder.
 periplus init                      # create .periplus/, a pack folder and a commented settings file
 periplus status                    # report the settings, where each value came from, and the pack search path
 periplus spec [PACK] [--summary]   # print the rutter contract, and what one rutter declares and inherits
-periplus validate PACK             # check one rutter's files against the shipped schemas and name what disagrees
+periplus validate PACK             # check one rutter against the schemas and what map refuses it for
 periplus update                    # move each pin to the installed version of that rutter
 periplus map --output map.json     # map this project and write the map, with a run report
 periplus types                     # count the node types and edge kinds in the written map

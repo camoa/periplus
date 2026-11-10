@@ -376,10 +376,10 @@ def test_the_write_guard_refuses_an_id_whose_namespace_no_pack_declares_and_writ
     one."""
     built = periplus.map.build_document
 
-    def planted(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        document: dict[str, Any] = built(*args, **kwargs)
+    def planted(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
+        document, left_out = built(*args, **kwargs)
         document["nodes"].append({**document["nodes"][0], "id": "None::X"})
-        return document
+        return document, left_out
 
     monkeypatch.setattr(periplus.map, "build_document", planted)
     rutter(tmp_path, "models", MODELS, {"models.yaml": MODELS_RULES})

@@ -72,7 +72,8 @@ rules:
 # f(...): an edge to <script path>:f from the nearest named function that holds the call, or from
 # the script when no named function holds it. A call inside an object-member function or a function
 # passed as an argument has no node of its own, so it starts at the named function around it or at
-# the script. A call written through a member, a.b(), makes nothing.
+# the script. A call written through a member, a.b(), makes no edge and is a row of the
+# report's matches skipped. A call to a function another script declares stays unresolved.
 - rule: function_call
   reads: file
   in: [js_source]

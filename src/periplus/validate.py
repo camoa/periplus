@@ -29,9 +29,9 @@ Validate has to name what failed, and a line naming only the branch does not.
 **Once the pack's files pass their schema, it runs the checks ``periplus map`` runs.** It calls
 ``engine.check.checked`` on the pack and the packs it depends on, with the project's settings
 values when a settings file resolves, so a problem ``map`` would refuse the pack for, in it or in
-a dependency, is reported here with the same code and message. The one check left out is a
-value the pack declares that the settings do not give: that is a fault of a project, not of the
-pack.
+a dependency, is reported here with the same code and message. Inside a project, a value the
+pack declares that the settings do not give is refused as ``map`` refuses it, and folders resolve
+against every pinned pack, as ``map`` resolves them. Outside a project no value is asked for.
 """
 
 from __future__ import annotations
@@ -47,13 +47,14 @@ from jsonschema.exceptions import ValidationError
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
+from periplus.engine.select import folder_problems
 from periplus.errors import ExitCode, Problem
 from periplus.manifest import MANIFEST_FILENAME, LoadedPack, resolve_pack_order
 from periplus.mapshared import _section
 from periplus.packs import PackCandidate, match_pins
 from periplus.preflight import DependencyStatus
 from periplus.report import _escape, _json_problem
-from periplus.resolution import resolve
+from periplus.resolution import folder_overrides, resolve, settings_values
 from periplus.spec import _unknown_pack, contract_root
 
 __all__ = [
@@ -186,17 +187,18 @@ def validate(
         # Imported here: `periplus.engine.check` imports this module.
         from periplus.engine.check import checked as engine_checked
 
-        given = resolution.settings.values if resolution.settings else {}
-        values = {name: setting.value for name, setting in given.items()}
-        origins = {name: setting.sources[-1].name for name, setting in given.items()}
-        rule_set, refused = engine_checked(order, values, origins, require_values=False)
+        in_project = any(
+            s.kind == "project" and s.status == "used" for s in resolution.settings_sources
+        )
+        values, origins = settings_values(resolution.settings)
+        rule_set, refused = engine_checked(order, values, origins, require_values=in_project)
         problems.extend(refused)
         if rule_set is not None:
-            from periplus.engine.select import folder_problems
-
-            folders = resolution.settings.folders if resolution.settings else {}
-            overrides = {name: setting.value for name, setting in folders.items()}
-            problems.extend(folder_problems(rule_set, order, overrides))
+            pinned, unresolved = resolve_pack_order(resolution.packs, resolution.candidates)
+            named = any(pack.path == path for pack in pinned)
+            folder_packs = pinned if in_project and named and not unresolved else order
+            overrides = folder_overrides(resolution.settings)
+            problems.extend(folder_problems(rule_set, folder_packs, overrides))
     return _report(requested, path, checked, errors, problems, version)
 
 

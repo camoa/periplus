@@ -264,6 +264,14 @@ nothing.
 Text: the `edges` count under Map. How many edges the map holds. With `nodes`, it is the quickest
 sign that a change to a rule did something.
 
+### `internal`
+
+Text: the line `internal: N nodes and M edges left out` under Map, printed only when either count
+is above zero. JSON: `{"nodes": N, "edges": M}`. How many nodes of a type marked `internal`, or
+below one, the written map leaves out, and how many edges with an end on one. Those types serve
+the map rules only. There is nothing to fix here; it explains why `nodes` and `edges` are lower
+than the rules made.
+
 ### `map`
 
 Text: the `path` row under Map. Where the map was written, or `null` when a problem stopped the

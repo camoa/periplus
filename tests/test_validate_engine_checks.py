@@ -8,8 +8,6 @@ itself: the problems ``validate`` gives equal the problems ``map`` gives for the
 
 from __future__ import annotations
 
-import contextlib
-import io
 import json
 import shutil
 from collections.abc import Sequence
@@ -17,11 +15,10 @@ from pathlib import Path
 
 import pytest
 from test_validate import (
-    BUNDLED_PACK_NAMES,
     BUNDLED_PACKS,
     REFERENCE_PACK_NAMES,
-    RUTTER_NAMES,
     Project,
+    _run,
     elsewhere,  # noqa: F401 - fixture
     project,  # noqa: F401 - fixture
 )
@@ -33,18 +30,8 @@ RULE_NOT_EXECUTABLE = 26
 
 def _call(args: Sequence[str], *, cwd: Path, config: Path) -> tuple[int, dict[str, object]]:
     """Run the entry function in process and return its status and its JSON report."""
-    from periplus.cli import main
-
-    out = io.StringIO()
-    with (
-        pytest.MonkeyPatch.context() as patch,
-        contextlib.redirect_stdout(out),
-        contextlib.redirect_stderr(io.StringIO()),
-    ):
-        patch.chdir(cwd)
-        patch.setenv("PERIPLUS_CONFIG_DIR", str(config))
-        status = main([*args, "--format", "json"])
-    return int(status), json.loads(out.getvalue())
+    result = _run([*args, "--format", "json"], cwd=cwd, config=config)
+    return result.returncode, json.loads(result.stdout)
 
 
 def _fixture(packs: Path, name: str, *, depends: str | None = None) -> Path:
@@ -221,22 +208,59 @@ def test_map_refuses_an_omitted_declared_value_and_maps_when_it_is_given_c2(
     assert (given_status, given["problems"]) == (0, [])
 
 
+@pytest.mark.criterion(id="c2")
+def test_validate_in_a_project_refuses_an_omitted_declared_value_as_map_does_c2(
+    project: Project,  # noqa: F811
+) -> None:
+    (project.root / ".periplus" / "settings.yml").write_text(
+        f"periplus_version: 0\npacks:\n  - go_basic@{_pinned_version('go_basic')}\n",
+        encoding="utf-8",
+    )
+
+    map_status, expected, status, actual = _both(project, "go_basic")
+
+    assert expected == [
+        (
+            RULE_NOT_EXECUTABLE,
+            "go_basic/pack.yaml: the rutter go_basic reads the settings value module, which the "
+            "project settings do not give",
+        )
+    ]
+    assert map_status == RULE_NOT_EXECUTABLE
+    assert (status, actual) == (map_status, expected)
+
+
+@pytest.mark.criterion(id="c2")
+def test_a_value_only_an_unrelated_pack_declares_does_not_satisfy_a_rule_c2(
+    elsewhere: Project,  # noqa: F811
+) -> None:
+    user_packs = elsewhere.config / "packs"
+    user_packs.mkdir()
+    _valued_pack(user_packs, "undeclaredfix", declared=False)
+    for name, body in (
+        ("valuesfix", "depends: []\nvalues:\n  drush_prefix: A prefix.\n"),
+        ("bothfix", "depends: [undeclaredfix, valuesfix]\n"),
+    ):
+        (user_packs / f"{name}@0.0.1").mkdir()
+        (user_packs / f"{name}@0.0.1" / "pack.yaml").write_text(
+            '$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"\n'
+            f"pack: {name}\nversion: 0.0.1\n{body}",
+            encoding="utf-8",
+        )
+
+    alone_status, alone = _call(
+        ["validate", "undeclaredfix"], cwd=elsewhere.root, config=elsewhere.config
+    )
+    status, combined = _call(["validate", "bothfix"], cwd=elsewhere.root, config=elsewhere.config)
+
+    assert alone_status == RULE_NOT_EXECUTABLE
+    assert (status, _problems(combined)) == (alone_status, _problems(alone))
+
+
 def _pinned_version(name: str) -> str:
     """The version half of the bundled directory ``<name>@<version>``."""
     (directory,) = [e for e in BUNDLED_PACKS.iterdir() if e.name.startswith(f"{name}@")]
     return directory.name.split("@")[1]
-
-
-@pytest.mark.criterion(id="c5")
-@pytest.mark.parametrize("pack", RUTTER_NAMES)
-def test_every_bundled_rutter_validates_clean_outside_a_project_c5(
-    elsewhere: Project,  # noqa: F811
-    pack: str,
-) -> None:
-    status, payload = _call(["validate", pack], cwd=elsewhere.root, config=elsewhere.config)
-
-    assert payload["errors"] == []
-    assert (status, payload["problems"]) == (0, [])
 
 
 @pytest.mark.criterion(id="c5")

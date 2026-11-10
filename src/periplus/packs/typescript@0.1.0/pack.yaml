@@ -2,8 +2,6 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
 # TypeScript, read as text, because Periplus ships no TypeScript grammar, so a rule sees what a
 # pattern sees and claims no more than that. Modules, imports, packages and functions.
-#
-# The project sets one value, typescript_alias_root: the folder the @/ import alias points at.
 
 pack: typescript
 version: 0.1.0

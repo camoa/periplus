@@ -51,7 +51,7 @@ from periplus.settings import (
     user_config_dir,
 )
 
-__all__ = ["ResolutionReport", "resolve"]
+__all__ = ["ResolutionReport", "folder_overrides", "resolve", "settings_values"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,9 +175,7 @@ def resolve(
     candidates = discover_candidates(pack_roots)
     packs = _match(settings, candidates, skipped, problems)
     if pack_checks and packs and not problems:
-        given = settings.values if settings else {}
-        values = {name: s.value for name, s in given.items()}
-        origins = {name: s.sources[-1].name for name, s in given.items()}
+        values, origins = settings_values(settings)
         problems.extend(_pack_problems(packs, candidates, values, origins))
 
     return ResolutionReport(
@@ -315,6 +313,21 @@ def _merge(
 
     skipped["settings"] = "no settings file was found at either level"
     return None
+
+
+def settings_values(
+    settings: ResolvedSettings | None,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """The settings values by name, and the settings file that gave each; empty with no settings."""
+    given = settings.values if settings else {}
+    values = {name: s.value for name, s in given.items()}
+    origins = {name: s.sources[-1].name for name, s in given.items()}
+    return values, origins
+
+
+def folder_overrides(settings: ResolvedSettings | None) -> dict[str, str | tuple[str, ...]]:
+    """The folder values the settings give, by folder name; empty with no settings."""
+    return {name: s.value for name, s in (settings.folders if settings else {}).items()}
 
 
 def _pack_problems(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 from periplus.engine.packload import BoundaryEntry, EdgeKind, TypeInfo
@@ -15,6 +15,7 @@ from periplus.manifest import LoadedPack
 
 __all__ = [
     "EdgeIllegal",
+    "LeftOut",
     "TypeCollision",
     "build_document",
     "counts",
@@ -36,6 +37,14 @@ class EdgeIllegal(HarnessError):
     code = ExitCode.EDGE_ILLEGAL
 
 
+@dataclass(frozen=True, slots=True)
+class LeftOut:
+    """How many nodes and edges of an internal type the written map leaves out."""
+
+    nodes: int = 0
+    edges: int = 0
+
+
 def build_document(
     nodes: Sequence[FoundNode],
     edges: Sequence[FoundEdge],
@@ -46,9 +55,8 @@ def build_document(
     settings: str,
     boundary: Mapping[str, BoundaryEntry] | None = None,
     skipped: list[Skipped] | None = None,
-    left_out: dict[str, int] | None = None,
-) -> dict[str, Any]:
-    """The map document.
+) -> tuple[dict[str, Any], LeftOut]:
+    """The map document, and what it leaves out.
 
     Nodes merge on id and the most specific type found wins. An attribute whose contributions
     differ is written as ``{"differs": [...]}``. Edges merge on kind, from and to, and an end no
@@ -65,7 +73,7 @@ def build_document(
     Then each mapped node whose ancestry reaches such a node with a classification is classified,
     as ``_classify`` says, and its rows join ``skipped``. Locations and provenance de-duplicate and
     sort. Last, a node whose type is internal, or lies below an internal type, is left out with
-    every edge that has an end on it; ``left_out`` gets how many of each.
+    every edge that has an end on it; ``LeftOut`` counts each.
     """
     groups: dict[str, list[FoundNode]] = {}
     for found in nodes:
@@ -163,17 +171,12 @@ def build_document(
     written = [
         _edge(key, group, merged, edge_kinds, types) for key, group in sorted(merged_edges.items())
     ]
-    hidden = {
-        node["id"]
-        for node in ordered
-        if any(types[name].internal for name in type_chain(types, node["type"]) if name in types)
-    }
+    hidden = {node["id"] for node in ordered if _internal(types, node["type"])}
     kept = [edge for edge in written if edge["from"] not in hidden and edge["to"] not in hidden]
-    if left_out is not None:
-        left_out.update(nodes=len(hidden), edges=len(written) - len(kept))
+    left_out = LeftOut(nodes=len(hidden), edges=len(written) - len(kept))
     ordered = [node for node in ordered if node["id"] not in hidden]
     written = kept
-    return {
+    document = {
         "periplus_map_version": 0,
         "generated_by": f"periplus {tool_version}",
         "packs": sorted(
@@ -189,6 +192,7 @@ def build_document(
         "nodes": ordered,
         "edges": written,
     }
+    return document, left_out
 
 
 def counts(
@@ -295,17 +299,18 @@ def type_chain(types: Mapping[str, TypeInfo], name: str) -> list[str]:
     return chain or [name]
 
 
+def _internal(types: Mapping[str, TypeInfo], name: str) -> bool:
+    """Whether the type is internal, or lies below an internal type."""
+    return any(types[t].internal for t in type_chain(types, name) if t in types)
+
+
 def _referenced_type(names: set[str], types: Mapping[str, TypeInfo]) -> str:
     """The deepest of the types the edges claim when one chain holds them all, else the first.
 
     Either way a type not internal and not below an internal type wins, when one is claimed, so
     an end a written type also claims stays in the map.
     """
-    hidden = {
-        name
-        for name in names
-        if any(types[t].internal for t in type_chain(types, name) if t in types)
-    }
+    hidden = {name for name in names if _internal(types, name)}
     deepest = max(sorted(names), key=lambda name: len(type_chain(types, name)))
     if all(name in type_chain(types, deepest) for name in names):
         return max(sorted(names - hidden) or [deepest], key=lambda n: len(type_chain(types, n)))

@@ -40,8 +40,8 @@ def checked(
     """The packs' rules and every problem ``periplus map`` refuses them for before it reads a
     source file; ``None`` in place of the rules when a rule file cannot be read. ``values`` are the
     project's settings values, and ``origins`` the settings file of each. With ``require_values``
-    off, as ``periplus validate`` runs it, a value a pack declares and ``values`` lacks is no
-    problem.
+    off, as ``periplus validate`` runs it outside a project, a value a pack declares and ``values``
+    lacks is no problem.
 
     A pack that fails its schema does not hide the problems of the packs that do not depend on it.
     """

@@ -158,8 +158,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check = subcommands.add_parser(
         "validate",
-        help="check one pack's files against the shipped schemas and name what disagrees",
-        description="Check a pack against the schemas it is written against, and stop.",
+        help="check one pack against the shipped schemas, then report what map refuses it for",
+        description=(
+            "Check a pack against the schemas it is written against, report what periplus map "
+            "refuses it for before reading a file, and stop."
+        ),
     )
     # Required, unlike `spec`'s. A bare `periplus validate` would check the file `init` writes,
     # and a test that loads that file asserts that property rather than a second command surface.

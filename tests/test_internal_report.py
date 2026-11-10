@@ -1,4 +1,5 @@
-"""The map report and the written map's counts leave an internal type out, and say so only when it did."""
+"""The map report and the written map's counts leave an internal type out, and say so when
+they did."""
 
 from __future__ import annotations
 
