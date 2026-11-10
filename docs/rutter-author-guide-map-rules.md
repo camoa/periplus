@@ -24,7 +24,9 @@ and an optional `follow`, a list of steps from that node:
 
 It emits edges whose ends are `this_node`, the node it matched, `matched_node`, the node its
 `follow` reached, or one template end filled from the captures, with `type` or `types` and
-`on_miss` as on any end; or one node, whose `id` is a template. Every kind and type it names is
+`on_miss` as on any end; or one node, whose `id` is a template. What a fire makes sits at each
+location of the node it matched, whatever its ends name, so a rule that matches a call-site node
+places its edge at the call. Every kind and type it names is
 declared by its rutter or one it depends on. A map rule reads only the nodes the rules found and
 the edges the file rules made, and edges map rules made between those; an end a map rule composed
 is never read, so the passes end. Two steps, in a file type `fleet`:
