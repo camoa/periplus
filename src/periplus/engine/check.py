@@ -14,6 +14,7 @@ from periplus.engine.emit import type_chain
 from periplus.engine.packload import (
     _BOUNDARY_SHAPE,
     RuleSet,
+    declared_values,
     load_rules,
     node_types,
     twin_type,
@@ -33,10 +34,14 @@ def checked(
     packs: Sequence[LoadedPack],
     values: Mapping[str, str] | None = None,
     origins: Mapping[str, str] | None = None,
+    *,
+    require_values: bool = True,
 ) -> tuple[RuleSet | None, list[Problem]]:
     """The packs' rules and every problem ``periplus map`` refuses them for before it reads a
     source file; ``None`` in place of the rules when a rule file cannot be read. ``values`` are the
-    project's settings values, and ``origins`` the settings file of each.
+    project's settings values, and ``origins`` the settings file of each. With ``require_values``
+    off, as ``periplus validate`` runs it, a value a pack declares and ``values`` lacks is no
+    problem.
 
     A pack that fails its schema does not hide the problems of the packs that do not depend on it.
     """
@@ -46,7 +51,23 @@ def checked(
         rule_set = load_rules(sound, values, origins)
     except HarnessError as error:
         return None, [*schema, error.problem()]
-    return rule_set, [*schema, *rule_set.conflicts, *check_packs(sound, rule_set)]
+    omitted = _omitted_values(sound, values or {}) if require_values else []
+    return rule_set, [*schema, *rule_set.conflicts, *check_packs(sound, rule_set), *omitted]
+
+
+def _omitted_values(packs: Sequence[LoadedPack], values: Mapping[str, str]) -> list[Problem]:
+    """Each settings value a pack declares that ``values`` does not give."""
+    return [
+        Problem(
+            ExitCode.RULE_NOT_EXECUTABLE,
+            f"{pack.name.pack}/{MANIFEST_FILENAME}: the rutter {pack.name.pack} reads the settings "
+            f"value {name}, which the project settings do not give",
+            {"pack": pack.name.pack, "value": name},
+        )
+        for pack in packs
+        for name in declared_values(pack)
+        if name not in values
+    ]
 
 
 def _schema_problems(packs: Sequence[LoadedPack]) -> tuple[list[Problem], set[str]]:

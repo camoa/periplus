@@ -161,6 +161,7 @@ PINNED: dict[str, str] = {
   "attributes": {
     "visibility": "public"
   },
+  "description": null,
   "id": "php.method::A::go",
   "incoming": {
     "items": [
@@ -168,6 +169,7 @@ PINNED: dict[str, str] = {
         "confidences": [
           "inferred"
         ],
+        "description": null,
         "kind": "calls",
         "locations": [
           {
@@ -187,6 +189,7 @@ PINNED: dict[str, str] = {
         "confidences": [
           "inferred"
         ],
+        "description": null,
         "kind": "defines",
         "locations": [
           {
@@ -220,6 +223,7 @@ PINNED: dict[str, str] = {
           "declared",
           "inferred"
         ],
+        "description": null,
         "kind": "calls",
         "locations": [
           {
@@ -240,6 +244,7 @@ PINNED: dict[str, str] = {
         "confidences": [
           "inferred"
         ],
+        "description": null,
         "kind": "calls",
         "locations": [
           {

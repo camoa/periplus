@@ -39,7 +39,7 @@ def run(
     start: Path,
     env: Mapping[str, str],
     ids: Collection[str],
-    prefix: str | None,
+    prefixes: Collection[str],
     direction: str,
     depth: int,
     kinds: Collection[str],
@@ -47,12 +47,12 @@ def run(
     out: Path,
     map_path: Path | None,
 ) -> SliceReport:
-    """Write ``ids``, the nodes under ``prefix`` and what they reach to ``out``.
+    """Write ``ids``, the nodes under each of ``prefixes`` and what they reach to ``out``.
 
     ``direction`` is ``out``, ``in`` or ``both``. A limit of 0 keeps every item.
     """
     try:
-        if not ids and prefix is None:
+        if not ids and not prefixes:
             return SliceReport(
                 problems=(Problem(ExitCode.USAGE, "give at least one id or a path prefix", {}),)
             )
@@ -66,7 +66,7 @@ def run(
         with reading_fields(start, map_path):
             index = MapIndex(document)
             starts = {index.node(resolve(index, text))["id"] for text in ids}
-            if prefix is not None:
+            for prefix in prefixes:
                 under = {
                     node["id"]
                     for node in document["nodes"]

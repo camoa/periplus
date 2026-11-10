@@ -46,14 +46,15 @@ def build_document(
     settings: str,
     boundary: Mapping[str, BoundaryEntry] | None = None,
     skipped: list[Skipped] | None = None,
+    left_out: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """The map document.
 
     Nodes merge on id and the most specific type found wins. An attribute whose contributions
     differ is written as ``{"differs": [...]}``. Edges merge on kind, from and to, and an end no
-    rule found becomes a referenced node, of the deepest type its edges claim, an edge's named
-    ``target_type`` among them; an end written ``{declared: <type>}`` claims that type alone. An
-    end no rule found that an edge declared ``on_miss`` for is
+    rule found becomes a referenced node, of the deepest type its edges claim that is not
+    internal, an edge's named ``target_type`` among them; an end written ``{declared: <type>}``
+    claims that type alone. An end no rule found that an edge declared ``on_miss`` for is
     unresolved instead, with the first such edge's rule, by pack and rule, in its detail, and the
     types that edge's end tried, in order. An end that lists none tried its one declared type,
     else its kind's types at that end. An end with candidate ids lands on the first a rule
@@ -63,7 +64,8 @@ def build_document(
     whose kind has no type on a chain with the group's type at that end raises ``EdgeIllegal``.
     Then each mapped node whose ancestry reaches such a node with a classification is classified,
     as ``_classify`` says, and its rows join ``skipped``. Locations and provenance de-duplicate and
-    sort.
+    sort. Last, a node whose type is internal, or lies below an internal type, is left out with
+    every edge that has an end on it; ``left_out`` gets how many of each.
     """
     groups: dict[str, list[FoundNode]] = {}
     for found in nodes:
@@ -161,6 +163,16 @@ def build_document(
     written = [
         _edge(key, group, merged, edge_kinds, types) for key, group in sorted(merged_edges.items())
     ]
+    hidden = {
+        node["id"]
+        for node in ordered
+        if any(types[name].internal for name in type_chain(types, node["type"]) if name in types)
+    }
+    kept = [edge for edge in written if edge["from"] not in hidden and edge["to"] not in hidden]
+    if left_out is not None:
+        left_out.update(nodes=len(hidden), edges=len(written) - len(kept))
+    ordered = [node for node in ordered if node["id"] not in hidden]
+    written = kept
     return {
         "periplus_map_version": 0,
         "generated_by": f"periplus {tool_version}",
@@ -284,11 +296,20 @@ def type_chain(types: Mapping[str, TypeInfo], name: str) -> list[str]:
 
 
 def _referenced_type(names: set[str], types: Mapping[str, TypeInfo]) -> str:
-    """The deepest of the types the edges claim when one chain holds them all, else the first."""
+    """The deepest of the types the edges claim when one chain holds them all, else the first.
+
+    Either way a type not internal and not below an internal type wins, when one is claimed, so
+    an end a written type also claims stays in the map.
+    """
+    hidden = {
+        name
+        for name in names
+        if any(types[t].internal for t in type_chain(types, name) if t in types)
+    }
     deepest = max(sorted(names), key=lambda name: len(type_chain(types, name)))
     if all(name in type_chain(types, deepest) for name in names):
-        return deepest
-    return min(names)
+        return max(sorted(names - hidden) or [deepest], key=lambda n: len(type_chain(types, n)))
+    return min(names, key=lambda name: (name in hidden, name))
 
 
 def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> dict[str, Any]:

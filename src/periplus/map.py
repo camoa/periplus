@@ -24,7 +24,7 @@ import periplus
 from periplus.engine.check import checked
 from periplus.engine.emit import build_document, render
 from periplus.engine.rules import MapPass, run_file_rules, run_map_rules
-from periplus.engine.select import Selection, files_in, holds_double_star, resolve_folders
+from periplus.engine.select import Selection, files_in, folder_problems, resolve_folders
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER, SETTINGS_FILENAME
 from periplus.manifest import resolve_pack_order
@@ -79,6 +79,8 @@ class MapReport:
     unlisted: tuple[str, ...] = ()
     #: Each pass of the map rules, the last one adding nothing; empty when no map rule runs.
     map_passes: tuple[MapPass, ...] = ()
+    #: The nodes and the edges of an internal type the written map leaves out.
+    internal: tuple[int, int] = (0, 0)
 
     @property
     def exit_code(self) -> ExitCode:
@@ -157,12 +159,9 @@ def run(
             settings.exclude.value if settings.exclude else (),
             settings.re_include.value if settings.re_include else (),
         )
-        deep = sorted(name for name in relative - {""} if holds_double_star(name, packs, overrides))
-        if deep:
-            message = (
-                f"the folder {deep[0]}, which a path value is relative_to, holds ** in its value"
-            )
-            return _failed([Problem(ExitCode.FOLDER_UNRESOLVED, message, {"folder": deep[0]})])
+        refused = list(folder_problems(rule_set, packs, overrides))
+        if refused:
+            return _failed(refused)
         folders = resolve_folders(
             sorted({*wanted, *relative} - {""}), packs, overrides, root, selection
         )
@@ -176,6 +175,7 @@ def run(
         directories = sorted({path for name in wanted for path in folders[name]})
         listed, unlisted = files_in(root, directories, selection)
         unread = sorted(set(listed) - read)
+        left_out: dict[str, int] = {}
         document = build_document(
             [*found_nodes, *map_nodes],
             [*found_edges, *map_edges],
@@ -186,6 +186,7 @@ def run(
             Path(os.path.relpath(project.path, root)).as_posix(),
             boundary=rule_set.boundary,
             skipped=skipped,
+            left_out=left_out,
         )
     except HarnessError as error:
         return _failed([error.problem()])
@@ -226,6 +227,7 @@ def run(
         unread=tuple(unread),
         unlisted=tuple(unlisted),
         map_passes=tuple(map_passes),
+        internal=(left_out["nodes"], left_out["edges"]),
     )
 
 
@@ -256,6 +258,11 @@ def render_text(report: MapReport) -> str:
             f"{'path':<8}{_escape(report.map_path or 'not written')}",
             f"{'nodes':<8}{report.nodes}",
             f"{'edges':<8}{report.edges}",
+            *(
+                [f"internal: {report.internal[0]} nodes and {report.internal[1]} edges left out"]
+                if any(report.internal)
+                else []
+            ),
         ],
     )
     lines += _section(
@@ -327,6 +334,7 @@ def render_json(report: MapReport) -> str:
         "map": report.map_path,
         "nodes": report.nodes,
         "edges": report.edges,
+        "internal": {"nodes": report.internal[0], "edges": report.internal[1]},
         "packs": [{"pack": p, "version": v} for p, v in report.packs],
         "executed": [{"pack": p, "rule": r, "fires": n} for p, r, n in report.executed],
         "zero_fires": [{"pack": p, "rule": r} for p, r in report.idle],

@@ -9,10 +9,14 @@ from dataclasses import dataclass
 from errno import EBADF, ELOOP, ENOENT, ENOTDIR
 from pathlib import Path, PurePosixPath
 from stat import S_ISDIR, S_ISLNK, S_ISREG
+from typing import TYPE_CHECKING
 
 from periplus.engine.source import SHORT_FORM_FORMAT, SourceUnreadable
-from periplus.errors import ExitCode, HarnessError
+from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.manifest import LoadedPack
+
+if TYPE_CHECKING:
+    from periplus.engine.packload import RuleSet
 
 __all__ = [
     "FileType",
@@ -21,6 +25,7 @@ __all__ = [
     "Selection",
     "extended",
     "files_in",
+    "folder_problems",
     "folder_values",
     "holds_double_star",
     "reachable",
@@ -77,6 +82,32 @@ def holds_double_star(
     ``FolderUnresolved`` as ``resolve_folders`` does."""
     _, settled = folder_values(packs)
     return any("**" in pattern.split("/") for pattern in _patterns(name, settled, overrides, ()))
+
+
+def folder_problems(
+    rule_set: RuleSet, packs: Sequence[LoadedPack], overrides: Mapping[str, str | Sequence[str]]
+) -> tuple[Problem, ...]:
+    """The first folder refusal ``periplus map`` gives before it reads a file, or ``()``.
+
+    The folders are those map resolves: each one a supported rule reads in, and each one a path
+    value is ``relative_to``. The checks read the folder values only, never a directory.
+    """
+    wanted = {name for rule in rule_set.rules if rule.supported for name in rule.folders}
+    relative = {v.relative_to for i in rule_set.files.values() for v in i.path_values} - {""}
+    try:
+        deep = [name for name in sorted(relative) if holds_double_star(name, packs, overrides)]
+        if deep:
+            message = (
+                f"the folder {deep[0]}, which a path value is relative_to, holds ** in its value"
+            )
+            return (Problem(ExitCode.FOLDER_UNRESOLVED, message, {"folder": deep[0]}),)
+        _, settled = folder_values(packs)
+        for name in sorted(wanted | relative):
+            for pattern in _patterns(name, settled, overrides, ()):
+                _inside(pattern)
+    except FolderUnresolved as error:
+        return (error.problem(),)
+    return ()
 
 
 def reachable(pack: LoadedPack, packs: Sequence[LoadedPack]) -> set[str]:
@@ -149,12 +180,18 @@ def _patterns(
     return patterns
 
 
-def _expand(pattern: str, root: Path, selection: Selection | None) -> tuple[str, ...]:
+def _inside(pattern: str) -> str:
+    """The value normalised; one that leaves the project root raises ``FolderUnresolved``."""
     normal = posixpath.normpath(pattern)
     if normal.startswith("/") or ".." in normal.split("/"):
         raise FolderUnresolved(
             f"folder value {pattern} leaves the project root", {"value": pattern}
         )
+    return normal
+
+
+def _expand(pattern: str, root: Path, selection: Selection | None) -> tuple[str, ...]:
+    normal = _inside(pattern)
     found = [""]
     for segment in normal.split("/"):
         if segment == "**":

@@ -33,7 +33,7 @@ def test_slice_refuses_an_out_that_is_the_map_it_reads_and_writes_nothing(tmp_pa
     (tmp_path / "sub").mkdir()
     spelled = tmp_path / "sub" / ".." / "full-map.json"
 
-    report = slicing.run(tmp_path, {}, ("py::a",), None, "both", 1, (), 500, spelled, path)
+    report = slicing.run(tmp_path, {}, ("py::a",), (), "both", 1, (), 500, spelled, path)
 
     assert report.exit_code == ExitCode.OUTPUT_UNWRITABLE
     assert len(report.problems) == 1
@@ -56,7 +56,7 @@ def test_slice_with_no_ids_and_no_prefix_writes_nothing_and_exits_usage(tmp_path
     path.write_text(json.dumps(document), encoding="utf-8")
     out = tmp_path / "piece.json"
 
-    report = slicing.run(tmp_path, {}, (), None, "both", 1, (), 500, out, path)
+    report = slicing.run(tmp_path, {}, (), (), "both", 1, (), 500, out, path)
 
     assert report.exit_code == ExitCode.USAGE
     assert report.out is None
@@ -93,7 +93,7 @@ def test_slice_writes_a_relative_out_under_start(
     monkeypatch.chdir(elsewhere)
 
     report = slicing.run(
-        tmp_path, {}, ("py::a",), None, "both", 1, (), 500, Path("piece.json"), path
+        tmp_path, {}, ("py::a",), (), "both", 1, (), 500, Path("piece.json"), path
     )
 
     assert report.out == str(tmp_path / "piece.json")

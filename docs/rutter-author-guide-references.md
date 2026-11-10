@@ -111,7 +111,7 @@ when none holds, the end goes under `skipped`: no resolution step holds for its 
 may name its own pack's tables and those of the packs it depends on. Of two tables with one name,
 the nearer pack's wins whole, so a key that only the farther one holds is not found. A step naming
 a table that none of them declares refuses the map with exit 26, naming the `tables` key.
-`periplus map` checks this; `periplus validate`, which checks the schemas only, does not.
+`periplus validate` checks this too and gives the same message.
 
 ```yaml drupal_basic@0.3.0/call/call.yaml
 # \Drupal::logger('my_module'), \Drupal::currentUser() and the other shortcuts, to the service the

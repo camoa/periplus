@@ -7,10 +7,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # Each script is a js.file node named by its path, and each function above has a
 # script_declares_function edge from its script.
 # What it does not map, today:
-# - A call: no rule reads one, so the map holds no edge between two functions.
+# - A member call, a.b(): no edge.
 # - A generator, function* name() {}, a class and a class method: no node.
 # - A function that is a member of an object, { name() {} }, { name: function () {} } or
-#   { name: () => {} }, and a function passed as an argument: no node.
+#   { name: () => {} }, and a function passed as an argument: no node. A call inside one of
+#   these starts at the nearest named function that holds it, or at the script if none does.
 # - A function declared inside another gets the same kind of id, so two functions of one name in
 #   one script are one node holding both locations.
 # - An import or an export: no rule. A script in a .mjs, .cjs, .jsx or .ts file is not read.
@@ -48,3 +49,5 @@ identity:
   namespace:
     path_value: script
   written_names: [identifier]
+  # f() names <script path>:f.
+  resolve: [prefix_bare_with: namespace]

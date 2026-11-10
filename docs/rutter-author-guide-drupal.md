@@ -199,8 +199,8 @@ narrows a rule to the files of one ending, or of any in a list, written without 
 
 `match.file` globs the stem, the name less its ending, so it cannot tell two endings apart.
 A declaration, text or reference rule takes `ending`. An ending that no loaded pack claims refuses
-the map with exit 26, and the problem lists the endings that are claimed. `periplus map` checks
-this, and `periplus validate` does not. An ending that only another file type claims passes the
+the map with exit 26, and the problem lists the endings that are claimed. `periplus validate`
+checks this too. An ending that only another file type claims passes the
 check and reads nothing.
 
 ## From a library to a behavior, and between templates

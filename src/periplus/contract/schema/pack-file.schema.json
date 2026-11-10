@@ -108,6 +108,11 @@
           "type": "boolean",
           "description": "Nothing matches this directly; its descendants do."
         },
+        "internal": {
+          "type": "boolean",
+          "default": false,
+          "description": "Map rules read nodes of this type and of every type below it, and the written map leaves them out, with every edge that has an end on one."
+        },
         "container": {
           "type": "boolean"
         },

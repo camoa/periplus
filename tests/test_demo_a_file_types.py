@@ -66,7 +66,7 @@ def test_the_longest_ending_wins_and_a_type_declared_by_whole_name_selects_that_
     }
 
 
-def test_a_rule_file_whose_applies_to_names_any_tree_node_passes_validate(
+def test_a_rule_file_whose_applies_to_names_any_tree_node_gets_from_validate_the_exit_map_gives(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rutter(
@@ -96,7 +96,8 @@ rules:
     pin(tmp_path, "anynode@0.0.1")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("PERIPLUS_CONFIG_DIR", str(tmp_path / "_config"))
-    assert main(["validate", "anynode"]) == 0
+    report, _ = map_project(tmp_path)
+    assert main(["validate", "anynode"]) == report.exit_code == ExitCode.RULE_NOT_EXECUTABLE
 
 
 def test_a_short_list_sharing_a_bundled_ending_loads_and_a_text_type_holds_non_yaml(

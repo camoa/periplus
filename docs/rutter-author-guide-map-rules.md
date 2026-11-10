@@ -143,3 +143,13 @@ Map rule passes:
   pass 2: fleet ask_through_part fired 1
   pass 3: none
 ```
+
+## Internal node types
+
+A node type marked `internal: true` serves the map rules and stays out of the written map. File
+rules emit its nodes and map rules read them like any others, so a map rule can join through a
+call site and emit the edge the call site stands for. When the map is written, each node of an
+internal type, or of a type below one, is left out, with every edge that has an end on it. A node
+of another type stays, even when every edge it had is gone. When the map leaves anything out, the
+Map section of the report prints `internal: <n> nodes and <m> edges left out`; the JSON report's
+`internal` holds both counts on every run.

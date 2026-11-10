@@ -99,6 +99,9 @@ pipx upgrade periplus-map
 pip install -U periplus-map
 ```
 
+`uv tool upgrade` leaves an install pinned to an exact version, such as `periplus-map==0.5.1`, where
+it is. For that one, run `uv tool install periplus-map@latest`.
+
 Then run `periplus skills install` again, and repeat the copy above for any other agent. Read the
 [changelog](CHANGELOG.md) before you upgrade: when a bundled rutter's version changes, update the
 pins in your project's settings with `periplus update` and map again.
@@ -221,7 +224,7 @@ are copied into a project's `.periplus/packs`. The tables group them by language
 | Rutter | Version | What it finds |
 |---|---|---|
 | `php_basic` | 0.2.0 | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interfaces, traits, containment, properties and parameters with their types, and call sites. Plain and static calls, and method calls through a typed or assigned property; a call to a PHP builtin function makes nothing. Reads a parse tree. |
-| `js_basic` | 0.0.1 | JavaScript scripts, and the functions that have a name of their own, each under its script's path. It reads `.js` files only and maps no calls. Reads a parse tree. |
+| `js_basic` | 0.0.1 | JavaScript scripts, and the functions that have a name of their own, each under its script's path. Calls written `f(x)`, from the function or the script that holds them, as `js_calls`; a member call such as `a.b()` is not mapped. It reads `.js` files only. Reads a parse tree. |
 | `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. It skips test files and `vendor`, and needs the module path in the settings as `values.module`. Reads a parse tree. |
 | `yaml_basic` | 0.1.0 | Claims `.yml` and `.yaml` files for rutters that depend on it. No rules of its own. |
 | `twig_basic` | 0.1.0 | Claims `.twig` files for rutters that depend on it. No rules of its own. |
@@ -280,8 +283,9 @@ beside `drupal_basic` when the site uses that module.
 <details>
 <summary><strong>Reference packs</strong></summary>
 
-The bundle also holds five older reference packs. They pass `periplus validate`, but they hold
-vocabulary only and cannot make a map.
+The bundle also holds five older reference packs. They hold vocabulary only and cannot make a map:
+`periplus validate` finds no schema error in them, and reports the same problems `periplus map`
+reports for a project that pins them, such as the rules in them the engine does not execute.
 
 | Pack | Version |
 |---|---|
@@ -487,12 +491,12 @@ codes, with an example you can run.
 whole map as GraphML, DOT or Mermaid. To draw a part of the map, slice it, then export the slice.
 
 ```
-periplus slice [ID ...] [--path PREFIX] --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH]
+periplus slice [ID ...] [--path PREFIX]... --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH]
 periplus export --format graphml|dot|mermaid [--map PATH]
 ```
 
 `slice` starts from the ids you name and from every node whose first file starts with `--path PREFIX`, and follows edges
-from them. `--direction out` and `in` follow edges one way; `both` follows an edge either way at every hop (default `both`).
+from them. Repeat `--path` for several prefixes. `--direction out` and `in` follow edges one way; `both` follows an edge either way at every hop (default `both`).
 `--depth N` sets how many edges to follow (default 1), and `--kind K` keeps only edges of kind `K`;
 repeat it for several. `--limit N` stops the slice when it would hold more than `N` items (default
 500, `0` for no limit): the command exits 32 and writes nothing. An unknown id, or a prefix that

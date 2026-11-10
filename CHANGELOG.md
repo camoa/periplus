@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `js_basic` maps a call written `f(x)` as a `js_calls` edge, from the function that holds it, or from the script at its top level, to the function it names; a name the script does not declare is an unresolved end.
+- A node type marked `internal: true` serves the map rules and stays out of the written map, with every edge that has an end on one; the map report counts what it left out.
+- `periplus show` prints the entry `.periplus/descriptions.yaml` holds for the node and for each edge, in text and JSON, and `description: none` for a node without one.
+
+### Changed
+
+- `periplus validate` runs the checks `periplus map` runs on the rutter and its dependencies once its files pass the schemas, so a rule the engine cannot execute is reported before a map. A rutter declares the settings values its rules read in its manifest's `values`, and `periplus map` refuses a project whose settings do not give one.
+
 ## [0.5.2] - 2026-11-09
 
 ### Changed

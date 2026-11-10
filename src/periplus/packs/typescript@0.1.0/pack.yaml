@@ -8,6 +8,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: typescript
 version: 0.1.0
 depends: []
+values:
+  typescript_alias_root: The folder the @/ import alias points at.
 
 folders:
   # Every TypeScript file of the application.

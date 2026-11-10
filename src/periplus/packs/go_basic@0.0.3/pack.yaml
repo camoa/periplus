@@ -46,8 +46,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   <module>/<folder>, which is not its real import path.
 # The module path is not read from go.mod. Give it in the project settings as values.module, such
 # as module: github.com/spf13/cobra, and run periplus at the module's root. Without it, periplus
-# map exits 19 and writes no map, with "the template {module}/{file}, which names module, no
-# capture of its pattern and no settings value". If the module sits in
+# map exits 26 and writes no map, with "the rutter go_basic reads the settings value module, which
+# the project settings do not give". If the module sits in
 # a subfolder of the project, that folder's name becomes part of every package path: name the
 # folder as the module path's last segment and set values.module to the path without it, or move
 # the settings to the module's root.
@@ -56,6 +56,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: go_basic
 version: 0.0.3
 depends: []
+values:
+  module: The Go module path, as the module line of go.mod gives it.
 grammar:
   provider: tree-sitter
   provider_version: "0.26.0"

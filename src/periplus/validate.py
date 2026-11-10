@@ -26,17 +26,12 @@ the given schemas", which names no key at all — so the sub-errors ``jsonschema
 ``ValidationError.context`` are rendered beneath their parent, sorted by the same key.
 Validate has to name what failed, and a line naming only the branch does not.
 
-Two things this module does not do, recorded so a reader does not go looking for them.
-
-It does **not** check a pack's vocabulary against its dependencies — that a rule may only name a
-type its own pack or a pack it depends on declares. That is the graph validator, it needs the
-reader ``spec.InheritedVocabulary`` is waiting on, and it is the next unit. What is checked here is
-one file against one document, which is every check the two shipped schemas can express.
-
-It does **not** validate the packs a pack depends on. ``periplus validate drupal`` reads
-``drupal``'s files and no others, although resolving the name walks the ``depends`` graph and
-inherits whatever that walk reported. A pack is validated by naming it, which is also the command
-a CI step runs once per pack.
+**Once the pack's files pass their schema, it runs the checks ``periplus map`` runs.** It calls
+``engine.check.checked`` on the pack and the packs it depends on, with the project's settings
+values when a settings file resolves, so a problem ``map`` would refuse the pack for, in it or in
+a dependency, is reported here with the same code and message. The one check left out is a
+value the pack declares that the settings do not give: that is a fault of a project, not of the
+pack.
 """
 
 from __future__ import annotations
@@ -53,7 +48,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from periplus.errors import ExitCode, Problem
-from periplus.manifest import MANIFEST_FILENAME, resolve_pack_order
+from periplus.manifest import MANIFEST_FILENAME, LoadedPack, resolve_pack_order
 from periplus.mapshared import _section
 from periplus.packs import PackCandidate, match_pins
 from periplus.preflight import DependencyStatus
@@ -181,10 +176,27 @@ def validate(
     pins = (
         resolution.settings.packs.value if resolution.settings and resolution.settings.packs else ()
     )
-    directory, path, version = _locate(requested, resolution.candidates, pins, problems)
+    directory, path, version, order = _locate(requested, resolution.candidates, pins, problems)
     if directory is None:
         return _report(requested, None, (), (), problems)
-    checked, errors = _check_directory(directory, problems)
+    unreadable: list[Problem] = []
+    checked, errors = _check_directory(directory, unreadable)
+    problems.extend(unreadable)
+    if not errors and not unreadable:
+        # Imported here: `periplus.engine.check` imports this module.
+        from periplus.engine.check import checked as engine_checked
+
+        given = resolution.settings.values if resolution.settings else {}
+        values = {name: setting.value for name, setting in given.items()}
+        origins = {name: setting.sources[-1].name for name, setting in given.items()}
+        rule_set, refused = engine_checked(order, values, origins, require_values=False)
+        problems.extend(refused)
+        if rule_set is not None:
+            from periplus.engine.select import folder_problems
+
+            folders = resolution.settings.folders if resolution.settings else {}
+            overrides = {name: setting.value for name, setting in folders.items()}
+            problems.extend(folder_problems(rule_set, order, overrides))
     return _report(requested, path, checked, errors, problems, version)
 
 
@@ -216,8 +228,9 @@ def _locate(
     candidates: Sequence[PackCandidate],
     pins: Sequence[str],
     problems: list[Problem],
-) -> tuple[Traversable | None, str | None, str | None]:
-    """One pack name, or ``name@version``, resolved to the directory that carries it, or to nothing.
+) -> tuple[Traversable | None, str | None, str | None, tuple[LoadedPack, ...]]:
+    """One pack name, or ``name@version``, resolved to the directory that carries it, or to nothing,
+    and the pack with every pack it depends on, dependencies first.
 
     ``name@version`` names the copy. A bare name with one copy on the path names that copy. A bare
     name with several copies takes the copy the project pins, and with no pin among them stops with
@@ -249,7 +262,7 @@ def _locate(
     entries = sorted({candidate.entry for candidate in copies})
     if not entries:
         problems.append(_unknown_pack(name, candidates))
-        return None, None, None
+        return None, None, None, ()
     if version:
         entries = [entry for entry in entries if entry == requested]
         if not entries:
@@ -261,12 +274,12 @@ def _locate(
                     detail={"pack": name, "version": version, "available": versions},
                 )
             )
-            return None, None, None
+            return None, None, None, ()
     elif len(entries) > 1:
         pinned = [entry for entry in entries if entry in pins]
         if not pinned:
             problems.append(_ambiguous(name, copies))
-            return None, None, None
+            return None, None, None, ()
         entries = pinned
 
     matches, pin_problems = match_pins(entries, candidates)
@@ -276,8 +289,8 @@ def _locate(
 
     loaded = next((pack for pack in order if pack.name.pack == name), None)
     if loaded is None:
-        return None, None, None
-    return loaded.directory, loaded.path, loaded.name.version
+        return None, None, None, ()
+    return loaded.directory, loaded.path, loaded.name.version, order
 
 
 def _ambiguous(name: str, copies: Sequence[PackCandidate]) -> Problem:

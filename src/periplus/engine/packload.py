@@ -33,6 +33,7 @@ __all__ = [
     "RuleSet",
     "TypeInfo",
     "Value",
+    "declared_values",
     "load_rules",
     "namespace_of",
     "namespaces",
@@ -62,6 +63,7 @@ EXECUTED_KEYS = frozenset(
     {
         *(f"manifest.{k}" for k in ("pack", "version", "depends", "folders", "identity")),
         "manifest.tables",
+        "manifest.values",
         *(f"manifest.boundary{k}" for k in ("", ".*.type", ".*.ancestry", ".*.names")),
         *(f"manifest.identity.call_{k}" for k in ("arguments", "argument", "argument_name")),
         *(f"manifest.identity.call_literal{k}" for k in ("s", "_content", "_delimiters")),
@@ -95,7 +97,7 @@ EXECUTED_KEYS = frozenset(
         *(f"file.edge_kinds{k}" for k in ("", ".*.kind", ".*.from", ".*.to")),
         *(
             f"file.node_types{k}"
-            for k in ("", ".*.name", ".*.parent", ".*.abstract", ".*.id_namespace")
+            for k in ("", ".*.name", ".*.parent", ".*.abstract", ".*.id_namespace", ".*.internal")
         ),
         *(f"file.imports{k}" for k in ("", ".*.ast", ".*.group_ast", ".*.clause", ".*.facts")),
         *(f"file.imports.*.bind{k}" for k in ("", ".name", ".prefix_from_group", ".strip_prefix")),
@@ -269,12 +271,14 @@ class PackRulesUnreadable(HarnessError):
 
 @dataclass(frozen=True, slots=True)
 class TypeInfo:
-    """One node type: its id namespace, its parent type, and the pack that declared it."""
+    """One node type: its id namespace, its parent type, the pack that declared it, and whether
+    it is marked internal."""
 
     name: str
     id_namespace: str | None
     parent: str | None
     pack: str
+    internal: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -599,8 +603,10 @@ def load_rules(
     file_types = FileTypes.build(packs, {})
     rules = [_check_ending(_check_reader(rule, file_types), file_types) for rule in rules]
     files = _file_info(packs)
-    rules = [_check_names(rule, files.get(rule.filetype, FileInfo()), values) for rule in rules]
-    conflicts.extend(_collisions(rules, sources, files, packs, values, origins or {}))
+    declared = {name for pack in packs for name in declared_values(pack)}
+    known = {**dict.fromkeys(declared, ""), **values}
+    rules = [_check_names(rule, files.get(rule.filetype, FileInfo()), known) for rule in rules]
+    conflicts.extend(_collisions(rules, sources, files, packs, values, origins or {}, declared))
     grammars: dict[str, Grammar] = {}
     for index, rule in enumerate(rules):
         tree = rule.declaration or rule.attribute or rule.annotation or rule.reference
@@ -640,6 +646,12 @@ def load_rules(
         tables=tables,
         boundary=boundary,
     )
+
+
+def declared_values(pack: LoadedPack) -> list[str]:
+    """The settings value names the pack's manifest declares its rules read, sorted."""
+    found = pack.manifest.document.get("values")
+    return sorted(str(name) for name in found) if isinstance(found, Mapping) else []
 
 
 def _tables(packs: Sequence[LoadedPack]) -> dict[str, dict[str, Mapping[str, str]]]:
@@ -998,15 +1010,18 @@ def _collisions(
     packs: Sequence[LoadedPack],
     values: Mapping[str, str],
     origins: Mapping[str, str],
+    declared_names: set[str],
 ) -> list[Problem]:
     """Each path value name that the engine fills already (on a tree file type, also the names it
     fills for a declaration rule and ``line``), that a rule on its file type captures or names as
-    a value, or that a settings value gives; each settings value name the engine fills, or a rule
-    captures or names as a value; and each path value template naming a name that is no capture
-    of its pattern and no settings value, or both: a problem naming the pack, the file and the
-    names, and the settings file of a settings value."""
+    a value, or that a settings value gives or a pack declares; each such settings value name
+    the engine fills, or a rule captures or names as a value; and each path value template
+    naming a name that is no capture of its pattern and no settings value, declared or given,
+    or both: a problem naming the pack, the file and the names, and the settings file of a
+    settings value."""
     problems: list[Problem] = []
     tree_filled = {"file_stem", "key", "line", *_TREE_FILLED}
+    settings = set(values) | declared_names
 
     def setting(name: str) -> str:
         origin = f" of {origins[name]}" if name in origins else ""
@@ -1023,18 +1038,18 @@ def _collisions(
                     problems.append(_collision(pack.name.pack, MANIFEST_FILENAME, name, kind))
                 where = f"{pack.name.pack}/{MANIFEST_FILENAME}: the path value {name} of the file "
                 detail = {"pack": pack.name.pack, "file": MANIFEST_FILENAME, "name": name}
-                if name in values:
+                if name in settings:
                     message = f"{where}type {kind} has the name of {setting(name)}"
                     problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
                 captures = set(compile_pattern(value["pattern"]).groupindex)
                 named = set(PLACEHOLDER.findall(value["template"]))
-                for missing in sorted(named - captures - set(values)):
+                for missing in sorted(named - captures - settings):
                     message = (
                         f"{where}type {kind} has the template {value['template']}, which names "
                         f"{missing}, no capture of its pattern and no settings value"
                     )
                     problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
-                for both in sorted(named & captures & set(values)):
+                for both in sorted(named & captures & settings):
                     message = (
                         f"{where}type {kind} has the template {value['template']}, which names "
                         f"{both}, both a capture of its pattern and a settings value"
@@ -1054,7 +1069,7 @@ def _collisions(
                 f"which is also {setting(name)}",
                 {"pack": rule.pack, "file": source, "name": name},
             )
-            for name in sorted(set(values) & given)
+            for name in sorted(settings & given)
         )
     problems.extend(
         Problem(
@@ -1062,7 +1077,7 @@ def _collisions(
             f"{setting(name)} has a name the engine fills",
             {"name": name},
         )
-        for name in sorted(set(values) & tree_filled)
+        for name in sorted(settings & tree_filled)
     )
     return problems
 
@@ -1345,6 +1360,7 @@ def _read_types(pack: str, declared: object, types: dict[str, TypeInfo]) -> None
             id_namespace=entry.get("id_namespace"),
             parent=entry.get("parent"),
             pack=pack,
+            internal=entry.get("internal") is True,
         )
 
 

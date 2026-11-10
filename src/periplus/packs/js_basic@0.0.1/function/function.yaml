@@ -10,6 +10,9 @@ edge_kinds:
 - kind: script_declares_function
   from: js.file
   to: js.function
+- kind: js_calls
+  from: [js.function, js.file]
+  to: js.function
 
 rules:
 # function name(...) {...}: <script path>:name
@@ -65,4 +68,14 @@ rules:
   match: {declaration: program, filetype: javascript}
   id: {from: script}
   emits: [{node: {type: js.file}}]
+  confidence: declared
+# f(...): an edge to <script path>:f from the nearest named function that holds the call, or from
+# the script when no named function holds it. A call inside an object-member function or a function
+# passed as an argument has no node of its own, so it starts at the named function around it or at
+# the script. A call written through a member, a.b(), makes nothing.
+- rule: function_call
+  reads: file
+  in: [js_source]
+  match: {reference: call_expression, name_child: function, whole_written: true, filetype: javascript}
+  emits: [{edge: {kind: js_calls, from: enclosing_declaration, to: {types: [js.function], on_miss: unresolved}}}]
   confidence: declared

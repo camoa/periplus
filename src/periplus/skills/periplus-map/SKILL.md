@@ -39,6 +39,36 @@ $ periplus affected python.function::shop.tools.helper
 $ periplus path python.module::shop.cli python.function::shop.tools.helper
 ```
 
+## Answer a question about a feature
+
+A feature, such as how authentication works, spans many nodes, and no one id names it. Cut a slice
+of it from the map, then read the slice:
+
+1. Run `periplus find` several times: once for each name the feature goes by, and with `--type`
+   for each type it may hold. One search misses every name it does not hold.
+2. Run `periplus show` on each candidate. Keep the ones whose type, location and edges belong to
+   the feature.
+3. Run one `periplus slice` from every confirmed start: each confirmed id, and one `--path` for a
+   folder or file prefix the feature lives in. Repeat `--path` for each prefix.
+4. To widen the slice, or join it to the slice of another feature, run `periplus slice` again and
+   name both sets of starts: every id and every `--path` prefix of each. Each call reads the full
+   map and replaces the file it writes, so the second call must hold the first call's starts too.
+   `--depth` widens it further.
+5. Read the slice with the commands above, each given `--map` and the slice file. Then read the
+   code at each location, and describe the feature from what the code does.
+
+On the Navigation guide's worked example, these steps run as shown:
+
+```console
+$ periplus find tools
+$ periplus find hello
+$ periplus show python.function::shop.tools.helper
+$ periplus show typer.command::shop.cli.app:hello
+$ periplus slice python.function::shop.tools.helper typer.command::shop.cli.app:hello --path shop/tools.py --out feature.map.json
+$ periplus slice python.function::shop.tools.helper typer.command::shop.cli.app:hello --path shop/tools.py --depth 2 --out feature.map.json
+$ periplus types --map feature.map.json
+```
+
 ## Read and write the descriptions file
 
 The map holds ids, types and locations, not what a thing does. That text lives in
@@ -46,6 +76,10 @@ The map holds ids, types and locations, not what a thing does. That text lives i
 writes the file, so the map stays byte-identical from run to run. Commit it with the map.
 
 Open the descriptions file on every navigation, and read the entry of each id the command reached.
+
+When you read the code of a node or an edge that has no entry, write its entry before you answer.
+`periplus show` prints `description: none` for such a node, and no description line under such an
+edge. A reading that leaves no entry leaves no record, so the next question reads the code again.
 
 The file has two top-level keys:
 

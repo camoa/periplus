@@ -323,7 +323,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cut.add_argument("id", metavar="ID", nargs="*", help="a node id to start from")
     cut.add_argument(
-        "--path", metavar="PREFIX", help="also start from nodes whose first file starts with PREFIX"
+        "--path",
+        action="append",
+        default=[],
+        metavar="PREFIX",
+        help="also start from nodes whose first file starts with PREFIX; repeat for several",
     )
     cut.add_argument("--out", type=Path, required=True, metavar="FILE", help="the file to write")
     cut.add_argument(
@@ -658,7 +662,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             start=Path.cwd(),
             env=os.environ,
             ids=args.id,
-            prefix=args.path,
+            prefixes=args.path,
             direction=args.direction,
             depth=args.depth,
             kinds=args.kind,

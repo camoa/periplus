@@ -69,6 +69,13 @@ Prints the node's type, state, location and provenance, then its outgoing and in
 grouped by kind. Each edge row names the other end, the first location, the occurrence count, the
 confidence and the rule. `--limit` applies to each of the two edge lists. Take `ID` from `find`.
 
+`show` also reads `descriptions.yaml` beside the map file, when it exists. It prints the node's
+entry as `description: <text> (<file>:<line>)`, or `description: none` when the node has none. An
+edge with an entry gets the same line, indented, under its row. JSON puts the entry, or `null`, in
+a `description` key. A descriptions file that is not YAML, or not the shape the `periplus-map`
+skill's `descriptions.schema.json` states, is a problem with exit 30, and `show` still prints the
+node and its edges.
+
 ### neighbors
 
 ```
@@ -100,12 +107,12 @@ direction. Without a chain it prints `no path`, and exits 0. `--kind K` follows 
 ### slice
 
 ```
-periplus slice [ID ...] [--path PREFIX] --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH] [--format text|json]
+periplus slice [ID ...] [--path PREFIX]... --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH] [--format text|json]
 ```
 
 Writes the items around some start items to a map file of their own. Name the start items as
 `ID`s, with `--path PREFIX` (every node whose first file starts with `PREFIX`), or both; one of
-the two is required. `--out FILE` is required, and exits 27 when it is the map being read.
+the two is required. Repeat `--path` for several prefixes; each one must match a node. `--out FILE` is required, and exits 27 when it is the map being read.
 `--direction out` and `in` follow edges one way; `both` follows an edge either way at every hop
 (default `both`). `--depth N`
 sets how many edges to follow (default 1). `--kind K` keeps only edges of kind `K`; repeat it for
@@ -254,6 +261,7 @@ type: python.function
 state: mapped
 location: shop/tools.py:1
 provenance: python_text:function  declared
+description: none
 
 Outgoing (0):
   none

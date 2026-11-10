@@ -102,8 +102,8 @@ periplus map
 
 Map:
   path    /path/to/project/.periplus/map.json
-  nodes   11
-  edges   7
+  nodes   12
+  edges   8
 
 Files:
   selected  5
@@ -151,6 +151,7 @@ Rules not executed:
 
 Matches skipped:
   web/modules/custom/greet/greet.libraries.yml:4 library_script fired and emitted nothing
+  web/modules/custom/greet/js/banner.js:1 function_call function is not a written name
 
 Attributes that differ between files:
   none
@@ -280,6 +281,7 @@ type: drupal.js_setting
 state: mapped
 location: web/modules/custom/greet/greet.module:11
 provenance: drupal_js_basic:setting_attached_in_array  declared
+description: none
 
 Outgoing (0):
   none
@@ -291,15 +293,17 @@ Incoming (2):
     drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  web/modules/custom/greet/js/banner.js:4  x1  declared  drupal_js_basic:setting_read_in_behavior
 ```
 
-The script reaches the behavior it declares and the path it fetches whole.
+The script reaches the behavior it declares, the path it fetches whole, and `fetch`, a function it
+calls and does not declare, so the end is unresolved.
 
 <!-- nav-run -->
 ```
 $ periplus neighbors js.file::web/modules/custom/greet/js/banner.js
 periplus neighbors js.file::web/modules/custom/greet/js/banner.js
-2 items
+3 items
   1  drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  via script_declares_behavior from js.file::web/modules/custom/greet/js/banner.js
   1  drupal.url_path::/greet/hello  drupal.url_path  referenced  via script_links_to_path from js.file::web/modules/custom/greet/js/banner.js
+  1  js.function::web/modules/custom/greet/js/banner.js:fetch  js.function  unresolved  via js_calls from js.file::web/modules/custom/greet/js/banner.js
 ```
 
 ## A shape the map lacks
@@ -348,8 +352,8 @@ periplus map
 
 Map:
   path    /path/to/project/.periplus/map.json
-  nodes   1
-  edges   0
+  nodes   2
+  edges   1
 
 Files:
   selected  1
@@ -420,8 +424,8 @@ periplus map
 
 Map:
   path    /path/to/project/.periplus/map.json
-  nodes   11
-  edges   7
+  nodes   12
+  edges   8
 
 Files:
   selected  5
@@ -469,6 +473,7 @@ Rules not executed:
 
 Matches skipped:
   web/modules/custom/greet/greet.libraries.yml:4 library_script fired and emitted nothing
+  web/modules/custom/greet/js/banner.js:1 function_call function is not a written name
 
 Attributes that differ between files:
   none
@@ -491,6 +496,7 @@ type: drupal.js_setting
 state: mapped
 location: web/modules/custom/greet/greet.module:11
 provenance: drupal_js_basic:setting_attached_in_array  declared
+description: none
 
 Outgoing (0):
   none
@@ -579,6 +585,7 @@ type: myproject.event
 state: mapped
 location: web/modules/custom/greet/templates/card.html.twig:1
 provenance: myproject:event_from_data_track  declared
+description: none
 
 Outgoing (0):
   none

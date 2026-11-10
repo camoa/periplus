@@ -232,6 +232,12 @@
         "additionalProperties": {"type": "string", "minLength": 1}
       },
       "description": "Name tables by table name, each mapping a written name to a node name. A rule's lookup_last_segment_in step names a table this pack or a pack it depends on declares; this pack's table wins over a dependency's of the same name."
+    },
+
+    "values": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1},
+      "description": "The settings values this pack's rules read, by name, each with a one-sentence description. A template may name a declared value; periplus map refuses a project whose settings do not give it."
     }
   },
 

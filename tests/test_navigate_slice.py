@@ -95,7 +95,7 @@ def _call(tmp_path: Path, map_path: Path, out: Path, **kw: Any) -> tuple[Any, st
 
     args: dict[str, Any] = {
         "ids": (),
-        "prefix": None,
+        "prefixes": (),
         "direction": "both",
         "depth": 1,
         "kinds": (),
@@ -150,7 +150,7 @@ def test_slice_from_a_path_prefix_at_depth_two_keeps_what_both_ways_reach_c1(
     tmp_path: Path, planted: Path
 ) -> None:
     out = tmp_path / "piece.json"
-    code, _ = _call(tmp_path, planted, out, prefix="src/a/", depth=2)
+    code, _ = _call(tmp_path, planted, out, prefixes=("src/a/",), depth=2)
 
     assert code == 0
     document = _kept(out)
@@ -230,7 +230,7 @@ def test_slice_from_a_prefix_matching_no_item_exits_node_not_found_naming_it_c2(
     tmp_path: Path, planted: Path
 ) -> None:
     out = tmp_path / "piece.json"
-    code, said = _call(tmp_path, planted, out, prefix="src/missing/")
+    code, said = _call(tmp_path, planted, out, prefixes=("src/missing/",))
 
     assert code == ExitCode.NODE_NOT_FOUND
     assert not out.exists()

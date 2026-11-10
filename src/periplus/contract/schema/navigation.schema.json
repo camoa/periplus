@@ -41,6 +41,16 @@
         "sets": {"type": "array", "items": {"type": "string"}}
       }
     },
+    "description": {
+      "description": "The descriptions.yaml entry for a node or edge, or null when it has none.",
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false, "required": ["text", "file", "line"],
+          "properties": {"text": {"type": "string"}, "file": {"type": "string"}, "line": {"type": "integer"}}
+        },
+        {"type": "null"}
+      ]
+    },
 
     "listing": {
       "description": "The shared cut list. The items schema is supplied by the command that uses it.",
@@ -104,7 +114,7 @@
 
     "edge_row": {
       "type": "object", "additionalProperties": false,
-      "required": ["kind", "other", "other_type", "other_state", "locations", "occurrences", "confidences", "rules"],
+      "required": ["kind", "other", "other_type", "other_state", "locations", "occurrences", "confidences", "rules", "description"],
       "properties": {
         "kind": {"type": "string"},
         "other": {"type": "string"},
@@ -113,7 +123,8 @@
         "locations": {"type": "array", "items": {"$ref": "#/$defs/location"}},
         "occurrences": {"type": ["integer", "null"]},
         "confidences": {"type": "array", "items": {"enum": ["declared", "inferred"]}},
-        "rules": {"type": "array", "items": {"type": "string"}}
+        "rules": {"type": "array", "items": {"type": "string"}},
+        "description": {"$ref": "#/$defs/description"}
       }
     },
     "edge_listing": {
@@ -123,7 +134,7 @@
 
     "show": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "type", "state", "roles", "attributes", "locations", "provenance", "outgoing", "incoming", "problems"],
+      "required": ["id", "type", "state", "roles", "attributes", "locations", "provenance", "description", "outgoing", "incoming", "problems"],
       "properties": {
         "id": {"type": "string"},
         "type": {"type": "string"},
@@ -132,6 +143,7 @@
         "attributes": {"type": "object"},
         "locations": {"type": "array", "items": {"$ref": "#/$defs/location"}},
         "provenance": {"type": "array", "items": {"$ref": "#/$defs/provenance"}},
+        "description": {"$ref": "#/$defs/description"},
         "outgoing": {"$ref": "#/$defs/edge_listing"},
         "incoming": {"$ref": "#/$defs/edge_listing"},
         "problems": {"$ref": "#/$defs/problems"}

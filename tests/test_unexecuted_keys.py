@@ -105,3 +105,10 @@ def test_the_declared_end_keys_are_executed() -> None:
     """The end ``{declared: <type>}`` of a tree declaration rule's edge, at from and at to."""
     keys = {f"file.rules.*.emits.*.edge.{end}.declared" for end in ("from", "to")}
     assert keys <= EXECUTED_KEYS & _schema_paths()
+
+
+def test_the_internal_and_declared_values_keys_are_executed() -> None:
+    """A node type's internal mark and a manifest's declared settings values."""
+    keys = {"file.node_types.*.internal", "manifest.values"}
+    assert keys <= EXECUTED_KEYS & _schema_paths()
+    assert "manifest.values.*" not in EXECUTED_KEYS

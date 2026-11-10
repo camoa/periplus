@@ -51,6 +51,26 @@ end the group at the closure route.
 A match outside every span still fires. To drop it, name the span's value in the id, then strip
 it with `normalize`, as `{scope}|{name}` with `^.*\|`.
 
+`balance` takes two single characters, so a span ends at a character, never at a word or a
+closing tag such as `</cffunction>`. A region that a closing tag ends takes a section plus a span.
+A section's `open` and `close` are patterns, so it can close at the tag, and a span counts no
+character inside it. A span opens only outside the sections, so it opens before the section does,
+and its first closing character after the section ends it:
+
+```yaml
+sections:
+- name: function_text
+  open: 'cffunction\b'
+  close: '</cffunction'
+spans:
+- name: function
+  open: '<cffunction\b[^>]*\bname="(?<name>\w+)"'
+  balance: ['<', '>']
+```
+
+A rule that reads inside the function lists `reads_sections: [function_text]`. Sections do not
+nest, so a string or a comment inside that section is part of it, and the rule reads it too.
+
 ## A value from the enclosing spans
 
 A text rule's value may read a capture of every span that holds the match:

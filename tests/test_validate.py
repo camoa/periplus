@@ -50,6 +50,15 @@ BUNDLED_PACK_NAMES = tuple(
     sorted(entry.name.split("@")[0] for entry in BUNDLED_PACKS.iterdir() if entry.is_dir())
 )
 
+#: The five reference packs. They hold rules the engine does not execute, so ``validate`` reports
+#: those; every other bundled pack is a rutter and validates clean.
+REFERENCE_PACK_NAMES = ("drupal", "go", "php", "twig", "yaml")
+RUTTER_NAMES = tuple(name for name in BUNDLED_PACK_NAMES if name not in REFERENCE_PACK_NAMES)
+
+#: A rutter small enough to read, for the one test that names a pack's files.
+CLEAN_RUTTER = "js_basic"
+CLEAN_RUTTER_DIRECTORY = "js_basic@0.0.1"
+
 #: The console script's entry function in a fresh interpreter, for the determinism test: a hash
 #: seed and a locale are fixed when a process starts, so two calls in one process cannot differ.
 _CHILD = """
@@ -298,19 +307,21 @@ def test_an_unmodified_bundled_pack_validates_clean_and_says_what_it_opened(
     has been validated too.
     """
     expected = {
-        path.relative_to(BUNDLED_PACKS / SOURCE_PACK).as_posix()
-        for path in (BUNDLED_PACKS / SOURCE_PACK).rglob("*.yaml")
+        path.relative_to(BUNDLED_PACKS / CLEAN_RUTTER_DIRECTORY).as_posix()
+        for path in (BUNDLED_PACKS / CLEAN_RUTTER_DIRECTORY).rglob("*.yaml")
     }
 
     result = _run(
-        ["validate", "go", "--format", "json"], cwd=elsewhere.root, config=elsewhere.config
+        ["validate", CLEAN_RUTTER, "--format", "json"],
+        cwd=elsewhere.root,
+        config=elsewhere.config,
     )
 
     assert result.returncode == 0, f"{result.stdout}{result.stderr}"
     payload = json.loads(result.stdout)
     assert payload["errors"] == []
     assert set(payload["checked"]) == expected
-    assert payload["pack"] == "go"
+    assert payload["pack"] == CLEAN_RUTTER
 
 
 def test_a_missing_required_key_exits_sixteen_naming_the_key_and_its_path(
@@ -752,7 +763,7 @@ def test_every_bundled_pack_file_declares_the_schema_it_is_written_against() -> 
     )
 
 
-@pytest.mark.parametrize("pack", BUNDLED_PACK_NAMES)
+@pytest.mark.parametrize("pack", RUTTER_NAMES)
 def test_every_bundled_pack_validates_against_the_shipped_schemas(
     elsewhere: Project, pack: str
 ) -> None:

@@ -61,7 +61,7 @@ def _slice(
         out=out,
         map_path=map_path,
         ids=(start,),
-        prefix=None,
+        prefixes=(),
         direction=direction,
         depth=depth,
         kinds=(),

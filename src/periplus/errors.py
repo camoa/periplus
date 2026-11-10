@@ -260,7 +260,9 @@ class ExitCode(IntEnum):
     MAP_NOT_FOUND = 29
 
     #: The file a navigation command read is not JSON, lacks the map's outline, or is damaged
-    #: below the outline: a node, edge or type_hierarchy row is malformed.
+    #: below the outline: a node, edge or type_hierarchy row is malformed. Also the
+    #: ``descriptions.yaml`` beside the map that ``periplus show`` reads, when it is not valid
+    #: YAML or does not match the descriptions schema.
     NOT_A_MAP = 30
 
     #: An id given to a navigation command names no node in the map.

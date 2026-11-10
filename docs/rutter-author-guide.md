@@ -30,6 +30,10 @@ the project folder, and `re_include` takes back by glob what a rutter's `files.e
 `values` names strings, as `values: {module: example.com/app}`, that any template may name, a
 path value's too. A setting that a path value, a capture or the engine also gives, and a path value
 template naming what neither its pattern nor a setting gives, refuse the map with exit 19.
+A rutter whose rules name a setting declares it in the manifest's `values`, each name with one
+sentence on what it holds, as `values: {module: The module path that go.mod names.}`.
+`periplus map` refuses, with exit 26, a project whose settings do not give a value a loaded rutter
+declares; `periplus validate` does not ask for one.
 Run these in the project folder, with `REPO` naming the repository:
 
 ```
@@ -66,7 +70,9 @@ module:
 `match.file` globs the file's stem, its name less its type's ending: `file: mission` reads
 `mission.yaml`. A rule reads the files directly in each folder `in` names; a folder value needs
 `/**` to reach those below. A text rule fires once per match of `match.text`, an RE2 pattern, on a
-file type read as text. One rule reads one way: to read a tree type's files as text too, declare a
+file type read as text. A rule names one `filetype`, so a stack that holds one thing in files of
+several types writes one rule per type.
+One rule reads one way: to read a tree type's files as text too, declare a
 second type on that ending under `files.types`, as `php_notes: {endings: [php], reader: text}`; each
 rule takes its own type's path values and sections, and two types read alike are refused. A text
 rule's node sits at the match's line, its id a template over captures and path values:
@@ -139,7 +145,10 @@ $ periplus status
 $ periplus map --output map.json --format json >report.json
 ```
 
-`validate` checks each file of a rutter against the two schemas; `status` shows which rutters the
+`validate` checks each file of a rutter against the two schemas. When they pass, it runs the
+checks `periplus map` runs before it reads a source file, on the rutter and the rutters it
+depends on;
+`status` shows which rutters the
 project matched, and from where; `periplus spec <pack>` prints the schemas and what the rutter's
 manifest declares and inherits. In the map report, `not_executed` lists the rules the engine cannot
 run and why, `problems` what the run could not do, `unlisted` the folders it could not list: each
