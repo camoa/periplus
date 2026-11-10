@@ -89,9 +89,10 @@ jobs:
       # checking passes against an empty one.
       #
       # Every pack is validated before the job fails, so one run names every broken pack rather
-      # than the first. The five reference packs hold rules the engine does not execute, which
-      # validate reports with the codes map gives: 18, 19, 22, 26 and 28. Any other non-zero exit,
-      # a schema error's 16 among them, fails the job.
+      # than the first. The five reference packs hold problems map refuses them for, and each
+      # must give the exit it gives today, its lowest code: drupal 18, a folder with two values in
+      # its dependencies; go, php, twig and yaml 26, rules the engine does not execute. Any other
+      # exit fails the job, so a new problem with a lower code, or a fix, needs this list changed.
       - name: validate every bundled pack
         run: |
           set -u
@@ -104,13 +105,15 @@ jobs:
             echo "== $pack"
             periplus validate "$pack" || status=1
           done
-          for pack in drupal go php twig yaml; do
+          for entry in drupal:18 go:26 php:26 twig:26 yaml:26; do
+            pack=${entry%%:*}
+            expected=${entry#*:}
             echo "== $pack"
             code=0
             periplus validate "$pack" || code=$?
-            case "$code" in
-              0|18|19|22|26|28) ;;
-              *) status=1 ;;
-            esac
+            if [ "$code" != "$expected" ]; then
+              echo "$pack exited $code, expected $expected"
+              status=1
+            fi
           done
           exit $status

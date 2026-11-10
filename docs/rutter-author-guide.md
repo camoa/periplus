@@ -33,9 +33,11 @@ template naming what neither its pattern nor a setting gives, refuse the map wit
 A rutter whose rules name a setting declares it in the manifest's `values`, each name with one
 sentence on what it holds, as `values: {module: The module path that go.mod names.}`.
 `periplus map` refuses, with exit 26, a project whose settings do not give a value a loaded rutter
-declares; `periplus validate` refuses it inside a project, and outside one does not ask for one.
-Outside a project, `validate` accepts a value a rule names only when the rule's rutter, or a
-rutter it depends on, declares it.
+declares. `periplus validate` refuses it too when the project pins the rutter, or a rutter that
+depends on it, and otherwise does not ask for one.
+`validate` accepts a value a rule names only when the settings give it, the user settings in
+`<config dir>/settings.yml` among them, or when the rule's rutter, or a rutter it depends on,
+declares it.
 Run these in the project folder, with `REPO` naming the repository:
 
 ```
@@ -156,8 +158,10 @@ $ periplus map --output map.json --format json >report.json
 
 `validate` checks each file of a rutter against the two schemas. When they pass, it runs the
 checks `periplus map` runs before it reads a source file, on the rutter and the rutters it
-depends on. Inside a project it uses the project's settings values and folders, and resolves
-folders against every pinned rutter, as `map` does;
+depends on. Inside a project it uses the project's settings values and folders. When the project
+pins the rutter, or a rutter that depends on it, and every pinned rutter's dependencies resolve,
+it resolves folders against every pinned rutter, as `map` does; otherwise against the rutter and
+the rutters it depends on;
 `status` shows which rutters the
 project matched, and from where; `periplus spec <pack>` prints the schemas and what the rutter's
 manifest declares and inherits. In the map report, `not_executed` lists the rules the engine cannot

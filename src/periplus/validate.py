@@ -29,9 +29,11 @@ Validate has to name what failed, and a line naming only the branch does not.
 **Once the pack's files pass their schema, it runs the checks ``periplus map`` runs.** It calls
 ``engine.check.checked`` on the pack and the packs it depends on, with the project's settings
 values when a settings file resolves, so a problem ``map`` would refuse the pack for, in it or in
-a dependency, is reported here with the same code and message. Inside a project, a value the
-pack declares that the settings do not give is refused as ``map`` refuses it, and folders resolve
-against every pinned pack, as ``map`` resolves them. Outside a project no value is asked for.
+a dependency, is reported here with the same code and message. Inside a project that pins the
+pack, or a pack that depends on it, a value the pack declares that the settings do not give is
+refused as ``map`` refuses it; elsewhere no value is asked for. When that project's pinned packs
+all resolve their dependencies, folders resolve against every pinned pack, as ``map`` resolves
+them; otherwise against the pack and the packs it depends on.
 """
 
 from __future__ import annotations
@@ -191,11 +193,13 @@ def validate(
             s.kind == "project" and s.status == "used" for s in resolution.settings_sources
         )
         values, origins = settings_values(resolution.settings)
-        rule_set, refused = engine_checked(order, values, origins, require_values=in_project)
+        pinned, unresolved = resolve_pack_order(resolution.packs, resolution.candidates)
+        named = any(pack.path == path for pack in pinned)
+        rule_set, refused = engine_checked(
+            order, values, origins, require_values=in_project and named
+        )
         problems.extend(refused)
         if rule_set is not None:
-            pinned, unresolved = resolve_pack_order(resolution.packs, resolution.candidates)
-            named = any(pack.path == path for pack in pinned)
             folder_packs = pinned if in_project and named and not unresolved else order
             overrides = folder_overrides(resolution.settings)
             problems.extend(folder_problems(rule_set, folder_packs, overrides))

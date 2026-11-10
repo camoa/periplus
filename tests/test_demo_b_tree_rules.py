@@ -290,6 +290,26 @@ def test_a_setting_named_like_a_path_value_is_refused_at_load(tmp_path: Path) ->
     assert "path value pkg" in problem.message and "settings.yml" in problem.message, problem
 
 
+def test_a_declared_setting_named_like_a_path_value_is_refused_at_load(tmp_path: Path) -> None:
+    pack = MODULES_PACK.replace("depends: []\n", "depends: []\nvalues:\n  pkg: A package.\n")
+    plant(
+        tmp_path,
+        {
+            **settings("modules@0.0.1", values="values:\n  module: example.com/app\n"),
+            ".periplus/packs/modules@0.0.1/pack.yaml": pack,
+            ".periplus/packs/modules@0.0.1/rules/modules.yaml": MODULES_RULES,
+            "Root.php": "<?php\n\nclass Root\n{\n}\n",
+        },
+    )
+    report, document = map_site(tmp_path)
+    assert document is None
+    assert report.exit_code == ExitCode.PACK_RULES_UNREADABLE
+    assert (
+        "modules/pack.yaml: the path value pkg of the file type code has the name of the settings "
+        "value pkg (a loaded rutter declares it, and the project settings do not give it)"
+    ) in [p.message for p in report.problems], report.problems
+
+
 # --- id patterns that only filter --------------------------------------------------------------
 
 HOOKS_PACK = (

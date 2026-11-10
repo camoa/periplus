@@ -257,6 +257,46 @@ def test_a_value_only_an_unrelated_pack_declares_does_not_satisfy_a_rule_c2(
     assert (status, _problems(combined)) == (alone_status, _problems(alone))
 
 
+@pytest.mark.criterion(id="c2")
+@pytest.mark.parametrize("pack", ["typescript", "go_basic"])
+def test_validate_in_a_project_asks_no_value_of_a_rutter_the_project_does_not_pin_c2(
+    project: Project,  # noqa: F811
+    pack: str,
+) -> None:
+    """The project pins js_basic only, so it gives no value the named rutter declares, and the
+    named rutter's folders resolve against its own dependency order, not the pinned one."""
+    _pin(project, "js_basic")
+
+    status, payload = _call(["validate", pack], cwd=project.root, config=project.config)
+
+    assert (status, payload["errors"], payload["problems"]) == (0, [], [])
+
+
+@pytest.mark.criterion(id="c2")
+def test_validate_resolves_folders_by_its_own_order_when_a_pinned_dependency_is_missing_c2(
+    project: Project,  # noqa: F811
+) -> None:
+    """A pinned neighbour gives typescript_source a second value and depends on a rutter nothing
+    carries; the pinned order has a problem, so folders resolve against typescript's own order."""
+    neighbour = project.packs / "neighbourfix@0.0.1"
+    neighbour.mkdir()
+    (neighbour / "pack.yaml").write_text(
+        '$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"\n'
+        "pack: neighbourfix\nversion: 0.0.1\ndepends: [nosuchfix]\n"
+        "folders:\n  typescript_source: ./other/**\n",
+        encoding="utf-8",
+    )
+    (project.root / ".periplus" / "settings.yml").write_text(
+        f"periplus_version: 0\npacks:\n  - typescript@{_pinned_version('typescript')}\n"
+        "  - neighbourfix@0.0.1\nvalues:\n  typescript_alias_root: src\n",
+        encoding="utf-8",
+    )
+
+    status, payload = _call(["validate", "typescript"], cwd=project.root, config=project.config)
+
+    assert (status, payload["errors"], payload["problems"]) == (0, [], [])
+
+
 def _pinned_version(name: str) -> str:
     """The version half of the bundled directory ``<name>@<version>``."""
     (directory,) = [e for e in BUNDLED_PACKS.iterdir() if e.name.startswith(f"{name}@")]

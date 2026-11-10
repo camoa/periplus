@@ -14,7 +14,7 @@ from pathlib import Path
 
 from periplus.errors import ExitCode, HarnessError
 
-__all__ = ["SkillsUnwritable", "install_skills"]
+__all__ = ["SKILLS_DIRECTORY", "SkillsUnwritable", "install_skills"]
 
 SKILLS_DIRECTORY = "skills"
 
