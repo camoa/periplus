@@ -1,0 +1,106 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A @var class name written with a backslash inside and none in front, @var Lib\Mailer. PHP reads
+# such a name relative to the namespace and its imports; code often means the full name as written.
+# find_var_property_type leaves this shape out, and these rules keep both readings on internal
+# nodes, at the property: the name as written, <class>::$<name>::<type>, and the name resolved
+# through the file's imports and namespace, of the same shape. The map rule joins a call through
+# the property to the type as written when the map holds a node of that name, else to the resolved
+# one, and then looks the method up on that type and its ancestors, as calls_through_typed_property
+# does. A method no class in the map declares lands unresolved under the chosen type.
+#
+# Limit: the property gets no php.property_type node and no property_typed_as edge for this shape,
+# so a rule that reads those does not see it.
+node_types:
+
+- name: php.property_written_type
+  id_namespace: php.property_written_type
+  internal: true
+
+- name: php.property_resolved_type
+  id_namespace: php.property_resolved_type
+  internal: true
+
+edge_kinds:
+
+- kind: property_written_as
+  from: php.property
+  to: php.property_written_type
+
+- kind: property_resolved_as
+  from: php.property
+  to: php.property_resolved_type
+
+rules:
+
+- rule: find_var_property_written_type
+  reads: file
+  in: [source]
+  match: &property_match {declaration: property_declaration, name_child: [property_element, name], filetype: php}
+  id:
+    from:
+    - enclosing_type
+    - declared_name
+    - docblock: &written_var '@var\s+\??(?i:null\|)?(?<type>[A-Za-z_][A-Za-z0-9_]*\\[A-Za-z0-9_\\]+)(?i:\|null)?(?:\s|\*)'
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.property_written_type}}]
+  confidence: declared
+
+- rule: find_var_property_resolved_type
+  reads: file
+  in: [source]
+  match: *property_match
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: *written_var}}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.property_resolved_type}}]
+  confidence: declared
+
+# The docblock source is only a condition in these two twins, as in var_property_typed_as.
+- rule: var_property_written_as
+  reads: file
+  in: [source]
+  match: *property_match
+  id: &property_id
+    from: [enclosing_type, declared_name, {docblock: *written_var}]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{edge: {kind: property_written_as, from: this_node, to: {declared: php.property_written_type}}}]
+  confidence: declared
+
+- rule: var_property_resolved_as
+  reads: file
+  in: [source]
+  match: *property_match
+  id: *property_id
+  emits: [{edge: {kind: property_resolved_as, from: this_node, to: {declared: php.property_resolved_type}}}]
+  confidence: declared
+
+# The first try rebinds the type to the name as written when the map holds it; the second is
+# calls_through_typed_property's method lookup.
+- rule: calls_through_written_var_type
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_written_as
+    - id_matches: '^php\.property_written_type::[^:]+::\$\w+::(?<written>[A-Za-z_][\w\\]*)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_resolved_as
+    - id_matches: '^php\.property_resolved_type::[^:]+::\$\w+::(?<type>(?<declarer>[A-Za-z_][\w\\]*))$'
+    - try:
+      - node: 'php.type::{written}'
+      - id_matches: '^php\.type::(?<type>(?<declarer>.+))$'
+    - try:
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred

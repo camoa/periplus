@@ -75,7 +75,7 @@ BUNDLED_PACKS = {
     "nextjs@0.2.0": 32,
     "paragraphs_basic@0.0.1": 2,
     "php@0.1.0": 12,
-    "php_basic@0.2.0": 7,
+    "php_basic@0.2.0": 9,
     "profile_basic@0.0.1": 2,
     "react@0.1.0": 18,
     "salesforce_basic@0.0.1": 6,

@@ -154,4 +154,5 @@ def test_no_calls_edge_leaves_a_marked_site_of_any_shape_wo2(tmp_path: Path) -> 
 def test_literal_named_calls_get_no_marked_site_wo2(tmp_path: Path) -> None:
     document = _map_files(tmp_path, {"Page.php": LITERAL_SHAPES})
     assert [n["id"] for n in document["nodes"] if _resolution(n) == "runtime"] == []
-    assert [s["id"] for s in _sites(document)] == []
+    # self::go() keeps the unmarked site that relative_scope_calls.yaml gives it.
+    assert [s["id"] for s in _sites(document)] == ["php.call_site::App\\Page::run::self::go"]

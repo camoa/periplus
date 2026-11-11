@@ -223,7 +223,7 @@ are copied into a project's `.periplus/packs`. The tables group them by language
 
 | Rutter | Version | What it finds |
 |---|---|---|
-| `php_basic` | 0.2.0 | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interfaces, traits, containment, properties and parameters with their types, and call sites. Plain and static calls, and method calls through a typed or assigned property; a call to a PHP builtin function makes nothing. Reads a parse tree. |
+| `php_basic` | 0.2.0 | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interfaces, traits, containment, properties and parameters with their types, and call sites. Plain and static calls, calls on `self`, `static` and `parent`, and method calls through a typed or assigned property; a call to a PHP builtin function makes nothing. Reads a parse tree. |
 | `js_basic` | 0.0.1 | JavaScript scripts, and the functions that have a name of their own, each under its script's path. Calls written `f(x)`, from the function or the script that holds them, as `js_calls`; a member call such as `a.b()` is not mapped. It reads `.js` files only. Reads a parse tree. |
 | `go_basic` | 0.0.3 | Go functions, methods, structs and interfaces, each under its package's import path. Calls written `f(x)` inside one package, and `pkg.F(x)` through an import, to another package of the module or to an unresolved function outside it. It skips test files and `vendor`, and needs the module path in the settings as `values.module`. Reads a parse tree. |
 | `yaml_basic` | 0.1.0 | Claims `.yml` and `.yaml` files for rutters that depend on it. No rules of its own. |

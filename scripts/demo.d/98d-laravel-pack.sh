@@ -227,7 +227,7 @@ assert ids == [
     "laravel.view::dashboard",
     "laravel.view::layouts.app",
     "laravel.view::welcome",
-    "php.function::App\\Http\\Controllers\\view",
+    "php.function::view",
     "php.method::App\\Http\\Controllers\\BookController::index",
     "php.method::App\\Models\\Book::all",
     "php.type::App\\Http\\Controllers\\BookController",
@@ -245,7 +245,7 @@ controller = "app/Http/Controllers/BookController.php"
 # view('books.index') is a renders edge from its method.
 assert edges == [
     ("calls", "php.method::App\\Http\\Controllers\\BookController::index",
-     "php.function::App\\Http\\Controllers\\view", [(controller, 11)]),
+     "php.function::view", [(controller, 11)]),
     ("calls", "php.method::App\\Http\\Controllers\\BookController::index",
      "php.method::App\\Models\\Book::all", [(controller, 11)]),
     ("contains", "php.type::App\\Http\\Controllers\\BookController",

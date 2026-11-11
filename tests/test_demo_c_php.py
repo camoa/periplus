@@ -127,7 +127,8 @@ def _calls(document: dict[str, Any], kind: str = "calls") -> dict[tuple[str, str
 
 def test_plain_and_static_calls_give_a_calls_edge_by_exact_value(tmp_path: Path) -> None:
     """Through an alias, a full name and a used class; a miss ends at an unresolved node that
-    keeps what was searched for; the function imported as h() resolves under the namespace."""
+    keeps what was searched for; an unqualified miss and the function imported as h() end at the
+    global name; self:: and static:: end at the enclosing class's method."""
     lines = _plant(tmp_path)
     document, _ = _map(tmp_path)
     closure, method = _at(lines, r"        local\(\);")
@@ -142,9 +143,13 @@ def test_plain_and_static_calls_give_a_calls_edge_by_exact_value(tmp_path: Path)
             _at(lines, r"    \\Drupal::service\('x'\);"),
             "Drupal::service",
         ),
-        (CALLER, F + "App\\missing"): (_at(lines, r"    missing\(\);"), "App\\missing"),
-        (CALLER, F + "App\\h"): (_at(lines, r"    h\(\);"), "App\\h"),
+        (CALLER, F + "missing"): (_at(lines, r"    missing\(\);"), "missing"),
+        (CALLER, F + "h"): (_at(lines, r"    h\(\);"), "h"),
         (RUN, F + "App\\local"): ([method], None),
+        (RUN, M + "App\\Main::other"): (
+            _at(lines, r"        self::other\(\);") + _at(lines, r"        static::other\(\);"),
+            None,
+        ),
         (RUN, MAKE): (_at(lines, r"        Util::make\(\);"), None),
         (RUN, M + "App\\Lib\\Util::absent"): (
             _at(lines, r"        Util::absent\(\);"),
@@ -161,9 +166,12 @@ def test_plain_and_static_calls_give_a_calls_edge_by_exact_value(tmp_path: Path)
         static = "::" in edge["to"].split("::", 1)[1]
         function_rules = {"calls_function", "calls_qualified_function"}
         rules = {"calls_static_method"} if static else function_rules
+        confidence = "declared"
+        if edge["to"] == M + "App\\Main::other":
+            rules, confidence = {"calls_self_method"}, "inferred"
         (provenance,) = edge["provenance"]
         assert provenance["rule"] in rules, edge
-        assert (provenance["confidence"], provenance["pack"]) == ("declared", "php_basic"), edge
+        assert (provenance["confidence"], provenance["pack"]) == (confidence, "php_basic"), edge
     nodes = {n["id"]: n for n in document["nodes"]}
     for (_, end), (_, searched) in expected.items():
         if searched is None:
@@ -174,11 +182,11 @@ def test_plain_and_static_calls_give_a_calls_edge_by_exact_value(tmp_path: Path)
             assert nodes[end]["unresolved_detail"]["searched_for"] == searched, nodes[end]
 
 
-def test_language_constructs_and_object_calls_give_no_edge_and_scope_calls_are_skipped(
+def test_language_constructs_and_object_calls_give_no_edge_and_a_call_outside_is_skipped(
     tmp_path: Path,
 ) -> None:
-    """isset, empty and strlen are skip_names; a call on an object gives nothing; self:: and
-    static:: and a call outside any function are listed as skipped, each with its reason."""
+    """isset, empty and strlen are skip_names; a call on an object gives nothing; a call outside
+    any function is listed as skipped with its reason, and self:: and static:: are not."""
     lines = _plant(tmp_path)
     document, report = _map(tmp_path)
     calls = [e for e in document["edges"] if e["kind"] == "calls"]
@@ -199,18 +207,6 @@ def test_language_constructs_and_object_calls_give_no_edge_and_scope_calls_are_s
                 _at(lines, r"local\(\);")[0],
                 "calls_function",
                 "no enclosing declaration is mapped",
-            ),
-            (
-                "src/App/Main.php",
-                _at(lines, r"        self::other\(\);")[0],
-                "calls_static_method",
-                "scope is not a written name",
-            ),
-            (
-                "src/App/Main.php",
-                _at(lines, r"        static::other\(\);")[0],
-                "calls_static_method",
-                "scope is not a written name",
             ),
         ]
     )
@@ -237,9 +233,11 @@ def test_a_rutter_can_narrow_php_basics_source_and_read_an_extra_folder_by_its_o
         "edge_kinds:\n- kind: calls_planted\n  from: [php.function, php.method]\n"
         "  to: [php.function, php.method]\nrules:\n- rule: call_function\n  reads: file\n"
         "  in: [code, extra]\n  match: {reference: function_call_expression, name_child: function,"
-        " filetype: php, skip_names: [isset, empty, strlen]}\n  emits:\n  - edge:\n"
-        "      kind: calls_planted\n      from: enclosing_declaration\n"
-        "      to: {type: php.function, on_miss: unresolved}\n  confidence: declared\n"
+        " filetype: php, skip_names: [isset, empty, strlen],"
+        " where: [{name_matches: {child: function, pattern: '(?<fn>[^\\W\\d]\\w*)'}}]}\n"
+        "  emits:\n  - edge:\n      kind: calls_planted\n      from: enclosing_declaration\n"
+        "      to: {template: '{fn}', type: php.function, fallback: [prefix_with: namespace],"
+        " on_miss: unresolved}\n  confidence: declared\n"
     )
     (tmp_path / "extra" / "Side.php").write_text("<?php\n\nfunction side()\n{\n    local();\n}\n")
     document, report = _map(tmp_path, "planted.json")
@@ -247,11 +245,11 @@ def test_a_rutter_can_narrow_php_basics_source_and_read_an_extra_folder_by_its_o
         (e["from"], e["to"]): sorted(loc["line"] for loc in e["locations"])
         for e in plain["edges"]
         if e["kind"] == "calls"
-        and e["provenance"][0]["rule"] in ("calls_function", "calls_qualified_function")
+        and e["provenance"][0]["rule"] == "calls_function"
     }
     assert _calls(document, "calls_planted") == want
     nodes = {n["id"]: n for n in document["nodes"]}
-    assert nodes["php.function::App\\missing"]["type"] == "php.function"
+    assert nodes["php.function::missing"]["type"] == "php.function"
     assert not [n for n in nodes if n.endswith("::side")], "phantom source"
     assert all("extra/" not in place["file"] for e in document["edges"] for place in e["locations"])
     assert ("extra/Side.php", 5, "call_function") in {(s[0], s[1], s[2]) for s in report.skipped}

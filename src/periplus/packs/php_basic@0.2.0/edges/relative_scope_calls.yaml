@@ -1,0 +1,75 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A static call on self, static or parent, self::m(), static::m() and parent::m(), inside a class
+# method. The first two rules keep it as a php.call_site at its line,
+# <class>::<method>::<scope>::<name>, joined to and from the method around it; calls_static_method
+# passes these three scopes over. The map rules then give the call its calls edge, from the
+# method around it, inferred: self and static look the method up on the enclosing class and then
+# its ancestors, parent on the parent class and then its ancestors. A method no class in the map
+# declares, or a parent outside the map, lands unresolved under the class the walk started from.
+#
+# Limits: static:: is read as self::, though PHP binds it to the class the call runs on. Inside a
+# trait, self and static name the trait, not the class that uses it. A class with no extends gives
+# a parent:: call no edge, and its call site stays. A variable method name, self::$name(), is
+# types/find_runtime_calls.yaml's.
+rules:
+
+- rule: find_relative_scoped_call
+  reads: file
+  in: [source]
+  match: &relative_match
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: 'self|static|parent'}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &relative_id
+    from: [enclosing_type, enclosing_method, scope, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{scope}::{declared_name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: relative_scoped_call_method
+  reads: file
+  in: [source]
+  match: *relative_match
+  id: *relative_id
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+- rule: calls_self_method
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<declarer>[^:]+)::[^:]+::(?:self|static)::(?<method>\w+))$'}]
+    follow:
+    - try:
+      - node: 'php.type::{declarer}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: calls_parent_method
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::parent::(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - try:
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred

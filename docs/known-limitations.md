@@ -18,7 +18,12 @@ a list of its known gaps.
   `\strlen()` and `StrLen()` still give an unresolved function. A built-in of an extension that
   was not loaded when the list was taken is not listed. A project's own function named like a
   built-in, `function strlen()` in its namespace, gets no edge from an unqualified call. Drupal's
-  global functions, such as `t()`, are not built-ins and give an unresolved function.
+  global functions, such as `t()`, are not built-ins and give an unresolved function under the
+  global name. An unqualified call tries the global name before the namespaced one, the reverse of
+  PHP's order: when the map holds both, the call ends at the global function. `static::m()` is read
+  as `self::m()`, and inside a trait `self` and `static` name the trait. A `@var` written
+  `Lib\Mailer`, with a backslash inside and none in front, joins a call to the class of that full
+  name when the map holds it, else to the name resolved through the namespace.
   `skip_names` matches the exact case, so `ISSET(` still gives an unresolved function. A call
   whose method name or callee is built at run time, such as `$this->$name()` or `$fn()`, gives no
   edge; inside a class method it is kept as a `php.call_site` marked `resolution: runtime`,

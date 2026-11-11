@@ -8,7 +8,7 @@ Each entry below gives the rutter, its version, what it maps and the rutters it 
 
 | Rutter | What it maps | Depends on |
 |---|---|---|
-| `php_basic@0.2.0` | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interface use, trait use, containment, properties and parameters with their types, and call sites. Plain and static calls, and method calls through a typed or assigned property. A call to a PHP builtin makes nothing. | none |
+| `php_basic@0.2.0` | PHP classes, interfaces, traits, enums, functions and methods. Inheritance, interface use, trait use, containment, properties and parameters with their types, and call sites. Plain and static calls, calls on `self`, `static` and `parent`, and method calls through a typed or assigned property. A call to a PHP builtin makes nothing. | none |
 | `js_basic@0.0.1` | JavaScript scripts, and the functions that have a name of their own, each under its script's path. Calls written `f(x)`, from the function or the script that holds them, as `js_calls`; a member call such as `a.b()` is not mapped. It reads `.js` files only. | none |
 | `go_basic@0.0.3` | Go functions, methods, structs and interfaces, each under its package's import path. Calls inside one package, and calls through an import. It skips test files and `vendor`, and needs the module path in the settings as `values.module`. | none |
 | `yaml_basic@0.1.0` | Claims `.yml` and `.yaml` files for the rutters that depend on it. It has no rules of its own. | none |
