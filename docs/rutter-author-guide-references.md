@@ -14,15 +14,20 @@ src/periplus/packs.
     reference: function_call_expression
     name_child: function
     filetype: php
+    where: [{name_matches: {child: function, pattern: '[^\W\d]\w*'}}]
     skip_names: [isset, empty, unset, list, array, echo, print, exit, die, eval, include, require,
       include_once, require_once]
-  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.function], on_miss: unresolved}}}]
+  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.function], fallback: [as_written], on_miss: unresolved, on_miss_name: fallback}}}]
   confidence: declared
 
 - rule: calls_static_method
   reads: file
   in: [source]
-  match: {reference: scoped_call_expression, name_child: [scope, name], filetype: php}
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    skip_names: [self, static, parent]
   emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.method], separator: "::", on_miss: unresolved}}}]
   confidence: declared
 ```

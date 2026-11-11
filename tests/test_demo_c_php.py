@@ -234,10 +234,10 @@ def test_a_rutter_can_narrow_php_basics_source_and_read_an_extra_folder_by_its_o
         "  to: [php.function, php.method]\nrules:\n- rule: call_function\n  reads: file\n"
         "  in: [code, extra]\n  match: {reference: function_call_expression, name_child: function,"
         " filetype: php, skip_names: [isset, empty, strlen],"
-        " where: [{name_matches: {child: function, pattern: '(?<fn>[^\\W\\d]\\w*)'}}]}\n"
+        " where: [{name_matches: {child: function, pattern: '[^\\W\\d]\\w*'}}]}\n"
         "  emits:\n  - edge:\n      kind: calls_planted\n      from: enclosing_declaration\n"
-        "      to: {template: '{fn}', type: php.function, fallback: [prefix_with: namespace],"
-        " on_miss: unresolved}\n  confidence: declared\n"
+        "      to: {type: php.function, fallback: [as_written], on_miss: unresolved,"
+        " on_miss_name: fallback}\n  confidence: declared\n"
     )
     (tmp_path / "extra" / "Side.php").write_text("<?php\n\nfunction side()\n{\n    local();\n}\n")
     document, report = _map(tmp_path, "planted.json")

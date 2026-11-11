@@ -21,10 +21,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   \strlen(), or in another letter case, StrLen(), still gives an unresolved function node.
 # - A function the project declares under a builtin name, function strlen() in its namespace, gets
 #   no calls edge from an unqualified call to it: the name is in calls_function's skip list.
-# - An unqualified call inside a namespace tries the global name first and the namespaced one
-#   second, the reverse of PHP's order, so a global function outside the map stays unresolved under
-#   its global name. When the map holds both a global and a namespaced function of one name, the
-#   call ends at the global one, where PHP calls the namespaced one.
+# - An unqualified call inside a namespace tries the namespaced name first and the global one
+#   second, as PHP does. When the map holds neither, the call is unresolved under its global name,
+#   so a namespaced function outside the map, called unqualified, is filed under the global name.
 # - A use function alias does not bind: y() after use function x as y resolves as y.
 # - Drupal's global functions, such as t(), drupal_flush_all_caches() and theme_get_setting(), are
 #   not PHP builtins: a call to one still gives an unresolved function node, under its global name.

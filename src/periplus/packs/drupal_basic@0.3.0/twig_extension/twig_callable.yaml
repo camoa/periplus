@@ -1,12 +1,12 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# new TwigFilter('name', ...) and new TwigFunction('name', ...), written by the short name, each
-# give an internal drupal.twig_callable with an edge to the class around the call. A map
-# rule keeps a name only when that class extends Twig's AbstractExtension, directly or through
-# mapped parents: it makes the twig.filter or twig.function node, at the call's line, and its
-# provided_by edge to the class. new \Twig\TwigFilter(...) written with its namespace, a name
-# that is not a text literal, a class that implements ExtensionInterface without
-# AbstractExtension, and the old Twig_SimpleFilter form give nothing.
+# new TwigFilter('name', ...) and new TwigFunction('name', ...), written by the short name or as
+# \Twig\TwigFilter and \Twig\TwigFunction, each give an internal drupal.twig_callable with an edge
+# to the class around the call. A map rule keeps a name only when that class extends Twig's
+# AbstractExtension, directly or through mapped parents: it makes the twig.filter or twig.function
+# node, at the call's line, and its provided_by edge to the class. A name that is not a text
+# literal, a class that implements ExtensionInterface without AbstractExtension, and the old
+# Twig_SimpleFilter form give nothing.
 
 rules:
 - rule: twig_filter_created
@@ -45,6 +45,46 @@ rules:
   reads: file
   in: [source]
   match: *function
+  id: {from: declared_name, pattern: '^[''"](?<callable>[A-Za-z_]\w*)[''"]$', template: 'function|{callable}'}
+  emits: [{edge: {kind: twig_callable_in_class, from: this_node, to: enclosing_class}}]
+  confidence: declared
+
+- rule: twig_filter_created_qualified
+  reads: file
+  in: [source]
+  match: &filter_qualified
+    declaration: object_creation_expression
+    name_child: [arguments, argument]
+    filetype: php
+    where: [{name_matches: {child: qualified_name, pattern: '\\Twig\\TwigFilter'}}]
+  id: {from: declared_name, pattern: '^[''"](?<callable>[A-Za-z_]\w*)[''"]$', template: 'filter|{callable}'}
+  emits: [{node: {type: drupal.twig_callable}}]
+  confidence: declared
+
+- rule: twig_filter_qualified_in_class
+  reads: file
+  in: [source]
+  match: *filter_qualified
+  id: {from: declared_name, pattern: '^[''"](?<callable>[A-Za-z_]\w*)[''"]$', template: 'filter|{callable}'}
+  emits: [{edge: {kind: twig_callable_in_class, from: this_node, to: enclosing_class}}]
+  confidence: declared
+
+- rule: twig_function_created_qualified
+  reads: file
+  in: [source]
+  match: &function_qualified
+    declaration: object_creation_expression
+    name_child: [arguments, argument]
+    filetype: php
+    where: [{name_matches: {child: qualified_name, pattern: '\\Twig\\TwigFunction'}}]
+  id: {from: declared_name, pattern: '^[''"](?<callable>[A-Za-z_]\w*)[''"]$', template: 'function|{callable}'}
+  emits: [{node: {type: drupal.twig_callable}}]
+  confidence: declared
+
+- rule: twig_function_qualified_in_class
+  reads: file
+  in: [source]
+  match: *function_qualified
   id: {from: declared_name, pattern: '^[''"](?<callable>[A-Za-z_]\w*)[''"]$', template: 'function|{callable}'}
   emits: [{edge: {kind: twig_callable_in_class, from: this_node, to: enclosing_class}}]
   confidence: declared

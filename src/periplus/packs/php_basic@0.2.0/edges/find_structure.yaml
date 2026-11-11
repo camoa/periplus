@@ -48,21 +48,21 @@ rules:
 # at the call's line; unresolved when the project holds no such function or method. A plain call
 # names a function. A static call, Class::method(), resolves the class through the imports and
 # joins the method with ::, which is how find_method builds a method's id. A call on self, static
-# or parent is passed over by calls_static_method's where, since skip_names does not reach a scope
-# that is not a written name; relative_scope_calls.yaml gives it its edge. A call on a variable
+# or parent is passed over by calls_static_method's skip_names; relative_scope_calls.yaml gives it
+# its edge. A call on a variable
 # and a call outside any function or method make nothing and go under skipped. A method call on an
 # object, member_call_expression, is stated only by the map
 # rules below, for a call on a property of the enclosing object: the class of $x in $x->m() is
-# known only when the code runs. A function imported by use function x as y is not bound, because the imports bind type names only, so y() resolves as y, else under the namespace.
-# PHP's fallback of an unqualified call to a global function is read in reverse: the to end of an
-# unqualified call tries the name as written first and the namespaced name second, fallback:
-# [prefix_with: namespace], so a call to a global function outside the map, such as a framework's
-# helper, is unresolved under its global name and not under the caller's namespace. Limit: when the
-# map holds both a global and a namespaced function of one name, an unqualified call in that
-# namespace ends at the global one, where PHP calls the namespaced one. A name holding a backslash
-# never falls back, so calls_qualified_function has no fallback. The where admits a written name
-# only, since the template would take a variable's text, $fn, as a name; calls_function_not_a_name
-# keeps the skipped row of a callee that is not one.
+# known only when the code runs. A function imported by use function x as y is not bound, because
+# the imports bind type names only, so y() resolves under the namespace, else as y.
+# PHP's fallback of an unqualified call to a global function is read in PHP's order: the to end of
+# an unqualified call tries the namespaced name first and the name as written second, fallback:
+# [as_written]. When neither is mapped, on_miss_name: fallback leaves the call unresolved under its
+# global name, so a call to a global function outside the map, such as a framework's helper, is
+# not filed under the caller's namespace; a namespaced function outside the map is filed under the
+# global name too. A name holding a backslash never falls back, so calls_qualified_function has no
+# fallback. The where admits a plain name only; calls_function_not_a_name keeps the skipped row of
+# a callee that is not one.
 # skip_names lists PHP's language constructs, as written: grammar 0.24.1 parses isset(, empty(,
 # die( and eval( as function calls, and the rest are listed in case a release does too. After them
 # come the functions PHP reports as internal, so strlen() makes nothing; pack.yaml names the run
@@ -74,7 +74,7 @@ rules:
     reference: function_call_expression
     name_child: function
     filetype: php
-    where: [{name_matches: {child: function, pattern: '(?<fn>[^\W\d]\w*)'}}]
+    where: [{name_matches: {child: function, pattern: '[^\W\d]\w*'}}]
     skip_names: &calls_skip_names [isset, empty, unset, list, array, echo, print, exit, die, eval, include, require,
       include_once, require_once, _, abs, acos, acosh, addcslashes, addslashes, array_all,
       array_any, array_change_key_case, array_chunk, array_column, array_combine,
@@ -519,7 +519,7 @@ rules:
       zip_entry_close, zip_entry_compressedsize, zip_entry_compressionmethod, zip_entry_filesize,
       zip_entry_name, zip_entry_open, zip_entry_read, zip_open, zip_read, zlib_decode, zlib_encode,
       zlib_get_coding_type]
-  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {template: '{fn}', types: [php.function], fallback: [prefix_with: namespace], on_miss: unresolved}}}]
+  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.function], fallback: [as_written], on_miss: unresolved, on_miss_name: fallback}}}]
   confidence: declared
 
 - rule: calls_qualified_function
@@ -556,7 +556,7 @@ rules:
     reference: scoped_call_expression
     name_child: [scope, name]
     filetype: php
-    where: [{name_matches: {child: scope, pattern: '(?!(?:self|static|parent)$).*'}}]
+    skip_names: [self, static, parent]
   emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.method], separator: "::", on_miss: unresolved}}}]
   confidence: declared
 

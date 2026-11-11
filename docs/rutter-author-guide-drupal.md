@@ -283,7 +283,8 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   around `->dispatch($event, X::NAME)`, or `dispatched_by_function` in a module file. Both are read
   as text through the spans
   `subscribed_events` and `named_function` and the bindings of `event/use_binding.yaml`.
-- `twig.filter` and `twig.function`, from `new TwigFilter('x')` and `new TwigFunction('x')` in a
+- `twig.filter` and `twig.function`, from `new TwigFilter('x')` and `new TwigFunction('x')`,
+  written by the short name or as `\Twig\TwigFilter` and `\Twig\TwigFunction`, in a
   class that descends from `AbstractExtension`, with `twig_filter_provided_by` and
   `twig_function_provided_by` to the class; `template_uses_twig_filter` and
   `template_uses_twig_function`, from a template that calls the name inside the span

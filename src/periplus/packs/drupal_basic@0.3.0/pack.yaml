@@ -280,9 +280,6 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the like.
 # - An attribute keeps the value as written, so no_cache: 'TRUE' and no_cache: true give "TRUE"
 #   and true, and is_admin: null gives null.
-# - Only the first constant of a const statement is read: const A = 'a', B = 'b'; gives no event
-#   B, and a key or dispatch naming B ends at a referenced event. A tree rule's name_child is a
-#   field or a path of two steps, and a const_element's name is neither.
 # - A subscriber key or dispatch name written with its namespace, \A\B::NAME, as text such as
 #   'kernel.request', or as a variable gives nothing. A key or name whose class no use statement
 #   binds leaves a skipped row, and joins its event only when a mapped class of the file's
@@ -291,10 +288,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   subscriber outside a src folder, and a dispatch in a plain PHP file outside a src folder give
 #   nothing. A method of a class kept in a module file reads as a function of its name. A grouped
 #   use binds no name for these rules.
-# - new \Twig\TwigFilter(...) written with its namespace, a filter or function name that is not a
-#   text literal, and an extension that implements ExtensionInterface without AbstractExtension
-#   give nothing. A filter or function after a hash in the same print, as {{ {a: 1}|money }},
-#   gives nothing. A template's use edge sits at the template's line, not the call's.
+# - A filter or function name that is not a text literal, and an extension that implements
+#   ExtensionInterface without AbstractExtension, give nothing. Twig\TwigFilter(...) written with a
+#   namespace but no leading backslash gives nothing. A filter or function after a hash in the same
+#   print, as {{ {a: 1}|money }}, gives nothing. A template's use edge sits at the template's line,
+#   not the call's.
 # - A field named as v['field_x'], through ?->get(), by a variable, or by a constant of core or
 #   contrib gives no accesses_field edge; the constant leaves a skipped row. A name given as
 #   self::X or static::X that does not start with field_ links nothing. A template reads only

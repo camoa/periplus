@@ -150,11 +150,11 @@ function both() {
 """
 
 
-def test_an_unqualified_call_tries_the_global_name_first_and_the_namespaced_one_second(
+def test_an_unqualified_call_tries_the_namespaced_name_first_and_the_global_one_second(
     tmp_path: Path,
 ) -> None:
     """A function outside the map is unresolved under its global name. When both a global and a
-    namespaced function of one name are mapped, the call ends at the global one: the known limit."""
+    namespaced function of one name are mapped, the call ends at the namespaced one, as in PHP."""
     document, _ = _map(
         tmp_path,
         {"App/f.php": FUNCTIONS, "global.php": GLOBAL, "App/both.php": NAMESPACED_BOTH},
@@ -163,7 +163,7 @@ def test_an_unqualified_call_tries_the_global_name_first_and_the_namespaced_one_
     assert _calls(document) == {
         (caller, F + "App\\local"): ([8], "calls_function", "declared"),
         (caller, F + "t"): ([9], "calls_function", "declared"),
-        (caller, F + "both"): ([10], "calls_function", "declared"),
+        (caller, F + "App\\both"): ([10], "calls_function", "declared"),
     }
     assert _state(document, F + "t") == "unresolved"
     assert not [n for n in document["nodes"] if n["id"] == F + "App\\t"]

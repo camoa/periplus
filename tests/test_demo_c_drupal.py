@@ -1270,9 +1270,9 @@ def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_t
 ) -> None:
     """A constant of an Event class or an *Events class is an event; each key of
     getSubscribedEvents, in either form, joins its listener, and each dispatch its method, all
-    inferred. An outside event, a second constant of one statement and an own-class constant end
-    at referenced events; an array outside getSubscribedEvents gives nothing; a class in the
-    file's namespace joins in the map and keeps its skipped row."""
+    inferred. A second constant of one statement is an event too. An outside event and an
+    own-class constant end at referenced events; an array outside getSubscribedEvents gives
+    nothing; a class in the file's namespace joins in the map and keeps its skipped row."""
     _plant(tmp_path, EVENTS)
     document, report = _map(tmp_path)
     own = "Drupal\\my_module\\"
@@ -1282,7 +1282,7 @@ def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_t
     states = {n["id"]: n["state"] for n in document["nodes"] if n["type"] == "drupal.event"}
     assert states == {
         event + "Event\\OrderEvent::PLACED": "mapped",
-        event + "Event\\OrderEvent::CANCELLED": "referenced",
+        event + "Event\\OrderEvent::CANCELLED": "mapped",
         event + "Event\\OrderEvents::PAID": "mapped",
         event + "EventSubscriber\\LocalEvents::LOCAL": "mapped",
         event + "EventSubscriber\\OrderSubscriber::MINE": "referenced",
@@ -1439,6 +1439,22 @@ class Helper {
 
 }
 """,
+    str(MODULE / "src/Twig/WrittenExtension.php"): r"""<?php
+
+namespace Drupal\my_module\Twig;
+
+class WrittenExtension extends ShopExtension {
+
+  public function getFilters() {
+    return [new \Twig\TwigFilter('long', [$this, 'long'])];
+  }
+
+  public function getFunctions() {
+    return [new \Twig\TwigFunction('cart_count', [$this, 'count'])];
+  }
+
+}
+""",
     str(MODULE / "templates/my-cart.html.twig"): """\
 <div>{{ price|money }} {{ cart_total() }}</div>
 {% if cart_total() %}{{ 'Cart'|t }}{% endif %}
@@ -1446,6 +1462,7 @@ class Helper {
 {{ {a: 1}|merge({b: 2})|short }}
 {{ title|loose }}
 {# {{ title|short }} #}
+{{ price|long }} {{ cart_count() }}
 """,
 }
 
@@ -1453,10 +1470,10 @@ class Helper {
 def test_a_twig_extension_provides_its_filters_and_functions_and_templates_use_them(
     tmp_path: Path,
 ) -> None:
-    """A filter or function created in a class that descends from AbstractExtension is a node
-    provided by that class, declared; a template that calls it uses it, inferred. A filter made in
-    any other class, a core filter, text outside Twig, a filter after a hash and a comment give
-    nothing."""
+    """A filter or function created in a class that descends from AbstractExtension, by the short
+    class name or as \\Twig\\TwigFilter, is a node provided by that class, declared; a template
+    that calls it uses it, inferred. A filter made in any other class, a core filter, text outside
+    Twig, a filter after a hash and a comment give nothing."""
     _plant(tmp_path, TWIG_EXTENSIONS)
     document, report = _map(tmp_path)
     assert report.skipped == (), report.skipped
@@ -1467,8 +1484,10 @@ def test_a_twig_extension_provides_its_filters_and_functions_and_templates_use_t
         if n["type"] in ("twig.filter", "twig.function")
     )
     assert names == [
+        ("twig.filter::long", 8),
         ("twig.filter::money", 12),
         ("twig.filter::short", 10),
+        ("twig.function::cart_count", 12),
         ("twig.function::cart_total", 16),
     ]
     found = {
@@ -1489,6 +1508,15 @@ def test_a_twig_extension_provides_its_filters_and_functions_and_templates_use_t
         ),
         ("template_uses_twig_filter", template, "twig.filter::money", "inferred"),
         ("template_uses_twig_function", template, "twig.function::cart_total", "inferred"),
+        ("twig_filter_provided_by", "twig.filter::long", twig + "WrittenExtension", "declared"),
+        (
+            "twig_function_provided_by",
+            "twig.function::cart_count",
+            twig + "WrittenExtension",
+            "declared",
+        ),
+        ("template_uses_twig_filter", template, "twig.filter::long", "inferred"),
+        ("template_uses_twig_function", template, "twig.function::cart_count", "inferred"),
     }
 
 

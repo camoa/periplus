@@ -8,8 +8,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 - name: drupal.event
   id_namespace: drupal.event
-# The first constant of each const statement, as <class>::<CONST>; event/event_name.yaml reads
-# it in the map.
+# Each class constant, as <class>::<CONST>; event/event_name.yaml reads it in the map.
 - name: drupal.class_constant
   id_namespace: drupal.class_constant
   internal: true

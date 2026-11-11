@@ -1,17 +1,17 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# Which class constants name an event. The first constant of each const statement of a class,
-# interface or enum is an internal node: const A = 'a', B = 'b'; gives A only, since a rule's
-# name_child cannot name a const_element's name, which has no field. A map rule makes a drupal.event of
-# each constant of a class that descends from Symfony's Event or Drupal's Event, through mapped
-# parents, and of each constant of a class whose name ends in Events, as core's KernelEvents
-# names its events. Every constant of such a class reads as an event name.
+# Which class constants name an event. Each constant of a class, interface or enum is an internal
+# node: the rule matches each const_element, so const A = 'a', B = 'b'; gives A and B, each at its
+# own line, and the one-step name_child [name] reads the name, which has no field. A map rule
+# makes a drupal.event of each constant of a class that descends from Symfony's Event or Drupal's
+# Event, through mapped parents, and of each constant of a class whose name ends in Events, as
+# core's KernelEvents names its events. Every constant of such a class reads as an event name.
 
 rules:
 - rule: class_constant
   reads: file
   in: [source]
-  match: {declaration: const_declaration, name_child: [const_element, name], filetype: php}
+  match: {declaration: const_element, name_child: [name], filetype: php}
   id: {from: [enclosing_type, declared_name], template: '{enclosing_type}::{declared_name}'}
   emits: [{node: {type: drupal.class_constant}}]
   confidence: declared

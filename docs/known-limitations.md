@@ -19,8 +19,9 @@ a list of its known gaps.
   was not loaded when the list was taken is not listed. A project's own function named like a
   built-in, `function strlen()` in its namespace, gets no edge from an unqualified call. Drupal's
   global functions, such as `t()`, are not built-ins and give an unresolved function under the
-  global name. An unqualified call tries the global name before the namespaced one, the reverse of
-  PHP's order: when the map holds both, the call ends at the global function. `static::m()` is read
+  global name. An unqualified call tries the namespaced name before the global one, as PHP does,
+  and when the map holds neither it is unresolved under the global name, even where the callee is a
+  namespaced function outside the map. `static::m()` is read
   as `self::m()`, and inside a trait `self` and `static` name the trait. A `@var` written
   `Lib\Mailer`, with a backslash inside and none in front, joins a call to the class of that full
   name when the map holds it, else to the name resolved through the namespace. Such a property's
@@ -98,11 +99,10 @@ a list of its known gaps.
   A constraint whose `validatedBy()` returns a text in double quotes, a concatenation or a call
   gets no `validated_by` edge, and a `validatedBy()` written on a parent is not read.
 - **Drupal, events, Twig extensions, field access and suggestions:** every constant of an `Event`
-  class or a class named `*Events` reads as an event name, and only the first constant of a
-  `const` statement is read. A subscriber key or dispatch name written with its namespace, as text
-  or as a variable gives nothing, and so does `dispatch($event)` with no name or a call in a plain
-  PHP file outside a `src` folder; only a key's first listener is read. `new \Twig\TwigFilter(...)` written with
-  its namespace, a filter after a hash in the same print, and an extension without
+  class or a class named `*Events` reads as an event name. A subscriber key or dispatch name
+  written with its namespace, as text or as a variable gives nothing, and so does
+  `dispatch($event)` with no name or a call in a plain PHP file outside a `src` folder; only a
+  key's first listener is read. A filter after a hash in the same print and an extension without
   `AbstractExtension` give nothing. `->get('x')` is read on any object but a config factory or
   a config object, so `$form_state->get('x')` links to a field storage named `x`; a `field_` name with no storage ends at an unresolved
   `field.storage.<name>`. A field suggestion is read only for a name that starts with `field_`. A
