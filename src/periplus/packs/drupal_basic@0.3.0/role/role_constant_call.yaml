@@ -1,0 +1,76 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A role named by self::X or static::X in ->hasRole(), ->addRole() or ->removeRole(), as
+# role_call.yaml reads them: an edge from the method or function around the call to the internal
+# drupal.class_constant node <class>::X of the class around it. The map rules walk from that class
+# to its parents and interfaces, take the text of the nearest one that declares X
+# (constant/constant_text.yaml), and give checks_role or changes_role to user.role.<text>, an
+# unresolved role when no file declares it. A constant the class itself declares also gives
+# role_call.yaml's edge.
+
+edge_kinds:
+- kind: names_checked_role_constant
+  from: [php.method, php.function]
+  to: drupal.class_constant
+- kind: names_changed_role_constant
+  from: [php.method, php.function]
+  to: drupal.class_constant
+
+rules:
+- rule: role_constant_checked_in_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - {name_matches: {child: name, pattern: hasRole}}
+    - &role_constant {name_matches: {child: arguments, pattern: '\(\s*(?:self|static)::(?<role_constant>[A-Z_][A-Z0-9_]*)\s*\)'}}
+  emits: [{edge: {kind: names_checked_role_constant, from: enclosing_declaration, to: {template: '{enclosing_type}::{role_constant}', types: [drupal.class_constant]}}}]
+  confidence: declared
+
+- rule: role_constant_changed_in_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - {name_matches: {child: name, pattern: 'addRole|removeRole'}}
+    - *role_constant
+  emits: [{edge: {kind: names_changed_role_constant, from: enclosing_declaration, to: {template: '{enclosing_type}::{role_constant}', types: [drupal.class_constant]}}}]
+  confidence: declared
+
+- rule: code_checks_role_by_constant
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: names_checked_role_constant
+    - id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>\w+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<role>.+)$'
+  emits: [{edge: {kind: checks_role, from: this_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: code_changes_role_by_constant
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: names_changed_role_constant
+    - id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>\w+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<role>.+)$'
+  emits: [{edge: {kind: changes_role, from: this_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: inferred

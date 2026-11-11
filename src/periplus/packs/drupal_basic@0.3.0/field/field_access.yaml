@@ -6,12 +6,15 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # field storage of that name, on any entity type, at the line of the method, the function or the
 # template. A name that starts with field_ and that no mapped storage has ends at an unresolved
 # field storage, field.storage.<name>, so it stays in the map as a mark. Any other name with no
-# storage, such as a configuration key read by $config->get('name'), gives nothing.
+# storage gives nothing.
 #
-# The object is not read, so ->get('field_x') on a form state or a configuration object links to
-# a storage named field_x too. The argument is a text literal or a class constant a mapped file
-# declares as text; a constant of core or contrib leaves a skipped row, and a variable or an
-# expression gives nothing. A template reads x.field_y only: x['field_y'] and a name built in Twig
+# The object is read only to leave out a config factory or a config object, so ->get('field_x')
+# on a form state, a request or a config object held in a variable of another name links to a
+# storage named field_x too. The argument is a text literal, or a class constant a mapped file
+# declares as text, on any object; a constant of core or contrib leaves a skipped row, and a
+# variable, an expression, a double-quoted text holding $ and a text holding a backslash give
+# nothing. field/field_constant_call.yaml reads self::X and static::X declared on a parent or an
+# interface. A template reads x.field_y only: x['field_y'] and a name built in Twig
 # give nothing.
 
 edge_kinds:
@@ -28,6 +31,11 @@ edge_kinds:
   to: drupal.field_storage
 
 rules:
+# A text literal. A call on a config factory or a config object, the shapes
+# config/config_call.yaml reads, names its own hub, <object><name>, which no map rule joins: the
+# object ends in such a shape, captured after a lazy head, else config_object is empty. That
+# shape is a variable or a property ending in config, as $config or $this->config; a config
+# factory; or \Drupal::config(), $this->config(), or get() or getEditable() on a config factory.
 - rule: field_named_in_call
   reads: file
   in: [source]
@@ -37,7 +45,22 @@ rules:
     filetype: php
     where:
     - {name_matches: 'get|set|hasField'}
-    - {name_matches: {child: arguments, pattern: '(?s)\(\s*(?:''[^'']*''|"[^"]*"|(?:\\?[A-Za-z_][\w\\]*|self|static)::[A-Z_][A-Z0-9_]*)\s*(?:,.*)?\)'}}
+    - {name_matches: {child: object, pattern: '(?s)(?<field_object_head>.*?)(?<config_object>\$\w*[cC]onfig|.*->\w*[cC]onfig|.*(?:configFactory|config_factory)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]config\.factory[''"]\)|\\?Drupal::service\([''"]config\.factory[''"]\)|\\?Drupal::config\((?:[^()]|\([^()]*\))*\)|\$this->config\((?:[^()]|\([^()]*\))*\)|(?:.*(?:configFactory|config_factory)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]config\.factory[''"]\)|\\?Drupal::service\([''"]config\.factory[''"]\))->(?:get|getEditable)\((?:[^()]|\([^()]*\))*\)|)'}}
+    - {name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<field_text>[^''"$\\]*)[''"]\s*(?:,.*)?\)'}}
+  emits: [{edge: {kind: names_field, from: enclosing_declaration, to: {template: '{config_object}{field_text}', types: [drupal.field_name]}}}]
+  confidence: declared
+
+# A class constant, read as the text a mapped file declares it with, on any object.
+- rule: field_named_by_constant_in_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - {name_matches: 'get|set|hasField'}
+    - {name_matches: {child: arguments, pattern: '(?s)\(\s*(?:\\?[A-Za-z_][\w\\]*|self|static)::[A-Z_][A-Z0-9_]*\s*(?:,.*)?\)'}}
   emits: [{edge: {kind: names_field, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.field_name]}}}]
   confidence: declared
 

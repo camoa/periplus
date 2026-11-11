@@ -1,0 +1,49 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field named by self::X or static::X in ->get(), ->set() or ->hasField(), as field_access.yaml
+# reads them: names_field_constant from the method or function around the call to the internal
+# drupal.class_constant node <class>::X of the class around it. The map rule walks from that class
+# to its parents and interfaces, takes the text of the nearest one that declares X
+# (constant/constant_text.yaml), and, for a text that starts with field_, gives accesses_field to
+# each storage of that name, else to the unresolved field.storage.<name>, as
+# code_accesses_field_or_mark does. A text that does not start with field_ gives nothing. A
+# constant the class itself declares also gives field_access.yaml's edge.
+
+edge_kinds:
+- kind: names_field_constant
+  from: [php.method, php.function]
+  to: drupal.class_constant
+
+rules:
+- rule: field_constant_named_in_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - {name_matches: 'get|set|hasField'}
+    - {name_matches: {child: arguments, pattern: '(?s)\(\s*(?:self|static)::(?<field_constant>[A-Z_][A-Z0-9_]*)\s*(?:,.*)?\)'}}
+  emits: [{edge: {kind: names_field_constant, from: enclosing_declaration, to: {template: '{enclosing_type}::{field_constant}', types: [drupal.class_constant]}}}]
+  confidence: declared
+
+- rule: code_accesses_field_by_class_constant
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: names_field_constant
+    - id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>\w+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<entity>)(?<field>field_\w+)$'
+    - try:
+      - node: 'drupal.field_name::{field}'
+      - edge: field_name_of
+      - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+\.)(?<field>.+)$'
+  emits: [{edge: {kind: accesses_field, from: this_node, to: {template: 'field.storage.{entity}{field}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred

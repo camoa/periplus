@@ -140,9 +140,10 @@ a table that none of them declares refuses the map with exit 26, naming the `tab
 `\Drupal::logger('x')` ends at `drupal.service::logger.factory`. The end has no `on_miss`, so a
 service that no mapped file declares is `referenced`. The rule `entity_class_static_call` beside it
 looks a class's short name up in the table `entity_classes`, for `load`, `loadMultiple` and
-`create`. A short name is not a class: a project class named like a core one, such as a module's
-own `User`, gives a false `uses_entity_type` edge, and a `load` or `create` call on any other
-capitalised class leaves a skipped row.
+`create`, from an internal hub of that short name. A short name is not a class, so a second rule
+resolves the class through the file's use statements, and a map rule gives `uses_entity_type`
+only when that class sits in a core namespace: a module's own `User` gives none. A `load` or
+`create` call on any other capitalised class leaves a skipped row.
 
 ## Where the framework begins: boundary
 

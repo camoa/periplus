@@ -1,19 +1,37 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# A static load, loadMultiple or create call on a class the map holds as an entity type's class,
-# as MyEntity::load(1) on a module's own entity class: a uses_entity_type edge from the method or
-# function around the call to that entity type. It reads the calls edge calls_static_method makes
-# and entity_type_of_class (entity_type/entity_type_of_class.yaml). Inferred, as
-# entity_class_static_call: the method's name, not the file, says it loads entities.
+# A static load, loadMultiple or create call on an entity class: a uses_entity_type edge from the
+# method or function around the call to the class's entity type. entity_class_static_call_mapped
+# reads the calls edge calls_static_method makes and entity_type_of_class
+# (entity_type/entity_type_of_class.yaml), for a class the map holds as an entity type's class, as
+# MyEntity::load(1) on a module's own entity class. entity_class_static_call_core reads the class
+# that entity_class_named_in_call resolved through the file's use statements and namespace, keeps
+# it only in a core entity class's namespace, and ends at the entity type the table entity_classes
+# gives for its short name (call/call.yaml). So a module's own User class gives no edge to core's
+# user. Inferred, as entity_class_static_call: the method's name, not the file, says it loads
+# entities.
 #
 # Limits:
 # - The edge sits at the method's line, not the call's: a map rule places what it makes at the
 #   node it matched.
-# - entity_class_static_call still lists its skipped row for such a call, since its table does
-#   not hold the class.
+# - entity_class_static_call still lists its skipped row for a call on a class its table does not
+#   hold, a module's own entity class among them.
 # - A call on a subclass of an entity class, or through self:: or static::, makes no edge.
-# - A module's class named as a core one in entity_classes, such as its own User, gives both this
-#   edge and entity_class_static_call's edge to the core type.
+# - A core class is joined by its short name: an import that renames it, as use ...\User as
+#   Account, joins only when another call in the map writes the short name User.
+
+node_types:
+- name: drupal.entity_class_name
+  id_namespace: drupal.entity_class_name
+  internal: true
+
+edge_kinds:
+- kind: names_entity_class
+  from: [php.function, php.method]
+  to: drupal.class_ref
+- kind: class_names_entity_type
+  from: drupal.entity_class_name
+  to: drupal.entity_type
 
 rules:
 - rule: entity_class_static_call_mapped
@@ -25,5 +43,18 @@ rules:
     - id_matches: '^php\.method::(?<class>.+)::(?:load|loadMultiple|create)$'
     - node: 'php.type::{class}'
     - edge: entity_type_of_class
+  emits: [{edge: {kind: uses_entity_type, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+# The core entity classes the table entity_classes lists, by their namespaces in Drupal 11.4 core.
+- rule: entity_class_static_call_core
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: names_entity_class
+    - id_matches: '^drupal\.class_ref::Drupal\\(?:Core\\(?:Datetime|Entity|Field)|block|block_content|comment|contact|content_moderation|editor|field|file|filter|image|language|media|menu_link_content|node|path_alias|responsive_image|rest|search|shortcut|system|taxonomy|user|views|workflows|workspaces)\\Entity\\(?<short>\w+)$'
+    - node: 'drupal.entity_class_name::{short}'
+    - edge: class_names_entity_type
   emits: [{edge: {kind: uses_entity_type, from: this_node, to: matched_node}}]
   confidence: inferred

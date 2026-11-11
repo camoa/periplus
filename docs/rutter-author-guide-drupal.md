@@ -291,7 +291,8 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
 - `accesses_field`, from a method, function or template that names a field, to every storage of
   that name, joined through the internal hub `drupal.field_name`. A `field_` name with no storage
   ends at the unresolved `field.storage.<name>`, through a `try` step whose empty capture the
-  storage's entity type fills.
+  storage's entity type fills. A call on a config factory or a config object names a hub of its
+  own, `<object><name>`, which no map rule joins.
 - `suggests_block_plugin`, `suggests_block_placement`, `suggests_theme_hook` and
   `suggests_field`, inferred from a suggestion template's file name to a node the map holds.
 - `checks_role` and `changes_role`, from the method or function around `->hasRole('x')`, or
@@ -305,6 +306,10 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   factory, to the queue worker plugin `x`, so a worker's queue writers are one edge away.
 - `alters_form`, inferred by a map rule from each method or function that implements a hook
   `form_<id>_alter` to the form id `<id>`.
+- `has_constant_text`, from the internal `drupal.class_constant` node of `<class>::<CONST>` to an
+  internal node of the text it is declared with. A queue, role, configuration or field name given
+  as `self::X` or `static::X` is joined in the map from the class to its parents and interfaces,
+  through `ancestors`, to the nearest that declares `X`, and gives the edge its text would.
 - `built_by_service` and `built_by_class`, from a service to the factory its `factory` key names,
   as `['@other.service', 'create']`, `['Class', 'create']` or `'Class::create'`; and
   `built_by_method`, joined in the map through the internal hub `drupal.factory_method`, to the

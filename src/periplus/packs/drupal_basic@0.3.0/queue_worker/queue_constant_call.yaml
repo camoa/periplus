@@ -1,0 +1,59 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A queue named by self::X or static::X, in \Drupal::queue() or in get() on a queue factory, as
+# queue_call.yaml reads them: names_queue_constant from the method or function around the call to
+# the internal drupal.class_constant node <class>::X of the class around it. The map rule
+# queue_by_class_constant walks from that class to its parents and interfaces, takes the text of
+# the nearest one that declares X (constant/constant_text.yaml), and gives uses_queue to the
+# queue worker plugin of that name, at the method's line. A constant the class itself declares
+# also gives queue_call.yaml's edge at the call's line, so that edge holds both lines.
+
+edge_kinds:
+- kind: names_queue_constant
+  from: [php.method, php.function]
+  to: drupal.class_constant
+
+rules:
+- rule: queue_constant_by_drupal
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: queue}
+    - name_matches: {child: arguments, pattern: '\(\s*(?:self|static)::(?<queue_constant>[A-Z_][A-Z0-9_]*)\s*\)'}
+  emits: [{edge: {kind: names_queue_constant, from: enclosing_declaration, to: {template: '{enclosing_type}::{queue_constant}', types: [drupal.class_constant]}}}]
+  confidence: declared
+
+- rule: queue_constant_from_factory
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '(?s).*(?:queueFactory|queue_factory)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]queue[''"]\)|\\?Drupal::service\([''"]queue[''"]\)'}
+    - name_matches: {child: name, pattern: get}
+    - name_matches: {child: arguments, pattern: '\(\s*(?:self|static)::(?<queue_constant>[A-Z_][A-Z0-9_]*)\s*\)'}
+  emits: [{edge: {kind: names_queue_constant, from: enclosing_declaration, to: {template: '{enclosing_type}::{queue_constant}', types: [drupal.class_constant]}}}]
+  confidence: inferred
+
+- rule: queue_by_class_constant
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: names_queue_constant
+    - id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>\w+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<queue>.+)$'
+  emits: [{edge: {kind: uses_queue, from: this_node, to: {template: '{queue}', types: [drupal.queue_worker_plugin]}}}]
+  confidence: inferred

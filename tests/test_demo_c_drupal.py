@@ -184,7 +184,7 @@ TABLE_PATH = str(MODULE / "src/Controller/ThingController.php")
 
 def test_a_shortcut_and_an_entity_class_end_at_the_names_the_tables_give(tmp_path: Path) -> None:
     """Drupal::logger gives logger.factory and User::load gives user, both inferred and both
-    ends referenced."""
+    ends referenced; the entity edge sits at the method's line, joined in the map."""
     _plant(tmp_path, {TABLE_PATH: TABLE_CONTROLLER})
     document, _ = _map(tmp_path)
     run_method = "php.method::Drupal\\my_module\\Controller\\ThingController::run"
@@ -208,8 +208,8 @@ def test_a_shortcut_and_an_entity_class_end_at_the_names_the_tables_give(tmp_pat
             "uses_entity_type",
             run_method,
             "drupal.entity_type::user",
-            _line(TABLE_CONTROLLER, "$account = User::load(1);"),
-            "entity_class_static_call",
+            _line(TABLE_CONTROLLER, "public function run() {"),
+            "entity_class_static_call_core",
             "inferred",
         ),
     }
@@ -1567,6 +1567,7 @@ def test_code_and_templates_that_name_a_field_access_each_storage_of_that_name_o
         (paint, storage + "user.field_color", 9, "code_accesses_field_or_mark"),
         (paint, storage + "field_size", 9, "code_accesses_field_or_mark"),
         (paint, storage + "field_gone", 9, "code_accesses_field_or_mark"),
+        (paint, storage + "field_gone", 9, "code_accesses_field_by_class_constant"),
         (paint, storage + "node.body", 9, "code_accesses_field"),
         (presave, storage + "node.field_color", 3, "code_accesses_field_or_mark"),
         (presave, storage + "user.field_color", 3, "code_accesses_field_or_mark"),
@@ -1775,6 +1776,7 @@ def test_a_role_named_in_code_is_checked_or_changed_and_a_variable_role_is_a_run
         ("checks_role", check, role + "editor", 11, "declared"),
         ("changes_role", check, role + "ghost", 11, "declared"),
         ("changes_role", check, role + "editor", 11, "declared"),
+        ("changes_role", check, role + "editor", 11, "inferred"),
         ("changes_role", presave, role + "editor", 3, "declared"),
     }
     marks = sorted((n["id"], n["type"]) for n in document["nodes"] if n["state"] == "unresolved")
@@ -1851,12 +1853,13 @@ def test_a_config_name_read_or_edited_through_a_config_factory_links_to_its_conf
     by_drupal = ("config_read_by_drupal", "declared")
     from_factory = ("config_read_from_factory", "inferred")
     edited = ("config_edited_from_factory", "inferred")
+    by_constant = ("config_read_by_class_constant", "inferred")
     assert found == {
         (
             "reads_config_object",
             config + "my_module.settings",
-            (12, 14, 18),
-            (by_drupal, own, from_factory),
+            (11, 12, 14, 18),
+            (by_constant, by_drupal, own, from_factory),
         ),
         ("reads_config_object", config + "system.site", (13,), (by_drupal,)),
         ("edits_config_object", config + "my_module.settings", (15,), (edited,)),
@@ -1938,7 +1941,7 @@ def test_a_queue_got_by_name_links_to_the_worker_of_that_queue(tmp_path: Path) -
         for p in e["provenance"]
     }
     assert found == {
-        (send, worker + "my_module_send", 10, "inferred"),
+        (send, worker + "my_module_send", 9, "inferred"),
         (send, worker + "contrib_pull", 11, "declared"),
         ("php.function::my_module_cron", worker + "my_module_send", 4, "inferred"),
     }
@@ -2285,5 +2288,343 @@ def test_a_macro_file_is_a_template_that_its_importers_link_to(tmp_path: Path) -
             "drupal.component::button",
             "drupal.template::macros",
             (1,),
+        ),
+    }
+
+
+# --- own entity classes, validators, config objects and inherited constants ------------------
+
+SHORT_NAME_LIST = r"""<?php
+
+namespace Drupal\my_module\Controller;
+
+use Drupal\my_module\Entity\User;
+use Drupal\node\Entity\Node;
+
+class ListController {
+
+  public function run() {
+    $own = User::load(1);
+    $node = Node::load(2);
+    $term = \Drupal\taxonomy\Entity\Term::load(3);
+    $other = Unlisted::load(4);
+  }
+
+}
+"""
+SHORT_NAME_FILES = {
+    str(MODULE / "src/Entity/User.php"): r"""<?php
+
+namespace Drupal\my_module\Entity;
+
+use Drupal\Core\Entity\Attribute\ContentEntityType;
+
+#[ContentEntityType(id: 'my_user')]
+class User {
+}
+""",
+    str(MODULE / "src/Controller/ListController.php"): SHORT_NAME_LIST,
+    str(MODULE / "src/Controller/CoreController.php"): r"""<?php
+
+namespace Drupal\my_module\Controller;
+
+use Drupal\user\Entity\User;
+
+class CoreController {
+
+  public function run() {
+    $account = User::load(1);
+  }
+
+}
+""",
+}
+
+
+def test_a_module_class_named_as_a_core_entity_class_ends_only_at_its_own_entity_type(
+    tmp_path: Path,
+) -> None:
+    """User::load on a module's own User class ends at its own entity type only; User, Node and
+    Term of core end at core's entity types, through the use statements or written whole. A class
+    no table lists keeps its skipped row."""
+    _plant(tmp_path, SHORT_NAME_FILES)
+    document, report = _map(tmp_path)
+    listing = str(MODULE / "src/Controller/ListController.php")
+    assert [(f, line, r, why) for f, line, r, why in report.skipped] == [
+        (
+            listing,
+            _line(SHORT_NAME_LIST, "$other = Unlisted::load(4);"),
+            "entity_class_static_call",
+            "no resolution step holds for scope",
+        ),
+    ]
+    listed = "php.method::Drupal\\my_module\\Controller\\ListController::run"
+    core = "php.method::Drupal\\my_module\\Controller\\CoreController::run"
+    entity = "drupal.entity_type::"
+    found = {
+        (e["from"], e["to"], p["rule"])
+        for e in document["edges"]
+        if e["kind"] == "uses_entity_type"
+        for p in e["provenance"]
+    }
+    assert found == {
+        (listed, entity + "my_user", "entity_class_static_call_mapped"),
+        (listed, entity + "node", "entity_class_static_call_core"),
+        (listed, entity + "taxonomy_term", "entity_class_static_call_core"),
+        (core, entity + "user", "entity_class_static_call_core"),
+    }
+
+
+VALIDATOR_FILES = {
+    **{
+        str(CONSTRAINT / f"{name}ConstraintValidator.php"): (
+            "<?php\n\nnamespace Drupal\\my_module\\Plugin\\Validation\\Constraint;\n\n"
+            f"class {name}ConstraintValidator {{\n}}\n"
+        )
+        for name in ("Other", "Text", "Built")
+    },
+    str(CONSTRAINT / "SharedValidator.php"): (
+        "<?php\n\nnamespace Drupal\\my_module\\Plugin\\Validation\\Constraint;\n\n"
+        "class SharedValidator {\n}\n"
+    ),
+    **{
+        str(CONSTRAINT / f"{name}Constraint.php"): (
+            "<?php\n\nnamespace Drupal\\my_module\\Plugin\\Validation\\Constraint;\n\n"
+            "use Drupal\\Core\\Validation\\Attribute\\Constraint;\n\n"
+            f"#[Constraint(id: 'My{name}', label: '{name}')]\n"
+            f"class {name}Constraint {{\n\n"
+            f"  public function validatedBy() {{\n    return {returned};\n  }}\n\n}}\n"
+        )
+        for name, returned in (
+            ("Other", "SharedValidator::class"),
+            ("Text", "'\\Drupal\\my_module\\Plugin\\Validation\\Constraint\\SharedValidator'"),
+            ("Built", "static::class . 'Validator'"),
+        )
+    },
+}
+
+
+def test_a_written_validated_by_stops_the_validator_named_by_convention(tmp_path: Path) -> None:
+    """validatedBy() returning Name::class or the class's full name as text gives a declared edge
+    to that class and no inferred edge to <class>Validator, though that class is mapped; one that
+    returns anything else gives neither."""
+    _plant(tmp_path, VALIDATOR_FILES)
+    document, _ = _map(tmp_path)
+    shared = "php.type::Drupal\\my_module\\Plugin\\Validation\\Constraint\\SharedValidator"
+    found = {
+        (e["from"], e["to"], p["rule"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "validated_by"
+        for p in e["provenance"]
+    }
+    assert found == {
+        ("drupal.plugin.constraint::MyOther", shared, "constraint_validated_by_method", "declared"),
+        ("drupal.plugin.constraint::MyText", shared, "constraint_validated_by_method", "declared"),
+    }
+
+
+CONFIG_OBJECT_FIELDS = r"""<?php
+
+namespace Drupal\my_module;
+
+class Reader {
+
+  public function read($entity, $config, $form_state, $site_config) {
+    $entity->get('field_color');
+    $this->entity->get('field_color');
+    $entity->get('field_ref')->entity->get('field_color');
+    $this->getEntity()->get('field_color');
+    $form_state->get('field_state');
+    $config->get('field_conf_var');
+    $site_config->get('field_conf_suffix');
+    $this->config->get('field_conf_property');
+    \Drupal::config('my_module.settings')->get('field_conf_drupal');
+    $this->config('my_module.settings')->get('field_conf_own');
+    $this->configFactory->get('my_module.settings')->get('field_conf_factory');
+    $this->configFactory->getEditable('my_module.settings')->set('field_conf_editable', 1);
+  }
+
+}
+"""
+
+
+def test_a_field_name_read_on_a_config_object_links_to_no_field(tmp_path: Path) -> None:
+    """get, set and hasField on a config factory or a config object, a variable or property
+    ending in config, give no accesses_field edge and no mark; on any other object they do."""
+    _plant(
+        tmp_path,
+        {
+            "config/sync/field.storage.node.field_color.yml": FIELD_STORAGE.format(
+                entity="node", field="field_color"
+            ),
+            str(MODULE / "src/Reader.php"): CONFIG_OBJECT_FIELDS,
+        },
+    )
+    document, _ = _map(tmp_path)
+    storage = "drupal.config::field.storage."
+    found = {
+        (e["from"], e["to"])
+        for e in document["edges"]
+        if e["kind"] == "accesses_field"
+    }
+    read = "php.method::Drupal\\my_module\\Reader::read"
+    assert found == {
+        (read, storage + "node.field_color"),
+        (read, storage + "field_ref"),
+        (read, storage + "field_state"),
+    }
+
+
+CONSTANT_FILES = {
+    "config/sync/user.role.my_editor.yml": "id: my_editor\nlabel: Editor\npermissions: []\n",
+    "config/sync/my_module.settings.yml": "mode: soft\n",
+    "config/sync/field.storage.node.field_size.yml": FIELD_STORAGE.format(
+        entity="node", field="field_size"
+    ),
+    **{
+        str(MODULE / f"src/Plugin/QueueWorker/{name}Worker.php"): (
+            "<?php\n\nnamespace Drupal\\my_module\\Plugin\\QueueWorker;\n\n"
+            "use Drupal\\Core\\Queue\\Attribute\\QueueWorker;\n\n"
+            f"#[QueueWorker(id: '{queue}')]\nclass {name}Worker {{\n}}\n"
+        )
+        for name, queue in (("Notify", "my_notify"), ("Sweep", "my_sweep"))
+    },
+    str(MODULE / "src/Service/NotifierInterface.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+interface NotifierInterface {
+
+  public const QUEUE_NAME = 'my_notify';
+  const EDITOR_ROLE = "my_editor";
+  const SETTINGS = 'my_module.settings';
+  const SIZE_FIELD = 'field_size';
+  const GONE_FIELD = 'field_gone';
+
+}
+""",
+    str(MODULE / "src/Service/Notifier.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+class Notifier implements NotifierInterface {
+
+  public function run($account, $entity) {
+    $this->queueFactory->get(self::QUEUE_NAME);
+    $account->hasRole(self::EDITOR_ROLE);
+    $account->addRole(static::EDITOR_ROLE);
+    \Drupal::config(self::SETTINGS);
+    $this->configFactory->getEditable(self::SETTINGS);
+    $entity->get(self::SIZE_FIELD);
+    $entity->get(self::GONE_FIELD);
+  }
+
+}
+""",
+    str(MODULE / "src/Service/SweeperInterface.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+interface SweeperInterface {
+
+  const QUEUE_NAME = 'my_sweep';
+
+}
+""",
+    str(MODULE / "src/Service/BaseSweeper.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+abstract class BaseSweeper implements SweeperInterface {
+}
+""",
+    str(MODULE / "src/Service/Sweeper.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+class Sweeper extends BaseSweeper {
+
+  public function sweep() {
+    \Drupal::queue(static::QUEUE_NAME);
+  }
+
+}
+""",
+}
+
+
+def test_a_name_given_as_a_constant_of_an_interface_or_a_parent_links_to_its_target(
+    tmp_path: Path,
+) -> None:
+    """A queue, role, configuration or field name given as self::X or static::X, where X is
+    declared as text on an interface the class implements or on a parent's interface, gives the
+    edge the text would, inferred, at the method's line; a field_ name with no storage ends at an
+    unresolved storage. The file rules keep their skipped rows."""
+    _plant(tmp_path, CONSTANT_FILES)
+    document, report = _map(tmp_path)
+    notifier = str(MODULE / "src/Service/Notifier.php")
+    sweeper = str(MODULE / "src/Service/Sweeper.php")
+    no_text = "argument 0 is a class constant with no declared text"
+    assert sorted((f, line, r, why) for f, line, r, why in report.skipped) == sorted(
+        [
+            (
+                "config/sync/user.role.my_editor.yml",
+                1,
+                "role_from_config_edges",
+                "edge grants_permission: no value for key permissions",
+            ),
+            (notifier, 8, "queue_from_factory", no_text),
+            (notifier, 8, "field_named_by_constant_in_call", no_text),
+            (notifier, 9, "role_checked_in_call", no_text),
+            (notifier, 10, "role_changed_in_call", no_text),
+            (notifier, 11, "config_read_by_drupal", no_text),
+            (notifier, 12, "config_edited_from_factory", no_text),
+            (notifier, 13, "field_named_by_constant_in_call", no_text),
+            (notifier, 14, "field_named_by_constant_in_call", no_text),
+            (sweeper, 8, "queue_by_drupal", no_text),
+        ]
+    )
+    run = "php.method::Drupal\\my_module\\Service\\Notifier::run"
+    sweep = "php.method::Drupal\\my_module\\Service\\Sweeper::sweep"
+    found = {
+        (e["kind"], e["from"], e["to"], e["locations"][0]["line"], p["rule"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"]
+        in (
+            "uses_queue",
+            "checks_role",
+            "changes_role",
+            "reads_config_object",
+            "edits_config_object",
+            "accesses_field",
+        )
+        for p in e["provenance"]
+    }
+    worker = "drupal.plugin.queue_worker::"
+    role = "drupal.config::user.role.my_editor"
+    settings = "drupal.config::my_module.settings"
+    storage = "drupal.config::field.storage."
+    assert found == {
+        ("uses_queue", run, worker + "my_notify", 7, "queue_by_class_constant", "inferred"),
+        ("uses_queue", sweep, worker + "my_sweep", 7, "queue_by_class_constant", "inferred"),
+        ("checks_role", run, role, 7, "code_checks_role_by_constant", "inferred"),
+        ("changes_role", run, role, 7, "code_changes_role_by_constant", "inferred"),
+        ("reads_config_object", run, settings, 7, "config_read_by_class_constant", "inferred"),
+        ("edits_config_object", run, settings, 7, "config_edited_by_class_constant", "inferred"),
+        (
+            "accesses_field",
+            run,
+            storage + "node.field_size",
+            7,
+            "code_accesses_field_by_class_constant",
+            "inferred",
+        ),
+        (
+            "accesses_field",
+            run,
+            storage + "field_gone",
+            7,
+            "code_accesses_field_by_class_constant",
+            "inferred",
         ),
     }

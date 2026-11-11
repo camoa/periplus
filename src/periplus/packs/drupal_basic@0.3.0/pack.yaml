@@ -81,8 +81,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   HttpExceptionSubscriberBase as an event subscriber, and a route subscriber's alters_routes
 #   edge to a drupal.route_alter node marked resolution runtime;
 # - each constraint plugin's validator class, as a validated_by edge: declared from a validatedBy()
-#   that returns Name::class, else inferred from the name <constraint class>Validator when the map
-#   holds it; each class an entity type's attribute or annotation names under handlers, as a
+#   that returns Name::class or the class's full name in single quotes, else inferred from the name
+#   <constraint class>Validator when the map holds it and the constraint class writes no
+#   validatedBy(); each class an entity type's attribute or annotation names under handlers, as a
 #   has_access_handler, has_list_builder, has_view_builder, has_storage_handler, has_form_handler
 #   or has_route_provider edge from the entity type;
 # - each PHP attribute, as a has_attribute edge from the class, method, function, property or
@@ -106,7 +107,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - each ->get('x'), ->set('x', ...) and ->hasField('x') in a PHP method or function, and each
 #   v.field_x in a template, as an inferred accesses_field edge to every field storage named x. A
 #   name that starts with field_ and that no mapped storage has ends at the unresolved
-#   field.storage.<name>; any other name with no storage gives nothing;
+#   field.storage.<name>; any other name with no storage gives nothing. A call on a config factory
+#   or a config object, a variable or property ending in config, \Drupal::config(),
+#   $this->config(), or get() or getEditable() on a config factory, names no field;
 # - each theme suggestion template, by its file name, as an inferred edge to the block plugin of
 #   block--<id> or block--<base>--<derivative>, the placement block.block.<id>, the theme hook of
 #   <base>--..., and the field storage of field--field-x or field--<entity type>--field-x, each
@@ -125,6 +128,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - each method or function that implements a hook form_<id>_alter, as an inferred alters_form
 #   edge to the form id <id>; a form id no mapped class returns, such as a core form's or a base
 #   form id, ends at a referenced node;
+# - a queue, role, configuration or field name given as self::X or static::X, where X is declared
+#   as text on the class, a parent or an interface, through the nearest that declares it, as the
+#   edge the text would give, inferred, at the method's or function's line;
 # - each service's factory key, as a built_by_service edge to a factory service written @name or a
 #   built_by_class edge to a class, and a built_by_method edge to the factory's method on the
 #   factory service's class or the class written, unresolved when the map holds no such method;
@@ -142,9 +148,6 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
 #   unmapped bundle ends at a referenced node.
-# - The inferred validated_by edge does not read validatedBy(): a constraint whose validatedBy()
-#   returns another class, while a class named <constraint class>Validator is mapped, gets a false
-#   inferred edge to that class beside its declared one.
 # - A contributed or core theme's settings, such as olivero.settings, still end at a referenced
 #   module: only a mapped theme takes its configuration.
 # - A hook with a template key kept in a variables default, or an entry whose first key is not a
@@ -176,8 +179,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   service.
 # - Every constant of an Event class or an *Events class reads as an event name, so one that holds
 #   something else is a false event.
-# - The object of ->get('x'), ->set('x') and ->hasField('x') is not read: $form_state->get('x') or
-#   $config->get('x') links to a field storage named x.
+# - The object of ->get('x'), ->set('x') and ->hasField('x') is read only to leave out a config
+#   factory or a config object: $form_state->get('x'), $request->get('x'), a config object held in
+#   a variable of another name, as $settings->get('x'), and a name given as a class constant on a
+#   config object link to a field storage named x.
 # - A filter called with a space after the pipe and an argument list, as | money(2), also reads as
 #   a call of the function money, which links when an extension provides a function of that name.
 # - The object of hasRole, addRole and removeRole is not read, so such a method of any class gives
@@ -246,9 +251,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the table entity_classes lists; any other class is listed as skipped. On a class the map holds
 #   as an entity type's class, as a module's own MyEntity, call/entity_class_call.yaml gives the
 #   edge from the method, at the method's line, and the skipped row stays. Message::load(1) and a
-#   call on a subclass of an entity class give none. An entity class is known by its short name,
-#   so a project class named as a core one, such as a module's own User class, gives a false
-#   uses_entity_type edge.
+#   call on a subclass of an entity class give none. A core entity class's edge sits at the
+#   method's line, and needs the class, resolved through the file's use statements, in a core
+#   namespace: a module's own class named as a core one, such as its User class, gives none.
 # - The container rules read get('x') in lower case only: another letter case, such as
 #   ->GET('x'), gives no edge and no skipped row.
 # - A contributed module's bundle config file, such as paragraphs.paragraphs_type.text or
@@ -291,7 +296,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   give nothing. A filter or function after a hash in the same print, as {{ {a: 1}|money }},
 #   gives nothing. A template's use edge sits at the template's line, not the call's.
 # - A field named as v['field_x'], through ?->get(), by a variable, or by a constant of core or
-#   contrib gives no accesses_field edge; the constant leaves a skipped row. A template reads only
+#   contrib gives no accesses_field edge; the constant leaves a skipped row. A name given as
+#   self::X or static::X that does not start with field_ links nothing. A template reads only
 #   names that start with field_. The edge sits at the method's or the template's line.
 # - A field suggestion is read only for a field name that starts with field_: field--body and
 #   field--node--body give nothing, since field--<name> may name a field type and
@@ -299,8 +305,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   block--<module> link to nothing, since the map holds no such node. A derivative written with
 #   a dash in it, as block--x--main-2 for x:main-2, is read with an underscore and links nothing.
 # - A config or queue name held in a variable leaves a skipped row and keeps no call site; a role,
-#   config or queue name given by a constant of core or contrib, or by self::X where X is declared
-#   on an interface the class implements, leaves a skipped row. A ?-> call
+#   config or queue name given by a constant of core or contrib leaves a skipped row. One given as
+#   self::X or static::X, declared as text on an interface or a parent, gives its edge at the
+#   method's line and keeps the skipped row; one declared on the class itself gives the edge at
+#   both the call's and the method's line. Foo::X declared on a parent or an interface of Foo, a
+#   constant declared by an expression, and a text holding a backslash give nothing. A ?-> call
 #   to hasRole, get or getEditable gives nothing. The call that follows a queue's get, such as
 #   createItem or claimItem, is not read. A config or queue edge sits at the call's line, a role
 #   edge at the method's or function's line.
@@ -314,6 +323,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   files of one stem meet at one node. An import of a name with a dot before .twig other than
 #   .html.twig, of _self or of a variable, and an import in a Twig file that is neither a
 #   .html.twig template nor a component, give nothing.
+# - A constraint whose validatedBy() returns a text in double quotes, a concatenation or a call
+#   gets no validated_by edge, declared or inferred. A validatedBy() a parent writes is not read,
+#   so its subclass still gets the inferred edge.
 #
 # Settings to know:
 # - Only the custom modules and themes are read as PHP. Move them with custom_module and

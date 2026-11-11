@@ -1,0 +1,36 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The text a class constant is declared with, const X = 'x'; or const X = "x";, as an internal
+# drupal.constant_text node, joined from the internal drupal.class_constant node of
+# <class>::<CONST> (event/event.yaml) by has_constant_text. The class is the one the file's path
+# names by Drupal's PSR-4 layout, so the rule is inferred. The map rules that read a name given as
+# self::X or static::X, in queue_worker/, role/ and config/, walk from the class to its parents
+# and interfaces and read the text of the nearest one that declares X. Only the first constant of
+# a const statement is read, and a text holding a backslash, or a double-quoted text holding $,
+# gives nothing.
+
+node_types:
+- name: drupal.constant_text
+  id_namespace: drupal.constant_text
+  internal: true
+
+edge_kinds:
+- kind: has_constant_text
+  from: drupal.class_constant
+  to: drupal.constant_text
+
+rules:
+- rule: constant_text
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bconst\s+(?:\w+\s+)?(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?:''(?<single_text>[^''\\]*)''|"(?<double_text>[^"\\$]*)")\s*[;,]'
+  id: {template: '{single_text}{double_text}'}
+  emits:
+  - edge:
+      kind: has_constant_text
+      from: {template: '{psr4_class}::{constant}', type: drupal.class_constant}
+      to: this_node
+  confidence: inferred

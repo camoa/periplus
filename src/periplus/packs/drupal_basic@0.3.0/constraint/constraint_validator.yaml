@@ -1,28 +1,34 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A constraint plugin and the class that validates it. A constraint class whose validatedBy()
-# returns Name::class names it, declared; else Symfony's default, the constraint class's own name
-# followed by Validator in the same namespace, inferred, when the map holds that class. The return
-# is read as an internal drupal.class_ref node, one per method and class it names, and a map rule
-# picks the one in the constraint class's validatedBy().
+# returns Name::class, or the class's full name as a text in single quotes, names it, declared;
+# else Symfony's default, the constraint class's own name followed by Validator in the same
+# namespace, inferred, when the map holds that class and the constraint class writes no
+# validatedBy(). The return is read as an internal drupal.class_ref node, one per method and class
+# it names, and a map rule picks the one in the constraint class's validatedBy().
 #
 # Limits:
-# - validatedBy() is read only when it returns Name::class; a text, a concatenation or a call
-#   gives no declared edge.
-# - The inferred edge does not test validatedBy(): a constraint whose validatedBy() returns another
-#   class, while a class named <constraint>Validator is in the map too, gets a false inferred edge
-#   to that class beside its declared one.
-# - validatedBy() is read on the constraint class itself, not on a parent.
+# - validatedBy() is read only when it returns Name::class or a text in single quotes with single
+#   backslashes; a text in double quotes, a concatenation or a call gives no declared edge, and,
+#   since validatedBy() is written, no inferred edge either.
+# - validatedBy() is read on the constraint class itself, not on a parent: a constraint whose
+#   parent writes validatedBy() still gets the inferred edge when <class>Validator is mapped.
 
 node_types:
 - name: drupal.class_ref
   id_namespace: drupal.class_ref
   internal: true
+# A class that writes validatedBy(), by the class its file's path names.
+- name: drupal.validated_by_written
+  id_namespace: drupal.validated_by_written
+  internal: true
 
 edge_kinds:
+# The internal end takes the inferred edge of a constraint class that writes validatedBy(), so
+# the written map leaves that edge out.
 - kind: validated_by
   from: drupal.constraint_plugin
-  to: php.class
+  to: [php.class, drupal.validated_by_written]
 - kind: returns_class
   from: [php.function, php.method]
   to: drupal.class_ref
@@ -46,6 +52,31 @@ rules:
       to: {template: '{returned}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
   confidence: declared
 
+# return '\Drupal\mymod\MyValidator'; a class's full name as text, which PHP does not resolve.
+- rule: return_class_text
+  reads: file
+  in: [source]
+  match:
+    reference: return_statement
+    name_child: string
+    filetype: php
+    where:
+    - name_matches: {child: string, pattern: '''\\?(?<returned_text>[A-Za-z_]\w*(?:\\\w+)+)'''}
+  emits:
+  - edge:
+      kind: returns_class
+      from: enclosing_declaration
+      to: {template: '{returned_text}', types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: validated_by_written
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+validatedBy\s*\('}
+  id: {template: '{psr4_class}'}
+  emits: [{node: {type: drupal.validated_by_written}}]
+  confidence: declared
+
 - rule: constraint_validated_by_method
   reads: map
   match:
@@ -67,5 +98,13 @@ rules:
     - edge: plugin_class
     - id_matches: '^php\.type::(?<constraint>.+)$'
     - node: 'php.type::{constraint}Validator'
+    - id_matches: '^(?<validator>.+)$'
+    # A class that writes validatedBy() rebinds validator to its internal marker, so the edge ends
+    # there and is left out of the map; with none, the try reaches nothing and validator keeps the
+    # class <constraint>Validator.
+    - try:
+      - node: 'drupal.validated_by_written::{constraint}'
+      - id_matches: '^(?<validator>.+)$'
+    - node: '{validator}'
   emits: [{edge: {kind: validated_by, from: this_node, to: matched_node}}]
   confidence: inferred

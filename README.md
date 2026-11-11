@@ -194,14 +194,14 @@ The engine writes three states today:
   example when only custom code is mapped.
 - `unresolved`: a rule looked for a name and no rule maps it. The node records what was searched.
 
-An unresolved node from a map of a Drupal site, shortened:
+An unresolved node from a map of a Drupal site, shortened: a method calls `my_module_format()`,
+which no mapped file declares.
 
 ```json
-{"id": "php.function::Drupal\\my_module\\Plugin\\Action\\json_decode",
+{"id": "php.function::my_module_format",
  "state": "unresolved", "type": "php.function",
  "unresolved_detail": {"rule": "php_basic/calls_function", "found": "no mapped node of this name",
-   "searched_for": "Drupal\\my_module\\Plugin\\Action\\json_decode",
-   "types_tried": ["php.function"]}}
+   "searched_for": "my_module_format", "types_tried": ["php.function"]}}
 ```
 
 Each edge has `from`, `to`, `kind`, its locations, an `occurrences` count and its provenance.

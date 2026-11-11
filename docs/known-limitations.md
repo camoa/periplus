@@ -69,10 +69,10 @@ a list of its known gaps.
   `getStorage('x')` on a property or promoted parameter with no declared type, unless it is named
   `entityTypeManager`, `get('x')` on a container with another name, and other entity type manager
   methods such as `getHandler('x')` give no edge. A local variable, such as `$etm->getStorage('x')`
-  on a parameter, gives no entity type edge unless it is named `$entity_type_manager`. An entity
-  class is known by its short name, so `User::load(1)` on a module's own `User` class gives a false
-  entity type. A static `load`, `loadMultiple` or `create` on a module's own entity class gives
-  its `uses_entity_type` edge at the method's line, not the call's, and keeps the skipped row of
+  on a parameter, gives no entity type edge unless it is named `$entity_type_manager`. A core
+  entity class's edge needs the class, resolved through the file's use statements, in a core
+  namespace, and sits at the method's line. A static `load`, `loadMultiple` or `create` on a
+  module's own entity class gives its `uses_entity_type` edge at the method's line, not the call's, and keeps the skipped row of
   `entity_class_static_call`; a call on a subclass of the entity class gives no edge. The
   container rules read `get('x')` in lower case only: another letter case, such as `->GET('x')`, gives no edge and no
   skipped row. Core plugins whose folders the rutter does not name give nothing, such as a views
@@ -95,16 +95,16 @@ a list of its known gaps.
   engine accepts an attribute on an edge and does not execute it. A custom requirement joins the
   service whose tag names it in `applies_to`; a comma-separated list of keys joins nothing.
   A contributed or core theme's settings, such as `olivero.settings`, end at a referenced module.
-  A constraint whose `validatedBy()` returns another class gets a false inferred `validated_by`
-  edge when a class named `<constraint class>Validator` is mapped too.
+  A constraint whose `validatedBy()` returns a text in double quotes, a concatenation or a call
+  gets no `validated_by` edge, and a `validatedBy()` written on a parent is not read.
 - **Drupal, events, Twig extensions, field access and suggestions:** every constant of an `Event`
   class or a class named `*Events` reads as an event name, and only the first constant of a
   `const` statement is read. A subscriber key or dispatch name written with its namespace, as text
   or as a variable gives nothing, and so does `dispatch($event)` with no name or a call in a plain
   PHP file outside a `src` folder; only a key's first listener is read. `new \Twig\TwigFilter(...)` written with
   its namespace, a filter after a hash in the same print, and an extension without
-  `AbstractExtension` give nothing. `->get('x')` is read on any object, so `$config->get('x')`
-  links to a field storage named `x`; a `field_` name with no storage ends at an unresolved
+  `AbstractExtension` give nothing. `->get('x')` is read on any object but a config factory or
+  a config object, so `$form_state->get('x')` links to a field storage named `x`; a `field_` name with no storage ends at an unresolved
   `field.storage.<name>`. A field suggestion is read only for a name that starts with `field_`. A
   template's edge sits at the template's line, and a method's field edge at the method's line.
 - **Drupal, roles, configuration, queues and form alters in code:** the object of `hasRole`,
@@ -112,8 +112,9 @@ a list of its known gaps.
   object's name. A config form's `$this->config('x')` reads as a read, though it may return an
   editable object. A queue is named by its worker plugin, so a queue no worker processes ends at a
   referenced worker, and the `createItem` or `claimItem` after `get` is not read. A config or
-  queue name in a variable, or in `self::X` declared on an interface the class implements, leaves
-  a skipped row only, and a `?->` call gives nothing.
+  queue name in a variable leaves a skipped row only. One in `self::X` or `static::X` declared on
+  an interface or a parent gives its edge at the method's line and keeps the skipped row; `Foo::X`
+  declared on a parent of `Foo` gives nothing, and a `?->` call gives nothing.
   `alters_form` cannot tell a form id from a base form id, and a generic `hook_form_alter` that
   tests `$form_id` gives none.
 - **Drupal, factories, links and macros:** a factory class written without a namespace, and a
