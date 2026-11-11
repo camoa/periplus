@@ -23,11 +23,14 @@ a list of its known gaps.
   PHP's order: when the map holds both, the call ends at the global function. `static::m()` is read
   as `self::m()`, and inside a trait `self` and `static` name the trait. A `@var` written
   `Lib\Mailer`, with a backslash inside and none in front, joins a call to the class of that full
-  name when the map holds it, else to the name resolved through the namespace.
+  name when the map holds it, else to the name resolved through the namespace. Such a property's
+  `property_typed_as` edge ends at a `referenced` type node, and when the map holds neither name,
+  that node takes the name as written unless an import binds its first segment.
   `skip_names` matches the exact case, so `ISSET(` still gives an unresolved function. A call
   whose method name or callee is built at run time, such as `$this->$name()` or `$fn()`, gives no
   edge; inside a class method it is kept as a `php.call_site` marked `resolution: runtime`,
-  instead of leaving nothing, and elsewhere it makes nothing.
+  instead of leaving nothing. A function callee that is not a written name, such as `$fn()` or
+  `f()()`, lists a skipped row wherever it is.
 - **Drupal:** a template name held in a variable, a concatenation or a list gives no edge. A contributed module's plugins and
   bundle config files are mapped only by that module's rutter, listed below. Without one, its
   bundle config file stays a plain config object and its bundle is `referenced`, with no label.

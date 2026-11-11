@@ -61,8 +61,8 @@ rules:
 # map holds both a global and a namespaced function of one name, an unqualified call in that
 # namespace ends at the global one, where PHP calls the namespaced one. A name holding a backslash
 # never falls back, so calls_qualified_function has no fallback. The where admits a written name
-# only, since the template would take a variable's text, $fn, as a name; a callee that is not a
-# name passes over with no skipped row.
+# only, since the template would take a variable's text, $fn, as a name; calls_function_not_a_name
+# keeps the skipped row of a callee that is not one.
 # skip_names lists PHP's language constructs, as written: grammar 0.24.1 parses isset(, empty(,
 # die( and eval( as function calls, and the rest are listed in case a release does too. After them
 # come the functions PHP reports as internal, so strlen() makes nothing; pack.yaml names the run
@@ -531,6 +531,21 @@ rules:
     filetype: php
     where: [{name_matches: {child: function, pattern: '.*\\.*'}}]
     skip_names: *calls_skip_names
+  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.function], on_miss: unresolved}}}]
+  confidence: declared
+
+# A callee with no backslash that is not a plain name, $fn(), f()(), ($fn)() or $a['k'](), is an
+# unknown boundary. The end reads the callee as a written name, finds none and lists the skipped row
+# "function is not a written name", so the call site keeps a mark; inside a class method $fn() also
+# keeps its php.call_site marked resolution: runtime (types/find_runtime_calls.yaml).
+- rule: calls_function_not_a_name
+  reads: file
+  in: [source]
+  match:
+    reference: function_call_expression
+    name_child: function
+    filetype: php
+    where: [{name_matches: {child: function, pattern: '(?![^\W\d]\w*$)[^\\]+'}}]
   emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.function], on_miss: unresolved}}}]
   confidence: declared
 

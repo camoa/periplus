@@ -9,8 +9,18 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # one, and then looks the method up on that type and its ancestors, as calls_through_typed_property
 # does. A method no class in the map declares lands unresolved under the chosen type.
 #
-# Limit: the property gets no php.property_type node and no property_typed_as edge for this shape,
-# so a rule that reads those does not see it.
+# written_var_property_typed_as gives the property its property_typed_as edge, inferred, to a
+# php.property_type end, <class>::$<name>::<type>, that stays referenced. <type> is the name as
+# written when the map holds it, else the resolved name when the map holds that. When the map holds
+# neither, it is the resolved name when an import binds the first segment, since PHP and the writer
+# agree there; else the name as written, since a name that starts with a root namespace segment,
+# @var Drupal\Core\Foo in namespace Drupal\mymod, means the full name, and the namespace-relative
+# reading, Drupal\mymod\Drupal\Core\Foo, names no class. A rule cannot read an edge a map rule
+# made, so calls_through_typed_property does not read this one.
+#
+# Limits: a name whose first segment an import binds to the file's own namespace, use App\Lib in
+# namespace App, is read as written when the map holds neither reading. calls_through_written_var_type
+# ends a call through a property of neither reading under the resolved name.
 node_types:
 
 - name: php.property_written_type
@@ -103,4 +113,32 @@ rules:
     - node: 'php.call_site::{site}'
     - edge: call_site_in
   emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+# The first try finds whether the resolved name is the namespace joined to the name as written, so
+# no import bound its first segment, and then takes the name as written; the next two take a name
+# the map holds, the name as written last so that it wins.
+- rule: written_var_property_typed_as
+  reads: map
+  match:
+    node_type: php.property
+    where: [{id_matches: '^php\.property::(?<owner>(?<nsp>[^:]+\\)?[^\\:]+)::\$(?<member>\w+)$'}]
+    follow:
+    - edge: property_resolved_as
+    - id_matches: '^php\.property_resolved_type::[^:]+::\$\w+::(?<type>(?<resolved>[A-Za-z_][\w\\]*))$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_written_as
+    - id_matches: '^php\.property_written_type::[^:]+::\$\w+::(?<written>[A-Za-z_][\w\\]*)$'
+    - try:
+      - node: 'php.property_resolved_type::{owner}::${member}::{nsp}{written}'
+      - node: 'php.property_written_type::{owner}::${member}::{written}'
+      - id_matches: '^php\.property_written_type::[^:]+::\$\w+::(?<type>.+)$'
+    - try:
+      - node: 'php.type::{resolved}'
+      - id_matches: '^php\.type::(?<type>.+)$'
+    - try:
+      - node: 'php.type::{written}'
+      - id_matches: '^php\.type::(?<type>.+)$'
+    - node: 'php.property::{owner}::${member}'
+  emits: [{edge: {kind: property_typed_as, from: this_node, to: {template: '{owner}::${member}::{type}', types: [php.property_type]}}}]
   confidence: inferred

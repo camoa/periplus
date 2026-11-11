@@ -193,6 +193,9 @@ class Holder {
         $this->gone->stop();
         $this->tool->make();
     }
+
+    /** @var App\\Deep */
+    protected $deep;
 }
 """
 
@@ -205,7 +208,9 @@ def test_a_var_name_written_without_a_leading_backslash_joins_as_written_else_re
 ) -> None:
     """Lib\\Mailer is mapped as written; Other\\Thing only resolved in the namespace; Lib\\Gone is
     neither and stays unresolved under the resolved name; Kit\\Tool resolves through the import.
-    None of the four makes a php.property_type node."""
+    Each property's type end stays referenced: the name the map holds, else the name as written
+    when no import binds its first segment, else the resolved name; App\\Deep, in namespace App,
+    keeps the name as written. The internal nodes stay out of the map."""
     document, _ = _map(
         tmp_path, {"App/Holder.php": HOLDER, "Lib/Mailer.php": MAILER, "Other/Thing.php": THING}
     )
@@ -218,6 +223,53 @@ def test_a_var_name_written_without_a_leading_backslash_joins_as_written_else_re
         (run_, M + "Ext\\Kit\\Tool::make"): ([23], rule, "inferred"),
     }
     assert _state(document, M + "App\\Lib\\Gone::stop") == "unresolved"
+    typed_as = {
+        e["from"].rsplit("$", 1)[1]: (
+            e["to"].rsplit("::", 1)[1],
+            [loc["line"] for loc in e["locations"]],
+            e["provenance"][0]["rule"],
+            e["provenance"][0]["confidence"],
+        )
+        for e in document["edges"]
+        if e["kind"] == "property_typed_as"
+    }
+    written = "written_var_property_typed_as"
+    assert typed_as == {
+        "mailer": ("Lib\\Mailer", [8], written, "inferred"),
+        "thing": ("App\\Other\\Thing", [11], written, "inferred"),
+        "gone": ("Lib\\Gone", [14], written, "inferred"),
+        "tool": ("Ext\\Kit\\Tool", [17], written, "inferred"),
+        "deep": ("App\\Deep", [27], written, "inferred"),
+    }
+    ends = {e["to"] for e in document["edges"] if e["kind"] == "property_typed_as"}
+    assert "php.property_type::App\\Holder::$gone::Lib\\Gone" in ends
+    assert {_state(document, end) for end in ends} == {"referenced"}
     types = {n["type"] for n in document["nodes"]}
-    internal = {"php.property_written_type", "php.property_resolved_type"}
-    assert not types & ({"php.property_type"} | internal)
+    assert not types & {"php.property_written_type", "php.property_resolved_type"}
+
+
+NOT_A_NAME = """<?php
+namespace App;
+
+class Page {
+    public function run($fn, $arr) {
+        $fn();
+        f()();
+        $arr['k']();
+    }
+}
+
+function plain($fn) {
+    $fn();
+}
+"""
+
+
+def test_a_function_callee_that_is_not_a_written_name_lists_a_skipped_row(tmp_path: Path) -> None:
+    """Each call keeps a mark: the row, and inside a class method $fn() also its runtime site."""
+    document, report = _map(tmp_path, {"Page.php": NOT_A_NAME})
+    rows = [(r[1], r[2], r[3]) for r in report.skipped if r[2] == "calls_function_not_a_name"]
+    reason = "function is not a written name"
+    assert rows == [(line, "calls_function_not_a_name", reason) for line in (6, 7, 8, 13)]
+    sites = [n["id"] for n in document["nodes"] if n["type"] == "php.call_site"]
+    assert sites == ["php.call_site::App\\Page::run::$fn"]

@@ -40,13 +40,16 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   a child assigns; the call keeps its php.call_site node.
 # - A call whose method name or callee is a variable, $x->$name(), $x?->$name(), self::$name() or
 #   $fn(), gets no calls edge: inside a class method it keeps a php.call_site node marked
-#   resolution: runtime (types/find_runtime_calls.yaml); elsewhere it makes nothing.
+#   resolution: runtime (types/find_runtime_calls.yaml); elsewhere a method name makes nothing. A
+#   function callee that is not a written name, $fn(), f()() or $a['k'](), anywhere, also lists
+#   the skipped row "function is not a written name" (calls_function_not_a_name).
 # - A parent:: call in a class with no extends clause gets no calls edge; it keeps its
 #   php.call_site node.
 # - A property whose @var names a class with a backslash inside and none in front, @var
-#   Lib\Mailer, gets no php.property_type node and no property_typed_as edge; a call through it is
-#   joined by edges/var_type_as_written.yaml, to the name as written when the map holds it, else to
-#   the name resolved through the namespace and imports.
+#   Lib\Mailer, gets no found php.property_type node. edges/var_type_as_written.yaml gives it an
+#   inferred property_typed_as edge to a referenced php.property_type end, and joins a call through
+#   it to the name as written when the map holds it, else to the name resolved through the namespace
+#   and imports; calls_through_typed_property does not read that edge.
 pack: php_basic
 version: 0.2.0
 depends: []
