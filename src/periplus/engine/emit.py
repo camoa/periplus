@@ -209,10 +209,11 @@ def counts(
 
 
 def _landed(edge: FoundEdge, merged: Mapping[str, Any]) -> FoundEdge:
-    """The edge with its composed end on the first candidate id a rule found, else the first."""
+    """The edge with its composed end on the first candidate id a rule found, else the one at
+    ``miss_at``."""
     if not edge.candidates:
         return edge
-    chosen = next((c for c in edge.candidates if c in merged), edge.candidates[0])
+    chosen = next((c for c in edge.candidates if c in merged), edge.candidates[edge.miss_at])
     # A composed end that is the from end names its type in source_type.
     return replace(edge, source=chosen) if edge.source_type else replace(edge, target=chosen)
 

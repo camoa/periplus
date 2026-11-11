@@ -114,8 +114,9 @@ class FoundEdge:
     on_miss: str = ""
     searched_for: str = ""
     #: The ids the composed end may take, one per candidate type in order; the first a rule maps
-    #: wins, else the first. Empty for an end of one type.
+    #: wins, else the one at ``miss_at``. Empty for an end of one type.
     candidates: tuple[str, ...] = ()
+    miss_at: int = 0
     #: The composed end's candidate types, in the order tried; empty when the spec lists none.
     types_tried: tuple[str, ...] = ()
     #: The ends, ``source`` or ``target``, written ``{declared: <type>}``: when no rule finds such
@@ -347,10 +348,11 @@ def run_map_rules(
 
 
 def _landed_end(edge: FoundEdge, found: set[str]) -> FoundEdge:
-    """The edge with its composed end on the first candidate id a rule found, else the first."""
+    """The edge with its composed end on the first candidate id a rule found, else the one at
+    ``miss_at``."""
     if not edge.candidates:
         return edge
-    chosen = next((c for c in edge.candidates if c in found), edge.candidates[0])
+    chosen = next((c for c in edge.candidates if c in found), edge.candidates[edge.miss_at])
     return replace(edge, source=chosen) if edge.source_type else replace(edge, target=chosen)
 
 
@@ -1590,7 +1592,8 @@ def _edges(
         if not spec.full_id and other is None and not candidates:
             continue
         this, composed = whole or f"{own}::{node_id}", end if spec.full_id else f"{other}::{end}"
-        composed = candidates[0] if candidates else composed
+        miss_at, searched = _missed(spec, candidates, end, fallback)
+        composed = candidates[miss_at] if candidates else composed
         found.append(
             FoundEdge(
                 kind=spec.kind,
@@ -1604,8 +1607,9 @@ def _edges(
                 target_type="" if flipped else spec.to_type,
                 source_type=spec.to_type if flipped else "",
                 on_miss=("source" if flipped else "target") if spec.on_miss else "",
-                searched_for=end.partition("::")[2] if spec.full_id else end,
+                searched_for=end.partition("::")[2] if spec.full_id else searched,
                 candidates=candidates,
+                miss_at=miss_at,
                 types_tried=spec.types,
             )
         )
@@ -1628,6 +1632,17 @@ def _candidates(
     if not spaces:
         spaces = [namespace_of(types, spec.to_type)] if spec.to_type else [far] if far else []
     return tuple(f"{space}::{name}" for name in (end, fallback) for space in spaces)
+
+
+def _missed(
+    spec: EdgeSpec, candidates: tuple[str, ...], end: str, fallback: str | None
+) -> tuple[int, str]:
+    """The index of the candidate an end takes when none is mapped, and the name it searched for:
+    under ``on_miss_name: fallback``, the fallback name's first candidate, else the first name's."""
+    if spec.miss_fallback and candidates and fallback is not None and fallback != end:
+        # _candidates lists the first name under each type, then the fallback name under each.
+        return len(candidates) // 2, fallback
+    return 0, end
 
 
 def _within(pack: str, packs: Sequence[LoadedPack]) -> frozenset[str]:
@@ -1767,6 +1782,7 @@ def _references(
             candidates = (
                 () if spec.full_id else _candidates(spec, rule_set.types, name, fallback, far)
             )
+            miss_at, searched = _missed(spec, candidates, name, fallback)
             if spec.from_template is not None:
                 start = f"{next(iter(namespaces(rule_set.types, kind.from_types)))}::{start}"
             edges.append(
@@ -1775,7 +1791,7 @@ def _references(
                     source=start,
                     target=name
                     if spec.full_id
-                    else candidates[0]
+                    else candidates[miss_at]
                     if candidates
                     else f"{far}::{name}",
                     file=file,
@@ -1785,8 +1801,9 @@ def _references(
                     confidence=rule.confidence,
                     target_type=spec.to_type,
                     on_miss="target" if spec.on_miss else "",
-                    searched_for=name,
+                    searched_for=searched,
                     candidates=candidates,
+                    miss_at=miss_at,
                     types_tried=spec.types,
                 )
             )

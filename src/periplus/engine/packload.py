@@ -150,6 +150,7 @@ EXECUTED_KEYS = frozenset(
             for k in (
                 *("", ".from", ".template", ".type", ".each", ".pattern", ".where", ".on_miss"),
                 *(".where.*.matches", ".where.*.listed_at", ".from.key", ".from.capture"),
+                ".on_miss_name",
                 ".where.*.not_matches",
                 *(".from.*.key", ".from.*.each", ".types", ".declared", *_RESOLVE),
                 *_TABLE_STEPS,
@@ -492,6 +493,8 @@ class EdgeSpec:
     separator: str = ""
     #: The steps that resolve the written name a second time; its ids follow the first name's.
     fallback: tuple[Step, ...] = ()
+    #: ``on_miss_name: fallback``: when no candidate is mapped, the end is the fallback name's.
+    miss_fallback: bool = False
     #: The composed end's candidate types, in order, in place of ``to_type``; ``to_type`` is the
     #: first of them.
     types: tuple[str, ...] = ()
@@ -1625,7 +1628,10 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
             or "this_node" not in (edge.get("from"), edge.get("to"))
             or not isinstance(end, Mapping)
             or not set(end)
-            <= {"from", "template", "type", "types", "on_miss", "resolve", "fallback", "separator"}
+            <= {
+                *("from", "template", "type", "types", "on_miss", "on_miss_name", "resolve"),
+                *("fallback", "separator"),
+            }
             or not {"from", "template"} & set(end)
             or not isinstance(end.get("template", ""), str)
             or not _types_ok(end)
@@ -1651,6 +1657,7 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
                 resolve=_read_steps(end.get("resolve", []), tables),
                 separator=str(end.get("separator", "")),
                 fallback=_read_fallback(end, tables),
+                miss_fallback=_read_miss_name(end),
                 types=tuple(end.get("types", ())),
             )
         )
@@ -1723,6 +1730,15 @@ def _read_fallback(end: Mapping[str, Any], tables: frozenset[str]) -> tuple[Step
     if not isinstance(end["fallback"], list):
         raise _Unsupported("fallback is not a list of resolve steps")
     return _read_steps(end["fallback"], tables)
+
+
+def _read_miss_name(end: Mapping[str, Any]) -> bool:
+    """Whether an end puts its on_miss mark under its fallback name."""
+    if "on_miss_name" not in end:
+        return False
+    if end["on_miss_name"] != "fallback" or not {"on_miss", "fallback"} <= set(end):
+        raise _Unsupported("on_miss_name is fallback, in an end that has on_miss and fallback")
+    return True
 
 
 def _read_value(name: str, spec: object, path: bool = False) -> Value:
@@ -2051,7 +2067,10 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
             or (start != "enclosing_declaration" and not _template_end(start))
             or not isinstance(end, Mapping)
             or not set(end)
-            <= {"type", "types", "on_miss", "resolve", "fallback", "separator", "from", "template"}
+            <= {
+                *("type", "types", "on_miss", "on_miss_name", "resolve", "fallback", "separator"),
+                *("from", "template"),
+            }
             or ("from" in end and argument is None)
             or not _types_ok(end)
         ):
@@ -2088,6 +2107,7 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
                 resolve=_read_steps(end.get("resolve", []), tables),
                 separator=str(end.get("separator", "")),
                 fallback=_read_fallback(end, tables),
+                miss_fallback=_read_miss_name(end),
                 # The one-type form is a list of that one type.
                 types=tuple(end.get("types", ())) or tuple(end.get("type", "").split()),
                 from_template=from_template,

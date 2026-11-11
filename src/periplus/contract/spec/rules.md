@@ -216,6 +216,12 @@ still holds no language knowledge. An end read `{argument: N}` also takes a clas
 declared as text, when the grammar block declares `constant_access` and `constant_declaration`,
 the node types of a constant read and of a declaration; one without the other is refused.
 
+An end with `fallback` tries a second name after the first, and `on_miss` marks the first when
+neither is mapped. `on_miss_name: fallback` marks the fallback name instead, for a language that
+looks a name up locally first and globally second, where the global name is the likelier miss. The
+order tried does not change. The key needs `on_miss` and `fallback` in the same end, or the rule is
+refused.
+
 ---
 
 ## 11. A match is one kind plus a `where` list

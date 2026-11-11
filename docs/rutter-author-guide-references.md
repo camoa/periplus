@@ -78,6 +78,12 @@ identity does not prefix the namespace writes `resolve: [prefix_with: namespace]
 neither is mapped, `on_miss` applies under the first name, `App\helper`. A `fallback` that is not a
 list of resolve steps refuses the rule.
 
+`on_miss_name: fallback` puts that mark under the fallback name instead: with it, the same call
+lands on `App\helper`, else on `helper`, and when neither is mapped it is an unresolved `helper`,
+searched for as `helper`. Use it when the fallback name is the likelier one outside the map, as a
+global function from a library is. The key needs `on_miss` and `fallback` in the same end; without
+either, the rule is refused.
+
 ## What a tree reference cannot say today
 
 - A method call on an object, `$x->m()` or `$this->m()`, whose class is known only at run time.

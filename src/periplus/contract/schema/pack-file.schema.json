@@ -1120,11 +1120,15 @@
             "fallback": {
               "items": {"$ref": "#/$defs/resolveStep"},
               "minItems": 1,
-              "description": "Resolve steps run on the name as written, after the first name is settled by the grammar's identity resolve and this end's resolve. The end lands on the first mapped id of the first name under each candidate type, then of the fallback name under each; when none is mapped, on_miss applies under the first name. Under a grammar whose identity prefixes the namespace, fallback: [as_written] alone tries App\\helper, then helper. The engine, not this schema, refuses a value that is not a list, naming the rule and the key."
+              "description": "Resolve steps run on the name as written, after the first name is settled by the grammar's identity resolve and this end's resolve. The end lands on the first mapped id of the first name under each candidate type, then of the fallback name under each; when none is mapped, on_miss applies under the first name, or under the fallback name with on_miss_name: fallback. Under a grammar whose identity prefixes the namespace, fallback: [as_written] alone tries App\\helper, then helper. The engine, not this schema, refuses a value that is not a list, naming the rule and the key."
             },
             "separator": {
               "type": "string",
               "description": "The separator bound_first_segment splits on and joins with, and prefix_with joins with."
+            },
+            "on_miss_name": {
+              "enum": ["fallback"],
+              "description": "fallback: when no candidate is mapped, the end takes on_miss under the fallback name's first candidate id, and the unresolved node searches for the fallback name. The order tried stays: the first name under each candidate type, then the fallback name under each. Without it the mark goes under the first name. Needs on_miss and fallback in the same end; the engine refuses it otherwise, naming the rule. A fallback name equal to the first name leaves one name to mark."
             },
             "on_miss": {
               "enum": ["unresolved"],
