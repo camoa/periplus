@@ -8,7 +8,7 @@ a map report adds when a rule fires and makes less than it names.
 
 A span is a region of a text file that holds other matches, such as a Laravel route group. A file
 type declares its spans beside its sections, each with a `name`, an `open` pattern and a
-`balance` pair of characters:
+`balance` pair of an opening and a closing token:
 
 ```yaml laravel_basic@0.0.5/pack.yaml
 spans:
@@ -18,12 +18,12 @@ spans:
 ```
 
 A span starts at each match of `open` outside the type's sections. From the end of that match,
-each opening character outside the sections counts one up and each closing character one down.
-The span ends after the closing character that brings the count to zero or below, or at the end
-of the file when none does. So the open must stop before its first opening character, as above.
+each opening token outside the sections counts one up and each closing token one down. The span
+ends after the closing token that brings the count to zero or below, or at the end of the file
+when none does. So the open must stop before its first opening token, as above.
 An open that takes it starts the count one short, and the span ends at the first inner pair.
 
-Sections matter here: a closing character inside a string or a comment does not count. Spans of
+Sections matter here: a closing token inside a string or a comment does not count. Spans of
 one name nest, since each match of `open` starts its own span. In this route file:
 
 ```php
@@ -51,25 +51,24 @@ end the group at the closure route.
 A match outside every span still fires. To drop it, name the span's value in the id, then strip
 it with `normalize`, as `{scope}|{name}` with `^.*\|`.
 
-`balance` takes two single characters, so a span ends at a character, never at a word or a
-closing tag such as `</cffunction>`. A region that a closing tag ends takes a section plus a span.
-A section's `open` and `close` are patterns, so it can close at the tag, and a span counts no
-character inside it. A span opens only outside the sections, so it opens before the section does,
-and its first closing character after the section ends it:
+A `balance` entry of one character matches that character; a longer entry is a pattern, so a
+tag language balances its tags:
 
 ```yaml
 sections:
-- name: function_text
-  open: 'cffunction\b'
-  close: '</cffunction'
+- name: comment
+  open: '<!--'
+  close: '-->'
 spans:
 - name: function
-  open: '<cffunction\b[^>]*\bname="(?<name>\w+)"'
-  balance: ['<', '>']
+  open: '(?=<fn\b[^>]*\bname="(?<name>\w+)")'
+  balance: ['<fn\b', '</fn>']
 ```
 
-A rule that reads inside the function lists `reads_sections: [function_text]`. Sections do not
-nest, so a string or a comment inside that section is part of it, and the rule reads it too.
+The open is a lookahead, so it stops before its own `<fn`, which counts one up. An inner `<fn`
+counts one more and its `</fn>` one down, so the function's own `</fn>` ends the span. Where an
+opening and a closing token start together, the opening counts first. The body is no section, so
+a comment inside it stays a section a rule does not read.
 
 ## A value from the enclosing spans
 

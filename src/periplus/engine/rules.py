@@ -634,32 +634,53 @@ def _closing(close: str, opened: re.Match[str]) -> re.Pattern[str]:
 
 def _spans(
     text: str,
-    declared: Sequence[tuple[str, re.Pattern[str], str, str]],
+    declared: Sequence[tuple[str, re.Pattern[str], re.Pattern[str], re.Pattern[str]]],
     sections: list[tuple[str, int, int]],
 ) -> list[Span]:
     """Each span of the text, sorted by start: one per match of its opening outside the sections.
 
-    From the end of the opening, each opening and closing character outside the sections counts
-    one up and one down; the span ends after the closing character that brings the count to zero
-    or below, or at the end of the text.
+    From the end of the opening, each opening and closing token outside the sections counts one up
+    and one down; the span ends after the closing token that brings the count to zero or below, or
+    at the end of the text.
     """
     starts = [begin for _, begin, _ in sections]
     found: list[Span] = []
-    for name, opening, open_char, close_char in declared:
-        pair = re.compile(f"[{re.escape(open_char)}{re.escape(close_char)}]")
+    for name, opening, up, down in declared:
         for match in _outside(opening, text, sections, ()):
             depth, end = 0, len(text)
-            for char in pair.finditer(text, match.end()):
-                index = bisect_right(starts, char.start()) - 1
-                if index >= 0 and char.start() < sections[index][2]:
+            for token, step in _tokens(text, match.end(), up, down):
+                index = bisect_right(starts, token.start()) - 1
+                if index >= 0 and token.start() < sections[index][2]:
                     continue
-                depth += 1 if char.group() == open_char else -1
+                depth += step
                 if depth <= 0:
-                    end = char.end()
+                    end = token.end()
                     break
             captured = {k: v for k, v in match.groupdict().items() if v is not None}
             found.append((name, match.start(), end, captured))
     return sorted(found, key=lambda span: (span[1], span[2], span[0]))
+
+
+def _tokens(
+    text: str, at: int, up: re.Pattern[str], down: re.Pattern[str]
+) -> Iterator[tuple[re.Match[str], int]]:
+    """Each opening token from ``at`` with step 1 and each closing token with step -1, in order of
+    start, the opening first on a tie. The search goes on after each token, so tokens never
+    overlap."""
+    rise, fall = up.search(text, at), down.search(text, at)
+    while True:
+        if rise is not None and (fall is None or rise.start() <= fall.start()):
+            token, step = rise, 1
+        elif fall is not None:
+            token, step = fall, -1
+        else:
+            return
+        yield token, step
+        at = max(token.end(), token.start() + 1)
+        if rise is not None and rise.start() < at:
+            rise = up.search(text, at)
+        if fall is not None and fall.start() < at:
+            fall = down.search(text, at)
 
 
 def _held(

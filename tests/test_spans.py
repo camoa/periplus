@@ -7,6 +7,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+from test_demo_a_support import edges, pin, plant, rutter
+
+from periplus.cli import main
 from periplus.errors import ExitCode
 from periplus.map import MapReport, run
 from periplus.preflight import check_runtime_dependencies
@@ -400,3 +404,119 @@ rules:
     assert report.problems == () and report.map_path is not None, report
     rows = {(line, rule, reason) for _, line, rule, reason in report.skipped}
     assert rows == {(3, "closure", "the id source return_type is absent")}, rows
+
+
+TAGS_MANIFEST = """\
+pack: tags
+version: 0.0.1
+depends: []
+folders:
+  src: ./src
+files:
+  types:
+    tpl:
+      endings: [tpl]
+      reader: text
+      sections:
+      - {name: comment, open: '<!--', close: '-->'}
+      spans:
+      - {name: fn, open: '(?=<fn\\s+name="(?<name>\\w+)")', balance: ['<fn\\b', '</fn>']}
+"""
+
+TAGS_RULES = """\
+node_types:
+- {name: tags.fn, id_namespace: tags.fn}
+- {name: tags.query, id_namespace: tags.query}
+edge_kinds:
+- {kind: runs, from: tags.fn, to: tags.query}
+rules:
+- rule: query
+  reads: file
+  in: [src]
+  match: {file: '*', filetype: tpl, text: '<query\\s+name="(?<query>\\w+)"'}
+  values:
+    owner:
+      from: {enclosing: fn, capture: name}
+      join: '|'
+      normalize: [{replace: '^.*\\|', with: ''}]
+  id: {template: '{owner}'}
+  emits: [{edge: {kind: runs, from: this_node, to: {from: {capture: query}}}}]
+  confidence: declared
+"""
+
+TAGS_TEXT = """\
+<fn name="outer" access="public">
+  <query name="first">
+  <!-- </fn> <query name="hidden"> -->
+  <fn name="inner">
+    <query name="second">
+  </fn>
+  <query name="third">
+</fn>
+<query name="outside">
+"""
+
+
+def _tags_map(
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    manifest: str = TAGS_MANIFEST,
+    text: str = TAGS_TEXT,
+) -> tuple[int, dict[str, Any]]:
+    """Plant the tag pack and its file, run ``periplus map`` once, and give the exit code and
+    the written map ({} when none)."""
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("PERIPLUS_CONFIG_DIR", str(root / "_config"))
+    rutter(root, "tags", manifest, {"tags.yaml": TAGS_RULES})
+    pin(root, "tags@0.0.1")
+    plant(root, {"src/page.tpl": text})
+    code = main(["map", "--output", str(root / "out.json")])
+    out = root / "out.json"
+    return code, json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
+
+
+def test_a_span_balancing_tag_patterns_holds_a_match_inside_a_nested_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A query takes the name of the innermost fn tag around it: an fn inside an fn opens one
+    more and its own close ends it, so the outer fn's close ends the outer span."""
+    code, document = _tags_map(tmp_path, monkeypatch)
+    assert code == 0, code
+    assert edges(document, "runs") == {
+        ("runs", "tags.fn::outer", "tags.query::first"),
+        ("runs", "tags.fn::inner", "tags.query::second"),
+        ("runs", "tags.fn::outer", "tags.query::third"),
+    }, edges(document)
+
+
+def test_a_comment_inside_a_tag_balanced_span_stays_a_section(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The body of an fn is no section, so the comment section holds inside it: the commented
+    query makes no edge and the commented close tag does not end the span."""
+    code, document = _tags_map(tmp_path, monkeypatch)
+    assert code == 0, code
+    runs = edges(document, "runs")
+    assert ("runs", "tags.fn::outer", "tags.query::first") in runs, runs
+    assert ("runs", "tags.fn::outer", "tags.query::third") in runs, runs
+    assert not [e for e in runs if e[2] == "tags.query::hidden"], runs
+
+
+def test_a_balance_entry_of_one_character_matches_that_character(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A one-character entry is the character itself, never a pattern: ``(`` and ``)`` balance
+    parentheses, and a parenthesis inside the comment section does not count."""
+    manifest = TAGS_MANIFEST.replace(
+        """open: '(?=<fn\\s+name="(?<name>\\w+)")', balance: ['<fn\\b', '</fn>']""",
+        """open: 'fn (?<name>\\w+)(?=\\()', balance: ['(', ')']""",
+    )
+    text = 'fn outer(<query name="first"> <!-- ) --> (fn inner(<query name="second">))\n'
+    text += '<query name="third">) <query name="outside">\n'
+    code, document = _tags_map(tmp_path, monkeypatch, manifest, text)
+    assert code == 0, code
+    assert edges(document, "runs") == {
+        ("runs", "tags.fn::outer", "tags.query::first"),
+        ("runs", "tags.fn::inner", "tags.query::second"),
+        ("runs", "tags.fn::outer", "tags.query::third"),
+    }, edges(document)

@@ -342,13 +342,13 @@ class FileInfo:
     """What a declared file type says about its files: the values its path gives, and its
     sections, each a name, an opening pattern and a closing template; and the resolution steps,
     with their separator, an edge end of a text rule takes when it declares none. Last its spans,
-    each a name, an opening pattern, and the opening and closing characters it balances."""
+    each a name, an opening pattern, and the opening and closing tokens it balances."""
 
     path_values: tuple[Value, ...] = ()
     sections: tuple[tuple[str, re.Pattern[str], str], ...] = ()
     resolve: tuple[Step, ...] = ()
     separator: str = ""
-    spans: tuple[tuple[str, re.Pattern[str], str, str], ...] = ()
+    spans: tuple[tuple[str, re.Pattern[str], re.Pattern[str], re.Pattern[str]], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -790,7 +790,7 @@ def _file_info(packs: Sequence[LoadedPack]) -> dict[str, FileInfo]:
     """Each declared file type's path values, sections and spans, by type name.
 
     Raises ``PackRulesUnreadable`` for a pattern that does not compile, a span whose balance is not
-    two different characters, and a ``relative_to`` naming a folder no loaded pack declares or
+    two different tokens, and a ``relative_to`` naming a folder no loaded pack declares or
     whose value holds ``**``, naming the pack.
     """
     found: dict[str, FileInfo] = {}
@@ -830,16 +830,20 @@ def _file_info(packs: Sequence[LoadedPack]) -> dict[str, FileInfo]:
     return found
 
 
-def _balance(pair: object) -> tuple[str, str]:
-    """A span's opening and closing characters."""
+def _balance(pair: object) -> tuple[re.Pattern[str], re.Pattern[str]]:
+    """A span's opening and closing tokens: an entry of one character matches that character,
+    and a longer one is a pattern."""
     if not (
         isinstance(pair, list)
         and len(pair) == 2
-        and all(isinstance(c, str) and len(c) == 1 for c in pair)
+        and all(isinstance(c, str) and c for c in pair)
         and pair[0] != pair[1]
     ):
-        raise _Unsupported("a span's balance is not two different characters")
-    return pair[0], pair[1]
+        raise _Unsupported("a span's balance is not two different tokens")
+    opening, closing = (
+        re.compile(re.escape(token)) if len(token) == 1 else _regex(token) for token in pair
+    )
+    return opening, closing
 
 
 def _flat_folder(value: Value, packs: Sequence[LoadedPack]) -> None:
