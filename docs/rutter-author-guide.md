@@ -91,6 +91,15 @@ rule's node sits at the match's line, its id a template over captures and path v
   confidence: declared
 ```
 
+A capture of an optional group that took no part in the match fills a template as empty text,
+when another capture the template names took part: in an id, a value, an attribute, a binding or
+an edge end. With `text: 'create\("(?<pkg>\w+)(?:\.(?<sub>\w+))?"\)'` and
+`to: {template: 'x:{pkg}{sub}'}`, one rule ends `create("alpha")` at `x:alpha` and
+`create("alpha.beta")` at `x:alphabeta`. A template where no capture it names took part makes
+nothing and leaves no skipped row, as an end that names the capture directly does: `x:{sub}`, or
+`{module}.{sub}` with a path value, on `create("alpha")`. A capture that took part and matched
+empty text still makes nothing in an id, attribute or edge template, and an edge end lists a row.
+
 Values reshape a capture before an id or an attribute uses it. In Typer, a command with no
 written name takes its function's name, lowercased, with dashes for underscores:
 

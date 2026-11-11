@@ -461,11 +461,12 @@ def _texts(
     ``read_from`` is the file's text, its path values, its sections and its spans. A match that
     makes no id, or whose id capture is empty, makes nothing, nor does an edge end whose capture is
     empty. An id, attribute or edge end whose template names an empty or absent value makes
-    nothing; an empty attribute capture is an empty value. An edge end that makes nothing is listed
-    in ``skipped`` with the edge's kind and the value it lacks, and the other edges still emit. A
-    capture, and an attribute or edge end from it, sits at the line it starts on; the node, a value
-    and anything made from a template at the line the match starts on, or the line its ``line``
-    capture starts on.
+    nothing; an empty attribute capture is an empty value. A template, a value's among them, fills
+    a capture that took no part as empty text when another capture it names took part. An edge
+    end that makes nothing is listed in ``skipped`` with the edge's kind and the value it lacks,
+    and the other edges still emit. A capture, and an attribute or edge end from it, sits at the
+    line it starts on; the node, a value and anything made from a template at the line the match
+    starts on, or the line its ``line`` capture starts on.
     """
     text, paths, sections, spans = read_from
     types = rule_set.types
@@ -474,7 +475,8 @@ def _texts(
     info = rule_set.files.get(rule.filetype, FileInfo())
     tables = rule_set.tables.get(rule.pack, {})
     for found in _outside(pattern, text, sections, rule.reads_sections):
-        values = {name: value for name, value in found.groupdict().items() if value is not None}
+        captures = found.groupdict()
+        values = {name: value for name, value in captures.items() if value is not None}
         lines = {name: text.count("\n", 0, found.start(name)) + 1 for name in values}
         line = lines.get(rule.line_capture) or text.count("\n", 0, found.start()) + 1
         values.update(paths)
@@ -485,19 +487,22 @@ def _texts(
                     value.join.join(held), value.normalize, value.case, values
                 )
                 continue
-            made = _value(value, values)
+            made = _value(value, values, captures)
             if made is not None:
                 values[value.name] = made
         present = {name: value for name, value in values.items() if value}
         if rule.bindings:
             for name_template, target_template in rule.bindings:
-                name, target = _fill(name_template, present), _fill(target_template, present)
+                name = _fill(name_template, present, captures)
+                target = _fill(target_template, present, captures)
                 if name and target:
                     bound.append((found.start(), name, target))
                     fired += 1
             continue
         node_id = (
-            values.get(rule.id_capture) if rule.id_capture else _fill(rule.id_template, present)
+            values.get(rule.id_capture)
+            if rule.id_capture
+            else _fill(rule.id_template, present, captures)
         )
         if node_id and rule.id_resolve:
             node_id = resolve_name(
@@ -515,7 +520,7 @@ def _texts(
                 if source in values
             ]
             for name, template in rule.templates:
-                filled = _fill(template, present)
+                filled = _fill(template, present, captures)
                 read += [(name, filled, line)] if filled is not None else []
             nodes.append(
                 FoundNode(
@@ -538,7 +543,11 @@ def _texts(
                     row = f"edge {spec.kind}: no value for {lacking}"
                     skipped.append((file, line, rule.name, row))
                 continue
-            end = _fill(spec.template, present) if spec.template is not None else values[spec.key]
+            end = (
+                _fill(spec.template, present, captures)
+                if spec.template is not None
+                else values[spec.key]
+            )
             if end is None:
                 empty = sorted(set(PLACEHOLDER.findall(spec.template or "")) - set(present))
                 silent += any(name not in values for name in empty)
@@ -717,9 +726,12 @@ def _held(
     ]
 
 
-def _value(value: Value, known: Mapping[str, str]) -> str | None:
-    """The value made from the values known, reshaped; ``None`` when what it names is absent."""
-    found = known.get(value.capture) if value.capture else _fill(value.template, known)
+def _value(
+    value: Value, known: Mapping[str, str], captures: Mapping[str, str | None] | None = None
+) -> str | None:
+    """The value made from the values known, reshaped; ``None`` when what it names is absent.
+    ``captures`` are as for ``_fill``."""
+    found = known.get(value.capture) if value.capture else _fill(value.template, known, captures)
     return None if found is None else _reshape(found, value.normalize, value.case, known)
 
 
@@ -1970,11 +1982,26 @@ def _composed(
     return ends
 
 
-def _fill(template: str | None, values: Mapping[str, str]) -> str | None:
-    """The template with each ``{name}`` replaced; ``None`` when a name has no value."""
-    if template is None or any(name not in values for name in PLACEHOLDER.findall(template)):
+def _fill(
+    template: str | None,
+    values: Mapping[str, str],
+    captures: Mapping[str, str | None] | None = None,
+) -> str | None:
+    """The template with each ``{name}`` replaced; ``None`` when a name has no value.
+
+    ``captures`` are the match's: one that took no part fills as empty text when another capture
+    the template names took part, and the template is ``None`` otherwise.
+    """
+    if template is None:
         return None
-    return PLACEHOLDER.sub(lambda found: values[found.group(1)], template)
+    captures = captures or {}
+    names = PLACEHOLDER.findall(template)
+    unfilled = [name for name in names if name not in values]
+    if any(captures.get(name, "") is not None for name in unfilled):
+        return None
+    if unfilled and all(captures.get(name) is None for name in names):
+        return None
+    return PLACEHOLDER.sub(lambda found: values.get(found.group(1), ""), template)
 
 
 def _node_id(rule: Rule, values: Mapping[str, str], *, empty_ok: bool = False) -> str | None:

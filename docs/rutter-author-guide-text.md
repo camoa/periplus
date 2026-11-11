@@ -233,8 +233,8 @@ no resolution step holds, which reads `no resolution step holds for capture b`. 
 names the end, as `no value for enclosing_class`, an attribute's argument that is not a text
 literal, or the written name a reference rule's step cannot resolve.
 
-An end whose source is absent states no edge, and leaves no row: a capture that took no part, a
-template naming a value nothing gave, a declaration with no written name, an attribute argument
+An end whose source is absent states no edge, and leaves no row: a capture that took no part,
+named directly or by a template no other capture of which took part, a template naming a value nothing gave, a declaration with no written name, an attribute argument
 not written, or a data rule's key path that reaches nothing. Packs pick between two rules or two
 edges that way, as `drupal_basic` does for a permission with and without a plus sign. An optional
 key a file leaves out is silent by design: the file does not state that relation. An id that
