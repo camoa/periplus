@@ -218,6 +218,140 @@ def test_a_shortcut_and_an_entity_class_end_at_the_names_the_tables_give(tmp_pat
     assert nodes["drupal.entity_type::user"] == "referenced"
 
 
+ENTITY_CLASSES = {
+    "Gadget": (
+        "use Drupal\\Core\\Entity\\Attribute\\ContentEntityType;\n",
+        "#[ContentEntityType(id: 'gadget')]\n",
+    ),
+    "Widget": ("", '/**\n * @ContentEntityType(\n *   id = "widget",\n * )\n */\n'),
+    "Preset": (
+        "use Drupal\\Core\\Entity\\Attribute\\ConfigEntityType;\n",
+        "#[ConfigEntityType(id: 'preset')]\n",
+    ),
+    "Recipe": ("", '/**\n * @ConfigEntityType(\n *   id = "recipe",\n * )\n */\n'),
+}
+OWN_CALLER = r"""<?php
+
+namespace Drupal\my_module\Controller;
+
+use Drupal\my_module\Entity\Gadget;
+use Drupal\my_module\Entity\Widget;
+use Drupal\my_module\Entity\Preset;
+use Drupal\my_module\Entity\Recipe;
+
+class OwnController {
+
+  public function run() {
+    $a = Gadget::load(1);
+    $b = Widget::loadMultiple();
+    $c = Preset::create([]);
+    $d = Recipe::load('x');
+    $e = Gadget::save();
+  }
+
+}
+"""
+
+
+def test_a_static_call_on_a_mapped_entity_class_ends_at_its_entity_type(tmp_path: Path) -> None:
+    """load, loadMultiple and create on a module's own entity class, declared by attribute or
+    annotation, content or config, end at that entity type, inferred, at the method's line;
+    another method makes nothing."""
+    files = {
+        str(MODULE / f"src/Entity/{name}.php"): "<?php\n\nnamespace Drupal\\my_module\\Entity;\n\n"
+        + use
+        + "\n"
+        + head
+        + f"class {name} {{\n}}\n"
+        for name, (use, head) in ENTITY_CLASSES.items()
+    }
+    files[str(MODULE / "src/Controller/OwnController.php")] = OWN_CALLER
+    _plant(tmp_path, files)
+    document, _ = _map(tmp_path)
+    run_method = "php.method::Drupal\\my_module\\Controller\\OwnController::run"
+    found = {
+        (e["to"], place["line"], p["rule"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "uses_entity_type" and e["from"] == run_method
+        for place in e["locations"]
+        for p in e["provenance"]
+    }
+    rule = "entity_class_static_call_mapped"
+    line = _line(OWN_CALLER, "public function run() {")
+    assert found == {
+        (f"drupal.entity_type::{name}", line, rule, "inferred")
+        for name in ("gadget", "widget", "preset", "recipe")
+    }
+    of_class = {
+        (e["from"], e["to"]) for e in document["edges"] if e["kind"] == "entity_type_of_class"
+    }
+    assert of_class == {
+        (f"php.type::Drupal\\my_module\\Entity\\{name}", f"drupal.entity_type::{name.lower()}")
+        for name in ENTITY_CLASSES
+    }
+
+
+VIEWS_FIELD = r"""<?php
+
+namespace Drupal\my_module\Plugin\views\field;
+
+use Drupal\views\Attribute\ViewsField;
+
+#[ViewsField('my_field')]
+class MyField {
+}
+"""
+VIEW = """\
+id: things
+display:
+  default:
+    display_options:
+      fields:
+        title:
+          plugin_id: field
+        mine:
+          plugin_id: my_field
+      filters:
+        status:
+          plugin_id: boolean
+      style:
+        type: table
+  page_1:
+    display_options:
+      path: things
+"""
+
+
+def test_a_view_config_file_names_the_views_plugins_its_displays_use(tmp_path: Path) -> None:
+    """A field's and a filter's plugin_id and the style's type, declared; the module's own field
+    plugin is mapped, the core ones referenced."""
+    _plant(
+        tmp_path,
+        {
+            str(MODULE / "src/Plugin/views/field/MyField.php"): VIEWS_FIELD,
+            "config/sync/views.view.things.yml": VIEW,
+        },
+    )
+    document, _ = _map(tmp_path)
+    view = "drupal.config::views.view.things"
+    found = {
+        (e["kind"], e["to"], p["confidence"])
+        for e in document["edges"]
+        if e["from"] == view and e["kind"].startswith("view_uses_")
+        for p in e["provenance"]
+    }
+    assert found == {
+        ("view_uses_field_plugin", "drupal.plugin.views_field::field", "declared"),
+        ("view_uses_field_plugin", "drupal.plugin.views_field::my_field", "declared"),
+        ("view_uses_filter_plugin", "drupal.plugin.views_filter::boolean", "declared"),
+        ("view_uses_style_plugin", "drupal.plugin.views_style::table", "declared"),
+    }
+    states = {n["id"]: n["state"] for n in document["nodes"]}
+    assert states["drupal.plugin.views_field::my_field"] == "mapped"
+    assert states["drupal.plugin.views_field::field"] == "referenced"
+    assert states["drupal.plugin.views_style::table"] == "referenced"
+
+
 def test_a_rutter_whose_step_names_a_table_no_pack_declares_is_refused_with_exit_26(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

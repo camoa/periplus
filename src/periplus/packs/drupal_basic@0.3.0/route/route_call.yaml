@@ -1,6 +1,6 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# A route named in a PHP call, joined to that route. A class or a function that builds a link from
+# A route named in a PHP call, joined to that route. A method or a function that builds a link from
 # a route name gives a links_to_route edge to the route: Url::fromRoute('x'),
 # Link::createFromRoute('t', 'x') and $this->redirect('x'). The first two are declared: a static
 # call on a named class says what it is. $this->redirect is inferred: the object's name, not its
@@ -8,8 +8,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # routing file declares ends at a referenced node.
 #
 # Limits:
-# - A call in a method links from the class around it, and one in a function from the function. A
-#   call in a trait, an enum or an interface gives no edge and goes under skipped.
+# - A call links from the method or function around it, in a class, a trait or an enum.
 # - A route name that is not a text literal gives no edge. One built at run time from a variable,
 #   in a method, is kept by call/runtime_argument.yaml as a php.call_site marked resolution
 #   runtime; a constant, and a variable in a function, go under skipped.

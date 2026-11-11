@@ -4,11 +4,17 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # a content entity type with its label; and each ECK bundle, from its config file
 # eck.eck_type.<entity type>.<bundle>, as the bundle <entity type>.<bundle> with its label (key
 # name), a configured_by edge to that file and a bundle_of edge to its entity type.
+# A static load, loadMultiple or create call on EckEntityType gives an inferred uses_entity_type
+# edge to its entity type, from the table eck_entity_classes (call/eck_entity_class_call.yaml).
 #
 # Known gaps: an ECK entity type's base field switches (uid, created, changed, title) and
 # standalone_url give nothing, and it has no entity_class edge, because ECK defines no class per
 # type. The bundle_of edge reads the entity type from the file name, not from a key, so a file
-# renamed by hand gives a wrong edge. A bundle's description gives nothing.
+# renamed by hand gives a wrong edge. A bundle's description gives nothing. The table
+# eck_entity_classes lists EckEntityType only: ECK derives one entity type for each ECK type from
+# EckEntity and EckEntityBundle, so a static call on either gives no edge. drupal_basic's
+# entity_class_static_call still lists such a call as skipped, and a project class with the short
+# name of a listed class gives a false uses_entity_type edge.
 #
 # The path value eck_entity_type is declared on yaml_basic's type yml, so the bundle rules match
 # filetype yml; a type of another name that claims the ending yml is refused.
@@ -26,3 +32,9 @@ files:
         eck_entity_type:
           pattern: '^(?:.*/)?eck\.eck_type\.(?<name>[^./]+)\.[^/]+\.yml$'
           template: '{name}'
+
+tables:
+  # The Entity Construction Kit module's entity classes by short name, and the entity type id
+  # each declares.
+  eck_entity_classes:
+    EckEntityType: eck_entity_type

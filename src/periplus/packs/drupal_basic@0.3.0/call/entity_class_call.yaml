@@ -1,0 +1,29 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A static load, loadMultiple or create call on a class the map holds as an entity type's class,
+# as MyEntity::load(1) on a module's own entity class: a uses_entity_type edge from the method or
+# function around the call to that entity type. It reads the calls edge calls_static_method makes
+# and entity_type_of_class (entity_type/entity_type_of_class.yaml). Inferred, as
+# entity_class_static_call: the method's name, not the file, says it loads entities.
+#
+# Limits:
+# - The edge sits at the method's line, not the call's: a map rule places what it makes at the
+#   node it matched.
+# - entity_class_static_call still lists its skipped row for such a call, since its table does
+#   not hold the class.
+# - A call on a subclass of an entity class, or through self:: or static::, makes no edge.
+# - A module's class named as a core one in entity_classes, such as its own User, gives both this
+#   edge and entity_class_static_call's edge to the core type.
+
+rules:
+- rule: entity_class_static_call_mapped
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: calls
+    - id_matches: '^php\.method::(?<class>.+)::(?:load|loadMultiple|create)$'
+    - node: 'php.type::{class}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: uses_entity_type, from: this_node, to: matched_node}}]
+  confidence: inferred

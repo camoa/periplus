@@ -89,6 +89,49 @@ def test_config_type_file_makes_a_bundle_and_a_settings_file_does_not(
     }
 
 
+# pack, the entity classes its table lists, each with the entity type id it declares
+ENTITY_CLASS_PACKS = [
+    ("profile_basic", {"Profile": "profile", "ProfileType": "profile_type"}),
+    ("eck_basic", {"EckEntityType": "eck_entity_type"}),
+    (
+        "salesforce_basic",
+        {"MappedObject": "salesforce_mapped_object", "SalesforceMapping": "salesforce_mapping"},
+    ),
+    ("webform_basic", {"Webform": "webform", "WebformSubmission": "webform_submission"}),
+    ("paragraphs_basic", {"Paragraph": "paragraph", "ParagraphsType": "paragraphs_type"}),
+]
+
+
+@pytest.mark.parametrize(("pack", "classes"), ENTITY_CLASS_PACKS)
+def test_a_static_load_on_a_contrib_entity_class_ends_at_its_entity_type(
+    tmp_path: Path, pack: str, classes: dict[str, str]
+) -> None:
+    """load, loadMultiple and create on a class the pack's table lists end at its entity type;
+    another method, and a class the table does not list, give no edge from the pack's rule."""
+    calls = "".join(
+        f"    \\Drupal\\some\\Entity\\{name}::{method}();\n"
+        for name, method in zip(classes, ("load", "loadMultiple"), strict=False)
+    )
+    first = next(iter(classes))
+    source = (
+        "<?php\nnamespace Drupal\\mymodule\\Controller;\n\nclass Loader {\n"
+        "  public function run() {\n"
+        + calls
+        + f"    {first}::create([]);\n    {first}::save();\n    Unlisted::load(1);\n"
+        "  }\n}\n"
+    )
+    _, document = _map(tmp_path, pack, {f"{MODULE_DIR}/src/Controller/Loader.php": source})
+    run_method = "php.method::Drupal\\mymodule\\Controller\\Loader::run"
+    found = {
+        (e["to"], p["rule"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "uses_entity_type" and e["from"] == run_method
+        for p in e["provenance"]
+    }
+    rule = pack.removesuffix("_basic") + "_entity_class_static_call"
+    assert found == {(f"drupal.entity_type::{i}", rule, "inferred") for i in classes.values()}
+
+
 def test_eck_entity_type_and_bundle_files_make_a_content_entity_type_and_bundles(
     tmp_path: Path,
 ) -> None:

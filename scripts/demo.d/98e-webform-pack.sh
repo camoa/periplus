@@ -5,7 +5,9 @@
 # plugin and is listed under skipped, and the same annotation on a class outside that folder makes
 # nothing. A webform's config file makes the bundle webform_submission.<id> with its label read
 # from the key title, a configured_by edge to its config file and a bundle_of edge to the entity
-# type webform_submission, which no file declares and so stays referenced.
+# type webform_submission, which no file declares and so stays referenced. Each handler the
+# webform runs gives a webform_uses_handler edge to its plugin; the Webform module's own email
+# handler stays referenced.
 set -euo pipefail
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -15,7 +17,8 @@ module="$site/web/modules/custom/mymodule"
 handlers="$module/src/Plugin/WebformHandler"
 mkdir -p "$site/.periplus" "$site/config/sync" "$handlers" "$module/src/Other"
 printf 'name: My module\ntype: module\ncore_version_requirement: ^10\n' >"$module/mymodule.info.yml"
-printf 'id: my_type\ntitle: My form\nelements: ""\n' >"$site/config/sync/webform.webform.my_type.yml"
+printf 'id: my_type\ntitle: My form\nelements: ""\nhandlers:\n  mine:\n    id: my_handler\n  email:\n    id: email\n' \
+    >"$site/config/sync/webform.webform.my_type.yml"
 cat >"$handlers/MyHandler.php" <<'EOF'
 <?php
 
@@ -99,6 +102,7 @@ assert nodes == {
     "drupal.entity_type::webform_submission": ("referenced", None),
     "drupal.module::mymodule": ("mapped", None),
     "drupal.module::webform": ("referenced", None),
+    "drupal.plugin.webform_handler::email": ("referenced", None),
     "drupal.plugin.webform_handler::my_handler": ("mapped", None),
     "php.type::Drupal\\mymodule\\Other\\NotAHandler": ("mapped", None),
     "php.type::Drupal\\mymodule\\Plugin\\WebformHandler\\ComputedHandler": ("mapped", None),
@@ -120,6 +124,10 @@ assert edges == sorted([
      "drupal.config::webform.webform.my_type", [(config, 1)]),
     ("config_provided_by", "drupal.config::webform.webform.my_type", "drupal.module::webform",
      [(config, 1)]),
+    ("webform_uses_handler", "drupal.bundle::webform_submission.my_type",
+     "drupal.plugin.webform_handler::my_handler", [(config, line(config, "id: my_handler"))]),
+    ("webform_uses_handler", "drupal.bundle::webform_submission.my_type",
+     "drupal.plugin.webform_handler::email", [(config, line(config, "id: email"))]),
     ("plugin_class", "drupal.plugin.webform_handler::my_handler",
      "php.type::Drupal\\mymodule\\Plugin\\WebformHandler\\MyHandler",
      [(my_handler, line(my_handler, "@WebformHandler("))]),

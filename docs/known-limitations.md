@@ -71,12 +71,15 @@ a list of its known gaps.
   methods such as `getHandler('x')` give no edge. A local variable, such as `$etm->getStorage('x')`
   on a parameter, gives no entity type edge unless it is named `$entity_type_manager`. An entity
   class is known by its short name, so `User::load(1)` on a module's own `User` class gives a false
-  entity type. The container rules read
-  `get('x')` in lower case only: another letter case, such as `->GET('x')`, gives no edge and no
+  entity type. A static `load`, `loadMultiple` or `create` on a module's own entity class gives
+  its `uses_entity_type` edge at the method's line, not the call's, and keeps the skipped row of
+  `entity_class_static_call`; a call on a subclass of the entity class gives no edge. The
+  container rules read `get('x')` in lower case only: another letter case, such as `->GET('x')`, gives no edge and no
   skipped row. Core plugins whose folders the rutter does not name give nothing, such as a views
   argument, sort or display plugin, and so do a views field, filter or style plugin and a mail
-  plugin declared by an annotation. A plugin type, its attribute class and its plugin manager get
-  no node. A display in the mode `default` has no `in_mode` edge, and an entity reference field's
+  plugin declared by an annotation. A view names only its field, filter and style plugins: its
+  sorts, arguments, relationships, rows and pagers give no edge. A plugin type, its attribute
+  class and its plugin manager get no node. A display in the mode `default` has no `in_mode` edge, and an entity reference field's
   target bundles give no edge.
 - **Drupal, routes and roles:** route requirements and options other than those the manifest
   lists give nothing, such as `_entity_create_access` or `_auth`. A `_custom_access` written
@@ -92,7 +95,7 @@ a list of its known gaps.
 - **Drupal contributed modules, bundles:** `config_pages_basic`, `crop_basic`, `eck_basic`,
   `paragraphs_basic`, `profile_basic` and `webform_basic` map each type's label and nothing else of
   its settings, such as a paragraph type's behaviors, a crop type's aspect ratio, a profile type's
-  roles or a webform's elements and handlers. Their entity types, other than an ECK one, are
+  roles or a webform's elements. Their entity types, other than an ECK one, are
   declared by the module's PHP, which is not mapped, so they stay `referenced`. An image style's
   crop effect and a field's allowed paragraph types give no edge. An ECK bundle's entity type is
   read from its file name, so a file renamed by hand gives a wrong edge. `eck_basic` declares its
@@ -101,7 +104,11 @@ a list of its known gaps.
 - **Drupal contributed modules, plugins:** in `ai_basic`, `advancedqueue_basic`,
   `salesforce_basic` and `webform_basic`, a plugin id that is not a text literal, or in an
   annotation not text in double quotes, makes no plugin and is listed under skipped. `webform_basic` reads handlers declared by annotation only, and no other
-  Webform plugin type. `salesforce_basic` reads any class with a generic `Plugin` annotation in the
+  Webform plugin type; a webform's disabled handler gives the same edge as an enabled one. A
+  static `load` on a contributed module's entity class gives an edge only through that module's
+  rutter, for the classes its table lists, and keeps `entity_class_static_call`'s skipped row.
+  `eck_basic` lists `EckEntityType` only: ECK derives one entity type for each ECK type from
+  `EckEntity` and `EckEntityBundle`. `salesforce_basic` reads any class with a generic `Plugin` annotation in the
   mapping field folder as a mapping field. It does not read a mapping's `field_mappings`, so a field
   mapped by a property path, a Salesforce field and a direction give no edge. Sync triggers, pull
   settings and other Salesforce plugin types give nothing. An event used through an alias, or

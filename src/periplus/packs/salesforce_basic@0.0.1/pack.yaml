@@ -6,6 +6,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # <drupal_entity_type>.<drupal_bundle>, a maps_entity_type edge, and an inferred maps_field edge to
 # each field instance its dependencies.config lists; and each SalesforceEvents constant a
 # subscriber keys, as a salesforce.event, read as text through drupal_basic's drupal_php_text.
+# A static load, loadMultiple or create call on MappedObject or SalesforceMapping gives an inferred
+# uses_entity_type edge to its entity type, from the table salesforce_entity_classes
+# (call/salesforce_entity_class_call.yaml).
 #
 # Known gaps:
 # - The mapping field manager reads the generic Plugin annotation, so any class in the folder
@@ -22,6 +25,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - An event is named by its constant as written, less any namespace. One used through an alias,
 #   or as the event's own text, such as 'salesforce.pull_query', makes no event. No edge joins a
 #   subscriber to its event: that rule belongs to drupal_basic.
+# - A static call on MappedObject or SalesforceMapping is read by the class's short name:
+#   drupal_basic's entity_class_static_call still lists such a call as skipped, and a project class
+#   with the short name of a listed class gives a false uses_entity_type edge.
 pack: salesforce_basic
 version: 0.0.1
 depends: [drupal_basic, php_basic]
@@ -29,3 +35,10 @@ depends: [drupal_basic, php_basic]
 folders:
   # The folder the mapping field manager discovers in, below a module's src folder.
   salesforce_mapping_field_classes: "{module_root}/src/Plugin/SalesforceMappingField/**"
+
+tables:
+  # The Salesforce Mapping module's entity classes by short name, and the entity type id each
+  # declares.
+  salesforce_entity_classes:
+    MappedObject: salesforce_mapped_object
+    SalesforceMapping: salesforce_mapping

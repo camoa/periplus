@@ -1,0 +1,29 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The Entity Construction Kit module's entity classes in a static load, loadMultiple or create call,
+# as EckEntityType::load(): drupal_basic's entity_class_static_call narrowed to the classes of the
+# table eck_entity_classes, which pack.yaml declares, since a dependent rutter cannot add rows to
+# drupal_basic's entity_classes. A uses_entity_type edge runs from the method or function around the
+# call to the entity type the table gives for the class's short name, inferred, at the call's line.
+# EckEntity and EckEntityBundle are left out: ECK derives one entity type for each ECK type from
+# each of them, so neither class names one entity type.
+#
+# Limits: entity_class_static_call still lists its skipped row for such a call. A class is known by
+# its short name, so a project class of the same short name gives a false edge.
+rules:
+- rule: eck_entity_class_static_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: scope
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?(?:\w+\\)*(?:EckEntityType)'}
+    - name_matches: {child: name, pattern: 'load|loadMultiple|create'}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: eck_entity_classes], types: [drupal.entity_type]}
+  confidence: inferred

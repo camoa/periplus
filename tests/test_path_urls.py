@@ -48,7 +48,7 @@ function mymod_link() {
   return \\Drupal\\Core\\Url::fromUri('internal:/my/path');
 }
 """
-CLASS = "php.type::Drupal\\mymod\\Controller\\LinkController"
+METHOD = "php.method::Drupal\\mymod\\Controller\\LinkController::page"
 
 
 def _plant(root: Path) -> None:
@@ -94,10 +94,10 @@ def test_a_path_url_links_to_the_path_node_the_route_serves(tmp_path: Path) -> N
     route, item = "route_from_routing_file_edges", "drupal.url_path::/my/item/{id}"
     assert edges == [
         ("links_to_path", "php.function::mymod_link", "drupal.url_path::/my/path", (internal,)),
-        ("links_to_path", CLASS, "drupal.url_path::/my/item/5", (user,)),
-        ("links_to_path", CLASS, "drupal.url_path::/my/path", (internal, user)),
-        ("links_to_path", CLASS, "drupal.url_path::/my/path?x=1", (user,)),
-        ("links_to_path", CLASS, "drupal.url_path::/no/route", (user,)),
+        ("links_to_path", METHOD, "drupal.url_path::/my/item/5", (user,)),
+        ("links_to_path", METHOD, "drupal.url_path::/my/path", (internal, user)),
+        ("links_to_path", METHOD, "drupal.url_path::/my/path?x=1", (user,)),
+        ("links_to_path", METHOD, "drupal.url_path::/no/route", (user,)),
         ("route_serves_path", "drupal.route::mymod.item", item, (route,)),
         ("route_serves_path", "drupal.route::mymod.page", "drupal.url_path::/my/path", (route,)),
     ]

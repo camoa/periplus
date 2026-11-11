@@ -1,0 +1,33 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A view's config file names the views plugins its displays use: each field's and each filter's
+# plugin_id, and the style's type, under display.<display>.display_options. One edge from the
+# view's config node to each plugin, declared: the file states the id. A core plugin, such as the
+# field plugin field or the style plugin table, has no class in the mapped code and ends at a
+# referenced node.
+#
+# Limits: sorts, arguments, relationships, rows, pagers and the display plugins themselves give
+# nothing: drupal_basic has no node type for them.
+
+edge_kinds:
+- kind: view_uses_field_plugin
+  from: drupal.config_object
+  to: drupal.views_field_plugin
+- kind: view_uses_filter_plugin
+  from: drupal.config_object
+  to: drupal.views_filter_plugin
+- kind: view_uses_style_plugin
+  from: drupal.config_object
+  to: drupal.views_style_plugin
+
+rules:
+- rule: view_uses_views_plugins
+  reads: file
+  in: [config, module_config]
+  match: {file: 'views.view.*', filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - edge: {kind: view_uses_field_plugin, from: this_node, to: {from: {key: 'display.*.display_options.fields.*.plugin_id'}, type: drupal.views_field_plugin}}
+  - edge: {kind: view_uses_filter_plugin, from: this_node, to: {from: {key: 'display.*.display_options.filters.*.plugin_id'}, type: drupal.views_filter_plugin}}
+  - edge: {kind: view_uses_style_plugin, from: this_node, to: {from: {key: 'display.*.display_options.style.type'}, type: drupal.views_style_plugin}}
+  confidence: declared

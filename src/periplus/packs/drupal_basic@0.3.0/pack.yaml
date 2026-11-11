@@ -69,7 +69,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   as an inferred hook_acts_on_entity_type edge to <type>; each route's path, as a
 #   route_serves_path edge to a drupal.url_path node, and each path Url::fromUserInput or
 #   Url::fromUri('internal:...') names, as a links_to_path edge; each route name Url::fromRoute,
-#   Link::createFromRoute or $this->redirect names, as a links_to_route edge. The rule files'
+#   Link::createFromRoute or $this->redirect names, as a links_to_route edge from the method or
+#   function around the call; each field, filter and style plugin a view's config file names, as a
+#   view_uses_field_plugin, view_uses_filter_plugin or view_uses_style_plugin edge. The rule files'
 #   headers name their limits.
 #
 # False results:
@@ -146,10 +148,13 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   manager methods such as getHandler('x') give no edge.
 # - A \Drupal:: shortcut gives a uses_service edge only when the table shortcut_services below
 #   lists its method, and \Drupal::cache('x') gives none. A static load, loadMultiple or create
-#   call gives a uses_entity_type edge only on a core entity class the table entity_classes lists:
-#   MyEntity::loadMultiple() and Message::load(1) give none. Each such call is listed as skipped.
-#   An entity class is known by its short name, so a project class named as a core one, such as
-#   a module's own User class, gives a false uses_entity_type edge.
+#   call gives a uses_entity_type edge from entity_class_static_call only on a core entity class
+#   the table entity_classes lists; any other class is listed as skipped. On a class the map holds
+#   as an entity type's class, as a module's own MyEntity, call/entity_class_call.yaml gives the
+#   edge from the method, at the method's line, and the skipped row stays. Message::load(1) and a
+#   call on a subclass of an entity class give none. An entity class is known by its short name,
+#   so a project class named as a core one, such as a module's own User class, gives a false
+#   uses_entity_type edge.
 # - The container rules read get('x') in lower case only: another letter case, such as
 #   ->GET('x'), gives no edge and no skipped row.
 # - A contributed module's bundle config file, such as paragraphs.paragraphs_type.text or

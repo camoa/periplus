@@ -1,0 +1,55 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The twins of the four entity_class rules, the other way round: from the class that defines an
+# entity type to that type, so a map rule can walk forward from a call on the class
+# (call/entity_class_call.yaml). Each fires on the same attribute or annotation as its twin.
+
+edge_kinds:
+- kind: entity_type_of_class
+  from: php.class
+  to: drupal.entity_type
+
+rules:
+- rule: content_entity_type_of_class_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    attribute: Drupal\Core\Entity\Attribute\ContentEntityType
+    filetype: php
+    where: [{applies_to: class_declaration}]
+  id: {from: {attribute_argument: id}, must_be: string_literal}
+  emits: [{edge: {kind: entity_type_of_class, from: enclosing_class, to: this_node}}]
+  confidence: declared
+
+- rule: config_entity_type_of_class_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    attribute: Drupal\Core\Entity\Attribute\ConfigEntityType
+    filetype: php
+    where: [{applies_to: class_declaration}]
+  id: {from: {attribute_argument: id}, must_be: string_literal}
+  emits: [{edge: {kind: entity_type_of_class, from: enclosing_class, to: this_node}}]
+  confidence: declared
+
+- rule: content_entity_type_of_class_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match:
+    annotation: ContentEntityType
+    filetype: php
+    where: [{applies_to: class_declaration}]
+  id: {from: {annotation_key: id}, must_be: string_literal}
+  emits: [{edge: {kind: entity_type_of_class, from: enclosing_class, to: this_node}}]
+  confidence: declared
+
+- rule: config_entity_type_of_class_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match:
+    annotation: ConfigEntityType
+    filetype: php
+    where: [{applies_to: class_declaration}]
+  id: {from: {annotation_key: id}, must_be: string_literal}
+  emits: [{edge: {kind: entity_type_of_class, from: enclosing_class, to: this_node}}]
+  confidence: declared

@@ -21,7 +21,7 @@ Each entry below gives the rutter, its version, what it maps and the rutters it 
 
 | Rutter | What it maps | Depends on |
 |---|---|---|
-| `drupal_basic@0.3.0` | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays, forms, roles, block placements and plugins such as blocks, actions, field widgets and formatters, queue workers and REST resources. The services and entity types that PHP code names in calls such as `\Drupal::service('x')`. | `php_basic`, `yaml_basic`, `twig_basic` |
+| `drupal_basic@0.3.0` | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays, forms, roles, block placements and plugins such as blocks, actions, field widgets and formatters, queue workers and REST resources. The services and entity types that PHP code names in calls such as `\Drupal::service('x')` or a static `load()` on a module's own entity class, the routes and paths a method or function links to, and the views plugins a view uses. | `php_basic`, `yaml_basic`, `twig_basic` |
 | `drupal_js_basic@0.0.1` | Drupal JavaScript behaviors and the behaviors they attach, the `drupalSettings` keys that PHP attaches and behaviors read, the libraries that PHP, templates and components attach, the library scripts and stylesheets, and the paths that script strings write. | `js_basic`, `drupal_basic` |
 | `drupal_more@0.1.0` | Base fields an entity class defines and the entity type a reference field targets, the PHP class or trait that reads or writes a field by name, the handler classes an entity annotation names, `Job::create('type')` calls, and `->hasPermission('literal')` checks. | `drupal_basic`, `advancedqueue_basic` |
 
@@ -37,12 +37,12 @@ Pin one of these beside `drupal_basic` when the site uses the module.
 | `crop_basic@0.0.1` | Each Crop API crop type, as a bundle of the entity type `crop`. | `drupal_basic` |
 | `drupal_next@0.1.0` | The next module's sites, per-bundle settings and four plugin kinds, the site's preview and revalidate handlers in the Next.js app, Drupal endpoints with their HTTP methods from routing files and REST resources, the TypeScript calls to an endpoint, JSON:API resources and OAuth scopes. | `drupal_basic`, `php_basic`, `typescript`, `react`, `nextjs` |
 | `drush_basic@0.0.1` | Drush commands in the custom modules, from the `Command` attribute or the `@command` tag, each joined to its method and class. | `drupal_basic`, `php_basic` |
-| `eck_basic@0.0.1` | Each Entity Construction Kit entity type and each of its bundles. | `drupal_basic` |
-| `paragraphs_basic@0.0.1` | Each paragraph type, as a bundle of the entity type `paragraph`. | `drupal_basic` |
-| `profile_basic@0.0.1` | Each Profile type, as a bundle of the entity type `profile`. | `drupal_basic` |
-| `salesforce_basic@0.0.1` | Salesforce mapping field plugins, each mapping with its Salesforce object and the bundle, entity type and fields it maps, and the Salesforce events that subscribers name. | `drupal_basic`, `php_basic` |
+| `eck_basic@0.0.1` | Each Entity Construction Kit entity type and each of its bundles, and the entity type a static `EckEntityType::load()` names. | `drupal_basic` |
+| `paragraphs_basic@0.0.1` | Each paragraph type, as a bundle of the entity type `paragraph`, and the entity type a static `load()` on `Paragraph` or `ParagraphsType` names. | `drupal_basic` |
+| `profile_basic@0.0.1` | Each Profile type, as a bundle of the entity type `profile`, and the entity type a static `load()` on `Profile` or `ProfileType` names. | `drupal_basic` |
+| `salesforce_basic@0.0.1` | Salesforce mapping field plugins, each mapping with its Salesforce object and the bundle, entity type and fields it maps, and the Salesforce events that subscribers name, and the entity type a static `load()` on `MappedObject` or `SalesforceMapping` names. | `drupal_basic`, `php_basic` |
 | `twig_tweak_basic@0.0.1` | The block plugins, menus, entity types, entity forms and field storages that Twig Tweak functions such as `drupal_block('x')` name in templates. | `drupal_basic` |
-| `webform_basic@0.0.1` | Webform handler plugins declared by annotation, each joined to its class, and each webform as a bundle of `webform_submission`. | `drupal_basic`, `php_basic` |
+| `webform_basic@0.0.1` | Webform handler plugins declared by annotation, each joined to its class, each webform as a bundle of `webform_submission` with the handlers it runs, and the entity type a static `load()` on `Webform` or `WebformSubmission` names. | `drupal_basic`, `php_basic` |
 
 ## Laravel
 

@@ -1,0 +1,26 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A webform's config file names the handler plugin of each handler it runs, under handlers.<handler
+# id>.id: one webform_uses_handler edge from the webform's bundle, webform_submission.<id>, to that
+# plugin, declared: the file states the id. A handler the Webform module itself provides, such as
+# email, has no class in the mapped code and ends at a referenced node.
+#
+# Limits: a handler's status, conditions and settings give nothing, so a disabled handler gives the
+# same edge as an enabled one.
+
+edge_kinds:
+- kind: webform_uses_handler
+  from: drupal.bundle
+  to: drupal.webform_handler
+
+rules:
+- rule: webform_uses_handler_from_config
+  reads: file
+  in: [config, module_config]
+  match: {file: 'webform.webform.*', filetype: yaml}
+  id:
+    from: file_stem
+    normalize: [{replace: '^webform\.webform\.', with: 'webform_submission.'}]
+  emits:
+  - edge: {kind: webform_uses_handler, from: this_node, to: {from: {key: 'handlers.*.id'}, type: drupal.webform_handler}}
+  confidence: declared

@@ -2,15 +2,14 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A URL written as a path string, joined to the route that serves that exact path. A route serves
 # the path its routing file gives it, a route_serves_path edge in route/route_definition.yaml. A
-# class or a function that builds a URL from a path names that path, a links_to_path edge:
+# method or a function that builds a URL from a path names that path, a links_to_path edge:
 # Url::fromUserInput('/x') and Url::fromUri('internal:/x'). A template's attribute value written
 # whole as a path names it too. All meet at one drupal.url_path node,
 # whose id is the path as written, so a route and a link reach each other through it. A path no
 # route serves ends at a referenced node.
 #
 # Limits:
-# - A call in a method links from the class around it, and one in a function from the function. A
-#   call in a trait, an enum or an interface gives no edge and goes under skipped.
+# - A call links from the method or function around it, in a class, a trait or an enum.
 # - A query string or a fragment stays in the id: /my/path?x=1 is a referenced path node of its
 #   own and meets no route. No reference end can cut a suffix from a call's argument.
 # - A path is matched exactly. A route path with a placeholder, such as /my/item/{id}, meets no
@@ -29,7 +28,7 @@ edge_kinds:
   from: drupal.route
   to: drupal.url_path
 - kind: links_to_path
-  from: [php.class, php.function, drupal.template]
+  from: [php.class, php.function, php.method, drupal.template]
   to: drupal.url_path
 - kind: component_links_path
   from: drupal.component
