@@ -97,6 +97,16 @@ a list of its known gaps.
   A contributed or core theme's settings, such as `olivero.settings`, end at a referenced module.
   A constraint whose `validatedBy()` returns another class gets a false inferred `validated_by`
   edge when a class named `<constraint class>Validator` is mapped too.
+- **Drupal, events, Twig extensions, field access and suggestions:** every constant of an `Event`
+  class or a class named `*Events` reads as an event name, and only the first constant of a
+  `const` statement is read. A subscriber key or dispatch name written with its namespace, as text
+  or as a variable gives nothing, and so does `dispatch($event)` with no name or a call in a plain
+  PHP file outside a `src` folder; only a key's first listener is read. `new \Twig\TwigFilter(...)` written with
+  its namespace, a filter after a hash in the same print, and an extension without
+  `AbstractExtension` give nothing. `->get('x')` is read on any object, so `$config->get('x')`
+  links to a field storage named `x`; a `field_` name with no storage ends at an unresolved
+  `field.storage.<name>`. A field suggestion is read only for a name that starts with `field_`. A
+  template's edge sits at the template's line, and a method's field edge at the method's line.
 - **Drupal, settings to know:** only the custom modules and themes are read as PHP. A folder
   setting may not leave the project root, so a site is mapped from inside its own tree.
   `drupal_basic` repeats `php_basic`'s grammar pin, so a grammar update must change both.
@@ -120,7 +130,8 @@ a list of its known gaps.
   mapping field folder as a mapping field. It does not read a mapping's `field_mappings`, so a field
   mapped by a property path, a Salesforce field and a direction give no edge. Sync triggers, pull
   settings and other Salesforce plugin types give nothing. An event used through an alias, or
-  written as its own text, makes no event, and no edge joins a subscriber to its event.
+  written as its own text, makes no `salesforce.event`; `drupal_basic` joins each key of
+  `getSubscribedEvents` to its listener through a referenced `drupal.event`.
 - **Drush:** the `@command` tag is read as text, because the engine reads a docblock annotation
   only in the form `@Name(...)` and allows one text file type per ending. Its class is named from
   the file's path, so its edges are inferred, and a class named otherwise gives unresolved ends.

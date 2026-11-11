@@ -1,0 +1,38 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Twig filter or function a module's Twig extension provides, named as templates call it:
+# new TwigFilter('price', ...) in getFilters() is twig.filter::price, and new TwigFunction('total',
+# ...) in getFunctions() is twig.function::total. Each is provided by the class that creates it
+# and used by the templates that call it. Core's and contributed modules' filters and functions,
+# such as |t or attach_library(), are not nodes.
+
+node_types:
+- name: twig.filter
+  id_namespace: twig.filter
+- name: twig.function
+  id_namespace: twig.function
+# Where a filter or function is created or called, as filter|<name> or function|<name>: one node
+# per name, at each creation, with an edge to each class that creates it.
+- name: drupal.twig_callable
+  id_namespace: drupal.twig_callable
+  internal: true
+
+edge_kinds:
+- kind: twig_filter_provided_by
+  from: twig.filter
+  to: php.class
+- kind: twig_function_provided_by
+  from: twig.function
+  to: php.class
+- kind: template_uses_twig_filter
+  from: drupal.template
+  to: twig.filter
+- kind: template_uses_twig_function
+  from: drupal.template
+  to: twig.function
+- kind: twig_callable_in_class
+  from: drupal.twig_callable
+  to: php.class
+- kind: template_calls_twig_callable
+  from: drupal.template
+  to: drupal.twig_callable

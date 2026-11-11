@@ -1,0 +1,32 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field's machine name as an internal hub: one node per name, with an edge to each field storage
+# of that name, on any entity type. Code and templates name a field by its name alone; the map
+# rules in field_access.yaml and theme_hook/suggestion_field.yaml join through the hub.
+
+node_types:
+- name: drupal.field_name
+  id_namespace: drupal.field_name
+  internal: true
+
+edge_kinds:
+- kind: field_name_of
+  from: drupal.field_name
+  to: drupal.field_storage
+
+rules:
+- rule: field_name_from_storage
+  reads: file
+  in: [config, module_config]
+  match: {file: field.storage.*, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^field\.storage\.[^.]+\.', with: ''}]}
+  emits: [{node: {type: drupal.field_name}}]
+  confidence: declared
+
+- rule: field_name_from_storage_edges
+  reads: file
+  in: [config, module_config]
+  match: {file: field.storage.*, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^field\.storage\.[^.]+\.', with: ''}]}
+  emits: [{edge: {kind: field_name_of, from: this_node, to: {from: {key: id}, template: 'field.storage.{id}', type: drupal.field_storage}}}]
+  confidence: declared

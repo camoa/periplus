@@ -1,0 +1,23 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# <base>--<anything>.html.twig suggests the theme hook <base>, its dashes read as underscores:
+# my-card--wide suggests my_card. A core hook such as node or block is not a mapped node, so a
+# template that suggests one links to nothing.
+
+rules:
+- rule: hook_suggestion
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'hook|{template_name}|{hook_suggestion}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: suggests_theme_hook
+  reads: map
+  match:
+    node_type: drupal.suggestion
+    where: [{id_matches: '^drupal\.suggestion::hook\|(?<template>[^|]+)\|(?<hook>.+)$'}]
+    follow: [{node: 'drupal.theme_hook::{hook}'}]
+  emits: [{edge: {kind: suggests_theme_hook, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred

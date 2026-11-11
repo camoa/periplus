@@ -1,0 +1,27 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A theme suggestion template, by its file name, to what the name suggests it for: a block plugin,
+# a block placement, a base theme hook or a field storage. The name is a naming convention, so each
+# edge is inferred. A file rule turns the name into an internal node, <what>|<template>|<name>, from
+# the path values of drupal_template_text in pack.yaml; a map rule joins it only to a node the map
+# holds, so no target is made up. A name that no mapped or referenced node has gives nothing. The
+# edge sits at the template's last line, where the name is read.
+
+node_types:
+- name: drupal.suggestion
+  id_namespace: drupal.suggestion
+  internal: true
+
+edge_kinds:
+- kind: suggests_block_plugin
+  from: drupal.template
+  to: drupal.block_plugin
+- kind: suggests_block_placement
+  from: drupal.template
+  to: drupal.block_placement
+- kind: suggests_theme_hook
+  from: drupal.template
+  to: drupal.theme_hook
+- kind: suggests_field
+  from: drupal.template
+  to: drupal.field_storage

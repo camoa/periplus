@@ -1,0 +1,94 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Code that names a field: ->get('field_x'), ->set('field_x', ...) and ->hasField('field_x') in a
+# PHP method or function, and <variable>.field_x inside {{ }} or {% %} in a template. Each links to
+# the internal field-name hub (field/field_name.yaml). A map rule then gives accesses_field to every
+# field storage of that name, on any entity type, at the line of the method, the function or the
+# template. A name that starts with field_ and that no mapped storage has ends at an unresolved
+# field storage, field.storage.<name>, so it stays in the map as a mark. Any other name with no
+# storage, such as a configuration key read by $config->get('name'), gives nothing.
+#
+# The object is not read, so ->get('field_x') on a form state or a configuration object links to
+# a storage named field_x too. The argument is a text literal or a class constant a mapped file
+# declares as text; a constant of core or contrib leaves a skipped row, and a variable or an
+# expression gives nothing. A template reads x.field_y only: x['field_y'] and a name built in Twig
+# give nothing.
+
+edge_kinds:
+- kind: names_field
+  from: [php.method, php.function]
+  to: drupal.field_name
+# A template's own kind, because a text rule builds its from end from the kind's types, which must
+# share one id namespace.
+- kind: template_names_field
+  from: drupal.template
+  to: drupal.field_name
+- kind: accesses_field
+  from: [php.method, php.function, drupal.template]
+  to: drupal.field_storage
+
+rules:
+- rule: field_named_in_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - {name_matches: 'get|set|hasField'}
+    - {name_matches: {child: arguments, pattern: '(?s)\(\s*(?:''[^'']*''|"[^"]*"|(?:\\?[A-Za-z_][\w\\]*|self|static)::[A-Z_][A-Z0-9_]*)\s*(?:,.*)?\)'}}
+  emits: [{edge: {kind: names_field, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.field_name]}}}]
+  confidence: declared
+
+- rule: field_named_in_template
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\b[A-Za-z_]\w*\.(?<field>field_\w+)'}
+  values:
+    in_twig: {from: {enclosing: twig_expression, capture: mark}}
+  id: {template: '{in_twig}|{template_name}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{edge: {kind: template_names_field, from: this_node, to: {from: {capture: field}, type: drupal.field_name}}}]
+  confidence: declared
+
+# A name that does not start with field_: an edge to each storage of that name, and nothing when
+# none is mapped. The pattern spells out "not field_" one letter at a time.
+- rule: code_accesses_field
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: names_field
+    - id_matches: '^drupal\.field_name::(?:[^f]|f[^i]|fi[^e]|fie[^l]|fiel[^d]|field[^_])'
+    - edge: field_name_of
+  emits: [{edge: {kind: accesses_field, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+# A name that starts with field_: an edge to each storage of that name, else to the unresolved
+# field.storage.<name>. entity captures empty text at the hub, and the storage's entity type and a
+# dot when the try step reaches a storage.
+- rule: code_accesses_field_or_mark
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: names_field
+    - id_matches: '^drupal\.field_name::(?<entity>)(?<field>field_\w+)$'
+    - try:
+      - edge: field_name_of
+      - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+\.)(?<field>.+)$'
+  emits: [{edge: {kind: accesses_field, from: this_node, to: {template: 'field.storage.{entity}{field}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: template_accesses_field_or_mark
+  reads: map
+  match:
+    node_type: drupal.template
+    follow:
+    - edge: template_names_field
+    - id_matches: '^drupal\.field_name::(?<entity>)(?<field>field_\w+)$'
+    - try:
+      - edge: field_name_of
+      - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+\.)(?<field>.+)$'
+  emits: [{edge: {kind: accesses_field, from: this_node, to: {template: 'field.storage.{entity}{field}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred

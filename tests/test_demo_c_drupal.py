@@ -1146,3 +1146,558 @@ def test_a_plugin_type_comes_from_its_attribute_or_annotation_class_and_joins_pl
     assert managed == [(f"php.method::{own}GizmoManager::__construct", gizmo, "inferred")]
     attributes = {(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "has_attribute"}
     assert (f"php.type::{own}Attribute\\Gizmo", "php.type::Attribute") in attributes
+
+
+# --- events, Twig extensions, field access, theme suggestions ---------------------------------
+
+EVENTS = {
+    str(MODULE / "src/Event/OrderEvent.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+use Symfony\Contracts\EventDispatcher\Event;
+
+class OrderEvent extends Event {
+
+  const PLACED = 'my_module.placed', CANCELLED = 'my_module.cancelled';
+
+}
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+
+  const PAID = 'my_module.paid';
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/LocalEvents.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+final class LocalEvents {
+
+  const LOCAL = 'my_module.local';
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/OrderSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvent;
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpKernel\KernelEvents;
+
+class OrderSubscriber implements EventSubscriberInterface {
+
+  const MINE = 'my_module.mine';
+
+  public static function getSubscribedEvents() {
+    $events[OrderEvent::CANCELLED][] = ['onCancelled', 5];
+    $events[self::MINE][] = ['onMine'];
+    return $events + [
+      OrderEvent::PLACED => 'onPlaced',
+      KernelEvents::REQUEST => ['onRequest', 100],
+      OrderEvents::PAID => 'onPaid',
+      LocalEvents::LOCAL => 'onLocal',
+    ];
+  }
+
+  public function helper() {
+    return [OrderEvent::PLACED => 'notAListener'];
+  }
+
+  public function onPlaced($event) {
+  }
+
+  public function onCancelled($event) {
+  }
+
+  public function onMine($event) {
+  }
+
+  public function onRequest($event) {
+  }
+
+  public function onPaid($event) {
+  }
+
+  public function onLocal($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/Service/Notifier.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+use Drupal\my_module\Event\OrderEvent;
+use Drupal\my_module\Event\OrderEvents;
+
+class Notifier {
+
+  const SENT = 'my_module.sent';
+
+  public function notify($order) {
+    $event = new OrderEvent();
+    $this->dispatcher->dispatch($event, OrderEvent::PLACED);
+    $this->dispatcher->dispatch(new OrderEvent(f(g($order))), OrderEvents::PAID);
+    $this->dispatcher->dispatch($event, self::SENT);
+    $later = function () use ($event) {
+      $this->dispatcher->dispatch($event, OrderEvent::CANCELLED);
+    };
+  }
+
+}
+""",
+    str(MODULE / "my_module.module"): r"""<?php
+
+use Drupal\my_module\Event\OrderEvent;
+
+function my_module_user_login($account) {
+  \Drupal::service('event_dispatcher')->dispatch(new OrderEvent(), OrderEvent::PLACED);
+}
+""",
+}
+
+
+def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_the_methods_around(
+    tmp_path: Path,
+) -> None:
+    """A constant of an Event class or an *Events class is an event; each key of
+    getSubscribedEvents, in either form, joins its listener, and each dispatch its method, all
+    inferred. An outside event, a second constant of one statement and an own-class constant end
+    at referenced events; an array outside getSubscribedEvents gives nothing; a class in the
+    file's namespace joins in the map and keeps its skipped row."""
+    _plant(tmp_path, EVENTS)
+    document, report = _map(tmp_path)
+    own = "Drupal\\my_module\\"
+    event = "drupal.event::" + own
+    sub = f"php.method::{own}EventSubscriber\\OrderSubscriber::"
+    notify = f"php.method::{own}Service\\Notifier::notify"
+    states = {n["id"]: n["state"] for n in document["nodes"] if n["type"] == "drupal.event"}
+    assert states == {
+        event + "Event\\OrderEvent::PLACED": "mapped",
+        event + "Event\\OrderEvent::CANCELLED": "referenced",
+        event + "Event\\OrderEvents::PAID": "mapped",
+        event + "EventSubscriber\\LocalEvents::LOCAL": "mapped",
+        event + "EventSubscriber\\OrderSubscriber::MINE": "referenced",
+        event + "Service\\Notifier::SENT": "referenced",
+        "drupal.event::Symfony\\Component\\HttpKernel\\KernelEvents::REQUEST": "referenced",
+    }
+    found = {
+        (e["kind"], e["from"], e["to"], e["locations"][0]["line"], p["rule"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] in ("subscribed_by", "dispatched_by", "dispatched_by_function")
+        for p in e["provenance"]
+    }
+    request = "drupal.event::Symfony\\Component\\HttpKernel\\KernelEvents::REQUEST"
+    assert found == {
+        (
+            "subscribed_by",
+            event + "Event\\OrderEvent::CANCELLED",
+            sub + "onCancelled",
+            15,
+            "event_subscribed_by",
+            "inferred",
+        ),
+        (
+            "subscribed_by",
+            event + "EventSubscriber\\OrderSubscriber::MINE",
+            sub + "onMine",
+            16,
+            "event_subscribed_by_own_class",
+            "inferred",
+        ),
+        (
+            "subscribed_by",
+            event + "Event\\OrderEvent::PLACED",
+            sub + "onPlaced",
+            18,
+            "event_subscribed_by",
+            "inferred",
+        ),
+        ("subscribed_by", request, sub + "onRequest", 19, "event_subscribed_by", "inferred"),
+        (
+            "subscribed_by",
+            event + "Event\\OrderEvents::PAID",
+            sub + "onPaid",
+            20,
+            "event_subscribed_by",
+            "inferred",
+        ),
+        (
+            "subscribed_by",
+            event + "EventSubscriber\\LocalEvents::LOCAL",
+            sub + "onLocal",
+            21,
+            "event_subscribed_in_namespace",
+            "inferred",
+        ),
+        (
+            "dispatched_by",
+            event + "Event\\OrderEvent::PLACED",
+            notify,
+            14,
+            "event_dispatched_by",
+            "inferred",
+        ),
+        (
+            "dispatched_by",
+            event + "Event\\OrderEvents::PAID",
+            notify,
+            15,
+            "event_dispatched_by",
+            "inferred",
+        ),
+        (
+            "dispatched_by",
+            event + "Service\\Notifier::SENT",
+            notify,
+            16,
+            "event_dispatched_by_own_class",
+            "inferred",
+        ),
+        (
+            "dispatched_by",
+            event + "Event\\OrderEvent::CANCELLED",
+            notify,
+            18,
+            "event_dispatched_by",
+            "inferred",
+        ),
+        (
+            "dispatched_by_function",
+            event + "Event\\OrderEvent::PLACED",
+            "php.function::my_module_user_login",
+            6,
+            "event_dispatched_by_function",
+            "inferred",
+        ),
+    }
+    rows = [(file.rsplit("/", 1)[-1], line, rule, why) for file, line, rule, why in report.skipped]
+    assert rows == [
+        (
+            "OrderSubscriber.php",
+            21,
+            "event_subscribed_by",
+            "edge subscribed_by: no resolution step holds for capture key",
+        )
+    ]
+
+
+TWIG_EXTENSIONS = {
+    str(MODULE / "src/Twig/ShopExtension.php"): r"""<?php
+
+namespace Drupal\my_module\Twig;
+
+use Twig\Extension\AbstractExtension;
+use Twig\TwigFilter;
+use Twig\TwigFunction;
+
+class ShopExtension extends AbstractExtension {
+
+  public function getFilters() {
+    return [new TwigFilter('money', [$this, 'money'])];
+  }
+
+  public function getFunctions() {
+    return [new TwigFunction('cart_total', [$this, 'total'])];
+  }
+
+}
+""",
+    str(MODULE / "src/Twig/MoreExtension.php"): r"""<?php
+
+namespace Drupal\my_module\Twig;
+
+use Twig\TwigFilter;
+
+class MoreExtension extends ShopExtension {
+
+  public function getFilters() {
+    return [new TwigFilter('short', [$this, 'short'])];
+  }
+
+}
+""",
+    str(MODULE / "src/Helper.php"): r"""<?php
+
+namespace Drupal\my_module;
+
+use Twig\TwigFilter;
+
+class Helper {
+
+  public function make() {
+    return new TwigFilter('loose', 'strtoupper');
+  }
+
+}
+""",
+    str(MODULE / "templates/my-cart.html.twig"): """\
+<div>{{ price|money }} {{ cart_total() }}</div>
+{% if cart_total() %}{{ 'Cart'|t }}{% endif %}
+<p>Plain text | short and a note.</p>
+{{ {a: 1}|merge({b: 2})|short }}
+{{ title|loose }}
+{# {{ title|short }} #}
+""",
+}
+
+
+def test_a_twig_extension_provides_its_filters_and_functions_and_templates_use_them(
+    tmp_path: Path,
+) -> None:
+    """A filter or function created in a class that descends from AbstractExtension is a node
+    provided by that class, declared; a template that calls it uses it, inferred. A filter made in
+    any other class, a core filter, text outside Twig, a filter after a hash and a comment give
+    nothing."""
+    _plant(tmp_path, TWIG_EXTENSIONS)
+    document, report = _map(tmp_path)
+    assert report.skipped == (), report.skipped
+    twig = "php.type::Drupal\\my_module\\Twig\\"
+    names = sorted(
+        (n["id"], n["locations"][0]["line"])
+        for n in document["nodes"]
+        if n["type"] in ("twig.filter", "twig.function")
+    )
+    assert names == [
+        ("twig.filter::money", 12),
+        ("twig.filter::short", 10),
+        ("twig.function::cart_total", 16),
+    ]
+    found = {
+        (e["kind"], e["from"], e["to"], p["confidence"])
+        for e in document["edges"]
+        if "twig" in e["kind"]
+        for p in e["provenance"]
+    }
+    template = "drupal.template::my-cart"
+    assert found == {
+        ("twig_filter_provided_by", "twig.filter::money", twig + "ShopExtension", "declared"),
+        ("twig_filter_provided_by", "twig.filter::short", twig + "MoreExtension", "declared"),
+        (
+            "twig_function_provided_by",
+            "twig.function::cart_total",
+            twig + "ShopExtension",
+            "declared",
+        ),
+        ("template_uses_twig_filter", template, "twig.filter::money", "inferred"),
+        ("template_uses_twig_function", template, "twig.function::cart_total", "inferred"),
+    }
+
+
+FIELD_STORAGE = """\
+langcode: en
+status: true
+id: {entity}.{field}
+field_name: {field}
+entity_type: {entity}
+type: string
+"""
+FIELD_FILES = {
+    "config/sync/field.storage.node.field_color.yml": FIELD_STORAGE.format(
+        entity="node", field="field_color"
+    ),
+    "config/sync/field.storage.user.field_color.yml": FIELD_STORAGE.format(
+        entity="user", field="field_color"
+    ),
+    "config/sync/field.storage.node.body.yml": FIELD_STORAGE.format(entity="node", field="body"),
+    str(MODULE / "src/Painter.php"): r"""<?php
+
+namespace Drupal\my_module;
+
+class Painter {
+
+  const GONE = 'field_gone';
+
+  public function paint($entity, $config, $name) {
+    if ($entity->hasField('field_color')) {
+      $entity->set('field_size', 3);
+      $entity->get('body');
+      $entity->get(self::GONE);
+      $entity->get($name);
+      $config->get('my_module.setting');
+    }
+  }
+
+}
+""",
+    str(MODULE / "my_module.module"): """\
+<?php
+
+function my_module_node_presave($node) {
+  $node->get('field_color');
+}
+""",
+    str(THEME / "templates/node--article--full.html.twig"): """\
+<article>{{ node.field_color.value }} {{ content.field_width }}</article>
+<p>node.field_plain in text</p>
+""",
+}
+
+
+def test_code_and_templates_that_name_a_field_access_each_storage_of_that_name_or_leave_a_mark(
+    tmp_path: Path,
+) -> None:
+    """get, set and hasField in a method or a function, and x.field_y in Twig, give accesses_field
+    to every storage of that name, inferred, at the method's or the template's line. A field_ name
+    with no storage ends at an unresolved field.storage.<name>; any other unmapped name, a
+    variable and a name in plain text give nothing."""
+    _plant(tmp_path, FIELD_FILES)
+    document, report = _map(tmp_path)
+    assert report.skipped == (), report.skipped
+    paint = "php.method::Drupal\\my_module\\Painter::paint"
+    presave = "php.function::my_module_node_presave"
+    template = "drupal.template::node--article--full"
+    storage = "drupal.config::field.storage."
+    found = {
+        (e["from"], e["to"], e["locations"][0]["line"], p["rule"])
+        for e in document["edges"]
+        if e["kind"] == "accesses_field"
+        for p in e["provenance"]
+    }
+    assert found == {
+        (paint, storage + "node.field_color", 9, "code_accesses_field_or_mark"),
+        (paint, storage + "user.field_color", 9, "code_accesses_field_or_mark"),
+        (paint, storage + "field_size", 9, "code_accesses_field_or_mark"),
+        (paint, storage + "field_gone", 9, "code_accesses_field_or_mark"),
+        (paint, storage + "node.body", 9, "code_accesses_field"),
+        (presave, storage + "node.field_color", 3, "code_accesses_field_or_mark"),
+        (presave, storage + "user.field_color", 3, "code_accesses_field_or_mark"),
+        (template, storage + "node.field_color", 1, "template_accesses_field_or_mark"),
+        (template, storage + "user.field_color", 1, "template_accesses_field_or_mark"),
+        (template, storage + "field_width", 1, "template_accesses_field_or_mark"),
+    }
+    marks = sorted((n["id"], n["type"]) for n in document["nodes"] if n["state"] == "unresolved")
+    assert marks == [
+        (storage + "field_gone", "drupal.field_storage"),
+        (storage + "field_size", "drupal.field_storage"),
+        (storage + "field_width", "drupal.field_storage"),
+    ]
+
+
+SUGGESTIONS = {
+    str(MODULE / "src/Plugin/Block/CartBlock.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Block;
+
+use Drupal\Core\Block\Attribute\Block;
+use Drupal\Core\Block\BlockBase;
+
+#[Block(id: 'my_cart_block', admin_label: 'Cart')]
+class CartBlock extends BlockBase {
+}
+""",
+    str(MODULE / "my_module.module"): """\
+<?php
+
+function my_module_theme($existing, $type, $theme, $path) {
+  return [
+    'my_card' => [
+      'variables' => ['title' => NULL],
+    ],
+  ];
+}
+""",
+    "config/sync/block.block.my_theme_branding.yml": (
+        "id: my_theme_branding\ntheme: my_theme\nregion: header\nplugin: system_branding_block\n"
+    ),
+    "config/sync/block.block.views_block__recent_list.yml": (
+        "id: views_block__recent_list\ntheme: my_theme\nregion: content\n"
+        "plugin: 'views_block:recent-list'\n"
+    ),
+    "config/sync/block.block.my_theme_main_menu.yml": (
+        "id: my_theme_main_menu\ntheme: my_theme\nregion: header\n"
+        "plugin: 'system_menu_block:main'\n"
+    ),
+    "config/sync/field.storage.node.field_color.yml": FIELD_STORAGE.format(
+        entity="node", field="field_color"
+    ),
+    "config/sync/field.storage.user.field_color.yml": FIELD_STORAGE.format(
+        entity="user", field="field_color"
+    ),
+    "config/sync/field.storage.taxonomy_term.field_tags.yml": FIELD_STORAGE.format(
+        entity="taxonomy_term", field="field_tags"
+    ),
+    **{
+        str(THEME / f"templates/{name}.html.twig"): "<div>{{ content }}</div>\n"
+        for name in (
+            "block--my-cart-block",
+            "block--my-theme-branding",
+            "block--system-menu-block--main",
+            "block--views-block--recent-list",
+            "block--system",
+            "my-card--wide",
+            "field--field-color",
+            "field--node--field-color--article",
+            "field--taxonomy-term--field-tags",
+            "field--entity-reference",
+            "field--node--article",
+        )
+    },
+}
+
+
+def test_a_suggestion_template_links_to_the_block_hook_or_field_its_name_suggests_when_mapped(
+    tmp_path: Path,
+) -> None:
+    """Each edge is inferred and ends only on a node the map holds: a block plugin, a derivative
+    plugin a placement names, a placement, a theme hook, every storage of a field name, or the one
+    storage an entity type names. A module, a field type and a bundle name link nowhere."""
+    _plant(tmp_path, SUGGESTIONS)
+    document, report = _map(tmp_path)
+    assert report.skipped == (), report.skipped
+    storage = "drupal.config::field.storage."
+    found = {
+        (e["kind"], e["from"].split("::", 1)[1], e["to"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"].startswith("suggests_") and e["kind"] != "suggests_bundle"
+        for p in e["provenance"]
+    }
+    assert found == {
+        (
+            "suggests_block_plugin",
+            "block--my-cart-block",
+            "drupal.plugin.block::my_cart_block",
+            "inferred",
+        ),
+        (
+            "suggests_block_plugin",
+            "block--system-menu-block--main",
+            "drupal.plugin.block::system_menu_block:main",
+            "inferred",
+        ),
+        (
+            "suggests_block_placement",
+            "block--my-theme-branding",
+            "drupal.config::block.block.my_theme_branding",
+            "inferred",
+        ),
+        (
+            "suggests_block_placement",
+            "block--views-block--recent-list",
+            "drupal.config::block.block.views_block__recent_list",
+            "inferred",
+        ),
+        ("suggests_theme_hook", "my-card--wide", "drupal.theme_hook::my_card", "inferred"),
+        ("suggests_field", "field--field-color", storage + "node.field_color", "inferred"),
+        ("suggests_field", "field--field-color", storage + "user.field_color", "inferred"),
+        (
+            "suggests_field",
+            "field--node--field-color--article",
+            storage + "node.field_color",
+            "inferred",
+        ),
+        (
+            "suggests_field",
+            "field--taxonomy-term--field-tags",
+            storage + "taxonomy_term.field_tags",
+            "inferred",
+        ),
+    }

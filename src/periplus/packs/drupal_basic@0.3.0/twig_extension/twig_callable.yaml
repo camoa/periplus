@@ -1,0 +1,104 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# new TwigFilter('name', ...) and new TwigFunction('name', ...), written by the short name, each
+# give an internal drupal.twig_callable with an edge to the class around the call. A map
+# rule keeps a name only when that class extends Twig's AbstractExtension, directly or through
+# mapped parents: it makes the twig.filter or twig.function node, at the call's line, and its
+# provided_by edge to the class. new \Twig\TwigFilter(...) written with its namespace, a name
+# that is not a text literal, a class that implements ExtensionInterface without
+# AbstractExtension, and the old Twig_SimpleFilter form give nothing.
+
+rules:
+- rule: twig_filter_created
+  reads: file
+  in: [source]
+  match: &filter
+    declaration: object_creation_expression
+    name_child: [arguments, argument]
+    filetype: php
+    where: [{name_matches: {child: name, pattern: TwigFilter}}]
+  id: {from: declared_name, pattern: '^[''"](?<callable>[A-Za-z_]\w*)[''"]$', template: 'filter|{callable}'}
+  emits: [{node: {type: drupal.twig_callable}}]
+  confidence: declared
+
+- rule: twig_filter_created_in_class
+  reads: file
+  in: [source]
+  match: *filter
+  id: {from: declared_name, pattern: '^[''"](?<callable>[A-Za-z_]\w*)[''"]$', template: 'filter|{callable}'}
+  emits: [{edge: {kind: twig_callable_in_class, from: this_node, to: enclosing_class}}]
+  confidence: declared
+
+- rule: twig_function_created
+  reads: file
+  in: [source]
+  match: &function
+    declaration: object_creation_expression
+    name_child: [arguments, argument]
+    filetype: php
+    where: [{name_matches: {child: name, pattern: TwigFunction}}]
+  id: {from: declared_name, pattern: '^[''"](?<callable>[A-Za-z_]\w*)[''"]$', template: 'function|{callable}'}
+  emits: [{node: {type: drupal.twig_callable}}]
+  confidence: declared
+
+- rule: twig_function_created_in_class
+  reads: file
+  in: [source]
+  match: *function
+  id: {from: declared_name, pattern: '^[''"](?<callable>[A-Za-z_]\w*)[''"]$', template: 'function|{callable}'}
+  emits: [{edge: {kind: twig_callable_in_class, from: this_node, to: enclosing_class}}]
+  confidence: declared
+
+- rule: twig_filter_of_extension
+  reads: map
+  match:
+    node_type: drupal.twig_callable
+    where: [{id_matches: '^drupal\.twig_callable::filter\|(?<callable>.+)$'}]
+    follow:
+    - edge: twig_callable_in_class
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Twig\\Extension\\AbstractExtension$'
+  id: {template: '{callable}'}
+  emits: [{node: {type: twig.filter}}]
+  confidence: declared
+
+- rule: twig_function_of_extension
+  reads: map
+  match:
+    node_type: drupal.twig_callable
+    where: [{id_matches: '^drupal\.twig_callable::function\|(?<callable>.+)$'}]
+    follow:
+    - edge: twig_callable_in_class
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Twig\\Extension\\AbstractExtension$'
+  id: {template: '{callable}'}
+  emits: [{node: {type: twig.function}}]
+  confidence: declared
+
+- rule: twig_filter_provided_by_extension
+  reads: map
+  match:
+    node_type: drupal.twig_callable
+    where: [{id_matches: '^drupal\.twig_callable::filter\|(?<callable>.+)$'}]
+    follow:
+    - edge: twig_callable_in_class
+    - id_matches: '^php\.type::(?<class>.+)$'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Twig\\Extension\\AbstractExtension$'
+    - node: 'php.type::{class}'
+  emits: [{edge: {kind: twig_filter_provided_by, from: {template: '{callable}', type: twig.filter}, to: matched_node}}]
+  confidence: declared
+
+- rule: twig_function_provided_by_extension
+  reads: map
+  match:
+    node_type: drupal.twig_callable
+    where: [{id_matches: '^drupal\.twig_callable::function\|(?<callable>.+)$'}]
+    follow:
+    - edge: twig_callable_in_class
+    - id_matches: '^php\.type::(?<class>.+)$'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Twig\\Extension\\AbstractExtension$'
+    - node: 'php.type::{class}'
+  emits: [{edge: {kind: twig_function_provided_by, from: {template: '{callable}', type: twig.function}, to: matched_node}}]
+  confidence: declared

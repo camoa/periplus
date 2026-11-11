@@ -1,0 +1,21 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# What a PHP file's use statements bind, for the text rules on drupal_php_text that resolve a
+# class written by its short name: use A\B\C; binds C, and use A\B\C as D; binds D. A use at the
+# start of a line only, so a trait's use inside a class body binds nothing. A grouped use,
+# use A\{B, C};, binds nothing, nor does use function or use const.
+
+rules:
+- rule: use_binding
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '(?m)^use\s+(?<path>[\w\\]*\\(?<short>\w+))\s*;'}
+  emits: [{binding: {name: '{short}', target: '{path}'}}]
+  confidence: declared
+
+- rule: use_alias_binding
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '(?m)^use\s+(?<path>[\w\\]+)\s+as\s+(?<short>\w+)\s*;'}
+  emits: [{binding: {name: '{short}', target: '{path}'}}]
+  confidence: declared

@@ -1,0 +1,34 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An event, named by the class constant that holds its name, fully qualified:
+# drupal.event::Drupal\mymod\Event\OrderEvents::PLACED. A subscriber method subscribes to it and a
+# method dispatches it. An event of core, Symfony or a contributed module, such as
+# KernelEvents::REQUEST, is a referenced node: its class is outside the mapped code.
+
+node_types:
+- name: drupal.event
+  id_namespace: drupal.event
+# The first constant of each const statement, as <class>::<CONST>; event/event_name.yaml reads
+# it in the map.
+- name: drupal.class_constant
+  id_namespace: drupal.class_constant
+  internal: true
+# A subscription or a dispatch whose class is written with no use, read in the file's own
+# namespace: <kind>|<event>|<method>. A map rule keeps it only when a mapped class declares that
+# constant.
+- name: drupal.event_use
+  id_namespace: drupal.event_use
+  internal: true
+
+edge_kinds:
+- kind: subscribed_by
+  from: drupal.event
+  to: php.method
+- kind: dispatched_by
+  from: drupal.event
+  to: php.method
+# A text rule builds its to end from the kind's types, which must share one id namespace, so a
+# dispatch in a function has its own kind.
+- kind: dispatched_by_function
+  from: drupal.event
+  to: php.function

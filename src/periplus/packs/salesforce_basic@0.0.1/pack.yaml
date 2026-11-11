@@ -23,8 +23,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A mapping's sync triggers, pull settings and key give nothing. The auth provider config,
 #   salesforce.salesforce_auth.*, and salesforce_logger.settings stay plain config objects.
 # - An event is named by its constant as written, less any namespace. One used through an alias,
-#   or as the event's own text, such as 'salesforce.pull_query', makes no event. No edge joins a
-#   subscriber to its event: that rule belongs to drupal_basic.
+#   or as the event's own text, such as 'salesforce.pull_query', makes no event. drupal_basic's
+#   event rules join a key of getSubscribedEvents to its listener method, by subscribed_by from
+#   the referenced drupal.event::Drupal\salesforce\Event\SalesforceEvents::<CONST>, beside the
+#   salesforce.event this pack names.
 # - A static call on MappedObject or SalesforceMapping is read by the class's short name:
 #   drupal_basic's entity_class_static_call still lists such a call as skipped, and a project class
 #   with the short name of a listed class gives a false uses_entity_type edge.

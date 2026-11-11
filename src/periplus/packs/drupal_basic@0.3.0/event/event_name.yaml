@@ -1,0 +1,39 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Which class constants name an event. The first constant of each const statement of a class,
+# interface or enum is an internal node: const A = 'a', B = 'b'; gives A only, since a rule's
+# name_child cannot name a const_element's name, which has no field. A map rule makes a drupal.event of
+# each constant of a class that descends from Symfony's Event or Drupal's Event, through mapped
+# parents, and of each constant of a class whose name ends in Events, as core's KernelEvents
+# names its events. Every constant of such a class reads as an event name.
+
+rules:
+- rule: class_constant
+  reads: file
+  in: [source]
+  match: {declaration: const_declaration, name_child: [const_element, name], filetype: php}
+  id: {from: [enclosing_type, declared_name], template: '{enclosing_type}::{declared_name}'}
+  emits: [{node: {type: drupal.class_constant}}]
+  confidence: declared
+
+- rule: event_of_event_class
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?:Symfony\\Contracts|Drupal\\Component)\\EventDispatcher\\Event$'
+  id: {template: '{class}::{constant}'}
+  emits: [{node: {type: drupal.event}}]
+  confidence: inferred
+
+- rule: event_of_events_class
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]*Events)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+  id: {template: '{class}::{constant}'}
+  emits: [{node: {type: drupal.event}}]
+  confidence: inferred

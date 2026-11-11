@@ -1,0 +1,87 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# ->dispatch($event, X::NAME): a dispatched_by edge from the event to the method around the call,
+# of the class the file's path names by Drupal's PSR-4 layout, so the rules are inferred. In a
+# module, install, inc, theme or profile file it is a dispatched_by_function edge to the function
+# around the call. A call in a closure counts the named function around it. X is read as in
+# event_subscriber.yaml: through the file's use statements, as self or static, or in the file's
+# own namespace when a mapped class of that namespace declares the constant. The first argument
+# may hold three levels of parentheses, as new MyEvent(f(g($x))). dispatch($event) with no name,
+# the name written first, a name held in a variable, and a call in a plain PHP file outside a src
+# folder give nothing. A method of a class kept in a module file reads as a function of the
+# method's name.
+
+rules:
+- rule: event_dispatched_by
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->dispatch\(\s*(?:[^,()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))+,\s*(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*\)'
+  values:
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{psr4_class}::{method}'}
+  emits:
+  - edge:
+      kind: dispatched_by
+      from: {from: {capture: key}, resolve: [bound_first_segment], separator: '::', types: [drupal.event]}
+      to: this_node
+  confidence: inferred
+
+- rule: event_dispatched_by_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '->dispatch\(\s*(?:[^,()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))+,\s*(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*\)'
+  values:
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{function}'}
+  emits:
+  - edge:
+      kind: dispatched_by_function
+      from: {from: {capture: key}, resolve: [bound_first_segment], separator: '::', types: [drupal.event]}
+      to: this_node
+  confidence: inferred
+
+- rule: event_dispatched_by_own_class
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->dispatch\(\s*(?:[^,()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))+,\s*(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*\)'
+  values:
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{psr4_class}::{method}'}
+  emits:
+  - edge:
+      kind: dispatched_by
+      from: {template: '{psr4_class}::{constant}', types: [drupal.event]}
+      to: this_node
+  confidence: inferred
+
+- rule: event_dispatch_in_namespace
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->dispatch\(\s*(?:[^,()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))+,\s*(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*)\s*\)'
+  values:
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: 'dispatched|{psr4_namespace}{class}::{constant}|{psr4_class}::{method}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: event_dispatched_in_namespace
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::dispatched\|(?<event>[^|]+)\|(?<method>[^|]+)$'}]
+    follow: [{node: 'drupal.class_constant::{event}'}, {node: 'php.method::{method}'}]
+  emits: [{edge: {kind: dispatched_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node}}]
+  confidence: inferred

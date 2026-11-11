@@ -90,7 +90,27 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   and each annotation class that extends core's annotation Plugin, as a drupal.plugin_type node;
 #   each class that carries that attribute, or opens its docblock with that annotation, as a
 #   plugin_of_type edge; and a manager constructor that passes the attribute class fifth to
-#   parent::__construct, as a manages_plugin_type edge.
+#   parent::__construct, as a manages_plugin_type edge;
+# - each constant of a class that descends from Symfony's or Drupal's Event, or whose name ends in
+#   Events, as a drupal.event named <class>::<CONST>; each key of getSubscribedEvents, written
+#   X::NAME, self::NAME or static::NAME, as a subscribed_by edge from the event to the listener
+#   method; and each ->dispatch($event, X::NAME) as a dispatched_by edge to the method around it,
+#   or a dispatched_by_function edge to the function around it in a module, install, inc, theme
+#   or profile file. All inferred: a method's class is named from the file's path. An event of
+#   core, Symfony or a contributed module, such as KernelEvents::REQUEST, ends at a referenced
+#   node;
+# - each new TwigFilter('name') or new TwigFunction('name') in a class that descends from Twig's
+#   AbstractExtension, as a twig.filter or twig.function node with a provided_by edge to the class,
+#   and each template that calls it inside {{ }} or {% %}, as template_uses_twig_filter or
+#   template_uses_twig_function;
+# - each ->get('x'), ->set('x', ...) and ->hasField('x') in a PHP method or function, and each
+#   v.field_x in a template, as an inferred accesses_field edge to every field storage named x. A
+#   name that starts with field_ and that no mapped storage has ends at the unresolved
+#   field.storage.<name>; any other name with no storage gives nothing;
+# - each theme suggestion template, by its file name, as an inferred edge to the block plugin of
+#   block--<id> or block--<base>--<derivative>, the placement block.block.<id>, the theme hook of
+#   <base>--..., and the field storage of field--field-x or field--<entity type>--field-x, each
+#   only when the map holds the target.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
@@ -127,6 +147,12 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   does, and not at an unresolved one.
 # - A $container or $this->container that is not Drupal's service container gives a false
 #   service.
+# - Every constant of an Event class or an *Events class reads as an event name, so one that holds
+#   something else is a false event.
+# - The object of ->get('x'), ->set('x') and ->hasField('x') is not read: $form_state->get('x') or
+#   $config->get('x') links to a field storage named x.
+# - A filter called with a space after the pipe and an argument list, as | money(2), also reads as
+#   a call of the function money, which links when an extension provides a function of that name.
 #
 # Missing results:
 # - A '#theme' written in a function, such as a hook in a module file, gives no edge, because the
@@ -213,6 +239,29 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the like.
 # - An attribute keeps the value as written, so no_cache: 'TRUE' and no_cache: true give "TRUE"
 #   and true, and is_admin: null gives null.
+# - Only the first constant of a const statement is read: const A = 'a', B = 'b'; gives no event
+#   B, and a key or dispatch naming B ends at a referenced event. A tree rule's name_child is a
+#   field or a path of two steps, and a const_element's name is neither.
+# - A subscriber key or dispatch name written with its namespace, \A\B::NAME, as text such as
+#   'kernel.request', or as a variable gives nothing. A key or name whose class no use statement
+#   binds leaves a skipped row, and joins its event only when a mapped class of the file's
+#   namespace declares that constant. Only the first listener of a key is read. dispatch($event)
+#   with no name, the name written first, a first argument four levels of parentheses deep, a
+#   subscriber outside a src folder, and a dispatch in a plain PHP file outside a src folder give
+#   nothing. A method of a class kept in a module file reads as a function of its name. A grouped
+#   use binds no name for these rules.
+# - new \Twig\TwigFilter(...) written with its namespace, a filter or function name that is not a
+#   text literal, and an extension that implements ExtensionInterface without AbstractExtension
+#   give nothing. A filter or function after a hash in the same print, as {{ {a: 1}|money }},
+#   gives nothing. A template's use edge sits at the template's line, not the call's.
+# - A field named as v['field_x'], through ?->get(), by a variable, or by a constant of core or
+#   contrib gives no accesses_field edge; the constant leaves a skipped row. A template reads only
+#   names that start with field_. The edge sits at the method's or the template's line.
+# - A field suggestion is read only for a field name that starts with field_: field--body and
+#   field--node--body give nothing, since field--<name> may name a field type and
+#   field--<entity type>--<name> a bundle. A base hook of core, such as node or block, and
+#   block--<module> link to nothing, since the map holds no such node. A derivative written with
+#   a dash in it, as block--x--main-2 for x:main-2, is read with an underscore and links nothing.
 #
 # Settings to know:
 # - Only the custom modules and themes are read as PHP. Move them with custom_module and
@@ -356,14 +405,58 @@ files:
         component_name:
           pattern: '^(?:.*/)?components/(?<name>[^/]+)/(?P=name)\.twig$'
           template: '{name}'
+        # What a theme suggestion's file name names, read by theme_hook/suggestion_*.yaml, its
+        # dashes written back as underscores. Each is absent for any other name. hook_suggestion
+        # is the part before the first --, the base hook.
+        hook_suggestion:
+          pattern: '^(?:.*/)?(?<base>[a-z0-9_]+(?:-[a-z0-9_]+)*)--[^/]+\.html\.twig$'
+          template: '{base}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # block--<id>: a block plugin id or a block placement id. A placement id may hold __, which
+        # the file name writes as --.
+        block_suggestion:
+          pattern: '^(?:.*/)?block--(?<id>[a-z0-9_]+(?:--?[a-z0-9_]+)*)\.html\.twig$'
+          template: '{id}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # One part with its dashes kept, for a plugin id written with a dash.
+        block_suggestion_as_written:
+          pattern: '^(?:.*/)?block--(?<id>[a-z0-9_]+(?:-[a-z0-9_]+)*)\.html\.twig$'
+          template: '{id}'
+        # block--<base>--<derivative>: the derivative plugin <base>:<derivative>.
+        block_derivative_suggestion:
+          pattern: '^(?:.*/)?block--(?<base>[a-z0-9_]+(?:-[a-z0-9_]+)*)--(?<derivative>[a-z0-9_]+(?:-[a-z0-9_]+)*)\.html\.twig$'
+          template: '{base}:{derivative}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # field--field-<name>: a field whose name starts with field_, on any entity type.
+        field_suggestion:
+          pattern: '^(?:.*/)?field--(?<field>field(?:-[a-z0-9_]+)+)\.html\.twig$'
+          template: '{field}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # field--<entity type>--field-<name>, and the same with --<bundle> after it:
+        # <entity type>.<field name>, as the field storage's own name ends.
+        entity_field_suggestion:
+          pattern: '^(?:.*/)?field--(?<entity>[a-z0-9_]+(?:-[a-z0-9_]+)*)--(?<field>field(?:-[a-z0-9_]+)+)(?:--[a-z0-9_]+(?:-[a-z0-9_]+)*)?\.html\.twig$'
+          template: '{entity}.{field}'
+          normalize:
+          - {replace: '-', with: '_'}
       sections:
       - name: comment
         open: '\{#'
         close: '#\}'
+      spans:
+      # A Twig print or tag, from {{ or {% to its first closing brace. A hash inside, such as
+      # {a: 1}, ends the span at its own closing brace, so what follows the hash is outside.
+      - name: twig_expression
+        open: '\{(?<mark>[{%])'
+        balance: ['\{', '\}']
     # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
     # attachment. The sections are the comments and the strings. The spans kept here are attached,
-    # the array after '#attached' =>, library_list, the array after 'library' =>, and
-    # hook_theme_body.
+    # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
+    # subscribed_events and named_function.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
       reader: text
@@ -373,6 +466,14 @@ files:
         # prefix is matched lazily, so the module is the folder right before src or tests/src.
         psr4_class:
           pattern: '^(?:.*?/)?(?<module>[^/]+)/(?<tests>(?:tests/)?)src/(?<rest>.+)\.php$'
+          template: 'Drupal\{tests}{module}\{rest}'
+          normalize:
+          - {replace: '^Drupal\\tests/', with: 'Drupal\Tests\'}
+          - {replace: '/', with: '\'}
+        # The namespace of that class, with a backslash after it: Drupal\<module>\A\ for
+        # <module>/src/A/B.php.
+        psr4_namespace:
+          pattern: '^(?:.*?/)?(?<module>[^/]+)/(?<tests>(?:tests/)?)src/(?<rest>(?:[^/]+/)*)[^/]+\.php$'
           template: 'Drupal\{tests}{module}\{rest}'
           normalize:
           - {replace: '^Drupal\\tests/', with: 'Drupal\Tests\'}
@@ -407,6 +508,15 @@ files:
       # its entries.
       - name: hook_theme_body
         open: '\b(?<mark>function)\s+(?:\w+_)?theme\s*\([^)]*\)[^{;]*(?=\{)'
+        balance: ['{', '}']
+      # The body of getSubscribedEvents, where a subscriber keys its events.
+      - name: subscribed_events
+        open: '\b(?<mark>function)\s+getSubscribedEvents\s*\(\s*\)[^{;]*'
+        balance: ['{', '}']
+      # The body of a named function or method; function is its name. A closure has no name and
+      # opens none, so a match inside one reads the function around it.
+      - name: named_function
+        open: '\bfunction\s+(?<function>\w+)\s*\([^)]*\)[^{;]*'
         balance: ['{', '}']
 
 grammar:

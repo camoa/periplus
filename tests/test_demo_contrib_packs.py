@@ -456,6 +456,7 @@ def test_salesforce_mapping_config_field_plugin_and_event_subscriber(tmp_path: P
     sub_method = "php.method::Drupal\\mymodule\\EventSubscriber\\MySubscriber::"
     field_base = "php.type::Drupal\\salesforce_mapping\\SalesforceMappingFieldPluginBase"
     interface = "php.type::Symfony\\Component\\EventDispatcher\\EventSubscriberInterface"
+    event = "drupal.event::Drupal\\salesforce\\Event\\SalesforceEvents::"
     assert _type_state(document) == {
         "drupal.bundle::node.my_type": ("drupal.bundle", "referenced"),
         instance: ("drupal.field_instance", "referenced"),
@@ -476,6 +477,10 @@ def test_salesforce_mapping_config_field_plugin_and_event_subscriber(tmp_path: P
         interface: ("php.interface", "declared"),
         "salesforce.event::SalesforceEvents::PULL_PRESAVE": ("salesforce.event", "referenced"),
         "salesforce.event::SalesforceEvents::PUSH_PARAMS": ("salesforce.event", "referenced"),
+        event + "PULL_PRESAVE": ("drupal.event", "referenced"),
+        event + "PUSH_PARAMS": ("drupal.event", "referenced"),
+        sub_method + "pullPresave": ("php.method", "referenced"),
+        sub_method + "pushParams": ("php.method", "referenced"),
     }
     assert nodes(document)[mapping]["attributes"] == {
         "pull_standalone": True,
@@ -501,6 +506,8 @@ def test_salesforce_mapping_config_field_plugin_and_event_subscriber(tmp_path: P
             sub_class,
             "salesforce.event::SalesforceEvents::PULL_PRESAVE",
         ),
+        ("subscribed_by", event + "PUSH_PARAMS", sub_method + "pushParams"),
+        ("subscribed_by", event + "PULL_PRESAVE", sub_method + "pullPresave"),
         ("contains", sub_class, sub_method + "getSubscribedEvents"),
         ("contains", sub_class, sub_method + "check"),
         ("implements", sub_class, interface),

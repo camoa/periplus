@@ -1,0 +1,56 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A template that calls a filter, as {{ price|money }}, or a function, as {{ total() }}, inside
+# {{ }} or {% %}, links to the internal drupal.twig_callable of that name. A map rule turns the
+# link into template_uses_twig_filter or template_uses_twig_function only when a Twig extension of
+# the mapped code provides the name, so |t, |raw and attach_library() give nothing. The edge sits
+# at the template's line. A function name after a dot, as node.label(), is a method and gives
+# nothing; one right after a pipe is a filter. A filter or function after a hash in the same print or
+# tag, as {{ {a: 1}|money }}, and one in a Twig comment give nothing.
+
+rules:
+- rule: template_calls_filter
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\|\s*(?<callable>[A-Za-z_]\w*)'}
+  values:
+    in_twig: {from: {enclosing: twig_expression, capture: mark}}
+  id: {template: '{in_twig}|{template_name}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{edge: {kind: template_calls_twig_callable, from: this_node, to: {from: {capture: callable}, template: 'filter|{callable}'}}}]
+  confidence: declared
+
+- rule: template_calls_function
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '(?:^|[^\w.|''"])(?<callable>[A-Za-z_]\w*)\s*\('}
+  values:
+    in_twig: {from: {enclosing: twig_expression, capture: mark}}
+  id: {template: '{in_twig}|{template_name}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{edge: {kind: template_calls_twig_callable, from: this_node, to: {from: {capture: callable}, template: 'function|{callable}'}}}]
+  confidence: declared
+
+- rule: template_uses_twig_filter
+  reads: map
+  match:
+    node_type: drupal.template
+    follow:
+    - edge: template_calls_twig_callable
+    - id_matches: '^drupal\.twig_callable::filter\|(?<callable>.+)$'
+    - edge: twig_callable_in_class
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Twig\\Extension\\AbstractExtension$'
+  emits: [{edge: {kind: template_uses_twig_filter, from: this_node, to: {template: '{callable}', type: twig.filter}}}]
+  confidence: inferred
+
+- rule: template_uses_twig_function
+  reads: map
+  match:
+    node_type: drupal.template
+    follow:
+    - edge: template_calls_twig_callable
+    - id_matches: '^drupal\.twig_callable::function\|(?<callable>.+)$'
+    - edge: twig_callable_in_class
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Twig\\Extension\\AbstractExtension$'
+  emits: [{edge: {kind: template_uses_twig_function, from: this_node, to: {template: '{callable}', type: twig.function}}}]
+  confidence: inferred

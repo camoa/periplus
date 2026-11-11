@@ -275,6 +275,23 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   two static calls, inferred for `$this->redirect`. A route name that is not a text literal goes
   under skipped, a call in a trait or an enum links from its method, and
   `$other->redirect('x')` links nothing.
+- `drupal.event`, a node for each constant of a class that descends from `Event` or is named
+  `*Events`, made by map rules from an internal node per constant; `subscribed_by`, from the
+  event to each listener a key of `getSubscribedEvents` names, and `dispatched_by`, to the method
+  around `->dispatch($event, X::NAME)`, or `dispatched_by_function` in a module file. Both are read
+  as text through the spans
+  `subscribed_events` and `named_function` and the bindings of `event/use_binding.yaml`.
+- `twig.filter` and `twig.function`, from `new TwigFilter('x')` and `new TwigFunction('x')` in a
+  class that descends from `AbstractExtension`, with `twig_filter_provided_by` and
+  `twig_function_provided_by` to the class; `template_uses_twig_filter` and
+  `template_uses_twig_function`, from a template that calls the name inside the span
+  `twig_expression`. A name no extension provides, such as `|t`, stays on an internal node.
+- `accesses_field`, from a method, function or template that names a field, to every storage of
+  that name, joined through the internal hub `drupal.field_name`. A `field_` name with no storage
+  ends at the unresolved `field.storage.<name>`, through a `try` step whose empty capture the
+  storage's entity type fills.
+- `suggests_block_plugin`, `suggests_block_placement`, `suggests_theme_hook` and
+  `suggests_field`, inferred from a suggestion template's file name to a node the map holds.
 
 ## Where to look when the map misses a thing
 

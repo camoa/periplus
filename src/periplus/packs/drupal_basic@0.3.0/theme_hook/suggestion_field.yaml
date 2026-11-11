@@ -1,0 +1,42 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# field--field-<name>.html.twig suggests every field storage of the field <name>, through the
+# field-name hub (field/field_name.yaml). field--<entity type>--field-<name>.html.twig, with or
+# without --<bundle> after it, suggests the storage <entity type>.<name> alone; a dashed entity
+# type such as taxonomy-term reads as taxonomy_term. Only a field name that starts with field_ is
+# read, since field--<name> may also name a field type, and field--<entity type>--<name> a bundle.
+
+rules:
+- rule: field_suggestion
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: 'field--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'field|{template_name}|{field_suggestion}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: entity_field_suggestion
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: 'field--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'storage|{template_name}|{entity_field_suggestion}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: suggests_field
+  reads: map
+  match:
+    node_type: drupal.suggestion
+    where: [{id_matches: '^drupal\.suggestion::field\|(?<template>[^|]+)\|(?<field>.+)$'}]
+    follow: [{node: 'drupal.field_name::{field}'}, {edge: field_name_of}]
+  emits: [{edge: {kind: suggests_field, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred
+
+- rule: suggests_entity_field
+  reads: map
+  match:
+    node_type: drupal.suggestion
+    where: [{id_matches: '^drupal\.suggestion::storage\|(?<template>[^|]+)\|(?<storage>.+)$'}]
+    follow: [{node: 'drupal.config::field.storage.{storage}'}]
+  emits: [{edge: {kind: suggests_field, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred

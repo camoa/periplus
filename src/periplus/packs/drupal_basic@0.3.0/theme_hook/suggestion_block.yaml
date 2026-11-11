@@ -1,0 +1,52 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# block--<id>.html.twig suggests the block plugin <id> and the block placement block.block.<id>,
+# its dashes read as underscores, so block--a-b--c gives a_b__c; a plugin id of one part is also
+# tried with its dashes kept.
+# block--<base>--<derivative>.html.twig suggests the derivative plugin <base>:<derivative>. A
+# plugin of core or contrib links only when a placement in the mapped configuration names it, so
+# the map holds it as a referenced node. block--<module>, the suggestion for every block a module
+# provides, links to nothing unless a plugin or placement has that name.
+
+rules:
+- rule: block_suggestion
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: 'block--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'block|{template_name}|{block_suggestion}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: block_suggestion_as_written
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: 'block--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'block|{template_name}|{block_suggestion_as_written}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: block_derivative_suggestion
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: 'block--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'block|{template_name}|{block_derivative_suggestion}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: suggests_block_plugin
+  reads: map
+  match:
+    node_type: drupal.suggestion
+    where: [{id_matches: '^drupal\.suggestion::block\|(?<template>[^|]+)\|(?<id>.+)$'}]
+    follow: [{node: 'drupal.plugin.block::{id}'}]
+  emits: [{edge: {kind: suggests_block_plugin, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred
+
+- rule: suggests_block_placement
+  reads: map
+  match:
+    node_type: drupal.suggestion
+    where: [{id_matches: '^drupal\.suggestion::block\|(?<template>[^|]+)\|(?<id>.+)$'}]
+    follow: [{node: 'drupal.config::block.block.{id}'}]
+  emits: [{edge: {kind: suggests_block_placement, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred
