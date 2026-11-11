@@ -45,15 +45,18 @@ second by the end's `separator`. `Util::make()` after `use App\Lib\Util` gives `
 find_method's id for that method. The end's own `resolve` steps then run on the result, joined by
 its `separator`. So a step in both runs twice, and a `"::"` end needs none. A child that is not a
 written name, as `self`, `static`, `parent` or a variable, makes nothing and goes under `skipped` as
-not a written name. A name the `resolve` steps hold for on no edge makes nothing, counts no fire and
-goes under `skipped`: no resolution step holds for its `name_child`.
+not a written name, unless `skip_names` lists its text. A name the `resolve` steps hold for on no
+edge makes nothing, counts no fire and goes under `skipped`: no resolution step holds for its
+`name_child`.
 
-`skip_names` lists written names that make nothing: no edge, no unresolved node, no row under
-`skipped`, and no fire. It compares the text of the first `name_child` field exactly as written,
-case and all, before any `resolve` step runs, so `isset(` is skipped in every namespace while
-`ISSET(` and `\isset(` are not unless listed so. With `[scope, name]` it compares the scope's
-text. `php_basic` lists PHP's language constructs; the grammar parses only isset, empty, die and
-eval as calls, and the rest are listed in case a release does too.
+`skip_names` lists names that make nothing: no edge, no unresolved node, no row under `skipped`,
+and no fire. It compares the text of the first `name_child` field exactly as written, case and
+all, before any `resolve` step runs, so `isset(` is skipped in every namespace while `ISSET(` and
+`\isset(` are not unless listed so. With `[scope, name]` it compares the scope's text. The
+comparison comes before the check that the field is a written name, so `skip_names: [self,
+static, parent]` passes over `self::m()`, though the grammar parses `self` as a keyword.
+`php_basic` lists PHP's language constructs; the grammar parses only isset, empty, die and eval as
+calls, and the rest are listed in case a release does too.
 
 `types` lists the to end's candidate types. The end lands on the first a rule maps under the
 resolved name. If none does, `on_miss: unresolved` gives an unresolved node searched for under that

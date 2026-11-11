@@ -1666,9 +1666,9 @@ def _references(
     steps then run on that name. A reference with no enclosing declaration, whose name child is not
     a written name, or holds a node that is not one under ``whole_written``, whose argument is
     missing, empty or not a text literal, or that no step gives a name, makes nothing and is listed
-    in ``skipped``. A name written exactly as one of the rule's ``skip_names``, or a match failing a
-    ``name_matches`` condition, makes nothing, is not listed and is not a fire. An edge
-    sits at the reference's line.
+    in ``skipped``. A name child written exactly as one of the rule's ``skip_names``, written name
+    or not, or a match failing a ``name_matches`` condition, makes nothing, is not listed and is
+    not a fire. An edge sits at the reference's line.
     """
     holders = _holder_rules(rule_set, rule.filetype, within)
     declared: dict[str, list[Rule]] = {}
@@ -1696,6 +1696,8 @@ def _references(
             continue
         line = line_of(match)
         written = _child(match, rule.name_child)
+        if written is not None and text_of(written) in rule.skip_names:
+            continue
         member = _child(match, rule.member_child) if rule.member_child else None
         if (
             written is None
@@ -1704,8 +1706,6 @@ def _references(
             or (reads_name and rule.whole_written and not _all_written(written, grammar.written))
         ):
             skipped.append((file, line, rule.name, f"{rule.name_child} is not a written name"))
-            continue
-        if text_of(written) in rule.skip_names:
             continue
         # An edge whose from end is a template needs no enclosing declaration.
         needed = any(spec.from_template is None for spec in rule.edges)
