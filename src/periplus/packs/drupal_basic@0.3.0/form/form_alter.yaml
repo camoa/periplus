@@ -1,0 +1,25 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A hook_form_FORM_ID_alter or hook_form_BASE_FORM_ID_alter implementation, a function or a method
+# that implements the hook form_<id>_alter (hook/hook.yaml, hook/hook_attribute.yaml), gives
+# alters_form to the form id <id>. A form id no mapped class returns, such as a core form's or a
+# base form id such as node_form, ends at a referenced node. Inferred, because the hook's name is a
+# convention; it cannot tell a form id from a base form id.
+#
+# A generic hook_form_alter that tests $form_id gives nothing.
+
+edge_kinds:
+- kind: alters_form
+  from: [php.method, php.function]
+  to: drupal.form_id
+
+rules:
+- rule: form_alter_hook_alters_form
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: implements_hook
+    - id_matches: '^drupal\.hook::form_(?<form>\w+)_alter$'
+  emits: [{edge: {kind: alters_form, from: this_node, to: {template: '{form}', types: [drupal.form_id]}}}]
+  confidence: inferred

@@ -1,0 +1,142 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Code that names a role: ->hasRole('x') gives checks_role, ->addRole('x') and ->removeRole('x')
+# give changes_role, from the method or function around the call to the role's configuration,
+# user.role.x. A file rule links the call to an internal role-name hub; a map rule ends the edge at
+# user.role.<name>, an unresolved role when no mapped file declares it. The argument is a text
+# literal or a class constant a mapped file declares as text; a constant of core or contrib leaves
+# a skipped row. A variable in the argument is built at run time: the call is kept as a
+# php.call_site marked resolution runtime, in a method or in a function of a module-family file.
+#
+# The object is not read, so a hasRole, addRole or removeRole method of any class counts.
+# ?->hasRole('x') gives nothing.
+
+node_types:
+- name: drupal.role_name
+  id_namespace: drupal.role_name
+  internal: true
+
+edge_kinds:
+- kind: names_checked_role
+  from: [php.method, php.function]
+  to: drupal.role_name
+- kind: names_changed_role
+  from: [php.method, php.function]
+  to: drupal.role_name
+- kind: checks_role
+  from: [php.method, php.function]
+  to: drupal.role
+- kind: changes_role
+  from: [php.method, php.function]
+  to: drupal.role
+
+rules:
+- rule: role_checked_in_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where: [{name_matches: {child: name, pattern: hasRole}}]
+  emits: [{edge: {kind: names_checked_role, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.role_name]}}}]
+  confidence: declared
+
+- rule: role_changed_in_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where: [{name_matches: {child: name, pattern: 'addRole|removeRole'}}]
+  emits: [{edge: {kind: names_changed_role, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.role_name]}}}]
+  confidence: declared
+
+- rule: code_checks_role
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: names_checked_role
+    - id_matches: '^drupal\.role_name::(?<role>.+)$'
+  emits: [{edge: {kind: checks_role, from: this_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: declared
+
+- rule: code_changes_role
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: names_changed_role
+    - id_matches: '^drupal\.role_name::(?<role>.+)$'
+  emits: [{edge: {kind: changes_role, from: this_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: declared
+
+# $account->hasRole($role), $user->addRole($name . '_x'): a variable in the argument, in a method.
+- rule: runtime_role_call
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &role_where
+    - name_matches: {child: name, pattern: 'hasRole|addRole|removeRole'}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[^,$]*\$.*'}
+  id: &role_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}(runtime)"
+  emits:
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: runtime_role_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *role_where
+  id: *role_id
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+# The same in a function of a module-family file, as call/runtime_argument_in_function.yaml.
+- rule: runtime_role_call_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: &module_endings [module, install, theme, inc, profile]
+    holder: function_definition
+    where: *role_where
+  id: &role_function_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::{declared_name}->{name}(runtime)"
+  emits:
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: runtime_role_call_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *role_where
+  id: *role_function_id
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_class, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_class}
+  confidence: declared

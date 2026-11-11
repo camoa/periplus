@@ -110,7 +110,21 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - each theme suggestion template, by its file name, as an inferred edge to the block plugin of
 #   block--<id> or block--<base>--<derivative>, the placement block.block.<id>, the theme hook of
 #   <base>--..., and the field storage of field--field-x or field--<entity type>--field-x, each
-#   only when the map holds the target.
+#   only when the map holds the target;
+# - each ->hasRole('x') in a PHP method or function, as a checks_role edge, and each ->addRole('x')
+#   or ->removeRole('x'), as a changes_role edge, to the role user.role.x, joined through an
+#   internal role-name hub; a role no mapped file declares ends at an unresolved role, and a
+#   variable in the argument keeps the call as a php.call_site marked resolution runtime;
+# - each configuration object that \Drupal::config('x'), $this->config('x') or get('x') on a config
+#   factory names, as a reads_config_object edge, and that getEditable('x') on a config factory
+#   names, as an edits_config_object edge; a name no mapped file declares ends at an unresolved
+#   configuration object;
+# - each queue that \Drupal::queue('x') or get('x') on a queue factory names, as a uses_queue edge
+#   to the queue worker plugin x, the worker Drupal runs for that queue; a worker no mapped file
+#   declares, such as a contributed module's, ends at a referenced node;
+# - each method or function that implements a hook form_<id>_alter, as an inferred alters_form
+#   edge to the form id <id>; a form id no mapped class returns, such as a core form's or a base
+#   form id, ends at a referenced node.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
@@ -153,6 +167,15 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   $config->get('x') links to a field storage named x.
 # - A filter called with a space after the pipe and an argument list, as | money(2), also reads as
 #   a call of the function money, which links when an extension provides a function of that name.
+# - The object of hasRole, addRole and removeRole is not read, so such a method of any class gives
+#   a role edge. A config factory and a queue factory are known by the object's name, and
+#   $this->config('x') is taken to be core's. A config form's $this->config('x') returns an
+#   editable object for a name its getEditableConfigNames() lists, and still reads as
+#   reads_config_object.
+# - A queue is named by its worker plugin, so a queue that no worker processes anywhere ends at a
+#   referenced worker plugin of its name.
+# - alters_form cannot tell a form id from a base form id: form_node_form_alter links to the form
+#   id node_form.
 #
 # Missing results:
 # - A '#theme' written in a function, such as a hook in a module file, gives no edge, because the
@@ -262,6 +285,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   field--<entity type>--<name> a bundle. A base hook of core, such as node or block, and
 #   block--<module> link to nothing, since the map holds no such node. A derivative written with
 #   a dash in it, as block--x--main-2 for x:main-2, is read with an underscore and links nothing.
+# - A config or queue name held in a variable leaves a skipped row and keeps no call site; a role,
+#   config or queue name given by a constant of core or contrib, or by self::X where X is declared
+#   on an interface the class implements, leaves a skipped row. A ?-> call
+#   to hasRole, get or getEditable gives nothing. The call that follows a queue's get, such as
+#   createItem or claimItem, is not read. A config or queue edge sits at the call's line, a role
+#   edge at the method's or function's line.
+# - A generic hook_form_alter that tests $form_id with ==, in_array or switch gives no alters_form
+#   edge.
 #
 # Settings to know:
 # - Only the custom modules and themes are read as PHP. Move them with custom_module and

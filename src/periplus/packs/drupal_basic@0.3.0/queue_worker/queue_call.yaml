@@ -1,0 +1,47 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Code that gets a queue by name: \Drupal::queue('x') and get('x') on a queue factory give uses_queue,
+# from the method or function around the call to the queue worker plugin x, the worker Drupal runs
+# for the queue named x. So the methods that add items to a worker's queue, or claim them, are one
+# edge from the worker. A queue factory is an object written ending in queueFactory or
+# queue_factory, as $this->queueFactory, or the container's get('queue') or
+# \Drupal::service('queue'). A queue whose worker no mapped file declares, such as a contributed
+# module's, ends at a referenced worker. The argument is a text literal or a class constant a
+# mapped file declares as text; a constant of core or contrib leaves a skipped row, and so does a
+# variable.
+#
+# \Drupal::queue is declared; get on a queue factory is inferred, because the object's name, not
+# its type, says it is the queue factory. The call that follows, createItem or claimItem, is not
+# read. ?->get('x') gives nothing.
+
+edge_kinds:
+- kind: uses_queue
+  from: [php.method, php.function]
+  to: drupal.queue_worker_plugin
+
+rules:
+- rule: queue_by_drupal
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: queue}
+  emits: [{edge: {kind: uses_queue, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.queue_worker_plugin]}}}]
+  confidence: declared
+
+- rule: queue_from_factory
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '(?s).*(?:queueFactory|queue_factory)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]queue[''"]\)|\\?Drupal::service\([''"]queue[''"]\)'}
+    - name_matches: {child: name, pattern: get}
+  emits: [{edge: {kind: uses_queue, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.queue_worker_plugin]}}}]
+  confidence: inferred

@@ -1701,3 +1701,326 @@ def test_a_suggestion_template_links_to_the_block_hook_or_field_its_name_suggest
             "inferred",
         ),
     }
+
+
+# --- roles, configuration, queues and form alters named in code -------------------------------
+
+ROLE_FILES = {
+    "config/sync/user.role.editor.yml": (
+        "uuid: 1\nid: editor\nlabel: Editor\nis_admin: false\npermissions: []\n"
+    ),
+    str(MODULE / "src/Access/Gate.php"): r"""<?php
+
+namespace Drupal\my_module\Access;
+
+use Drupal\user\RoleInterface;
+
+class Gate {
+
+  const ROLE = 'editor';
+
+  public function check($account, $role) {
+    if ($account->hasRole('editor')) {
+      $account->addRole('ghost');
+      $account->removeRole(self::ROLE);
+    }
+    $account->hasRole($role);
+    $account->hasRole(RoleInterface::AUTHENTICATED_ID);
+  }
+
+}
+""",
+    str(MODULE / "my_module.module"): """\
+<?php
+
+function my_module_user_presave($account) {
+  $account->addRole('editor');
+  $account->removeRole($account->name . '_x');
+}
+""",
+}
+
+
+def test_a_role_named_in_code_is_checked_or_changed_and_a_variable_role_is_a_runtime_mark(
+    tmp_path: Path,
+) -> None:
+    """hasRole gives checks_role, addRole and removeRole give changes_role, to user.role.<name> at
+    the method's or function's line; a role no file declares is unresolved. A variable argument
+    keeps the call as a runtime call site and a core constant leaves a skipped row."""
+    _plant(tmp_path, ROLE_FILES)
+    document, report = _map(tmp_path)
+    gate = str(MODULE / "src/Access/Gate.php")
+    module = str(MODULE / "my_module.module")
+    assert sorted((f, line, r, why) for f, line, r, why in report.skipped) == [
+        (
+            "config/sync/user.role.editor.yml",
+            1,
+            "role_from_config_edges",
+            "edge grants_permission: no value for key permissions",
+        ),
+        (module, 5, "role_changed_in_call", "argument 0 is not a text literal"),
+        (gate, 16, "role_checked_in_call", "argument 0 is not a text literal"),
+        (gate, 17, "role_checked_in_call", "argument 0 is a class constant with no declared text"),
+    ]
+    check = "php.method::Drupal\\my_module\\Access\\Gate::check"
+    presave = "php.function::my_module_user_presave"
+    role = "drupal.config::user.role."
+    found = {
+        (e["kind"], e["from"], e["to"], e["locations"][0]["line"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] in ("checks_role", "changes_role")
+        for p in e["provenance"]
+    }
+    assert found == {
+        ("checks_role", check, role + "editor", 11, "declared"),
+        ("changes_role", check, role + "ghost", 11, "declared"),
+        ("changes_role", check, role + "editor", 11, "declared"),
+        ("changes_role", presave, role + "editor", 3, "declared"),
+    }
+    marks = sorted((n["id"], n["type"]) for n in document["nodes"] if n["state"] == "unresolved")
+    assert marks == [(role + "ghost", "drupal.role")]
+    runtime = {
+        (e["from"], e["to"], e["locations"][0]["line"])
+        for e in document["edges"]
+        if e["kind"] == "has_call_site"
+    }
+    assert runtime == {
+        (
+            check,
+            "php.call_site::Drupal\\my_module\\Access\\Gate::check::$account->hasRole(runtime)",
+            16,
+        ),
+        (presave, "php.call_site::my_module_user_presave::$account->removeRole(runtime)", 5),
+    }
+
+
+CONFIG_FORM = r"""<?php
+
+namespace Drupal\my_module\Form;
+
+use Drupal\Core\Form\ConfigFormBase;
+
+class SettingsForm extends ConfigFormBase {
+
+  const SETTINGS = 'my_module.settings';
+
+  public function buildForm(array $form, $form_state) {
+    $this->config(self::SETTINGS)->get('mode');
+    \Drupal::config('system.site')->get('name');
+    $this->configFactory->get('my_module.settings');
+    \Drupal::configFactory()->getEditable('my_module.settings')->save();
+    $this->container->get('config.factory')->getEditable('my_module.other');
+    $this->configFactoryOverride->get('my_module.none');
+    $config = \Drupal::config('my_module.settings');
+    $config->get('my_module.none');
+    return $form;
+  }
+
+}
+"""
+
+
+def test_a_config_name_read_or_edited_through_a_config_factory_links_to_its_config_object(
+    tmp_path: Path,
+) -> None:
+    """\\Drupal::config is declared; $this->config and get or getEditable on an object named as a
+    config factory are inferred. A name no file declares is an unresolved config object; get on
+    any other object gives nothing."""
+    _plant(
+        tmp_path,
+        {
+            "config/sync/my_module.settings.yml": "mode: soft\n",
+            str(MODULE / "src/Form/SettingsForm.php"): CONFIG_FORM,
+        },
+    )
+    document, report = _map(tmp_path)
+    assert report.skipped == (), report.skipped
+    build = "php.method::Drupal\\my_module\\Form\\SettingsForm::buildForm"
+    found = {
+        (
+            e["kind"],
+            e["to"],
+            tuple(location["line"] for location in e["locations"]),
+            tuple((p["rule"], p["confidence"]) for p in e["provenance"]),
+        )
+        for e in document["edges"]
+        if e["kind"] in ("reads_config_object", "edits_config_object") and e["from"] == build
+    }
+    config = "drupal.config::"
+    own = ("config_read_by_own_method", "inferred")
+    by_drupal = ("config_read_by_drupal", "declared")
+    from_factory = ("config_read_from_factory", "inferred")
+    edited = ("config_edited_from_factory", "inferred")
+    assert found == {
+        (
+            "reads_config_object",
+            config + "my_module.settings",
+            (12, 14, 18),
+            (by_drupal, own, from_factory),
+        ),
+        ("reads_config_object", config + "system.site", (13,), (by_drupal,)),
+        ("edits_config_object", config + "my_module.settings", (15,), (edited,)),
+        ("edits_config_object", config + "my_module.other", (16,), (edited,)),
+    }
+    marks = sorted(
+        (n["id"], n["type"])
+        for n in document["nodes"]
+        if n["state"] == "unresolved" and n["id"].startswith(config)
+    )
+    assert marks == [
+        (config + "my_module.other", "drupal.config_object"),
+        (config + "system.site", "drupal.config_object"),
+    ]
+
+
+QUEUE_FILES = {
+    str(MODULE / "src/Plugin/QueueWorker/SendWorker.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\QueueWorker;
+
+use Drupal\Core\Queue\QueueWorkerBase;
+
+/**
+ * @QueueWorker(
+ *   id = "my_module_send",
+ *   title = @Translation("Send"),
+ * )
+ */
+class SendWorker extends QueueWorkerBase {
+
+  public function processItem($data) {
+  }
+
+}
+""",
+    str(MODULE / "src/Service/Sender.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+class Sender {
+
+  const QUEUE = 'my_module_send';
+
+  public function send($name) {
+    $this->queueFactory->get(self::QUEUE)->createItem([]);
+    \Drupal::queue('contrib_pull')->createItem([]);
+    $this->queueFactory->get($name);
+    $this->cache->get('my_module_send');
+  }
+
+}
+""",
+    str(MODULE / "my_module.module"): """\
+<?php
+
+function my_module_cron() {
+  \\Drupal::service('queue')->get('my_module_send')->claimItem();
+}
+""",
+}
+
+
+def test_a_queue_got_by_name_links_to_the_worker_of_that_queue(tmp_path: Path) -> None:
+    """\\Drupal::queue('x') and get('x') on a queue factory give uses_queue to the worker plugin
+    x; a worker no file declares is referenced, and a variable queue leaves a skipped row."""
+    _plant(tmp_path, QUEUE_FILES)
+    document, report = _map(tmp_path)
+    sender = str(MODULE / "src/Service/Sender.php")
+    assert [(f, line, r, why) for f, line, r, why in report.skipped] == [
+        (sender, 12, "queue_from_factory", "argument 0 is not a text literal"),
+    ]
+    worker = "drupal.plugin.queue_worker::"
+    send = "php.method::Drupal\\my_module\\Service\\Sender::send"
+    found = {
+        (e["from"], e["to"], e["locations"][0]["line"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "uses_queue"
+        for p in e["provenance"]
+    }
+    assert found == {
+        (send, worker + "my_module_send", 10, "inferred"),
+        (send, worker + "contrib_pull", 11, "declared"),
+        ("php.function::my_module_cron", worker + "my_module_send", 4, "inferred"),
+    }
+    states = {n["id"]: n["state"] for n in document["nodes"] if n["id"].startswith(worker)}
+    assert states == {worker + "my_module_send": "mapped", worker + "contrib_pull": "referenced"}
+
+
+FORM_ALTER_FILES = {
+    str(MODULE / "src/Form/SettingsForm.php"): r"""<?php
+
+namespace Drupal\my_module\Form;
+
+use Drupal\Core\Form\FormBase;
+
+class SettingsForm extends FormBase {
+
+  public function getFormId() {
+    return 'my_module_settings';
+  }
+
+}
+""",
+    str(MODULE / "my_module.module"): """\
+<?php
+
+function my_module_form_my_module_settings_alter(&$form, $form_state) {
+}
+
+function my_module_form_node_form_alter(&$form, $form_state) {
+}
+
+function my_module_form_alter(&$form, $form_state, $form_id) {
+}
+""",
+    str(MODULE / "src/Hook/FormHooks.php"): r"""<?php
+
+namespace Drupal\my_module\Hook;
+
+use Drupal\Core\Hook\Attribute\Hook;
+
+class FormHooks {
+
+  #[Hook('form_user_login_form_alter')]
+  public function loginAlter(&$form) {
+  }
+
+}
+""",
+}
+
+
+def test_a_form_id_alter_hook_alters_the_form_its_name_gives(tmp_path: Path) -> None:
+    """A function or method implementing form_<id>_alter gives alters_form to the form id <id>,
+    inferred; a form id no class returns, a core or base form id, is referenced. form_alter itself
+    gives none."""
+    _plant(tmp_path, FORM_ALTER_FILES)
+    document, _ = _map(tmp_path)
+    form = "drupal.form_id::"
+    found = {
+        (e["from"], e["to"], e["locations"][0]["line"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "alters_form"
+        for p in e["provenance"]
+    }
+    assert found == {
+        (
+            "php.function::my_module_form_my_module_settings_alter",
+            form + "my_module_settings",
+            3,
+            "inferred",
+        ),
+        ("php.function::my_module_form_node_form_alter", form + "node_form", 6, "inferred"),
+        (
+            "php.method::Drupal\\my_module\\Hook\\FormHooks::loginAlter",
+            form + "user_login_form",
+            10,
+            "inferred",
+        ),
+    }
+    states = {n["id"]: n["state"] for n in document["nodes"] if n["id"].startswith(form)}
+    assert states == {
+        form + "my_module_settings": "mapped",
+        form + "node_form": "referenced",
+        form + "user_login_form": "referenced",
+    }

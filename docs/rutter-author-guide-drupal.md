@@ -292,6 +292,17 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   storage's entity type fills.
 - `suggests_block_plugin`, `suggests_block_placement`, `suggests_theme_hook` and
   `suggests_field`, inferred from a suggestion template's file name to a node the map holds.
+- `checks_role` and `changes_role`, from the method or function around `->hasRole('x')`, or
+  `->addRole('x')` and `->removeRole('x')`, to the role `user.role.x`, joined through the internal
+  hub `drupal.role_name`; an unmapped role ends at an unresolved one, and a variable role keeps
+  the call as a `php.call_site` marked `resolution: runtime`.
+- `reads_config_object` and `edits_config_object`, from the method or function around
+  `\Drupal::config('x')`, `$this->config('x')`, or `get('x')` and `getEditable('x')` on a config
+  factory, to the configuration object `x`, unresolved when no file declares it.
+- `uses_queue`, from the method or function around `\Drupal::queue('x')` or `get('x')` on a queue
+  factory, to the queue worker plugin `x`, so a worker's queue writers are one edge away.
+- `alters_form`, inferred by a map rule from each method or function that implements a hook
+  `form_<id>_alter` to the form id `<id>`.
 
 ## Where to look when the map misses a thing
 

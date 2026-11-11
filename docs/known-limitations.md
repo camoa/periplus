@@ -107,6 +107,15 @@ a list of its known gaps.
   links to a field storage named `x`; a `field_` name with no storage ends at an unresolved
   `field.storage.<name>`. A field suggestion is read only for a name that starts with `field_`. A
   template's edge sits at the template's line, and a method's field edge at the method's line.
+- **Drupal, roles, configuration, queues and form alters in code:** the object of `hasRole`,
+  `addRole` and `removeRole` is not read, and a config factory or queue factory is known by the
+  object's name. A config form's `$this->config('x')` reads as a read, though it may return an
+  editable object. A queue is named by its worker plugin, so a queue no worker processes ends at a
+  referenced worker, and the `createItem` or `claimItem` after `get` is not read. A config or
+  queue name in a variable, or in `self::X` declared on an interface the class implements, leaves
+  a skipped row only, and a `?->` call gives nothing.
+  `alters_form` cannot tell a form id from a base form id, and a generic `hook_form_alter` that
+  tests `$form_id` gives none.
 - **Drupal, settings to know:** only the custom modules and themes are read as PHP. A folder
   setting may not leave the project root, so a site is mapped from inside its own tree.
   `drupal_basic` repeats `php_basic`'s grammar pin, so a grammar update must change both.

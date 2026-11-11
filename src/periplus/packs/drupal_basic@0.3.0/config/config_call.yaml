@@ -1,0 +1,77 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Code that names a configuration object: \Drupal::config('x.y'), $this->config('x.y') and get('x.y')
+# on a config factory give reads_config_object, and getEditable('x.y') on a config factory gives
+# edits_config_object, from the method or function around the call to the configuration object
+# x.y, an unresolved one when no mapped file declares it. A config factory is an object written
+# ending in configFactory or config_factory, as $this->configFactory, \Drupal::configFactory() or
+# $config_factory, or the container's get('config.factory') or \Drupal::service('config.factory').
+# The argument is a text literal or a class constant a mapped file declares as text; a constant of
+# core or contrib leaves a skipped row, and so does a variable.
+#
+# \Drupal::config is declared; the others are inferred, because the object's name, not its type,
+# says it is a config factory, and $this->config() is taken to be the one of ControllerBase,
+# FormBase or ConfigFormBase. A config form's $this->config('x.y') returns an editable object for a
+# name its getEditableConfigNames() lists, and still reads as reads_config_object. ?->get('x.y')
+# gives nothing.
+
+edge_kinds:
+- kind: reads_config_object
+  from: [php.method, php.function]
+  to: drupal.config_object
+- kind: edits_config_object
+  from: [php.method, php.function]
+  to: drupal.config_object
+
+rules:
+- rule: config_read_by_drupal
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: config}
+  emits: [{edge: {kind: reads_config_object, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: declared
+
+- rule: config_read_by_own_method
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this'}
+    - name_matches: {child: name, pattern: config}
+  emits: [{edge: {kind: reads_config_object, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: config_read_from_factory
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: &factory_object '(?s).*(?:configFactory|config_factory)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]config\.factory[''"]\)|\\?Drupal::service\([''"]config\.factory[''"]\)'}
+    - name_matches: {child: name, pattern: get}
+  emits: [{edge: {kind: reads_config_object, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: config_edited_from_factory
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *factory_object}
+    - name_matches: {child: name, pattern: getEditable}
+  emits: [{edge: {kind: edits_config_object, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred
