@@ -131,7 +131,8 @@ class Grammar:
     and ``argument_name`` the field of a named argument's name. ``literals`` are the node types of
     a text literal and ``literal_content`` the node type of its text. Each is empty when the pack
     declares no attribute. ``comment`` is the node type of a comment, empty when none is declared.
-    ``call_arguments`` is the field of a call's arguments. ``call_argument`` is the node type of
+    ``call_arguments`` is the field of a call's arguments, or the node type of the child holding
+    them on a call without that field. ``call_argument`` is the node type of
     one, and each named child that is not an extra is one when it is empty; ``call_argument_name``
     is the field of a named argument's name. ``call_literals`` are the node types of a call's text
     literal, ``call_literal_content`` those of its text, and ``call_literal_delimiters`` those of
@@ -240,14 +241,16 @@ def text_of(node: Node) -> str:
 def argument_of(attribute: Node, key: str, grammar: Grammar, call: bool = False) -> Node | None:
     """The value of the attribute's argument named ``key``, or at position ``key`` when it is a
     whole number; ``None`` when the attribute has no such argument. ``call`` reads a call's
-    arguments by the grammar's call keys. A wrapped or named argument's value is its last named
-    child."""
+    arguments by the grammar's call keys: the child in the ``call_arguments`` field, else the first
+    named child of that node type. A wrapped or named argument's value is its last named child."""
     field, wrapper, named = (
         (grammar.call_arguments, grammar.call_argument, grammar.call_argument_name)
         if call
         else (grammar.arguments, grammar.argument, grammar.argument_name)
     )
     holder = attribute.child_by_field_name(field)
+    if holder is None and call:
+        holder = next((c for c in attribute.named_children if c.type == field), None)
     found = [
         c
         for c in (holder.named_children if holder else ())

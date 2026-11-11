@@ -215,6 +215,8 @@ table none of them declares is refused, naming the `tables` key. The table is da
 still holds no language knowledge. An end read `{argument: N}` also takes a class constant
 declared as text, when the grammar block declares `constant_access` and `constant_declaration`,
 the node types of a constant read and of a declaration; one without the other is refused.
+An end or id read `{argument: N}` finds the arguments in the field `identity.call_arguments`
+names, else in the matched node's first named child of that node type.
 
 An end with `fallback` tries a second name after the first, and `on_miss` marks the first when
 neither is mapped. `on_miss_name: fallback` marks the fallback name instead, for a language that

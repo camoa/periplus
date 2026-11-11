@@ -197,7 +197,7 @@
       "additionalProperties": true,
       "description": "How this language composes a qualified name, folds case, and what it must never normalise. Shape not yet derived from enough packs to close.",
       "properties": {
-        "call_arguments": {"type": "string", "description": "The tree field of a call that holds its arguments, read by an id or a reference end from {argument: N}. Default: arguments."},
+        "call_arguments": {"type": "string", "description": "The tree field of a call that holds its arguments, read by an id or a reference end from {argument: N}; on a call node without that field, its first named child of that node type. Default: arguments."},
         "call_argument": {"type": "string", "description": "The tree node type that holds one argument of a call; its value is its last named child. Without it, each named child of the arguments field is one argument, a comment or other extra node left out."},
         "call_argument_name": {"type": "string", "description": "The field of an argument that holds its name. A named argument is found by its name, not its position, and its value is its last named child."},
         "call_literals": {"type": "array", "items": {"type": "string"}, "description": "The tree node types of a call argument's text literal. Without them, no argument is a text literal."},

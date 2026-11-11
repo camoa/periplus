@@ -77,7 +77,9 @@ name so:
 Keys under `identity` say how the grammar writes a call's arguments. They are read apart from the
 `attribute` block:
 
-- `call_arguments` names the field that holds the arguments, `arguments` by default.
+- `call_arguments` names the field that holds the arguments, `arguments` by default. On a node
+  without that field, the arguments are its first named child of that node type. In PHP,
+  `new Filter('price')` holds them so, and `{argument: 0}` reads `price` from it.
 - `call_argument` names the node type that wraps one argument, whose value is its last named child.
   Without it, each named child of the field is one argument by position, and a comment is none.
 - `call_argument_name` names the field of a named argument's name. That argument is found by name.
