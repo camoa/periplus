@@ -12,7 +12,7 @@
 extra for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.5.2.
+Status: **beta**, version 0.6.0.
 
 </div>
 
@@ -63,7 +63,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.5.2
+uv tool install git+https://github.com/camoa/periplus@v0.6.0
 ```
 
 To install from a local copy of this repository:
@@ -317,9 +317,11 @@ To map a Laravel application, pin `php_basic@0.2.0` and `laravel_basic@0.0.5` an
 at the application's root. The default Laravel folders need no settings. To move the templates,
 set `views_root` under `folders`; a template is named by its path below `views_root`.
 
-New in this release: one install serves every bundled rutter. The Go and JavaScript grammars
-are dependencies of the package, so `go_basic`, `js_basic` and `drupal_js_basic` map without a
-second install, and the `go` and `js` extras are gone.
+New in this release: a rutter declares the settings values its rules read under `values` in its
+manifest, and a project whose settings lack one is refused; a node type marked `internal` serves
+the map rules and stays out of the written map; a span can balance tags longer than one character;
+a file rule without `match.text` may hold values, and a text rule may name `{file_stem}`;
+`js_basic` maps calls; and `periplus show` prints each node's and edge's description.
 
 ## Write a rutter
 
