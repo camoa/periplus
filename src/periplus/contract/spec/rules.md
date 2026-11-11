@@ -239,6 +239,10 @@ Everything else was a condition wearing the wrong shape — `in_method_with_attr
 Two conditions force `reads: map`, because they cannot be answered from one file:
 `ancestor_reaches` and `contained_by_type`.
 
+A declaration rule's `name_child` list is a path of one step or more, each step a field or else
+the first named child of that node type; `[name]` reaches a name that has no field. A reference
+rule's list is one field or two, the name and a member.
+
 `name_matches` tests a child's whole text. Its string form tests the first `name_child`. Its
 mapping form, `{child: scope, pattern: Config}`, names the child: a field of the match, or else
 its first child of that node type. So one rule can test a call's class and its method. A match

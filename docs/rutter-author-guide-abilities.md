@@ -319,16 +319,24 @@ for an id that names `enclosing_type` outside any type.
 
 These blocks are not worked examples; `tests/test_property_type_sources.py` runs the same shapes.
 
-A tree declaration rule's `name_child` may be a list, a path walked from the matched node. Each
-step is the child in that field, or else the first named child of that node type. The declared
-name is the leaf's text, and the node sits at the leaf's line. In PHP a typed property's type sits
-on the `property_declaration`, and its name two levels down:
+A tree declaration rule's `name_child` may be a list, a path of one step or more walked from the
+matched node. Each step is the child in that field, or else the first named child of that node
+type. The declared name is the leaf's text, and the node sits at the leaf's line. In PHP a typed
+property's type sits on the `property_declaration`, and its name two levels down:
 
 ```yaml
 match: {declaration: property_declaration, name_child: [property_element, name], filetype: php}
 ```
 
-A rule with this match fires once per statement, so `protected $a, $b;` names `$a` only.
+A rule with this match fires once per statement, so `protected $a, $b;` names `$a` only. To read
+every element, match the element and walk one step to its name. A string `name_child` names a
+field, and a PHP constant's name has none, so the one-step list `[name]` reads it by its node type:
+
+```yaml
+match: {declaration: const_element, name_child: [name], filetype: php}
+```
+
+This rule fires once per constant, so `const A = 'a', B = 'b';` names `A` and `B`.
 
 The id may also list one docblock source, `{docblock: <pattern>}`. The engine searches the
 pattern in the comment that is the matched node's previous sibling, of the node type the grammar's

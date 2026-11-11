@@ -2049,6 +2049,8 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
             "a reference rule is not a file rule with in, match.reference, match.name_child, "
             "match.filetype and edges only, and no id"
         )
+    if len(fields) > 2:
+        raise _Unsupported("the name_child of a reference rule is one field, or a name and a member")
     where = match.get("where", [])
     if not isinstance(where, list) or not all(
         isinstance(c, Mapping) and set(c) == {"name_matches"} for c in where
