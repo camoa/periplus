@@ -7,9 +7,16 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # provided by the module its name starts with; a configuration entity (it has a uuid) has no owner
 # edge. Drupal strips the uuid from a module's config/install and config/optional files, so the
 # test cannot tell the two apart there and those files get no owner edge. core.* names no module.
+# The owner is the mapped module of that name, else the mapped theme, as mytheme.settings of a custom
+# theme, else a referenced module.
 node_types:
 - name: drupal.config_object
   id_namespace: drupal.config
+# The owner a simple configuration file's name gives, before the map says whether it is a module
+# or a theme.
+- name: drupal.config_owner
+  id_namespace: drupal.config_owner
+  internal: true
 
 edge_kinds:
 - kind: config_depends
@@ -25,7 +32,10 @@ edge_kinds:
   to: drupal.theme
 - kind: config_provided_by
   from: drupal.config_object
-  to: drupal.module
+  to: [drupal.module, drupal.theme]
+- kind: config_owner_named
+  from: drupal.config_object
+  to: drupal.config_owner
 
 rules:
 - rule: any_config_file
@@ -111,9 +121,18 @@ rules:
     from: file_stem
   emits:
   - edge:
-      kind: config_provided_by
+      kind: config_owner_named
       from: this_node
       to:
         from: []
         template: '{config_owner}'
+  confidence: declared
+- rule: simple_config_provided_by
+  reads: map
+  match:
+    node_type: drupal.config_object
+    follow:
+    - edge: config_owner_named
+    - id_matches: '^drupal\.config_owner::(?<owner>.+)$'
+  emits: [{edge: {kind: config_provided_by, from: this_node, to: {template: '{owner}', types: [drupal.module, drupal.theme]}}}]
   confidence: declared

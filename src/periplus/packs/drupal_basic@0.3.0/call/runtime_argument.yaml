@@ -110,7 +110,7 @@ rules:
   emits: *runtime_edges
   confidence: declared
 
-# \Drupal::service($id), as service_call.
+# \Drupal::service($id), as service_call, and \Drupal::cache($bin), as drupal_cache_bin_call.
 - rule: runtime_service_call
   reads: file
   in: [source]
@@ -120,7 +120,7 @@ rules:
     filetype: php
     where: &service_where
     - name_matches: {child: scope, pattern: '\\?Drupal'}
-    - name_matches: {child: name, pattern: service}
+    - name_matches: {child: name, pattern: 'service|cache'}
     - name_matches: {child: arguments, pattern: *first_variable}
   id: *scoped_id
   emits: *runtime_node

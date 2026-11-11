@@ -1,0 +1,65 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A custom route requirement that an access_check service answers: a route whose requirements hold
+# _mymod_access, and a service tagged access_check with applies_to: _mymod_access. Each file names
+# the key, as an internal drupal.route_requirement node; the map rule joins a route to each service
+# its keys reach, as access_checked_by_service. A key no service names joins nothing.
+#
+# Limits: applies_to is read on any tag of the service, not only access_check, and holds one key
+# as written; a comma-separated list of keys joins nothing.
+
+node_types:
+- name: drupal.route_requirement
+  id_namespace: drupal.route_requirement
+  internal: true
+
+edge_kinds:
+- kind: route_names_requirement
+  from: drupal.route
+  to: drupal.route_requirement
+- kind: requirement_checked_by
+  from: drupal.route_requirement
+  to: drupal.service
+
+rules:
+- rule: route_requirement_keys
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.routing'
+    filetype: yaml
+    each: '*'
+    where: [{has_key: {path: path}}]
+  id: {from: key}
+  emits:
+  - edge:
+      kind: route_names_requirement
+      from: this_node
+      to: {from: [{each: requirements.*}], template: '{key}', type: drupal.route_requirement}
+  confidence: declared
+
+- rule: service_applies_to_requirement
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where: [{id_matches: '^[^_]'}]
+  id: {from: key}
+  emits:
+  - edge:
+      kind: requirement_checked_by
+      from: {from: {key: tags.*.applies_to}, type: drupal.route_requirement}
+      to: this_node
+  confidence: declared
+
+- rule: route_access_checked_by_applies_to
+  reads: map
+  match:
+    node_type: drupal.route
+    follow:
+    - edge: route_names_requirement
+    - edge: requirement_checked_by
+  emits: [{edge: {kind: access_checked_by_service, from: this_node, to: matched_node}}]
+  confidence: declared

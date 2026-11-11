@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A plugin manager: a class whose constructor calls parent::__construct with the plugin folder in
+# quotes first and an attribute class written Name::class fifth, as a DefaultPluginManager subclass
+# does, manages the plugin type of that class. The edge starts at that constructor. Inferred: the argument's position, not a name, says
+# what it is. An attribute class outside the mapped code ends at a referenced plugin type.
+#
+# Limits: a manager that names its attribute class as text, or only an annotation class (the sixth
+# argument), or that builds its discovery itself, such as from YAML files, gives no edge.
+
+rules:
+- rule: manager_of_plugin_type
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: parent}
+    - name_matches: {child: name, pattern: __construct}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[''"][^''"]*[''"]\s*,[^,]*,[^,]*,[^,]*,\s*(?<attr>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: manages_plugin_type
+      from: enclosing_declaration
+      to: {template: '{attr}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.plugin_type]}
+  confidence: inferred

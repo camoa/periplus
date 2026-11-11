@@ -63,7 +63,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   block-content, paragraph, media or comment gives a suggests_bundle edge to the bundle
 #   <entity>.<bundle>, as inferred.
 # - each simple configuration file, with no top-level uuid, as a config_provided_by edge to the
-#   module its name starts with; each literal form id a form class returns, as a drupal.form_id
+#   module its name starts with, or the theme; each literal form id a form class returns, as a drupal.form_id
 #   node with a form_has_id edge from the class, and each form id a CAPTCHA point or the honeypot
 #   settings name, as a config_names_form edge; each hook named <extension>_<type>_<operation>,
 #   as an inferred hook_acts_on_entity_type edge to <type>; each route's path, as a
@@ -73,10 +73,33 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   function around the call; each field, filter and style plugin a view's config file names, as a
 #   view_uses_field_plugin, view_uses_filter_plugin or view_uses_style_plugin edge. The rule files'
 #   headers name their limits.
+# - \Drupal::cache() as a uses_service edge to cache.default, and \Drupal::cache('x') to cache.x;
+#   a route whose requirements hold a key that a service's tag names in applies_to, as an
+#   access_checked_by_service edge to that service; a theme's simple configuration, such as
+#   mytheme.settings, as provided by the theme when the map holds it; an argument of a service that
+#   is itself a list of @names, one level down; a class that extends RouteSubscriberBase or
+#   HttpExceptionSubscriberBase as an event subscriber, and a route subscriber's alters_routes
+#   edge to a drupal.route_alter node marked resolution runtime;
+# - each constraint plugin's validator class, as a validated_by edge: declared from a validatedBy()
+#   that returns Name::class, else inferred from the name <constraint class>Validator when the map
+#   holds it; each class an entity type's attribute or annotation names under handlers, as a
+#   has_access_handler, has_list_builder, has_view_builder, has_storage_handler, has_form_handler
+#   or has_route_provider edge from the entity type;
+# - each PHP attribute, as a has_attribute edge from the class, method, function, property or
+#   parameter it sits on to its class; each attribute class that extends core's attribute Plugin,
+#   and each annotation class that extends core's annotation Plugin, as a drupal.plugin_type node;
+#   each class that carries that attribute, or opens its docblock with that annotation, as a
+#   plugin_of_type edge; and a manager constructor that passes the attribute class fifth to
+#   parent::__construct, as a manages_plugin_type edge.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
 #   unmapped bundle ends at a referenced node.
+# - The inferred validated_by edge does not read validatedBy(): a constraint whose validatedBy()
+#   returns another class, while a class named <constraint class>Validator is mapped, gets a false
+#   inferred edge to that class beside its declared one.
+# - A contributed or core theme's settings, such as olivero.settings, still end at a referenced
+#   module: only a mapped theme takes its configuration.
 # - A hook with a template key kept in a variables default, or an entry whose first key is not a
 #   registry key, reads as no hook or as the wrong one. A hook entry that opens with the key
 #   type, pattern or function is not found. One that opens with path or file is found when a
@@ -133,7 +156,15 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   argument, sort or display plugin. A views field, filter or style plugin declared by an
 #   annotation, and a mail plugin declared by an annotation, give nothing. A views plugin gives
 #   one skipped row, argument 0 or id missing, from the rule that reads the other form of the id.
-# - A plugin type itself, its attribute class and its plugin manager service, gets no node.
+# - A plugin manager names no plugin type when it passes no attribute class, or names it as text,
+#   or builds its discovery itself, such as from YAML files. Its service gets no edge to the type;
+#   the edge starts at its constructor. An annotation plugin type is read only from the first
+#   annotation of a plugin class's docblock.
+# - An entity type handler written as text in an attribute, a form operation other than default,
+#   add, edit and delete, a route provider other than html, and a handler set in code, such as by
+#   hook_entity_type_alter, give no edge. The form operation is not recorded on the edge.
+# - A route subscriber that extends another of the project's route subscribers, not
+#   RouteSubscriberBase as written, gets no alters_routes edge.
 # - A hook with a variable part keeps that part in its name: mymod_form_user_login_form_alter
 #   implements form_user_login_form_alter, not form_FORM_ID_alter.
 # - A class that extends ContentEntityBase and carries no ContentEntityType attribute or
@@ -147,7 +178,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   written with a space or a line break inside get('entity_type.manager'), and other entity type
 #   manager methods such as getHandler('x') give no edge.
 # - A \Drupal:: shortcut gives a uses_service edge only when the table shortcut_services below
-#   lists its method, and \Drupal::cache('x') gives none. A static load, loadMultiple or create
+#   lists its method, or it is cache() with no argument or a quoted bin; \Drupal::cache($bin) is
+#   kept as a call site marked resolution runtime. A static load, loadMultiple or create
 #   call gives a uses_entity_type edge from entity_class_static_call only on a core entity class
 #   the table entity_classes lists; any other class is listed as skipped. On a class the map holds
 #   as an entity type's class, as a module's own MyEntity, call/entity_class_call.yaml gives the
@@ -171,8 +203,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the custom_access attribute and gives no edge to a PHP method.
 # - The applies_to key of a service's access_check tag is kept as the service's applies_to
 #   attribute, not on the tagged_as edge, because an attribute on an edge is accepted and not
-#   executed. A custom route requirement that such a tag binds, such as _mymod_access: 'TRUE', is
-#   not read and gives no edge to the service.
+#   executed. applies_to is read on any tag of a service, and a comma-separated list of keys
+#   joins no route.
 # - A route parameter that Drupal converts to an entity because its name is an entity type, with
 #   no options.parameters type, gives no loads_entity_type edge, nor does a type other than
 #   entity:<type>, such as entity_revision:<type>.
@@ -399,7 +431,8 @@ grammar:
 # Name tables that call/call.yaml looks a written name up in.
 tables:
   # Each static method of core's Drupal class, as of Drupal 11.4, that gets one fixed service from
-  # the container, and that service. cache() names its service by its argument and is left out.
+  # the container, and that service. cache() names its service by its argument and is read by
+  # drupal_cache_call and drupal_cache_bin_call.
   shortcut_services:
     accessManager: access_manager
     classResolver: class_resolver
@@ -504,7 +537,7 @@ boundary:
       Drupal\Core\Entity\EntityAccessControlHandler: ~
       Drupal\Core\Entity\EntityDeleteForm: ~
       Drupal\Core\Entity\EntityForm: ~
-      Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase: ~
+      Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase: drupal.event_subscriber_class
       Drupal\Core\Form\ConfigFormBase: drupal.config_form_class
       Drupal\Core\Form\ConfirmFormBase: ~
       Drupal\Core\Form\FormBase: drupal.form_class
@@ -512,7 +545,7 @@ boundary:
       Drupal\Core\Plugin\DefaultPluginManager: ~
       Drupal\Core\Plugin\PluginBase: ~
       Drupal\Core\Queue\QueueWorkerBase: ~
-      Drupal\Core\Routing\RouteSubscriberBase: ~
+      Drupal\Core\Routing\RouteSubscriberBase: drupal.event_subscriber_class
       Drupal\KernelTests\Components\ComponentKernelTestBase: ~
       Drupal\KernelTests\KernelTestBase: ~
       Drupal\Tests\BrowserTestBase: ~

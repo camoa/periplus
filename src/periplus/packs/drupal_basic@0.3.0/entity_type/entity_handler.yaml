@@ -1,0 +1,133 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An entity type's handlers: each class its annotation or attribute names under handlers, as an
+# edge from the entity type to that class whose kind is the handler key: has_access_handler,
+# has_list_builder, has_view_builder, has_storage_handler, has_form_handler for each form
+# operation, and has_route_provider. entity_handler_attribute.yaml and entity_handler_annotation.yaml
+# read each key in the class's file as an internal names_<key> edge from the class to a
+# drupal.class_ref node; the map rules below join the class to its entity type through
+# entity_type_of_class. A handler class outside the mapped code, such as a core route provider,
+# ends at a referenced node. Declared: the entity type's definition names each class.
+#
+# Limits:
+# - The form operations read are default, add, edit and delete, and the route provider read is
+#   html; the operation is not recorded on the edge.
+# - A handler set in code, such as by hook_entity_type_alter or by a contributed module that builds
+#   its entity types, gives no edge.
+
+edge_kinds:
+- kind: names_access_handler
+  from: php.class
+  to: drupal.class_ref
+- kind: names_list_builder
+  from: php.class
+  to: drupal.class_ref
+- kind: names_view_builder
+  from: php.class
+  to: drupal.class_ref
+- kind: names_storage_handler
+  from: php.class
+  to: drupal.class_ref
+- kind: names_form_handler
+  from: php.class
+  to: drupal.class_ref
+- kind: names_route_provider
+  from: php.class
+  to: drupal.class_ref
+- kind: has_access_handler
+  from: drupal.entity_type
+  to: php.class
+- kind: has_list_builder
+  from: drupal.entity_type
+  to: php.class
+- kind: has_view_builder
+  from: drupal.entity_type
+  to: php.class
+- kind: has_storage_handler
+  from: drupal.entity_type
+  to: php.class
+- kind: has_form_handler
+  from: drupal.entity_type
+  to: php.class
+- kind: has_route_provider
+  from: drupal.entity_type
+  to: php.class
+
+rules:
+- rule: entity_type_access_handler
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<owner>.+)$'}]
+    follow:
+    - edge: names_access_handler
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_access_handler, from: matched_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: entity_type_list_builder
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<owner>.+)$'}]
+    follow:
+    - edge: names_list_builder
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_list_builder, from: matched_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: entity_type_view_builder
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<owner>.+)$'}]
+    follow:
+    - edge: names_view_builder
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_view_builder, from: matched_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: entity_type_storage_handler
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<owner>.+)$'}]
+    follow:
+    - edge: names_storage_handler
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_storage_handler, from: matched_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: entity_type_form_handler
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<owner>.+)$'}]
+    follow:
+    - edge: names_form_handler
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_form_handler, from: matched_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: entity_type_route_provider
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<owner>.+)$'}]
+    follow:
+    - edge: names_route_provider
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_route_provider, from: matched_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared

@@ -700,3 +700,449 @@ def test_a_path_written_whole_links_to_the_node_its_route_serves_and_a_joined_on
     serves = [(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "route_serves_path"]
     assert serves == [("drupal.route::mymod.xy", path)]
     assert [n["id"] for n in document["nodes"] if n["type"] == "drupal.url_path"] == [path]
+
+
+# --- cache shortcut, access check binding, nested arguments, route subscribers ----------------
+
+CACHE_CONTROLLER = r"""<?php
+
+namespace Drupal\my_module\Controller;
+
+class CacheController {
+
+  public function run($bin) {
+    $a = \Drupal::cache();
+    $b = \Drupal::cache('render');
+    $c = \Drupal::cache("data");
+    $d = \Drupal::cache($bin);
+    \Drupal::setContainer($container);
+    \Drupal::unsetContainer();
+  }
+
+}
+"""
+
+
+def test_drupal_cache_ends_at_its_bin_service_and_set_container_leaves_no_row(
+    tmp_path: Path,
+) -> None:
+    """cache() gives cache.default and a quoted bin cache.<bin>, inferred, at each call's line; a
+    variable bin is a call site marked runtime; setContainer and unsetContainer give nothing."""
+    path = str(MODULE / "src/Controller/CacheController.php")
+    _plant(tmp_path, {path: CACHE_CONTROLLER})
+    document, report = _map(tmp_path)
+    assert report.skipped == (), report.skipped
+    run_method = "php.method::Drupal\\my_module\\Controller\\CacheController::run"
+    found = {
+        (e["from"], e["to"], place["line"], p["rule"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "uses_service"
+        for place in e["locations"]
+        for p in e["provenance"]
+    }
+    assert found == {
+        (run_method, "drupal.service::cache.default", 8, "drupal_cache_call", "inferred"),
+        (run_method, "drupal.service::cache.render", 9, "drupal_cache_bin_call", "inferred"),
+        (run_method, "drupal.service::cache.data", 10, "drupal_cache_bin_call", "inferred"),
+    }
+    runtime = [
+        (n["id"], n["locations"][0]["line"])
+        for n in document["nodes"]
+        if n.get("attributes", {}).get("resolution") == "runtime"
+    ]
+    assert runtime == [
+        ("php.call_site::Drupal\\my_module\\Controller\\CacheController::run::\\Drupal::cache", 11)
+    ]
+
+
+ACCESS_ROUTING = """\
+my_module.page:
+  path: '/my/page'
+  requirements:
+    _my_module_access: 'TRUE'
+my_module.open:
+  path: '/my/open'
+  requirements:
+    _permission: 'access content'
+"""
+ACCESS_SERVICES = """\
+services:
+  my_module.access_check:
+    class: Drupal\\my_module\\Access\\MyAccessCheck
+    tags:
+      - { name: access_check, applies_to: _my_module_access }
+  my_module.chain:
+    class: Drupal\\my_module\\Chain
+    arguments:
+      - ['@my_module.first', '@?my_module.second']
+      - '@my_module.third'
+"""
+
+
+def test_a_route_requirement_joins_the_service_whose_tag_applies_to_it(tmp_path: Path) -> None:
+    """The route holding the key gets one declared edge to the service; the other route none, and
+    the internal requirement nodes stay out of the written map."""
+    _plant(
+        tmp_path,
+        {
+            str(MODULE / "my_module.routing.yml"): ACCESS_ROUTING,
+            str(MODULE / "my_module.services.yml"): ACCESS_SERVICES,
+        },
+    )
+    document, report = _map(tmp_path)
+    checked = {
+        (e["from"], e["to"], p["rule"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "access_checked_by_service"
+        for p in e["provenance"]
+    }
+    assert checked == {
+        (
+            "drupal.route::my_module.page",
+            "drupal.service::my_module.access_check",
+            "route_access_checked_by_applies_to",
+            "declared",
+        )
+    }
+    assert not [n for n in document["nodes"] if n["type"] == "drupal.route_requirement"]
+    assert (report.internal.nodes, report.internal.edges) == (2, 3), report.internal
+
+
+def test_a_list_argument_of_a_service_injects_each_service_it_names(tmp_path: Path) -> None:
+    """A nested list of @names gives one injects_service edge each, beside the plain argument."""
+    _plant(tmp_path, {str(MODULE / "my_module.services.yml"): ACCESS_SERVICES})
+    document, _ = _map(tmp_path)
+    injected = sorted(
+        (e["to"], e["locations"][0]["line"])
+        for e in document["edges"]
+        if e["kind"] == "injects_service" and e["from"] == "drupal.service::my_module.chain"
+    )
+    assert injected == [
+        ("drupal.service::my_module.first", 9),
+        ("drupal.service::my_module.second", 9),
+        ("drupal.service::my_module.third", 10),
+    ]
+
+
+SUBSCRIBERS = {
+    str(MODULE / "src/Routing/RouteSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\Routing;
+
+use Drupal\Core\Routing\RouteSubscriberBase;
+use Symfony\Component\Routing\RouteCollection;
+
+class RouteSubscriber extends RouteSubscriberBase {
+
+  protected function alterRoutes(RouteCollection $collection) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/DeniedSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase;
+
+class DeniedSubscriber extends HttpExceptionSubscriberBase {
+}
+""",
+}
+
+
+def test_route_and_exception_subscribers_are_event_subscribers_and_a_route_one_alters_routes(
+    tmp_path: Path,
+) -> None:
+    """Both classes take the event subscriber type; only the route subscriber has an inferred
+    alters_routes edge, to a node marked resolution runtime at the class's line."""
+    _plant(tmp_path, SUBSCRIBERS)
+    document, _ = _map(tmp_path)
+    nodes = {n["id"]: n for n in document["nodes"]}
+    route = "php.type::Drupal\\my_module\\Routing\\RouteSubscriber"
+    denied = "php.type::Drupal\\my_module\\EventSubscriber\\DeniedSubscriber"
+    assert nodes[route]["type"] == nodes[denied]["type"] == "drupal.event_subscriber_class"
+    alters = [
+        (e["from"], e["to"], e["provenance"][0]["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "alters_routes"
+    ]
+    mark = "drupal.route_alter::Drupal\\my_module\\Routing\\RouteSubscriber"
+    assert alters == [(route, mark, "inferred")]
+    assert nodes[mark]["attributes"] == {"resolution": "runtime"}
+    assert nodes[mark]["locations"][0]["line"] == 8
+
+
+# --- constraint validators, entity handlers, plugin types --------------------------------------
+
+CONSTRAINT = MODULE / "src/Plugin/Validation/Constraint"
+CONSTRAINTS = {
+    str(CONSTRAINT / "SkuConstraint.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Validation\Constraint;
+
+use Drupal\Core\Validation\Attribute\Constraint;
+use Symfony\Component\Validator\Constraint as SymfonyConstraint;
+
+#[Constraint(id: 'MySku', label: 'Sku')]
+class SkuConstraint extends SymfonyConstraint {
+}
+""",
+    str(CONSTRAINT / "SkuConstraintValidator.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Validation\Constraint;
+
+class SkuConstraintValidator {
+}
+""",
+    str(CONSTRAINT / "PriceConstraint.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Validation\Constraint;
+
+/**
+ * @Constraint(
+ *   id = "MyPrice",
+ *   label = @Translation("Price")
+ * )
+ */
+class PriceConstraint {
+
+  public function validatedBy() {
+    return PriceChecker::class;
+  }
+
+}
+""",
+    str(CONSTRAINT / "PriceChecker.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Validation\Constraint;
+
+class PriceChecker {
+}
+""",
+    str(CONSTRAINT / "LoneConstraint.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Validation\Constraint;
+
+use Drupal\Core\Validation\Attribute\Constraint;
+
+#[Constraint(id: 'MyLone', label: 'Lone')]
+class LoneConstraint {
+}
+""",
+}
+
+
+def test_a_constraint_links_to_the_class_validated_by_returns_else_to_its_named_validator(
+    tmp_path: Path,
+) -> None:
+    """validatedBy() returning Name::class gives a declared edge; the name <class>Validator an
+    inferred one; a constraint with neither gives none."""
+    _plant(tmp_path, CONSTRAINTS)
+    document, _ = _map(tmp_path)
+    own = "php.type::Drupal\\my_module\\Plugin\\Validation\\Constraint\\"
+    found = {
+        (e["from"], e["to"], p["rule"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "validated_by"
+        for p in e["provenance"]
+    }
+    assert found == {
+        (
+            "drupal.plugin.constraint::MyPrice",
+            own + "PriceChecker",
+            "constraint_validated_by_method",
+            "declared",
+        ),
+        (
+            "drupal.plugin.constraint::MySku",
+            own + "SkuConstraintValidator",
+            "constraint_validated_by_name",
+            "inferred",
+        ),
+    }
+
+
+ENTITY = MODULE / "src/Entity"
+HANDLED = {
+    str(ENTITY / "Order.php"): r"""<?php
+
+namespace Drupal\my_module\Entity;
+
+use Drupal\Core\Entity\Attribute\ContentEntityType;
+use Drupal\my_module\OrderAccess;
+
+#[ContentEntityType(
+  id: 'my_order',
+  handlers: [
+    'access' => OrderAccess::class,
+    'list_builder' => \Drupal\my_module\OrderListBuilder::class,
+    'storage' => 'Drupal\my_module\OrderStorage',
+    'form' => [
+      'default' => Form\OrderForm::class,
+    ],
+  ],
+)]
+class Order {
+
+  public function helper() {
+    return ['access' => OrderAccess::class];
+  }
+
+}
+""",
+    str(ENTITY / "Coupon.php"): r"""<?php
+
+namespace Drupal\my_module\Entity;
+
+/**
+ * @ConfigEntityType(
+ *   id = "my_coupon",
+ *   handlers = {
+ *     "view_builder" = "\Drupal\my_module\CouponViewBuilder",
+ *     "form" = {
+ *       "add" = "Drupal\my_module\CouponForm",
+ *       "delete" = "Drupal\my_module\CouponDeleteForm",
+ *     },
+ *     "route_provider" = {
+ *       "html" = "Drupal\Core\Entity\Routing\AdminHtmlRouteProvider",
+ *     },
+ *   },
+ * )
+ */
+class Coupon {
+}
+""",
+}
+
+
+def test_an_entity_type_links_to_each_handler_class_its_attribute_or_annotation_names(
+    tmp_path: Path,
+) -> None:
+    """One declared edge per handler, of the kind its key names, at the class's line; a handler
+    written as text in the attribute and an array in a method give none."""
+    _plant(tmp_path, HANDLED)
+    document, _ = _map(tmp_path)
+    own = "php.type::Drupal\\my_module\\"
+    found = {
+        (e["kind"], e["from"], e["to"], e["provenance"][0]["confidence"])
+        for e in document["edges"]
+        if e["kind"].startswith("has_") and e["from"].startswith("drupal.entity_type::")
+    }
+    order, coupon = "drupal.entity_type::my_order", "drupal.entity_type::my_coupon"
+    assert found == {
+        ("has_access_handler", order, own + "OrderAccess", "declared"),
+        ("has_list_builder", order, own + "OrderListBuilder", "declared"),
+        ("has_form_handler", order, own + "Entity\\Form\\OrderForm", "declared"),
+        ("has_view_builder", coupon, own + "CouponViewBuilder", "declared"),
+        ("has_form_handler", coupon, own + "CouponForm", "declared"),
+        ("has_form_handler", coupon, own + "CouponDeleteForm", "declared"),
+        (
+            "has_route_provider",
+            coupon,
+            "php.type::Drupal\\Core\\Entity\\Routing\\AdminHtmlRouteProvider",
+            "declared",
+        ),
+    }
+
+
+PLUGIN_TYPES = {
+    str(MODULE / "src/Attribute/Gizmo.php"): r"""<?php
+
+namespace Drupal\my_module\Attribute;
+
+use Drupal\Component\Plugin\Attribute\Plugin;
+
+#[\Attribute(\Attribute::TARGET_CLASS)]
+class Gizmo extends Plugin {
+}
+""",
+    str(MODULE / "src/Annotation/Gadget.php"): r"""<?php
+
+namespace Drupal\my_module\Annotation;
+
+use Drupal\Component\Annotation\Plugin;
+
+/**
+ * @Annotation
+ */
+class Gadget extends Plugin {
+}
+""",
+    str(MODULE / "src/Plugin/Gizmo/Spinner.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Gizmo;
+
+use Drupal\my_module\Attribute\Gizmo;
+
+#[Gizmo(id: 'spinner')]
+class Spinner {
+}
+""",
+    str(MODULE / "src/Plugin/Gizmo/Wobbler.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Gizmo;
+
+#[\Drupal\my_module\Attribute\Gizmo(id: 'wobbler')]
+class Wobbler {
+}
+""",
+    str(MODULE / "src/Plugin/Gadget/Lever.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Gadget;
+
+use Drupal\my_module\Annotation\Gadget;
+
+/**
+ * @Gadget(
+ *   id = "lever"
+ * )
+ */
+class Lever {
+}
+""",
+    str(MODULE / "src/GizmoManager.php"): r"""<?php
+
+namespace Drupal\my_module;
+
+use Drupal\Core\Plugin\DefaultPluginManager;
+use Drupal\my_module\Attribute\Gizmo;
+
+class GizmoManager extends DefaultPluginManager {
+
+  public function __construct(\Traversable $namespaces, $handler) {
+    parent::__construct('Plugin/Gizmo', $namespaces, $handler, NULL, Gizmo::class);
+  }
+
+}
+""",
+}
+
+
+def test_a_plugin_type_comes_from_its_attribute_or_annotation_class_and_joins_plugins_and_manager(
+    tmp_path: Path,
+) -> None:
+    """Each class extending a core Plugin base is a plugin type; plugins by short, qualified and
+    annotation names join it, and the manager's constructor names it, inferred."""
+    _plant(tmp_path, PLUGIN_TYPES)
+    document, report = _map(tmp_path)
+    assert report.skipped == (), report.skipped
+    own = "Drupal\\my_module\\"
+    gizmo = f"drupal.plugin_type::{own}Attribute\\Gizmo"
+    gadget = f"drupal.plugin_type::{own}Annotation\\Gadget"
+    types = sorted(n["id"] for n in document["nodes"] if n["type"] == "drupal.plugin_type")
+    assert types == sorted([gizmo, gadget])
+    plugins = {(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "plugin_of_type"}
+    assert plugins == {
+        (f"php.type::{own}Plugin\\Gizmo\\Spinner", gizmo),
+        (f"php.type::{own}Plugin\\Gizmo\\Wobbler", gizmo),
+        (f"php.type::{own}Plugin\\Gadget\\Lever", gadget),
+    }
+    managed = [
+        (e["from"], e["to"], e["provenance"][0]["confidence"])
+        for e in document["edges"]
+        if e["kind"] == "manages_plugin_type"
+    ]
+    assert managed == [(f"php.method::{own}GizmoManager::__construct", gizmo, "inferred")]
+    attributes = {(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "has_attribute"}
+    assert (f"php.type::{own}Attribute\\Gizmo", "php.type::Attribute") in attributes

@@ -1,0 +1,83 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The handlers of an entity type declared by the ContentEntityType or ConfigEntityType docblock
+# annotation, read as text inside the class file's block comment: each key of handlers whose value
+# is a class name in double quotes, as a names_<key> edge from the class the file holds by Drupal's
+# PSR-4 layout. A leading backslash is dropped. One rule per key, and one per form operation;
+# entity_handler.yaml joins them to the entity type.
+#
+# Limits: a key is read anywhere in a block comment of a file in an entity type folder, not only
+# under handlers.
+
+rules:
+- rule: access_handler_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"access"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: names_access_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  confidence: declared
+
+- rule: list_builder_handler_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"list_builder"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: names_list_builder, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  confidence: declared
+
+- rule: view_builder_handler_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"view_builder"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: names_view_builder, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  confidence: declared
+
+- rule: storage_handler_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"storage"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: names_storage_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  confidence: declared
+
+- rule: form_default_handler_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"form"\s*=\s*\{[^}]*?"default"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  confidence: declared
+
+- rule: form_add_handler_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"form"\s*=\s*\{[^}]*?"add"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  confidence: declared
+
+- rule: form_edit_handler_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"form"\s*=\s*\{[^}]*?"edit"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  confidence: declared
+
+- rule: form_delete_handler_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"form"\s*=\s*\{[^}]*?"delete"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  confidence: declared
+
+- rule: route_provider_html_handler_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"route_provider"\s*=\s*\{[^}]*?"html"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: names_route_provider, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  confidence: declared

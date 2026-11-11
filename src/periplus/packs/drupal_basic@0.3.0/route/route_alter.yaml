@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route subscriber: a class that extends RouteSubscriberBase alters the routes its alterRoutes
+# method picks from the route collection at run time. The class takes the event subscriber role from
+# the boundary block in pack.yaml; here it gets an alters_routes edge to a drupal.route_alter node
+# marked resolution runtime, since which routes it alters is not written as a name. Inferred: the
+# base class, not the file, says the class alters routes.
+#
+# Limits: the base is read as written after extends, short or qualified, so a class that extends
+# another of the project's route subscribers gets no mark.
+
+node_types:
+- name: drupal.route_alter
+  id_namespace: drupal.route_alter
+
+edge_kinds:
+- kind: alters_routes
+  from: php.class
+  to: drupal.route_alter
+
+rules:
+- rule: route_alter_from_base
+  reads: file
+  in: [source]
+  match: &route_subscriber
+    declaration: class_declaration
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: base_clause, pattern: 'extends\s+\\?(?:Drupal\\Core\\Routing\\)?RouteSubscriberBase'}
+  id: {from: qualified_name}
+  emits:
+  - node: {type: drupal.route_alter}
+  - attribute: {name: resolution, template: runtime}
+  confidence: inferred
+
+- rule: route_alter_from_base_edges
+  reads: file
+  in: [source]
+  match: *route_subscriber
+  id: {from: qualified_name}
+  emits: [{edge: {kind: alters_routes, from: {declared: php.class}, to: this_node}}]
+  confidence: inferred

@@ -231,6 +231,7 @@ def test_advancedqueue_job_type_from_attribute_and_annotation_but_not_a_constant
     )
     cls = "php.type::Drupal\\mymodule\\Plugin\\AdvancedQueue\\JobType\\"
     base = "php.type::Drupal\\advancedqueue\\Plugin\\AdvancedQueue\\JobType\\JobTypeBase"
+    attribute = "php.type::Drupal\\advancedqueue\\Attribute\\AdvancedQueueJobType"
     assert _type_state(document) == {
         "drupal.module::mymodule": ("drupal.module", "mapped"),
         "drupal.plugin.advancedqueue_job_type::my_job": ("drupal.queue_job_type", "mapped"),
@@ -239,6 +240,7 @@ def test_advancedqueue_job_type_from_attribute_and_annotation_but_not_a_constant
         cls + "MyJob": ("php.class", "mapped"),
         cls + "OldJob": ("php.class", "mapped"),
         base: ("php.class_like", "referenced"),
+        attribute: ("php.class_like", "referenced"),
     }
     assert edges(document) == {
         ("plugin_class", "drupal.plugin.advancedqueue_job_type::my_job", cls + "MyJob"),
@@ -246,6 +248,8 @@ def test_advancedqueue_job_type_from_attribute_and_annotation_but_not_a_constant
         ("inherits", cls + "MyJob", base),
         ("inherits", cls + "OldJob", base),
         ("inherits", cls + "ComputedJob", base),
+        ("has_attribute", cls + "MyJob", attribute),
+        ("has_attribute", cls + "ComputedJob", attribute),
     }
     assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
         (
@@ -297,6 +301,8 @@ def test_ai_agent_and_function_call_plugins_from_attributes_including_a_constant
     cls = "php.type::Drupal\\mymodule\\Plugin\\"
     agent_base = "php.type::Drupal\\ai_agents\\PluginBase\\AiAgentBase"
     function_base = "php.type::Drupal\\ai\\Base\\FunctionCallBase"
+    agent_attribute = "php.type::Drupal\\ai_agents\\Attribute\\AiAgent"
+    function_attribute = "php.type::Drupal\\ai\\Attribute\\FunctionCall"
     assert _type_state(document) == {
         "drupal.module::mymodule": ("drupal.module", "mapped"),
         "drupal.plugin.ai_agent::my_agent": ("drupal.ai_agent", "mapped"),
@@ -307,6 +313,8 @@ def test_ai_agent_and_function_call_plugins_from_attributes_including_a_constant
         "drupal.plugin.ai_function_call::computed": ("drupal.ai_function_call", "mapped"),
         agent_base: ("php.class_like", "referenced"),
         function_base: ("php.class_like", "referenced"),
+        agent_attribute: ("php.class_like", "referenced"),
+        function_attribute: ("php.class_like", "referenced"),
         cls + "AiAgent\\MyAgent": ("php.class", "mapped"),
         cls + "AiFunctionCall\\ComputedFunction": ("php.class", "mapped"),
         cls + "AiFunctionCall\\MyFunction": ("php.class", "mapped"),
@@ -326,6 +334,9 @@ def test_ai_agent_and_function_call_plugins_from_attributes_including_a_constant
         ("inherits", cls + "AiAgent\\MyAgent", agent_base),
         ("inherits", cls + "AiFunctionCall\\MyFunction", function_base),
         ("inherits", cls + "AiFunctionCall\\ComputedFunction", function_base),
+        ("has_attribute", cls + "AiAgent\\MyAgent", agent_attribute),
+        ("has_attribute", cls + "AiFunctionCall\\MyFunction", function_attribute),
+        ("has_attribute", cls + "AiFunctionCall\\ComputedFunction", function_attribute),
     }
 
 
@@ -363,6 +374,8 @@ def test_drush_command_from_attribute_and_docblock_tag_but_not_a_positional_name
     my_method = "php.method::Drupal\\mymodule\\Drush\\Commands\\MyCommands::"
     other_method = "php.method::Drupal\\mymodule\\Drush\\Commands\\OtherCommands::other"
     base = "php.type::Drush\\Commands\\DrushCommands"
+    drush_command = "php.type::Drush\\Attributes\\Command"
+    annotated_command = "php.type::Consolidation\\AnnotatedCommand\\Attributes\\Command"
     assert _type_state(document) == {
         "drupal.module::mymodule": ("drupal.module", "mapped"),
         "drush.command::mymodule:old": ("drush.command", "mapped"),
@@ -375,6 +388,8 @@ def test_drush_command_from_attribute_and_docblock_tag_but_not_a_positional_name
         mine: ("php.class", "mapped"),
         other: ("php.class", "mapped"),
         base: ("php.class_like", "referenced"),
+        drush_command: ("php.class_like", "referenced"),
+        annotated_command: ("php.class_like", "referenced"),
     }
     assert edges(document) == {
         ("command_method", "drush.command::mymodule:sync", my_method + "sync"),
@@ -388,6 +403,9 @@ def test_drush_command_from_attribute_and_docblock_tag_but_not_a_positional_name
         ("contains", mine, my_method + "positional"),
         ("contains", other, other_method),
         ("inherits", mine, base),
+        ("has_attribute", my_method + "sync", drush_command),
+        ("has_attribute", my_method + "positional", drush_command),
+        ("has_attribute", other_method, annotated_command),
     }
     assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
         (f"{folder}/MyCommands.php", "command_from_attribute", "argument name is missing")

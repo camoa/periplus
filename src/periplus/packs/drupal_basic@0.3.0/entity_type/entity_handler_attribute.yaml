@@ -1,0 +1,162 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The handlers of an entity type declared by the ContentEntityType or ConfigEntityType attribute:
+# each key of the handlers argument whose value is written Name::class, resolved through the
+# file's imports and namespace, as a names_<key> edge from the class the attribute sits on. One
+# rule per key, and one per form operation; entity_handler.yaml joins them to the entity type.
+#
+# Limits: a value written as text, such as 'Drupal\mymod\MyStorage', gives no edge.
+
+rules:
+- rule: access_handler_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    reference: argument
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: handlers}
+    - name_matches: {child: array_creation_expression, pattern: '(?s)\[.*''access''\s*=>\s*(?<handler>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: names_access_handler
+      from: enclosing_declaration
+      to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: list_builder_handler_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    reference: argument
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: handlers}
+    - name_matches: {child: array_creation_expression, pattern: '(?s)\[.*''list_builder''\s*=>\s*(?<handler>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: names_list_builder
+      from: enclosing_declaration
+      to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: view_builder_handler_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    reference: argument
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: handlers}
+    - name_matches: {child: array_creation_expression, pattern: '(?s)\[.*''view_builder''\s*=>\s*(?<handler>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: names_view_builder
+      from: enclosing_declaration
+      to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: storage_handler_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    reference: argument
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: handlers}
+    - name_matches: {child: array_creation_expression, pattern: '(?s)\[.*''storage''\s*=>\s*(?<handler>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: names_storage_handler
+      from: enclosing_declaration
+      to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: form_default_handler_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    reference: argument
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: handlers}
+    - name_matches: {child: array_creation_expression, pattern: '(?s)\[.*''form''\s*=>\s*\[[^\]]*''default''\s*=>\s*(?<handler>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: names_form_handler
+      from: enclosing_declaration
+      to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: form_add_handler_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    reference: argument
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: handlers}
+    - name_matches: {child: array_creation_expression, pattern: '(?s)\[.*''form''\s*=>\s*\[[^\]]*''add''\s*=>\s*(?<handler>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: names_form_handler
+      from: enclosing_declaration
+      to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: form_edit_handler_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    reference: argument
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: handlers}
+    - name_matches: {child: array_creation_expression, pattern: '(?s)\[.*''form''\s*=>\s*\[[^\]]*''edit''\s*=>\s*(?<handler>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: names_form_handler
+      from: enclosing_declaration
+      to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: form_delete_handler_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    reference: argument
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: handlers}
+    - name_matches: {child: array_creation_expression, pattern: '(?s)\[.*''form''\s*=>\s*\[[^\]]*''delete''\s*=>\s*(?<handler>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: names_form_handler
+      from: enclosing_declaration
+      to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: route_provider_html_handler_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    reference: argument
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: handlers}
+    - name_matches: {child: array_creation_expression, pattern: '(?s)\[.*''route_provider''\s*=>\s*\[[^\]]*''html''\s*=>\s*(?<handler>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: names_route_provider
+      from: enclosing_declaration
+      to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared

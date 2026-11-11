@@ -1,0 +1,71 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A constraint plugin and the class that validates it. A constraint class whose validatedBy()
+# returns Name::class names it, declared; else Symfony's default, the constraint class's own name
+# followed by Validator in the same namespace, inferred, when the map holds that class. The return
+# is read as an internal drupal.class_ref node, one per method and class it names, and a map rule
+# picks the one in the constraint class's validatedBy().
+#
+# Limits:
+# - validatedBy() is read only when it returns Name::class; a text, a concatenation or a call
+#   gives no declared edge.
+# - The inferred edge does not test validatedBy(): a constraint whose validatedBy() returns another
+#   class, while a class named <constraint>Validator is in the map too, gets a false inferred edge
+#   to that class beside its declared one.
+# - validatedBy() is read on the constraint class itself, not on a parent.
+
+node_types:
+- name: drupal.class_ref
+  id_namespace: drupal.class_ref
+  internal: true
+
+edge_kinds:
+- kind: validated_by
+  from: drupal.constraint_plugin
+  to: php.class
+- kind: returns_class
+  from: [php.function, php.method]
+  to: drupal.class_ref
+
+rules:
+# return Name::class; resolved through the file's imports and namespace. self, static and parent
+# are left out.
+- rule: return_class_constant
+  reads: file
+  in: [source]
+  match:
+    reference: return_statement
+    name_child: class_constant_access_expression
+    filetype: php
+    where:
+    - name_matches: {child: class_constant_access_expression, pattern: '(?!(?:self|static|parent)::)(?<returned>\\?[A-Za-z_][\w\\]*)::class'}
+  emits:
+  - edge:
+      kind: returns_class
+      from: enclosing_declaration
+      to: {template: '{returned}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+  confidence: declared
+
+- rule: constraint_validated_by_method
+  reads: map
+  match:
+    node_type: drupal.constraint_plugin
+    follow:
+    - edge: plugin_class
+    - id_matches: '^php\.type::(?<constraint>.+)$'
+    - node: 'php.method::{constraint}::validatedBy'
+    - edge: returns_class
+    - id_matches: '^drupal\.class_ref::(?<validator>.+)$'
+  emits: [{edge: {kind: validated_by, from: this_node, to: {template: '{validator}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: constraint_validated_by_name
+  reads: map
+  match:
+    node_type: drupal.constraint_plugin
+    follow:
+    - edge: plugin_class
+    - id_matches: '^php\.type::(?<constraint>.+)$'
+    - node: 'php.type::{constraint}Validator'
+  emits: [{edge: {kind: validated_by, from: this_node, to: matched_node}}]
+  confidence: inferred

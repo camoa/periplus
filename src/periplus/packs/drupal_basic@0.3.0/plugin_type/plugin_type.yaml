@@ -1,0 +1,20 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A plugin type: an attribute class that extends core's attribute Plugin, or an annotation class
+# that extends core's annotation Plugin, named by that class's full name. Each class that carries
+# its attribute or annotation is a plugin of that type, and a plugin manager's constructor names it.
+
+node_types:
+- name: drupal.plugin_type
+  id_namespace: drupal.plugin_type
+
+edge_kinds:
+- kind: plugin_type_attribute
+  from: drupal.plugin_type
+  to: php.class
+- kind: plugin_of_type
+  from: php.class
+  to: drupal.plugin_type
+- kind: manages_plugin_type
+  from: php.method
+  to: drupal.plugin_type

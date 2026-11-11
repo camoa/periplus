@@ -1,0 +1,52 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The annotation form: an annotation class that extends Drupal\Component\Annotation\Plugin is a
+# plugin type, and a class whose docblock opens its first annotation with that class's name is one
+# of its plugins. The first @Name( of each class's docblock, resolved through the file's imports
+# and namespace, is an internal node the map rule joins.
+#
+# Limits: only the first annotation of a docblock is read, so a plugin annotation after another
+# annotation gives no edge.
+
+node_types:
+- name: drupal.class_annotation
+  id_namespace: drupal.class_annotation
+  internal: true
+
+rules:
+- rule: class_first_annotation
+  reads: file
+  in: [source]
+  match: {declaration: class_declaration, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '@(?<annotation>[A-Z]\w*)\('}}]
+    template: '{qualified_name}::{annotation}'
+  emits: [{node: {type: drupal.class_annotation}}]
+  confidence: declared
+
+- rule: plugin_type_from_annotation_class
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<annotation>.+)$'}]
+    follow: &extends_annotation_plugin
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Component\\Annotation\\Plugin$'
+  id: {template: '{annotation}'}
+  emits: [{node: {type: drupal.plugin_type}}]
+  confidence: declared
+
+- rule: plugin_of_type_by_annotation
+  reads: map
+  match:
+    node_type: drupal.class_annotation
+    where: [{id_matches: '^drupal\.class_annotation::(?<class>[^:]+)::(?<annotation>[^:]+)$'}]
+    follow:
+    - node: 'php.type::{annotation}'
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Component\\Annotation\\Plugin$'
+    - node: 'php.type::{class}'
+  emits: [{edge: {kind: plugin_of_type, from: matched_node, to: {template: '{annotation}', types: [drupal.plugin_type]}}}]
+  confidence: declared

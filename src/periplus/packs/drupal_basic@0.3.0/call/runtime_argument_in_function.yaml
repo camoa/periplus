@@ -97,7 +97,7 @@ rules:
   emits: *runtime_edges
   confidence: declared
 
-# \Drupal::service($id).
+# \Drupal::service($id) and \Drupal::cache($bin).
 - rule: runtime_service_call_in_function
   reads: file
   in: [source]
@@ -109,7 +109,7 @@ rules:
     holder: function_definition
     where: &service_where
     - name_matches: {child: scope, pattern: '\\?Drupal'}
-    - name_matches: {child: name, pattern: service}
+    - name_matches: {child: name, pattern: 'service|cache'}
     - name_matches: {child: arguments, pattern: *first_variable}
   id: *scoped_id
   emits: *runtime_node

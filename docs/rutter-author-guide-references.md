@@ -97,7 +97,8 @@ a table's name to a map of written name to node name. The Drupal pack declares t
 # Name tables that call/call.yaml looks a written name up in.
 tables:
   # Each static method of core's Drupal class, as of Drupal 11.4, that gets one fixed service from
-  # the container, and that service. cache() names its service by its argument and is left out.
+  # the container, and that service. cache() names its service by its argument and is read by
+  # drupal_cache_call and drupal_cache_bin_call.
   shortcut_services:
     accessManager: access_manager
     classResolver: class_resolver
@@ -116,7 +117,8 @@ a table that none of them declares refuses the map with exit 26, naming the `tab
 ```yaml drupal_basic@0.3.0/call/call.yaml
 # \Drupal::logger('my_module'), \Drupal::currentUser() and the other shortcuts, to the service the
 # table shortcut_services gives for the method's name. Inferred: the table, not the file, names the
-# service. The methods other rules read, and getContainer, are left to them.
+# service. The methods other rules read, and getContainer, are left to them; setContainer and
+# unsetContainer set the container and name no service.
 - rule: drupal_shortcut_call
   reads: file
   in: [source]
@@ -126,7 +128,7 @@ a table that none of them declares refuses the map with exit 26, naming the `tab
     filetype: php
     where:
     - name_matches: {child: scope, pattern: '\\?Drupal'}
-    - name_matches: {child: name, pattern: '(?!(?:service|getContainer|entityQuery(?:Aggregate)?)$)\w+'}
+    - name_matches: {child: name, pattern: '(?!(?:service|getContainer|setContainer|unsetContainer|cache|entityQuery(?:Aggregate)?)$)\w+'}
   emits:
   - edge:
       kind: uses_service
@@ -307,8 +309,8 @@ and edges as the bundled rutters.
 
 A data rule's edge end may be `from: []` with a `template` and nothing else. The template is
 filled once per fire from the file's path values, at the fire's line, and reads no key of the
-file. `drupal_basic` uses it for `config_provided_by`: each simple configuration file links to the
-module its name starts with. An end with `from: []` and no template is refused, and the rule is not
+file. `drupal_basic` uses it for `config_owner_named`: each simple configuration file links to an
+internal node named for the module or theme its name starts with. An end with `from: []` and no template is refused, and the rule is not
 run. This project-local pack links each configuration file to the module its file name starts
 with:
 

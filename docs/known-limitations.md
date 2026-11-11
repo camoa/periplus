@@ -78,8 +78,13 @@ a list of its known gaps.
   skipped row. Core plugins whose folders the rutter does not name give nothing, such as a views
   argument, sort or display plugin, and so do a views field, filter or style plugin and a mail
   plugin declared by an annotation. A view names only its field, filter and style plugins: its
-  sorts, arguments, relationships, rows and pagers give no edge. A plugin type, its attribute
-  class and its plugin manager get no node. A display in the mode `default` has no `in_mode` edge, and an entity reference field's
+  sorts, arguments, relationships, rows and pagers give no edge. A plugin manager that names no
+  attribute class fifth to `parent::__construct`, such as one with YAML discovery, gives no
+  `manages_plugin_type` edge, and the edge starts at the manager's constructor, not its service.
+  An entity type handler written as text in an attribute, a form operation other than default,
+  add, edit and delete, and a handler set in code by `hook_entity_type_alter` give no edge; the
+  form operation is not recorded. A route subscriber that extends another project class, not
+  `RouteSubscriberBase`, gets no `alters_routes` edge. A display in the mode `default` has no `in_mode` edge, and an entity reference field's
   target bundles give no edge.
 - **Drupal, routes and roles:** route requirements and options other than those the manifest
   lists give nothing, such as `_entity_create_access` or `_auth`. A `_custom_access` written
@@ -87,8 +92,11 @@ a list of its known gaps.
   name alone, or typed other than `entity:<type>`, gives no `loads_entity_type` edge. An attribute
   keeps its value as written, so `no_cache: 'TRUE'` and `no_cache: true` differ. The `applies_to`
   key of an `access_check` tag is kept on the service, not on its `tagged_as` edge, because the
-  engine accepts an attribute on an edge and does not execute it; a custom requirement that such a
-  tag binds gives no edge.
+  engine accepts an attribute on an edge and does not execute it. A custom requirement joins the
+  service whose tag names it in `applies_to`; a comma-separated list of keys joins nothing.
+  A contributed or core theme's settings, such as `olivero.settings`, end at a referenced module.
+  A constraint whose `validatedBy()` returns another class gets a false inferred `validated_by`
+  edge when a class named `<constraint class>Validator` is mapped too.
 - **Drupal, settings to know:** only the custom modules and themes are read as PHP. A folder
   setting may not leave the project root, so a site is mapped from inside its own tree.
   `drupal_basic` repeats `php_basic`'s grammar pin, so a grammar update must change both.

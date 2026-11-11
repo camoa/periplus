@@ -1,0 +1,38 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each PHP attribute, as a has_attribute edge from the declaration it sits on to the attribute's
+# class: a class, a method or function, a property or a parameter, whichever the map holds nearest.
+# The name resolves through the file's imports and namespace; #[Name] and #[\Full\Name] are two
+# rules, since the first is a name and the second a qualified name in the tree. An attribute class
+# outside the mapped code ends at a referenced node.
+#
+# Limits: an attribute on a declaration the map holds no node for, such as a class constant or a
+# promoted constructor parameter, starts at the declaration around it.
+
+edge_kinds:
+- kind: has_attribute
+  from: [php.class_like, php.callable, php.property, php.parameter]
+  to: php.class_like
+
+rules:
+- rule: has_attribute
+  reads: file
+  in: [source]
+  match:
+    reference: attribute
+    name_child: name
+    filetype: php
+    where: [{name_matches: {child: name, pattern: '.+'}}]
+  emits: [{edge: {kind: has_attribute, from: enclosing_declaration, to: {types: [php.class_like]}}}]
+  confidence: declared
+
+- rule: has_qualified_attribute
+  reads: file
+  in: [source]
+  match:
+    reference: attribute
+    name_child: qualified_name
+    filetype: php
+    where: [{name_matches: {child: qualified_name, pattern: '.+'}}]
+  emits: [{edge: {kind: has_attribute, from: enclosing_declaration, to: {types: [php.class_like]}}}]
+  confidence: declared

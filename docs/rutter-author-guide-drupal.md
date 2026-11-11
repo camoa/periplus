@@ -235,10 +235,12 @@ meet at one node. A third party gets the same links from a project-local pack
 Each relation below is an edge kind `drupal_basic@0.3.0` or `drupal_js_basic@0.0.1` declares.
 The pack's `pack.yaml` lists what each one misses and where it is wrong.
 
-- `config_provided_by`, from a configuration object to a module: each simple configuration file,
-  one with no top-level `uuid`, names the module its file name starts with, as
-  `mymod.settings` to `mymod`. A configuration entity file has none. The end is
-  [from the file's path alone](rutter-author-guide-references.md#an-edge-end-from-the-files-path-alone-from-).
+- `config_provided_by`, from a configuration object to a module or a theme: each simple
+  configuration file, one with no top-level `uuid`, names the extension its file name starts with,
+  as `mymod.settings` to `mymod`. A configuration entity file has none. The file rule's end is
+  [from the file's path alone](rutter-author-guide-references.md#an-edge-end-from-the-files-path-alone-from-),
+  on an internal `drupal.config_owner` node; the map rule `simple_config_provided_by` ends the edge
+  at the mapped module of that name, else the mapped theme, else a referenced module.
 - `drupal.theme_hook`, a node for each entry of a `hook_theme` function; `renders_theme_hook`, from
   the class or trait under `src` whose render array gives `'#theme' => 'name'`;
   `theme_hook_template`, from a hook to its template, declared by its `template` key or inferred

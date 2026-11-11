@@ -1,0 +1,41 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The attribute form: an attribute class that extends Drupal\Component\Plugin\Attribute\Plugin,
+# directly or through mapped classes, is a plugin type, and a class that carries it is one of its
+# plugins. Order 3: the map rules read the inherits and has_attribute edges.
+
+rules:
+- rule: plugin_type_from_attribute_class
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<attr>.+)$'}]
+    follow: &extends_attribute_plugin
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Component\\Plugin\\Attribute\\Plugin$'
+  id: {template: '{attr}'}
+  emits: [{node: {type: drupal.plugin_type}}]
+  confidence: declared
+
+- rule: plugin_type_attribute_class
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<attr>.+)$'}]
+    follow: *extends_attribute_plugin
+  emits: [{edge: {kind: plugin_type_attribute, from: {template: '{attr}', type: drupal.plugin_type}, to: this_node}}]
+  confidence: declared
+
+- rule: plugin_of_type_by_attribute
+  reads: map
+  match:
+    node_type: php.class
+    follow:
+    - edge: has_attribute
+    - id_matches: '^php\.type::(?<attr>.+)$'
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Component\\Plugin\\Attribute\\Plugin$'
+  emits: [{edge: {kind: plugin_of_type, from: this_node, to: {template: '{attr}', types: [drupal.plugin_type]}}}]
+  confidence: declared

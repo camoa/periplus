@@ -101,3 +101,26 @@ def test_an_empty_list_end_with_a_template_runs_and_one_without_is_refused(tmp_p
         str(s) for s in getattr(report, "skipped", ())
     )
     assert "from: [] with a template alone" in text, text
+
+
+def test_a_mapped_themes_simple_config_is_provided_by_the_theme_and_makes_no_module(
+    tmp_path: Path,
+) -> None:
+    """mytheme.settings ends at the mapped theme; no drupal.module node of that name is made."""
+    _plant(tmp_path)
+    theme = tmp_path / "web/themes/custom/mytheme"
+    theme.mkdir(parents=True)
+    (theme / "mytheme.info.yml").write_text(
+        "name: My theme\ntype: theme\ncore_version_requirement: ^10\n"
+    )
+    (tmp_path / "config" / "sync" / "mytheme.settings.yml").write_text("logo: x\n")
+    document = _map(tmp_path)
+    nodes = {str(n["id"]) for n in document["nodes"]}
+    owned = {
+        (str(e["from"]), str(e["to"]))
+        for e in document["edges"]
+        if e["kind"] == "config_provided_by"
+    }
+    assert ("drupal.config::mytheme.settings", "drupal.theme::mytheme") in owned
+    assert "drupal.module::mytheme" not in nodes
+    assert "drupal.config_owner::mytheme" not in nodes

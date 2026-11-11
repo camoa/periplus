@@ -299,7 +299,8 @@ rules:
 
 # \Drupal::logger('my_module'), \Drupal::currentUser() and the other shortcuts, to the service the
 # table shortcut_services gives for the method's name. Inferred: the table, not the file, names the
-# service. The methods other rules read, and getContainer, are left to them.
+# service. The methods other rules read, and getContainer, are left to them; setContainer and
+# unsetContainer set the container and name no service.
 - rule: drupal_shortcut_call
   reads: file
   in: [source]
@@ -309,12 +310,51 @@ rules:
     filetype: php
     where:
     - name_matches: {child: scope, pattern: '\\?Drupal'}
-    - name_matches: {child: name, pattern: '(?!(?:service|getContainer|entityQuery(?:Aggregate)?)$)\w+'}
+    - name_matches: {child: name, pattern: '(?!(?:service|getContainer|setContainer|unsetContainer|cache|entityQuery(?:Aggregate)?)$)\w+'}
   emits:
   - edge:
       kind: uses_service
       from: enclosing_declaration
       to: {resolve: [lookup_last_segment_in: shortcut_services], types: [drupal.service]}
+  confidence: inferred
+
+# \Drupal::cache() with no argument, to the service cache.default. Inferred, as drupal_shortcut_call.
+- rule: drupal_cache_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: cache}
+    - name_matches: {child: arguments, pattern: '\(\s*\)'}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {template: cache.default, types: [drupal.service]}
+  confidence: inferred
+
+# \Drupal::cache('render'), to the service cache.render: the bin the quoted argument names, after
+# cache. A variable bin is kept by call/runtime_argument.yaml.
+- rule: drupal_cache_bin_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: cache}
+    - name_matches: {child: arguments, pattern: '\(\s*[''"](?<bin>[\w.]+)[''"]\s*\)'}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {template: 'cache.{bin}', types: [drupal.service]}
   confidence: inferred
 
 # User::load(1), Node::loadMultiple() and Term::create([...]), to the entity type the table
