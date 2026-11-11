@@ -116,6 +116,12 @@ a list of its known gaps.
   a skipped row only, and a `?->` call gives nothing.
   `alters_form` cannot tell a form id from a base form id, and a generic `hook_form_alter` that
   tests `$form_id` gives none.
+- **Drupal, factories, links and macros:** a factory class written without a namespace, and a
+  factory set in code, give no edge, and a factory service no mapped file declares names no
+  method. A local task, local action or contextual link that a deriver makes at run time is not a
+  node; the entry that names the deriver is. A menu link's class and deriver, and a link's
+  `route_parameters`, give nothing. A Twig file not named `.html.twig` is a template only when it
+  defines a macro, known by its stem, and an import of `_self` or of a variable gives nothing.
 - **Drupal, settings to know:** only the custom modules and themes are read as PHP. A folder
   setting may not leave the project root, so a site is mapped from inside its own tree.
   `drupal_basic` repeats `php_basic`'s grammar pin, so a grammar update must change both.

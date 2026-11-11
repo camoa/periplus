@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A local task read from a links.task file, one per top-level key. Two rules because a rule that
+# emits an edge emits no node. A leading backslash on a class or a deriver is dropped. A task a
+# deriver makes at run time is not read; the entry that names the deriver is the node.
+
+rules:
+- rule: local_task_from_links_file
+  reads: file
+  in: [module_root]
+  match: {file: '*.links.task', filetype: yaml, each: '*'}
+  id: {from: key}
+  emits:
+  - node: {type: drupal.local_task}
+  - attribute: {name: title, from: {key: title}}
+  confidence: declared
+- rule: local_task_from_links_file_edges
+  reads: file
+  in: [module_root]
+  match: {file: '*.links.task', filetype: yaml, each: '*'}
+  id: {from: key}
+  emits:
+  - edge: {kind: links_to_route, from: this_node, to: {from: {key: route_name}}}
+  - edge: {kind: task_base_route, from: this_node, to: {from: {key: base_route}}}
+  - edge: {kind: child_of_task, from: this_node, to: {from: {key: parent_id}}}
+  - edge: {kind: link_class, from: this_node, to: {from: {key: class}, pattern: '^\\?(?<class>[^\\].*)$', template: '{class}'}}
+  - edge: {kind: link_deriver, from: this_node, to: {from: {key: deriver}, pattern: '^\\?(?<class>[^\\].*)$', template: '{class}'}}
+  confidence: declared

@@ -1,0 +1,24 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A local task, a tab, named by its key in a links.task file. links_to_route (menu_link/menu_link.yaml)
+# joins it to its route_name; task_base_route to the route whose tabs it joins, child_of_task to
+# the task its parent_id names. link_class and link_deriver join a local task, a local action or a
+# contextual link to the class or the deriver its class or deriver key names.
+
+node_types:
+- name: drupal.local_task
+  id_namespace: drupal.local_task
+
+edge_kinds:
+- kind: task_base_route
+  from: drupal.local_task
+  to: drupal.route
+- kind: child_of_task
+  from: drupal.local_task
+  to: drupal.local_task
+- kind: link_class
+  from: [drupal.local_task, drupal.local_action, drupal.contextual_link]
+  to: php.class
+- kind: link_deriver
+  from: [drupal.local_task, drupal.local_action, drupal.contextual_link]
+  to: php.class

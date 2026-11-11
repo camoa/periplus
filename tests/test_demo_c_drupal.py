@@ -2024,3 +2024,266 @@ def test_a_form_id_alter_hook_alters_the_form_its_name_gives(tmp_path: Path) -> 
         form + "node_form": "referenced",
         form + "user_login_form": "referenced",
     }
+
+
+# --- service factories, links files, form bases and macro imports ----------------------------
+
+FACTORY_SERVICES = r"""services:
+  my_module.client_factory:
+    class: Drupal\my_module\ClientFactory
+  my_module.client:
+    class: Drupal\my_module\Client
+    factory: ['@my_module.client_factory', 'create']
+  my_module.export:
+    class: Drupal\my_module\Client
+    factory: ['Drupal\my_module\ClientFactory', 'export']
+  my_module.static_export:
+    class: Drupal\my_module\Client
+    factory: 'Drupal\my_module\ClientFactory::export'
+  my_module.outside:
+    class: Drupal\my_module\Client
+    factory: ['@other.factory', 'build']
+  my_module.missing:
+    factory: ['@my_module.client_factory', 'absent']
+"""
+FACTORY_CLASS = r"""<?php
+
+namespace Drupal\my_module;
+
+class ClientFactory {
+
+  public function create() {
+  }
+
+  public static function export() {
+  }
+
+}
+"""
+
+
+def test_a_service_built_by_a_factory_links_to_the_factory_and_its_method(tmp_path: Path) -> None:
+    """factory: ['@s', 'm'] gives built_by_service, factory: ['Class', 'm'] and 'Class::m' give
+    built_by_class, and each gives built_by_method to <class>::m, all declared; a method the class
+    lacks is unresolved, and an unmapped factory service names no method."""
+    _plant(
+        tmp_path,
+        {
+            str(MODULE / "my_module.services.yml"): FACTORY_SERVICES,
+            str(MODULE / "src/ClientFactory.php"): FACTORY_CLASS,
+            str(MODULE / "src/Client.php"): (
+                "<?php\n\nnamespace Drupal\\my_module;\n\nclass Client {\n}\n"
+            ),
+        },
+    )
+    document, report = _map(tmp_path)
+    assert [r for _, _, r, _ in report.skipped if r.startswith("service_factory")] == []
+    service = "drupal.service::my_module."
+    factory = "php.type::Drupal\\my_module\\ClientFactory"
+    method = "php.method::Drupal\\my_module\\ClientFactory::"
+    found = {
+        (e["kind"], e["from"], e["to"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"].startswith("built_by")
+        for p in e["provenance"]
+    }
+    assert found == {
+        ("built_by_service", service + "client", service + "client_factory", "declared"),
+        ("built_by_service", service + "outside", "drupal.service::other.factory", "declared"),
+        ("built_by_service", service + "missing", service + "client_factory", "declared"),
+        ("built_by_class", service + "export", factory, "declared"),
+        ("built_by_class", service + "static_export", factory, "declared"),
+        ("built_by_method", service + "client", method + "create", "declared"),
+        ("built_by_method", service + "export", method + "export", "declared"),
+        ("built_by_method", service + "static_export", method + "export", "declared"),
+        ("built_by_method", service + "missing", method + "absent", "declared"),
+    }
+    states = {n["id"]: n["state"] for n in document["nodes"]}
+    assert states[method + "absent"] == "unresolved"
+    assert states["drupal.service::other.factory"] == "referenced"
+
+
+LINKS_FILES = {
+    str(MODULE / "my_module.links.task.yml"): """\
+my_module.list:
+  title: 'List'
+  route_name: my_module.list
+  base_route: my_module.list
+my_module.settings_tab:
+  title: 'Settings'
+  route_name: my_module.settings
+  base_route: my_module.list
+my_module.sub_tab:
+  title: 'Sub'
+  route_name: my_module.settings
+  parent_id: my_module.settings_tab
+my_module.dynamic:
+  class: \\Drupal\\Core\\Menu\\LocalTaskDefault
+  deriver: \\Drupal\\my_module\\Plugin\\Derivative\\DynamicTasks
+""",
+    str(MODULE / "my_module.links.action.yml"): """\
+my_module.derived_add:
+  route_name: my_module.list
+  deriver: \\Drupal\\my_module\\Plugin\\Derivative\\DynamicTasks
+""",
+    str(MODULE / "my_module.links.contextual.yml"): """\
+my_module.edit:
+  title: 'Edit'
+  route_name: my_module.settings
+  group: my_module
+  class: \\Drupal\\my_module\\Plugin\\Derivative\\DynamicTasks
+""",
+    str(MODULE / "src/Plugin/Derivative/DynamicTasks.php"): r"""<?php
+
+namespace Drupal\my_module\Plugin\Derivative;
+
+class DynamicTasks {
+}
+""",
+}
+
+
+def test_local_tasks_actions_and_contextual_links_link_to_routes_and_classes(
+    tmp_path: Path,
+) -> None:
+    """Each entry of a links.task or links.contextual file is a node; route_name, base_route,
+    parent_id, class and deriver give an edge each, declared, and a local action's class and
+    deriver do too. A route or class no file declares is referenced."""
+    _plant(tmp_path, LINKS_FILES)
+    document, _ = _map(tmp_path)
+    task = "drupal.local_task::my_module."
+    route = "drupal.route::my_module."
+    deriver = "php.type::Drupal\\my_module\\Plugin\\Derivative\\DynamicTasks"
+    default = "php.type::Drupal\\Core\\Menu\\LocalTaskDefault"
+    action = "drupal.local_action::my_module.derived_add"
+    link = "drupal.contextual_link::my_module.edit"
+    kinds = {"links_to_route", "task_base_route", "child_of_task", "link_class", "link_deriver"}
+    found = {
+        (e["kind"], e["from"], e["to"], p["confidence"])
+        for e in document["edges"]
+        if e["kind"] in kinds
+        for p in e["provenance"]
+    }
+    assert found == {
+        ("links_to_route", task + "list", route + "list", "declared"),
+        ("links_to_route", task + "settings_tab", route + "settings", "declared"),
+        ("links_to_route", task + "sub_tab", route + "settings", "declared"),
+        ("task_base_route", task + "list", route + "list", "declared"),
+        ("task_base_route", task + "settings_tab", route + "list", "declared"),
+        ("child_of_task", task + "sub_tab", task + "settings_tab", "declared"),
+        ("link_class", task + "dynamic", default, "declared"),
+        ("link_deriver", task + "dynamic", deriver, "declared"),
+        ("links_to_route", action, route + "list", "declared"),
+        ("link_deriver", action, deriver, "declared"),
+        ("links_to_route", link, route + "settings", "declared"),
+        ("link_class", link, deriver, "declared"),
+    }
+    attributes = {
+        n["id"]: n.get("attributes")
+        for n in document["nodes"]
+        if n["type"] in ("drupal.local_task", "drupal.contextual_link")
+    }
+    assert attributes == {
+        task + "list": {"title": "List"},
+        task + "settings_tab": {"title": "Settings"},
+        task + "sub_tab": {"title": "Sub"},
+        task + "dynamic": None,
+        link: {"group": "my_module", "title": "Edit"},
+    }
+
+
+FORM_BASES = {
+    "ThingForm": "Drupal\\Core\\Entity\\EntityForm",
+    "ThingContentForm": "Drupal\\Core\\Entity\\ContentEntityForm",
+    "ThingBundleForm": "Drupal\\Core\\Entity\\BundleEntityFormBase",
+    "ThingDeleteForm": "Drupal\\Core\\Entity\\EntityDeleteForm",
+    "ThingContentDeleteForm": "Drupal\\Core\\Entity\\ContentEntityDeleteForm",
+    "ThingConfirmForm": "Drupal\\Core\\Form\\ConfirmFormBase",
+    "ThingEntityConfirmForm": "Drupal\\Core\\Entity\\EntityConfirmFormBase",
+    "ThingContentConfirmForm": "Drupal\\Core\\Entity\\ContentEntityConfirmFormBase",
+}
+
+
+def test_a_class_on_a_core_entity_or_confirm_form_base_is_a_form_class(tmp_path: Path) -> None:
+    """A class that extends a core entity form, delete form or confirm form base, or extends such
+    a class of the module, is typed drupal.form_class."""
+    files = {
+        str(MODULE / f"src/Form/{name}.php"): (
+            f"<?php\n\nnamespace Drupal\\my_module\\Form;\n\nuse {base};\n\n"
+            f"class {name} extends {base.rsplit(chr(92), 1)[-1]} {{\n}}\n"
+        )
+        for name, base in FORM_BASES.items()
+    }
+    files[str(MODULE / "src/Form/SubForm.php")] = (
+        "<?php\n\nnamespace Drupal\\my_module\\Form;\n\nclass SubForm extends ThingForm {\n}\n"
+    )
+    _plant(tmp_path, files)
+    document, _ = _map(tmp_path)
+    types = {
+        n["id"]: n["type"]
+        for n in document["nodes"]
+        if n["id"].startswith("php.type::Drupal\\my_module\\Form\\")
+    }
+    assert types == {
+        f"php.type::Drupal\\my_module\\Form\\{name}": "drupal.form_class"
+        for name in [*FORM_BASES, "SubForm"]
+    }
+
+
+MACRO_THEME = Path("web/themes/custom/my_theme")
+MACRO_FILES = {
+    str(MACRO_THEME / "my_theme.info.yml"): "name: My theme\ntype: theme\n",
+    str(MACRO_THEME / "templates/misc/macros.twig"): (
+        "{# Icons. #}\n{% macro icon(name) %}<i>{{ name }}</i>{% endmacro %}\n"
+        "{%- macro badge(x) -%}<b>{{ x }}</b>{%- endmacro -%}\n"
+    ),
+    str(MACRO_THEME / "templates/misc/forms.html.twig"): (
+        "{% macro row(x) %}{{ x }}{% endmacro %}\n"
+    ),
+    str(MACRO_THEME / "templates/misc/plain.twig"): "<p></p>\n",
+    str(MACRO_THEME / "templates/page.html.twig"): (
+        '{% import "@my_theme/misc/macros.twig" as macros %}\n'
+        "{% from 'macros.twig' import icon, badge as b %}\n"
+        '{% import "@my_theme/misc/forms.html.twig" as forms %}\n'
+        "{% import _self as own %}\n"
+    ),
+    str(MACRO_THEME / "components/button/button.component.yml"): "name: Button\n",
+    str(MACRO_THEME / "components/button/button.twig"): (
+        "{% import '@my_theme/misc/macros.twig' as m %}\n<button></button>\n"
+    ),
+}
+
+
+def test_a_macro_file_is_a_template_that_its_importers_link_to(tmp_path: Path) -> None:
+    """A Twig file not named .html.twig that defines a macro is a template, at each macro's line;
+    import and from of it give template_includes from a template and
+    component_includes_template from a component. A Twig file with no macro is no template, and
+    _self links nothing."""
+    _plant(tmp_path, MACRO_FILES)
+    document, report = _map(tmp_path)
+    assert [r for _, _, r, _ in report.skipped if r.startswith("macro_file")] == []
+    templates = {
+        n["id"]: sorted(place["line"] for place in n["locations"])
+        for n in document["nodes"]
+        if n["type"] == "drupal.template"
+    }
+    assert templates == {
+        "drupal.template::macros": [2, 3],
+        "drupal.template::forms": [1],
+        "drupal.template::page": [1],
+    }
+    found = {
+        (e["kind"], e["from"], e["to"], tuple(sorted(p["line"] for p in e["locations"])))
+        for e in document["edges"]
+        if e["kind"] in ("template_includes", "component_includes_template")
+    }
+    assert found == {
+        ("template_includes", "drupal.template::page", "drupal.template::macros", (1, 2)),
+        ("template_includes", "drupal.template::page", "drupal.template::forms", (3,)),
+        (
+            "component_includes_template",
+            "drupal.component::button",
+            "drupal.template::macros",
+            (1,),
+        ),
+    }

@@ -225,7 +225,9 @@ the function, so a method makes no edge. It starts its edge at `{template: '{fn}
 
 `drupal_basic` links a template to what it names: an include, extends, embed, import or from of a
 `.html.twig` file is a `template_includes` edge, and `theme:name` in an include or embed is a
-`template_includes_component` edge to the component's name. A call in a Twig comment gives
+`template_includes_component` edge to the component's name. A Twig file not named `.html.twig`
+that defines a macro, as `misc/macros.twig`, is a template named by its stem, and an import or
+from of it is a `template_includes` edge too. A call in a Twig comment gives
 nothing. Two themes with a template or component of one name
 meet at one node. A third party gets the same links from a project-local pack
 ([Tree references](rutter-author-guide-references.md#an-edge-from-the-file-enclosing_file)).
@@ -303,6 +305,15 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   factory, to the queue worker plugin `x`, so a worker's queue writers are one edge away.
 - `alters_form`, inferred by a map rule from each method or function that implements a hook
   `form_<id>_alter` to the form id `<id>`.
+- `built_by_service` and `built_by_class`, from a service to the factory its `factory` key names,
+  as `['@other.service', 'create']`, `['Class', 'create']` or `'Class::create'`; and
+  `built_by_method`, joined in the map through the internal hub `drupal.factory_method`, to the
+  factory's method on the factory service's class or on the class written.
+- `drupal.local_task` and `drupal.contextual_link`, a node for each entry of a `links.task` or
+  `links.contextual` file, with `links_to_route` to its `route_name`; `task_base_route` and
+  `child_of_task` from a local task's `base_route` and `parent_id`; and `link_class` and
+  `link_deriver` from a local task, a local action or a contextual link to the class or deriver
+  it names.
 
 ## Where to look when the map misses a thing
 

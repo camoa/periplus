@@ -1,0 +1,9 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A contextual link, named by its key in a links.contextual file. links_to_route
+# (menu_link/menu_link.yaml) joins it to its route_name, and link_class and link_deriver
+# (local_task/local_task.yaml) to its class or deriver. Its group is an attribute.
+
+node_types:
+- name: drupal.contextual_link
+  id_namespace: drupal.contextual_link

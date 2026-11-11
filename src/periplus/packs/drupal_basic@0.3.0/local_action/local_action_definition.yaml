@@ -1,7 +1,7 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A local action read from a links.action file, one per top-level key. Two rules because a rule
-# that emits an edge emits no node.
+# that emits an edge emits no node. A leading backslash on a class or a deriver is dropped.
 
 rules:
 - rule: local_action_from_links_file
@@ -46,4 +46,6 @@ rules:
         from:
           key: appears_on
         each: true
+  - edge: {kind: link_class, from: this_node, to: {from: {key: class}, pattern: '^\\?(?<class>[^\\].*)$', template: '{class}'}}
+  - edge: {kind: link_deriver, from: this_node, to: {from: {key: deriver}, pattern: '^\\?(?<class>[^\\].*)$', template: '{class}'}}
   confidence: declared

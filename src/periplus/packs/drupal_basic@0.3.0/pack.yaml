@@ -5,8 +5,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #
 # Known gaps. The basic Drupal pack maps, beside php_basic's classes, functions and methods:
 # - configuration, modules, themes, services with their tags and classes, routes, permissions,
-#   libraries, templates, entity types, bundles, fields, displays, menu links, local actions,
-#   block placements and the plugin kinds whose folders are named under folders below. A service's
+#   libraries, templates, entity types, bundles, fields, displays, menu links, local tasks, local
+#   actions, contextual links, block placements and the plugin kinds whose folders are named under folders below. A service's
 #   class may be a class or an interface, as for a service a factory builds;
 # - each bundle under the id <entity type>.<bundle>, as node.article. A bundle config file of a core
 #   prefix declares it with its label, a configured_by edge to that file and a bundle_of edge to
@@ -124,7 +124,20 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   declares, such as a contributed module's, ends at a referenced node;
 # - each method or function that implements a hook form_<id>_alter, as an inferred alters_form
 #   edge to the form id <id>; a form id no mapped class returns, such as a core form's or a base
-#   form id, ends at a referenced node.
+#   form id, ends at a referenced node;
+# - each service's factory key, as a built_by_service edge to a factory service written @name or a
+#   built_by_class edge to a class, and a built_by_method edge to the factory's method on the
+#   factory service's class or the class written, unresolved when the map holds no such method;
+# - each entry of a links.task or links.contextual file, as a drupal.local_task or
+#   drupal.contextual_link node with a links_to_route edge to its route_name; a local task's
+#   base_route as a task_base_route edge and its parent_id as a child_of_task edge; and the class
+#   and deriver of a local task, a local action or a contextual link, as link_class and
+#   link_deriver edges;
+# - a class that extends a core entity form, delete form, confirm form or bundle form base, as a
+#   drupal.form_class, as one that extends FormBase is;
+# - each Twig file not named .html.twig that defines a macro, as a template named by its stem, and
+#   each template or component that imports it with import or from, as a template_includes or
+#   component_includes_template edge.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
@@ -293,6 +306,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   edge at the method's or function's line.
 # - A generic hook_form_alter that tests $form_id with ==, in_array or switch gives no alters_form
 #   edge.
+# - A factory class written without a namespace, and a factory set in code, give no edge; a factory
+#   service no mapped file declares names no method. A local task, local action or contextual link
+#   that a deriver makes at run time is not a node: the entry that names the deriver is. A menu
+#   link's class and deriver, and a link's route_parameters, give nothing.
+# - A macro file is a node only when it defines a macro, and is known by its stem, so two macro
+#   files of one stem meet at one node. An import of a name with a dot before .twig other than
+#   .html.twig, of _self or of a variable, and an import in a Twig file that is neither a
+#   .html.twig template nor a component, give nothing.
 #
 # Settings to know:
 # - Only the custom modules and themes are read as PHP. Move them with custom_module and
@@ -674,13 +695,18 @@ boundary:
       Drupal\Core\Config\Entity\ConfigEntityBase: ~
       Drupal\Core\Config\Entity\ConfigEntityListBuilder: ~
       Drupal\Core\Controller\ControllerBase: drupal.controller_class
+      Drupal\Core\Entity\BundleEntityFormBase: drupal.form_class
       Drupal\Core\Entity\ContentEntityBase: ~
+      Drupal\Core\Entity\ContentEntityConfirmFormBase: drupal.form_class
+      Drupal\Core\Entity\ContentEntityDeleteForm: drupal.form_class
+      Drupal\Core\Entity\ContentEntityForm: drupal.form_class
       Drupal\Core\Entity\EntityAccessControlHandler: ~
-      Drupal\Core\Entity\EntityDeleteForm: ~
-      Drupal\Core\Entity\EntityForm: ~
+      Drupal\Core\Entity\EntityConfirmFormBase: drupal.form_class
+      Drupal\Core\Entity\EntityDeleteForm: drupal.form_class
+      Drupal\Core\Entity\EntityForm: drupal.form_class
       Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase: drupal.event_subscriber_class
       Drupal\Core\Form\ConfigFormBase: drupal.config_form_class
-      Drupal\Core\Form\ConfirmFormBase: ~
+      Drupal\Core\Form\ConfirmFormBase: drupal.form_class
       Drupal\Core\Form\FormBase: drupal.form_class
       Drupal\Core\Mail\Plugin\Mail\PhpMail: ~
       Drupal\Core\Plugin\DefaultPluginManager: ~

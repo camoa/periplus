@@ -1,0 +1,85 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A service built by a factory: factory: ['@other.service', 'method'] gives built_by_service to the
+# factory service, and factory: ['Class', 'method'] or factory: 'Class::method' gives
+# built_by_class to the class, declared. The method's name goes to an internal hub, and a map rule
+# joins the service to the factory's method, <class>::<method>, the class being the one the
+# factory service's class key names or the one written. A method the map does not hold ends at an
+# unresolved method; a factory service no mapped file declares ends at a referenced service and
+# names no method. A class written without a namespace is not read.
+
+node_types:
+- name: drupal.factory_method
+  id_namespace: drupal.factory_method
+  internal: true
+
+edge_kinds:
+- kind: built_by_service
+  from: drupal.service
+  to: drupal.service
+- kind: built_by_class
+  from: drupal.service
+  to: [php.class, php.interface]
+- kind: names_factory_method
+  from: drupal.service
+  to: drupal.factory_method
+- kind: built_by_method
+  from: drupal.service
+  to: php.method
+
+rules:
+# Both forms in one rule: each item of the list, or the text, is tested by each end's pattern. A
+# class is a namespaced name; a method is the item that is a bare word, or the part after ::.
+- rule: service_factory
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+  id: {from: key}
+  emits:
+  - edge:
+      kind: built_by_service
+      from: this_node
+      to: {from: {key: factory}, each: true, pattern: '^@\??(?<service>.+)$', template: '{service}'}
+  - edge:
+      kind: built_by_class
+      from: this_node
+      to: {from: {key: factory}, each: true, pattern: '^\\?(?<class>\w+(?:\\\w+)+)(?:::\w+)?$', template: '{class}'}
+  - edge:
+      kind: names_factory_method
+      from: this_node
+      to: {from: {key: factory}, each: true, pattern: '^(?:[^@:]+::)?(?<method>\w+)$', template: '{method}'}
+  confidence: declared
+
+- rule: service_factory_method_of_service
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: '^drupal\.service::(?<service>.+)$'}]
+    follow:
+    - edge: names_factory_method
+    - id_matches: '^drupal\.factory_method::(?<method>\w+)$'
+    - node: 'drupal.service::{service}'
+    - edge: built_by_service
+    - edge: service_class
+    - id_matches: '^php\.type::(?<class>.+)$'
+  emits: [{edge: {kind: built_by_method, from: this_node, to: {template: '{class}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: declared
+
+- rule: service_factory_method_of_class
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: '^drupal\.service::(?<service>.+)$'}]
+    follow:
+    - edge: names_factory_method
+    - id_matches: '^drupal\.factory_method::(?<method>\w+)$'
+    - node: 'drupal.service::{service}'
+    - edge: built_by_class
+    - id_matches: '^php\.type::(?<class>.+)$'
+  emits: [{edge: {kind: built_by_method, from: this_node, to: {template: '{class}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: declared
