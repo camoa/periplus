@@ -9,12 +9,12 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.mark.criterion(id="c4")
-def test_pyproject_lists_xdist_in_dev_extra_and_runs_n_auto_with_durations_c4() -> None:
+def test_pyproject_lists_xdist_in_dev_extra_and_runs_four_workers_with_durations_c4() -> None:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dev = data["project"]["optional-dependencies"]["dev"]
     assert any(d.lower().startswith("pytest-xdist") for d in dev), dev
     addopts = data["tool"]["pytest"]["ini_options"]["addopts"].split()
-    assert "-n" in addopts and addopts[addopts.index("-n") + 1] == "auto", addopts
+    assert "-n" in addopts and addopts[addopts.index("-n") + 1] == "4", addopts
     assert any(a.startswith("--durations") for a in addopts), addopts
     assert "-q" not in addopts, addopts
 
