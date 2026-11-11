@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `periplus show` prints the entry `.periplus/descriptions.yaml` holds for the node and for each edge, in text and JSON, and `description: none` for a node without one.
 - `periplus slice --path` may repeat, and a prefix that matches no node is refused.
 - The `periplus-map` skill answers a question about a feature in steps: find the candidates, show each, and cut one slice from every confirmed start. It writes a missing description entry for a node or edge whose code it read.
-- A span's `balance` entry longer than one character is a pattern, so a span can balance tags such as `<fn ...>` and `</fn>`; an entry of one character still matches that character.
+- A span's `balance` entry longer than one character is a pattern, so a span can balance tags such as `<fn ...>` and `</fn>`; an entry of one character still matches that character. An entry that matches the empty text, such as `/*`, is refused.
 
 ### Changed
 

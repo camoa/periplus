@@ -838,7 +838,8 @@ def _file_info(packs: Sequence[LoadedPack]) -> dict[str, FileInfo]:
 
 def _balance(pair: object) -> tuple[re.Pattern[str], re.Pattern[str]]:
     """A span's opening and closing tokens: an entry of one character matches that character,
-    and a longer one is a pattern."""
+    and a longer one is a pattern, refused when it matches the empty text. The two entries are
+    compared as written only."""
     if not (
         isinstance(pair, list)
         and len(pair) == 2
@@ -846,10 +847,13 @@ def _balance(pair: object) -> tuple[re.Pattern[str], re.Pattern[str]]:
         and pair[0] != pair[1]
     ):
         raise _Unsupported("a span's balance is not two different tokens")
-    opening, closing = (
-        re.compile(re.escape(token)) if len(token) == 1 else _regex(token) for token in pair
-    )
-    return opening, closing
+    tokens = []
+    for token in pair:
+        pattern = re.compile(re.escape(token)) if len(token) == 1 else _regex(token)
+        if pattern.match("") is not None:
+            raise _Unsupported(f"the balance entry {token} matches the empty text")
+        tokens.append(pattern)
+    return tokens[0], tokens[1]
 
 
 def _flat_folder(value: Value, packs: Sequence[LoadedPack]) -> None:

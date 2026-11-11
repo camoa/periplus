@@ -650,10 +650,7 @@ def _spans(
     for name, opening, up, down in declared:
         for match in _outside(opening, text, sections, ()):
             depth, end = 0, len(text)
-            for token, step in _tokens(text, match.end(), up, down):
-                index = bisect_right(starts, token.start()) - 1
-                if index >= 0 and token.start() < sections[index][2]:
-                    continue
+            for token, step in _tokens(text, match.end(), up, down, (sections, starts)):
                 depth += step
                 if depth <= 0:
                     end = token.end()
@@ -664,11 +661,17 @@ def _spans(
 
 
 def _tokens(
-    text: str, at: int, up: re.Pattern[str], down: re.Pattern[str]
+    text: str,
+    at: int,
+    up: re.Pattern[str],
+    down: re.Pattern[str],
+    held: tuple[list[tuple[str, int, int]], list[int]],
 ) -> Iterator[tuple[re.Match[str], int]]:
     """Each opening token from ``at`` with step 1 and each closing token with step -1, in order of
     start, the opening first on a tie. The search goes on after each token, so tokens never
-    overlap."""
+    overlap; a token that starts inside a section is skipped and the search goes on after that
+    section. ``held`` is the sections and their starts."""
+    sections, starts = held
     rise, fall = up.search(text, at), down.search(text, at)
     while True:
         if rise is not None and (fall is None or rise.start() <= fall.start()):
@@ -677,8 +680,15 @@ def _tokens(
             token, step = fall, -1
         else:
             return
-        yield token, step
-        at = max(token.end(), token.start() + 1)
+        index = bisect_right(starts, token.start()) - 1
+        if index >= 0 and token.start() < sections[index][2]:
+            at = sections[index][2]
+        else:
+            yield token, step
+            at = max(token.end(), token.start() + 1)
+        # A search from past the end would find the last empty match there again, forever.
+        if at > len(text):
+            return
         if rise is not None and rise.start() < at:
             rise = up.search(text, at)
         if fall is not None and fall.start() < at:

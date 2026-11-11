@@ -66,9 +66,18 @@ spans:
 ```
 
 The open is a lookahead, so it stops before its own `<fn`, which counts one up. An inner `<fn`
-counts one more and its `</fn>` one down, so the function's own `</fn>` ends the span. Where an
-opening and a closing token start together, the opening counts first. The body is no section, so
-a comment inside it stays a section a rule does not read.
+counts one more and its `</fn>` one down, so the function's own `</fn>` ends the span. The body is
+no section, so a comment inside it stays a section a rule does not read.
+
+A longer entry is a regular expression, never literal text, so escape its metacharacters:
+`<\?php`, `/\*`, `\{\{`. Unescaped, `<?php` means "an optional `<`, then `php`", and it still
+loads. An entry that matches the empty text, such as `/*` ("zero or more slashes"), is refused.
+
+A token counts where it starts. One that starts outside the sections counts even when its match
+runs into a section; one that starts inside a section is skipped, and the search goes on after
+that section. Tokens never overlap: the search goes on after each token counted. Where an opening
+and a closing token start together, the opening counts. So a pair whose closing token matches
+only where the opening token matches never closes, and that span runs to the end of the file.
 
 ## A value from the enclosing spans
 

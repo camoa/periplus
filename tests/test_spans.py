@@ -4,6 +4,10 @@ skipped rows of a fire that emits nothing and of an edge whose end is not made."
 from __future__ import annotations
 
 import json
+import os
+import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +15,9 @@ import pytest
 from test_demo_a_support import edges, pin, plant, rutter
 
 from periplus.cli import main
+from periplus.engine.packload import _balance
+from periplus.engine.pattern import compile_pattern
+from periplus.engine.rules import _sections, _spans
 from periplus.errors import ExitCode
 from periplus.map import MapReport, run
 from periplus.preflight import check_runtime_dependencies
@@ -462,12 +469,13 @@ def _tags_map(
     monkeypatch: pytest.MonkeyPatch,
     manifest: str = TAGS_MANIFEST,
     text: str = TAGS_TEXT,
+    rules: str = TAGS_RULES,
 ) -> tuple[int, dict[str, Any]]:
     """Plant the tag pack and its file, run ``periplus map`` once, and give the exit code and
     the written map ({} when none)."""
     monkeypatch.chdir(root)
     monkeypatch.setenv("PERIPLUS_CONFIG_DIR", str(root / "_config"))
-    rutter(root, "tags", manifest, {"tags.yaml": TAGS_RULES})
+    rutter(root, "tags", manifest, {"tags.yaml": rules})
     pin(root, "tags@0.0.1")
     plant(root, {"src/page.tpl": text})
     code = main(["map", "--output", str(root / "out.json")])
@@ -514,6 +522,120 @@ def test_a_balance_entry_of_one_character_matches_that_character(
     text = 'fn outer(<query name="first"> <!-- ) --> (fn inner(<query name="second">))\n'
     text += '<query name="third">) <query name="outside">\n'
     code, document = _tags_map(tmp_path, monkeypatch, manifest, text)
+    assert code == 0, code
+    assert edges(document, "runs") == {
+        ("runs", "tags.fn::outer", "tags.query::first"),
+        ("runs", "tags.fn::inner", "tags.query::second"),
+        ("runs", "tags.fn::outer", "tags.query::third"),
+    }, edges(document)
+
+
+def _spans_of(
+    text: str, opening: str, balance: list[str], comment: bool = False
+) -> list[tuple[int, int]]:
+    """The start and end of each span of the text, the balance read as a manifest reads it, with
+    a ``<!--``/``-->`` comment section when ``comment`` is set."""
+    declared = [("comment", compile_pattern("<!--"), "-->")] if comment else []
+    up, down = _balance(balance)
+    sections = _sections(text, declared)
+    spans = _spans(text, [("x", compile_pattern(opening), up, down)], sections)
+    return [(begin, end) for _, begin, end, _ in spans]
+
+
+def test_a_balance_entry_whose_pattern_matches_the_empty_text_is_refused_by_validate_and_map(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``/*`` is the pattern "zero or more slashes", not a comment opening: it matches nothing at
+    every offset, so validate and map both refuse the pack and name the entry."""
+    manifest = TAGS_MANIFEST.replace("['<fn\\b', '</fn>']", "['/*', '\\*/']")
+    code, document = _tags_map(tmp_path, monkeypatch, manifest)
+    assert code == ExitCode.PACK_RULES_UNREADABLE and document == {}, code
+    mapped = capsys.readouterr()
+    assert main(["validate", "tags"]) == ExitCode.PACK_RULES_UNREADABLE
+    validated = capsys.readouterr()
+    for out in (mapped, validated):
+        assert "the balance entry /* matches the empty text" in out.out + out.err, out
+
+
+def test_a_zero_width_token_at_the_end_of_the_text_ends_the_count(tmp_path: Path) -> None:
+    r"""``\b`` matches no empty text, so it loads, but it matches at the end of ``f a``. The count
+    stops there and the map finishes; before, the search found that match again forever."""
+    root = tmp_path.resolve()
+    manifest = TAGS_MANIFEST.replace("['<fn\\b', '</fn>']", "['\\b', '\\)']").replace(
+        """'(?=<fn\\s+name="(?<name>\\w+)")'""", "'(?<name>f)'"
+    )
+    rutter(root, "tags", manifest, {"tags.yaml": TAGS_RULES})
+    pin(root, "tags@0.0.1")
+    plant(root, {"src/page.tpl": "f a"})
+    child = "import sys; from periplus.cli import main; sys.exit(main(['map']))"
+    result = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
+        [sys.executable, "-c", child],
+        cwd=root,
+        env={**os.environ, "PERIPLUS_CONFIG_DIR": str(root / "_config")},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_token_skipped_inside_a_section_does_not_swallow_a_token_after_the_section() -> None:
+    """The ``<fn`` inside the comment runs past ``-->`` up to ``/``; the search resumes at the
+    end of the comment, so the first ``</fn>`` after it closes the span."""
+    text = "S <!-- <fn --> </fn> </fn>"
+    assert _spans_of(text, "S", ["<fn\\b[^/]*/?", "</fn>"], comment=True) == [(0, 20)]
+
+
+def test_a_token_that_starts_outside_a_section_counts_though_it_runs_into_one() -> None:
+    """The closing ``</fn`` starts before the comment, so it counts, and its match runs on into
+    the comment up to the last ``>``."""
+    text = "<fn a> </fn<!-- x -->"
+    assert _spans_of(text, "(?=<fn)", ["<fn\\b", "</fn[^>]*"], comment=True) == [(0, 20)]
+
+
+def test_an_opening_and_a_closing_token_that_start_together_count_as_the_opening() -> None:
+    """``<`` and ``</`` both start at each ``</x>``; the opening counts there, so this pair never
+    closes and the span runs to the end of the text."""
+    text = "f <x> </x> </x>"
+    assert _spans_of(text, "f", ["<", "</"]) == [(0, len(text))]
+
+
+def test_a_zero_width_token_counts_once_and_the_search_moves_past_it() -> None:
+    """A lookahead opening matches before each ``<fn`` without taking it: each tag counts once."""
+    text = "<fn a><fn b></fn></fn> tail"
+    assert _spans_of(text, "(?=<fn a)", ["(?=<fn)", "</fn>"]) == [(0, 22)]
+
+
+def test_tokens_do_not_overlap() -> None:
+    """``<fn>`` is one opening ``<f``; the closing ``fn>`` inside it does not count, since the
+    search resumes after the opening. The span ends at the closing ``fn>`` that stands alone."""
+    text = "S <fn> fn> tail"
+    assert _spans_of(text, "S", ["<f", "f\\w*>"]) == [(0, 10)]
+
+
+def test_an_unclosed_tag_span_ends_at_the_end_of_the_text() -> None:
+    text = "<fn a> body"
+    assert _spans_of(text, "(?=<fn)", ["<fn\\b", "</fn>"]) == [(0, len(text))]
+
+
+def test_an_open_that_takes_its_own_opening_token_ends_at_the_first_inner_close() -> None:
+    """The open takes ``<fn a``, so the count starts one short: the inner ``</fn>`` ends it."""
+    text = "<fn a><fn b></fn>X</fn>"
+    assert _spans_of(text, "<fn\\s+a", ["<fn\\b", "</fn>"]) == [(0, 17)]
+
+
+def test_the_guides_tag_example_balances_nested_tags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The guide's tag example, read from the page, maps the nested fn tags as the guide says."""
+    guide = (Path(__file__).parents[1] / "docs" / "rutter-author-guide-text.md").read_text()
+    found = re.search(r"tag language balances its tags:\n\n```yaml\n(.*?)```", guide, re.S)
+    assert found is not None
+    head, _, _ = TAGS_MANIFEST.partition("      sections:\n")
+    manifest = head + "".join(f"      {line}\n" for line in found[1].splitlines())
+    rules = TAGS_RULES.replace("enclosing: fn,", "enclosing: function,")
+    code, document = _tags_map(tmp_path, monkeypatch, manifest, rules=rules)
     assert code == 0, code
     assert edges(document, "runs") == {
         ("runs", "tags.fn::outer", "tags.query::first"),
