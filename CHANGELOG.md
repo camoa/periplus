@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `periplus slice --path` may repeat, and a prefix that matches no node is refused.
 - The `periplus-map` skill answers a question about a feature in steps: find the candidates, show each, and cut one slice from every confirmed start. It writes a missing description entry for a node or edge whose code it read.
 - A span's `balance` entry longer than one character is a pattern, so a span can balance tags such as `<fn ...>` and `</fn>`; an entry of one character still matches that character. An entry that matches the empty text, such as `/*`, is refused.
+- A text rule's templates may name `{file_stem}`, in its id, values, attributes, bindings and edge ends, as other file rules' ids do; it was refused with exit 26. A capture named `file_stem` keeps its own text.
+- A file rule without `match.text` may hold `values`, each a template over path values, settings values, `file_stem`, the values before it and, under `match.each`, `key`, with `normalize` and `case`; its id may name them. Such a rule with `values` was refused with exit 26. A value from a capture or an enclosing span is refused, since the rule has neither.
 
 ### Changed
 

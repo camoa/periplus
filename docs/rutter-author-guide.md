@@ -71,15 +71,34 @@ module:
   confidence: declared
 ```
 
+A whole-file rule may hold `values`, each a template over path values, settings values,
+`file_stem`, the values before it and, under `match.each`, `key`, with `normalize` and `case` as
+values have elsewhere. Its id may name them:
+
+```yaml
+  values:
+    module: {template: '{app}/{area}/{file_stem}', normalize: [{replace: '/', with: '.'}], case: upper}
+  id: {template: '{module}'}
+```
+
+With the settings value `app: shop` and a path value `area` of `lib`, `src/lib/one.sx` gets the
+id `SHOP.LIB.ONE`. A value from a capture or an enclosing span is refused, since the rule has
+neither.
+
 `match.file` globs the file's stem, its name less its type's ending: `file: mission` reads
 `mission.yaml`. A rule reads the files directly in each folder `in` names; a folder value needs
 `/**` to reach those below. A text rule fires once per match of `match.text`, an RE2 pattern, on a
 file type read as text. A rule names one `filetype`, so a stack that holds one thing in files of
 several types writes one rule per type.
+Two endings that share sections and spans can be one file type listing both endings, as
+`code: {endings: [inc, theme], reader: text}`; then one rule reads both. `match.ending: theme`
+keeps one of them, and a path value such as `ext: {pattern: '\.(?<ext>\w+)$', template: '{ext}'}`
+tells them apart in an id.
 One rule reads one way: to read a tree type's files as text too, declare a
 second type on that ending under `files.types`, as `php_notes: {endings: [php], reader: text}`; each
 rule takes its own type's path values and sections, and two types read alike are refused. A text
-rule's node sits at the match's line, its id a template over captures and path values:
+rule's node sits at the match's line, its id a template over captures, path values and
+`file_stem`, which a value's template may name too:
 
 ```yaml python_text@0.1.0/rules/python.yaml
 - rule: class

@@ -429,8 +429,9 @@ class Rule:
     #: Its ``attributes`` and each edge's ``key`` name a capture.
     text: re.Pattern[str] | None = None
     id_capture: str = ""
-    #: A text rule's named values in order, the sections its match reads inside, and each
-    #: attribute given as a name and a template; a text rule's ``id_template`` is its id template.
+    #: A text or file rule's named values in order; a text rule's sections its match reads inside,
+    #: and each attribute given as a name and a template; a text rule's ``id_template`` is its id
+    #: template.
     values: tuple[Value, ...] = ()
     reads_sections: tuple[str, ...] = ()
     templates: tuple[tuple[str, str], ...] = ()
@@ -919,24 +920,23 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
     if not rule.supported or tree:
         return rule
     if rule.text is not None:
-        before = known | set(rule.text.groupindex)
-        for value in rule.values:
-            later = set(PLACEHOLDER.findall(value.template or "")) - before
-            if later:
-                missing = ", ".join(sorted(later))
-                reason = (
-                    f"the value {value.name} names {missing}, which is no capture, path value, "
-                    "settings value or value defined before it"
-                )
-                return replace(rule, supported=False, reason=reason)
-            before.add(value.name)
-        known |= {*rule.text.groupindex, *(value.name for value in rule.values)}
-        templates = [rule.id_template, *(v.template or "" for v in rule.values)]
-        templates += [t for _, t in rule.templates] + [e.template or "" for e in rule.edges]
-        templates += [t for binding in rule.bindings for t in binding]
+        known |= {"file_stem", *rule.text.groupindex}
     else:
         known |= {"file_stem", *(("key",) if rule.each is not None else ())}
-        templates = [rule.id_template]
+    for value in rule.values:
+        later = set(PLACEHOLDER.findall(value.template or "")) - known
+        if later:
+            missing = ", ".join(sorted(later))
+            reason = (
+                f"the value {value.name} names {missing}, which is no capture, path value, "
+                "settings value or value defined before it"
+            )
+            return replace(rule, supported=False, reason=reason)
+        known.add(value.name)
+    templates = [rule.id_template, *(v.template or "" for v in rule.values)]
+    if rule.text is not None:
+        templates += [t for _, t in rule.templates] + [e.template or "" for e in rule.edges]
+        templates += [t for binding in rule.bindings for t in binding]
     names = {name for template in templates for name in PLACEHOLDER.findall(template)}
     if names - known:
         missing = ", ".join(sorted(names - known))
@@ -1473,9 +1473,19 @@ def _build_rule(pack: str, item: Any, tables: frozenset[str]) -> Rule:
     if "attribute" in item["match"] or "annotation" in item["match"]:
         return _build_attribute(pack, item)
     shape = _Unsupported("the rule has a shape the engine does not execute")
-    if not isinstance(item, Mapping) or set(item) != _RULE_KEYS or item["reads"] != "file":
+    if (
+        not isinstance(item, Mapping)
+        or not _RULE_KEYS <= set(item) <= {*_RULE_KEYS, "values"}
+        or item["reads"] != "file"
+    ):
         raise shape
     match, emits, folders = item["match"], item["emits"], item["in"]
+    values = item.get("values", {})
+    if not isinstance(values, Mapping):
+        raise _Unsupported("the values of a file rule are not a mapping")
+    read_values = tuple(_read_value(str(name), spec) for name, spec in values.items())
+    if any(value.template is None for value in read_values):
+        raise _Unsupported("a value of a file rule without match.text is not a template")
     if (
         not isinstance(folders, list)
         or not all(isinstance(folder, str) for folder in folders)
@@ -1522,6 +1532,7 @@ def _build_rule(pack: str, item: Any, tables: frozenset[str]) -> Rule:
         edges=read_edges,
         each=each,
         id_template=_id_template(item["id"], each is not None),
+        values=read_values,
     )
 
 

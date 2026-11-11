@@ -209,7 +209,8 @@ def run_file_rules(
                 if own not in sections:
                     sections[own] = _sections(texts[file], info.sections)
                     spans[own] = _spans(texts[file], info.spans, sections[own])
-                read_from = (texts[file], paths[own], sections[own], spans[own])
+                stemmed = {**paths[own], "file_stem": stem}
+                read_from = (texts[file], stemmed, sections[own], spans[own])
                 made = (nodes, edges, bound.setdefault(file, []), skipped)
                 fired += _texts(rule, rule.text, rule_set, file, read_from, *made)
                 continue
@@ -250,6 +251,10 @@ def run_file_rules(
                 fired += 1
                 values = {**paths[own], "file_stem": stem}
                 values.update({} if key is None else {"key": key})
+                for value in rule.values:
+                    given = _value(value, values)
+                    if given is not None:
+                        values[value.name] = given
                 node_id = _fill(rule.id_template, values)
                 if node_id is None:
                     continue
@@ -458,7 +463,8 @@ def _texts(
     name with it, a later binding of a name winning. The id and an edge end take their resolution
     steps, an end without its own taking the file type's; a name no step gives makes nothing.
 
-    ``read_from`` is the file's text, its path values, its sections and its spans. A match that
+    ``read_from`` is the file's text, its path values with ``file_stem``, its sections and its
+    spans; a capture named ``file_stem`` wins over the file's. A match that
     makes no id, or whose id capture is empty, makes nothing, nor does an edge end whose capture is
     empty. An id, attribute or edge end whose template names an empty or absent value makes
     nothing; an empty attribute capture is an empty value. A template, a value's among them, fills
@@ -476,10 +482,10 @@ def _texts(
     tables = rule_set.tables.get(rule.pack, {})
     for found in _outside(pattern, text, sections, rule.reads_sections):
         captures = found.groupdict()
-        values = {name: value for name, value in captures.items() if value is not None}
-        lines = {name: text.count("\n", 0, found.start(name)) + 1 for name in values}
+        taken = {name: value for name, value in captures.items() if value is not None}
+        lines = {name: text.count("\n", 0, found.start(name)) + 1 for name in taken}
         line = lines.get(rule.line_capture) or text.count("\n", 0, found.start()) + 1
-        values.update(paths)
+        values = {**paths, **taken}
         for value in rule.values:
             if value.enclosing is not None:
                 held = _held(spans, value.enclosing, found.start(), value.excluding_own)
