@@ -130,3 +130,30 @@ def test_a_whole_file_rule_value_named_as_an_engine_given_name_is_refused(
         f"stem/rules/stem.yaml: the rule whole cannot be executed: the value {name} of a file rule "
         "has a name the engine gives"
     ]
+
+
+def test_a_text_rule_value_named_file_stem_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rule = TEXT_RULE.replace("owner: {template", "file_stem: {template").replace(
+        "{value: owner}", "{value: file_stem}"
+    )
+    rutter(tmp_path, "stem", MANIFEST, {"stem.yaml": TYPES + rule})
+    plant(
+        tmp_path,
+        {
+            ".periplus/settings.yml": (
+                "periplus_version: 0\npacks:\n  - stem@0.0.1\nvalues:\n  app: shop\n"
+            ),
+            "src/lib/one.sx": "item alpha\n",
+        },
+    )
+    capsys.readouterr()
+    status = main(["map", "--format", "json", "--output", str(tmp_path / "out.json")])
+    problems = json.loads(capsys.readouterr().out)["problems"]
+
+    assert status == 26
+    assert [p["message"] for p in problems] == [
+        "stem/rules/stem.yaml: the rule item cannot be executed: the value file_stem of a text "
+        "rule has a name the engine gives"
+    ]

@@ -98,7 +98,7 @@ One rule reads one way: to read a tree type's files as text too, declare a
 second type on that ending under `files.types`, as `php_notes: {endings: [php], reader: text}`; each
 rule takes its own type's path values and sections, and two types read alike are refused. A text
 rule's node sits at the match's line, its id a template over captures, path values and
-`file_stem`, which a value's template may name too:
+`file_stem`, which a value's template may name too; a value named `file_stem` is refused:
 
 ```yaml python_text@0.1.0/rules/python.yaml
 - rule: class

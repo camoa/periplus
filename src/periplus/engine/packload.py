@@ -1661,6 +1661,8 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
         raise _Unsupported("a capture a text rule names is not a named group of match.text")
     if set(named) & set(pattern.groupindex):
         raise _Unsupported("a value of a text rule has the name of a capture")
+    if "file_stem" in named:
+        raise _Unsupported("the value file_stem of a text rule has a name the engine gives")
     return Rule(
         pack=pack,
         name=str(item["rule"]),
