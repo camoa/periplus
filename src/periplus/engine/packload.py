@@ -7,7 +7,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from periplus.engine.pattern import PATTERN_VALUE, compile_pattern
+from periplus.engine.pattern import compile_pattern, fill_values, value_names
 from periplus.engine.select import FileTypes, FolderUnresolved, holds_double_star
 from periplus.engine.tree import STEPS, Grammar, ImportRule, Step, _parser
 from periplus.errors import ExitCode, HarnessError, Problem
@@ -15,7 +15,6 @@ from periplus.manifest import MANIFEST_FILENAME, LoadedPack
 from periplus.validate import MANIFEST_SCHEMA, PACK_FILE_SCHEMA, _load, _schema, _yaml_files
 
 __all__ = [
-    "PATTERN_VALUE",
     "PLACEHOLDER",
     "TEXT",
     "BoundaryEntry",
@@ -555,7 +554,7 @@ def load_rules(
     type declared twice, and a supported rule that emits a type with no id namespace. An edge kind
     declared twice with different ends is left in ``RuleSet.conflicts``, so the run can report it
     beside the other problems of the packs, and so is a name the settings ``values`` and a pack
-    both give, a path value template or normalize pattern naming a value nothing gives, and a
+    both give, a path value template or normalize step naming a value nothing gives, and a
     declaration rule's id naming a name that is no field of its grammar and no value, and so is a
     boundary group whose type, classifying type or ancestry kind the run cannot use. ``origins``
     names the settings file of each settings value. Every pack given has passed its schema.
@@ -569,7 +568,7 @@ def load_rules(
     items: list[Mapping[str, Any]] = []
     sources: list[str] = []
     siblings: dict[str, list[Mapping[str, Any]]] = {}
-    imports: dict[str, list[Mapping[str, Any]]] = {}
+    imports: dict[str, list[tuple[str, Mapping[str, Any]]]] = {}
     tables = _tables(packs)
     for pack in packs:
         for relative, node in _yaml_files(pack.directory):
@@ -585,7 +584,9 @@ def load_rules(
             _read_kinds(
                 pack.name.pack, relative, document.get("edge_kinds"), kinds, conflicts, declared_at
             )
-            imports.setdefault(pack.name.pack, []).extend(document.get("imports", []))
+            imports.setdefault(pack.name.pack, []).extend(
+                (f"{pack.name.pack}/{relative}", entry) for entry in document.get("imports", [])
+            )
             for item in document.get("rules", []):
                 rules.append(_read_rule(pack.name.pack, item, frozenset(tables[pack.name.pack])))
                 items.append(item)
@@ -609,7 +610,9 @@ def load_rules(
     rules = [
         _check_names(rule, files.get(rule.filetype, FileInfo()), known[rule.pack]) for rule in rules
     ]
-    conflicts.extend(_collisions(rules, sources, files, packs, values, origins or {}, declared))
+    conflicts.extend(
+        _collisions(rules, sources, files, packs, values, origins or {}, declared, known)
+    )
     grammars: dict[str, Grammar] = {}
     for index, rule in enumerate(rules):
         tree = rule.declaration or rule.attribute or rule.annotation or rule.reference
@@ -626,18 +629,21 @@ def load_rules(
         if rules[index].supported and rule.annotation and not grammars[rule.filetype].comment:
             missing = f"the grammar for {rule.filetype} declares no identity.comment"
             rules[index] = replace(rule, supported=False, reason=missing)
-        if rules[index].supported and tree:
+        if rules[index].supported and tree and _reads_imports(rule, grammars[rule.filetype]):
             paths = {value.name for value in files.get(rule.filetype, FileInfo()).path_values}
-            entries = grammars[rule.filetype].imports
-            patterns = [step for entry in entries for step, _ in entry.normalize]
-            unnamed = {n for step in patterns for n in PATTERN_VALUE.findall(step.pattern)}
-            unnamed -= paths | set(known[rule.pack])
-            if unnamed:
-                unknown = (
-                    f"an import's normalize pattern names {', '.join(sorted(unnamed))}, which is "
-                    "no path value or settings value"
+            given = paths | set(known[rule.pack])
+            unknown: dict[str, set[str]] = {}
+            for entry in grammars[rule.filetype].imports:
+                absent = set(_step_names(entry.normalize)) - given
+                if absent:
+                    unknown.setdefault(entry.source, set()).update(absent)
+            if unknown:
+                unread = "; ".join(
+                    f"the imports of {source} have a normalize step naming "
+                    f"{', '.join(sorted(names))}, which is no path value or settings value"
+                    for source, names in sorted(unknown.items())
                 )
-                rules[index] = replace(rule, supported=False, reason=unknown)
+                rules[index] = replace(rule, supported=False, reason=unread)
     for rule in rules:
         if (
             rule.supported
@@ -871,23 +877,23 @@ def _closing(close: object, opening: object) -> str:
 
 
 def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
-    """The rule, marked not executed when a template or a normalize pattern names a value nothing
+    """The rule, marked not executed when a template or a normalize step names a value nothing
     gives, a value's template names a value defined after it, or the match reads a section its
     file type does not declare. A declaration rule is given the fields its id names."""
     tree = rule.declaration or rule.attribute or rule.annotation or rule.reference
     known = {value.name for value in info.path_values} | set(values)
     normalize = [*rule.normalize, *(step for value in rule.values for step in value.normalize)]
-    unnamed = {n for step, _ in normalize for n in PATTERN_VALUE.findall(step.pattern)} - known
+    unnamed = set(_step_names(normalize)) - known
     if rule.supported and unnamed:
         reason = (
-            f"a normalize pattern names {', '.join(sorted(unnamed))}, which is no path value or "
+            f"a normalize step names {', '.join(sorted(unnamed))}, which is no path value or "
             "settings value"
         )
         return replace(rule, supported=False, reason=reason)
     if rule.supported and rule.declaration:
-        captures = set(compile_pattern(PATTERN_VALUE.sub("", rule.id_pattern)).groupindex)
+        captures = set(compile_pattern(fill_values(rule.id_pattern, lambda _: "")).groupindex)
         clash = captures & (_TREE_FILLED | known)
-        unknown = set(PATTERN_VALUE.findall(rule.id_pattern)) - known
+        unknown = set(value_names(rule.id_pattern)) - known
         if clash or unknown:
             reason = (
                 f"the id pattern captures {', '.join(sorted(clash))}, a name the engine, a path "
@@ -1038,14 +1044,17 @@ def _collisions(
     values: Mapping[str, str],
     origins: Mapping[str, str],
     declared_names: set[str],
+    known: Mapping[str, Mapping[str, str]],
 ) -> list[Problem]:
     """Each path value name that the engine fills already (on a tree file type, also the names it
     fills for a declaration rule and ``line``), that a rule on its file type captures or names as
     a value, or that a settings value gives or a pack declares; each such settings value name
     the engine fills, or a rule captures or names as a value; each path value template
-    naming a name that is no capture of its pattern and no settings value, declared or given,
-    or both; and each path value normalize pattern naming a name that is no settings value: a
-    problem naming the pack, the file and the names, and the settings file of a settings value."""
+    naming a name that is no capture of its pattern and no settings value, or both; and each
+    path value normalize step naming a name that is no settings value: a problem naming the pack,
+    the file and the names, and the settings file of a settings value. A template or a normalize
+    step may rely only on a value ``known`` holds for its pack: one the pack or a pack it depends
+    on declares, or the settings give."""
     problems: list[Problem] = []
     tree_filled = {"file_stem", "key", "line", *_TREE_FILLED}
     settings = set(values) | declared_names
@@ -1065,6 +1074,7 @@ def _collisions(
         for kind, spec in declared.items() if isinstance(declared, Mapping) else ():
             path_values = spec.get("path_values", {}) if isinstance(spec, Mapping) else {}
             tree = isinstance(spec, Mapping) and spec.get("reader") == "tree"
+            visible = set(known[pack.name.pack])
             for name, value in path_values.items():
                 if name in (tree_filled if tree else {"file_stem", "key"}):
                     problems.append(_collision(pack.name.pack, MANIFEST_FILENAME, name, kind))
@@ -1075,7 +1085,7 @@ def _collisions(
                     problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
                 captures = set(compile_pattern(value["pattern"]).groupindex)
                 named = set(PLACEHOLDER.findall(value["template"]))
-                for missing in sorted(named - captures - settings):
+                for missing in sorted(named - captures - visible):
                     message = (
                         f"{where}type {kind} has the template {value['template']}, which names "
                         f"{missing}, no capture of its pattern and no settings value"
@@ -1088,10 +1098,11 @@ def _collisions(
                     )
                     problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
                 for step in value.get("normalize", []):
-                    for missing in sorted(set(PATTERN_VALUE.findall(step["replace"])) - settings):
+                    names = {*value_names(str(step["replace"])), *value_names(str(step["with"]))}
+                    for missing in sorted(names - visible):
                         message = (
-                            f"{where}type {kind} has the normalize pattern {step['replace']}, "
-                            f"which names {missing}, no settings value"
+                            f"{where}type {kind} has the normalize step {step['replace']} with "
+                            f"{step['with']}, which names {missing}, no settings value"
                         )
                         problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
     for rule, source in zip(rules, sources, strict=True):
@@ -1160,7 +1171,9 @@ def _check_ending(rule: Rule, types: FileTypes) -> Rule:
 
 
 def _grammar(
-    filetype: str, packs: Sequence[LoadedPack], imports: Mapping[str, list[Mapping[str, Any]]]
+    filetype: str,
+    packs: Sequence[LoadedPack],
+    imports: Mapping[str, list[tuple[str, Mapping[str, Any]]]],
 ) -> Grammar:
     """The grammar of the pack that declares the file type read as a tree, and pins one.
 
@@ -1212,7 +1225,7 @@ def _grammar(
                 namespace_name=str(namespace["name_child"]),
                 namespace_value=str(namespace.get("path_value", "")),
                 written=frozenset(str(name) for name in identity["written_names"]),
-                imports=tuple(_import_rule(entry) for entry in imports.get(pack.name.pack, [])),
+                imports=tuple(_import_rule(*entry) for entry in imports.get(pack.name.pack, [])),
                 attribute=str(attribute.get("node", "")),
                 attribute_list=str(attribute.get("list", "")),
                 arguments=str(attribute.get("arguments", "")),
@@ -1243,8 +1256,21 @@ def _grammar(
     raise _Unsupported(f"no loaded pack declares a grammar for the file type {filetype}")
 
 
-def _import_rule(entry: Mapping[str, Any]) -> ImportRule:
-    """One ``imports`` entry. Raises ``KeyError`` when its ``bind`` names a fact it lacks."""
+def _step_names(normalize: Iterable[tuple[re.Pattern[str], str]]) -> list[str]:
+    """Each value the normalize steps name, in a pattern or a replacement."""
+    return [n for step, made in normalize for n in (*value_names(step.pattern), *value_names(made))]
+
+
+def _reads_imports(rule: Rule, grammar: Grammar) -> bool:
+    """Whether a tree rule may resolve a name with ``bound_first_segment``, the one resolution
+    step that reads a file's imports: among the grammar's steps or its edges' own."""
+    edges = (step for spec in rule.edges for step in (*spec.resolve, *spec.fallback))
+    return any(kind == "bound_first_segment" for kind, _ in (*grammar.resolve, *edges))
+
+
+def _import_rule(source: str, entry: Mapping[str, Any]) -> ImportRule:
+    """One ``imports`` entry of the file ``source``. Raises ``KeyError`` when its ``bind`` names a
+    fact it lacks."""
     bind, facts = entry.get("bind", {}), {str(k): str(v) for k, v in entry["facts"].items()}
     rule = ImportRule(
         declaration=entry["ast"],
@@ -1257,6 +1283,7 @@ def _import_rule(entry: Mapping[str, Any]) -> ImportRule:
         skip_when=str(bind.get("skip_when_field_set", "")),
         normalize=_read_normalize(bind["normalize"]) if "normalize" in bind else (),
         unbound_aliases=frozenset(str(alias) for alias in bind.get("unbound_aliases", [])),
+        source=source,
     )
     for fact in (*rule.names, *([rule.skip_when] if rule.skip_when else [])):
         if fact not in ("last_segment", "path") and fact not in facts:
@@ -1783,7 +1810,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
     template = _tree_id(item["id"]) if "id" in item and argument is None else ""
     pattern = block.get("pattern", "") if template else ""
     if pattern:
-        _regex(PATTERN_VALUE.sub("", pattern))
+        _regex(fill_values(pattern, lambda _: ""))
     if not (template or argument) and (
         nodes or any("this_node" in (e.start, e.finish) for e in edges)
     ):

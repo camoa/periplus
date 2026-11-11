@@ -12,9 +12,14 @@ An import's `bind.name` source `path` is the whole written path. `bind.normalize
 and with steps, in order, on the bound name, whichever source gave it; the binding's target stays
 the written path. So `name: [alias, path]` with `normalize: [{replace: '^.*/', with: ''}, {replace:
 '_v\d+$', with: ''}]` binds `App/Util/Strings_v2` as `Strings`, where last_segment splits on the
-grammar's separator only. A fact is read on the clause, and on the import's own node when the clause
-has no such field. `bind.unbound_aliases` lists fact texts that bind no name, as `[_]`: a clause
-whose name comes from a fact written so binds nothing, and the sources after it are not tried.
+grammar's separator only. A step may name a path value or a settings value as `{name}`, as a
+rule's normalize step does. A name that is neither refuses each tree rule of the file type that may
+resolve a name with `bound_first_segment`, among the grammar's steps or its edges' own, since that
+step alone reads the imports. The refusal is exit 26 and names the imports file.
+
+A fact is read on the clause, and on the import's own node when the clause has no such field.
+`bind.unbound_aliases` lists fact texts that bind no name, as `[_]`: a clause whose name comes from
+a fact written so binds nothing, and the sources after it are not tried.
 
 The resolve step `prefix_bare_with: namespace` holds only for a name without the separator, and
 gives the namespace joined with it. After `bound_first_segment`, it gives `local()` the caller's

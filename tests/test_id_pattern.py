@@ -4,13 +4,14 @@ template, a non-match makes nothing, a {name} is a path or settings value taken 
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from periplus.engine import packload, rules
-from periplus.engine.packload import Rule
+from periplus.engine.packload import FileInfo, Rule
 from periplus.map import MapReport, run
 from periplus.preflight import check_runtime_dependencies
 
@@ -147,6 +148,38 @@ def test_a_value_in_the_pattern_is_literal_text(value: str, fits: str, misses: s
     )
     assert rules._node_id(rule, {"module": value, "declared_name": fits}) == "cron"
     assert rules._node_id(rule, {"module": value, "declared_name": misses}) is None
+
+
+def _patterned(id_pattern: str) -> Rule:
+    return Rule(
+        "p",
+        "r",
+        True,
+        (),
+        "",
+        "",
+        "T",
+        "declared",
+        id_template="{hook}",
+        id_pattern=id_pattern,
+        id_source="declared_name",
+    )
+
+
+def test_an_escaped_brace_in_the_pattern_stays_literal() -> None:
+    rule = _patterned(r"^\{module}_(?<hook>\w+)$")
+    assert rules._node_id(rule, {"module": "shop", "declared_name": "{module}_cron"}) == "cron"
+    escaped = replace(_patterned(r"^\{nowhere}_(?<hook>\w+)$"), declaration="function_definition")
+    unknown = packload._check_names(escaped, FileInfo(), {})
+    assert unknown.supported, unknown.reason
+
+
+@pytest.mark.parametrize(
+    "id_pattern", [r"^[{module}]_(?<hook>\w+)$", r"^[^{module}]_(?<hook>\w+)$"]
+)
+def test_a_pattern_that_does_not_compile_once_filled_makes_no_node(id_pattern: str) -> None:
+    rule = _patterned(id_pattern)
+    assert rules._node_id(rule, {"module": "", "declared_name": "a_cron"}) is None
 
 
 def test_an_absent_source_keeps_its_row(tmp_path: Path) -> None:

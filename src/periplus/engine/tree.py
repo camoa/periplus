@@ -99,7 +99,8 @@ class ImportRule:
     ``path``; ``normalize`` reshapes the name; a fact whose text is in ``unbound_aliases`` binds
     nothing; ``prefix_from_group`` joins a clause of the grouped form to the declaration's written
     prefix; ``strip_prefix`` is stripped from the path's front; and a declaration or clause where
-    the field of the fact ``skip_when`` is set binds nothing.
+    the field of the fact ``skip_when`` is set binds nothing. ``source`` names the pack and the
+    file that declare the entry, as ``pack/file``.
     """
 
     declaration: str
@@ -112,6 +113,7 @@ class ImportRule:
     skip_when: str = ""
     normalize: tuple[tuple[re.Pattern[str], str], ...] = ()
     unbound_aliases: frozenset[str] = frozenset()
+    source: str = ""
 
 
 @dataclass(frozen=True, slots=True)

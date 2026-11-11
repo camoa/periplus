@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from functools import cache, lru_cache
 
-__all__ = ["PATTERN_VALUE", "compile_pattern", "reshape"]
+__all__ = ["compile_pattern", "fill_values", "filled_pattern", "reshape", "value_names"]
 
-#: A ``{name}`` in an id pattern or a normalize step's pattern: a path or settings value, filled
-#: as literal text. A name starts with a letter, so a quantifier such as ``{2}`` stays one.
-PATTERN_VALUE = re.compile(r"\{([A-Za-z]\w*)\}")
+#: An escaped character, or a ``{name}`` in an id pattern or a normalize step's pattern or
+#: replacement: a path or settings value. An escaped character is matched first, so a brace after
+#: an odd number of backslashes stays literal. A name starts with a letter, so a quantifier such as
+#: ``{2}`` stays one.
+_VALUE = re.compile(r"\\.|\{([A-Za-z]\w*)\}", re.DOTALL)
 
 
 def _named_groups(expression: str) -> str:
@@ -58,6 +61,40 @@ def compile_pattern(expression: str) -> re.Pattern[str]:
     return re.compile(_named_groups(expression))
 
 
+@cache
+def value_names(text: str) -> tuple[str, ...]:
+    """Each name the text names as ``{name}``, in order."""
+    return tuple(found.group(1) for found in _VALUE.finditer(text) if found.group(1))
+
+
+def fill_values(text: str, fill: Callable[[str], str]) -> str:
+    """The text with each ``{name}`` it names replaced with ``fill(name)``."""
+    if not value_names(text):
+        return text
+    return _VALUE.sub(lambda found: fill(found[1]) if found[1] else found[0], text)
+
+
+def filled_pattern(expression: str, values: Mapping[str, str]) -> re.Pattern[str] | None:
+    """The expression compiled with each value it names filled in as literal text, escaped;
+    ``None`` when a value it names is absent or the filled expression does not compile."""
+    names = value_names(expression)
+    if any(name not in values for name in names):
+        return None
+    return _compiled(expression, tuple((name, values[name]) for name in names))
+
+
+@lru_cache(maxsize=4096)
+def _compiled(expression: str, values: tuple[tuple[str, str], ...]) -> re.Pattern[str] | None:
+    """The expression with the values filled in, compiled; ``None`` when it does not compile, as
+    an empty value inside a character class makes ``[]``. Cached by the values it names, so a
+    path value does not recompile the pattern on every call."""
+    given = dict(values)
+    try:
+        return compile_pattern(fill_values(expression, lambda name: re.escape(given[name])))
+    except re.error:
+        return None
+
+
 def reshape(
     value: str,
     normalize: Sequence[tuple[re.Pattern[str], str]],
@@ -66,14 +103,19 @@ def reshape(
 ) -> str:
     """The value with each normalize step applied in order, then set to ``lower`` or ``upper``
     case. Each ``{name}`` in a step's pattern is filled with that one of ``values`` as literal
-    text; a step naming a value ``values`` lacks matches nothing."""
+    text, and in its replacement as text. A step naming a value ``values`` lacks, or whose pattern
+    does not compile once filled, does not run."""
     known = values or {}
     for step, replacement in normalize:
-        names = PATTERN_VALUE.findall(step.pattern)
-        if not all(name in known for name in names):
+        named = value_names(replacement)
+        if any(name not in known for name in named):
             continue
-        if names:
-            filled = PATTERN_VALUE.sub(lambda found: re.escape(known[found.group(1)]), step.pattern)
-            step = re.compile(filled)
+        if value_names(step.pattern):
+            filled = filled_pattern(step.pattern, known)
+            if filled is None:
+                continue
+            step = filled
+        if named:
+            replacement = fill_values(replacement, known.__getitem__)
         value = step.sub(replacement.replace("\\", "\\\\"), value)
     return value.lower() if case == "lower" else value.upper() if case == "upper" else value

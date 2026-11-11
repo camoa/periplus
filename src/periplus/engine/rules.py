@@ -15,7 +15,6 @@ from typing import Any
 from tree_sitter import Node
 
 from periplus.engine.packload import (
-    PATTERN_VALUE,
     PLACEHOLDER,
     TEXT,
     Condition,
@@ -30,7 +29,7 @@ from periplus.engine.packload import (
     namespace_of,
     namespaces,
 )
-from periplus.engine.pattern import compile_pattern
+from periplus.engine.pattern import compile_pattern, fill_values, filled_pattern, value_names
 from periplus.engine.pattern import reshape as _reshape
 from periplus.engine.select import FileTypes, Selection, select_files
 from periplus.engine.source import (
@@ -200,6 +199,9 @@ def run_file_rules(
             own = (file, rule.filetype)
             if own not in paths:
                 paths[own] = {**rule_set.values, **_path_values(file, info, rule_set, folders)}
+            for pattern in _uncompiled(rule, rule_set, info, paths[own]):
+                why = f"the pattern {pattern} does not compile once its values are filled in"
+                skipped.append((file, 1, rule.name, why))
             if rule.text is not None:
                 if file not in texts:
                     texts[file] = load_text(root / file, file)
@@ -1402,8 +1404,8 @@ def _lacking(rule: Rule, grammar: Grammar, values: Mapping[str, Any]) -> set[str
         pattern, source = _id_pattern(rule, values), values.get(rule.id_source)
         if pattern is not None and source is not None and pattern.search(source) is None:
             return set()
-        captures = set(compile_pattern(PATTERN_VALUE.sub("", rule.id_pattern)).groupindex)
-        named = {rule.id_source, *PATTERN_VALUE.findall(rule.id_pattern)}
+        captures = set(compile_pattern(fill_values(rule.id_pattern, lambda _: "")).groupindex)
+        named = {rule.id_source, *value_names(rule.id_pattern)}
         names = names - captures | named - set(values)
     if "qualified_name" in names:
         names = names - {"qualified_name"} | {p for p in grammar.parts if p not in values}
@@ -1975,13 +1977,38 @@ def _node_id(rule: Rule, values: Mapping[str, str], *, empty_ok: bool = False) -
     return _reshape(filled, rule.normalize, values=values)
 
 
+def _uncompiled(
+    rule: Rule, rule_set: RuleSet, info: FileInfo, values: Mapping[str, str]
+) -> list[str]:
+    """Each pattern the rule fills from the file's values, and its file type's path values fill
+    from the settings values, that names only values given and does not compile once they are
+    filled in: the step or id pattern does not run on the file."""
+    tree = rule.declaration or rule.attribute or rule.annotation or rule.reference
+    imports = rule_set.grammars[rule.filetype].imports if tree else ()
+    steps = [
+        *rule.normalize,
+        *(step for value in rule.values for step in value.normalize),
+        *(step for entry in imports for step in entry.normalize),
+    ]
+    filled = [(step.pattern, values) for step, _ in steps]
+    filled += [(rule.id_pattern, values)] if rule.id_pattern else []
+    paths = (step for value in info.path_values for step in value.normalize)
+    filled += [(step.pattern, rule_set.values) for step, _ in paths]
+    return sorted(
+        {
+            pattern
+            for pattern, given in filled
+            if value_names(pattern)
+            and all(name in given for name in value_names(pattern))
+            and filled_pattern(pattern, given) is None
+        }
+    )
+
+
 def _id_pattern(rule: Rule, values: Mapping[str, str]) -> re.Pattern[str] | None:
     """The rule's id pattern, each ``{name}`` filled with that value as literal text; ``None`` when
-    a value it names is absent."""
-    if any(name not in values for name in PATTERN_VALUE.findall(rule.id_pattern)):
-        return None
-    filled = PATTERN_VALUE.sub(lambda found: re.escape(values[found.group(1)]), rule.id_pattern)
-    return compile_pattern(filled)
+    a value it names is absent or the filled pattern does not compile."""
+    return filled_pattern(rule.id_pattern, values)
 
 
 def _matches(

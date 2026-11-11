@@ -729,7 +729,7 @@
         },
         "pattern": {
           "type": "string",
-          "description": "RE2, with named captures the template may use. Executed on a tree declaration rule with one source: searched in its text, and a source it does not fit makes nothing. {name} is a path or settings value, filled as literal text."
+          "description": "RE2, with named captures the template may use. Executed on a tree declaration rule with one source: searched in its text, and a source it does not fit makes nothing. {name} is a path or settings value, filled as literal text; a brace after an odd number of backslashes stays literal."
         },
         "template": {
           "type": "string",
@@ -775,7 +775,7 @@
               }
             }
           },
-          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code."
+          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code. A {name} in replace or with is a path or settings value, filled in as literal text; a brace after an odd number of backslashes stays literal."
         }
       },
       "anyOf": [
@@ -1217,7 +1217,7 @@
             "normalize": {
               "type": "array",
               "items": {"type": "object", "additionalProperties": false, "required": ["replace", "with"], "properties": {"replace": {"type": "string"}, "with": {"type": "string"}}},
-              "description": "Steps run in order on the bound name, whichever source gave it, as a path value's normalize runs; the binding's target stays the written path."
+              "description": "Steps run in order on the bound name, whichever source gave it, as a path value's normalize runs; the binding's target stays the written path. A {name} in replace or with is a path or settings value, filled in as a rule's normalize fills it."
             },
             "unbound_aliases": {
               "type": "array",
@@ -1409,7 +1409,7 @@
               }
             }
           },
-          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code."
+          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code. A {name} in replace or with is a path or settings value, filled in as literal text; a brace after an odd number of backslashes stays literal."
         }
       },
       "anyOf": [
