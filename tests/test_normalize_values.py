@@ -57,9 +57,10 @@ def _plant(
     with_: str = "",
     file: str = "src/one.sx",
     path_normalize: str = "",
+    rules: str = RULES,
 ) -> None:
     manifest = MANIFEST.replace("PATH_NORMALIZE", path_normalize)
-    rules = RULES.replace("REPLACE", replace).replace("WITH", with_)
+    rules = rules.replace("REPLACE", replace).replace("WITH", with_)
     rutter(root, "site", manifest, {"site.yaml": rules})
     plant(
         root,
@@ -365,17 +366,25 @@ class Thing
 """
 
 
-def _plant_imports(root: Path, replace: str, *, bound: bool = True) -> None:
+def _plant_imports(
+    root: Path,
+    replace: str,
+    *,
+    bound: bool = True,
+    prefix: str = "Shop",
+    rules: str = IMPORT_RULES,
+    source: str = IMPORT_SOURCE,
+) -> None:
     manifest = IMPORT_PACK.replace("BOUND", "  - bound_first_segment\n" if bound else "")
     imports = IMPORTS.replace("REPLACE", replace)
-    rutter(root, "probe", manifest, {"imports.yaml": imports, "probe.yaml": IMPORT_RULES})
+    rutter(root, "probe", manifest, {"imports.yaml": imports, "probe.yaml": rules})
     plant(
         root,
         {
             ".periplus/settings.yml": (
-                "periplus_version: 0\npacks:\n  - probe@0.0.1\nvalues:\n  app_prefix: Shop\n"
+                f"periplus_version: 0\npacks:\n  - probe@0.0.1\nvalues:\n  app_prefix: '{prefix}'\n"
             ),
-            "src/Thing.php": IMPORT_SOURCE,
+            "src/Thing.php": source,
         },
     )
 
@@ -413,3 +422,155 @@ def test_an_import_bind_normalize_naming_no_value_spares_rules_that_never_read_i
         "probe.class::App\\Ctl\\Thing",
         "probe.property::$reg:App\\Ctl\\Reg",
     ]
+
+
+@pytest.mark.parametrize(("bound", "rows"), [(True, ["find_class", "property"]), (False, [])])
+def test_an_import_bind_normalize_that_does_not_compile_lists_rows_for_rules_that_read_imports(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], bound: bool, rows: list[str]
+) -> None:
+    _plant_imports(tmp_path, "^[{app_prefix}]", bound=bound, prefix="")
+
+    _, skipped = _skipped(tmp_path, capsys)
+
+    assert [(row["file"], row["rule"]) for row in skipped] == [("src/Thing.php", r) for r in rows]
+
+
+ID_RULES = IMPORT_RULES.replace(
+    "rules:\n",
+    """\
+- {name: probe.fn, id_namespace: probe.fn}
+rules:
+- rule: find_fn
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id: {from: declared_name, pattern: 'PATTERN', template: '{hook}'}
+  emits: [{node: {type: probe.fn}}]
+  confidence: declared
+""",
+)
+
+ID_SOURCE = IMPORT_SOURCE.replace(
+    "class Thing", "function a_cron() {}\nfunction b_init() {}\n\nclass Thing"
+)
+
+
+@pytest.mark.parametrize(
+    ("pattern", "prefix", "fns", "rows"),
+    [
+        ("^[{app_prefix}]_(?<hook>\\w+)$", "a", ["probe.fn::cron"], []),
+        ("^[{app_prefix}]_(?<hook>\\w+)$", "", [], [("src/Thing.php", 7, "find_fn")]),
+        # Whether a value makes a good range end is known only once it is filled in.
+        ("^[z-{app_prefix}]_(?<hook>\\w+)$", "a", [], [("src/Thing.php", 7, "find_fn")]),
+    ],
+)
+def test_a_settings_value_in_an_id_pattern_is_checked_when_the_value_is_filled_in(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    pattern: str,
+    prefix: str,
+    fns: list[str],
+    rows: list[tuple[str, int, str]],
+) -> None:
+    """At load, the pattern is not refused; filled with a value that makes it not compile, the
+    rule makes no node there and lists one skipped row."""
+    rules = ID_RULES.replace("PATTERN", pattern)
+    _plant_imports(tmp_path, "^x", bound=False, prefix=prefix, rules=rules, source=ID_SOURCE)
+
+    status, validated = _call(["validate", "probe"], capsys)
+    ids, skipped = _skipped(tmp_path, capsys)
+
+    assert (status, validated["problems"]) == (0, [])
+    assert [i for i in ids if i.startswith("probe.fn::")] == fns
+    assert [(row["file"], row["line"], row["rule"]) for row in skipped] == rows
+    assert all("does not compile" in row["reason"] for row in skipped)
+
+
+VALUE_RULES = """\
+node_types:
+- {name: site.thing, id_namespace: site.thing}
+rules:
+- rule: thing_line
+  reads: file
+  in: [src]
+  match: {file: '*', filetype: code, text: '(?m)^use (?<name>\\S+)$'}
+  values:
+    v: {template: '{name}', normalize: [{replace: 'REPLACE', with: 'WITH'}]}
+  id: {template: '{v}'}
+  emits: [{node: {type: site.thing}}]
+  confidence: declared
+"""
+
+
+def test_a_value_normalize_that_does_not_compile_lists_a_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _plant(tmp_path, "^[{app_prefix}]", "", "s.x", rules=VALUE_RULES)
+
+    ids, skipped = _skipped(tmp_path, capsys)
+
+    assert ids == ["site.thing::s.x"]
+    assert [(row["file"], row["rule"]) for row in skipped] == [("src/one.sx", "thing_line")]
+
+
+def test_a_path_value_normalize_that_does_not_compile_lists_a_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path_normalize = ", normalize: [{replace: '^[{app_prefix}]', with: ''}]"
+    _plant(tmp_path, "^{area}\\.", "", "a.x", file="src/a/one.sx", path_normalize=path_normalize)
+
+    ids, skipped = _skipped(tmp_path, capsys)
+
+    assert ids == ["site.thing::x"]
+    assert [(row["file"], row["rule"]) for row in skipped] == [("src/a/one.sx", "thing_line")]
+
+
+def test_a_file_the_rule_matched_nothing_in_lists_no_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _plant(tmp_path, "^[{app_prefix}]", "", "s.x", file="src/a/one.sx")
+    plant(tmp_path, {"src/b/two.sx": "nothing here\n"})
+
+    _, skipped = _skipped(tmp_path, capsys)
+
+    assert [row["file"] for row in skipped] == ["src/a/one.sx"]
+
+
+def test_a_step_whose_with_text_names_a_value_the_file_lacks_lists_no_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The file's path gives no area, so the step does not run whether or not it compiles."""
+    _plant(tmp_path, "^[{app_prefix}]", "", "s.x", with_="{area}")
+
+    assert _skipped(tmp_path, capsys) == (["site.thing::s.x"], [])
+
+
+@pytest.mark.parametrize(
+    ("with_", "prefix", "expected"),
+    [
+        ("{app_prefix}\\1$0\\g<0>-", "s", "site.thing::s\\1$0\\g<0>-cart"),
+        ("{app_prefix}-", "$1\\g<0>\\2", "site.thing::$1\\g<0>\\2-cart"),
+        # A backslash in with text is literal, an odd one before a brace too: the value is not
+        # filled in, and the backslash stays.
+        ("\\{app_prefix}-", "s", "site.thing::\\{app_prefix}-cart"),
+    ],
+)
+def test_with_text_is_literal_apart_from_the_values_it_names(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], with_: str, prefix: str, expected: str
+) -> None:
+    _plant(tmp_path, "^x\\.", prefix, "x.cart", with_=with_)
+
+    assert _ids(tmp_path, capsys) == [expected]
+
+
+def test_a_path_value_normalize_with_text_naming_no_settings_value_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path_normalize = ", normalize: [{replace: '^a', with: '{nowhere}'}]"
+    _plant(tmp_path, "x", "my", "shop.cart.Basket", path_normalize=path_normalize)
+
+    status, mapped = _call(["map", "--output", str(tmp_path / "out.json")], capsys)
+
+    assert status == PACK_RULES_UNREADABLE
+    assert [p["code"] for p in mapped["problems"]] == [PACK_RULES_UNREADABLE]
+    assert "nowhere" in mapped["problems"][0]["message"]

@@ -775,7 +775,7 @@
               }
             }
           },
-          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code. A {name} in replace or with is a path or settings value, filled in as literal text; a brace after an odd number of backslashes stays literal."
+          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code. A {name} in replace or with is a path or settings value, filled in as literal text; a brace after an odd number of backslashes stays literal. The rest of the with text is literal, a backslash included, so with has no way to write {name} for a name that is a value."
         }
       },
       "anyOf": [
@@ -1409,7 +1409,7 @@
               }
             }
           },
-          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code. A {name} in replace or with is a path or settings value, filled in as literal text; a brace after an odd number of backslashes stays literal."
+          "description": "Declared substitutions applied after the pattern. This is where a language's spelling variants are flattened — two spellings of one type, collapsing whitespace — as data rather than as engine code. A {name} in replace or with is a path or settings value, filled in as literal text; a brace after an odd number of backslashes stays literal. The rest of the with text is literal, a backslash included, so with has no way to write {name} for a name that is a value."
         }
       },
       "anyOf": [

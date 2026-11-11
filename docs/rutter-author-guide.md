@@ -108,7 +108,9 @@ A `replace` pattern may name a path value or a settings value as `{name}`. The e
 value as literal text, escaped, so a dot in the value matches only a dot. With the settings value
 `app_prefix: shop`, `{replace: '^{app_prefix}\.', with: ''}` turns `shop.cart.Basket` into
 `cart.Basket`. The `with` text may name one too, filled in as written: `with: '{app_prefix}-'`
-gives `shop-`. A path value's own normalize may name settings values only. A name that is neither
+gives `shop-`. Everything else in `with` is literal text: `$`, `\1` and `\g<0>` stay as written,
+and so does a backslash, so `with: '\{app_prefix}'` gives `\{app_prefix}` and fills nothing in.
+There is no way to write the text `{app_prefix}` in `with` while `app_prefix` is a value. A path value's own normalize may name settings values only. A name that is neither
 is refused when the pack loads: exit 26 for a rule, exit 19 for a path value. A quantifier such as
 `{2}` stays a quantifier. A brace after an odd number of backslashes stays literal, so
 `'^\{node}/'` matches the text `{node}/` of a route placeholder.
@@ -117,9 +119,12 @@ A quantifier after `{p}` binds to the value's last character only, so `^{p}+` re
 character; write `(?:{p})+` to repeat the value. A value of digits written inside braces, as
 `x{{n}}`, becomes a quantifier.
 
-A step naming a value a file lacks does not run on that file. Neither does a step whose pattern
-does not compile once filled in, as `[{p}]` with an empty value; that one lists a skipped row for
-each rule and file, at line 1, under the matches skipped.
+A step naming a value a file lacks, in its pattern or its `with` text, does not run on that
+file. Neither does a step whose pattern does not compile once filled in, as `[{p}]` with an empty
+value; that one lists a skipped row, at line 1, for each rule and file the rule fires on. An
+import's step lists one only for a rule that reads the imports. An id pattern is checked the same
+way: the pack loads whatever the value, and where the filled pattern does not compile the rule
+makes no node and lists a skipped row at its first match in the file.
 
 A binding rule names what a file's imports bind. It emits only bindings, has no id, writes nothing
 to the map, and serves no tree rule. Its values pick the bound name and target from one capture:

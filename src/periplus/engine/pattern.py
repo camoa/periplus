@@ -6,7 +6,14 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from functools import cache, lru_cache
 
-__all__ = ["compile_pattern", "fill_values", "filled_pattern", "reshape", "value_names"]
+__all__ = [
+    "compile_pattern",
+    "compile_unfilled",
+    "fill_values",
+    "filled_pattern",
+    "reshape",
+    "value_names",
+]
 
 #: An escaped character, or a ``{name}`` in an id pattern or a normalize step's pattern or
 #: replacement: a path or settings value. An escaped character is matched first, so a brace after
@@ -59,6 +66,17 @@ def compile_pattern(expression: str) -> re.Pattern[str]:
     The pack format names RE2; this uses Python's ``re`` engine instead.
     """
     return re.compile(_named_groups(expression))
+
+
+def compile_unfilled(expression: str) -> re.Pattern[str]:
+    """The expression compiled before its values are known, to check it and read its captures:
+    each value it names filled in as one letter, or, when that does not compile, as empty text, so
+    a value at either end of a range such as ``[z-{p}]`` is left to the run. Raises ``re.error``
+    when it compiles neither way."""
+    try:
+        return compile_pattern(fill_values(expression, lambda _: "x"))
+    except re.error:
+        return compile_pattern(fill_values(expression, lambda _: ""))
 
 
 @cache

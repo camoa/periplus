@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from periplus.engine.pattern import compile_pattern, fill_values, value_names
+from periplus.engine.pattern import compile_pattern, compile_unfilled, value_names
 from periplus.engine.select import FileTypes, FolderUnresolved, holds_double_star
 from periplus.engine.tree import STEPS, Grammar, ImportRule, Step, _parser
 from periplus.errors import ExitCode, HarnessError, Problem
@@ -895,7 +895,7 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
         )
         return replace(rule, supported=False, reason=reason)
     if rule.supported and rule.declaration:
-        captures = set(compile_pattern(fill_values(rule.id_pattern, lambda _: "")).groupindex)
+        captures = set(compile_unfilled(rule.id_pattern).groupindex)
         clash = captures & (_TREE_FILLED | known)
         unknown = set(value_names(rule.id_pattern)) - known
         if clash or unknown:
@@ -1814,7 +1814,7 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
     template = _tree_id(item["id"]) if "id" in item and argument is None else ""
     pattern = block.get("pattern", "") if template else ""
     if pattern:
-        _regex(fill_values(pattern, lambda _: ""))
+        _regex(pattern, compile_unfilled)
     if not (template or argument) and (
         nodes or any("this_node" in (e.start, e.finish) for e in edges)
     ):
@@ -2331,11 +2331,13 @@ def _id_template(block: Mapping[str, Any], entries: bool) -> str:
     )
 
 
-def _regex(expression: object) -> re.Pattern[str]:
+def _regex(
+    expression: object, compiler: Callable[[str], re.Pattern[str]] = compile_pattern
+) -> re.Pattern[str]:
     if not isinstance(expression, str):
         raise _Unsupported("a regular expression is not a string")
     try:
-        return compile_pattern(expression)
+        return compiler(expression)
     except re.error as error:
         raise _Unsupported(f"the expression {expression} does not compile: {error}") from error
 

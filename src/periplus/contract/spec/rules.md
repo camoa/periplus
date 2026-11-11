@@ -83,8 +83,10 @@ The steps run in that order: from, pattern, template, normalize. On a tree decla
 `pattern` reads one source and is searched in its text, not matched whole. A source it does not
 fit makes nothing: no node, no edge, no skipped row, and no fire. A `{name}` in the pattern, or
 in a normalize step's `replace` pattern or `with` text, is a path value or a settings value,
-filled in as literal text; a brace after an odd number of backslashes stays literal. A pattern
-that does not compile once filled in does not run on that file, and lists a skipped row.
+filled in as literal text; a brace after an odd number of backslashes stays literal. The rest of
+the `with` text is literal, a backslash included. A pattern is not refused at load for what a value
+may hold: one that does not compile once filled in does not run where it would have, and lists a
+skipped row there.
 
 This closed the sharpest question the design had open — whether id transformations are a
 closed set of engine functions, in which case a pack needing a new one needs a release. They

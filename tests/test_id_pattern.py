@@ -174,14 +174,6 @@ def test_an_escaped_brace_in_the_pattern_stays_literal() -> None:
     assert unknown.supported, unknown.reason
 
 
-@pytest.mark.parametrize(
-    "id_pattern", [r"^[{module}]_(?<hook>\w+)$", r"^[^{module}]_(?<hook>\w+)$"]
-)
-def test_a_pattern_that_does_not_compile_once_filled_makes_no_node(id_pattern: str) -> None:
-    rule = _patterned(id_pattern)
-    assert rules._node_id(rule, {"module": "", "declared_name": "a_cron"}) is None
-
-
 def test_an_absent_source_keeps_its_row(tmp_path: Path) -> None:
     plain = "{from: return_type}"
     patterned = r"{from: return_type, pattern: '^(?<kind>\w+)$', template: '{kind}'}"
