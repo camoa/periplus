@@ -70,11 +70,12 @@ a list of its known gaps.
   `getStorage('x')` on a property or promoted parameter with no declared type, unless it is named
   `entityTypeManager`, `get('x')` on a container with another name, and other entity type manager
   methods such as `getHandler('x')` give no edge. A local variable, such as `$etm->getStorage('x')`
-  on a parameter, gives no entity type edge unless it is named `$entity_type_manager`. A core
-  entity class's edge needs the class, resolved through the file's use statements, in a core
-  namespace, and sits at the method's line. A static `load`, `loadMultiple` or `create` on a
-  module's own entity class gives its `uses_entity_type` edge at the method's line, not the call's, and keeps the skipped row of
-  `entity_class_static_call`; a call on a subclass of the entity class gives no edge. The
+  on a parameter, gives no entity type edge unless it is named `$entity_type_manager`. A static
+  `load`, `loadMultiple` or `create` gives an edge only on a class the table `entity_classes`
+  lists by its full name, resolved through the file's use statements, or on a module's own entity
+  class the map holds. The latter's `uses_entity_type` edge sits at the method's line, not the
+  call's, and keeps the skipped row of `entity_class_static_call`; a call on a subclass of the
+  entity class gives no edge. The
   container rules read `get('x')` in lower case only: another letter case, such as `->GET('x')`, gives no edge and no
   skipped row. Core plugins whose folders the rutter does not name give nothing, such as a views
   argument, sort or display plugin, and so do a views field, filter or style plugin and a mail
@@ -139,8 +140,8 @@ a list of its known gaps.
   `salesforce_basic` and `webform_basic`, a plugin id that is not a text literal, or in an
   annotation not text in double quotes, makes no plugin and is listed under skipped. `webform_basic` reads handlers declared by annotation only, and no other
   Webform plugin type; a webform's disabled handler gives the same edge as an enabled one. A
-  static `load` on a contributed module's entity class gives an edge only through that module's
-  rutter, for the classes its table lists, and keeps `entity_class_static_call`'s skipped row.
+  static `load` on a contributed module's entity class gives an edge only when that module's
+  rutter is loaded, for the classes it adds to `drupal_basic`'s table `entity_classes`.
   `eck_basic` lists `EckEntityType` only: ECK derives one entity type for each ECK type from
   `EckEntity` and `EckEntityBundle`. `salesforce_basic` reads any class with a generic `Plugin` annotation in the
   mapping field folder as a mapping field. It does not read a mapping's `field_mappings`, so a field

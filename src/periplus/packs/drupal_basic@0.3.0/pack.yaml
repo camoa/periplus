@@ -247,13 +247,13 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A \Drupal:: shortcut gives a uses_service edge only when the table shortcut_services below
 #   lists its method, or it is cache() with no argument or a quoted bin; \Drupal::cache($bin) is
 #   kept as a call site marked resolution runtime. A static load, loadMultiple or create
-#   call gives a uses_entity_type edge from entity_class_static_call only on a core entity class
-#   the table entity_classes lists; any other class is listed as skipped. On a class the map holds
-#   as an entity type's class, as a module's own MyEntity, call/entity_class_call.yaml gives the
-#   edge from the method, at the method's line, and the skipped row stays. Message::load(1) and a
-#   call on a subclass of an entity class give none. A core entity class's edge sits at the
-#   method's line, and needs the class, resolved through the file's use statements, in a core
-#   namespace: a module's own class named as a core one, such as its User class, gives none.
+#   call gives a uses_entity_type edge from entity_class_static_call only on a class the table
+#   entity_classes lists by its full name, resolved through the file's use statements: a core
+#   entity class, or one a loaded rutter adds under add_table_rows. A module's own class named as
+#   a listed one, such as its User class, gives none, and any other class is listed as skipped.
+#   On a class the map holds as an entity type's class, as a module's own MyEntity,
+#   call/entity_class_call.yaml gives the edge from the method, at the method's line, and the
+#   skipped row stays. Message::load(1) and a call on a subclass of an entity class give none.
 # - The container rules read get('x') in lower case only: another letter case, such as
 #   ->GET('x'), gives no edge and no skipped row.
 # - A contributed module's bundle config file, such as paragraphs.paragraphs_type.text or
@@ -643,51 +643,51 @@ tables:
     translation: string_translation
     typedDataManager: typed_data_manager
     urlGenerator: url_generator
-  # Each entity class of Drupal 11.4 core by its short name, and its entity type id. Message, the
-  # contact module's class for contact_message, is left out: the Message module's class for the
-  # entity type message has the same short name.
+  # Each entity class of Drupal 11.4 core by its fully qualified name, and its entity type id. A
+  # contributed module's rutter adds its own classes under add_table_rows. The contact module's
+  # Message, for contact_message, is not listed.
   entity_classes:
-    Action: action
-    BaseFieldOverride: base_field_override
-    Block: block
-    BlockContent: block_content
-    BlockContentType: block_content_type
-    Comment: comment
-    CommentType: comment_type
-    ConfigurableLanguage: configurable_language
-    ContactForm: contact_form
-    ContentLanguageSettings: language_content_settings
-    ContentModerationState: content_moderation_state
-    DateFormat: date_format
-    Editor: editor
-    EntityFormDisplay: entity_form_display
-    EntityFormMode: entity_form_mode
-    EntityViewDisplay: entity_view_display
-    EntityViewMode: entity_view_mode
-    FieldConfig: field_config
-    FieldStorageConfig: field_storage_config
-    File: file
-    FilterFormat: filter_format
-    ImageStyle: image_style
-    Media: media
-    MediaType: media_type
-    Menu: menu
-    MenuLinkContent: menu_link_content
-    Node: node
-    NodeType: node_type
-    PathAlias: path_alias
-    ResponsiveImageStyle: responsive_image_style
-    RestResourceConfig: rest_resource_config
-    Role: user_role
-    SearchPage: search_page
-    Shortcut: shortcut
-    ShortcutSet: shortcut_set
-    Term: taxonomy_term
-    User: user
-    View: view
-    Vocabulary: taxonomy_vocabulary
-    Workflow: workflow
-    Workspace: workspace
+    Drupal\Core\Datetime\Entity\DateFormat: date_format
+    Drupal\Core\Entity\Entity\EntityFormDisplay: entity_form_display
+    Drupal\Core\Entity\Entity\EntityFormMode: entity_form_mode
+    Drupal\Core\Entity\Entity\EntityViewDisplay: entity_view_display
+    Drupal\Core\Entity\Entity\EntityViewMode: entity_view_mode
+    Drupal\Core\Field\Entity\BaseFieldOverride: base_field_override
+    Drupal\block\Entity\Block: block
+    Drupal\block_content\Entity\BlockContent: block_content
+    Drupal\block_content\Entity\BlockContentType: block_content_type
+    Drupal\comment\Entity\Comment: comment
+    Drupal\comment\Entity\CommentType: comment_type
+    Drupal\contact\Entity\ContactForm: contact_form
+    Drupal\content_moderation\Entity\ContentModerationState: content_moderation_state
+    Drupal\editor\Entity\Editor: editor
+    Drupal\field\Entity\FieldConfig: field_config
+    Drupal\field\Entity\FieldStorageConfig: field_storage_config
+    Drupal\file\Entity\File: file
+    Drupal\filter\Entity\FilterFormat: filter_format
+    Drupal\image\Entity\ImageStyle: image_style
+    Drupal\language\Entity\ConfigurableLanguage: configurable_language
+    Drupal\language\Entity\ContentLanguageSettings: language_content_settings
+    Drupal\media\Entity\Media: media
+    Drupal\media\Entity\MediaType: media_type
+    Drupal\menu_link_content\Entity\MenuLinkContent: menu_link_content
+    Drupal\node\Entity\Node: node
+    Drupal\node\Entity\NodeType: node_type
+    Drupal\path_alias\Entity\PathAlias: path_alias
+    Drupal\responsive_image\Entity\ResponsiveImageStyle: responsive_image_style
+    Drupal\rest\Entity\RestResourceConfig: rest_resource_config
+    Drupal\search\Entity\SearchPage: search_page
+    Drupal\shortcut\Entity\Shortcut: shortcut
+    Drupal\shortcut\Entity\ShortcutSet: shortcut_set
+    Drupal\system\Entity\Action: action
+    Drupal\system\Entity\Menu: menu
+    Drupal\taxonomy\Entity\Term: taxonomy_term
+    Drupal\taxonomy\Entity\Vocabulary: taxonomy_vocabulary
+    Drupal\user\Entity\Role: user_role
+    Drupal\user\Entity\User: user
+    Drupal\views\Entity\View: view
+    Drupal\workflows\Entity\Workflow: workflow
+    Drupal\workspaces\Entity\Workspace: workspace
 
 # The core and Symfony classes and interfaces that the custom code builds on and the map never
 # reads. Each one an inherits or implements edge reaches becomes a declared node this pack draws,

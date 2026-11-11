@@ -3,22 +3,21 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # The Paragraphs contributed module: each paragraph type, from its config file, as the bundle
 # paragraph.<id> with its label, a configured_by edge to that file and a bundle_of edge to the
 # entity type paragraph.
-# A static load, loadMultiple or create call on Paragraph or ParagraphsType gives an inferred
-# uses_entity_type edge to its entity type, from the table paragraphs_entity_classes
-# (call/paragraphs_entity_class_call.yaml).
+# Paragraph and ParagraphsType join drupal_basic's table entity_classes, so drupal_basic's
+# entity_class_static_call gives a static load, loadMultiple or create call on either an inferred
+# uses_entity_type edge to its entity type.
 #
 # Known gaps: a paragraph type's behavior plugins, icon and description give nothing. The entity
 # type paragraph is declared by the module's PHP, which is not mapped, so it stays referenced. A
-# field's allowed paragraph types give no edge. A static call on Paragraph or ParagraphsType is read
-# by the class's short name: drupal_basic's entity_class_static_call still lists such a call as
-# skipped, and a project class with the short name of a listed class gives a false uses_entity_type
-# edge.
+# field's allowed paragraph types give no edge.
 pack: paragraphs_basic
 version: 0.0.1
 depends: [drupal_basic]
 
-tables:
-  # The Paragraphs module's entity classes by short name, and the entity type id each declares.
-  paragraphs_entity_classes:
-    Paragraph: paragraph
-    ParagraphsType: paragraphs_type
+add_table_rows:
+  # The module's entity classes by fully qualified name, and the entity type id each declares,
+  # read by drupal_basic's entity_class_static_call.
+  drupal_basic:
+    entity_classes:
+      Drupal\paragraphs\Entity\Paragraph: paragraph
+      Drupal\paragraphs\Entity\ParagraphsType: paragraphs_type

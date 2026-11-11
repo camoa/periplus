@@ -89,16 +89,37 @@ def test_config_type_file_makes_a_bundle_and_a_settings_file_does_not(
     }
 
 
-# pack, the entity classes its table lists, each with the entity type id it declares
+# pack, the entity classes it adds to drupal_basic's table, each with the entity type id it declares
 ENTITY_CLASS_PACKS = [
-    ("profile_basic", {"Profile": "profile", "ProfileType": "profile_type"}),
-    ("eck_basic", {"EckEntityType": "eck_entity_type"}),
+    (
+        "profile_basic",
+        {
+            "Drupal\\profile\\Entity\\Profile": "profile",
+            "Drupal\\profile\\Entity\\ProfileType": "profile_type",
+        },
+    ),
+    ("eck_basic", {"Drupal\\eck\\Entity\\EckEntityType": "eck_entity_type"}),
     (
         "salesforce_basic",
-        {"MappedObject": "salesforce_mapped_object", "SalesforceMapping": "salesforce_mapping"},
+        {
+            "Drupal\\salesforce_mapping\\Entity\\MappedObject": "salesforce_mapped_object",
+            "Drupal\\salesforce_mapping\\Entity\\SalesforceMapping": "salesforce_mapping",
+        },
     ),
-    ("webform_basic", {"Webform": "webform", "WebformSubmission": "webform_submission"}),
-    ("paragraphs_basic", {"Paragraph": "paragraph", "ParagraphsType": "paragraphs_type"}),
+    (
+        "webform_basic",
+        {
+            "Drupal\\webform\\Entity\\Webform": "webform",
+            "Drupal\\webform\\Entity\\WebformSubmission": "webform_submission",
+        },
+    ),
+    (
+        "paragraphs_basic",
+        {
+            "Drupal\\paragraphs\\Entity\\Paragraph": "paragraph",
+            "Drupal\\paragraphs\\Entity\\ParagraphsType": "paragraphs_type",
+        },
+    ),
 ]
 
 
@@ -106,30 +127,45 @@ ENTITY_CLASS_PACKS = [
 def test_a_static_load_on_a_contrib_entity_class_ends_at_its_entity_type(
     tmp_path: Path, pack: str, classes: dict[str, str]
 ) -> None:
-    """load, loadMultiple and create on a class the pack's table lists end at its entity type;
-    another method, and a class the table does not list, give no edge from the pack's rule."""
-    calls = "".join(
-        f"    \\Drupal\\some\\Entity\\{name}::{method}();\n"
-        for name, method in zip(classes, ("load", "loadMultiple"), strict=False)
-    )
+    """load, loadMultiple and create on a class the pack adds to drupal_basic's table end at its
+    entity type, through drupal_basic's rule, at the call's line. Another method gives nothing; a
+    module's own class of the same short name, and a class no table lists, keep a skipped row."""
     first = next(iter(classes))
+    short = first.rpartition("\\")[2]
+    calls = [
+        f"\\{name}::{method}();"
+        for name, method in zip(classes, ("load", "loadMultiple"), strict=False)
+    ]
+    own = f"\\Drupal\\mymodule\\Entity\\{short}::load(1);"
+    body = [*calls, f"{short}::create([]);", f"{short}::save();", own, "Unlisted::load(1);"]
     source = (
-        "<?php\nnamespace Drupal\\mymodule\\Controller;\n\nclass Loader {\n"
-        "  public function run() {\n"
-        + calls
-        + f"    {first}::create([]);\n    {first}::save();\n    Unlisted::load(1);\n"
-        "  }\n}\n"
+        f"<?php\nnamespace Drupal\\mymodule\\Controller;\n\nuse {first};\n\nclass Loader {{\n"
+        "  public function run() {\n" + "".join(f"    {line}\n" for line in body) + "  }\n}\n"
     )
-    _, document = _map(tmp_path, pack, {f"{MODULE_DIR}/src/Controller/Loader.php": source})
+    lines = [line.strip() for line in source.splitlines()]
+
+    def at(text: str) -> int:
+        return lines.index(text) + 1
+
+    report, document = _map(tmp_path, pack, {f"{MODULE_DIR}/src/Controller/Loader.php": source})
     run_method = "php.method::Drupal\\mymodule\\Controller\\Loader::run"
     found = {
-        (e["to"], p["rule"], p["confidence"])
+        (e["to"], place["line"], p["rule"], p["confidence"])
         for e in document["edges"]
         if e["kind"] == "uses_entity_type" and e["from"] == run_method
+        for place in e["locations"]
         for p in e["provenance"]
     }
-    rule = pack.removesuffix("_basic") + "_entity_class_static_call"
-    assert found == {(f"drupal.entity_type::{i}", rule, "inferred") for i in classes.values()}
+    ids = list(classes.values())
+    called = [*zip(ids, calls, strict=False), (ids[0], f"{short}::create([]);")]
+    rule = "entity_class_static_call"
+    assert found == {
+        (f"drupal.entity_type::{entity}", at(call), rule, "inferred") for entity, call in called
+    }
+    assert [(line, r) for _, line, r, _ in report.skipped] == [
+        (at(own), rule),
+        (at("Unlisted::load(1);"), rule),
+    ]
 
 
 def test_eck_entity_type_and_bundle_files_make_a_content_entity_type_and_bundles(

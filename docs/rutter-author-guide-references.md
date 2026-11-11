@@ -153,11 +153,11 @@ a table that none of them declares refuses the map with exit 26, naming the `tab
 
 `\Drupal::logger('x')` ends at `drupal.service::logger.factory`. The end has no `on_miss`, so a
 service that no mapped file declares is `referenced`. The rule `entity_class_static_call` beside it
-looks a class's short name up in the table `entity_classes`, for `load`, `loadMultiple` and
-`create`, from an internal hub of that short name. A short name is not a class, so a second rule
-resolves the class through the file's use statements, and a map rule gives `uses_entity_type`
-only when that class sits in a core namespace: a module's own `User` gives none. A `load` or
-`create` call on any other capitalised class leaves a skipped row.
+looks a class up in the table `entity_classes`, for `load`, `loadMultiple` and `create`. The table
+is keyed by the class's full name, and the end's `separator` is a space, which no class name
+holds, so the whole name, resolved through the file's use statements, is the segment looked up: a
+module's own `User` gives no edge to core's `user`. A `load` or `create` call on any other
+capitalised class leaves a skipped row.
 
 ### Adding rows to a table another rutter owns
 
@@ -180,7 +180,9 @@ With `my_shortcuts` pinned, `drupal_shortcut_call` gives `\Drupal::thing()` the 
 writes it. The owner must be a rutter this one depends on, directly or not, and it must declare
 the table; a key the owner, or another loaded rutter, already gives a different value is refused.
 Each of these stops `periplus map` with exit 19, naming the `pack.yaml` and the row, before any
-source file is read. The same key with the same value is no problem.
+source file is read. The same key with the same value is no problem. The bundled rutters for
+contributed modules, such as `profile_basic`, add their entity classes to `entity_classes` this
+way, so `entity_class_static_call` reads `Profile::load(1)` only in a project that loads them.
 
 ## Where the framework begins: boundary
 

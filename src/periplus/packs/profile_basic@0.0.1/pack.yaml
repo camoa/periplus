@@ -3,21 +3,21 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # The Profile contributed module: each profile type, from its config file, as the bundle
 # profile.<id> with its label, a configured_by edge to that file and a bundle_of edge to the entity
 # type profile.
-# A static load, loadMultiple or create call on Profile or ProfileType gives an inferred
-# uses_entity_type edge to its entity type, from the table profile_entity_classes
-# (call/profile_entity_class_call.yaml).
+# Profile and ProfileType join drupal_basic's table entity_classes, so drupal_basic's
+# entity_class_static_call gives a static load, loadMultiple or create call on either an inferred
+# uses_entity_type edge to its entity type.
 #
 # Known gaps: the roles a profile type is limited to, and its registration and multiple settings,
 # give nothing. The entity type profile is declared by the module's PHP, which is not mapped, so it
-# stays referenced. A static call on Profile or ProfileType is read by the class's short name:
-# drupal_basic's entity_class_static_call still lists such a call as skipped, and a project class
-# with the short name of a listed class gives a false uses_entity_type edge.
+# stays referenced.
 pack: profile_basic
 version: 0.0.1
 depends: [drupal_basic]
 
-tables:
-  # The Profile module's entity classes by short name, and the entity type id each declares.
-  profile_entity_classes:
-    Profile: profile
-    ProfileType: profile_type
+add_table_rows:
+  # The module's entity classes by fully qualified name, and the entity type id each declares,
+  # read by drupal_basic's entity_class_static_call.
+  drupal_basic:
+    entity_classes:
+      Drupal\profile\Entity\Profile: profile
+      Drupal\profile\Entity\ProfileType: profile_type

@@ -6,19 +6,17 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # webform_submission.
 # Each handler a webform's config file lists gives a webform_uses_handler edge from its bundle to
 # the handler plugin its id names (webform_handler/webform_handler_use.yaml).
-# A static load, loadMultiple or create call on Webform or WebformSubmission gives an inferred
-# uses_entity_type edge to its entity type, from the table webform_entity_classes
-# (call/webform_entity_class_call.yaml).
+# Webform and WebformSubmission join drupal_basic's table entity_classes, so drupal_basic's
+# entity_class_static_call gives a static load, loadMultiple or create call on either an inferred
+# uses_entity_type edge to its entity type.
 #
 # Known gaps: an id that is not text in double quotes makes no plugin and is listed under skipped. A
 # handler declared by an attribute gives nothing: this pack reads the annotation only, and the
 # attribute class was not checked against a Webform release. Webform's other plugin types, such as
 # elements and exporters, give nothing. A webform's elements and settings in its config file give
 # nothing, nor does its category or status. A disabled handler gives the same webform_uses_handler
-# edge as an enabled one. A static call on Webform or WebformSubmission is read by the class's short
-# name: drupal_basic's entity_class_static_call still lists such a call as skipped, and a project
-# class with the short name of a listed class gives a false uses_entity_type edge. The entity type
-# webform_submission is declared by the module's PHP, which is not mapped, so it stays referenced.
+# edge as an enabled one. The entity type webform_submission is declared by the module's PHP, which
+# is not mapped, so it stays referenced.
 pack: webform_basic
 version: 0.0.1
 depends: [drupal_basic, php_basic]
@@ -27,8 +25,10 @@ folders:
   # The folder the handler manager discovers in, below a module's src folder.
   webform_handler_classes: "{module_root}/src/Plugin/WebformHandler/**"
 
-tables:
-  # The Webform module's entity classes by short name, and the entity type id each declares.
-  webform_entity_classes:
-    Webform: webform
-    WebformSubmission: webform_submission
+add_table_rows:
+  # The module's entity classes by fully qualified name, and the entity type id each declares,
+  # read by drupal_basic's entity_class_static_call.
+  drupal_basic:
+    entity_classes:
+      Drupal\webform\Entity\Webform: webform
+      Drupal\webform\Entity\WebformSubmission: webform_submission

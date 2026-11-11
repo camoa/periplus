@@ -184,7 +184,7 @@ TABLE_PATH = str(MODULE / "src/Controller/ThingController.php")
 
 def test_a_shortcut_and_an_entity_class_end_at_the_names_the_tables_give(tmp_path: Path) -> None:
     """Drupal::logger gives logger.factory and User::load gives user, both inferred and both
-    ends referenced; the entity edge sits at the method's line, joined in the map."""
+    ends referenced, each at its call's line."""
     _plant(tmp_path, {TABLE_PATH: TABLE_CONTROLLER})
     document, _ = _map(tmp_path)
     run_method = "php.method::Drupal\\my_module\\Controller\\ThingController::run"
@@ -208,8 +208,8 @@ def test_a_shortcut_and_an_entity_class_end_at_the_names_the_tables_give(tmp_pat
             "uses_entity_type",
             run_method,
             "drupal.entity_type::user",
-            _line(TABLE_CONTROLLER, "public function run() {"),
-            "entity_class_static_call_core",
+            _line(TABLE_CONTROLLER, "$account = User::load(1);"),
+            "entity_class_static_call",
             "inferred",
         ),
     }
@@ -2372,19 +2372,20 @@ class CoreController {
 def test_a_module_class_named_as_a_core_entity_class_ends_only_at_its_own_entity_type(
     tmp_path: Path,
 ) -> None:
-    """User::load on a module's own User class ends at its own entity type only; User, Node and
-    Term of core end at core's entity types, through the use statements or written whole. A class
-    no table lists keeps its skipped row."""
+    """User::load on a module's own User class ends at its own entity type only, and keeps the
+    skipped row of a class the table does not list, as Unlisted does; User, Node and Term of core
+    end at core's entity types, through the use statements or written whole."""
     _plant(tmp_path, SHORT_NAME_FILES)
     document, report = _map(tmp_path)
     listing = str(MODULE / "src/Controller/ListController.php")
     assert [(f, line, r, why) for f, line, r, why in report.skipped] == [
         (
             listing,
-            _line(SHORT_NAME_LIST, "$other = Unlisted::load(4);"),
+            _line(SHORT_NAME_LIST, written),
             "entity_class_static_call",
             "no resolution step holds for scope",
-        ),
+        )
+        for written in ("$own = User::load(1);", "$other = Unlisted::load(4);")
     ]
     listed = "php.method::Drupal\\my_module\\Controller\\ListController::run"
     core = "php.method::Drupal\\my_module\\Controller\\CoreController::run"
@@ -2397,9 +2398,9 @@ def test_a_module_class_named_as_a_core_entity_class_ends_only_at_its_own_entity
     }
     assert found == {
         (listed, entity + "my_user", "entity_class_static_call_mapped"),
-        (listed, entity + "node", "entity_class_static_call_core"),
-        (listed, entity + "taxonomy_term", "entity_class_static_call_core"),
-        (core, entity + "user", "entity_class_static_call_core"),
+        (listed, entity + "node", "entity_class_static_call"),
+        (listed, entity + "taxonomy_term", "entity_class_static_call"),
+        (core, entity + "user", "entity_class_static_call"),
     }
 
 

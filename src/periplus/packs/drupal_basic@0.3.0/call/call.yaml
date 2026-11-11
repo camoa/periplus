@@ -21,9 +21,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #   make nothing. Other manager methods that take an entity type id, such as getHandler and
 #   getDefinition, make nothing.
 # - A \Drupal:: shortcut such as \Drupal::currentUser(), and a static call on an entity class such
-#   as User::load(1), give an edge only for a name pack.yaml's tables list. An entity class's edge
-#   also needs the class, resolved through the file's use statements, in a core namespace, so a
-#   project class named as a core one, such as Drupal\mymod\Node, gives none.
+#   as User::load(1), give an edge only for a name pack.yaml's tables list. An entity class is
+#   listed by its full name and resolved through the file's use statements, so a project class
+#   named as a core one, such as Drupal\mymod\Node, gives none.
 # - get on the service container counts only when its object is written $container,
 #   $this->container, \Drupal::getContainer(), or getContainer() on $this, static or self, through
 #   -> or ?->. A container under another name and another letter case, such as ->GET('x'), make
@@ -357,15 +357,13 @@ rules:
       to: {template: 'cache.{bin}', types: [drupal.service]}
   confidence: inferred
 
-# User::load(1), Node::loadMultiple() and Term::create([...]): class_names_entity_type from an
-# internal hub of the class's short name to the entity type the table entity_classes gives for it,
-# and, in entity_class_named_in_call, names_entity_class from the method or function around the
-# call to the class as written, resolved through the file's use statements and namespace, an
-# internal drupal.class_ref node. call/entity_class_call.yaml joins the two into uses_entity_type
-# only when the class is core's, so a module's own class of the same short name gives none. Two
-# rules, because an edge from the enclosing declaration and an edge from a template do not share
-# a rule. Inferred: the table, not the file, names the entity type. static::, self:: and parent::
-# are not read.
+# User::load(1), Node::loadMultiple() and Term::create([...]): uses_entity_type from the method or
+# function around the call to the entity type the table entity_classes gives for the class. The
+# class is resolved through the file's use statements and namespace, and its whole name is looked
+# up: the end's separator, a space, is in no class name. So a module's own User class gives no
+# edge to core's user, and an import that renames a class still finds it. A rutter that depends on
+# this one adds its module's classes to the table under add_table_rows. Inferred: the table, not
+# the file, names the entity type. static::, self:: and parent:: are not read.
 - rule: entity_class_static_call
   reads: file
   in: [source]
@@ -374,28 +372,11 @@ rules:
     name_child: scope
     filetype: php
     where:
-    - name_matches: {child: scope, pattern: '\\?(?:\w+\\)*(?<entity_class_short>[A-Z]\w*)'}
+    - name_matches: {child: scope, pattern: '\\?(?:\w+\\)*[A-Z]\w*'}
     - name_matches: {child: name, pattern: 'load|loadMultiple|create'}
   emits:
   - edge:
-      kind: class_names_entity_type
-      from: {template: '{entity_class_short}'}
-      to: {resolve: [lookup_last_segment_in: entity_classes], types: [drupal.entity_type]}
-  confidence: inferred
-
-- rule: entity_class_named_in_call
-  reads: file
-  in: [source]
-  match:
-    reference: scoped_call_expression
-    name_child: scope
-    filetype: php
-    where:
-    - name_matches: {child: scope, pattern: '(?<entity_class>\\?(?:\w+\\)*[A-Z]\w*)'}
-    - name_matches: {child: name, pattern: 'load|loadMultiple|create'}
-  emits:
-  - edge:
-      kind: names_entity_class
+      kind: uses_entity_type
       from: enclosing_declaration
-      to: {template: '{entity_class}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+      to: {resolve: [lookup_last_segment_in: entity_classes], separator: ' ', types: [drupal.entity_type]}
   confidence: inferred
