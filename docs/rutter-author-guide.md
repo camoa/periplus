@@ -83,7 +83,7 @@ values have elsewhere. Its id may name them:
 
 With the settings value `app: shop` and a path value `area` of `lib`, `src/lib/one.sx` gets the
 id `SHOP.LIB.ONE`. A value from a capture or an enclosing span is refused, since the rule has
-neither.
+neither. A value named `file_stem` or `key` is refused, since the engine gives those names.
 
 `match.file` globs the file's stem, its name less its type's ending: `file: mission` reads
 `mission.yaml`. A rule reads the files directly in each folder `in` names; a folder value needs
@@ -112,12 +112,16 @@ rule's node sits at the match's line, its id a template over captures, path valu
 
 A capture of an optional group that took no part in the match fills a template as empty text,
 when another capture the template names took part: in an id, a value, an attribute, a binding or
-an edge end. With `text: 'create\("(?<pkg>\w+)(?:\.(?<sub>\w+))?"\)'` and
+an edge end. Only a capture counts. A value, a path value or a settings value the template names
+does not, so `{v}{sub}`, with the value `v` set and `sub` untaken, makes nothing. With `text: 'create\("(?<pkg>\w+)(?:\.(?<sub>\w+))?"\)'` and
 `to: {template: 'x:{pkg}{sub}'}`, one rule ends `create("alpha")` at `x:alpha` and
 `create("alpha.beta")` at `x:alphabeta`. A template where no capture it names took part makes
 nothing and leaves no skipped row, as an end that names the capture directly does: `x:{sub}`, or
 `{module}.{sub}` with a path value, on `create("alpha")`. A capture that took part and matched
-empty text still makes nothing in an id, attribute or edge template, and an edge end lists a row.
+empty text still makes nothing in an id, attribute or edge template. An edge end whose template
+makes nothing lists a skipped row only when every name it lacks has a value, an empty one. When
+one of them has no value, as an untaken capture or a value nothing gave, the end lists no row. So
+`{a}{sub}`, with `a` taken and empty and `sub` untaken, lists none.
 
 Values reshape a capture before an id or an attribute uses it. In Typer, a command with no
 written name takes its function's name, lowercased, with dashes for underscores:

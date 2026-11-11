@@ -246,6 +246,10 @@ def test_a_path_value_normalize_naming_no_settings_value_is_refused(
     assert status == PACK_RULES_UNREADABLE
     assert [p["code"] for p in mapped["problems"]] == [PACK_RULES_UNREADABLE]
     assert "nowhere" in mapped["problems"][0]["message"]
+    assert (
+        "normalize step '^{nowhere}_' with '', which names nowhere"
+        in (mapped["problems"][0]["message"])
+    )
 
 
 @pytest.mark.parametrize(

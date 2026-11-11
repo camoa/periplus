@@ -144,3 +144,27 @@ def test_validate_resolves_a_folder_a_pinned_sibling_declares_as_map_does(
     m_code, m_problems = run(tmp_path, capsys, monkeypatch, "map")
     assert (m_code, folder_problems(m_problems)) == (0, [])
     assert (v_code, folder_problems(v_problems)) == (m_code, [])
+
+
+def test_validate_gives_map_conflict_when_two_pinned_siblings_disagree_on_a_folder(
+    tmp_path, capsys, monkeypatch
+):
+    plant(tmp_path, src="./a", in_folder="src")
+    sibling = tmp_path / ".periplus" / "packs" / "u@0.1.0"
+    sibling.mkdir()
+    (sibling / "pack.yaml").write_text(
+        "pack: u\nversion: 0.1.0\ndepends: []\nfolders:\n  src: ./b\n"
+    )
+    (tmp_path / ".periplus" / "settings.yml").write_text(
+        "periplus_version: 0\npacks:\n  - t@0.1.0\n  - u@0.1.0\n"
+    )
+    conflict = (
+        FOLDER_EXIT,
+        "folder src has different values in the loaded packs: "
+        "./a in t/pack.yaml; ./b in u/pack.yaml",
+    )
+    m_code, m_problems = run(tmp_path, capsys, monkeypatch, "map")
+    assert (m_code, folder_problems(m_problems)) == (FOLDER_EXIT, [conflict])
+    for pack in ("t", "u"):
+        v_code, v_problems = run(tmp_path, capsys, monkeypatch, "validate", pack)
+        assert (v_code, folder_problems(v_problems)) == (FOLDER_EXIT, [conflict])

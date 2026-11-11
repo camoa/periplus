@@ -1105,8 +1105,8 @@ def _collisions(
                     names = {*value_names(str(step["replace"])), *value_names(str(step["with"]))}
                     for missing in sorted(names - visible):
                         message = (
-                            f"{where}type {kind} has the normalize step {step['replace']} with "
-                            f"{step['with']}, which names {missing}, no settings value"
+                            f"{where}type {kind} has the normalize step '{step['replace']}' with "
+                            f"'{step['with']}', which names {missing}, no settings value"
                         )
                         problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
     for rule, source in zip(rules, sources, strict=True):
@@ -1486,6 +1486,8 @@ def _build_rule(pack: str, item: Any, tables: frozenset[str]) -> Rule:
     read_values = tuple(_read_value(str(name), spec) for name, spec in values.items())
     if any(value.template is None for value in read_values):
         raise _Unsupported("a value of a file rule without match.text is not a template")
+    for name in sorted({"file_stem", "key"} & set(map(str, values))):
+        raise _Unsupported(f"the value {name} of a file rule has a name the engine gives")
     if (
         not isinstance(folders, list)
         or not all(isinstance(folder, str) for folder in folders)

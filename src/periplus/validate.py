@@ -187,6 +187,7 @@ def validate(
     problems.extend(unreadable)
     if not errors and not unreadable:
         # Imported here: `periplus.engine.check` imports this module.
+        from periplus.engine.check import _folder_conflicts
         from periplus.engine.check import checked as engine_checked
 
         in_project = any(
@@ -202,7 +203,11 @@ def validate(
         if rule_set is not None:
             folder_packs = pinned if in_project and named and not unresolved else order
             overrides = folder_overrides(resolution.settings)
-            problems.extend(folder_problems(rule_set, folder_packs, overrides))
+            # Map refuses a folder conflict before it resolves any folder.
+            conflicts = _folder_conflicts(folder_packs)
+            problems.extend(c for c in conflicts if c not in problems)
+            if not conflicts:
+                problems.extend(folder_problems(rule_set, folder_packs, overrides))
     return _report(requested, path, checked, errors, problems, version)
 
 

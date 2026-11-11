@@ -104,3 +104,29 @@ def test_a_whole_file_rule_fills_its_values_from_path_settings_and_file_stem(
     nodes = _map(tmp_path, capsys, WHOLE_FILE_RULE)
 
     assert [n for n in nodes if n.startswith("stem.file::")] == ["stem.file::SHOP.LIB.ONE"]
+
+
+@pytest.mark.parametrize("name", ["file_stem", "key"])
+def test_a_whole_file_rule_value_named_as_an_engine_given_name_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], name: str
+) -> None:
+    rule = WHOLE_FILE_RULE.replace("module:", f"{name}:").replace("'{module}'", f"'{{{name}}}'")
+    rutter(tmp_path, "stem", MANIFEST, {"stem.yaml": TYPES + rule})
+    plant(
+        tmp_path,
+        {
+            ".periplus/settings.yml": (
+                "periplus_version: 0\npacks:\n  - stem@0.0.1\nvalues:\n  app: shop\n"
+            ),
+            "src/lib/one.sx": "item alpha\n",
+        },
+    )
+    capsys.readouterr()
+    status = main(["map", "--format", "json", "--output", str(tmp_path / "out.json")])
+    problems = json.loads(capsys.readouterr().out)["problems"]
+
+    assert status == 26
+    assert [p["message"] for p in problems] == [
+        f"stem/rules/stem.yaml: the rule whole cannot be executed: the value {name} of a file rule "
+        "has a name the engine gives"
+    ]

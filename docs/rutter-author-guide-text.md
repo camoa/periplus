@@ -71,7 +71,11 @@ no section, so a comment inside it stays a section a rule does not read.
 
 A longer entry is a regular expression, never literal text, so escape its metacharacters:
 `<\?php`, `/\*`, `\{\{`. Unescaped, `<?php` means "an optional `<`, then `php`", and it still
-loads. An entry that matches the empty text, such as `/*` ("zero or more slashes"), is refused.
+loads. An entry that matches the empty text on its own, such as `/*` ("zero or more slashes"), is
+refused. An entry that matches zero characters only in context, such as `(?=a)`, `\b` or `(?<=x)`,
+loads; where it matches, it counts, and the search goes on one character later.
+
+A `{name}` in a `balance` entry is not filled in: it matches the literal text `{name}`.
 
 A token counts where it starts. One that starts outside the sections counts even when its match
 runs into a section; one that starts inside a section is skipped, and the search goes on after
@@ -228,8 +232,8 @@ routes/web.php:27 probe_nothing edge probe_second: no value for capture b
 routes/web.php:28 probe_two edge probe_second: no value for capture c
 ```
 
-An end lacks a value when its capture matched empty text, its template names an empty value, or
-no resolution step holds, which reads `no resolution step holds for capture b`. A tree rule's row
+An end lacks a value when its capture matched empty text, its template names an empty value and
+no absent one, or no resolution step holds, which reads `no resolution step holds for capture b`. A tree rule's row
 names the end, as `no value for enclosing_class`, an attribute's argument that is not a text
 literal, or the written name a reference rule's step cannot resolve.
 
