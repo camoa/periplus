@@ -62,6 +62,7 @@ EXECUTED_KEYS = frozenset(
     {
         *(f"manifest.{k}" for k in ("pack", "version", "depends", "folders", "identity")),
         "manifest.tables",
+        "manifest.add_table_rows",
         "manifest.values",
         *(f"manifest.boundary{k}" for k in ("", ".*.type", ".*.ancestry", ".*.names")),
         *(f"manifest.identity.call_{k}" for k in ("arguments", "argument", "argument_name")),
@@ -573,7 +574,7 @@ def load_rules(
     sources: list[str] = []
     siblings: dict[str, list[Mapping[str, Any]]] = {}
     imports: dict[str, list[tuple[str, Mapping[str, Any]]]] = {}
-    tables = _tables(packs)
+    tables = _tables(packs, conflicts)
     for pack in packs:
         for relative, node in _yaml_files(pack.directory):
             if relative == MANIFEST_FILENAME:
@@ -679,13 +680,17 @@ def declared_values(pack: LoadedPack) -> list[str]:
     return sorted(str(name) for name in found) if isinstance(found, Mapping) else []
 
 
-def _tables(packs: Sequence[LoadedPack]) -> dict[str, dict[str, Mapping[str, str]]]:
+def _tables(
+    packs: Sequence[LoadedPack], problems: list[Problem]
+) -> dict[str, dict[str, Mapping[str, str]]]:
     """The tables of each pack and of every pack it depends on, directly or not; of two tables of
-    one name, the one of the pack nearer in the walk from the pack wins."""
-    declared: dict[str, Mapping[str, Mapping[str, str]]] = {}
+    one name, the one of the pack nearer in the walk from the pack wins. A table holds the rows
+    the loaded packs' ``add_table_rows`` give it; the problems of those rows go to ``problems``."""
+    declared: dict[str, dict[str, Mapping[str, str]]] = {}
     for p in packs:
         own = p.manifest.document.get("tables")
-        declared[p.name.pack] = own if isinstance(own, Mapping) else {}
+        declared[p.name.pack] = dict(own) if isinstance(own, Mapping) else {}
+    problems.extend(_add_rows(packs, declared))
     found: dict[str, dict[str, Mapping[str, str]]] = {}
     for pack, walk in _visible_packs(packs).items():
         visible: dict[str, Mapping[str, str]] = {}
@@ -694,6 +699,61 @@ def _tables(packs: Sequence[LoadedPack]) -> dict[str, dict[str, Mapping[str, str
                 visible.setdefault(table, entries)
         found[pack] = visible
     return found
+
+
+def _add_rows(
+    packs: Sequence[LoadedPack], declared: dict[str, dict[str, Mapping[str, str]]]
+) -> list[Problem]:
+    """Add each pack's ``add_table_rows`` to the tables in ``declared``, and return the problem of
+    each row group naming a pack it does not depend on or a table that pack does not declare, and
+    of each key given a value other than the owner's or, without one, the first adding pack's by
+    name. A grown table lists the owner's rows and then the added keys sorted, so neither the
+    order the packs load in nor the order their rows are written in changes it."""
+    walks = _visible_packs(packs)
+    added: dict[tuple[str, str], dict[str, list[tuple[str, str]]]] = {}
+    problems: list[Problem] = []
+    for pack in sorted(packs, key=lambda p: p.name.pack):
+        name = pack.name.pack
+        where = f"{name}/{MANIFEST_FILENAME}: add_table_rows"
+        found = pack.manifest.document.get("add_table_rows")
+        for owner, tables in sorted((found if isinstance(found, Mapping) else {}).items()):
+            detail = {"pack": name, "owner": str(owner)}
+            if owner not in walks[name][1:]:
+                message = f"{where} names {owner}, which {name} does not depend on"
+                problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
+                continue
+            for table, rows in sorted(tables.items()):
+                if table not in declared.get(owner, {}):
+                    message = (
+                        f"{where} names the table {table} of {owner}, which {owner} does not "
+                        "declare under tables"
+                    )
+                    problems.append(
+                        Problem(
+                            ExitCode.PACK_RULES_UNREADABLE, message, {**detail, "table": table}
+                        )
+                    )
+                    continue
+                for key, value in rows.items():
+                    given = added.setdefault((owner, table), {}).setdefault(str(key), [])
+                    given.append((name, str(value)))
+    for (owner, table), keys in sorted(added.items()):
+        grown = dict(declared[owner][table])
+        for key, given in sorted(keys.items()):
+            first, kept = (owner, grown[key]) if key in grown else given[0]
+            problems.extend(
+                Problem(
+                    ExitCode.PACK_RULES_UNREADABLE,
+                    f"{adder}/{MANIFEST_FILENAME}: add_table_rows gives {key} in the table "
+                    f"{table} of {owner} the value {value}, where {first} gives {kept}",
+                    {"pack": adder, "owner": owner, "table": table, "key": key},
+                )
+                for adder, value in given
+                if value != kept
+            )
+            grown.setdefault(key, kept)
+        declared[owner][table] = grown
+    return problems
 
 
 def _visible_packs(packs: Sequence[LoadedPack]) -> dict[str, list[str]]:

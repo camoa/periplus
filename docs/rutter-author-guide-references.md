@@ -159,6 +159,29 @@ resolves the class through the file's use statements, and a map rule gives `uses
 only when that class sits in a core namespace: a module's own `User` gives none. A `load` or
 `create` call on any other capitalised class leaves a skipped row.
 
+### Adding rows to a table another rutter owns
+
+A table a rutter declares under `tables` stays its own: a dependent rutter that declares a table
+of the same name hides it from its own rules and adds nothing to the owner's. To add rows the
+owner's rules read, a rutter names the owner and the table under `add_table_rows`:
+
+```yaml
+pack: my_shortcuts
+version: 0.0.1
+depends: [drupal_basic]
+add_table_rows:
+  drupal_basic:
+    shortcut_services:
+      thing: my_module.thing
+```
+
+With `my_shortcuts` pinned, `drupal_shortcut_call` gives `\Drupal::thing()` the service
+`my_module.thing`. A project that does not load `my_shortcuts` sees the table as `drupal_basic`
+writes it. The owner must be a rutter this one depends on, directly or not, and it must declare
+the table; a key the owner, or another loaded rutter, already gives a different value is refused.
+Each of these stops `periplus map` with exit 19, naming the `pack.yaml` and the row, before any
+source file is read. The same key with the same value is no problem.
+
 ## Where the framework begins: boundary
 
 The project's classes extend and implement classes the map never reads, such as Drupal core's.

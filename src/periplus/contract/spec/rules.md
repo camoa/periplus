@@ -210,9 +210,15 @@ namespaces.
 An end may also find its name in a table the pack carries. `tables`, a top-level key of
 `pack.yaml`, maps a table's name to a map of written name to node name; the resolution step
 `lookup_last_segment_in: <table>` gives the value of the name's last segment, and a rule may name
-the tables of its pack and of the packs it depends on, the nearer pack's winning. A step naming a
-table none of them declares is refused, naming the `tables` key. The table is data, so the engine
-still holds no language knowledge. An end read `{argument: N}` also takes a class constant
+the tables of its pack and of the packs it depends on, the nearer pack's winning whole. A step
+naming a table none of them declares is refused, naming the `tables` key. The table is data, so the
+engine still holds no language knowledge. A pack adds rows to a table of a pack it depends on,
+directly or not, under `add_table_rows: {<pack>: {<table>: {<written name>: <node name>}}}`;
+every rule that sees the table, the owner's among them, then finds them, in a run that loads the
+adding pack. Before any source file is read, the run is refused, exit 19, for rows naming a pack
+the adding pack does not depend on, a table that pack does not declare under `tables`, or a key
+the owner, or another adding pack, gives a different value. The grown table lists the owner's rows
+and then the added keys sorted. An end read `{argument: N}` also takes a class constant
 declared as text, when the grammar block declares `constant_access` and `constant_declaration`,
 the node types of a constant read and of a declaration; one without the other is refused.
 An end or id read `{argument: N}` finds the arguments in the field `identity.call_arguments`
