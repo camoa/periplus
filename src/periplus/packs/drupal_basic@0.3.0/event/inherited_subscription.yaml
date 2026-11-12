@@ -1,0 +1,23 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A subscriber whose events its base class keys. HttpExceptionSubscriberBase subscribes its own
+# onException to KernelEvents::EXCEPTION, then calls on<status> or on<Format><status>, as on403
+# or onJson404, by a name built at run time. Each such method of a class that descends from the
+# base, through mapped parents, is a subscribed_by edge from the event of that constant. The rule
+# reads the method's name, so it is inferred. A method of that name in a class that does not
+# descend from the base gives nothing, nor does a name such as onward. Another core base that keys
+# its subscriber's events takes its own rule here.
+
+rules:
+- rule: exception_handler_subscribed_by_base
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<class>.+)::on(?:[A-Z][a-z]+)?[1-5]\d\d$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Core\\EventSubscriber\\HttpExceptionSubscriberBase$'
+  emits: [{edge: {kind: subscribed_by, from: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION', types: [drupal.event]}, to: this_node}}]
+  confidence: inferred
