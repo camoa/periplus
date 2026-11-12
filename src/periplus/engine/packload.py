@@ -2372,7 +2372,10 @@ def _table_conditions(
                     "where defines"
                 )
             if not capture and not named:
-                raise _Unsupported(f"{key} with no capture needs match.name_child of one field")
+                raise _Unsupported(
+                    f"{key} with no capture needs a string match.name_child; with a list, test a "
+                    "capture"
+                )
             found.append(InTable(frozenset(tables[table]), capture, key == "not_in_table"))
     return tuple(found)
 
