@@ -2148,7 +2148,9 @@ def _build_reference(
             "match.filetype and edges only, and no id"
         )
     if len(fields) > 2:
-        raise _Unsupported("the name_child of a reference rule is one field, or a name and a member")
+        raise _Unsupported(
+            "the name_child of a reference rule is one field, or a name and a member"
+        )
     where = match.get("where", [])
     if not isinstance(where, list) or not all(
         isinstance(c, Mapping) and len(c) == 1 and set(c) <= {"name_matches", *_TABLE_CONDITIONS}

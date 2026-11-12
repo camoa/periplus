@@ -53,7 +53,8 @@ rules:
     name_child: function
     filetype: php
     skip_names: {skip}
-  emits: [{{edge: {{kind: calls, from: enclosing_declaration, to: {{types: [own.fn], on_miss: unresolved}}}}}}]
+  emits:
+  - edge: {{kind: calls, from: enclosing_declaration, to: {{types: [own.fn], on_miss: unresolved}}}}
   confidence: declared
 """
 

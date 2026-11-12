@@ -257,7 +257,8 @@ class GapReport:
 
     def outside(self, start: str, kinds: tuple[str, ...]) -> list[str]:
         """The ids outside the mapped code that `kinds` edges reach, walking through mapped ids."""
-        seen, todo, found = {start}, [start], []
+        seen, todo = {start}, [start]
+        found: list[str] = []
         while todo:
             for e in self.edges_from.get(todo.pop(), []):
                 if e["kind"] not in kinds or e["to"] in seen:

@@ -24,6 +24,7 @@ from periplus.engine.packload import (
     IdMatches,
     InTable,
     IsMapping,
+    KeyEquals,
     Rule,
     RuleSet,
     Value,
@@ -1935,9 +1936,14 @@ def _same(left: Any, right: Any) -> bool:
     return type(left) is type(right) and bool(left == right)
 
 
-def _holds(data: dict[str, Entry], source: str, mapping: bool, condition: Condition) -> bool:
-    """Whether one condition holds; ``source`` is what ``id_matches`` searches and ``mapping``
-    what ``is_mapping`` compares."""
+def _holds(
+    data: dict[str, Entry],
+    source: str,
+    mapping: bool,
+    condition: KeyEquals | HasKey | IdMatches | IsMapping,
+) -> bool:
+    """Whether one condition other than a table test holds; ``source`` is what ``id_matches``
+    searches and ``mapping`` what ``is_mapping`` compares."""
     if isinstance(condition, IsMapping):
         return mapping is condition.value
     if isinstance(condition, IdMatches):
