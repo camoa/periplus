@@ -516,6 +516,13 @@
           "type": "string",
           "description": "On a tree declaration rule: the grammar node type its nearest enclosing holder must be, such as function_definition; a match under a holder of another type, or under none, is passed and is no fire."
         },
+        "encloses_for": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "On a tree declaration rule that emits a node: packs the rule's pack depends on, directly or not, whose reference rules take this rule's node as an enclosing declaration, as they take their own pack's. At one tree node it wins over their rules. Each named pack needs a reference rule that reads the same file type and whose edges, all from enclosing_declaration, are of kinds that allow the node's type there, or its ancestor's; a pack the rule's pack does not depend on, or one with no such reference rule, refuses the rule."
+        },
         "filetype": {
           "type": "string",
           "description": "What kind of file this rule reads, named explicitly rather than left as a suffix on the glob. Required with `file`. It says which pack's grammar or loader handles the contents, so `.yml` and `.yaml` are one rule rather than two, and a glob can never accidentally match a file of another type that happens to share a name."

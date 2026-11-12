@@ -249,6 +249,13 @@ Everything else was a condition wearing the wrong shape — `in_method_with_attr
 Two conditions force `reads: map`, because they cannot be answered from one file:
 `ancestor_reaches` and `contained_by_type`.
 
+A dependent's tree declaration rule may name, under `encloses_for`, packs it depends on whose
+reference rules take its node as an enclosing declaration, as they take their own pack's, ahead
+of theirs at one tree node. The edge kinds still bound it: the node's type must be allowed at the
+from end of each edge such a rule emits. Before any source file is read, the rule is refused when
+it emits no node, when a named pack is not one its pack depends on, or when the named pack has no
+reference rule of the same file type that could start at the type.
+
 A declaration rule's `name_child` list is a path of one step or more, each step a field or else
 the first named child of that node type; `[name]` reaches a name that has no field. A reference
 rule's list is one field or two, the name and a member.

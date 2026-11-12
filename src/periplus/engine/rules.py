@@ -230,7 +230,7 @@ def run_file_rules(
                             hits = _matches(root, other, packs, folders, selection, read, removed)
                             selected[owner] = {found[0] for found in hits}
                     fired += _references(
-                        rule, rule_set, grammar, file, trees[file], within, selected, edges, skipped
+                        rule, rule_set, grammar, file, trees[file], packs, selected, edges, skipped
                     )
                 elif rule.annotation:
                     found = (nodes, edges, skipped)
@@ -1746,7 +1746,7 @@ def _references(
     grammar: Grammar,
     file: str,
     parsed: ParsedFile,
-    within: frozenset[str],
+    packs: Sequence[LoadedPack],
     selected: Mapping[tuple[str, str], set[str]],
     edges: list[FoundEdge],
     skipped: list[Skipped],
@@ -1755,8 +1755,10 @@ def _references(
 
     The edge runs from the node the nearest enclosing declaration was given: a tree node that a
     declaration rule of the rule's pack, or of a pack it depends on, gives a map node in this file,
-    of a type each edge kind of the rule allows at its from end. ``selected`` holds the files each
-    declaration rule reads, by pack and rule name.
+    of a type each edge kind of the rule allows at its from end. A declaration rule whose
+    ``encloses_for`` names the rule's pack counts too, ahead of those at the same tree node, and
+    mints the id its own pack gives. ``selected`` holds the files each declaration rule reads, by
+    pack and rule name.
     The name is the text of the name child, a written name the grammar resolves; a member child's
     text follows it, joined with the end's separator or the grammar's. An end that reads the call's
     argument takes that argument's text literal instead, unresolved by the grammar. The end's own
@@ -1767,22 +1769,31 @@ def _references(
     or not, or a match failing a ``name_matches`` condition, makes nothing, is not listed and is
     not a fire. An edge sits at the reference's line.
     """
+    within = _within(rule.pack, packs)
     holders = _holder_rules(rule_set, rule.filetype, within)
-    declared: dict[str, list[Rule]] = {}
+    declared: dict[str, list[tuple[Rule, Mapping[str, tuple[Rule, ...]]]]] = {}
+    enclosing: dict[str, list[tuple[Rule, Mapping[str, tuple[Rule, ...]]]]] = {}
     for other in rule_set.rules:
+        own = other.pack in within
         if (
             other.supported
             and other.declaration
             and other.node_type
             and other.filetype == rule.filetype
-            and other.pack in within
+            and (own or rule.pack in other.encloses_for)
             and file in selected[(other.pack, other.name)]
             and all(
                 _allows(rule_set, other.node_type, rule_set.edge_kinds[spec.kind].from_types)
                 for spec in rule.edges
             )
         ):
-            declared.setdefault(other.declaration, []).append(other)
+            if own:
+                declared.setdefault(other.declaration, []).append((other, holders))
+            else:
+                theirs = _holder_rules(rule_set, rule.filetype, _within(other.pack, packs))
+                enclosing.setdefault(other.declaration, []).append((other, theirs))
+    for declaration, taking in enclosing.items():
+        declared[declaration] = [*taking, *declared.get(declaration, ())]
     tables = rule_set.tables.get(rule.pack, {})
     # The name child must be a written name only when an edge's to end reads it.
     reads_name = any(spec.template is None for spec in rule.edges)
@@ -1806,7 +1817,7 @@ def _references(
             continue
         # An edge whose from end is a template needs no enclosing declaration.
         needed = any(spec.from_template is None for spec in rule.edges)
-        source = _enclosing(match, declared, holders, rule_set, grammar, parsed) if needed else ""
+        source = _enclosing(match, declared, rule_set, grammar, parsed) if needed else ""
         if source is None:
             skipped.append((file, line, rule.name, "no enclosing declaration is mapped"))
             continue
@@ -1944,27 +1955,24 @@ def _written_in(node: Node, grammar: Grammar) -> Node | None:
 
 def _enclosing(
     node: Node,
-    declared: Mapping[str, Sequence[Rule]],
-    holders: Mapping[str, tuple[Rule, ...]],
+    declared: Mapping[str, Sequence[tuple[Rule, Mapping[str, tuple[Rule, ...]]]]],
     rule_set: RuleSet,
     grammar: Grammar,
     parsed: ParsedFile,
 ) -> str | None:
     """The id the nearest enclosing tree node a declaration rule maps was given, or ``None``.
 
-    The id is minted as the first declaration rule that fires on the node mints it; an ancestor it
-    mints no id for is passed.
+    The id is minted as the first declaration rule that fires on the node mints it, each rule with
+    the holder rules it is listed beside; an ancestor it mints no id for is passed.
     """
     parent = node.parent
     while parent is not None:
-        rule = next(
-            (
-                r
-                for r in declared.get(parent.type, ())
-                if _fires(r, parent, holders, rule_set, grammar, parsed)
-            ),
-            None,
-        )
+        rule: Rule | None = None
+        holders: Mapping[str, tuple[Rule, ...]] = {}
+        for listed, beside in declared.get(parent.type, ()):
+            if _fires(listed, parent, beside, rule_set, grammar, parsed):
+                rule, holders = listed, beside
+                break
         values = _names(parent, rule, grammar, parsed) if rule is not None else None
         if rule is not None and values is not None:
             holder = _holder(parent, holders, rule_set, grammar, parsed)

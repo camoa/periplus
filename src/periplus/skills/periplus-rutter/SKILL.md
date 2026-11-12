@@ -115,6 +115,7 @@ Each key below has its detail in the guide section linked:
   instead. Two small rules then split one shape
   ([Tree references](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-references.md)).
   `{table: <table>, fill: enclosing_type}` tests the enclosing type's full name, and with `pattern` and `capture` a capture of it.
+- `match.encloses_for: [<pack>]` on a declaration rule makes its node the start of that pack's reference-rule edges written inside it, in place of copying those rules ([Tree references](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-references.md#a-dependents-node-as-the-start-of-another-rutters-edges)).
 - `on_miss_name: fallback`, on an end that holds `on_miss` and `fallback`, puts the miss mark
   under the fallback name ([Tree references](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-references.md)).
 - A declaration rule's `name_child` list is a path of one step or more; each step is a field, else

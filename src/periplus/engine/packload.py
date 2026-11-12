@@ -127,6 +127,7 @@ EXECUTED_KEYS = frozenset(
                 *("file", "ending", "filetype", "each", "where", "declaration", "name_child"),
                 *("reference", "skip_names", "whole_written"),
                 *("body_child", "holder", "attribute", "annotation", "text", "reads_sections"),
+                "encloses_for",
                 *("node_type", "follow"),
             )
         ),
@@ -248,6 +249,7 @@ _RULE_KEYS = {"rule", "reads", "in", "match", "id", "emits", "confidence"}
 #: The match keys of a rule that reads a parse tree.
 _DECLARATION_MATCH = {
     *("declaration", "name_child", "body_child", "holder", "where", "filetype", "file", "ending"),
+    "encloses_for",
 }
 
 #: The names the engine fills for a declaration rule's id. Any other name its template holds is a
@@ -436,6 +438,9 @@ class Rule:
     body_child: str = ""
     #: A declaration rule: the tree node type its nearest enclosing holder must be; ``""`` for any.
     holder: str = ""
+    #: A declaration rule: the packs whose reference rules take its node as an enclosing
+    #: declaration, ahead of their own pack's rules at the same tree node.
+    encloses_for: tuple[str, ...] = ()
     #: A declaration rule: the tree node types the match must have as direct children, and the
     #: fields of the matched node its id names.
     has_child: tuple[str, ...] = ()
@@ -680,6 +685,13 @@ def load_rules(
                     for source, names in sorted(unknown.items())
                 )
                 rules[index] = replace(rule, supported=False, reason=unread)
+    visible = _visible_packs(packs)
+    rules = [
+        _check_encloses(rule, rules, types, kinds, visible[rule.pack][1:])
+        if rule.supported and rule.encloses_for
+        else rule
+        for rule in rules
+    ]
     for rule in rules:
         if (
             rule.supported
@@ -1475,6 +1487,51 @@ def _check_edges(rule: Rule, types: Mapping[str, TypeInfo], kinds: Mapping[str, 
     return rule
 
 
+def _check_encloses(
+    rule: Rule,
+    rules: Sequence[Rule],
+    types: Mapping[str, TypeInfo],
+    kinds: Mapping[str, EdgeKind],
+    depends: Sequence[str],
+) -> Rule:
+    """The rule, marked not executed when a pack its ``encloses_for`` names is not among
+    ``depends``, the packs its pack depends on, or has no supported reference rule that would take
+    its node: one that reads the same file type, starts an edge at ``enclosing_declaration``, and
+    emits only edges of kinds that allow the rule's type, or an ancestor of it, at their from end.
+    """
+    lineage: set[str] = set()
+    name: str | None = rule.node_type
+    while name is not None and name not in lineage:
+        lineage.add(name)
+        name = types[name].parent if name in types else None
+    for pack in rule.encloses_for:
+        if pack not in depends:
+            reason = (
+                f"match.encloses_for names the pack {pack}, which the rule's pack does not depend "
+                "on"
+            )
+            return replace(rule, supported=False, reason=reason)
+        if not any(
+            other.supported
+            and other.reference
+            and other.pack == pack
+            and other.filetype == rule.filetype
+            and any(edge.from_template is None for edge in other.edges)
+            and all(
+                edge.kind in kinds and lineage & set(kinds[edge.kind].from_types)
+                for edge in other.edges
+            )
+            for other in rules
+        ):
+            reason = (
+                f"match.encloses_for names the pack {pack}, no reference rule of which reads "
+                f"{rule.filetype}, starts an edge at enclosing_declaration and has only edges of "
+                f"kinds that allow {rule.node_type} at their from end"
+            )
+            return replace(rule, supported=False, reason=reason)
+    return rule
+
+
 def _read_kinds(
     pack: str,
     file: str,
@@ -1548,6 +1605,8 @@ def _read_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]] = _
 def _build_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]]) -> Rule:
     if "holder" in item.get("match", {}) and "declaration" not in item["match"]:
         raise _Unsupported("only a tree declaration rule takes match.holder")
+    if "encloses_for" in item.get("match", {}) and "declaration" not in item["match"]:
+        raise _Unsupported("only a tree declaration rule takes match.encloses_for")
     if item.get("reads") == "map":
         return _build_map(pack, item, tables)
     if (
@@ -1895,7 +1954,8 @@ def _build_declaration(
     ):
         raise _Unsupported(
             "a declaration rule is not a file rule with in, match.filetype and no match keys "
-            "beyond declaration, name_child, body_child, holder, where, file and ending"
+            "beyond declaration, name_child, body_child, holder, encloses_for, where, file and "
+            "ending"
         )
     where = match.get("where", [])
     if not isinstance(where, list) or not all(
@@ -1919,6 +1979,8 @@ def _build_declaration(
         or any(emit["node"].keys() != {"type"} for emit in emits if "node" in emit)
     ):
         raise _Unsupported("a declaration rule emits one node with a type, or edges only")
+    if "encloses_for" in match and not nodes:
+        raise _Unsupported("match.encloses_for needs a rule that emits a node")
     if not all(
         isinstance(a, Mapping)
         and set(a) == {"name", "template"}
@@ -1981,6 +2043,7 @@ def _build_declaration(
         name_path=path,
         body_child=match.get("body_child", ""),
         holder=match.get("holder", ""),
+        encloses_for=tuple(match.get("encloses_for", ())),
         has_child=tuple(c["has_child"] for c in where if "has_child" in c),
         id_argument=argument or "",
         name_matches=name_matches,

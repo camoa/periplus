@@ -334,6 +334,26 @@ Two such rules in one pack on one tree node do not combine: the enclosing class 
 last, and the `in` folders and `file` glob of the rule that gives it are not consulted. A
 dependent pack whose class rule reads only one folder still names its own class in any folder.
 
+### A dependent's node as the start of another rutter's edges
+
+A reference rule never starts at a node of a pack that depends on its own. A dependent declaration
+rule may list the packs whose reference rules should, under `match.encloses_for`:
+
+```yaml
+# drupal_js_basic: a behavior is the start of js_basic's calls written inside it.
+- rule: behavior_from_assignment
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: object}], encloses_for: [js_basic]}
+```
+
+Those reference rules then take the rule's node as an enclosing declaration, as they take their own
+pack's, nearest first; at one tree node it comes before their rules. Its id is the one its own pack
+mints. The edge kinds still decide: the node's type must be allowed at the from end of every edge
+the reference rule emits, so the dependent usually declares its type below theirs with `parent`.
+Map rules that match that type then match the dependent's node too. A named pack the rule's pack
+does not depend on, or one with no reference rule that reads the same file type and could start
+at the type, refuses the rule; so does the key on a rule that is not a tree declaration rule
+emitting a node.
+
 ## Tree ids and has_child
 
 A declaration rule's id may name, beside declared_name, namespace, qualified_name and
