@@ -158,7 +158,7 @@ skill.
 
 ## Worked example
 
-Each command's options, output and exit codes are in [Navigation](https://github.com/camoa/periplus/blob/v0.7.0/docs/navigation.md). On the
+Each command's options, output and exit codes are in [Navigation](https://github.com/camoa/periplus/blob/v0.8.0/docs/navigation.md). On the
 project in the Navigation guide's worked example, these run as shown:
 
 <!-- nav-run -->

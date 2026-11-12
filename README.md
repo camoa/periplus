@@ -12,7 +12,7 @@
 extra for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.7.0.
+Status: **beta**, version 0.8.0.
 
 </div>
 
@@ -63,7 +63,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.7.0
+uv tool install git+https://github.com/camoa/periplus@v0.8.0
 ```
 
 To install from a local copy of this repository:
@@ -325,13 +325,12 @@ To map a Laravel application, pin `php_basic@0.2.0` and `laravel_basic@0.0.5` an
 at the application's root. The default Laravel folders need no settings. To move the templates,
 set `views_root` under `folders`; a template is named by its path below `views_root`.
 
-New in this release: a rutter can add rows to a table that a rutter it depends on owns, with
-`add_table_rows`, and a rule can test a name against a table with `where: in_table`; a dependent
-rutter's node can start another rutter's edges with `encloses_for`; `php_basic` maps `self::`,
-`static::` and `parent::` calls; `drupal_basic` maps events, fields, configuration, roles, queues,
-plugin types, entity handlers and many more Drupal shapes; `js_basic` maps member functions and
-their calls; and two new rutters, `eca_basic` and `salesforce_eca_basic`, map ECA models. Node and
-edge ids move, so map again after upgrading.
+New in this release: `php_basic` maps `$this->method()` calls, `new Foo()` and `Foo::class`;
+`drupal_basic` joins a module or theme to its routes, services, classes, libraries and templates,
+starts a theme hook link at the method or function that renders it, joins a template or script
+path to the route of the same shape, and maps `getForm(Foo::class)`; `drupal_js_basic` starts a
+library attachment at the method; and a `name_matches` condition can test a later child with
+`nth`. Node and edge ids move, so map again after upgrading.
 
 ## Write a rutter
 

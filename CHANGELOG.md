@@ -5,6 +5,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-12
+
+### Added
+
+- A `name_matches` condition with `child` may take `nth`, a number from 1, and then tests that child among the children of the node type, where a condition without it reads the first. A rule can so tell apart two children that share a type and have no field name.
+- `php_basic` maps three more shapes:
+  - a `$this->method()` call is a call site joined to its method, with a `calls` edge to the method found on the class, its parents or its traits. A method no mapped class declares stays unresolved under the calling class;
+  - `new Foo()`, `new self()` and `new static()` give an `instantiates` edge from the function or method around them. `new $class()` in a method is a call site marked as runtime;
+  - `Foo::class`, plain or qualified, gives a `references_class` edge. A class constant such as `Foo::NAME` gives none.
+- `drupal_basic` maps:
+  - what a module or theme holds: `route_in_module`, `service_in_module`, `class_in_module`, `library_in_module`, `template_in_module`, `library_in_theme` and `template_in_theme`;
+  - a template path or script path with placeholders, joined to the route whose path has the same shape, as `template_links_route` and the new `script_links_to_route` in `drupal_js_basic`;
+  - `getForm(Foo::class)` as a `builds_form` edge from the method or function around it;
+  - a `'#theme'` in a function of a module, theme, install, inc or profile file, and a `hook_theme` `template` value that names a folder;
+  - an `on403`-style handler of a class that descends from `HttpExceptionSubscriberBase`, as a subscriber of the kernel exception event.
+- The map skill has one recipe per kind of question, and tells the reader to answer from the map first and then read the code the map points at.
+
+### Changed
+
+- A theme hook link (`renders_theme_hook`) and a library attachment in PHP (`attaches_library`) start at the method or function around them, no longer at the class. One written outside any named function, such as a property default, gives no edge and one skipped row.
+- A runtime `$this->redirect($route)` call site has an id that ends in `(runtime)`, apart from the plain call site at the same line.
+- Node and edge ids move and the map grows, so a committed map differs after the upgrade. Map again and review the difference.
+
 ## [0.7.0] - 2026-11-11
 
 ### Added
