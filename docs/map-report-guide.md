@@ -104,7 +104,7 @@ Map:
   path    /path/to/project/.periplus/map.json
   nodes   12
   edges   8
-  internal: 2 nodes and 1 edges left out
+  internal: 3 nodes and 2 edges left out
 
 Files:
   selected  5
@@ -363,7 +363,7 @@ Map:
   path    /path/to/project/.periplus/map.json
   nodes   1
   edges   0
-  internal: 1 nodes and 1 edges left out
+  internal: 2 nodes and 2 edges left out
 
 Files:
   selected  1
@@ -436,7 +436,7 @@ Map:
   path    /path/to/project/.periplus/map.json
   nodes   12
   edges   8
-  internal: 2 nodes and 1 edges left out
+  internal: 3 nodes and 2 edges left out
 
 Files:
   selected  5

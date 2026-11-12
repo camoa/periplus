@@ -19,11 +19,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   A rutter cannot drop a node the rutter it depends on makes, so both stay beside the behavior
 #   node. Drupal.behaviors.other.attach(context) is also js_basic's js_calls edge between the two
 #   attach functions.
-# - once(), $() and jQuery(): this pack adds the three names to js_basic's table library_globals,
-#   so a call that no function of its script declares is one unresolved node for every script,
-#   js.function::once, js.function::$ or js.function::jQuery. No edge joins it to the library
-#   core/once or core/jquery. A call to a core member, such as Drupal.t(), gives an edge only
-#   where a mapped script assigns that name.
+# - once(), $() and jQuery(): this pack adds the three names to js_basic's table globals, so a
+#   call to one makes nothing, as a call to a browser global does, unless its script declares a
+#   function of that name. No edge joins it to the library core/once or core/jquery. A call to a
+#   core member, such as Drupal.t(), gives an edge only where a mapped script assigns that name.
 #
 # Settings. $build['#attached']['drupalSettings']['key'] = ... in PHP is a setting node named by
 # that first key, and drupalSettings.key inside a behavior object is an edge to it. A key that
@@ -104,11 +103,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: drupal_js_basic
 version: 0.0.1
 depends: [js_basic, drupal_basic]
-# The globals Drupal core's libraries core/once and core/jquery define. A call to one that no
-# function of the script declares is one unresolved node of that name, not one per script.
+# The globals Drupal core's libraries core/once and core/jquery define, each the value of its own
+# key, as in js_basic's table. js_basic's function_call skips a call to one.
 add_table_rows:
   js_basic:
-    library_globals:
+    globals:
       once: once
       $: $
       jQuery: jQuery

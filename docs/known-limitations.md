@@ -173,8 +173,8 @@ a list of its known gaps.
   expression so assigned is one too; a value of any other kind, such as a variable, gives none. A behavior call or a settings read
   outside a behavior object, or in a class inside one, makes no edge and goes under skipped.
   `detach`, `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge.
-  `once()`, `$()` and `jQuery()` stay unresolved, one node each for all scripts, with no edge to
-  their core library. Only the
+  `once()`, `$()` and `jQuery()` make nothing, as a browser global's call does, unless the script
+  declares a function of that name; nothing joins them to their core library. Only the
   first key after `drupalSettings` is read. The array form of a PHP library attachment or of
   `drupalSettings` is read as text, so it is inferred. Under `src` its class is named by PSR-4
   path; in a `.module` file the edge starts at the function around it. A library or a key named

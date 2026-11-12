@@ -5,8 +5,8 @@ node_types:
   id_namespace: js.function
 - name: js.file
   id_namespace: js.file
-# A call function_call skips as a global's, named as function_call names a call. Internal: the map
-# rules join it to the script's function of that name.
+# A call named as function_call names one, and a global's call named by the global alone.
+# Internal: the map rules join a global's call to the script's function of that name.
 - name: js.global_name_call
   id_namespace: js.global_name_call
   internal: true
@@ -82,11 +82,8 @@ rules:
 # node of its own, so it starts at the named function around it or at the script. A dotted call,
 # a.b(), is member/member_call.yaml's; any other shape, such as f()() or a[i](), makes no edge and
 # is a row of the report's matches skipped. A call to a function another script declares stays
-# unresolved. A call to a JavaScript or browser global the list below names makes nothing;
+# unresolved. A call to import() or to a name the table globals holds makes nothing;
 # function_call_named_like_global gives the edge when the script declares a function of that name.
-# A name the table library_globals holds, which a rutter for a library adds, is unresolved under
-# that table's value when the script declares no function of that name, so every script's call
-# meets one node.
 - rule: function_call
   reads: file
   in: [js_source]
@@ -96,18 +93,13 @@ rules:
     whole_written: true
     filetype: javascript
     where: [{name_matches: '[A-Za-z_$][\w$]*|(?s:.*[^\w$.].*)'}]
-    skip_names: [setTimeout, setInterval, clearTimeout, clearInterval, setImmediate,
-      clearImmediate, queueMicrotask, requestAnimationFrame, cancelAnimationFrame,
-      requestIdleCallback, cancelIdleCallback, parseInt, parseFloat, isNaN, isFinite, String,
-      Number, Boolean, Array, Object, Date, Symbol, BigInt, Promise, Map, Set, WeakMap, WeakSet,
-      RegExp, Error, TypeError, RangeError, Function, eval, encodeURIComponent, decodeURIComponent,
-      encodeURI, decodeURI, fetch, alert, confirm, prompt, require, import, structuredClone, atob,
-      btoa, getComputedStyle, matchMedia]
-  emits: [{edge: {kind: js_calls, from: enclosing_declaration, to: {types: [js.function], fallback: [lookup_last_segment_in: library_globals], on_miss: unresolved, on_miss_name: fallback}}}]
+    skip_names: [import, {table: globals}]
+  emits: [{edge: {kind: js_calls, from: enclosing_declaration, to: {types: [js.function], on_miss: unresolved}}}]
   confidence: declared
-# A call function_call skips, to a function of that name the script declares. The list is
-# function_call's skip_names less import, which no function can be named. The call reaches an
-# internal node, and the map rules below keep only a name a function of the script has.
+# f(...) again, to two internal nodes: <script path>:f, and, when the table globals holds f, f
+# alone, the table's value. The map rules below join a call that reaches both to the function f the
+# script declares, so only a global's call gets an edge here; any other call's is function_call's.
+# They look the second node up by the name as called, so each row of globals is its own value.
 - rule: function_call_named_like_global
   reads: file
   in: [js_source]
@@ -115,20 +107,24 @@ rules:
     reference: call_expression
     name_child: function
     filetype: javascript
-    where: [{name_matches: 'setTimeout|setInterval|clearTimeout|clearInterval|setImmediate|clearImmediate|queueMicrotask|requestAnimationFrame|cancelAnimationFrame|requestIdleCallback|cancelIdleCallback|parseInt|parseFloat|isNaN|isFinite|String|Number|Boolean|Array|Object|Date|Symbol|BigInt|Promise|Map|Set|WeakMap|WeakSet|RegExp|Error|TypeError|RangeError|Function|eval|encodeURIComponent|decodeURIComponent|encodeURI|decodeURI|fetch|alert|confirm|prompt|require|structuredClone|atob|btoa|getComputedStyle|matchMedia'}]
-  emits: [{edge: {kind: calls_global_name, from: enclosing_declaration, to: {types: [js.global_name_call]}}}]
+    where: [{name_matches: '[A-Za-z_$][\w$]*'}]
+    # Keywords, not names: function_call skips import() and lists super() as skipped.
+    skip_names: [import, super]
+  emits:
+  - edge: {kind: calls_global_name, from: enclosing_declaration, to: {types: [js.global_name_call]}}
+  - edge: {kind: calls_global_name, from: enclosing_declaration, to: {types: [js.global_name_call], resolve: [lookup_last_segment_in: globals, as_written]}}
   confidence: declared
 - rule: function_named_like_global_called_from_function
   reads: map
   match:
     node_type: js.function
-    follow: [{edge: calls_global_name}, {id_matches: '^js\.global_name_call::(?<js_function>.+)$'}, {node: 'js.function::{js_function}'}]
+    follow: &global_name [{edge: calls_global_name}, {id_matches: '^js\.global_name_call::(?<js_function>.+:(?<js_global>[^:]+))$'}, {node: 'js.global_name_call::{js_global}'}, {node: 'js.function::{js_function}'}]
   emits: [{edge: {kind: js_calls, from: this_node, to: matched_node}}]
   confidence: declared
 - rule: function_named_like_global_called_from_script
   reads: map
   match:
     node_type: js.file
-    follow: [{edge: calls_global_name}, {id_matches: '^js\.global_name_call::(?<js_function>.+)$'}, {node: 'js.function::{js_function}'}]
+    follow: *global_name
   emits: [{edge: {kind: js_calls, from: this_node, to: matched_node}}]
   confidence: declared

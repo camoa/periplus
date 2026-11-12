@@ -17,9 +17,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   object of the same name in another meet: obj.run = function () {} in one script and obj.run()
 #   in another give a js_calls edge, though the two objects differ.
 # What it does not map, today:
-# - A call to a JavaScript or browser global function_call's skip_names lists, such as parseInt(),
-#   setTimeout() or fetch(): no edge and no node, unless the script declares a function of that
-#   name, which the call reaches.
+# - A call to a JavaScript or browser global the table globals holds, such as parseInt(),
+#   setTimeout() or fetch(), or to a name a rutter for a library adds to it: no edge and no node,
+#   unless the script declares a function of that name, which the call reaches. import(): nothing.
 # - A member call to a name no member function has, such as console.log(), $.ajax() or this.x():
 #   no edge, no node and no skipped row. A call on a call or an index, $('.x').hide(), f()() or
 #   a[i](), and a call through ?. or a private name: no edge, and a row of the map report's
@@ -28,8 +28,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   sits at the line of the function or the script it starts at, not at the call: a map rule
 #   places it.
 # - A call to a function another script declares: it stays an unresolved end named in the
-#   calling script, <script path>:<name>. A name the table library_globals holds, which a rutter
-#   for a library adds, is unresolved under the table's value instead, one node for all scripts.
+#   calling script, <script path>:<name>.
 # - A generator, function* name() {}, a class and a class method: no node. A class ends the walk
 #   to the object around it, so a class written inside a member function of A.b = {...} gives its
 #   methods no node.
@@ -79,7 +78,21 @@ identity:
   written_names: [identifier]
   # f() names <script path>:f.
   resolve: [prefix_bare_with: namespace]
-# A global name a library defines, as written, to the name an unresolved call to it takes, so the
-# calls of every script meet one node. A rutter for the library adds its rows under add_table_rows.
+# The JavaScript and browser global functions, each the value of its own key. function_call skips
+# a call to one, and function_call_named_like_global joins it to a function of that name the
+# script declares. A rutter for a library adds the library's globals under add_table_rows, each the
+# value of its own key too.
 tables:
-  library_globals: {}
+  globals: {setTimeout: setTimeout, setInterval: setInterval, clearTimeout: clearTimeout,
+    clearInterval: clearInterval, setImmediate: setImmediate, clearImmediate: clearImmediate,
+    queueMicrotask: queueMicrotask, requestAnimationFrame: requestAnimationFrame,
+    cancelAnimationFrame: cancelAnimationFrame, requestIdleCallback: requestIdleCallback,
+    cancelIdleCallback: cancelIdleCallback, parseInt: parseInt, parseFloat: parseFloat,
+    isNaN: isNaN, isFinite: isFinite, String: String, Number: Number, Boolean: Boolean,
+    Array: Array, Object: Object, Date: Date, Symbol: Symbol, BigInt: BigInt, Promise: Promise,
+    Map: Map, Set: Set, WeakMap: WeakMap, WeakSet: WeakSet, RegExp: RegExp, Error: Error,
+    TypeError: TypeError, RangeError: RangeError, Function: Function, eval: eval,
+    encodeURIComponent: encodeURIComponent, decodeURIComponent: decodeURIComponent,
+    encodeURI: encodeURI, decodeURI: decodeURI, fetch: fetch, alert: alert, confirm: confirm,
+    prompt: prompt, require: require, structuredClone: structuredClone, atob: atob, btoa: btoa,
+    getComputedStyle: getComputedStyle, matchMedia: matchMedia}
