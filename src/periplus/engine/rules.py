@@ -382,13 +382,30 @@ def _captured(
 
 
 def _in_tables(where: Sequence[Condition], name: str | None, groups: Mapping[str, str]) -> bool:
-    """Whether each ``in_table`` condition of ``where`` finds its capture among ``groups``, or
-    ``name`` when it names none, among its keys, and each ``not_in_table`` condition does not."""
+    """Whether each ``in_table`` condition of ``where`` with no fill finds its capture among
+    ``groups``, or ``name`` when it names none, among its keys, and each such ``not_in_table``
+    condition does not."""
     return all(
         ((groups.get(c.capture) if c.capture else name) in c.keys) is not c.negate
         for c in where
-        if isinstance(c, InTable)
+        if isinstance(c, InTable) and not c.fill
     )
+
+
+def _fills_in_tables(where: Sequence[Condition], fills: Mapping[str, str]) -> bool:
+    """Whether each ``in_table`` condition of ``where`` with a fill finds that fill's value among
+    ``fills``, or the capture its pattern takes in that value, among its keys, and each such
+    ``not_in_table`` condition does not."""
+    for c in where:
+        if not isinstance(c, InTable) or not c.fill:
+            continue
+        text = fills.get(c.fill)
+        if text is not None and c.pattern is not None:
+            found = c.pattern.search(text)
+            text = None if found is None else found.group(c.capture)
+        if (text in c.keys) is c.negate:
+            return False
+    return True
 
 
 def _follow(
@@ -825,7 +842,7 @@ def _declarations(
         "enclosing_method" in (spec.start, spec.finish) for spec in rule.edges
     )
     for match in parsed.by_type.get(rule.declaration, ()):
-        if not _fires(rule, match):
+        if not _fires(rule, match, holders, rule_set, grammar, parsed):
             continue
         values = _names(match, rule, grammar, parsed)
         if values is None:
@@ -1223,11 +1240,19 @@ def _annotation(
     return found
 
 
-def _fires(rule: Rule, node: Node) -> bool:
+def _fires(
+    rule: Rule,
+    node: Node,
+    holders: Mapping[str, tuple[Rule, ...]],
+    rule_set: RuleSet,
+    grammar: Grammar,
+    parsed: ParsedFile,
+) -> bool:
     """Whether the tree node has a direct child of each of the rule's ``has_child`` types, has
     each ``name_matches`` child, whose whole text matches that condition's pattern, and passes each
-    ``in_table`` and ``not_in_table`` condition on the text of its name child or on a capture of
-    those patterns."""
+    ``in_table`` and ``not_in_table`` condition on the text of its name child, on a capture of
+    those patterns, or on ``enclosing_type``, the full name ``_holder`` gives the node's nearest
+    enclosing type among ``holders``."""
     if not (
         all(any(c.type == kind for c in node.children) for kind in rule.has_child)
         and all(
@@ -1240,7 +1265,12 @@ def _fires(rule: Rule, node: Node) -> bool:
         return True
     named = _child(node, rule.name_child)
     name = None if named is None else text_of(named)
-    return _in_tables(rule.where, name, _name_groups(rule, node))
+    if not _in_tables(rule.where, name, _name_groups(rule, node)):
+        return False
+    if not any(isinstance(c, InTable) and c.fill for c in rule.where):
+        return True
+    holder = _holder(node, holders, rule_set, grammar, parsed)
+    return _fills_in_tables(rule.where, {} if holder is None else {"enclosing_type": holder[0]})
 
 
 def _name_groups(rule: Rule, node: Node) -> dict[str, str]:
@@ -1377,6 +1407,7 @@ def _minted(
     Only rules of the packs in ``within`` count, as in ``_holder_rules``. A rule that fires and
     mints no id passes the node to the next, for ``enclosing_method`` as for ``{declared: <type>}``.
     """
+    holders = _holder_rules(rule_set, filetype, within)
     for rule in rule_set.rules:
         if not (
             rule.supported
@@ -1385,7 +1416,7 @@ def _minted(
             and rule.declaration == node.type
             and rule.filetype == filetype
             and rule.pack in within
-            and _fires(rule, node)
+            and _fires(rule, node, holders, rule_set, grammar, parsed)
         ):
             continue
         values = _names(node, rule, grammar, parsed)
@@ -1515,7 +1546,14 @@ def _holder(
     bodies = {rule.body_child for rules in holders.values() for rule in rules}
     parent = node.parent
     while parent is not None:
-        rule = next((r for r in holders.get(parent.type, ()) if _fires(r, parent)), None)
+        rule = next(
+            (
+                r
+                for r in holders.get(parent.type, ())
+                if _fires(r, parent, holders, rule_set, grammar, parsed)
+            ),
+            None,
+        )
         if rule is not None:
             values = _names(parent, rule, grammar, parsed)
             node_id = _node_id(rule, values, empty_ok=True) if values is not None else None
@@ -1751,7 +1789,7 @@ def _references(
     templated = any(s.template is not None or s.from_template is not None for s in rule.edges)
     fired = 0
     for match in parsed.by_type.get(rule.reference, ()):
-        if not _fires(rule, match):
+        if not _fires(rule, match, holders, rule_set, grammar, parsed):
             continue
         line = line_of(match)
         written = _child(match, rule.name_child)
@@ -1919,7 +1957,14 @@ def _enclosing(
     """
     parent = node.parent
     while parent is not None:
-        rule = next((r for r in declared.get(parent.type, ()) if _fires(r, parent)), None)
+        rule = next(
+            (
+                r
+                for r in declared.get(parent.type, ())
+                if _fires(r, parent, holders, rule_set, grammar, parsed)
+            ),
+            None,
+        )
         values = _names(parent, rule, grammar, parsed) if rule is not None else None
         if rule is not None and values is not None:
             holder = _holder(parent, holders, rule_set, grammar, parsed)

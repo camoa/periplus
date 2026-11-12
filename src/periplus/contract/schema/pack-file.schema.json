@@ -713,7 +713,7 @@
         },
         "in_table": {
           "$ref": "#/$defs/tableCondition",
-          "description": "The name is a key of the table, or the match is passed and is no fire. The name is the text of the first name_child field on a tree declaration or reference rule, the whole node id on a map rule, and the entry's key or else the file's stem on a file rule. The mapping form {table, capture} tests instead the named capture of a pattern in the same where: a name_matches pattern on a tree rule, an id_matches pattern on a map or file rule; a capture that took no text is a key of no table. The table is one the rule's pack or a pack it depends on declares under tables, the nearer pack's winning, with the rows loaded packs add under add_table_rows; a table none of them declares, or a capture no such pattern defines, refuses the rule."
+          "description": "The name is a key of the table, or the match is passed and is no fire. The name is the text of the first name_child field on a tree declaration or reference rule, the whole node id on a map rule, and the entry's key or else the file's stem on a file rule. The mapping form {table, capture} tests instead the named capture of a pattern in the same where: a name_matches pattern on a tree rule, an id_matches pattern on a map or file rule; a capture that took no text is a key of no table. The table is one the rule's pack or a pack it depends on declares under tables, the nearer pack's winning, with the rows loaded packs add under add_table_rows. The mapping form {table, fill} tests a value the engine fills at the match, such as the enclosing type's name, and {table, fill, pattern, capture} a capture of a pattern searched in it. A table none of them declares, a capture no such pattern defines, or a fill the rule's kind does not give, refuses the rule."
         },
         "not_in_table": {
           "$ref": "#/$defs/tableCondition",
@@ -727,10 +727,14 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["table", "capture"],
+          "required": ["table"],
+          "anyOf": [{"required": ["capture"]}, {"required": ["fill"]}],
+          "dependentRequired": {"pattern": ["fill", "capture"]},
           "properties": {
             "table": {"type": "string", "minLength": 1, "description": "The table's name."},
-            "capture": {"type": "string", "minLength": 1, "description": "A named capture of a pattern in the same where."}
+            "capture": {"type": "string", "minLength": 1, "description": "A named capture of a pattern in the same where, or with fill, of this condition's pattern."},
+            "fill": {"type": "string", "minLength": 1, "description": "A value the engine fills at the match, tested in place of the name: enclosing_type, the full name of the nearest enclosing type declaration, on a tree declaration or reference rule. Absent at a match outside a type, and then a key of no table."},
+            "pattern": {"type": "string", "minLength": 1, "description": "RE2 searched in the fill's text; the condition tests the text its capture took, and a fill the pattern does not fit is a key of no table."}
           }
         }
       ]

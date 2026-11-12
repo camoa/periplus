@@ -243,9 +243,32 @@ name the table `shared` holds is one node for every file, any other is named in 
   confidence: declared
 ```
 
+On a tree declaration or reference rule, `{table: <table>, fill: enclosing_type}` tests the full
+name of the type declaration that holds the match, the value an id template reads as
+`{enclosing_type}`, in place of the rule's own name. Adding `pattern` and `capture` tests the
+capture of that pattern searched in the name instead. A match outside any type, or a name the
+pattern does not fit, is a key of no table. This rule maps a member of an object only when the
+first part of the name it is assigned to is in `shared`; `js_basic` names that object
+`<script path>:A.b`, so the pattern starts after the colon:
+
+```yaml
+- rule: object_member_shared
+  reads: file
+  in: [source]
+  match:
+    declaration: pair
+    name_child: key
+    filetype: javascript
+    where:
+    - in_table: {table: shared, fill: enclosing_type, pattern: ':(?<root>[\w$]+)', capture: root}
+  id: {from: [enclosing_type, declared_name], template: '{enclosing_type}.{declared_name}'}
+  emits: [{node: {type: my.member}}]
+  confidence: declared
+```
+
 A table none of the visible rutters declares refuses the rule, and so does a capture no pattern of
-the same `where` defines, or, on a declaration rule whose `name_child` is a list, a condition with
-no capture.
+the same `where` defines, a fill other than `enclosing_type` or on another kind of rule, or, on a
+declaration rule whose `name_child` is a list, a condition with no capture and no fill.
 
 ## Where the framework begins: boundary
 
@@ -603,9 +626,9 @@ file.rules.*.emits.*.edge.from.where.*: ancestor_reaches applies_to attribute_ar
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
     has_promoted_constructor_parameter id_matches in_method_with_attribute in_table is_mapping
     key method_set_covers name name_matches not_in_table on_service
-file.rules.*.emits.*.edge.from.where.*.in_table: capture table
+file.rules.*.emits.*.edge.from.where.*.in_table: capture fill pattern table
 file.rules.*.emits.*.edge.from.where.*.name_matches: child pattern
-file.rules.*.emits.*.edge.from.where.*.not_in_table: capture table
+file.rules.*.emits.*.edge.from.where.*.not_in_table: capture fill pattern table
 file.rules.*.emits.*.edge.to.from: annotation_key argument_class argument_key array_key_class
     each each_key incoming_edges literal qualified value
 file.rules.*.emits.*.edge.to.from.*: annotation_key argument argument_class argument_key
@@ -614,9 +637,9 @@ file.rules.*.emits.*.edge.to.where.*: ancestor_reaches applies_to attribute_argu
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
     has_promoted_constructor_parameter id_matches in_method_with_attribute in_table is_mapping
     key method_set_covers name name_matches not_in_table on_service
-file.rules.*.emits.*.edge.to.where.*.in_table: capture table
+file.rules.*.emits.*.edge.to.where.*.in_table: capture fill pattern table
 file.rules.*.emits.*.edge.to.where.*.name_matches: child pattern
-file.rules.*.emits.*.edge.to.where.*.not_in_table: capture table
+file.rules.*.emits.*.edge.to.where.*.not_in_table: capture fill pattern table
 file.rules.*.emits.*.node: state
 file.rules.*.id: on_miss
 file.rules.*.id.from: argument_class argument_key array_key_class each each_key incoming_edges

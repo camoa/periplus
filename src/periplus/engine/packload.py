@@ -140,7 +140,7 @@ EXECUTED_KEYS = frozenset(
         *(
             f"{_RULE}match.where.*.{c}{k}"
             for c in _TABLE_CONDITIONS
-            for k in ("", ".table", ".capture")
+            for k in ("", ".table", ".capture", ".fill", ".pattern")
         ),
         *(
             f"{_RULE}id.{k}"
@@ -239,6 +239,9 @@ def _holds(value: object, segments: Sequence[str]) -> bool:
 #: The values a reference rule gives its edge ends' templates, beside its name_matches groups.
 _REFERENCE_VALUES = {"enclosing_type", "enclosing_method"}
 
+#: The values a tree declaration or reference rule's table condition may test with ``fill``.
+_TABLE_FILLS = frozenset({"enclosing_type"})
+
 #: The keys of the rule shapes this engine executes. A rule with any other key is not run.
 _RULE_KEYS = {"rule", "reads", "in", "match", "id", "emits", "confidence"}
 
@@ -329,12 +332,16 @@ class IsMapping:
 @dataclass(frozen=True, slots=True)
 class InTable:
     """A ``where`` condition: the rule's name, or the named ``capture`` of a name or id pattern in
-    the same ``where``, is one of ``keys``, a table's keys; with ``negate`` it is not. A capture
-    that took no text is none of them."""
+    the same ``where``, is one of ``keys``, a table's keys; with ``negate`` it is not. With
+    ``fill`` it tests the value of that name the engine fills at the match instead, or with
+    ``pattern`` too, the ``capture`` of that pattern searched in it. A capture that took no text,
+    and a fill the match lacks, is none of them."""
 
     keys: frozenset[str]
     capture: str = ""
     negate: bool = False
+    fill: str = ""
+    pattern: re.Pattern[str] | None = None
 
 
 Condition = KeyEquals | HasKey | IdMatches | IsMapping | InTable
@@ -1977,7 +1984,9 @@ def _build_declaration(
         has_child=tuple(c["has_child"] for c in where if "has_child" in c),
         id_argument=argument or "",
         name_matches=name_matches,
-        where=_table_conditions(where, tables, patterns, "name_matches", named=named),
+        where=_table_conditions(
+            where, tables, patterns, "name_matches", named=named, fills=_TABLE_FILLS
+        ),
     )
 
 
@@ -2237,7 +2246,9 @@ def _build_reference(
         skip_names=_skip_names(match.get("skip_names", ()), tables),
         whole_written=match.get("whole_written") is True,
         name_matches=name_matches,
-        where=_table_conditions(where, tables, (p for _, p in name_matches), "name_matches"),
+        where=_table_conditions(
+            where, tables, (p for _, p in name_matches), "name_matches", fills=_TABLE_FILLS
+        ),
     )
 
 
@@ -2343,11 +2354,13 @@ def _table_conditions(
     kind: str,
     *,
     named: bool = True,
+    fills: frozenset[str] = frozenset(),
 ) -> tuple[InTable, ...]:
     """Each ``in_table`` and ``not_in_table`` condition of ``where``, holding the keys of the table
     it names among ``tables``. A capture it names must be a group of one of ``patterns``, the
     ``kind`` patterns of the same ``where``; one with no capture tests the rule's name, which a rule
-    that is not ``named`` lacks."""
+    that is not ``named`` lacks. A ``fill`` it names must be one of ``fills``, and its capture a
+    group of its own pattern."""
     groups = {group for pattern in patterns for group in pattern.groupindex}
     found = []
     for condition in where:
@@ -2355,28 +2368,50 @@ def _table_conditions(
             if key not in condition:
                 continue
             given = condition[key]
+            fill, pattern = "", None
             if isinstance(given, str):
                 table, capture = given, ""
             elif isinstance(given, Mapping) and set(given) == {"table", "capture"}:
                 table, capture = str(given["table"]), str(given["capture"])
+            elif isinstance(given, Mapping) and set(given) in (
+                {"table", "fill"},
+                {"table", "fill", "pattern", "capture"},
+            ):
+                table, fill = str(given["table"]), str(given["fill"])
+                capture = str(given.get("capture", ""))
+                pattern = _regex(given["pattern"]) if "pattern" in given else None
             else:
-                raise _Unsupported(f"{key} is not a table's name, or a table and a capture")
+                raise _Unsupported(
+                    f"{key} is not a table's name, a table and a capture, or a table and a fill "
+                    "with an optional pattern and its capture"
+                )
             if table not in tables:
                 raise _Unsupported(
                     f"{key} names the table {table}, which no tables key of the pack or a pack it "
                     "depends on declares"
                 )
-            if capture and capture not in groups:
+            if fill and fill not in fills:
+                raise _Unsupported(
+                    f"{key} names the fill {fill}, which this kind of rule does not give a table "
+                    "condition"
+                )
+            if pattern is not None and capture not in pattern.groupindex:
+                raise _Unsupported(
+                    f"{key} names the capture {capture}, which its pattern does not define"
+                )
+            if capture and not fill and capture not in groups:
                 raise _Unsupported(
                     f"{key} names the capture {capture}, which no {kind} pattern of the rule's "
                     "where defines"
                 )
-            if not capture and not named:
+            if not capture and not fill and not named:
                 raise _Unsupported(
                     f"{key} with no capture needs a string match.name_child; with a list, test a "
                     "capture"
                 )
-            found.append(InTable(frozenset(tables[table]), capture, key == "not_in_table"))
+            found.append(
+                InTable(frozenset(tables[table]), capture, key == "not_in_table", fill, pattern)
+            )
     return tuple(found)
 
 

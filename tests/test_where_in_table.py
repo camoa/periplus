@@ -286,3 +286,131 @@ def test_a_capture_no_pattern_of_the_where_defines_is_refused(tmp_path: Path) ->
         "cannot be executed: in_table names the capture name, which no id_matches pattern of "
         "the rule's where defines"
     ]
+
+
+#: ``shared`` and ``local`` split a class's methods by the class's name, a fill no pattern of the
+#: rule's own name gives; ``call`` tests the same fill at a call.
+FILL_RULES = """\
+node_types:
+- {{name: own.cls, id_namespace: own.cls}}
+- {{name: own.shared, id_namespace: own.shared}}
+- {{name: own.local, id_namespace: own.local}}
+- {{name: own.fn, id_namespace: own.fn}}
+edge_kinds:
+- {{kind: calls, from: [own.shared, own.local], to: own.fn}}
+rules:
+- rule: cls
+  reads: file
+  in: [code]
+  match: {{declaration: class_declaration, name_child: name, body_child: declaration_list,
+    filetype: php}}
+  id: {{from: declared_name}}
+  emits: [{{node: {{type: own.cls}}}}]
+  confidence: declared
+- rule: shared
+  reads: file
+  in: [code]
+  match: {{declaration: method_declaration, name_child: name, filetype: php,
+    where: [{{in_table: {test}}}]}}
+  id: {{from: [enclosing_type, declared_name], template: '{{enclosing_type}}.{{declared_name}}'}}
+  emits: [{{node: {{type: own.shared}}}}]
+  confidence: declared
+- rule: local
+  reads: file
+  in: [code]
+  match: {{declaration: method_declaration, name_child: name, filetype: php,
+    where: [{{not_in_table: {test}}}]}}
+  id: {{from: [enclosing_type, declared_name], template: '{{enclosing_type}}.{{declared_name}}'}}
+  emits: [{{node: {{type: own.local}}}}]
+  confidence: declared
+- rule: fn
+  reads: file
+  in: [code]
+  match: {{declaration: function_definition, name_child: name, filetype: php}}
+  id: {{from: declared_name}}
+  emits: [{{node: {{type: own.fn}}}}]
+  confidence: declared
+- rule: call
+  reads: file
+  in: [code]
+  match: {{reference: function_call_expression, name_child: function, filetype: php,
+    where: {call}}}
+  emits:
+  - edge: {{kind: calls, from: enclosing_declaration, to: {{types: [own.fn]}}}}
+  confidence: declared
+"""
+
+FILL_SOURCE = """\
+<?php
+
+class alpha { function run() { beta(); } }
+
+class gamma { function run() { beta(); } }
+
+class alpha_box { function run() {} }
+
+class gamma_box { function run() {} }
+
+function beta() {}
+"""
+
+#: The enclosing type's name, and the text before an underscore in it.
+WHOLE = "{table: builtins, fill: enclosing_type}"
+FIRST = "{table: builtins, fill: enclosing_type, pattern: '^(?<root>[a-z]+)', capture: root}"
+
+
+def _fill_project(root: Path, test: str, call: str = ANY) -> None:
+    plant(
+        root,
+        {
+            ".periplus/packs/own@0.0.1/pack.yaml": OWNER,
+            ".periplus/packs/own@0.0.1/rules/own.yaml": FILL_RULES.format(test=test, call=call),
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [own@0.0.1]\n",
+            "src/a.php": FILL_SOURCE,
+        },
+    )
+
+
+def _calls(root: Path) -> set[tuple[str, str]]:
+    document = json.loads((root / "map.json").read_text())
+    return {(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "calls"}
+
+
+def test_the_enclosing_type_fill_splits_members_and_names_the_edge_s_start(tmp_path: Path) -> None:
+    """gamma.run is local, so the call in it starts at the local node, not the shared rule's."""
+    _fill_project(tmp_path, WHOLE)
+    found = _map(tmp_path)
+    assert found["own.shared"] == {"alpha.run"}
+    assert found["own.local"] == {"gamma.run", "alpha_box.run", "gamma_box.run"}
+    assert _calls(tmp_path) == {
+        ("own.shared::alpha.run", "own.fn::beta"),
+        ("own.local::gamma.run", "own.fn::beta"),
+    }
+
+
+def test_a_capture_of_a_pattern_on_the_fill_is_tested_in_its_place(tmp_path: Path) -> None:
+    _fill_project(tmp_path, FIRST)
+    found = _map(tmp_path)
+    assert found["own.shared"] == {"alpha.run", "alpha_box.run"}
+    assert found["own.local"] == {"gamma.run", "gamma_box.run"}
+
+
+def test_a_reference_rule_tests_the_enclosing_type_fill(tmp_path: Path) -> None:
+    _fill_project(tmp_path, WHOLE, call=f"[{{not_in_table: {WHOLE}}}]")
+    _map(tmp_path)
+    assert _calls(tmp_path) == {("own.local::gamma.run", "own.fn::beta")}
+
+
+def test_a_fill_the_rule_kind_does_not_provide_is_refused(tmp_path: Path) -> None:
+    tree, mapped = tmp_path / "tree", tmp_path / "map"
+    _fill_project(tree, "{table: builtins, fill: declared_name}")
+    _project(mapped, mapped="[{in_table: {table: builtins, fill: enclosing_type}}]")
+    assert [p.message for p in _run(tree).problems] == [
+        f"own/rules/own.yaml: the rule {rule} cannot be executed: {key} names the fill "
+        "declared_name, which this kind of rule does not give a table condition"
+        for rule, key in (("local", "not_in_table"), ("shared", "in_table"))
+    ]
+    assert _refused(mapped, "root") == [
+        "cannot be executed: in_table names the fill enclosing_type, which this kind of rule does "
+        "not give a table condition"
+    ]
