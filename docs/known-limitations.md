@@ -16,10 +16,10 @@ known gaps.
   that no mapped class or ancestor declares is unresolved under the calling class, a call in a
   parent to a method a child overrides lands on the parent's method, and inside a trait `$this`
   names the trait. `new parent()`, an anonymous class and a class name built by an expression
-  give no `instantiates` edge, and `new $class()` is kept as a call site marked runtime. A plain
-  `Foo::class` gives no `references_class` edge, because a rule cannot tell it from `Foo::CONST`;
-  only a qualified `\A\B\Foo::class` or `Lib\Foo::class` does. A `new` or a qualified
-  `::class` outside any function or method, such as in an attribute, lists a skipped row. A
+  give no `instantiates` edge, and `new $class()` is kept as a call site marked runtime.
+  `self::class`, `static::class`, `parent::class` and `$x::class` give no `references_class`
+  edge. A `new` or a `::class` outside any function or method, such as in an attribute, lists a
+  skipped row. A
   property typed by a union of two or more class names, `Helper|Other`, gives no edge, and neither
   does a call in a parent class through a property only a child assigns. `use function` aliases
   do not bind. A call to a PHP built-in function makes nothing, but the names are compared as

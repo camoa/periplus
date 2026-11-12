@@ -4,8 +4,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # under its full name, and a class-like gets its inherits, implements, mixes_in and contains edges.
 # A function or method also gets a calls edge for each $this->m() it holds, inferred, an
 # instantiates edge for each new of a written class, self or static, and a references_class edge
-# for each qualified \A\B\Foo::class or Lib\Foo::class. It sits beside the reference pack php and
-# does not replace it.
+# for each Foo::class, \A\B\Foo::class or Lib\Foo::class. It sits beside the reference pack php
+# and does not replace it.
 #
 # Known gaps. A call to a function PHP itself defines, such as strlen() or json_decode(), makes
 # nothing: the rule calls_function lists the 2150 names get_defined_functions()['internal']
@@ -54,8 +54,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   new $this->cls(), make no instantiates edge. new $class() gets none either: inside a class
 #   method it keeps a php.call_site node marked resolution: runtime. A new outside any function or
 #   method, as in an attribute or a property default, lists a skipped row.
-# - A plain Foo::class makes no references_class edge: a reference rule cannot tell it from
-#   Foo::CONST. Nor do self::class, static::class, parent::class and $x::class. A qualified
+# - self::class, static::class, parent::class and $x::class make no references_class edge. A
 #   ::class outside any function or method lists a skipped row.
 # - A property whose @var names a class with a backslash inside and none in front, @var
 #   Lib\Mailer, gets no found php.property_type node. edges/var_type_as_written.yaml gives it an

@@ -115,8 +115,6 @@ either, the rule is refused.
 - A method call on an object, `$x->m()`, whose class is known only at run time. `$this->m()` is
   joined in the map through the enclosing class and its ancestors, so a call in a parent to a
   method a child overrides lands on the parent's method.
-- A plain `Foo::class`. The tree gives it and `Foo::CONST` the same two name children, and a rule
-  reads only the first, so only a qualified `\A\B\Foo::class` or `Lib\Foo::class` is mapped.
 - A function imported by `use function x as y`. The imports bind type names only, so `y()` is an
   unresolved `y` in the namespace: one table would merge a function and a class PHP keeps apart.
 - A call in a class constant or a property default, which no function or method holds: skipped.
@@ -672,7 +670,7 @@ file.rules.*.emits.*.edge.from.where.*: ancestor_reaches applies_to attribute_ar
     has_promoted_constructor_parameter id_matches in_method_with_attribute in_table is_mapping
     key method_set_covers name name_matches not_in_table on_service
 file.rules.*.emits.*.edge.from.where.*.in_table: capture fill pattern table
-file.rules.*.emits.*.edge.from.where.*.name_matches: child pattern
+file.rules.*.emits.*.edge.from.where.*.name_matches: child nth pattern
 file.rules.*.emits.*.edge.from.where.*.not_in_table: capture fill pattern table
 file.rules.*.emits.*.edge.to.from: annotation_key argument_class argument_key array_key_class
     each each_key incoming_edges literal qualified value
@@ -683,7 +681,7 @@ file.rules.*.emits.*.edge.to.where.*: ancestor_reaches applies_to attribute_argu
     has_promoted_constructor_parameter id_matches in_method_with_attribute in_table is_mapping
     key method_set_covers name name_matches not_in_table on_service
 file.rules.*.emits.*.edge.to.where.*.in_table: capture fill pattern table
-file.rules.*.emits.*.edge.to.where.*.name_matches: child pattern
+file.rules.*.emits.*.edge.to.where.*.name_matches: child nth pattern
 file.rules.*.emits.*.edge.to.where.*.not_in_table: capture fill pattern table
 file.rules.*.emits.*.node: state
 file.rules.*.id: on_miss

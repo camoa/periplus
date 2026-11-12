@@ -268,8 +268,10 @@ rule's list is one field or two, the name and a member. An empty step, or an emp
 
 `name_matches` tests a child's whole text. Its string form tests the first `name_child`. Its
 mapping form, `{child: scope, pattern: Config}`, names the child: a field of the match, or else
-its first child of that node type. So one rule can test a call's class and its method. A match
-without that child, or whose child does not match, makes nothing and is not a fire.
+its first child of that node type. So one rule can test a call's class and its method. With
+`nth`, `{child: name, nth: 2, pattern: class}`, it tests the match's nth child of that node type,
+counted from 1, and reads no field. A match without that child, or whose child does not match,
+makes nothing and is not a fire.
 
 `in_table: <table>` holds when a name is a key of the table, and `not_in_table: <table>` when it is
 not; the values are not read. The name is the first `name_child` field's text on a tree declaration
