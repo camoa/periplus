@@ -19,9 +19,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   is a js_calls edge from the behavior (encloses_for, behavior/behavior.yaml), and a call to a
 #   member function of the script, a.b(), sits at the line of the script. A function assigned to
 #   Drupal.behaviors.name.attach directly stays a member function, and a call in it starts there.
-# - Drupal.behaviors.other.attach(context) is also js_basic's js_calls edge from the behavior to
-#   an unresolved member function Drupal.behaviors.other.attach, even when a mapped script
-#   declares the other behavior: the attaches_behavior edge is the one that reaches it.
+# - Drupal.behaviors.other.attach(context), from a behavior, a function or a script, is also a
+#   js_calls edge to the other behavior, unresolved when no mapped script declares it
+#   (behavior/behavior.yaml); js_basic leaves the call to this pack, by excluded_objects.
 # - once(), $() and jQuery(): this pack adds the three names to js_basic's table library_globals,
 #   so a call to one is one unresolved node for every script, js.function::once, js.function::$ or
 #   js.function::jQuery, unless its script declares a function of that name. No edge joins it to

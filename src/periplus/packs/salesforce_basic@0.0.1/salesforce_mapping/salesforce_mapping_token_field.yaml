@@ -1,43 +1,131 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A field mapping whose Drupal side is a token names a field in it: [user:field_x],
-# [node:field_y:value]. The file rule links the mapping to drupal_basic's internal field-name hub
-# (field/field_name.yaml) for the first segment after a colon that starts with field_; the map rule
-# gives maps_token_field to every field storage of that name, on any entity type, else to the
-# unresolved field storage field.storage.<name>, which stays in the map as a mark. A token that
-# names no field_ segment, such as [site:name] or a base field, gives nothing.
+# [node:field_y:value]. Each token that holds a field_ segment after a colon, the first such, is
+# an internal node at its line, linked to drupal_basic's internal field-name hub
+# (field/field_name.yaml). A token is written [<token type>:<field>...], and a token type names
+# its entity type: the table token_entity_types gives the entity type of a token type whose name
+# differs, as term for taxonomy_term, and any other names its entity type as written. The map
+# rules give maps_token_field:
+# - when the field follows the token type and the map holds that entity type, to the storage
+#   field.storage.<entity type>.<field>, else to that unresolved storage, a mark;
+# - otherwise, as [current-user:field_x] or [webform_submission:user:field_x], to the one storage
+#   of that name when every storage of it has one entity type; maps_token_shared_field_name to the
+#   drupal.shared_field_name node when its storages sit on two or more entity types; and, when no
+#   mapped storage has the name, to the unresolved field.storage.<field>, a mark.
+# Each edge sits at the token's line. A token that names no field_ segment, such as [site:name]
+# or a base field, gives nothing.
 #
-# Inferred: the name, not the token's type, picks the storage, so [user:field_x] also links to a
-# node's field_x. A row of another field type is read too, which gives nothing unless its value
-# holds a colon before field_.
+# Read as text, since field_mappings is a list and a data rule's each reads only a mapping's
+# entries: drupal_field_value on a line of its own, its value quoted and starting with [. A row
+# of another field type is read too, which gives nothing unless its value is such a token.
+
+node_types:
+# <mapping>|<text before the field><field>, as salesforce_mapping.salesforce_mapping.m|node:field_x.
+- name: salesforce.token_field
+  id_namespace: salesforce.token_field
+  internal: true
+# The entity type a token type names, from the table, else as written.
+- name: salesforce.token_entity
+  id_namespace: salesforce.token_entity
+  internal: true
 
 edge_kinds:
 - kind: token_names_field
-  from: salesforce.mapping
+  from: salesforce.token_field
   to: drupal.field_name
+- kind: token_on_entity
+  from: salesforce.token_field
+  to: salesforce.token_entity
 - kind: maps_token_field
   from: salesforce.mapping
   to: drupal.field_storage
+- kind: maps_token_shared_field_name
+  from: salesforce.mapping
+  to: drupal.shared_field_name
 
 rules:
+# token_type takes part only where the field follows the token type.
+- rule: salesforce_token_field
+  reads: file
+  in: [config, module_config]
+  match: &token
+    file: 'salesforce_mapping.salesforce_mapping.*'
+    filetype: drupal_yml_text
+    text: '(?m)^[ \t]*(?:-[ \t]+)?drupal_field_value:[ \t]*[''"]\[(?<head>(?<token_type>[\w-]+):|[^\]''"\n]*?:)(?<field>field_[a-z0-9_]+)[:\]]'
+  id: &token_id {template: '{file_stem}|{head}{field}'}
+  emits: [{node: {type: salesforce.token_field}}]
+  confidence: inferred
 - rule: salesforce_token_names_field
   reads: file
   in: [config, module_config]
-  match: {file: 'salesforce_mapping.salesforce_mapping.*', filetype: yaml}
-  id: {from: file_stem}
-  emits:
-  - edge: {kind: token_names_field, from: this_node, to: {from: {key: 'field_mappings.*.drupal_field_value'}, pattern: '^\[[^\]]*?:(?<field>field_[a-z0-9_]+)[:\]]', template: '{field}', type: drupal.field_name}}
+  match: *token
+  id: *token_id
+  emits: [{edge: {kind: token_names_field, from: this_node, to: {from: {capture: field}, type: drupal.field_name}}}]
+  confidence: inferred
+- rule: salesforce_token_on_entity
+  reads: file
+  in: [config, module_config]
+  match: *token
+  id: *token_id
+  emits: [{edge: {kind: token_on_entity, from: this_node, to: {from: {capture: token_type}, resolve: [lookup_last_segment_in: token_entity_types, as_written], type: salesforce.token_entity}}}]
   confidence: inferred
 
-- rule: salesforce_token_field_or_mark
+- rule: salesforce_token_entity_field
   reads: map
   match:
-    node_type: salesforce.mapping
+    node_type: salesforce.token_field
+    where: [{id_matches: '^salesforce\.token_field::(?<mapping>[^|]+)\|[^|]*:(?<field>field_[a-z0-9_]+)$'}]
     follow:
+    - edge: token_on_entity
+    - id_matches: '^salesforce\.token_entity::(?<entity>.+)$'
+    - node: 'drupal.entity_type::{entity}'
+    - node: 'drupal.config::{mapping}'
+  emits: [{edge: {kind: maps_token_field, from: matched_node, to: {template: 'field.storage.{entity}.{field}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred
+
+# A token whose entity type is not known, through the hub: the name's one storage, from the second
+# pass, its shared name, or the mark. unknown is captured only where no known entity type was
+# reached, single only where no field_name_shared edge was, and none only where no storage was.
+- rule: salesforce_token_field_by_name
+  reads: map
+  match:
+    node_type: salesforce.token_field
+    where: [&token_read {id_matches: '^salesforce\.token_field::(?<read>(?<mapping>[^|]+)\|[^|]*:(?<field>field_[a-z0-9_]+))$'}]
+    follow:
+    - &known {try: [{edge: token_on_entity}, {id_matches: '^salesforce\.token_entity::(?<entity_type>.+)$'}, {node: 'drupal.entity_type::{entity_type}'}]}
+    - &unknown {id_matches: '^(?:drupal\.entity_type::|salesforce\.token_field::(?<unknown>))'}
+    - &back {node: 'salesforce.token_field::{read}'}
     - edge: token_names_field
-    - id_matches: '^drupal\.field_name::(?<entity>)(?<field>field_\w+)$'
-    - try:
-      - edge: field_name_of
-      - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+\.)(?<field>.+)$'
-  emits: [{edge: {kind: maps_token_field, from: this_node, to: {template: 'field.storage.{entity}{field}', type: drupal.field_storage, on_miss: unresolved}}}]
+    - edge: field_name_ready
+    - try: [{edge: field_name_shared}]
+    - id_matches: '^(?:drupal\.config::|drupal\.field_name::(?<single>))'
+    - node: 'drupal.field_name::{field}'
+    - edge: field_name_of
+    - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+)\.'
+    - &mapping {node: 'drupal.config::{mapping}'}
+  emits: [{edge: {kind: maps_token_field, from: matched_node, to: {template: 'field.storage.{entity}.{field}{unknown}{single}', type: drupal.field_storage}}}]
+  confidence: inferred
+- rule: salesforce_token_shared_field_name
+  reads: map
+  match:
+    node_type: salesforce.token_field
+    where: [*token_read]
+    follow: [*known, *unknown, *back, {edge: token_names_field}, {edge: field_name_shared}, *mapping]
+  emits: [{edge: {kind: maps_token_shared_field_name, from: matched_node, to: {template: '{field}{unknown}', type: drupal.shared_field_name}}}]
+  confidence: inferred
+- rule: salesforce_token_field_mark
+  reads: map
+  match:
+    node_type: salesforce.token_field
+    where: [*token_read]
+    follow:
+    - *known
+    - *unknown
+    - *back
+    - edge: token_names_field
+    - try: [{edge: field_name_of}]
+    - id_matches: '^(?:drupal\.config::|drupal\.field_name::(?<none>))'
+    - *mapping
+  emits: [{edge: {kind: maps_token_field, from: matched_node, to: {template: 'field.storage.{field}{unknown}{none}', type: drupal.field_storage, on_miss: unresolved}}}]
   confidence: inferred

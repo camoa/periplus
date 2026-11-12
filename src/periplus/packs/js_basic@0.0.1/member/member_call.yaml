@@ -58,6 +58,7 @@ rules:
   emits: [{edge: {kind: calls_member, from: enclosing_declaration, to: {template: '{js_a}.{js_b}.{js_c}'}}}]
   confidence: declared
 # The three shapes again, when shared_objects holds the first part and builtin_objects does not.
+# A call to P.x.y, where the table excluded_objects holds P, is left to the rutter that adds P.
 - rule: shared_member_call
   reads: file
   in: [js_source]
@@ -65,7 +66,7 @@ rules:
     reference: call_expression
     name_child: function
     filetype: javascript
-    where: [{name_matches: '(?<js_callee>(?<js_a>[A-Za-z_$][\w$]*)(?:\.[A-Za-z_$][\w$]*)+)'}, &shared {in_table: {table: shared_objects, capture: js_a}}, &not_builtin {not_in_table: {table: builtin_objects, capture: js_a}}]
+    where: [{name_matches: '(?<js_callee>(?<js_a>[A-Za-z_$][\w$]*)(?:\.[A-Za-z_$][\w$]*)+)'}, &shared {in_table: {table: shared_objects, capture: js_a}}, &not_builtin {not_in_table: {table: builtin_objects, capture: js_a}}, {name_matches: '(?:(?<js_owner>.*)\.)?[^.]*\.[^.]*'}, {not_in_table: {table: excluded_objects, capture: js_owner}}]
   emits: [{edge: {kind: calls_shared_member, from: enclosing_declaration, to: {template: '{js_callee}'}}}]
   confidence: declared
 - rule: shared_member_call_split_in_two
@@ -85,7 +86,7 @@ rules:
     reference: call_expression
     name_child: function
     filetype: javascript
-    where: [*split_three, *spaced, *shared, *not_builtin]
+    where: [*split_three, *spaced, *shared, *not_builtin, {not_in_table: {table: excluded_objects, capture: js_a}}]
   emits: [{edge: {kind: calls_shared_member, from: enclosing_declaration, to: {template: '{js_a}.{js_b}.{js_c}'}}}]
   confidence: declared
 # Inferred: the dotted name is taken to reach one object from every script.

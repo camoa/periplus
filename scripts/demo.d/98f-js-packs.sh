@@ -3,7 +3,7 @@
 # A module holds a libraries file, a script with two named functions and four behaviors, a
 # controller and a template. The functions are js.function nodes named by script path and name.
 # Each behavior is a node; the one whose attach calls the other's attach has an attaches_behavior
-# edge to it, and a js_calls edge to an unresolved member function, the other's attach, and its read of drupalSettings.mymoduleColor is a reads_setting edge. Two behaviors
+# edge to it and a js_calls edge to it, and its read of drupalSettings.mymoduleColor is a reads_setting edge. Two behaviors
 # are assigned an arrow function and a function expression; the arrow one's read of
 # drupalSettings.k is a reads_setting edge from it. The controller
 # attaches a library by assignment and by array, each an attaches_library edge from its class,
@@ -89,7 +89,6 @@ method = "php.method::Drupal\\mymodule\\Controller\\WidgetController::"
 widget, other = "drupal.js_behavior::mymoduleWidget", "drupal.js_behavior::mymoduleOther"
 setting = "drupal.js_setting::mymoduleColor"
 arrow, func = "drupal.js_behavior::mymoduleArrow", "drupal.js_behavior::mymoduleFunc"
-member = "js.member_function::Drupal.behaviors."
 
 
 def load(name):
@@ -113,8 +112,6 @@ assert nodes == {
     f"js.function::{script}:format": ("js.function", "mapped"),
     f"js.function::{script}:shout": ("js.function", "mapped"),
     f"js.file::{script}": ("js.file", "mapped"),
-    # A behavior's functions make no member function; the call to the other's attach marks one.
-    member + "mymoduleOther.attach": ("js.member_function", "unresolved"),
     widget: ("drupal.js_behavior", "mapped"),
     other: ("drupal.js_behavior", "mapped"),
     arrow: ("drupal.js_behavior", "mapped"),
@@ -141,7 +138,7 @@ assert edges == sorted([
     ("script_declares_function", f"js.file::{script}", f"js.function::{script}:shout",
      [(script, 6)]),
     # A map rule's edge sits at the behavior that holds the call.
-    ("js_calls", widget, member + "mymoduleOther.attach",
+    ("js_calls", widget, other,
      [(script, line(script, "Drupal.behaviors.mymoduleWidget = {"))]),
     ("script_declares_behavior", f"js.file::{script}", widget, [(script, line(script, "Drupal.behaviors.mymoduleWidget = {"))]),
     ("script_declares_behavior", f"js.file::{script}", other, [(script, line(script, "Drupal.behaviors.mymoduleOther = {"))]),

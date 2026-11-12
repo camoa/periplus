@@ -10,9 +10,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # entity_class_static_call gives a static load, loadMultiple or create call on either an inferred
 # uses_entity_type edge to its entity type.
 # A field mapping whose Drupal side is a token naming a field_ segment, as [user:field_x] or
-# [node:field_y:value], gives an inferred maps_token_field edge to each field storage of that name
-# through drupal_basic's field-name hub, else to the unresolved field.storage.<name>
-# (salesforce_mapping/salesforce_mapping_token_field.yaml). A token
+# [node:field_y:value], gives an inferred maps_token_field edge to the storage of the token type's
+# entity type, else to that unresolved storage; a token whose type the map holds no entity type
+# for reaches the one storage of the name, or the shared field name, else the unresolved
+# field.storage.<name> (salesforce_mapping/salesforce_mapping_token_field.yaml). A token
 # [webform_submission:values:<key>], or a WebformElements row naming <key>, in a mapping of
 # webform_submission.<webform> gives an inferred maps_webform_element edge to that element of the
 # webform, as webform_basic maps it (salesforce_mapping/salesforce_mapping_token_webform.yaml);
@@ -30,11 +31,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   plugin. A WebformElements row is read as text, with drupal_field_value on the line after
 #   drupal_field_type, as Drupal exports it. A mapping whose dependencies list no field instance,
 #   as a webform submission mapping, is listed under skipped: fired and emitted nothing; so is a
-#   mapping with field mappings and no webform submission token, even when its WebformElements
-#   rows join their elements.
-# - A token's field is chosen by its name alone, on any entity type, so [user:field_x] also links
-#   to a node's field_x; a token chain gives only its first field_ segment. A token or a row naming
-#   an element the webform does not hold gives nothing and leaves no mark.
+#   mapping with a Token row and no webform submission token. A mapping with no Token row lists no
+#   row for the token rules.
+# - A token's type picks the entity type only when the field follows it, [node:field_x]; a token
+#   chain, [webform_submission:user:field_x], is read by the field's name alone and gives only its
+#   first field_ segment. A token type is its entity type as written unless the table
+#   token_entity_types holds it, so a module token type named otherwise, with no row, is read by
+#   the name alone. [current-user:field_x] is read by the name alone. A token or a row naming an
+#   element the webform does not hold gives nothing and leaves no mark.
 # - A mapping's sync triggers, pull settings and key give nothing. The auth provider config,
 #   salesforce.salesforce_auth.*, and salesforce_logger.settings stay plain config objects.
 # - An event is named by its constant as written, less any namespace. One used through an alias,
@@ -49,6 +53,15 @@ depends: [drupal_basic, php_basic, webform_basic]
 folders:
   # The folder the mapping field manager discovers in, below a module's src folder.
   salesforce_mapping_field_classes: "{module_root}/src/Plugin/SalesforceMappingField/**"
+
+# A token type whose name differs from the entity type id its fields belong to, and that entity
+# type, as the token module maps Drupal core's: read by
+# salesforce_mapping/salesforce_mapping_token_field.yaml. Any other token type names its entity
+# type as written. A rutter for a module whose token type differs adds its row under
+# add_table_rows.
+tables:
+  token_entity_types:
+    term: taxonomy_term
 
 add_table_rows:
   # The module's entity classes by fully qualified name, and the entity type id each declares,

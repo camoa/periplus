@@ -781,9 +781,10 @@ def test_salesforce_eca_rows_join_a_salesforce_event_plugin_to_its_event(tmp_pat
 
 
 def test_salesforce_tokens_name_field_storages_and_webform_elements(tmp_path: Path) -> None:
-    """A token names a field storage through the field-name hub, or leaves a mark for a field_
-    name no storage has; a webform submission token names an element of the mapping's webform,
-    which webform_basic maps at any depth whatever its first property. Other tokens give nothing."""
+    """A token names the field storage of its token type's entity type, or leaves a mark there;
+    a token whose type names no known entity type names a storage through the field-name hub. A
+    webform submission token names an element of the mapping's webform, which webform_basic maps
+    at any depth whatever its first property. Other tokens give nothing."""
 
     def storage(entity: str, field: str) -> str:
         return f"id: {entity}.{field}\nfield_name: {field}\nentity_type: {entity}\ntype: string\n"
@@ -842,11 +843,11 @@ def test_salesforce_tokens_name_field_storages_and_webform_elements(tmp_path: Pa
     assert edges(document, "maps_token_field") | edges(document, "maps_webform_element") == {
         ("maps_token_field", contact_id, "drupal.config::field.storage.user.field_ext_id"),
         ("maps_token_field", article_id, "drupal.config::field.storage.node.field_color"),
-        ("maps_token_field", article_id, "drupal.config::field.storage.field_gone"),
+        ("maps_token_field", article_id, "drupal.config::field.storage.node.field_gone"),
         ("maps_webform_element", contact_id, f"{element}first_name"),
         ("maps_webform_element", contact_id, f"{element}topic"),
     }
-    assert nodes(document)["drupal.config::field.storage.field_gone"]["state"] == "unresolved"
+    assert nodes(document)["drupal.config::field.storage.node.field_gone"]["state"] == "unresolved"
     assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
         (article, "salesforce_token_names_element", "fired and emitted nothing")
     ]

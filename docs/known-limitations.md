@@ -157,7 +157,10 @@ a list of its known gaps.
   `EckEntity` and `EckEntityBundle`. `salesforce_basic` reads any class with a generic `Plugin` annotation in the
   mapping field folder as a mapping field. Of a mapping's `field_mappings` it reads only a token
   and a `WebformElements` row, the latter as text with its value on the line after its type, so a
-  field mapped by a property path, a Salesforce field and a direction give no edge. A token's field is picked by its name alone, on any entity type. Sync triggers, pull
+  field mapped by a property path, a Salesforce field and a direction give no edge. A token's
+  field is picked on its token type's entity type only when the field follows the type and the
+  map holds that entity type; any other token, such as `[current-user:field_x]` or a chain, picks
+  it by its name alone, reaching the shared field name when two entity types hold it. Sync triggers, pull
   settings and other Salesforce plugin types give nothing. An event used through an alias, or
   written as its own text, makes no `salesforce.event`; `drupal_basic` joins each key of
   `getSubscribedEvents` to its listener through a referenced `drupal.event`.
@@ -203,8 +206,9 @@ a list of its known gaps.
   behavior, or nested in another class, makes no edge and no skipped row. Two classes of one name
   in one script share their edges only when their bodies are the same text. A behavior's functions
   make no member function, and a call in them starts at the behavior; one to a member function of
-  the script sits at the script's line. A call to another behavior's `attach` is also a
-  `js_calls` edge to an unresolved member function, even when that behavior is mapped.
+  the script sits at the script's line. A call to another behavior's `attach`, from a behavior,
+  a function or a script, is also a `js_calls` edge to that behavior, unresolved when no script
+  declares it.
   `detach`, `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge.
   `once()`, `$()` and `jQuery()` are each one unresolved function for every script unless the
   script declares a function of that name, and a call to a member of `Drupal`, `drupalSettings`,

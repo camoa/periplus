@@ -24,10 +24,11 @@ edge_kinds:
   to: webform.element
 
 rules:
+# Only a mapping with a Token row fires, so one with no token lists no row.
 - rule: salesforce_token_names_element
   reads: file
   in: [config, module_config]
-  match: {file: 'salesforce_mapping.salesforce_mapping.*', filetype: yaml}
+  match: {file: 'salesforce_mapping.salesforce_mapping.*', filetype: yaml, where: [{key: {name: 'field_mappings.*.drupal_field_type', equals: Token}}]}
   id: {from: file_stem}
   emits:
   - edge: {kind: token_names_element, from: this_node, to: {from: {key: 'field_mappings.*.drupal_field_value'}, pattern: '^\[webform_submission:values:(?<element>[a-z0-9_]+)[:\]]', template: '{element}', type: salesforce.token_element}}

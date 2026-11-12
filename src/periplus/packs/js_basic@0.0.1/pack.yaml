@@ -60,7 +60,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   folder gets another id.
 # - A function assigned to P.x, or written in an object literal assigned to P.x, where the table
 #   excluded_objects holds P: no member function. A rutter that adds P maps it, and its node may be
-#   where the calls inside start. A function assigned to P.x.y stays a member function.
+#   where the calls inside start. A function assigned to P.x.y stays a member function. A call to
+#   P.x.y on a shared object makes no unresolved member function: that rutter marks it.
 # The grammar is a dependency of periplus-map, pinned at tree-sitter-javascript 0.25.0. With
 # another version installed, periplus map stops with a problem that names the pin.
 pack: js_basic
@@ -129,6 +130,7 @@ tables:
   library_globals: {}
   # Dotted object names whose functions a rutter that depends on this one maps instead, each the
   # value of its own key: a function assigned to <name>.x, or written in an object literal assigned
-  # to <name>.x, makes no member function (member/member_function.yaml). Empty here; that rutter
-  # adds its rows under add_table_rows.
+  # to <name>.x, makes no member function (member/member_function.yaml), and a call to <name>.x.y
+  # makes no unresolved one (member/member_call.yaml). Empty here; that rutter adds its rows under
+  # add_table_rows.
   excluded_objects: {}

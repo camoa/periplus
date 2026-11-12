@@ -99,6 +99,23 @@ rules:
   id: {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)\.attach$', template: '{behavior}'}
   emits: [{edge: {kind: attaches_behavior, from: enclosing_class, to: this_node}}]
   confidence: declared
+# The same call, from a behavior, a function or a script, as js_basic's js_calls edge to the other
+# behavior, else to an unresolved one. js_basic leaves the call's shared mark to this pack
+# (excluded_objects). Inferred, as js_basic's member calls are.
+- rule: behavior_attach_js_call_from_function
+  reads: map
+  match:
+    node_type: js.function
+    follow: &attach_call [{edge: calls_member}, {id_matches: '^js\.member_call::Drupal\.behaviors\.(?<js_behavior>[A-Za-z_$][\w$]*)\.attach$'}]
+  emits: [{edge: {kind: js_calls, from: this_node, to: {template: '{js_behavior}', type: drupal.js_behavior, on_miss: unresolved}}}]
+  confidence: inferred
+- rule: behavior_attach_js_call_from_script
+  reads: map
+  match:
+    node_type: js.file
+    follow: *attach_call
+  emits: [{edge: {kind: js_calls, from: this_node, to: {template: '{js_behavior}', type: drupal.js_behavior, on_miss: unresolved}}}]
+  confidence: inferred
 # A local script a library lists under js:. The key is the script's path from the libraries file's
 # folder, so that folder joined with the key is the script's path from the project folder. A key
 # that starts with one /, such as /core/misc/drupal.js, is joined to the Drupal root instead, by a
