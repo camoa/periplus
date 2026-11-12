@@ -17,19 +17,21 @@ edge_kinds:
   to: drupal.js_class
 
 rules:
-# class Panel {...} and a named class written as a value, named in the script.
+# class Panel {...} and a named class written as a value, named in the script and by the text of its
+# body, so two classes of one name in one script are two nodes unless their bodies are the same
+# text. The id is never written: the type is internal.
 - rule: js_class
   reads: file
   in: [js_source]
   match: {declaration: class_declaration, name_child: name, body_child: body, filetype: javascript}
-  id: {from: qualified_name}
+  id: &class_id {from: [qualified_name, body], template: '{qualified_name} {body}'}
   emits: [{node: {type: drupal.js_class}}]
   confidence: declared
 - rule: js_class_expression
   reads: file
   in: [js_source]
   match: {declaration: class, name_child: name, body_child: body, filetype: javascript}
-  id: {from: qualified_name}
+  id: *class_id
   emits: [{node: {type: drupal.js_class}}]
   confidence: declared
 # The behavior around a class, when the behavior is the nearest object or class around it.
@@ -37,14 +39,14 @@ rules:
   reads: file
   in: [js_source]
   match: {declaration: class_declaration, name_child: name, body_child: body, holder: assignment_expression, filetype: javascript}
-  id: {from: qualified_name}
+  id: *class_id
   emits: [{edge: {kind: behavior_holds_class, from: enclosing_class, to: this_node}}]
   confidence: declared
 - rule: js_class_expression_in_behavior
   reads: file
   in: [js_source]
   match: {declaration: class, name_child: name, body_child: body, holder: assignment_expression, filetype: javascript}
-  id: {from: qualified_name}
+  id: *class_id
   emits: [{edge: {kind: behavior_holds_class, from: enclosing_class, to: this_node}}]
   confidence: declared
 # A settings read or a behavior call in a class's method: the behavior around the class reads the

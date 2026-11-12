@@ -167,16 +167,19 @@ a list of its known gaps.
   at the field storage. A Twig file not named `.html.twig` gives no edge. A call inside a quoted
   text or a verbatim block still gives one. Two templates of one name in two modules are one node.
 - **JavaScript:** `js_basic` maps named functions, and functions assigned to a dotted name or
-  written directly in an object literal assigned to one. One assigned to a dotted name is named by
-  that name alone when its table `shared_objects` holds the first part, such as `window`, and else
-  in its script, so a call from another script to an application's own global object not in the
-  table gives no edge. One in an object literal is named by the dotted name alone, so a local
-  object and an object of the same name in another script meet, a false edge. A member call
-  gives an edge only to a mapped member function, and a map rule places that edge at the function
-  or script it starts at, not at the call. A call to a listed JavaScript or browser global gives
-  nothing. A call on a call or an index, an import, an export, a generator, a class, a class
-  method and a function that is an argument give nothing. Two functions of one name in one script
-  are one node. A `.mjs`, `.cjs`, `.jsx` or `.ts` file is not read. A script's id is its path from
+  written directly in an object literal assigned to one. Each is named by that name alone when its
+  table `shared_objects` holds the first part, such as `window`, and else in its script, so a call
+  from another script to an application's own global object not in the table gives no edge. A
+  member call gives an edge only to a mapped member function, and a map rule places that edge at
+  the function or script it starts at, not at the call. A call to a member of an object that
+  `shared_objects` holds and `builtin_objects` does not, which no script assigns, is one unresolved
+  member function for every script; one on any other object, such as a variable, `console` or
+  `document`, gives nothing. A dotted name split over lines is read up to three parts. A call to a
+  listed JavaScript or browser global gives nothing, and one to a name the table `library_globals`
+  holds is one unresolved function for every script. A callee computed at run time, such as
+  `a[i]()` or `f()()`, is listed under skipped; a method on a call or an index, an import, an
+  export, a generator, a class, a class method and a function that is an argument give nothing.
+  Two functions of one name in one script are one node. A `.mjs`, `.cjs`, `.jsx` or `.ts` file is not read. A script's id is its path from
   the project folder.
 - **Drupal JavaScript:** `drupal_js_basic` reads a behavior only as `Drupal.behaviors.name = ...`,
   and any object so assigned is one, with or without `attach`. An arrow function or a function
@@ -184,10 +187,13 @@ a list of its known gaps.
   outside a behavior object makes no edge and goes under skipped. One in a named class written in
   a behavior's function is the behavior's edge, at the behavior's line; one in a class outside a
   behavior, or nested in another class, makes no edge and no skipped row. Two classes of one name
-  in one script share their edges. Each function of a behavior is also a member function.
+  in one script share their edges only when their bodies are the same text. Each function of a
+  behavior is also a member function, and a call in it starts there, not at the behavior.
   `detach`, `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge.
-  `once()`, `$()` and `jQuery()` make nothing, as a browser global's call does, unless the script
-  declares a function of that name; nothing joins them to their core library. Only the
+  `once()`, `$()` and `jQuery()` are each one unresolved function for every script unless the
+  script declares a function of that name, and a call to a member of `Drupal`, `drupalSettings`,
+  `jQuery` or `$` that no script assigns, such as `Drupal.t()` or `$.ajax()`, is one unresolved
+  member function; nothing joins them to their core library. Only the
   first key after `drupalSettings` is read. The array form of a PHP library attachment or of
   `drupalSettings` is read as text, so it is inferred. Under `src` its class is named by PSR-4
   path; in a `.module` file the edge starts at the function around it. A library or a key named

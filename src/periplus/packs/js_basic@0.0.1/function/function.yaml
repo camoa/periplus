@@ -80,10 +80,16 @@ rules:
 # f(...): an edge to <script path>:f from the nearest named function that holds the call, or from
 # the script when no named function holds it. A call inside a function passed as an argument has no
 # node of its own, so it starts at the named function around it or at the script. A dotted call,
-# a.b(), is member/member_call.yaml's; any other shape, such as f()() or a[i](), makes no edge and
-# is a row of the report's matches skipped. A call to a function another script declares stays
-# unresolved. A call to import() or to a name the table globals holds makes nothing;
-# function_call_named_like_global gives the edge when the script declares a function of that name.
+# a.b(), is member/member_call.yaml's. A callee computed at run time, a[i](), f()() or
+# (c ? f : g)(), makes no edge and is a row of the report's matches skipped: the second, third and
+# fourth alternatives of the pattern, the last a parenthesis that holds no function. Any other
+# shape makes nothing: a method on a call or an index, $('.x').hide() or a[0].m(), as on a
+# variable, and a function called where it is written, (function () {})() or (() => {})(). A call
+# to a function another script declares stays unresolved. A call to import() or to a name the table
+# globals holds makes nothing; function_call_named_like_global gives the edge when the script
+# declares a function of that name. A name the table library_globals holds, which a rutter for a
+# library adds, is unresolved under that table's value when the script declares no function of
+# that name, so every script's call meets one node.
 - rule: function_call
   reads: file
   in: [js_source]
@@ -92,9 +98,9 @@ rules:
     name_child: function
     whole_written: true
     filetype: javascript
-    where: [{name_matches: '[A-Za-z_$][\w$]*|(?s:.*[^\w$.].*)'}]
+    where: [{name_matches: '[A-Za-z_$][\w$]*|(?s:.*)\]|[^(](?s:.*)\)|\(\s*(?:[^\s(fa]|f(?:[^u]|u(?:[^n]|n(?:[^c]|c(?:[^t]|t(?:[^i]|i(?:[^o]|o(?:[^n]|n[\w$])))))))|a(?:[^s]|s(?:[^y]|y(?:[^n]|n(?:[^c]|c[\w$])))))(?:[^=]|=+[^=>])*=*\)'}]
     skip_names: [import, {table: globals}]
-  emits: [{edge: {kind: js_calls, from: enclosing_declaration, to: {types: [js.function], on_miss: unresolved}}}]
+  emits: [{edge: {kind: js_calls, from: enclosing_declaration, to: {types: [js.function], fallback: [lookup_last_segment_in: library_globals], on_miss: unresolved, on_miss_name: fallback}}}]
   confidence: declared
 # f(...) again, to two internal nodes: <script path>:f, and, when the table globals holds f, f
 # alone, the table's value. The map rules below join a call that reaches both to the function f the

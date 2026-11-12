@@ -6,8 +6,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # from every script that runs on the page, so its node is named by the dotted name alone, and two
 # scripts that assign it give one node holding both locations. A function assigned to any other
 # dotted name, A.b.c = ..., is named in its script, <script path>:A.b.c, since A may be local to it.
-# A function in an object literal is named by the dotted name alone, whatever its first part. A
-# name that starts at this is the object a call runs on, so it makes nothing.
+# A function in an object literal, A.b = { open() {} }, is named the same way by A: A.b.open or
+# <script path>:A.b.open. A name that starts at this is the object a call runs on, so it makes
+# nothing.
 
 node_types:
 - name: js.member_function
@@ -112,12 +113,13 @@ rules:
   id: *no_id
   emits: [{node: {type: js.namespace_object}}]
   confidence: declared
-# { open(...) {...} } directly in that object. The enclosing type is the object's full name,
-# <script path>:A.b, so the script is cut from the id.
+# { open(...) {...} } directly in that object, A's name a key of shared_objects. The enclosing type
+# is the object's full name, <script path>:A.b, so the condition reads A after the colon and the
+# script is cut from the id.
 - rule: member_function_from_method
   reads: file
   in: [js_source]
-  match: &method {declaration: method_definition, name_child: name, filetype: javascript, where: [{name_matches: '[A-Za-z_$][\w$]*'}]}
+  match: &method {declaration: method_definition, name_child: name, filetype: javascript, where: [{name_matches: '[A-Za-z_$][\w$]*'}, &shared_object {in_table: {table: shared_objects, fill: enclosing_type, pattern: ':(?<js_root>[\w$]+)', capture: js_root}}]}
   id: &member_id {from: [enclosing_type, declared_name], template: '{enclosing_type}.{declared_name}', normalize: [{replace: '^[^:]*:', with: ''}]}
   emits: [{node: {type: js.member_function}}]
   confidence: declared
@@ -128,11 +130,26 @@ rules:
   id: *member_id
   emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
   confidence: declared
-# { close: function (...) {...} } directly in that object.
+# The same, A's name not a key of shared_objects: named in the script, <script path>:A.b.open.
+- rule: member_function_from_method_in_script
+  reads: file
+  in: [js_source]
+  match: &local_method {declaration: method_definition, name_child: name, filetype: javascript, where: [{name_matches: '[A-Za-z_$][\w$]*'}, &local_object {not_in_table: {table: shared_objects, fill: enclosing_type, pattern: ':(?<js_root>[\w$]+)', capture: js_root}}]}
+  id: &local_member_id {from: [enclosing_type, declared_name], template: '{enclosing_type}.{declared_name}'}
+  emits: [{node: {type: js.member_function}}]
+  confidence: declared
+- rule: member_function_from_method_in_script_in_file
+  reads: file
+  in: [js_source]
+  match: *local_method
+  id: *local_member_id
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
+# { close: function (...) {...} } directly in that object, A's name a key of shared_objects.
 - rule: member_function_from_pair
   reads: file
   in: [js_source]
-  match: &pair {declaration: pair, name_child: key, filetype: javascript, where: [{has_child: function_expression}, {name_matches: '[A-Za-z_$][\w$]*'}]}
+  match: &pair {declaration: pair, name_child: key, filetype: javascript, where: [{has_child: function_expression}, {name_matches: '[A-Za-z_$][\w$]*'}, *shared_object]}
   id: *member_id
   emits: [{node: {type: js.member_function}}]
   confidence: declared
@@ -141,5 +158,20 @@ rules:
   in: [js_source]
   match: *pair
   id: *member_id
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
+# The same, A's name not a key of shared_objects: named in the script.
+- rule: member_function_from_pair_in_script
+  reads: file
+  in: [js_source]
+  match: &local_pair {declaration: pair, name_child: key, filetype: javascript, where: [{has_child: function_expression}, {name_matches: '[A-Za-z_$][\w$]*'}, *local_object]}
+  id: *local_member_id
+  emits: [{node: {type: js.member_function}}]
+  confidence: declared
+- rule: member_function_from_pair_in_script_in_file
+  reads: file
+  in: [js_source]
+  match: *local_pair
+  id: *local_member_id
   emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
   confidence: declared

@@ -16,14 +16,17 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - js_basic maps each function of a behavior as a member function too: attach in
 #   Drupal.behaviors.name = { attach() {} } is js.member_function::Drupal.behaviors.name.attach,
 #   and a function assigned to Drupal.behaviors.name is js.member_function::Drupal.behaviors.name.
-#   Both stay beside the behavior node: js_basic's rules for a function in an object literal read
-#   the object's name only as enclosing_type, which no where condition can test, so no table this
-#   pack adds to can leave them out. Drupal.behaviors.other.attach(context) is also js_basic's
-#   js_calls edge between the two attach functions.
-# - once(), $() and jQuery(): this pack adds the three names to js_basic's table globals, so a
-#   call to one makes nothing, as a call to a browser global does, unless its script declares a
-#   function of that name. No edge joins it to the library core/once or core/jquery. A call to a
-#   core member, such as Drupal.t(), gives an edge only where a mapped script assigns that name.
+#   Both stay beside the behavior node. A call inside them starts at them: without them it would
+#   start at the script, since js_basic's call rules start only at js_basic's own nodes and its
+#   js_calls edge cannot start at a behavior. Drupal.behaviors.other.attach(context) is also
+#   js_basic's js_calls edge between the two attach functions, and, when no mapped script declares
+#   the other behavior, an unresolved member function Drupal.behaviors.other.attach.
+# - once(), $() and jQuery(): this pack adds the three names to js_basic's table library_globals,
+#   so a call to one is one unresolved node for every script, js.function::once, js.function::$ or
+#   js.function::jQuery, unless its script declares a function of that name. No edge joins it to
+#   the library core/once or core/jquery: a project need not list either as a dependency. A call to
+#   a member of Drupal, drupalSettings, jQuery or $ that no mapped script assigns, such as
+#   Drupal.t() or $.ajax(), is one unresolved member function, js.member_function::Drupal.t.
 #
 # Settings. $build['#attached']['drupalSettings']['key'] = ... in PHP is a setting node named by
 # that first key, and drupalSettings.key inside a behavior object is an edge to it. A key that
@@ -98,8 +101,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # internal drupal.js_class node (behavior/class_in_behavior.yaml), and sits at the behavior's line.
 # One in a class written in another class or in a non-behavior object, or in a class outside any
 # behavior, makes no edge and no skipped row, and a setting read only in such classes is a
-# referenced node with no edge in the written map. Two classes of one name in one script are one
-# node, so each behavior around one of them gets the edges of both. One in an unnamed class,
+# referenced node with no edge in the written map. The class node is named by its script, its name
+# and the text of its body, so two classes of one name in one script are one node only when their
+# bodies are the same text, and then their edges are the same too. One in an unnamed class,
 # class {...}, makes no edge and is listed under skipped. In PHP an attachment in a function, such
 # as a hook in a .module file, starts at the function, and one in a method starts at the class,
 # not at the method. An attachment outside both makes no edge and is listed the same way; its
@@ -109,14 +113,15 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: drupal_js_basic
 version: 0.0.1
 depends: [js_basic, drupal_basic]
-# The globals Drupal core's libraries core/once and core/jquery define, each the value of its own
-# key, as in js_basic's table. js_basic's function_call skips a call to one. And the global objects
-# of Drupal core's scripts and of core/jquery, whose members every script on a page reaches by one
-# name: js_basic names a function assigned to one of their members, Drupal.x = function () {}, by
-# the dotted name alone.
+# The global functions Drupal core's libraries core/once and core/jquery define: js_basic's
+# function_call makes a call to one that its script does not declare one unresolved node for every
+# script. And the global objects of Drupal core's scripts and of core/jquery, whose members every
+# script on a page reaches by one name: js_basic names a function assigned to one of their members,
+# Drupal.x = function () {}, by the dotted name alone, and a call to a member no script assigns,
+# Drupal.t(), is one unresolved member function.
 add_table_rows:
   js_basic:
-    globals:
+    library_globals:
       once: once
       $: $
       jQuery: jQuery

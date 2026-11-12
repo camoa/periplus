@@ -3,8 +3,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # a.b.c(...): a call through a dotted name. Each one reaches an internal node named by the dotted
 # name, from the nearest named function that holds the call, else from the script, as function_call
 # starts. The map rules below give a js_calls edge only where a member function of that name is
-# mapped, so a call on jQuery, the DOM, console or this gives nothing and no skipped row: to
-# a.b.c, named by the dotted name alone, and to <script path>:a.b.c, named in the calling script.
+# mapped, so a call on a variable, console or this gives nothing and no skipped row: to a.b.c,
+# named by the dotted name alone, and to <script path>:a.b.c, named in the calling script. A call
+# whose first part shared_objects holds and builtin_objects does not, such as Drupal.t() under
+# drupal_js_basic, reaches the same node a second way, and the shared rules below make it an
+# unresolved member function a.b.c when no script assigns it. A name split over lines, a\n  .b(),
+# is read as a.b, up to three parts.
 
 node_types:
 - name: js.member_call
@@ -13,6 +17,10 @@ node_types:
 
 edge_kinds:
 - kind: calls_member
+  from: [js.function, js.file]
+  to: js.member_call
+# A call on a shared object that is not a built-in one: the map rules mark it when nothing maps it.
+- kind: calls_shared_member
   from: [js.function, js.file]
   to: js.member_call
 
@@ -26,6 +34,59 @@ rules:
     filetype: javascript
     where: [{name_matches: '(?<js_callee>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)'}]
   emits: [{edge: {kind: calls_member, from: enclosing_declaration, to: {template: '{js_callee}'}}}]
+  confidence: declared
+# The same name split over lines, a\n  .b() and a.b\n  .c(): the node a.b or a.b.c, without the
+# spaces. The second pattern keeps a name with no space to member_call.
+- rule: member_call_split_in_two
+  reads: file
+  in: [js_source]
+  match:
+    reference: call_expression
+    name_child: function
+    filetype: javascript
+    where: [&split_two {name_matches: '(?<js_a>[A-Za-z_$][\w$]*)\s*\.\s*(?<js_b>[A-Za-z_$][\w$]*)'}, &spaced {name_matches: '(?s:.*\s.*)'}]
+  emits: [{edge: {kind: calls_member, from: enclosing_declaration, to: {template: '{js_a}.{js_b}'}}}]
+  confidence: declared
+- rule: member_call_split_in_three
+  reads: file
+  in: [js_source]
+  match:
+    reference: call_expression
+    name_child: function
+    filetype: javascript
+    where: [&split_three {name_matches: '(?<js_a>[A-Za-z_$][\w$]*)\s*\.\s*(?<js_b>[A-Za-z_$][\w$]*)\s*\.\s*(?<js_c>[A-Za-z_$][\w$]*)'}, *spaced]
+  emits: [{edge: {kind: calls_member, from: enclosing_declaration, to: {template: '{js_a}.{js_b}.{js_c}'}}}]
+  confidence: declared
+# The three shapes again, when shared_objects holds the first part and builtin_objects does not.
+- rule: shared_member_call
+  reads: file
+  in: [js_source]
+  match:
+    reference: call_expression
+    name_child: function
+    filetype: javascript
+    where: [{name_matches: '(?<js_callee>(?<js_a>[A-Za-z_$][\w$]*)(?:\.[A-Za-z_$][\w$]*)+)'}, &shared {in_table: {table: shared_objects, capture: js_a}}, &not_builtin {not_in_table: {table: builtin_objects, capture: js_a}}]
+  emits: [{edge: {kind: calls_shared_member, from: enclosing_declaration, to: {template: '{js_callee}'}}}]
+  confidence: declared
+- rule: shared_member_call_split_in_two
+  reads: file
+  in: [js_source]
+  match:
+    reference: call_expression
+    name_child: function
+    filetype: javascript
+    where: [*split_two, *spaced, *shared, *not_builtin]
+  emits: [{edge: {kind: calls_shared_member, from: enclosing_declaration, to: {template: '{js_a}.{js_b}'}}}]
+  confidence: declared
+- rule: shared_member_call_split_in_three
+  reads: file
+  in: [js_source]
+  match:
+    reference: call_expression
+    name_child: function
+    filetype: javascript
+    where: [*split_three, *spaced, *shared, *not_builtin]
+  emits: [{edge: {kind: calls_shared_member, from: enclosing_declaration, to: {template: '{js_a}.{js_b}.{js_c}'}}}]
   confidence: declared
 # Inferred: the dotted name is taken to reach one object from every script.
 - rule: member_call_from_function
@@ -68,4 +129,21 @@ rules:
     where: [{id_matches: '^js\.file::(?<js_script>.+)$'}]
     follow: [{edge: script_declares_function}, {id_matches: '^js\.member_function::(?<js_caller>[^:]+)$'}, {edge: calls_member}, {id_matches: '^js\.member_call::(?<js_callee>.+)$'}, {node: 'js.member_function::{js_script}:{js_callee}'}]
   emits: [{edge: {kind: js_calls, from: {template: 'js.member_function::{js_caller}', type: js.member_function, on_miss: unresolved}, to: matched_node}}]
+  confidence: inferred
+# A call on a shared object to the member function a.b.c named by the dotted name alone, else to
+# one unresolved member function of that name for every script: the library or the page defines it
+# outside the map. Inferred, as above.
+- rule: shared_member_call_from_function
+  reads: map
+  match:
+    node_type: js.function
+    follow: &shared_call [{edge: calls_shared_member}, {id_matches: '^js\.member_call::(?<js_callee>.+)$'}]
+  emits: [{edge: {kind: js_calls, from: this_node, to: {template: '{js_callee}', types: [js.member_function], on_miss: unresolved}}}]
+  confidence: inferred
+- rule: shared_member_call_from_script
+  reads: map
+  match:
+    node_type: js.file
+    follow: *shared_call
+  emits: [{edge: {kind: js_calls, from: this_node, to: {template: '{js_callee}', types: [js.member_function], on_miss: unresolved}}}]
   confidence: inferred

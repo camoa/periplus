@@ -6,27 +6,31 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # dotted name, A.b.c = function () {} or A.b.c = () => {}, is a js.member_function node (member/):
 # named by the dotted name alone, A.b.c, when the table shared_objects holds A, such as window,
 # and else named in its script, <script path>:A.b.c. A function written directly in an object
-# literal assigned to a dotted name, A.b = { open() {}, close: function () {} }, is one named by
-# the dotted name alone, A.b.open. Each line below was seen on real code or on a planted file.
-# Each script is a js.file node named by its path, and each function above has a
+# literal assigned to a dotted name, A.b = { open() {}, close: function () {} }, is named the same
+# way, A.b.open or <script path>:A.b.open. Each line below was seen on real code or on a planted
+# file. Each script is a js.file node named by its path, and each function above has a
 # script_declares_function edge from its script.
 # Calls: f() is a js_calls edge to <script path>:f; a.b.c() is a js_calls edge to the member
 # function a.b.c, and to the member function <script path>:a.b.c of the calling script, when one
-# is mapped, else nothing. Each starts at the nearest named or member function that holds the
-# call, else at the script.
-# False results:
-# - A function in an object literal is named without its script whatever A is, so a local object
-#   in one script and an object of the same name in another meet: A.b = { open() {} } in one
-#   script and A.b.open() in another give a js_calls edge, though the two objects differ. Its
-#   rule reads the object's name only as enclosing_type, which no where condition can test.
+# is mapped. When shared_objects holds a and builtin_objects does not, a call no script assigns is
+# a js_calls edge to one unresolved member function a.b.c for every script; any other a.b.c() is
+# nothing. A dotted name split over lines, a\n  .b(), is read as a.b, up to three parts. Each edge
+# starts at the nearest named or member function that holds the call, else at the script.
 # What it does not map, today:
 # - A call to a JavaScript or browser global the table globals holds, such as parseInt(),
-#   setTimeout() or fetch(), or to a name a rutter for a library adds to it: no edge and no node,
-#   unless the script declares a function of that name, which the call reaches. import(): nothing.
-# - A member call to a name no member function has, such as console.log(), $.ajax() or this.x():
-#   no edge, no node and no skipped row. A call on a call or an index, $('.x').hide(), f()() or
-#   a[i](), and a call through ?. or a private name: no edge, and a row of the map report's
-#   matches skipped.
+#   setTimeout() or fetch(): no edge and no node, unless the script declares a function of that
+#   name, which the call reaches. import(): nothing. A call to a name the table library_globals
+#   holds, which a rutter for a library adds, is one unresolved function named by the table's
+#   value for every script, unless the script declares a function of that name. No edge joins it
+#   to its library.
+# - A member call on an object shared_objects does not hold, or builtin_objects holds, to a name
+#   no member function has, such as console.log(), document.querySelector(), e.x() or this.x(): no
+#   edge, no node and no skipped row. So is a method called on a call, an index, a new object or an
+#   array, $('.x').hide() or a[0].m(), a call through ?. or a private name, a dotted name of four
+#   parts or more split over lines, and a function called where it is written,
+#   (function () {})(). A callee computed at run time, a[i](), f()() or (c ? f : g)(): no edge,
+#   and a row of the map report's matches skipped. A parenthesis that holds an arrow anywhere is
+#   taken as a function called where it is written, so (c ? () => 1 : g)() gives no row.
 # - A js_calls edge to a member function, or to a function of the script named like a global,
 #   sits at the line of the function or the script it starts at, not at the call: a map rule
 #   places it. A call from a member function named by its dotted name alone to a member function
@@ -48,7 +52,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   function passed as an argument: no node.
 # - A function declared inside another gets the same kind of id, so two functions of one name in
 #   one script are one node holding both locations. Two scripts that assign one dotted name named
-#   without its script, or write one in an object literal, give one member function holding both
+#   without its script, or write it in an object literal, give one member function holding both
 #   locations.
 # - An import or an export: no rule. A script in a .mjs, .cjs, .jsx or .ts file is not read.
 # - The script path is the path from the project folder, so the same script mapped from another
@@ -110,3 +114,12 @@ tables:
   # them is one member function for every script (member/member_function.yaml). A rutter for a
   # library adds the library's global objects under add_table_rows, each the value of its own key.
   shared_objects: {window: window, globalThis: globalThis, self: self, document: document}
+  # The objects of shared_objects that the language or the browser defines. A call to a member of
+  # one that no mapped script assigns makes nothing, so the DOM's methods leave no node
+  # (member/member_call.yaml); a call on an object shared_objects holds and this table does not is
+  # an unresolved member function when no script assigns it.
+  builtin_objects: {window: window, globalThis: globalThis, self: self, document: document}
+  # A global function a library defines, as written, to the name an unresolved call to it takes, so
+  # the calls of every script meet one node (function/function.yaml). A rutter for the library adds
+  # its rows under add_table_rows.
+  library_globals: {}

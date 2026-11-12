@@ -152,7 +152,6 @@ Rules not executed:
 
 Matches skipped:
   web/modules/custom/greet/greet.libraries.yml:4 library_script fired and emitted nothing
-  web/modules/custom/greet/js/banner.js:1 function_call function is not a written name
 
 Attributes that differ between files:
   none
@@ -484,7 +483,6 @@ Rules not executed:
 
 Matches skipped:
   web/modules/custom/greet/greet.libraries.yml:4 library_script fired and emitted nothing
-  web/modules/custom/greet/js/banner.js:1 function_call function is not a written name
 
 Attributes that differ between files:
   none

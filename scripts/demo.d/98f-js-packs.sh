@@ -103,12 +103,10 @@ def line(path, text):
 
 document, report = load("one.json"), load("one-report.json")
 assert report["problems"] == [] and report["not_executed"] == [], report
-# js_basic's function_call skips a call whose callee is no written name: the wrapping IIFE. The
-# member calls value.toUpperCase() and Drupal.behaviors.mymoduleOther.attach(context) are
-# member_call's, and leave no row.
-assert report["skipped"] == [
-    {"file": script, "line": 1, "reason": "function is not a written name", "rule": "function_call"}
-], report["skipped"]
+# js_basic's function_call leaves the wrapping IIFE, a function called where it is written, without
+# a row. The member calls value.toUpperCase() and Drupal.behaviors.mymoduleOther.attach(context)
+# are member_call's, and leave no row.
+assert report["skipped"] == [], report["skipped"]
 
 nodes = {n["id"]: (n["type"], n["state"]) for n in document["nodes"]}
 assert nodes == {

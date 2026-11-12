@@ -114,6 +114,7 @@ Each key below has its detail in the guide section linked:
   not, or is, a key of the table; `{table: <table>, capture: <name>}` tests a named capture
   instead. Two small rules then split one shape
   ([Tree references](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-references.md)).
+  `{table: <table>, fill: enclosing_type}` tests the enclosing type's full name, and with `pattern` and `capture` a capture of it.
 - `on_miss_name: fallback`, on an end that holds `on_miss` and `fallback`, puts the miss mark
   under the fallback name ([Tree references](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-references.md)).
 - A declaration rule's `name_child` list is a path of one step or more; each step is a field, else

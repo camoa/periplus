@@ -67,8 +67,9 @@ An item of `skip_names` may name a table in place of a name. The rule then skips
 keys as well; the values are not read. The table follows the lookup step's rules: the rule's pack
 or a pack it depends on declares it under `tables`, the nearer pack's winning, and a table none of
 them declares refuses the rule. Rows another rutter adds under `add_table_rows` are skipped in a
-run that loads that rutter, so a rutter for a library can add the library's globals to the skip
-list of the language rutter's call rule:
+run that loads that rutter. Skip only a language's or a runtime's own names: a library's function
+lies outside the map and keeps its mark, as `js_basic`'s `library_globals` table does through
+`fallback` and `on_miss_name: fallback`.
 
 ```yaml
 skip_names:

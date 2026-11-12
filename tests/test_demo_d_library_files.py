@@ -16,6 +16,10 @@ LOCAL_PACK = """\
 pack: localjs
 version: 0.0.1
 depends: [js_basic, drupal_basic]
+add_table_rows:
+  js_basic:
+    shared_objects:
+      Drupal: Drupal
 files:
   types:
     yml:
