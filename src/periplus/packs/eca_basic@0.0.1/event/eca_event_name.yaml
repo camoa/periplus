@@ -1,0 +1,24 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The event a model's event plugin reacts to: the plugin id looked up in the table
+# eca_event_names (pack.yaml), an edge from the model to drupal_basic's drupal.event of that class
+# constant, where a custom subscriber's subscribed_by edge starts too. Inferred: the table, not the
+# file, names the event. A plugin id the table does not hold gives no edge; another rutter adds a
+# row under add_table_rows.
+
+edge_kinds:
+- kind: eca_reacts_to_event
+  from: eca.model
+  to: drupal.event
+
+rules:
+- rule: eca_model_event_from_table
+  reads: file
+  in: [config, module_config]
+  match:
+    file: 'eca.eca.*'
+    filetype: drupal_yml_text
+    text: '(?m)^[ \t]+plugin:[ \t]*''?(?<plugin>[a-z0-9_]+:[a-z0-9_:]+)''?[ \t]*$'
+  id: {template: '{file_stem}'}
+  emits: [{edge: {kind: eca_reacts_to_event, from: this_node, to: {from: {capture: plugin}, resolve: [lookup_last_segment_in: eca_event_names], types: [drupal.event]}}}]
+  confidence: inferred

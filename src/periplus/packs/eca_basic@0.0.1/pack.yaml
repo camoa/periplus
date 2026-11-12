@@ -1,0 +1,120 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The ECA contributed module (Events - Conditions - Actions). Each ECA model's config file,
+# eca.eca.<id>, is an eca.model on its config node, with its label (model/eca_model.yaml), and:
+# - an edge to the plugin of each event, condition and action it holds, by plugin id: an event
+#   plugin is a drupal.eca_event, a condition plugin a drupal.eca_condition, and an action plugin
+#   drupal_basic's drupal.action_plugin, since ECA's actions are core action plugins. A plugin of
+#   ECA or another module, outside the mapped code, ends at a referenced node; a custom module's
+#   plugin ends at the plugin this pack or drupal_basic maps (model/eca_model_plugin.yaml);
+# - each event, gateway and action as an eca.model_entry, eca.eca.<id>:<entry id>, with an edge to
+#   its model and one to each entry its successors name (model/eca_model_entry.yaml);
+# - the field storages its conditions and actions name, through drupal_basic's field-name hub
+#   (model/eca_model_field.yaml); the roles its actions name by rid and its conditions by role,
+#   through drupal_basic's role-name hub (model/eca_model_role.yaml); and the bundle or entity
+#   type an event or an action names (model/eca_model_entity_type.yaml);
+# - the event each event plugin reacts to, from the table eca_event_names below, as an edge to
+#   drupal_basic's drupal.event, where a custom subscriber's subscribed_by edge starts too
+#   (event/eca_event_name.yaml).
+# A custom module's event plugins, below src/Plugin/ECA/Event, and condition plugins, below
+# src/Plugin/ECA/Condition, declared by the EcaEvent or EcaCondition annotation or attribute, are
+# plugins joined to their class by plugin_class. A model's event plugin id written
+# <base>:<derivative> also links to the mapped plugin <base> (event/eca_event_derivative.yaml).
+#
+# Known gaps:
+# - A model's modeller data, eca.model.<id>, stays a plain config object.
+# - A successor's condition gives no edge, nor does a gateway's type. An entry does not link to
+#   its plugin; the plugin edges start at the model.
+# - The table eca_event_names holds the event plugins of ECA 2.1's eca_content, eca_config and
+#   eca_user and of salesforce_eca 1.0. Any other event plugin id gives no event edge and lists a
+#   skipped row: no resolution step holds. A rutter that knows one adds a row under
+#   add_table_rows. The table is read on each line plugin: <id> of the model whose id holds a
+#   colon, so a condition or action plugin id with a colon lists the same skipped row.
+# - A value is read only under the keys named in each rule file. A field name reads up to its first
+#   character that is not a lowercase letter, digit or underscore, so field_x.value names field_x
+#   and a token names nothing. A role list gives nothing. A type value of one word, such as a
+#   comparison's value, gives nothing, and a two-word value under another plugin reads as an
+#   entity type and a bundle.
+# - A custom action plugin is drupal_basic's, by its Action annotation or attribute. A custom
+#   event or condition plugin whose id is not a text literal, or in an annotation not text in
+#   double quotes, makes no plugin and is listed under skipped. A derived action or condition
+#   plugin id does not link to its base plugin.
+#
+# The path value eca_model is declared on yaml_basic's type yml, so the entry rules match filetype
+# yml; a type of another name that claims the ending yml as data is refused.
+pack: eca_basic
+version: 0.0.1
+depends: [drupal_basic, php_basic]
+
+files:
+  types:
+    # yaml_basic's type yml, given the path value eca_model: the config name of an ECA model's
+    # file, eca.eca.<id>, which an entry's id and edges name (model/eca_model_entry.yaml).
+    yml:
+      endings: [yml]
+      reader: data
+      format: yaml
+      path_values:
+        eca_model:
+          pattern: '^(?:.*/)?(?<name>eca\.eca\.[^/]+)\.yml$'
+          template: '{name}'
+
+folders:
+  # The folders ECA's event and condition plugin managers discover in, below a module's src folder.
+  eca_event_classes: "{module_root}/src/Plugin/ECA/Event/**"
+  eca_condition_classes: "{module_root}/src/Plugin/ECA/Condition/**"
+
+tables:
+  # Each event plugin id, <plugin>:<derivative>, and the class constant that holds the event name
+  # its definition gives as event_name, as drupal_basic names an event: ECA 2.1's eca_content,
+  # eca_config and eca_user, and salesforce_eca 1.0.
+  eca_event_names:
+    'content_entity:bundlecreate': Drupal\eca_content\Event\ContentEntityEvents::BUNDLECREATE
+    'content_entity:bundledelete': Drupal\eca_content\Event\ContentEntityEvents::BUNDLEDELETE
+    'content_entity:create': Drupal\eca_content\Event\ContentEntityEvents::CREATE
+    'content_entity:custom': Drupal\eca_content\Event\ContentEntityEvents::CUSTOM
+    'content_entity:delete': Drupal\eca_content\Event\ContentEntityEvents::DELETE
+    'content_entity:fieldvaluesinit': Drupal\eca_content\Event\ContentEntityEvents::FIELDVALUESINIT
+    'content_entity:insert': Drupal\eca_content\Event\ContentEntityEvents::INSERT
+    'content_entity:load': Drupal\eca_content\Event\ContentEntityEvents::LOAD
+    'content_entity:options_selection': Drupal\eca_content\Event\ContentEntityEvents::OPTIONS_SELECTION
+    'content_entity:predelete': Drupal\eca_content\Event\ContentEntityEvents::PREDELETE
+    'content_entity:prepareform': Drupal\eca_content\Event\ContentEntityEvents::PREPAREFORM
+    'content_entity:prepareview': Drupal\eca_content\Event\ContentEntityEvents::PREPAREVIEW
+    'content_entity:preload': Drupal\eca_content\Event\ContentEntityEvents::PRELOAD
+    'content_entity:presave': Drupal\eca_content\Event\ContentEntityEvents::PRESAVE
+    'content_entity:reference_selection': Drupal\eca_content\Event\ContentEntityEvents::REFERENCE_SELECTION
+    'content_entity:revisioncreate': Drupal\eca_content\Event\ContentEntityEvents::REVISIONCREATE
+    'content_entity:revisiondelete': Drupal\eca_content\Event\ContentEntityEvents::REVISIONDELETE
+    'content_entity:storageload': Drupal\eca_content\Event\ContentEntityEvents::STORAGELOAD
+    'content_entity:translationcreate': Drupal\eca_content\Event\ContentEntityEvents::TRANSLATIONCREATE
+    'content_entity:translationdelete': Drupal\eca_content\Event\ContentEntityEvents::TRANSLATIONDELETE
+    'content_entity:translationinsert': Drupal\eca_content\Event\ContentEntityEvents::TRANSLATIONINSERT
+    'content_entity:update': Drupal\eca_content\Event\ContentEntityEvents::UPDATE
+    'content_entity:validate': Drupal\eca_content\Event\ContentEntityEvents::VALIDATE
+    'content_entity:view': Drupal\eca_content\Event\ContentEntityEvents::VIEW
+    'content_entity:viewmodealter': Drupal\eca_content\Event\ContentEntityEvents::VIEWMODEALTER
+    'config:collection_info': Drupal\Core\Config\ConfigCollectionEvents::COLLECTION_INFO
+    'config:delete': Drupal\Core\Config\ConfigEvents::DELETE
+    'config:import': Drupal\Core\Config\ConfigEvents::IMPORT
+    'config:import_missing_content': Drupal\Core\Config\ConfigEvents::IMPORT_MISSING_CONTENT
+    'config:import_validate': Drupal\Core\Config\ConfigEvents::IMPORT_VALIDATE
+    'config:rename': Drupal\Core\Config\ConfigEvents::RENAME
+    'config:save': Drupal\Core\Config\ConfigEvents::SAVE
+    'user:cancel': Drupal\eca_user\Event\UserEvents::CANCEL
+    'user:floodblockip': Drupal\user\Event\UserEvents::FLOOD_BLOCKED_IP
+    'user:floodblockuser': Drupal\user\Event\UserEvents::FLOOD_BLOCKED_USER
+    'user:login': Drupal\eca_user\Event\UserEvents::LOGIN
+    'user:logout': Drupal\eca_user\Event\UserEvents::LOGOUT
+    'user:set_user': Drupal\Core\Session\AccountEvents::SET_USER
+    'salesforce:error': Drupal\salesforce\Event\SalesforceEvents::ERROR
+    'salesforce:pull_entity_value': Drupal\salesforce\Event\SalesforceEvents::PULL_ENTITY_VALUE
+    'salesforce:pull_enqueue': Drupal\salesforce\Event\SalesforceEvents::PULL_ENQUEUE
+    'salesforce:pull_prepull': Drupal\salesforce\Event\SalesforceEvents::PULL_PREPULL
+    'salesforce:pull_presave': Drupal\salesforce\Event\SalesforceEvents::PULL_PRESAVE
+    'salesforce:pull_query': Drupal\salesforce\Event\SalesforceEvents::PULL_QUERY
+    'salesforce:push_allowed': Drupal\salesforce\Event\SalesforceEvents::PUSH_ALLOWED
+    'salesforce:push_fail': Drupal\salesforce\Event\SalesforceEvents::PUSH_FAIL
+    'salesforce:push_mapping_object': Drupal\salesforce\Event\SalesforceEvents::PUSH_MAPPING_OBJECT
+    'salesforce:push_params': Drupal\salesforce\Event\SalesforceEvents::PUSH_PARAMS
+    'salesforce:push_success': Drupal\salesforce\Event\SalesforceEvents::PUSH_SUCCESS

@@ -1,0 +1,72 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each event, gateway and action of a model, as <model config>:<entry id>, with an eca_entry_of
+# edge to its model and an eca_next edge to each entry its successors name, at the line of the
+# successor's id. One rule per section, since a rule reads one section's entries.
+
+node_types:
+- name: eca.model_entry
+  id_namespace: eca.model_entry
+
+edge_kinds:
+- kind: eca_entry_of
+  from: eca.model_entry
+  to: eca.model
+- kind: eca_next
+  from: eca.model_entry
+  to: eca.model_entry
+
+rules:
+- rule: eca_event_entry
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yml, each: 'events.*'}
+  id: {template: '{eca_model}:{key}'}
+  emits: [{node: {type: eca.model_entry}}]
+  confidence: declared
+
+- rule: eca_event_entry_edges
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yml, each: 'events.*'}
+  id: {template: '{eca_model}:{key}'}
+  emits:
+  - edge: {kind: eca_entry_of, from: this_node, to: {from: [], template: '{eca_model}', type: eca.model}}
+  - edge: {kind: eca_next, from: this_node, to: {from: {key: 'successors.*.id'}, pattern: '^(?<next>.+)$', template: '{eca_model}:{next}', type: eca.model_entry}}
+  confidence: declared
+
+- rule: eca_gateway_entry
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yml, each: 'gateways.*'}
+  id: {template: '{eca_model}:{key}'}
+  emits: [{node: {type: eca.model_entry}}]
+  confidence: declared
+
+- rule: eca_gateway_entry_edges
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yml, each: 'gateways.*'}
+  id: {template: '{eca_model}:{key}'}
+  emits:
+  - edge: {kind: eca_entry_of, from: this_node, to: {from: [], template: '{eca_model}', type: eca.model}}
+  - edge: {kind: eca_next, from: this_node, to: {from: {key: 'successors.*.id'}, pattern: '^(?<next>.+)$', template: '{eca_model}:{next}', type: eca.model_entry}}
+  confidence: declared
+
+- rule: eca_action_entry
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yml, each: 'actions.*'}
+  id: {template: '{eca_model}:{key}'}
+  emits: [{node: {type: eca.model_entry}}]
+  confidence: declared
+
+- rule: eca_action_entry_edges
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yml, each: 'actions.*'}
+  id: {template: '{eca_model}:{key}'}
+  emits:
+  - edge: {kind: eca_entry_of, from: this_node, to: {from: [], template: '{eca_model}', type: eca.model}}
+  - edge: {kind: eca_next, from: this_node, to: {from: {key: 'successors.*.id'}, pattern: '^(?<next>.+)$', template: '{eca_model}:{next}', type: eca.model_entry}}
+  confidence: declared

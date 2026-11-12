@@ -1,0 +1,30 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The entity type and bundle a model's events and actions name. ECA writes an entity type and a
+# bundle as one type value, '<entity type> <bundle>', with the bundle _all for every bundle, as a
+# content entity event or eca_new_entity does: an eca_acts_on_bundle edge to the bundle
+# <entity type>.<bundle>, or for _all an eca_acts_on_entity_type edge to the entity type. An
+# action's entity_type value names an entity type; _none names none. A type value of one word,
+# such as a comparison's value, gives nothing.
+
+edge_kinds:
+- kind: eca_acts_on_bundle
+  from: eca.model
+  to: drupal.bundle
+- kind: eca_acts_on_entity_type
+  from: eca.model
+  to: drupal.entity_type
+
+rules:
+- rule: eca_model_bundles_from_config
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - edge: {kind: eca_acts_on_bundle, from: this_node, to: {from: {key: 'events.*.configuration.type'}, pattern: '^(?<entity>[a-z][a-z0-9_]*) (?<bundle>[a-z0-9][a-z0-9_]*)$', template: '{entity}.{bundle}'}}
+  - edge: {kind: eca_acts_on_bundle, from: this_node, to: {from: {key: 'actions.*.configuration.type'}, pattern: '^(?<entity>[a-z][a-z0-9_]*) (?<bundle>[a-z0-9][a-z0-9_]*)$', template: '{entity}.{bundle}'}}
+  - edge: {kind: eca_acts_on_entity_type, from: this_node, to: {from: {key: 'events.*.configuration.type'}, pattern: '^(?<entity>[a-z][a-z0-9_]*) _all$', template: '{entity}'}}
+  - edge: {kind: eca_acts_on_entity_type, from: this_node, to: {from: {key: 'actions.*.configuration.type'}, pattern: '^(?<entity>[a-z][a-z0-9_]*) _all$', template: '{entity}'}}
+  - edge: {kind: eca_acts_on_entity_type, from: this_node, to: {from: {key: 'actions.*.configuration.entity_type'}, pattern: '^(?<entity>[a-z][a-z0-9_]*)$', template: '{entity}'}}
+  confidence: inferred

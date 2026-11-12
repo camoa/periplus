@@ -1,0 +1,18 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A model names a derived event plugin as <base>:<derivative>, and a custom module declares the
+# base plugin, whose deriver gives the derivatives. When the plugin <base> is mapped, an
+# eca_reacts_to edge from the model to it, beside the one to the referenced derivative. Inferred:
+# the id's form, not a declaration, says the derivative is the base plugin's.
+
+rules:
+- rule: eca_model_reacts_to_base_plugin
+  reads: map
+  match:
+    node_type: eca.model
+    follow:
+    - edge: eca_reacts_to
+    - id_matches: '^drupal\.plugin\.eca_event::(?<base>[^:]+):.+$'
+    - node: 'drupal.plugin.eca_event::{base}'
+  emits: [{edge: {kind: eca_reacts_to, from: this_node, to: matched_node}}]
+  confidence: inferred

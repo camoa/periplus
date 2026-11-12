@@ -1,0 +1,54 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A condition or an action of a model names a field by field_name, or an action by
+# field_name_entity_ref. The file rule links the model to drupal_basic's internal field-name hub
+# (field/field_name.yaml) for the machine name the value starts with, so field_x.value names
+# field_x and a token names nothing. The map rules give eca_uses_field to every field storage of
+# that name, on any entity type: a name that starts with field_ and that no mapped storage has ends
+# at the unresolved field.storage.<name>, a mark; any other name with no storage, such as a base
+# field, gives nothing. The pattern in the first map rule spells out "not field_" one letter at a
+# time, as drupal_basic's code_accesses_field does.
+
+edge_kinds:
+- kind: eca_names_field
+  from: eca.model
+  to: drupal.field_name
+- kind: eca_uses_field
+  from: eca.model
+  to: drupal.field_storage
+
+rules:
+- rule: eca_model_field_names_from_config
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - edge: {kind: eca_names_field, from: this_node, to: {from: {key: 'conditions.*.configuration.field_name'}, pattern: '^(?<field>[a-z][a-z0-9_]*)', template: '{field}', type: drupal.field_name}}
+  - edge: {kind: eca_names_field, from: this_node, to: {from: {key: 'actions.*.configuration.field_name'}, pattern: '^(?<field>[a-z][a-z0-9_]*)', template: '{field}', type: drupal.field_name}}
+  - edge: {kind: eca_names_field, from: this_node, to: {from: {key: 'actions.*.configuration.field_name_entity_ref'}, pattern: '^(?<field>[a-z][a-z0-9_]*)', template: '{field}', type: drupal.field_name}}
+  confidence: declared
+
+- rule: eca_model_uses_field
+  reads: map
+  match:
+    node_type: eca.model
+    follow:
+    - edge: eca_names_field
+    - id_matches: '^drupal\.field_name::(?:[^f]|f[^i]|fi[^e]|fie[^l]|fiel[^d]|field[^_])'
+    - edge: field_name_of
+  emits: [{edge: {kind: eca_uses_field, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: eca_model_uses_field_or_mark
+  reads: map
+  match:
+    node_type: eca.model
+    follow:
+    - edge: eca_names_field
+    - id_matches: '^drupal\.field_name::(?<entity>)(?<field>field_\w+)$'
+    - try:
+      - edge: field_name_of
+      - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+\.)(?<field>.+)$'
+  emits: [{edge: {kind: eca_uses_field, from: this_node, to: {template: 'field.storage.{entity}{field}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred

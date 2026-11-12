@@ -67,6 +67,7 @@ BUNDLED_PACKS = {
     "drupal_more@0.1.0": 14,
     "drupal_next@0.1.0": 65,
     "drush_basic@0.0.1": 4,
+    "eca_basic@0.0.1": 15,
     "eck_basic@0.0.1": 3,
     "go@0.0.2": 4,
     "go_basic@0.0.3": 5,

@@ -1,0 +1,17 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An ECA model read from its config file, eca.eca.<id>, with its label. It refines the config
+# object of its file, so it shares that node's id.
+
+node_types:
+- name: eca.model
+  parent: drupal.config_object
+
+rules:
+- rule: eca_model_from_config
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yaml}
+  id: {from: file_stem}
+  emits: [{node: {type: eca.model}}, {attribute: {name: label, from: {key: label}}}]
+  confidence: declared

@@ -1,0 +1,29 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The plugin each event, condition and action of a model names by its plugin key: an edge from the
+# model to the event plugin, the condition plugin or the action plugin of that id, at the line of
+# the key. A plugin no mapped file declares, as one of ECA or another contributed module, ends at a
+# referenced node.
+
+edge_kinds:
+- kind: eca_reacts_to
+  from: eca.model
+  to: drupal.eca_event
+- kind: eca_checks
+  from: eca.model
+  to: drupal.eca_condition
+- kind: eca_runs
+  from: eca.model
+  to: drupal.action_plugin
+
+rules:
+- rule: eca_model_plugins_from_config
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - edge: {kind: eca_reacts_to, from: this_node, to: {from: {key: 'events.*.plugin'}, type: drupal.eca_event}}
+  - edge: {kind: eca_checks, from: this_node, to: {from: {key: 'conditions.*.plugin'}, type: drupal.eca_condition}}
+  - edge: {kind: eca_runs, from: this_node, to: {from: {key: 'actions.*.plugin'}, type: drupal.action_plugin}}
+  confidence: declared

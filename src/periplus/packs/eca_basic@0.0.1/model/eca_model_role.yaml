@@ -1,0 +1,36 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A role a model names: an action's rid, as core's user_add_role_action and
+# user_remove_role_action write it, and a condition's role, as ECA's eca_current_user_role writes
+# it. The file rule links the model to drupal_basic's internal role-name hub (role/role_call.yaml);
+# the map rule gives eca_uses_role to the role's configuration, user.role.<role>, an unresolved
+# role when no mapped file declares it, as drupal_basic's role edges end.
+
+edge_kinds:
+- kind: eca_names_role
+  from: eca.model
+  to: drupal.role_name
+- kind: eca_uses_role
+  from: eca.model
+  to: drupal.role
+
+rules:
+- rule: eca_model_role_names_from_config
+  reads: file
+  in: [config, module_config]
+  match: {file: 'eca.eca.*', filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - edge: {kind: eca_names_role, from: this_node, to: {from: {key: 'actions.*.configuration.rid'}, pattern: '^(?<role>[a-z0-9_]+)$', template: '{role}', type: drupal.role_name}}
+  - edge: {kind: eca_names_role, from: this_node, to: {from: {key: 'conditions.*.configuration.role'}, pattern: '^(?<role>[a-z0-9_]+)$', template: '{role}', type: drupal.role_name}}
+  confidence: declared
+
+- rule: eca_model_uses_role
+  reads: map
+  match:
+    node_type: eca.model
+    follow:
+    - edge: eca_names_role
+    - id_matches: '^drupal\.role_name::(?<role>.+)$'
+  emits: [{edge: {kind: eca_uses_role, from: this_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: declared

@@ -550,6 +550,200 @@ def test_salesforce_mapping_config_field_plugin_and_event_subscriber(tmp_path: P
     }
 
 
+ECA_MODEL = """id: my_model
+label: 'My model'
+events:
+  Event_pull:
+    plugin: 'salesforce:pull_presave'
+    successors:
+      -
+        id: Gateway_1
+        condition: ''
+  Event_save:
+    plugin: 'content_entity:presave'
+    configuration:
+      type: 'node article'
+    successors:
+      -
+        id: Action_set
+        condition: Cond_status
+  Event_insert:
+    plugin: 'content_entity:insert'
+    configuration:
+      type: 'user _all'
+  Event_mine:
+    plugin: 'mymodule_event:thing'
+conditions:
+  Cond_status:
+    plugin: eca_entity_field_value
+    configuration:
+      field_name: field_status
+      type: value
+  Cond_gone:
+    plugin: eca_entity_field_value
+    configuration:
+      field_name: field_gone
+  Cond_base:
+    plugin: eca_entity_field_value
+    configuration:
+      field_name: title
+  Cond_role:
+    plugin: eca_current_user_role
+    configuration:
+      role: editor
+  Cond_mine:
+    plugin: mymodule_condition
+gateways:
+  Gateway_1:
+    type: 0
+    successors:
+      -
+        id: Action_add
+        condition: Cond_role
+actions:
+  Action_add:
+    plugin: user_add_role_action
+    configuration:
+      rid: editor
+  Action_remove:
+    plugin: user_remove_role_action
+    configuration:
+      rid: missing_role
+  Action_set:
+    plugin: eca_set_field_value
+    configuration:
+      field_name: field_color.value
+    successors:
+      -
+        id: Action_mine
+        condition: ''
+  Action_mine:
+    plugin: mymodule_action
+  Action_load:
+    plugin: eca_token_load_entity
+    configuration:
+      entity_type: _none
+"""
+
+
+def test_eca_model_plugins_events_entries_fields_roles_and_bundles(tmp_path: Path) -> None:
+    """A model links to the plugins it names, a custom one where mapped and a derived event to its
+    mapped base; a table event plugin to the event a subscriber subscribes to; its entries to the
+    entries their successors name; and the fields, roles and bundles its configuration names."""
+    plugins = f"{MODULE_DIR}/src/Plugin"
+    report, document = _map(
+        tmp_path,
+        "eca_basic",
+        {
+            "config/sync/eca.eca.my_model.yml": ECA_MODEL,
+            "config/sync/field.storage.node.field_color.yml": (
+                "id: node.field_color\nfield_name: field_color\nentity_type: node\n"
+            ),
+            "config/sync/field.storage.node.field_status.yml": (
+                "id: node.field_status\nfield_name: field_status\nentity_type: node\n"
+            ),
+            "config/sync/user.role.editor.yml": "id: editor\nlabel: Editor\n",
+            "config/sync/node.type.article.yml": "type: article\nname: Article\n",
+            f"{plugins}/ECA/Event/MyEvent.php": (
+                "<?php\n\nnamespace Drupal\\mymodule\\Plugin\\ECA\\Event;\n\n"
+                "use Drupal\\eca\\Plugin\\ECA\\Event\\EventBase;\n\n"
+                '/**\n * @EcaEvent(\n *   id = "mymodule_event",\n * )\n */\n'
+                "class MyEvent extends EventBase {\n}\n"
+            ),
+            f"{plugins}/ECA/Condition/MyCondition.php": (
+                "<?php\n\nnamespace Drupal\\mymodule\\Plugin\\ECA\\Condition;\n\n"
+                "use Drupal\\eca\\Attribute\\EcaCondition;\n"
+                "use Drupal\\eca\\Plugin\\ECA\\Condition\\ConditionBase;\n\n"
+                "#[EcaCondition(\n  id: 'mymodule_condition',\n)]\n"
+                "class MyCondition extends ConditionBase {\n}\n"
+            ),
+            f"{plugins}/Action/MyAction.php": (
+                "<?php\n\nnamespace Drupal\\mymodule\\Plugin\\Action;\n\n"
+                "use Drupal\\Core\\Action\\Attribute\\Action;\n"
+                "use Drupal\\Core\\Action\\ActionBase;\n\n"
+                "#[Action(\n  id: 'mymodule_action',\n)]\n"
+                "class MyAction extends ActionBase {\n}\n"
+            ),
+            f"{MODULE_DIR}/src/EventSubscriber/PullSubscriber.php": (
+                "<?php\n\nnamespace Drupal\\mymodule\\EventSubscriber;\n\n"
+                "use Drupal\\salesforce\\Event\\SalesforceEvents;\n"
+                "use Symfony\\Component\\EventDispatcher\\EventSubscriberInterface;\n\n"
+                "class PullSubscriber implements EventSubscriberInterface {\n\n"
+                "  public static function getSubscribedEvents(): array {\n"
+                "    return [SalesforceEvents::PULL_PRESAVE => 'pullPresave'];\n  }\n\n}\n"
+            ),
+        },
+    )
+    model = "drupal.config::eca.eca.my_model"
+    entry = "eca.model_entry::eca.eca.my_model:"
+    event = "drupal.event::Drupal\\"
+    pull = event + "salesforce\\Event\\SalesforceEvents::PULL_PRESAVE"
+    content = event + "eca_content\\Event\\ContentEntityEvents::"
+    eca_event = "drupal.plugin.eca_event::"
+    eca_condition = "drupal.plugin.eca_condition::"
+    action = "drupal.plugin.action::"
+    found = nodes(document)
+    assert found[model]["type"] == "eca.model"
+    assert {
+        node_id: (node["type"], node["state"])
+        for node_id, node in found.items()
+        if node_id.startswith((eca_event, eca_condition, action + "mymodule"))
+    } == {
+        eca_event + "content_entity:insert": ("drupal.eca_event", "referenced"),
+        eca_event + "content_entity:presave": ("drupal.eca_event", "referenced"),
+        eca_event + "mymodule_event": ("drupal.eca_event", "mapped"),
+        eca_event + "mymodule_event:thing": ("drupal.eca_event", "referenced"),
+        eca_event + "salesforce:pull_presave": ("drupal.eca_event", "referenced"),
+        eca_condition + "eca_current_user_role": ("drupal.eca_condition", "referenced"),
+        eca_condition + "eca_entity_field_value": ("drupal.eca_condition", "referenced"),
+        eca_condition + "mymodule_condition": ("drupal.eca_condition", "mapped"),
+        action + "mymodule_action": ("drupal.action_plugin", "mapped"),
+    }
+    assert found["drupal.config::field.storage.field_gone"]["state"] == "unresolved"
+    assert found["drupal.config::user.role.missing_role"]["state"] == "unresolved"
+    model_edges = {edge for edge in edges(document) if edge[1] == model} - edges(
+        document, "config_provided_by"
+    )
+    assert model_edges == {
+        ("eca_reacts_to", model, eca_event + "content_entity:insert"),
+        ("eca_reacts_to", model, eca_event + "content_entity:presave"),
+        ("eca_reacts_to", model, eca_event + "mymodule_event"),
+        ("eca_reacts_to", model, eca_event + "mymodule_event:thing"),
+        ("eca_reacts_to", model, eca_event + "salesforce:pull_presave"),
+        ("eca_reacts_to_event", model, content + "INSERT"),
+        ("eca_reacts_to_event", model, content + "PRESAVE"),
+        ("eca_reacts_to_event", model, pull),
+        ("eca_checks", model, eca_condition + "eca_current_user_role"),
+        ("eca_checks", model, eca_condition + "eca_entity_field_value"),
+        ("eca_checks", model, eca_condition + "mymodule_condition"),
+        ("eca_runs", model, action + "eca_set_field_value"),
+        ("eca_runs", model, action + "eca_token_load_entity"),
+        ("eca_runs", model, action + "mymodule_action"),
+        ("eca_runs", model, action + "user_add_role_action"),
+        ("eca_runs", model, action + "user_remove_role_action"),
+        ("eca_uses_field", model, "drupal.config::field.storage.node.field_color"),
+        ("eca_uses_field", model, "drupal.config::field.storage.node.field_status"),
+        ("eca_uses_field", model, "drupal.config::field.storage.field_gone"),
+        ("eca_uses_role", model, "drupal.config::user.role.editor"),
+        ("eca_uses_role", model, "drupal.config::user.role.missing_role"),
+        ("eca_acts_on_bundle", model, "drupal.bundle::node.article"),
+        ("eca_acts_on_entity_type", model, "drupal.entity_type::user"),
+    }
+    assert edges(document, "eca_next") == {
+        ("eca_next", entry + "Event_pull", entry + "Gateway_1"),
+        ("eca_next", entry + "Event_save", entry + "Action_set"),
+        ("eca_next", entry + "Gateway_1", entry + "Action_add"),
+        ("eca_next", entry + "Action_set", entry + "Action_mine"),
+    }
+    assert len(edges(document, "eca_entry_of")) == 10
+    listener = "php.method::Drupal\\mymodule\\EventSubscriber\\PullSubscriber::pullPresave"
+    assert ("subscribed_by", pull, listener) in edges(document)
+    no_row = "edge eca_reacts_to_event: no resolution step holds for capture plugin"
+    assert [(rule, why) for _, _, rule, why in report.skipped] == [
+        ("eca_model_event_from_table", no_row)
+    ]
+
+
 def test_salesforce_tokens_name_field_storages_and_webform_elements(tmp_path: Path) -> None:
     """A token names a field storage through the field-name hub, or leaves a mark for a field_
     name no storage has; a webform submission token names an element of the mapping's webform,

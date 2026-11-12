@@ -150,6 +150,12 @@ a list of its known gaps.
   settings and other Salesforce plugin types give nothing. An event used through an alias, or
   written as its own text, makes no `salesforce.event`; `drupal_basic` joins each key of
   `getSubscribedEvents` to its listener through a referenced `drupal.event`.
+- **ECA:** `eca_basic` reads a model's config file, not its modeller data. A successor's
+  condition and a gateway's type give no edge, and the plugin edges start at the model, not at
+  its entries. Its table of event plugins holds those of ECA's content entity, config and user
+  submodules and of salesforce_eca; any other event plugin id gives no event edge and a skipped
+  row. A configuration value is read only under `field_name`, `field_name_entity_ref`, `rid`,
+  `role`, `type` and `entity_type`, and a role list gives nothing.
 - **Drush:** the `@command` tag is read as text, because the engine reads a docblock annotation
   only in the form `@Name(...)` and allows one text file type per ending. Its class is named from
   the file's path, so its edges are inferred, and a class named otherwise gives unresolved ends.
