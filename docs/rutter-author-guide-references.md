@@ -342,12 +342,13 @@ rule may list the packs whose reference rules should, under `match.encloses_for`
 ```yaml
 # drupal_js_basic: a behavior is the start of js_basic's calls written inside it.
 - rule: behavior_from_assignment
-  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: object}], encloses_for: [js_basic]}
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: object}, {name_matches: 'Drupal\.behaviors\.[A-Za-z_$][\w$]*'}], encloses_for: [js_basic]}
 ```
 
 Those reference rules then take the rule's node as an enclosing declaration, as they take their own
 pack's, nearest first; at one tree node it comes before their rules. Its id is the one its own pack
-mints. The edge kinds still decide: the node's type must be allowed at the from end of every edge
+mints. Where it fires and mints no id, the walk passes that tree node and their rules there too, so
+give it a `where` that holds only where its id does, as the name test above does. The edge kinds still decide: the node's type must be allowed at the from end of every edge
 the reference rule emits, so the dependent usually declares its type below theirs with `parent`.
 Map rules that match that type then match the dependent's node too. A named pack the rule's pack
 does not depend on, or one with no reference rule that reads the same file type and could start

@@ -15,7 +15,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # is mapped. When shared_objects holds a and builtin_objects does not, a call no script assigns is
 # a js_calls edge to one unresolved member function a.b.c for every script; any other a.b.c() is
 # nothing. A dotted name split over lines, a\n  .b(), is read as a.b, up to three parts. Each edge
-# starts at the nearest named or member function that holds the call, else at the script.
+# starts at the nearest named or member function that holds the call, else at the script; a rutter
+# that depends on this one may name a node of its own that holds the call (encloses_for).
 # What it does not map, today:
 # - A call to a JavaScript or browser global the table globals holds, such as parseInt(),
 #   setTimeout() or fetch(): no edge and no node, unless the script declares a function of that
@@ -57,6 +58,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - An import or an export: no rule. A script in a .mjs, .cjs, .jsx or .ts file is not read.
 # - The script path is the path from the project folder, so the same script mapped from another
 #   folder gets another id.
+# - A function assigned to P.x, or written in an object literal assigned to P.x, where the table
+#   excluded_objects holds P: no member function. A rutter that adds P maps it, and its node may be
+#   where the calls inside start. A function assigned to P.x.y stays a member function.
 # The grammar is a dependency of periplus-map, pinned at tree-sitter-javascript 0.25.0. With
 # another version installed, periplus map stops with a problem that names the pin.
 pack: js_basic
@@ -123,3 +127,8 @@ tables:
   # the calls of every script meet one node (function/function.yaml). A rutter for the library adds
   # its rows under add_table_rows.
   library_globals: {}
+  # Dotted object names whose functions a rutter that depends on this one maps instead, each the
+  # value of its own key: a function assigned to <name>.x, or written in an object literal assigned
+  # to <name>.x, makes no member function (member/member_function.yaml). Empty here; that rutter
+  # adds its rows under add_table_rows.
+  excluded_objects: {}

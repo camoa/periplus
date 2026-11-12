@@ -1,7 +1,10 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
+# Below js_basic's js.function, so js_basic's call edges, and the map rules that read them, may
+# start at a behavior.
 - name: drupal.js_behavior
+  parent: js.function
   id_namespace: drupal.js_behavior
 - name: css.file
   id_namespace: css.file
@@ -27,10 +30,14 @@ edge_kinds:
 rules:
 # Drupal.behaviors.name = {...}: the behavior name. An arrow function or a function expression on
 # the right is read by the rules below; any other value, such as a variable, makes nothing.
+# encloses_for: a call, a global's call or a member call js_basic reads inside the behavior, in
+# attach, detach or any other function of it, starts at the behavior, and js_basic makes no member
+# function there (pack.yaml, excluded_objects). The name test keeps the three node rules from
+# firing on another assignment, where they would mint no id and hide js_basic's member function.
 - rule: behavior_from_assignment
   reads: file
   in: [js_source]
-  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: object}]}
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: object}, &behavior_name {name_matches: 'Drupal\.behaviors\.[A-Za-z_$][\w$]*'}], encloses_for: [js_basic]}
   id: &behavior_id {from: declared_name, pattern: '^Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)$', template: '{behavior}'}
   emits: [{node: {type: drupal.js_behavior}}]
   confidence: declared
@@ -47,14 +54,14 @@ rules:
 - rule: behavior_from_arrow
   reads: file
   in: [js_source]
-  match: &arrow_match {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: arrow_function}]}
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: arrow_function}, *behavior_name], encloses_for: [js_basic]}
   id: *behavior_id
   emits: [{node: {type: drupal.js_behavior}}]
   confidence: declared
 - rule: behavior_from_arrow_in_file
   reads: file
   in: [js_source]
-  match: *arrow_match
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: arrow_function}]}
   id: *behavior_id
   emits: [{edge: {kind: script_declares_behavior, from: enclosing_file, to: this_node}}]
   confidence: declared
@@ -62,17 +69,28 @@ rules:
 - rule: behavior_from_function
   reads: file
   in: [js_source]
-  match: &function_match {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: function_expression}]}
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: function_expression}, *behavior_name], encloses_for: [js_basic]}
   id: *behavior_id
   emits: [{node: {type: drupal.js_behavior}}]
   confidence: declared
 - rule: behavior_from_function_in_file
   reads: file
   in: [js_source]
-  match: *function_match
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: function_expression}]}
   id: *behavior_id
   emits: [{edge: {kind: script_declares_behavior, from: enclosing_file, to: this_node}}]
   confidence: declared
+# a.b.c() inside a behavior to the member function <script path>:a.b.c of the behavior's script.
+# js_basic joins such a call through script_declares_function, which a behavior does not have. The
+# edge sits at the line of the script. Inferred, as js_basic's member calls are.
+- rule: behavior_member_call_in_script
+  reads: map
+  match:
+    node_type: js.file
+    where: [{id_matches: '^js\.file::(?<js_script>.+)$'}]
+    follow: [{edge: script_declares_behavior}, {id_matches: '^drupal\.js_behavior::(?<js_behavior>.+)$'}, {edge: calls_member}, {id_matches: '^js\.member_call::(?<js_callee>.+)$'}, {node: 'js.member_function::{js_script}:{js_callee}'}]
+  emits: [{edge: {kind: js_calls, from: {template: 'drupal.js_behavior::{js_behavior}'}, to: matched_node}}]
+  confidence: inferred
 # Drupal.behaviors.other.attach(...) inside a behavior object: that behavior runs the other one.
 - rule: behavior_attach_call
   reads: file

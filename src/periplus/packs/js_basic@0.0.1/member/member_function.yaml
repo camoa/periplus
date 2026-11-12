@@ -8,7 +8,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # dotted name, A.b.c = ..., is named in its script, <script path>:A.b.c, since A may be local to it.
 # A function in an object literal, A.b = { open() {} }, is named the same way by A: A.b.open or
 # <script path>:A.b.open. A name that starts at this is the object a call runs on, so it makes
-# nothing.
+# nothing. A function assigned to P.x, or written in an object literal assigned to P.x, makes
+# nothing when the table excluded_objects holds P: a rutter that depends on this one maps it.
 
 node_types:
 - name: js.member_function
@@ -26,7 +27,7 @@ rules:
 - rule: member_function_from_expression
   reads: file
   in: [js_source]
-  match: &expression {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: function_expression}, &root {name_matches: '(?<js_root>[\w$]*)(?s:.*)'}, &shared {in_table: {table: shared_objects, capture: js_root}}]}
+  match: &expression {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: function_expression}, &root {name_matches: '(?<js_root>[\w$]*)(?s:.*)'}, &shared {in_table: {table: shared_objects, capture: js_root}}, &owner {name_matches: '(?:(?<js_owner>(?s:.*))\.)?[^.]*'}, &unowned {not_in_table: {table: excluded_objects, capture: js_owner}}]}
   id: &dotted_id
     from: declared_name
     # A dotted name whose first part is not this.
@@ -45,7 +46,7 @@ rules:
 - rule: member_function_from_expression_in_script
   reads: file
   in: [js_source]
-  match: &local_expression {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: function_expression}, *root, &local {not_in_table: {table: shared_objects, capture: js_root}}]}
+  match: &local_expression {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: function_expression}, *root, &local {not_in_table: {table: shared_objects, capture: js_root}}, *owner, *unowned]}
   id: &local_id
     from: declared_name
     pattern: '^(?<js_member>(?:[A-Za-su-z_$][\w$]*|t|t[A-Za-gi-z\d_$][\w$]*|th|th[A-Za-hj-z\d_$][\w$]*|thi|thi[A-Za-rt-z\d_$][\w$]*|this[\w$]+)(?:\.[A-Za-z_$][\w$]*)+)$'
@@ -63,7 +64,7 @@ rules:
 - rule: member_function_from_arrow
   reads: file
   in: [js_source]
-  match: &arrow {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: arrow_function}, *root, *shared]}
+  match: &arrow {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: arrow_function}, *root, *shared, *owner, *unowned]}
   id: *dotted_id
   emits: [{node: {type: js.member_function}}]
   confidence: declared
@@ -78,7 +79,7 @@ rules:
 - rule: member_function_from_arrow_in_script
   reads: file
   in: [js_source]
-  match: &local_arrow {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: arrow_function}, *root, *local]}
+  match: &local_arrow {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: arrow_function}, *root, *local, *owner, *unowned]}
   id: *local_id
   emits: [{node: {type: js.member_function}}]
   confidence: declared
@@ -119,7 +120,7 @@ rules:
 - rule: member_function_from_method
   reads: file
   in: [js_source]
-  match: &method {declaration: method_definition, name_child: name, filetype: javascript, where: [{name_matches: '[A-Za-z_$][\w$]*'}, &shared_object {in_table: {table: shared_objects, fill: enclosing_type, pattern: ':(?<js_root>[\w$]+)', capture: js_root}}]}
+  match: &method {declaration: method_definition, name_child: name, filetype: javascript, where: [{name_matches: '[A-Za-z_$][\w$]*'}, &shared_object {in_table: {table: shared_objects, fill: enclosing_type, pattern: ':(?<js_root>[\w$]+)', capture: js_root}}, &unowned_object {not_in_table: {table: excluded_objects, fill: enclosing_type, pattern: ':(?<js_owner>(?s:.*))\.[^.]*$', capture: js_owner}}]}
   id: &member_id {from: [enclosing_type, declared_name], template: '{enclosing_type}.{declared_name}', normalize: [{replace: '^[^:]*:', with: ''}]}
   emits: [{node: {type: js.member_function}}]
   confidence: declared
@@ -134,7 +135,7 @@ rules:
 - rule: member_function_from_method_in_script
   reads: file
   in: [js_source]
-  match: &local_method {declaration: method_definition, name_child: name, filetype: javascript, where: [{name_matches: '[A-Za-z_$][\w$]*'}, &local_object {not_in_table: {table: shared_objects, fill: enclosing_type, pattern: ':(?<js_root>[\w$]+)', capture: js_root}}]}
+  match: &local_method {declaration: method_definition, name_child: name, filetype: javascript, where: [{name_matches: '[A-Za-z_$][\w$]*'}, &local_object {not_in_table: {table: shared_objects, fill: enclosing_type, pattern: ':(?<js_root>[\w$]+)', capture: js_root}}, *unowned_object]}
   id: &local_member_id {from: [enclosing_type, declared_name], template: '{enclosing_type}.{declared_name}'}
   emits: [{node: {type: js.member_function}}]
   confidence: declared
@@ -149,7 +150,7 @@ rules:
 - rule: member_function_from_pair
   reads: file
   in: [js_source]
-  match: &pair {declaration: pair, name_child: key, filetype: javascript, where: [{has_child: function_expression}, {name_matches: '[A-Za-z_$][\w$]*'}, *shared_object]}
+  match: &pair {declaration: pair, name_child: key, filetype: javascript, where: [{has_child: function_expression}, {name_matches: '[A-Za-z_$][\w$]*'}, *shared_object, *unowned_object]}
   id: *member_id
   emits: [{node: {type: js.member_function}}]
   confidence: declared
@@ -164,7 +165,7 @@ rules:
 - rule: member_function_from_pair_in_script
   reads: file
   in: [js_source]
-  match: &local_pair {declaration: pair, name_child: key, filetype: javascript, where: [{has_child: function_expression}, {name_matches: '[A-Za-z_$][\w$]*'}, *local_object]}
+  match: &local_pair {declaration: pair, name_child: key, filetype: javascript, where: [{has_child: function_expression}, {name_matches: '[A-Za-z_$][\w$]*'}, *local_object, *unowned_object]}
   id: *local_member_id
   emits: [{node: {type: js.member_function}}]
   confidence: declared

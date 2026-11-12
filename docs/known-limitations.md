@@ -201,8 +201,10 @@ a list of its known gaps.
   outside a behavior object makes no edge and goes under skipped. One in a named class written in
   a behavior's function is the behavior's edge, at the behavior's line; one in a class outside a
   behavior, or nested in another class, makes no edge and no skipped row. Two classes of one name
-  in one script share their edges only when their bodies are the same text. Each function of a
-  behavior is also a member function, and a call in it starts there, not at the behavior.
+  in one script share their edges only when their bodies are the same text. A behavior's functions
+  make no member function, and a call in them starts at the behavior; one to a member function of
+  the script sits at the script's line. A call to another behavior's `attach` is also a
+  `js_calls` edge to an unresolved member function, even when that behavior is mapped.
   `detach`, `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge.
   `once()`, `$()` and `jQuery()` are each one unresolved function for every script unless the
   script declares a function of that name, and a call to a member of `Drupal`, `drupalSettings`,

@@ -102,8 +102,8 @@ periplus map
 
 Map:
   path    /path/to/project/.periplus/map.json
-  nodes   12
-  edges   8
+  nodes   11
+  edges   7
   internal: 3 nodes and 2 edges left out
 
 Files:
@@ -301,17 +301,17 @@ Incoming (2):
     drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  web/modules/custom/greet/js/banner.js:4  x1  declared  drupal_js_basic:setting_read_in_behavior
 ```
 
-The script reaches the behavior it declares, the path it fetches whole, and the function `attach`
-written in the behavior's object. `fetch` is a browser global, so its calls make no node.
+The script reaches the behavior it declares and the path it fetches whole. The function `attach`
+written in the behavior's object is the behavior's, so it is no node of its own. `fetch` is a
+browser global, so its calls make no node.
 
 <!-- nav-run -->
 ```
 $ periplus neighbors js.file::web/modules/custom/greet/js/banner.js
 periplus neighbors js.file::web/modules/custom/greet/js/banner.js
-3 items
+2 items
   1  drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  via script_declares_behavior from js.file::web/modules/custom/greet/js/banner.js
   1  drupal.url_path::/greet/hello  drupal.url_path  referenced  via script_links_to_path from js.file::web/modules/custom/greet/js/banner.js
-  1  js.member_function::Drupal.behaviors.greetBanner.attach  js.member_function  mapped  via script_declares_function from js.file::web/modules/custom/greet/js/banner.js
 ```
 
 ## A shape the map lacks
@@ -433,8 +433,8 @@ periplus map
 
 Map:
   path    /path/to/project/.periplus/map.json
-  nodes   12
-  edges   8
+  nodes   11
+  edges   7
   internal: 3 nodes and 2 edges left out
 
 Files:

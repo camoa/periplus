@@ -20,6 +20,8 @@ add_table_rows:
   js_basic:
     shared_objects:
       Drupal: Drupal
+    excluded_objects:
+      Drupal.behaviors: Drupal.behaviors
 files:
   types:
     yml:
