@@ -1,0 +1,56 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method call on $this, $this->m(), inside a class method. The first two rules keep it as a
+# php.call_site at its line, <class>::<method>::$this->m, joined to and from the method around it.
+# The map rule then gives the call its calls edge, from the method around it, inferred: it looks
+# the method up on the enclosing class and then its ancestors, through extends and used traits. A
+# method no class in the map declares, such as one inherited from a class outside the map, lands
+# unresolved under the class the walk started from.
+#
+# Limits: a call in a parent class to a method a child overrides lands on the parent's method, as
+# with static::. Inside a trait, $this names the trait, not the class that uses it. A variable
+# method name, $this->$name(), is types/find_runtime_calls.yaml's; a call on a property,
+# $this->a->b(), is find_call_site's.
+rules:
+
+- rule: find_this_call
+  reads: file
+  in: [source]
+  match: &this_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this'}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &this_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: this_call_method
+  reads: file
+  in: [source]
+  match: *this_match
+  id: *this_id
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+- rule: calls_this_method
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<declarer>[^:]+)::[^:]+::\$this->(?<method>\w+))$'}]
+    follow:
+    - try:
+      - node: 'php.type::{declarer}'
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
