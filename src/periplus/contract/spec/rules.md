@@ -332,8 +332,7 @@ and a reader knows not to trust them as variables.
 ## 14. A pack may only name types it declares or a dependency declares
 
 Checkable before a single source file is opened, which is what makes building the type table
-an ordering commitment rather than an implementation detail. Checked mechanically across five
-packs; it found one violation.
+an ordering commitment rather than an implementation detail.
 
 There are no kinds of pack. A root is a pack with nothing beneath it and need not be a
 language. If any level were special, a third party could not occupy it.
