@@ -112,7 +112,11 @@ either, the rule is refused.
 
 ## What a tree reference cannot say today
 
-- A method call on an object, `$x->m()` or `$this->m()`, whose class is known only at run time.
+- A method call on an object, `$x->m()`, whose class is known only at run time. `$this->m()` is
+  joined in the map through the enclosing class and its ancestors, so a call in a parent to a
+  method a child overrides lands on the parent's method.
+- A plain `Foo::class`. The tree gives it and `Foo::CONST` the same two name children, and a rule
+  reads only the first, so only a qualified `\A\B\Foo::class` or `Lib\Foo::class` is mapped.
 - A function imported by `use function x as y`. The imports bind type names only, so `y()` is an
   unresolved `y` in the namespace: one table would merge a function and a class PHP keeps apart.
 - A call in a class constant or a property default, which no function or method holds: skipped.

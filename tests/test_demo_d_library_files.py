@@ -158,7 +158,7 @@ def test_a_remote_script_makes_no_node_and_a_library_listing_only_urls_gives_one
     ]
 
 
-def test_a_library_attached_from_php_is_mapped_and_links_to_the_class_that_attaches_it(
+def test_a_library_attached_from_php_is_mapped_and_links_to_the_method_that_attaches_it(
     tmp_path: Path,
 ) -> None:
     module = _plant(tmp_path, JS_PACKS, "form:\n  js:\n    js/form.js: {}\n")
@@ -174,7 +174,10 @@ def test_a_library_attached_from_php_is_mapped_and_links_to_the_class_that_attac
     _, document = _map(tmp_path)
     assert _states(document)["drupal.library::mymodule/form"] == "mapped"
     assert _edge_set(document, "attaches_library") == {
-        ("php.type::Drupal\\mymodule\\Controller\\FormController", "drupal.library::mymodule/form")
+        (
+            "php.method::Drupal\\mymodule\\Controller\\FormController::page",
+            "drupal.library::mymodule/form",
+        )
     }
 
 

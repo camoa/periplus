@@ -40,9 +40,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # to the drupal.url_path node a route serves: a path written whole in a quoted string
 # (behavior/behavior.yaml), and, in url/script_url.yaml, Drupal.url('my/path') as /my/path and a
 # template literal that starts with one /.
-# - A template literal keeps each ${...} as written, `/my/item/${id}`, so it meets no route whose
-#   path holds a placeholder. One joined with +, one holding a space, and one after return or any
-#   character other than ( [ , = : ?, give nothing.
+# - A template literal keeps each ${...} as written, `/my/item/${id}`, so its path edge meets no
+#   route whose path holds a placeholder. One joined with +, one holding a space, and one after
+#   return or any character other than ( [ , = : ?, give nothing.
+# - url/script_route.yaml also joins a template literal to a route by shape, each ${...} and each
+#   route's {x} written as *, as an inferred script_links_to_route edge from the script. A query
+#   string and a fragment are cut first. A literal value in a placeholder slot, `/my/item/5`, and a
+#   path no mapped routing file declares give none. Two routes whose paths have one shape both get
+#   an edge.
 # - Drupal.url('a/' + id) and a text holding a space: no edge.
 # - fetch(x), $.ajax(x), $.get(x), $.getJSON(x), $.post(x), the same through jQuery, and
 #   Drupal.url(x), whose first argument starts with no quote, backtick or brace, is a js.url_call
@@ -57,14 +62,19 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # add a path value and the spans its rules read.
 #
 # Library attachments. In PHP, $build['#attached']['library'][] = 'module/library' is an edge
-# from the class or the function around it. The array form,
-# '#attached' => ['library' => ['module/library', ...]], is an edge from the class of its file,
-# one for each text in the list. In Twig, attach_library('module/library') in a
+# from the method or the function around it. The array form,
+# '#attached' => ['library' => ['module/library', ...]], is an edge from the named method around
+# it, one for each text in the list. In Twig, attach_library('module/library') in a
 # <name>.html.twig file is an edge from the template.
-# - The array form is read as text. Its class is named from the file's path, by Drupal's PSR-4
-#   layout: <module>/src/A/B.php is Drupal\<module>\A\B. So the rule is inferred, and a file
-#   whose class is named otherwise gets an edge from a class that does not exist. In a .module,
-#   .theme, .inc, .install or .profile file the edge starts at the function around the list.
+# - The array form is read as text. Its method's class is named from the file's path, by Drupal's
+#   PSR-4 layout: <module>/src/A/B.php is Drupal\<module>\A\B. So the rule is inferred, and a file
+#   whose class is named otherwise gets an edge from a method that does not exist. A list in a
+#   closure counts the named method around it. A list outside any named function, such as a
+#   property's default, gives no edge and one skipped row. In a .module, .theme, .inc, .install or
+#   .profile file the edge starts at the function around the list.
+# - In a .module, .theme, .inc, .install or .profile file, the assignment form inside a method of
+#   a class kept there gives two edges: one from the method, and one from the class, because the
+#   function rule starts at the nearest holder, which for a method is its class.
 # - The array form with something between => and the array makes nothing:
 #   '#attached' => $flag ? ['library' => [...]] : [].
 # - A library named by a constant, a variable or a joined text: no edge.
@@ -106,11 +116,12 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # and the text of its body, so two classes of one name in one script are one node only when their
 # bodies are the same text, and then their edges are the same too. One in an unnamed class,
 # class {...}, makes no edge and is listed under skipped. In PHP an attachment in a function, such
-# as a hook in a .module file, starts at the function, and one in a method starts at the class,
-# not at the method. An attachment outside both makes no edge and is listed the same way; its
-# setting node is still made. In a procedural file, such as a .module or .inc file, an attachment
-# in the array form inside a class method now makes no edge and one skipped row, no value for fn,
-# as one outside any class or function does; its setting node is still made.
+# as a hook in a .module file, starts at the function. A library attachment in a method starts at
+# the method; a drupalSettings key in a method starts at the class, not at the method. A settings
+# attachment outside both makes no edge and is listed the same way; its setting node is still
+# made. In a procedural file, such as a .module or .inc file, an attachment in the array form
+# inside a class method makes no edge and one skipped row, no value for fn, as one outside any
+# class or function does; its setting node is still made.
 pack: drupal_js_basic
 version: 0.0.1
 depends: [js_basic, drupal_basic]

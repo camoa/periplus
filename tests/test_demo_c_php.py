@@ -128,7 +128,7 @@ def _calls(document: dict[str, Any], kind: str = "calls") -> dict[tuple[str, str
 def test_plain_and_static_calls_give_a_calls_edge_by_exact_value(tmp_path: Path) -> None:
     """Through an alias, a full name and a used class; a miss ends at an unresolved node that
     keeps what was searched for; an unqualified miss and the function imported as h() end at the
-    global name; self:: and static:: end at the enclosing class's method."""
+    global name; self::, static:: and $this-> end at the enclosing class's method."""
     lines = _plant(tmp_path)
     document, _ = _map(tmp_path)
     closure, method = _at(lines, r"        local\(\);")
@@ -147,7 +147,9 @@ def test_plain_and_static_calls_give_a_calls_edge_by_exact_value(tmp_path: Path)
         (CALLER, F + "h"): (_at(lines, r"    h\(\);"), "h"),
         (RUN, F + "App\\local"): ([method], None),
         (RUN, M + "App\\Main::other"): (
-            _at(lines, r"        self::other\(\);") + _at(lines, r"        static::other\(\);"),
+            _at(lines, r"        \$this->other\(\);")
+            + _at(lines, r"        self::other\(\);")
+            + _at(lines, r"        static::other\(\);"),
             None,
         ),
         (RUN, MAKE): (_at(lines, r"        Util::make\(\);"), None),
@@ -166,12 +168,13 @@ def test_plain_and_static_calls_give_a_calls_edge_by_exact_value(tmp_path: Path)
         static = "::" in edge["to"].split("::", 1)[1]
         function_rules = {"calls_function", "calls_qualified_function"}
         rules = {"calls_static_method"} if static else function_rules
-        confidence = "declared"
+        confidence, count = "declared", 1
         if edge["to"] == M + "App\\Main::other":
-            rules, confidence = {"calls_self_method"}, "inferred"
-        (provenance,) = edge["provenance"]
-        assert provenance["rule"] in rules, edge
-        assert (provenance["confidence"], provenance["pack"]) == (confidence, "php_basic"), edge
+            rules, confidence, count = {"calls_self_method", "calls_this_method"}, "inferred", 2
+        assert len(edge["provenance"]) == count, edge
+        for provenance in edge["provenance"]:
+            assert provenance["rule"] in rules, edge
+            assert (provenance["confidence"], provenance["pack"]) == (confidence, "php_basic"), edge
     nodes = {n["id"]: n for n in document["nodes"]}
     for (_, end), (_, searched) in expected.items():
         if searched is None:
@@ -185,8 +188,9 @@ def test_plain_and_static_calls_give_a_calls_edge_by_exact_value(tmp_path: Path)
 def test_language_constructs_and_object_calls_give_no_edge_and_a_call_outside_is_skipped(
     tmp_path: Path,
 ) -> None:
-    """isset, empty and strlen are skip_names; a call on an object gives nothing; a call outside
-    any function is listed as skipped with its reason, and self:: and static:: are not."""
+    """isset, empty and strlen are skip_names; a call on an object other than $this gives nothing;
+    a call outside any function is listed as skipped with its reason, and self:: and static:: are
+    not."""
     lines = _plant(tmp_path)
     document, report = _map(tmp_path)
     calls = [e for e in document["edges"] if e["kind"] == "calls"]
@@ -195,7 +199,7 @@ def test_language_constructs_and_object_calls_give_no_edge_and_a_call_outside_is
         + _at(lines, r"    empty\(\$y\);")
         + _at(lines, r"    strlen\('x'\);")
     )
-    objects = _at(lines, r"    \$obj->m\(\);") + _at(lines, r"        \$this->other\(\);")
+    objects = _at(lines, r"    \$obj->m\(\);")
     for edge in calls:
         assert not {loc["line"] for loc in edge["locations"]} & set(constructs + objects), edge
     names = {n["id"].rsplit("\\", 1)[-1] for n in document["nodes"]}

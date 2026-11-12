@@ -5,7 +5,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # install, inc, theme or profile file it runs from the function around the call. X is read as
 # text: a leading backslash names the class in full, else X's first segment goes through the
 # file's use statements, else X is in the file's own namespace, as PHP reads it. A class the map
-# does not hold ends at an unresolved node. A call in a closure counts the named function around
+# does not hold ends at a referenced node. A call in a closure counts the named function around
 # it. getForm($variable), getForm('text') and a form built through a service other than ->getForm
 # give nothing.
 

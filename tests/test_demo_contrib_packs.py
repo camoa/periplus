@@ -293,13 +293,17 @@ def test_advancedqueue_job_type_from_attribute_and_annotation_but_not_a_constant
         ("inherits", cls + "ComputedJob", base),
         ("has_attribute", cls + "MyJob", attribute),
         ("has_attribute", cls + "ComputedJob", attribute),
+        ("class_in_module", cls + "MyJob", "drupal.module::mymodule"),
+        ("class_in_module", cls + "OldJob", "drupal.module::mymodule"),
+        ("class_in_module", cls + "ComputedJob", "drupal.module::mymodule"),
     }
     assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
         (
             f"{folder}/ComputedJob.php",
             "queue_job_type_from_attribute",
             "argument id is a class constant with no declared text",
-        )
+        ),
+        (f"{folder}/MyJob.php", "instantiates_class", "no enclosing declaration is mapped"),
     ]
 
 
@@ -340,7 +344,18 @@ def test_ai_agent_and_function_call_plugins_from_attributes_including_a_constant
             ),
         },
     )
-    assert report.skipped == (), report.skipped
+    assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
+        (
+            f"{plugins}/AiAgent/MyAgent.php",
+            "instantiates_class",
+            "no enclosing declaration is mapped",
+        ),
+        (
+            f"{plugins}/AiFunctionCall/MyFunction.php",
+            "instantiates_class",
+            "no enclosing declaration is mapped",
+        ),
+    ]
     cls = "php.type::Drupal\\mymodule\\Plugin\\"
     agent_base = "php.type::Drupal\\ai_agents\\PluginBase\\AiAgentBase"
     function_base = "php.type::Drupal\\ai\\Base\\FunctionCallBase"
@@ -380,6 +395,9 @@ def test_ai_agent_and_function_call_plugins_from_attributes_including_a_constant
         ("has_attribute", cls + "AiAgent\\MyAgent", agent_attribute),
         ("has_attribute", cls + "AiFunctionCall\\MyFunction", function_attribute),
         ("has_attribute", cls + "AiFunctionCall\\ComputedFunction", function_attribute),
+        ("class_in_module", cls + "AiAgent\\MyAgent", "drupal.module::mymodule"),
+        ("class_in_module", cls + "AiFunctionCall\\MyFunction", "drupal.module::mymodule"),
+        ("class_in_module", cls + "AiFunctionCall\\ComputedFunction", "drupal.module::mymodule"),
     }
 
 
@@ -449,6 +467,8 @@ def test_drush_command_from_attribute_and_docblock_tag_but_not_a_positional_name
         ("has_attribute", my_method + "sync", drush_command),
         ("has_attribute", my_method + "positional", drush_command),
         ("has_attribute", other_method, annotated_command),
+        ("class_in_module", mine, "drupal.module::mymodule"),
+        ("class_in_module", other, "drupal.module::mymodule"),
     }
     assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
         (f"{folder}/MyCommands.php", "command_from_attribute", "argument name is missing")
@@ -554,6 +574,8 @@ def test_salesforce_mapping_config_field_plugin_and_event_subscriber(tmp_path: P
         ("contains", sub_class, sub_method + "getSubscribedEvents"),
         ("contains", sub_class, sub_method + "check"),
         ("implements", sub_class, interface),
+        ("class_in_module", field_class, "drupal.module::mymodule"),
+        ("class_in_module", sub_class, "drupal.module::mymodule"),
     }
 
 

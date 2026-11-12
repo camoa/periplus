@@ -2,7 +2,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
 # The basic PHP pack: every class, interface, trait, enum, function and method becomes a node
 # under its full name, and a class-like gets its inherits, implements, mixes_in and contains edges.
-# It sits beside the reference pack php and does not replace it.
+# A function or method also gets a calls edge for each $this->m() it holds, inferred, an
+# instantiates edge for each new of a written class, self or static, and a references_class edge
+# for each qualified \A\B\Foo::class or Lib\Foo::class. It sits beside the reference pack php and
+# does not replace it.
 #
 # Known gaps. A call to a function PHP itself defines, such as strlen() or json_decode(), makes
 # nothing: the rule calls_function lists the 2150 names get_defined_functions()['internal']
@@ -29,14 +32,17 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   not PHP builtins: a call to one still gives an unresolved function node, under its global name.
 # - A static:: call is read as self::, though PHP binds static to the class the call runs on, and
 #   inside a trait self:: and static:: name the trait, not the class that uses it.
+# - A $this->m() call in a parent class to a method a child overrides lands on the parent's
+#   method, and inside a trait $this names the trait. A method no mapped class or ancestor
+#   declares lands unresolved under the calling class. new static() is read as the enclosing class.
 #
 # Missing results:
-# - A method call on an object, $x->m(), makes nothing, except a call on a property of $this
-#   whose type the same class declares, or that the calling class, or its nearest ancestor
-#   declaring the property, assigns from a parameter typed by a class name: only plain function
-#   calls, static calls and those are read. A property typed by a union of two or more class names,
-#   Helper|Other, gives no edge, and neither does a call in a parent class through a property only
-#   a child assigns; the call keeps its php.call_site node.
+# - A method call on an object, $x->m(), makes nothing, except a call on $this itself, and a call
+#   on a property of $this whose type the same class declares, or that the calling class, or its
+#   nearest ancestor declaring the property, assigns from a parameter typed by a class name: only
+#   plain function calls, static calls and those are read. A property typed by a union of two or
+#   more class names, Helper|Other, gives no edge, and neither does a call in a parent class
+#   through a property only a child assigns; the call keeps its php.call_site node.
 # - A call whose method name or callee is a variable, $x->$name(), $x?->$name(), self::$name() or
 #   $fn(), gets no calls edge: inside a class method it keeps a php.call_site node marked
 #   resolution: runtime (types/find_runtime_calls.yaml); elsewhere a method name makes nothing. A
@@ -44,6 +50,13 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the skipped row "function is not a written name" (calls_function_not_a_name).
 # - A parent:: call in a class with no extends clause gets no calls edge; it keeps its
 #   php.call_site node.
+# - new parent(), an anonymous class and a class name built by an expression, new ($x)() or
+#   new $this->cls(), make no instantiates edge. new $class() gets none either: inside a class
+#   method it keeps a php.call_site node marked resolution: runtime. A new outside any function or
+#   method, as in an attribute or a property default, lists a skipped row.
+# - A plain Foo::class makes no references_class edge: a reference rule cannot tell it from
+#   Foo::CONST. Nor do self::class, static::class, parent::class and $x::class. A qualified
+#   ::class outside any function or method lists a skipped row.
 # - A property whose @var names a class with a backslash inside and none in front, @var
 #   Lib\Mailer, gets no found php.property_type node. edges/var_type_as_written.yaml gives it an
 #   inferred property_typed_as edge to a referenced php.property_type end, and joins a call through

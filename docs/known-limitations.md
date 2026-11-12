@@ -11,12 +11,19 @@ known gaps.
 
 ## The rutters
 
-- **PHP:** a method call on an object, `$x->m()`, is not stated, except through a property of
-  `$this` whose type the class declares, which is `inferred`. A property typed by a union of two or
-  more class names, `Helper|Other`, gives no edge, and neither does a call in a parent class through
-  a property only a child assigns. `use function` aliases do not
-  bind. A call to a PHP built-in function makes nothing, but the names are compared as written:
-  `\strlen()` and `StrLen()` still give an unresolved function. A built-in of an extension that
+- **PHP:** a method call on an object, `$x->m()`, is not stated, except on `$this` itself and
+  through a property of `$this` whose type the class declares, both `inferred`. A `$this->m()`
+  that no mapped class or ancestor declares is unresolved under the calling class, a call in a
+  parent to a method a child overrides lands on the parent's method, and inside a trait `$this`
+  names the trait. `new parent()`, an anonymous class and a class name built by an expression
+  give no `instantiates` edge, and `new $class()` is kept as a call site marked runtime. A plain
+  `Foo::class` gives no `references_class` edge, because a rule cannot tell it from `Foo::CONST`;
+  only a qualified `\A\B\Foo::class` or `Lib\Foo::class` does. A `new` or a qualified
+  `::class` outside any function or method, such as in an attribute, lists a skipped row. A
+  property typed by a union of two or more class names, `Helper|Other`, gives no edge, and neither
+  does a call in a parent class through a property only a child assigns. `use function` aliases
+  do not bind. A call to a PHP built-in function makes nothing, but the names are compared as
+  written: `\strlen()` and `StrLen()` still give an unresolved function. A built-in of an extension that
   was not loaded when the list was taken is not listed. A project's own function named like a
   built-in, `function strlen()` in its namespace, gets no edge from an unqualified call. Drupal's
   global functions, such as `t()`, are not built-ins and give an unresolved function under the
@@ -89,8 +96,15 @@ known gaps.
   add, edit and delete, a route provider other than `html`, and a handler set in code by
   `hook_entity_type_alter` give no edge; the form operation is not recorded. A route subscriber that extends another project class, not
   `RouteSubscriberBase`, gets no `alters_routes` edge. A display in the mode `default` has no `in_mode` edge, and an entity reference field's
-  target bundles give no edge. A `'#theme'` written in a function, such as a hook in a module
-  file, gives no edge. A form id is read only from a `getFormId()` that returns a literal text.
+  target bundles give no edge. A `'#theme'` outside any named function, such as a property
+  default, gives no edge and a skipped row, and one in a method of a class kept in a module file
+  reads as a function of the method's name. A form id is read only from a `getFormId()` that
+  returns a literal text. Only `->getForm(X::class)` gives a `builds_form` edge, and a grouped
+  `use A\{B, C}` binds no name for it. A template's module or theme is read from its folder's
+  name, so a folder named other than its machine name gives a wrong owner, inferred. A path a
+  template writes joins a route only by shape: a literal value in a placeholder slot, a path with
+  no leading slash, a core route's path and a path built at run time give no edge, and two routes
+  of one shape both get one.
 - **Drupal, routes and roles:** route requirements and options other than those the manifest
   lists give nothing, such as `_entity_create_access` or `_auth`. A `_custom_access` written
   `service:method` gives an edge to the service only. A parameter converted to an entity by its
@@ -114,7 +128,9 @@ known gaps.
   whose text holds a backslash. A
   subscriber key or dispatch name written with its namespace, as text or as a variable gives
   nothing, and so does `dispatch($event)` with no name or a call in a plain PHP file outside a
-  `src` folder; only a key's first listener is read. A filter after a hash in the same print and
+  `src` folder; only a key's first listener is read. A handler of an `HttpExceptionSubscriberBase`
+  descendant is read by its method's name, `on403` or `onJson404`, not by
+  `getHandledFormats()`. A filter after a hash in the same print and
   an extension without `AbstractExtension` give nothing. `->get('x')` is read on any object but a
   config factory or a config object, so `$form_state->get('x')` links to a field storage named
   `x`. Only a template read knows its entity type: by its variable, as `node.field_x`, or for
@@ -225,12 +241,15 @@ known gaps.
   member function; nothing joins them to their core library. Only the
   first key after `drupalSettings` is read. The array form of a PHP library attachment or of
   `drupalSettings` is read as text, so it is inferred. Under `src` its class is named by PSR-4
-  path; in a `.module` file the edge starts at the function around it. A library or a key named
+  path, and a library edge starts at the named method around it; one outside any named function
+  gives no edge and a skipped row. In a `.module` file the edge starts at the function around
+  it. A library or a key named
   by a constant or a variable gives no edge, and a key nested below a first-level key gives none,
   whatever wraps the array: a ternary, a call, a cast, a list or old `array( )`. A path in a script
   string joined to another value with `+` on either side links nothing, at any distance and across
-  a line break. A template literal keeps `${...}` in its path, so it meets no route with a
-  placeholder. A request whose URL is built at run time is a node marked runtime, and
+  a line break. A template literal keeps `${...}` in its path, so its path edge meets no route
+  with a placeholder; its route edge joins by shape, and a literal value in a placeholder slot
+  meets no route. A request whose URL is built at run time is a node marked runtime, and
   `$.ajax({url: x})` gives none. A script's path edges start at the script, not the function. A script or stylesheet a
   `.libraries.yml` file lists by a URL gives no edge. One listed by a path from the Drupal root,
   starting with `/`, gives none in a project whose top folder is the Drupal root itself.

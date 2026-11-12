@@ -107,20 +107,20 @@ def _edges(document: dict[str, list[dict[str, object]]], kind: str) -> set[tuple
     }
 
 
-def test_a_class_links_to_the_theme_hook_its_render_array_names(tmp_path: Path) -> None:
+def test_a_method_links_to_the_theme_hook_its_render_array_names(tmp_path: Path) -> None:
     _plant(tmp_path)
     document = _map(tmp_path)
     nodes = {str(n["id"]): n["state"] for n in document["nodes"]}
     assert _edges(document, "renders_theme_hook") == {
         (
-            "php.type::Drupal\\mymodule\\Controller\\CardController",
+            "php.method::Drupal\\mymodule\\Controller\\CardController::page",
             "drupal.theme_hook::my_card",
-            "declared",
+            "inferred",
         ),
         (
-            "php.type::Drupal\\mymodule\\Controller\\CardController",
+            "php.method::Drupal\\mymodule\\Controller\\CardController::plain",
             "drupal.theme_hook::plain_box",
-            "declared",
+            "inferred",
         ),
     }
     assert nodes["drupal.theme_hook::my_card"] == "mapped"
@@ -166,14 +166,14 @@ trait CardTrait {
 """
 
 
-def test_a_trait_links_to_the_theme_hook_its_render_array_names(tmp_path: Path) -> None:
+def test_a_trait_method_links_to_the_theme_hook_its_render_array_names(tmp_path: Path) -> None:
     _plant(tmp_path)
     (tmp_path / MODULE / "src" / "CardTrait.php").write_text(TRAIT)
     document = _map(tmp_path)
     assert (
-        "php.type::Drupal\\mymodule\\CardTrait",
+        "php.method::Drupal\\mymodule\\CardTrait::card",
         "drupal.theme_hook::my_card",
-        "declared",
+        "inferred",
     ) in _edges(document, "renders_theme_hook")
 
 

@@ -49,15 +49,18 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   as a grants_permission edge. A role or permission that no mapped file declares, such as one
 #   from core or a contributed module, ends at a referenced node.;
 # - each route a template names in path('x') or url('x'), as a template_links_route edge, read as
-#   text; a core route such as user.login ends at a referenced node;
+#   text; a core route such as user.login ends at a referenced node. A path a template's attribute
+#   writes, as href="/my/item/{{ item.id }}/edit", also gives an inferred template_links_route edge
+#   to each route whose path has the same shape, each {x} and {{ ... }} written as *;
 # - each template another template names in an include, extends, embed, import or from, as a
 #   template_includes edge, and each component an include or embed names as theme:name, as a
 #   template_includes_component edge to the component's name. Read as text; a name no mapped
 #   template or component has ends at a referenced node;
 # - each theme hook that a hook_theme function declares, as a drupal.theme_hook node, and the
-#   class or trait under src that gives '#theme' => 'name' in a render array, as a
-#   renders_theme_hook edge to it. A hook links to its template by theme_hook_template: the
-#   template key as declared, and
+#   method around '#theme' => 'name' in a render array of a class under src, or the function around
+#   it in a module, install, inc, theme or profile file, as an inferred renders_theme_hook edge to
+#   it. A hook links to its template by theme_hook_template: the template key as declared, its
+#   last part when the key holds a folder, as cards/my-card for my-card, and
 #   for a hook with no template and no function key its name with underscores written as dashes,
 #   as inferred. A template named <entity>--<bundle>--<view mode> of node, taxonomy-term,
 #   block-content, paragraph, media or comment gives a suggests_bundle edge to the bundle
@@ -81,7 +84,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   mytheme.settings, as provided by the theme when the map holds it; an argument of a service that
 #   is itself a list of @names, one level down; a class that extends RouteSubscriberBase or
 #   HttpExceptionSubscriberBase as an event subscriber, and a route subscriber's alters_routes
-#   edge to a drupal.route_alter node marked resolution runtime;
+#   edge to a drupal.route_alter node marked resolution runtime; each method named on<status> or
+#   on<Format><status>, as on403 or onJson404, of a class that descends from
+#   HttpExceptionSubscriberBase, as an inferred subscribed_by edge from KernelEvents::EXCEPTION;
 # - each constraint plugin's validator class, as a validated_by edge: declared from a validatedBy()
 #   that returns Name::class or the class's full name in single quotes, else inferred from the name
 #   <constraint class>Validator when the map holds it and the constraint class writes no
@@ -153,7 +158,13 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   drupal.form_class, as one that extends FormBase is;
 # - each Twig file not named .html.twig that defines a macro, as a template named by its stem, and
 #   each template or component that imports it with import or from, as a template_includes or
-#   component_includes_template edge.
+#   component_includes_template edge;
+# - what a module or theme holds, one edge kind each: route_in_module and service_in_module from
+#   its routing and services files, library_in_module or library_in_theme from a library's first
+#   name part, class_in_module from a class named Drupal\<module>\..., inferred, and
+#   template_in_module or template_in_theme from a template's folder, inferred;
+# - each ->getForm(X::class), as an inferred builds_form edge from the method around it, or the
+#   function around it in a module, install, inc, theme or profile file, to the form class X.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
@@ -207,10 +218,19 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   referenced worker plugin of its name.
 # - alters_form cannot tell a form id from a base form id: form_node_form_alter links to the form
 #   id node_form.
+# - A template's owner is read from its folder: the folder right before templates for a module,
+#   the folder below custom_theme for a theme. A folder named other than its machine name gives a
+#   wrong owner. A drush.services.yml's services belong to the folder that holds it, by its name.
+# - Two routes whose paths have one shape, as /my/item/{id} and /my/item/{name}, both get a
+#   template_links_route edge from each template path of that shape.
+# - The subscribed_by edge of an HttpExceptionSubscriberBase descendant reads the method's name
+#   only, not getHandledFormats(), so a method for a format the class does not handle still links.
 #
 # Missing results:
-# - A '#theme' written in a function, such as a hook in a module file, gives no edge, because the
-#   rule starts it at the class the file path names. A theme hook declared by a method of a class,
+# - A '#theme' outside any named function, such as a property default, gives no edge and one
+#   skipped row. A method of a class kept in a module file reads as a function of the method's
+#   name. A render array in a closure counts the named function around it. A theme hook declared
+#   by a method of a class,
 #   or by a hook_theme function that is not named theme or ending in _theme, is not found. A
 #   template named <entity>--<name>.html.twig gives no suggests_bundle edge, because the file
 #   cannot tell a bundle from a view mode or a node id.
@@ -345,6 +365,16 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A constraint whose validatedBy() returns a text in double quotes, a concatenation or a call
 #   gets no validated_by edge, declared or inferred. A validatedBy() a parent writes is not read,
 #   so its subclass still gets the inferred edge.
+# - A template path with a literal value in a placeholder slot, as /my/item/5, a path with no
+#   leading slash, a path no mapped routing file declares, such as a core route's, and a path
+#   built in Twig other than by {{ ... }} holes give no route edge. A query string and a fragment
+#   are cut before the shape is made.
+# - getForm($variable), getForm('text') and a form built other than by ->getForm(X::class) give
+#   no builds_form edge. A form class the map does not hold ends at a referenced node. A grouped
+#   use, use A\{B, C}, binds no name for it.
+# - A routing file's route_callbacks key names no route, and a service alias written on one line,
+#   name: '@other', gives no service_in_module edge. A library, class or template whose module or
+#   theme the map does not hold gives no ownership edge.
 #
 # Settings to know:
 # - Only the custom modules and themes are read as PHP. Move them with custom_module and

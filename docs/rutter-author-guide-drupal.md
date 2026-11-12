@@ -221,7 +221,10 @@ A library attachment or a `drupalSettings` key in the array form, `'#attached' =
 `fn_name` from `{enclosing: function_body, capture: name}` and the class's mark as `in_class` from
 `{enclosing: class_body, capture: mark}`. It empties `fn` through `normalize` when a class holds
 the function, so a method makes no edge. It starts its edge at `{template: '{fn}', types:
-[php.function]}`, so a hook in a `.module` file attaches the library or provides the key.
+[php.function]}`, so a hook in a `.module` file attaches the library or provides the key. In a
+class file under `src`, `library_attached_in_array_method` reads the named method around the list
+from the span `named_function` and starts its edge at `{template: '{psr4_class}::{method}', types:
+[php.method]}`.
 
 `drupal_basic` links a template to what it names: an include, extends, embed, import or from of a
 `.html.twig` file is a `template_includes` edge, and `theme:name` in an include or embed is a
@@ -255,10 +258,12 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   referenced module when the map holds neither. The guess tests that neither node exists with a
   `try` step and an `id_matches` whose alternation captures a name only on the path where the
   `try` reached nothing; the edge's template names that capture.
-- `drupal.theme_hook`, a node for each entry of a `hook_theme` function; `renders_theme_hook`, from
-  the class or trait under `src` whose render array gives `'#theme' => 'name'`;
-  `theme_hook_template`, from a hook to its template, declared by its `template` key or inferred
-  from its name with underscores written as dashes; `suggests_bundle`, inferred from a template
+- `drupal.theme_hook`, a node for each entry of a `hook_theme` function; `renders_theme_hook`,
+  inferred, from the method of a class under `src` whose render array gives
+  `'#theme' => 'name'`, or from the function around it in a module, install, inc, theme or profile
+  file; `theme_hook_template`, from a hook to its template, declared by its `template` key, or
+  its last part when the key holds a folder, or inferred from its name with underscores written
+  as dashes; `suggests_bundle`, inferred from a template
   named `node--article--teaser` to the bundle `node.article`.
 - `library_includes_stylesheet`, from a library to a `css.file` node for each stylesheet its `css:`
   groups list, joined with the libraries file's folder or, for a key that starts with `/`, with
@@ -283,9 +288,16 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   `path_in_script_string` gives `script_links_to_path` from a script's `js.file` node to a path
   it holds in a quoted string, as `"/x"`. Only a path written whole counts: it starts with one
   `/` and holds no space. A path joined to another value with `+` on either side, as `"/x/" + id`
-  or `base + "/x/y"`, links nothing, and `/x/{{ id }}` links nowhere. `drupal_url_in_script`
+  or `base + "/x/y"`, links nothing, and `/x/{{ id }}` links to no path node. `drupal_url_in_script`
   links `Drupal.url('x')` to `/x`, and `path_in_script_template` a template literal that starts
   with one `/`, with each `${...}` kept as written.
+- `shape_of_route`, from an internal `drupal.path_shape` node to each route whose path has that
+  shape, each `{x}` written as `*`. The map rule `template_links_to_route_by_shape` gives an
+  inferred `template_links_route` edge from a template whose attribute path has the shape, each
+  `{{ ... }}` written as `*`, and `drupal_js_basic`'s `script_links_to_route_by_shape` an inferred
+  `script_links_to_route` edge from a script whose template literal has it, each `${...}` written
+  as `*`. A query string and a fragment are cut first; a literal value in a placeholder slot meets
+  no route.
 - `script_requests_url`, from a script to a `js.url_call` node marked `resolution: runtime`, for
   `fetch`, `$.ajax`, `$.get`, `$.getJSON`, `$.post` or `Drupal.url` whose first argument is no
   quoted text, template literal or object: the URL is built at run time.
@@ -302,7 +314,9 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   `dispatched_by_function` in a module file. Each key is read as text, through the spans
   `subscribed_events` and `named_function` and the bindings of `event/use_binding.yaml`, into an
   internal `drupal.event_use` node at its line, and map rules give its edge from the event of the
-  constant's text, else of the constant `<class>::<NAME>`.
+  constant's text, else of the constant `<class>::<NAME>`. A method named `on<status>` or
+  `on<Format><status>` of a class that descends from `HttpExceptionSubscriberBase` gets an
+  inferred `subscribed_by` edge from `KernelEvents::EXCEPTION`, read from its name.
 - `twig.filter` and `twig.function`, from `new TwigFilter('x')` and `new TwigFunction('x')`,
   written by the short name or as `\Twig\TwigFilter` and `\Twig\TwigFunction`, with or without
   the leading backslash, in a
@@ -347,6 +361,13 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   `child_of_task` from a local task's `base_route` and `parent_id`; and `link_class` and
   `link_deriver` from a local task, a local action or a contextual link to the class or deriver
   it names.
+- `route_in_module`, `service_in_module`, `library_in_module`, `library_in_theme`,
+  `class_in_module`, `template_in_module` and `template_in_theme`, from a route, service, library,
+  class or template to the module or theme that holds it. A route or service is read from its
+  file, a library by its name's first part and a class by the part after `Drupal\`, both in the
+  map, and a template by its folder's name, inferred.
+- `builds_form`, inferred, from the method around `->getForm(X::class)`, or the function around it
+  in a module file, to the form class `X`, resolved through the file's namespace and imports.
 
 ## Where to look when the map misses a thing
 
@@ -364,8 +385,8 @@ not listed. `skipped` names matches that made nothing. An `unresolved` node is a
 
 ## What the parse-tree side cannot say today
 
-- A method call on an object, `$x->m()`; plain and static calls are stated, and so is a call
-  through a property of `$this` whose type the class declares.
+- A method call on an object, `$x->m()`; plain and static calls are stated, and so are a call on
+  `$this` and a call through a property of `$this` whose type the class declares.
   [Tree references](rutter-author-guide-references.md) lists the other calls not stated.
 - The tree layout. A rule names node types and fields; how the engine walks the tree, finds the
   enclosing class and nests namespace blocks is engine code. A text rule on PHP names its own
