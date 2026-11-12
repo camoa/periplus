@@ -137,7 +137,7 @@ EXECUTED_KEYS = frozenset(
             f"{_RULE}match.where.*.{k}"
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
         ),
-        *(f"{_RULE}match.where.*.name_matches{k}" for k in ("", ".child", ".pattern")),
+        *(f"{_RULE}match.where.*.name_matches{k}" for k in ("", ".child", ".nth", ".pattern")),
         *(
             f"{_RULE}match.where.*.{c}{k}"
             for c in _TABLE_CONDITIONS
@@ -447,9 +447,9 @@ class Rule:
     fields: tuple[str, ...] = ()
     #: A declaration rule: the fields its id reads resolved through the file's imports.
     qualified: tuple[str, ...] = ()
-    #: A declaration or reference rule: each child, by field or node type, and the pattern its
-    #: whole text must match.
-    name_matches: tuple[tuple[str, re.Pattern[str]], ...] = ()
+    #: A declaration or reference rule: each child, by field or node type, the pattern its whole
+    #: text must match, and its place among the children of that node type, 0 when unnamed.
+    name_matches: tuple[tuple[str, re.Pattern[str], int], ...] = ()
     attribute: str = ""
     applies_to: str = ""
     id_argument: str = ""
@@ -2017,7 +2017,7 @@ def _build_declaration(
     name_child = match.get("name_child", "")
     path = tuple(name_child) if isinstance(name_child, list) else ()
     name_matches = _name_matches(where, None if path else name_child or None)
-    patterns = [pattern for _, pattern in name_matches]
+    patterns = [pattern for _, pattern, _ in name_matches]
     named = bool(name_child) and not path
     return Rule(
         pack=pack,
@@ -2233,7 +2233,7 @@ def _build_reference(
             "not_in_table conditions"
         )
     name_matches = _name_matches(where, fields[0])
-    groups = {group for _, pattern in name_matches for group in pattern.groupindex}
+    groups = {group for _, pattern, _ in name_matches for group in pattern.groupindex}
     specs = []
     for emit in emits:
         edge = emit["edge"]
@@ -2310,7 +2310,7 @@ def _build_reference(
         whole_written=match.get("whole_written") is True,
         name_matches=name_matches,
         where=_table_conditions(
-            where, tables, (p for _, p in name_matches), "name_matches", fills=_TABLE_FILLS
+            where, tables, (p for _, p, _ in name_matches), "name_matches", fills=_TABLE_FILLS
         ),
     )
 
@@ -2394,19 +2394,28 @@ def _build_attribute(pack: str, item: Mapping[str, Any]) -> Rule:
 
 def _name_matches(
     where: list[Mapping[str, Any]], name_child: str | None
-) -> tuple[tuple[str, re.Pattern[str]], ...]:
-    """The child and pattern of each ``name_matches`` condition: a ``{child, pattern}`` mapping, or
-    a pattern alone, which tests ``name_child`` and so needs it."""
+) -> tuple[tuple[str, re.Pattern[str], int], ...]:
+    """The child, pattern and ``nth`` of each ``name_matches`` condition: a ``{child, pattern}``
+    mapping with or without ``nth``, or a pattern alone, which tests ``name_child`` and so needs
+    it. ``nth`` is 0 when the condition names none."""
     found = []
     for condition in (c["name_matches"] for c in where if "name_matches" in c):
         if isinstance(condition, Mapping):
-            if set(condition) != {"child", "pattern"} or not isinstance(condition["child"], str):
-                raise _Unsupported("a name_matches mapping is not a child and a pattern")
-            found.append((condition["child"], _regex(condition["pattern"])))
+            nth = condition.get("nth", 0)
+            if (
+                set(condition) - {"nth"} != {"child", "pattern"}
+                or not isinstance(condition["child"], str)
+                or "nth" in condition
+                and (type(nth) is not int or nth < 1)
+            ):
+                raise _Unsupported(
+                    "a name_matches mapping is not a child, an nth of 1 or more, and a pattern"
+                )
+            found.append((condition["child"], _regex(condition["pattern"]), nth))
         elif name_child is None:
             raise _Unsupported("a name_matches condition needs match.name_child")
         else:
-            found.append((name_child, _regex(condition)))
+            found.append((name_child, _regex(condition), 0))
     return tuple(found)
 
 

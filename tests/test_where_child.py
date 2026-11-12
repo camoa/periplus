@@ -1,5 +1,6 @@
 """The mapping form of name_matches, ``{child, pattern}``: a condition that tests the whole text of
-a named child, by field or by node type, on tree declaration and reference rules."""
+a named child, by field or by node type, on tree declaration and reference rules. With ``nth`` it
+tests the nth child of that node type."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ from typing import Any
 
 from periplus.map import MapReport, run
 from periplus.preflight import check_runtime_dependencies
+from periplus.validate import validate
 
 MANIFEST = """\
 pack: own
@@ -129,6 +131,9 @@ function page()
     Reg::add('x');
     Other::add('y');
     Reg::drop('z');
+    Two::class;
+    Two::THING;
+    \\Q\\Two::class;
 }
 """
 
@@ -230,3 +235,62 @@ def test_a_condition_naming_a_child_the_match_lacks_fails(tmp_path: Path) -> Non
     assert _fires(report)["absent"] == 0, report.executed
     assert report.skipped == (), report.skipped
     assert len(_edges(document)) == 3, _edges(document)
+
+
+NTH = """\
+- rule: second
+  reads: file
+  in: [code]
+  match:
+    reference: class_constant_access_expression
+    name_child: [name]
+    filetype: php
+    where: [{name_matches: {child: name, nth: 2, pattern: '(?i:class)'}}]
+  emits:
+  - edge:
+      kind: shows
+      from: enclosing_declaration
+      to: {types: [own.view], on_miss: unresolved}
+  confidence: declared
+"""
+
+
+def test_nth_tests_the_nth_child_of_that_node_type(tmp_path: Path) -> None:
+    """Two::class has two name children and the second is class: one edge to Two. Two::THING's
+    second name child is THING, and \\Q\\Two::class has one name child: neither makes an edge."""
+    report, document = _map(tmp_path, RULES + NTH)
+    assert _fires(report)["second"] == 1, report.executed
+    assert {e for e in _edges(document) if "Two" in e[2]} == {
+        ("shows", "own.fn::page", "own.view::Two")
+    }, _edges(document)
+
+
+def test_nth_absent_reads_the_first_child_as_before(tmp_path: Path) -> None:
+    """Without nth the condition tests the first name child: Two on Two::class and Two::THING, so
+    neither fires, and class on \\Q\\Two::class, the one fire, whose name child is class."""
+    report, document = _map(tmp_path, RULES + NTH.replace("nth: 2, ", ""))
+    assert _fires(report)["second"] == 1, report.executed
+    assert not [e for e in _edges(document) if "Two" in e[2]], _edges(document)
+
+
+def _validate(root: Path, rules: str) -> Any:
+    pack = root / ".periplus" / "packs" / "own@0.0.1"
+    (pack / "rules").mkdir(parents=True)
+    (root / ".periplus" / "settings.yml").write_text("periplus_version: 0\npacks: [own@0.0.1]\n")
+    (pack / "pack.yaml").write_text(MANIFEST)
+    (pack / "rules" / "own.yaml").write_text(rules)
+    return validate(
+        start=root,
+        env={"PERIPLUS_CONFIG_DIR": str(root / "config")},
+        dependencies=check_runtime_dependencies(),
+        requested="own",
+    )
+
+
+def test_validate_accepts_nth_and_refuses_a_malformed_one(tmp_path: Path) -> None:
+    """nth: 2 validates clean; an nth of 0, or one that is not a number, is an error at nth."""
+    report = _validate(tmp_path / "good", RULES + NTH)
+    assert report.errors == () and report.problems == (), report
+    for case, bad in enumerate(("nth: 0, ", "nth: two, ")):
+        report = _validate(tmp_path / str(case), RULES + NTH.replace("nth: 2, ", bad))
+        assert [e for e in report.errors if "nth" in str(e)], (bad, report)

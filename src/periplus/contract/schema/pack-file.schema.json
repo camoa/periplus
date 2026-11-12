@@ -709,6 +709,11 @@
                   "minLength": 1,
                   "description": "The child whose text is tested: a field of the matched node, else its first named child of that node type."
                 },
+                "nth": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Tests the nth named child of the child's node type instead, counting from 1; a field is not read. A match with fewer children of that type fails."
+                },
                 "pattern": {
                   "type": "string",
                   "description": "RE2 over the whole text of that child."
@@ -716,7 +721,7 @@
               }
             }
           ],
-          "description": "RE2 over the declared name. Executed on a tree declaration or reference rule: the whole text of the first name_child field must match, or the match is passed and is no fire. The mapping form {child, pattern} tests the named child instead, whatever its node type; a match without that child fails. The case that proves confidence belongs on the rule: `^[A-Z]` is `declared` in Go, where capitalisation is visibility the compiler enforces, and `inferred` in React, where it is a convention people can ignore. Same primitive, same character, and only the author knows which."
+          "description": "RE2 over the declared name. Executed on a tree declaration or reference rule: the whole text of the first name_child field must match, or the match is passed and is no fire. The mapping form {child, pattern} tests the named child instead, whatever its node type, and {child, nth, pattern} its nth child of that node type; a match without that child fails. The case that proves confidence belongs on the rule: `^[A-Z]` is `declared` in Go, where capitalisation is visibility the compiler enforces, and `inferred` in React, where it is a convention people can ignore. Same primitive, same character, and only the author knows which."
         },
         "in_table": {
           "$ref": "#/$defs/tableCondition",

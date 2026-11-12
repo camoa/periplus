@@ -8,7 +8,7 @@ from bisect import bisect_right
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from fnmatch import fnmatchcase
-from itertools import product
+from itertools import islice, product
 from pathlib import Path
 from typing import Any
 
@@ -1256,8 +1256,8 @@ def _fires(
     if not (
         all(any(c.type == kind for c in node.children) for kind in rule.has_child)
         and all(
-            (found := _child(node, child)) is not None and pattern.fullmatch(text_of(found))
-            for child, pattern in rule.name_matches
+            (found := _child(node, child, nth)) is not None and pattern.fullmatch(text_of(found))
+            for child, pattern, nth in rule.name_matches
         )
     ):
         return False
@@ -1276,8 +1276,8 @@ def _fires(
 def _name_groups(rule: Rule, node: Node) -> dict[str, str]:
     """The named groups of each of the rule's ``name_matches`` patterns that fits its child."""
     values: dict[str, str] = {}
-    for child, pattern in rule.name_matches:
-        found = _child(node, child)
+    for child, pattern, nth in rule.name_matches:
+        found = _child(node, child, nth)
         fits = pattern.fullmatch(text_of(found)) if found is not None else None
         if fits is not None:
             values.update({k: v for k, v in fits.groupdict().items() if v is not None})
@@ -1944,8 +1944,11 @@ def _allows(rule_set: RuleSet, name: str, allowed: Sequence[str]) -> bool:
     return name in allowed
 
 
-def _child(node: Node, name: str) -> Node | None:
-    """The node's child in the field ``name``, else its first named child of that type."""
+def _child(node: Node, name: str, nth: int = 0) -> Node | None:
+    """The node's child in the field ``name``, else its first named child of that type; with
+    ``nth``, its nth named child of that type, the field not read."""
+    if nth:
+        return next(islice((c for c in node.named_children if c.type == name), nth - 1, None), None)
     found = node.child_by_field_name(name)
     return found or next((c for c in node.named_children if c.type == name), None)
 
