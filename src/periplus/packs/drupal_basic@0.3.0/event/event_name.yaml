@@ -2,10 +2,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # Which class constants name an event. Each constant of a class, interface or enum is an internal
 # node: the rule matches each const_element, so const A = 'a', B = 'b'; gives A and B, each at its
-# own line, and the one-step name_child [name] reads the name, which has no field. A map rule
-# makes a drupal.event of each constant of a class that descends from Symfony's Event or Drupal's
-# Event, through mapped parents, and of each constant of a class whose name ends in Events, as
-# core's KernelEvents names its events. Every constant of such a class reads as an event name.
+# own line, and the one-step name_child [name] reads the name, which has no field. Two map rules
+# mark as an event constant each constant of a class that descends from Symfony's Event or
+# Drupal's Event, through mapped parents, and each constant of a class whose name ends in Events,
+# as core's KernelEvents names its events. Every constant of such a class reads as an event name.
+# An event constant whose text constant/constant_text.yaml reads gives the event of that text and
+# a drupal.event_constant that names it; one whose text it does not read gives the event of
+# <class>::<CONST>.
 
 rules:
 - rule: class_constant
@@ -16,7 +19,20 @@ rules:
   emits: [{node: {type: drupal.class_constant}}]
   confidence: declared
 
-- rule: event_of_event_class
+# Each text a constant holds, as the end drupal.event::<text>, so a map rule can reach the event
+# of that text; constant_text_may_name_event's edge itself stays out of the map.
+- rule: constant_text_may_name_event
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bconst\s+(?:\w+\s+)?(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?:''(?<single_text>[^''\\]*)''|"(?<double_text>[^"\\$]*)")\s*[;,]'
+  id: {template: '{single_text}{double_text}'}
+  emits: [{edge: {kind: text_may_name_event, from: this_node, to: {template: '{single_text}{double_text}', types: [drupal.event_text]}}}]
+  confidence: inferred
+
+- rule: event_constant_of_event_class
   reads: map
   match:
     node_type: drupal.class_constant
@@ -25,15 +41,62 @@ rules:
     - node: 'php.type::{class}'
     - ancestors: [inherits]
     - id_matches: '^php\.type::(?:Symfony\\Contracts|Drupal\\Component)\\EventDispatcher\\Event$'
-  id: {template: '{class}::{constant}'}
-  emits: [{node: {type: drupal.event}}]
+  emits: [{edge: {kind: is_event_constant, from: this_node, to: this_node}}]
   confidence: inferred
 
-- rule: event_of_events_class
+- rule: event_constant_of_events_class
   reads: map
   match:
     node_type: drupal.class_constant
     where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]*Events)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
-  id: {template: '{class}::{constant}'}
+  emits: [{edge: {kind: is_event_constant, from: this_node, to: this_node}}]
+  confidence: inferred
+
+- rule: event_by_text
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    follow:
+    - edge: is_event_constant
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+  id: {template: '{text}'}
   emits: [{node: {type: drupal.event}}]
+  confidence: inferred
+
+# untexted is captured only where the constant has no text.
+- rule: event_by_constant
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow:
+    - edge: is_event_constant
+    - try: [{edge: has_constant_text}]
+    - id_matches: '^(?:drupal\.constant_text::|drupal\.class_constant::(?<untexted>))'
+  id: {template: '{class}::{constant}{untexted}'}
+  emits: [{node: {type: drupal.event}}]
+  confidence: inferred
+
+- rule: event_constant
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow: [{edge: is_event_constant}, {edge: has_constant_text}]
+  id: {template: '{class}::{constant}'}
+  emits: [{node: {type: drupal.event_constant}}]
+  confidence: inferred
+
+- rule: event_constant_names_event
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow:
+    - edge: is_event_constant
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - node: 'drupal.event::{text}'
+  emits: [{edge: {kind: names_event, from: {template: '{class}::{constant}', type: drupal.event_constant}, to: matched_node}}]
   confidence: inferred

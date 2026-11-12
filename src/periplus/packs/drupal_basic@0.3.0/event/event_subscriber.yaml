@@ -7,46 +7,73 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # getSubscribedEvents counts. The first listener of a key is read; a second, as in
 # X::NAME => [['first', 10], ['second', 0]], gives nothing.
 #
-# X is read through the file's use statements (event/use_binding.yaml). A class written with no
-# use is in the file's own namespace: event_subscribed_in_namespace joins it in the map, only when
-# a mapped class of that namespace declares the constant, and the unbound key still leaves its
-# skipped row. self::NAME and
-# static::NAME name a constant of the subscriber's own class. A class written with its namespace,
-# \A\B::NAME or A\B::NAME, gives nothing.
+# Each key is an internal drupal.event_use at its line (event/event.yaml), and the map rules make
+# its edge there: from the event of the text the constant holds, when a mapped file declares it
+# with a text, else from the event of the constant <class>::<NAME>. X is read through the file's
+# use statements (event/use_binding.yaml). A class written with no use is in the file's own
+# namespace and, as self::NAME and static::NAME, which name a constant of the subscriber's own
+# class, gives an edge only when a mapped class declares the constant. A class written with its
+# namespace, \A\B::NAME or A\B::NAME, gives nothing. Each use rule's _listener twin makes the
+# listener a known end, so a listener no mapped file declares ends at a referenced method; a key
+# in the file's own namespace is joined only when the map holds its method.
 
 rules:
-- rule: event_subscribed_by
+- rule: event_subscribed_use
   reads: file
   in: [source]
-  match:
+  match: &event_subscribed_use
     file: '**'
     filetype: drupal_php_text
     text: '\b(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"]'
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
-  id: {template: '{in_subscriber}|{psr4_class}::{method}', normalize: [{replace: '^[^|]*\|', with: ''}]}
-  emits:
-  - edge:
-      kind: subscribed_by
-      from: {from: {capture: key}, resolve: [bound_first_segment], separator: '::', types: [drupal.event]}
-      to: this_node
+  id:
+    template: '{key}|{in_subscriber}|subscribed|{psr4_class}::{method}'
+    resolve: [bound_first_segment]
+    separator: '::'
+    normalize: [{replace: '\|[^|]*\|subscribed\|', with: '|subscribed|'}]
+  emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-- rule: event_subscribed_by_own_class
+- rule: event_subscribed_use_listener
   reads: file
   in: [source]
-  match:
+  match: *event_subscribed_use
+  values:
+    in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+  id:
+    template: '{key}|{in_subscriber}|subscribed|{psr4_class}::{method}'
+    resolve: [bound_first_segment]
+    separator: '::'
+    normalize: [{replace: '\|[^|]*\|subscribed\|', with: '|subscribed|'}]
+  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}}}]
+  confidence: inferred
+
+- rule: event_subscribed_use_own_class
+  reads: file
+  in: [source]
+  match: &event_subscribed_use_own_class
     file: '**'
     filetype: drupal_php_text
     text: '\b(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"]'
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
-  id: {template: '{in_subscriber}|{psr4_class}::{method}', normalize: [{replace: '^[^|]*\|', with: ''}]}
-  emits:
-  - edge:
-      kind: subscribed_by
-      from: {template: '{psr4_class}::{constant}', types: [drupal.event]}
-      to: this_node
+  id:
+    template: '{in_subscriber}|{psr4_class}::{constant}|subscribed_here|{psr4_class}::{method}'
+    normalize: [{replace: '^[^|]*\|', with: ''}]
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: event_subscribed_use_own_class_listener
+  reads: file
+  in: [source]
+  match: *event_subscribed_use_own_class
+  values:
+    in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+  id:
+    template: '{in_subscriber}|{psr4_class}::{constant}|subscribed_here|{psr4_class}::{method}'
+    normalize: [{replace: '^[^|]*\|', with: ''}]
+  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}}}]
   confidence: inferred
 
 - rule: event_key_in_namespace
@@ -59,16 +86,46 @@ rules:
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
   id:
-    template: '{in_subscriber}|subscribed|{psr4_namespace}{class}::{constant}|{psr4_class}::{method}'
+    template: '{in_subscriber}|{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}'
     normalize: [{replace: '^[^|]*\|', with: ''}]
   emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: event_subscribed_by_text
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|subscribed(?:_here)?\|(?<listener>[^|]+)$'}]
+    follow:
+    - node: 'drupal.class_constant::{event}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - node: 'php.method::{listener}'
+  emits: [{edge: {kind: subscribed_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node}}]
+  confidence: inferred
+
+# untexted is captured only where no mapped file gives the constant a text.
+- rule: event_subscribed_by_constant
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|subscribed\|(?<listener>[^|]+)$'}]
+    follow:
+    - try: [{node: 'drupal.class_constant::{event}'}, {edge: has_constant_text}]
+    - id_matches: '^(?:drupal\.constant_text::|drupal\.event_use::(?<untexted>))'
+    - node: 'php.method::{listener}'
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node}}]
   confidence: inferred
 
 - rule: event_subscribed_in_namespace
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::subscribed\|(?<event>[^|]+)\|(?<method>[^|]+)$'}]
-    follow: [{node: 'drupal.class_constant::{event}'}, {node: 'php.method::{method}'}]
-  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node}}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|subscribed_here\|(?<listener>[^|]+)$'}]
+    follow:
+    - node: 'drupal.class_constant::{event}'
+    - try: [{edge: has_constant_text}]
+    - id_matches: '^(?:drupal\.constant_text::|drupal\.class_constant::(?<untexted>))'
+    - node: 'php.method::{listener}'
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node}}]
   confidence: inferred

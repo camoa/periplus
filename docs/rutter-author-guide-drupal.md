@@ -237,12 +237,18 @@ meet at one node. A third party gets the same links from a project-local pack
 Each relation below is an edge kind `drupal_basic@0.3.0` or `drupal_js_basic@0.0.1` declares.
 The pack's `pack.yaml` lists what each one misses and where it is wrong.
 
-- `config_provided_by`, from a configuration object to a module or a theme: each simple
-  configuration file, one with no top-level `uuid`, names the extension its file name starts with,
-  as `mymod.settings` to `mymod`. A configuration entity file has none. The file rule's end is
+- `config_provided_by` and `config_provided_by_theme`, from a configuration object to a module
+  or a theme: each simple configuration file, one with no top-level `uuid`, names the extension
+  its file name starts with, as `mymod.settings` to `mymod`. A configuration entity file has none.
+  The file rule's end is
   [from the file's path alone](rutter-author-guide-references.md#an-edge-end-from-the-files-path-alone-from-),
-  on an internal `drupal.config_owner` node; the map rule `simple_config_provided_by` ends the edge
-  at the mapped module of that name, else the mapped theme, else a referenced module.
+  on an internal `drupal.config_owner` node. The map rule `simple_config_provided_by_theme` ends
+  it at a theme of that name the map holds, mapped or referenced, as `core.extension`'s
+  `installs_theme` edges reference each installed theme; `simple_config_provided_by_module` at a
+  module of that name the map holds; and `simple_config_provided_by_guess`, inferred, at a
+  referenced module when the map holds neither. The guess tests that neither node exists with a
+  `try` step and an `id_matches` whose alternation captures a name only on the path where the
+  `try` reached nothing; the edge's template names that capture.
 - `drupal.theme_hook`, a node for each entry of a `hook_theme` function; `renders_theme_hook`, from
   the class or trait under `src` whose render array gives `'#theme' => 'name'`;
   `theme_hook_template`, from a hook to its template, declared by its `template` key or inferred
@@ -283,22 +289,32 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   under skipped, a call in a trait or an enum links from its method, and
   `$other->redirect('x')` links nothing.
 - `drupal.event`, a node for each constant of a class that descends from `Event` or is named
-  `*Events`, made by map rules from an internal node per constant; `subscribed_by`, from the
-  event to each listener a key of `getSubscribedEvents` names, and `dispatched_by`, to the method
-  around `->dispatch($event, X::NAME)`, or `dispatched_by_function` in a module file. Both are read
-  as text through the spans
-  `subscribed_events` and `named_function` and the bindings of `event/use_binding.yaml`.
+  `*Events`, made by map rules from an internal node per constant and named by the text the
+  constant holds, with a `drupal.event_constant` node and a `names_event` edge for each constant
+  of that text; `subscribed_by`, from the event to each listener a key of `getSubscribedEvents`
+  names, and `dispatched_by`, to the method around `->dispatch($event, X::NAME)`, or
+  `dispatched_by_function` in a module file. Each key is read as text, through the spans
+  `subscribed_events` and `named_function` and the bindings of `event/use_binding.yaml`, into an
+  internal `drupal.event_use` node at its line, and map rules give its edge from the event of the
+  constant's text, else of the constant `<class>::<NAME>`.
 - `twig.filter` and `twig.function`, from `new TwigFilter('x')` and `new TwigFunction('x')`,
-  written by the short name or as `\Twig\TwigFilter` and `\Twig\TwigFunction`, in a
+  written by the short name or as `\Twig\TwigFilter` and `\Twig\TwigFunction`, with or without
+  the leading backslash, in a
   class that descends from `AbstractExtension`, with `twig_filter_provided_by` and
   `twig_function_provided_by` to the class; `template_uses_twig_filter` and
   `template_uses_twig_function`, from a template that calls the name inside the span
   `twig_expression`. A name no extension provides, such as `|t`, stays on an internal node.
-- `accesses_field`, from a method, function or template that names a field, to every storage of
-  that name, joined through the internal hub `drupal.field_name`. A `field_` name with no storage
-  ends at the unresolved `field.storage.<name>`, through a `try` step whose empty capture the
-  storage's entity type fills. A call on a config factory or a config object names a hub of its
-  own, `<object><name>`, which no map rule joins.
+- `accesses_field`, from a method, function or template that names a field, to a field storage,
+  joined through the internal hub `drupal.field_name`. A template read whose variable, through
+  the table `twig_entity_variables`, or whose suggestion's hook, through `template_entity_hooks`,
+  names an entity type reaches that entity type's storage. Any other read reaches the one storage
+  of its name; when storages on two or more entity types share the name, it is an
+  `accesses_shared_field_name` edge to the visible `drupal.shared_field_name` node, whose
+  `shared_field_name_of` edges reach each storage. The map rule `field_name_shared` marks such a
+  hub in the first pass, and the rules that need a name not to be shared read the hub's
+  `field_name_ready` edge first, so they run in the second pass. A `field_` name with no storage
+  ends at the unresolved `field.storage.<name>`. A call on a config factory or a config object
+  names a hub of its own, `<object><name>`, which no map rule joins.
 - `suggests_block_plugin`, `suggests_block_placement`, `suggests_theme_hook` and
   `suggests_field`, inferred from a suggestion template's file name to a node the map holds.
 - `checks_role` and `changes_role`, from the method or function around `->hasRole('x')`, or

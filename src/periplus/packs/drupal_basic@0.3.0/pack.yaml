@@ -62,8 +62,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   as inferred. A template named <entity>--<bundle>--<view mode> of node, taxonomy-term,
 #   block-content, paragraph, media or comment gives a suggests_bundle edge to the bundle
 #   <entity>.<bundle>, as inferred.
-# - each simple configuration file, with no top-level uuid, as a config_provided_by edge to the
-#   module its name starts with, or the theme; each literal form id a form class returns, as a drupal.form_id
+# - each simple configuration file, with no top-level uuid, as a config_provided_by_theme edge to
+#   the theme its name starts with when the map holds that theme, else a config_provided_by edge
+#   to the module of that name, inferred when the map does not hold it; each theme core.extension
+#   lists, as an installs_theme edge; each literal form id a form class returns, as a drupal.form_id
 #   node with a form_has_id edge from the class, and each form id a CAPTCHA point or the honeypot
 #   settings name, as a config_names_form edge; each hook named <extension>_<type>_<operation>,
 #   as an inferred hook_acts_on_entity_type edge to <type>; each route's path, as a
@@ -93,20 +95,28 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   plugin_of_type edge; and a manager constructor that passes the attribute class fifth to
 #   parent::__construct, as a manages_plugin_type edge;
 # - each constant of a class that descends from Symfony's or Drupal's Event, or whose name ends in
-#   Events, as a drupal.event named <class>::<CONST>; each key of getSubscribedEvents, written
-#   X::NAME, self::NAME or static::NAME, as a subscribed_by edge from the event to the listener
-#   method; and each ->dispatch($event, X::NAME) as a dispatched_by edge to the method around it,
-#   or a dispatched_by_function edge to the function around it in a module, install, inc, theme
-#   or profile file. All inferred: a method's class is named from the file's path. An event of
-#   core, Symfony or a contributed module, such as KernelEvents::REQUEST, ends at a referenced
+#   Events, as a drupal.event named by the text the constant holds, with a drupal.event_constant
+#   <class>::<CONST> and its names_event edge to it, or named <class>::<CONST> when the mapped file
+#   gives the constant no text; each key of getSubscribedEvents, written X::NAME, self::NAME or
+#   static::NAME, as a subscribed_by edge from the event to the listener method; and each
+#   ->dispatch($event, X::NAME) as a dispatched_by edge to the method around it, or a
+#   dispatched_by_function edge to the function around it in a module, install, inc, theme or
+#   profile file, each at the key's line. A key's event is the text its constant holds when a
+#   mapped file declares it, so two constants of one text meet on one event. All inferred: a
+#   method's class is named from the file's path. An event of core, Symfony or a contributed
+#   module, such as KernelEvents::REQUEST, keeps its constant's name and ends at a referenced
 #   node;
 # - each new TwigFilter('name') or new TwigFunction('name') in a class that descends from Twig's
 #   AbstractExtension, as a twig.filter or twig.function node with a provided_by edge to the class,
 #   and each template that calls it inside {{ }} or {% %}, as template_uses_twig_filter or
 #   template_uses_twig_function;
 # - each ->get('x'), ->set('x', ...) and ->hasField('x') in a PHP method or function, and each
-#   v.field_x in a template, as an inferred accesses_field edge to every field storage named x. A
-#   name that starts with field_ and that no mapped storage has ends at the unresolved
+#   v.field_x in a template, as an inferred accesses_field edge: from a template read whose
+#   variable, as node or term, or whose suggestion's hook, for content.field_x, names an entity
+#   type, to that entity type's storage of x; from any other reader to the one storage named x
+#   when every storage of x has one entity type, else an accesses_shared_field_name edge to the
+#   drupal.shared_field_name x, which has a shared_field_name_of edge to each of those storages.
+#   A name that starts with field_ and that no mapped storage has ends at the unresolved
 #   field.storage.<name>; any other name with no storage gives nothing. A call on a config factory
 #   or a config object, a variable or property ending in config, \Drupal::config(),
 #   $this->config(), or get() or getEditable() on a config factory, names no field;
@@ -148,8 +158,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
 #   unmapped bundle ends at a referenced node.
-# - A contributed or core theme's settings, such as olivero.settings, still end at a referenced
-#   module: only a mapped theme takes its configuration.
+# - A simple configuration file whose owner the map holds as neither a theme nor a module ends
+#   at a referenced module of that name, inferred: core.extension's module list is not read, so a
+#   core or contributed module's settings take that guess unless another file names the module.
 # - A hook with a template key kept in a variables default, or an entry whose first key is not a
 #   registry key, reads as no hook or as the wrong one. A hook entry that opens with the key
 #   type, pattern or function is not found. One that opens with path or file is found when a
@@ -183,6 +194,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   factory or a config object: $form_state->get('x'), $request->get('x'), a config object held in
 #   a variable of another name, as $settings->get('x'), and a name given as a class constant on a
 #   config object link to a field storage named x.
+# - A template variable named as an entity template names its entity, such as node, term or
+#   user, reads as that entity even where a preprocess function set it to something else.
 # - A filter called with a space after the pipe and an argument list, as | money(2), also reads as
 #   a call of the function money, which links when an extension provides a function of that name.
 # - The object of hasRole, addRole and removeRole is not read, so such a method of any class gives
@@ -251,9 +264,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   entity_classes lists by its full name, resolved through the file's use statements: a core
 #   entity class, or one a loaded rutter adds under add_table_rows. A module's own class named as
 #   a listed one, such as its User class, gives none, and any other class is listed as skipped.
-#   On a class the map holds as an entity type's class, as a module's own MyEntity,
-#   call/entity_class_call.yaml gives the edge from the method, at the method's line, and the
-#   skipped row stays. Message::load(1) and a call on a subclass of an entity class give none.
+#   create() whose first argument is quoted text, $container or $this->container is no entity
+#   call and gives no row. On a class the map holds as an entity type's class, as a module's own
+#   MyEntity, call/entity_class_call.yaml gives the edge from the method, at the method's line,
+#   and the skipped row stays, as it does for a mapped class that is no entity, since a file rule
+#   cannot see the map. Message::load(1) and a call on a subclass of an entity class give none.
 # - The container rules read get('x') in lower case only: another letter case, such as
 #   ->GET('x'), gives no edge and no skipped row.
 # - A contributed module's bundle config file, such as paragraphs.paragraphs_type.text or
@@ -282,21 +297,26 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   and true, and is_admin: null gives null.
 # - A subscriber key or dispatch name written with its namespace, \A\B::NAME, as text such as
 #   'kernel.request', or as a variable gives nothing. A key or name whose class no use statement
-#   binds leaves a skipped row, and joins its event only when a mapped class of the file's
-#   namespace declares that constant. Only the first listener of a key is read. dispatch($event)
+#   binds joins its event only when a mapped class of the file's namespace declares that
+#   constant. A constant read from a parent of the class the key names, or one whose text holds a
+#   backslash, keys its event by the constant and meets no other constant of that text. A
+#   listener the map holds no method for gives no edge. Only the first listener of a key is
+#   read. dispatch($event)
 #   with no name, the name written first, a first argument four levels of parentheses deep, a
 #   subscriber outside a src folder, and a dispatch in a plain PHP file outside a src folder give
 #   nothing. A method of a class kept in a module file reads as a function of its name. A grouped
 #   use binds no name for these rules.
 # - A filter or function name that is not a text literal, and an extension that implements
-#   ExtensionInterface without AbstractExtension, give nothing. Twig\TwigFilter(...) written with a
-#   namespace but no leading backslash gives nothing. A filter or function after a hash in the same
-#   print, as {{ {a: 1}|money }}, gives nothing. A template's use edge sits at the template's line,
-#   not the call's.
+#   ExtensionInterface without AbstractExtension, give nothing. A filter or function after a hash
+#   in the same print, as {{ {a: 1}|money }}, gives nothing. A template's use edge sits at the
+#   template's line, not the call's.
 # - A field named as v['field_x'], through ?->get(), by a variable, or by a constant of core or
 #   contrib gives no accesses_field edge; the constant leaves a skipped row. A name given as
 #   self::X or static::X that does not start with field_ links nothing. A template reads only
-#   names that start with field_. The edge sits at the method's or the template's line.
+#   names that start with field_. A PHP receiver's entity type is not read, nor is content.field_x
+#   in a template whose name holds no --, nor a block template's: such a read of a name that
+#   storages on two entity types share ends at the shared name, not a storage. The edge sits at
+#   the method's line, or at the line of the read in the template file that holds it.
 # - A field suggestion is read only for a field name that starts with field_: field--body and
 #   field--node--body give nothing, since field--<name> may name a field type and
 #   field--<entity type>--<name> a bundle. A base hook of core, such as node or block, and
@@ -694,6 +714,24 @@ tables:
     Drupal\views\Entity\View: view
     Drupal\workflows\Entity\Workflow: workflow
     Drupal\workspaces\Entity\Workspace: workspace
+  # The variable a Drupal 11.4 core entity template is given its entity in, and that entity type,
+  # written entity.<type>, read by field/field_access.yaml for v.field_x. A contributed module's
+  # rutter adds its own under add_table_rows.
+  twig_entity_variables:
+    comment: entity.comment
+    media: entity.media
+    node: entity.node
+    term: entity.taxonomy_term
+    user: entity.user
+  # The theme hook of each Drupal 11.4 core entity template, as a suggestion's file name starts
+  # with it, and its entity type, written entity.<type>, read by field/field_access.yaml for
+  # content.field_x.
+  template_entity_hooks:
+    comment: entity.comment
+    media: entity.media
+    node: entity.node
+    taxonomy_term: entity.taxonomy_term
+    user: entity.user
 
 # The core and Symfony classes and interfaces that the custom code builds on and the map never
 # reads. Each one an inherits or implements edge reaches becomes a declared node this pack draws,

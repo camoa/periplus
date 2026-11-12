@@ -74,8 +74,9 @@ a list of its known gaps.
   `load`, `loadMultiple` or `create` gives an edge only on a class the table `entity_classes`
   lists by its full name, resolved through the file's use statements, or on a module's own entity
   class the map holds. The latter's `uses_entity_type` edge sits at the method's line, not the
-  call's, and keeps the skipped row of `entity_class_static_call`; a call on a subclass of the
-  entity class gives no edge. The
+  call's, and keeps the skipped row of `entity_class_static_call`, as does a mapped class that is
+  no entity; a call on a subclass of the entity class gives no edge. A `create` whose first
+  argument is quoted text, `$container` or `$this->container` is not read as an entity call. The
   container rules read `get('x')` in lower case only: another letter case, such as `->GET('x')`, gives no edge and no
   skipped row. Core plugins whose folders the rutter does not name give nothing, such as a views
   argument, sort or display plugin, and so do a views field, filter or style plugin and a mail
@@ -96,18 +97,28 @@ a list of its known gaps.
   key of an `access_check` tag is kept on the service, not on its `tagged_as` edge, because the
   engine accepts an attribute on an edge and does not execute it. A custom requirement joins the
   service whose tag names it in `applies_to`; a comma-separated list of keys joins nothing.
-  A contributed or core theme's settings, such as `olivero.settings`, end at a referenced module.
+  A simple configuration file's owner is the theme of its name when the map holds one, from a
+  custom theme, a reference or the theme list of `core.extension`, else the module of its name.
+  When the map holds neither, the owner is an inferred referenced module: the module list of
+  `core.extension` is not read.
   A constraint whose `validatedBy()` returns a text in double quotes, a concatenation or a call
   gets no `validated_by` edge, and a `validatedBy()` written on a parent is not read.
 - **Drupal, events, Twig extensions, field access and suggestions:** every constant of an `Event`
-  class or a class named `*Events` reads as an event name. A subscriber key or dispatch name
-  written with its namespace, as text or as a variable gives nothing, and so does
-  `dispatch($event)` with no name or a call in a plain PHP file outside a `src` folder; only a
-  key's first listener is read. A filter after a hash in the same print and an extension without
-  `AbstractExtension` give nothing. `->get('x')` is read on any object but a config factory or
-  a config object, so `$form_state->get('x')` links to a field storage named `x`; a `field_` name with no storage ends at an unresolved
-  `field.storage.<name>`. A field suggestion is read only for a name that starts with `field_`. A
-  template's edge sits at the template's line, and a method's field edge at the method's line.
+  class or a class named `*Events` reads as an event name. An event is named by the text its
+  constant holds when a mapped file declares it; an event of core or a contributed module keeps
+  its constant's name, and so does a constant read from a parent of the class a key names. A
+  subscriber key or dispatch name written with its namespace, as text or as a variable gives
+  nothing, and so does `dispatch($event)` with no name or a call in a plain PHP file outside a
+  `src` folder; only a key's first listener is read. A filter after a hash in the same print and
+  an extension without `AbstractExtension` give nothing. `->get('x')` is read on any object but a
+  config factory or a config object, so `$form_state->get('x')` links to a field storage named
+  `x`. Only a template read knows its entity type: by its variable, as `node.field_x`, or for
+  `content.field_x` by the hook its suggestion's name starts with. Any other read reaches the one
+  storage of its name, or, when storages on two or more entity types share the name, the
+  `drupal.shared_field_name` node that points at each, not a storage. A `field_` name with no
+  storage ends at an unresolved `field.storage.<name>`. A field suggestion is read only for a name
+  that starts with `field_`. A template's field edge sits at the read's line, and a method's at
+  the method's line.
 - **Drupal, roles, configuration, queues and form alters in code:** the object of `hasRole`,
   `addRole` and `removeRole` is not read, and a config factory or queue factory is known by the
   object's name. A config form's `$this->config('x')` reads as a read, though it may return an

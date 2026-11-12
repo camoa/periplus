@@ -3,14 +3,38 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # A field's machine name as an internal hub: one node per name, with an edge to each field storage
 # of that name, on any entity type. Code and templates name a field by its name alone; the map
 # rules in field_access.yaml and theme_hook/suggestion_field.yaml join through the hub.
+#
+# A name that storages on two or more entity types share is also a visible
+# drupal.shared_field_name node, with a shared_field_name_of edge to each of those storages. A reader that
+# names the field without its entity type points at that node, never at one storage
+# (field_access.yaml). Two map rules mark the hub in the first pass, from the storage files alone:
+# field_name_ready on every hub that has a storage, field_name_shared on every hub whose storages
+# differ in entity type. A rule that must know a name is not shared reads field_name_ready first,
+# so it runs only once field_name_shared is complete.
 
 node_types:
 - name: drupal.field_name
   id_namespace: drupal.field_name
   internal: true
+# <entity type>.<entity type>.<field>, one per storage: the id a map rule builds from two storages'
+# entity types exists only when the two are the same.
+- name: drupal.field_storage_same
+  id_namespace: drupal.field_storage_same
+  internal: true
+- name: drupal.shared_field_name
+  id_namespace: drupal.shared_field_name
 
 edge_kinds:
 - kind: field_name_of
+  from: drupal.field_name
+  to: drupal.field_storage
+- kind: shared_field_name_of
+  from: drupal.shared_field_name
+  to: drupal.field_storage
+- kind: field_name_ready
+  from: drupal.field_name
+  to: drupal.field_name
+- kind: field_name_shared
   from: drupal.field_name
   to: drupal.field_storage
 
@@ -29,4 +53,58 @@ rules:
   match: {file: field.storage.*, filetype: yaml}
   id: {from: file_stem, normalize: [{replace: '^field\.storage\.[^.]+\.', with: ''}]}
   emits: [{edge: {kind: field_name_of, from: this_node, to: {from: {key: id}, template: 'field.storage.{id}', type: drupal.field_storage}}}]
+  confidence: declared
+
+- rule: field_storage_same_from_storage
+  reads: file
+  in: [config, module_config]
+  match: {file: field.storage.*, filetype: yaml}
+  values:
+    entity: {template: '{file_stem}', normalize: [{replace: '^field\.storage\.', with: ''}, {replace: '\..*$', with: ''}]}
+  id: {template: '{entity}.{file_stem}', normalize: [{replace: 'field\.storage\.', with: ''}]}
+  emits: [{node: {type: drupal.field_storage_same}}]
+  confidence: declared
+
+- rule: field_name_ready
+  reads: map
+  match:
+    node_type: drupal.field_name
+    follow: [{edge: field_name_of}]
+  emits: [{edge: {kind: field_name_ready, from: this_node, to: this_node}}]
+  confidence: declared
+
+# For each pair of storages of the name: the try reaches the same-storage node when both have one
+# entity type, else the second storage, which alone captures other.
+- rule: field_name_shared
+  reads: map
+  match:
+    node_type: drupal.field_name
+    follow:
+    - edge: field_name_of
+    - id_matches: '^drupal\.config::field\.storage\.(?<first>[^.]+)\.(?<field>.+)$'
+    - node: 'drupal.field_name::{field}'
+    - edge: field_name_of
+    - id_matches: '^drupal\.config::field\.storage\.(?<second>[^.]+)\.'
+    - try: [{node: 'drupal.field_storage_same::{first}.{second}.{field}'}]
+    - id_matches: '^(?:drupal\.field_storage_same::|drupal\.config::(?<other>))'
+  emits: [{edge: {kind: field_name_shared, from: this_node, to: {template: 'field.storage.{second}.{field}{other}', type: drupal.field_storage}}}]
+  confidence: declared
+
+- rule: shared_field_name
+  reads: map
+  match:
+    node_type: drupal.field_name
+    where: [{id_matches: '^drupal\.field_name::(?<field>.+)$'}]
+    follow: [{edge: field_name_shared}]
+  id: {template: '{field}'}
+  emits: [{node: {type: drupal.shared_field_name}}]
+  confidence: declared
+
+- rule: shared_field_name_of
+  reads: map
+  match:
+    node_type: drupal.field_name
+    where: [{id_matches: '^drupal\.field_name::(?<field>.+)$'}]
+    follow: [{edge: field_name_shared}, {node: 'drupal.field_name::{field}'}, {edge: field_name_of}]
+  emits: [{edge: {kind: shared_field_name_of, from: {template: '{field}', type: drupal.shared_field_name}, to: matched_node}}]
   confidence: declared

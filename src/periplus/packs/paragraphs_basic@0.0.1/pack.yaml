@@ -5,7 +5,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # entity type paragraph.
 # Paragraph and ParagraphsType join drupal_basic's table entity_classes, so drupal_basic's
 # entity_class_static_call gives a static load, loadMultiple or create call on either an inferred
-# uses_entity_type edge to its entity type.
+# uses_entity_type edge to its entity type. The variable paragraph and the theme hook paragraph
+# join drupal_basic's tables twig_entity_variables and template_entity_hooks, so paragraph.field_x
+# in any template, and content.field_x in paragraph--<bundle>.html.twig, read a paragraph field.
 #
 # Known gaps: a paragraph type's behavior plugins, icon and description give nothing. The entity
 # type paragraph is declared by the module's PHP, which is not mapped, so it stays referenced. A
@@ -21,3 +23,9 @@ add_table_rows:
     entity_classes:
       Drupal\paragraphs\Entity\Paragraph: paragraph
       Drupal\paragraphs\Entity\ParagraphsType: paragraphs_type
+    # The variable paragraph.html.twig is given its paragraph in, and the theme hook its
+    # suggestions start with, read by drupal_basic's field/field_access.yaml.
+    twig_entity_variables:
+      paragraph: entity.paragraph
+    template_entity_hooks:
+      paragraph: entity.paragraph

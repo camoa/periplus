@@ -167,11 +167,13 @@ a table that none of them declares refuses the map with exit 26, naming the `tab
 
 `\Drupal::logger('x')` ends at `drupal.service::logger.factory`. The end has no `on_miss`, so a
 service that no mapped file declares is `referenced`. The rule `entity_class_static_call` beside it
-looks a class up in the table `entity_classes`, for `load`, `loadMultiple` and `create`. The table
-is keyed by the class's full name, and the end's `separator` is a space, which no class name
-holds, so the whole name, resolved through the file's use statements, is the segment looked up: a
-module's own `User` gives no edge to core's `user`. A `load` or `create` call on any other
-capitalised class leaves a skipped row.
+looks a class up in the table `entity_classes`, for `load` and `loadMultiple`, and
+`entity_class_static_create` does the same for `create`. The table is keyed by the class's full
+name, and the end's `separator` is a space, which no class name holds, so the whole name, resolved
+through the file's use statements, is the segment looked up: a module's own `User` gives no edge
+to core's `user`. A `load` or `create` call on any other capitalised class leaves a skipped row,
+except a `create` whose first argument is quoted text, `$container` or `$this->container`, which
+no entity's `create` takes.
 
 ### Adding rows to a table another rutter owns
 

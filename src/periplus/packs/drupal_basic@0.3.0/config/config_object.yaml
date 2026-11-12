@@ -7,8 +7,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # provided by the module its name starts with; a configuration entity (it has a uuid) has no owner
 # edge. Drupal strips the uuid from a module's config/install and config/optional files, so the
 # test cannot tell the two apart there and those files get no owner edge. core.* names no module.
-# The owner is the mapped module of that name, else the mapped theme, as mytheme.settings of a custom
-# theme, else a referenced module.
+# The owner is the theme of that name when the map holds one, mapped or referenced, as
+# mytheme.settings of a custom theme or claro.settings of a theme core.extension lists, by
+# config_provided_by_theme; else the mapped or referenced module of that name; else, inferred, a
+# referenced module of that name, by config_provided_by. Drupal keeps module and theme names
+# apart, so a name the map holds as both makes both edges. core.extension's theme list gives
+# installs_theme to each theme it names.
 node_types:
 - name: drupal.config_object
   id_namespace: drupal.config
@@ -32,10 +36,16 @@ edge_kinds:
   to: drupal.theme
 - kind: config_provided_by
   from: drupal.config_object
-  to: [drupal.module, drupal.theme]
+  to: drupal.module
+- kind: config_provided_by_theme
+  from: drupal.config_object
+  to: drupal.theme
 - kind: config_owner_named
   from: drupal.config_object
   to: drupal.config_owner
+- kind: installs_theme
+  from: drupal.config_object
+  to: drupal.theme
 
 rules:
 - rule: any_config_file
@@ -127,12 +137,46 @@ rules:
         from: []
         template: '{config_owner}'
   confidence: declared
-- rule: simple_config_provided_by
+- rule: core_extension_installs_theme
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem}
+  emits: [{edge: {kind: installs_theme, from: this_node, to: {from: [{each: theme.*}], template: '{key}', type: drupal.theme}}}]
+  confidence: declared
+- rule: simple_config_provided_by_theme
   reads: map
   match:
     node_type: drupal.config_object
     follow:
     - edge: config_owner_named
     - id_matches: '^drupal\.config_owner::(?<owner>.+)$'
-  emits: [{edge: {kind: config_provided_by, from: this_node, to: {template: '{owner}', types: [drupal.module, drupal.theme]}}}]
+    - node: 'drupal.theme::{owner}'
+  emits: [{edge: {kind: config_provided_by_theme, from: this_node, to: matched_node}}]
   confidence: declared
+- rule: simple_config_provided_by_module
+  reads: map
+  match:
+    node_type: drupal.config_object
+    follow:
+    - edge: config_owner_named
+    - id_matches: '^drupal\.config_owner::(?<owner>.+)$'
+    - node: 'drupal.module::{owner}'
+  emits: [{edge: {kind: config_provided_by, from: this_node, to: matched_node}}]
+  confidence: declared
+# notheme is captured only where the map holds no theme of the name, and nomodule only where it
+# holds no module.
+- rule: simple_config_provided_by_guess
+  reads: map
+  match:
+    node_type: drupal.config_object
+    follow:
+    - edge: config_owner_named
+    - id_matches: '^drupal\.config_owner::(?<owner>.+)$'
+    - try: [{node: 'drupal.theme::{owner}'}]
+    - id_matches: '^(?:drupal\.theme::|drupal\.config_owner::(?<notheme>))'
+    - node: 'drupal.config_owner::{owner}'
+    - try: [{node: 'drupal.module::{owner}'}]
+    - id_matches: '^(?:drupal\.module::|drupal\.config_owner::(?<nomodule>))'
+  emits: [{edge: {kind: config_provided_by, from: this_node, to: {template: '{owner}{notheme}{nomodule}', type: drupal.module}}}]
+  confidence: inferred

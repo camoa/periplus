@@ -157,10 +157,17 @@ def test_a_static_load_on_a_contrib_entity_class_ends_at_its_entity_type(
         for p in e["provenance"]
     }
     ids = list(classes.values())
-    called = [*zip(ids, calls, strict=False), (ids[0], f"{short}::create([]);")]
     rule = "entity_class_static_call"
+    created = f"drupal.entity_type::{ids[0]}"
+    create = f"{short}::create([]);"
+    # The create() call joins the load() call's edge, so that edge holds both lines and both rules.
     assert found == {
-        (f"drupal.entity_type::{entity}", at(call), rule, "inferred") for entity, call in called
+        (f"drupal.entity_type::{entity}", at(call), rule, "inferred")
+        for entity, call in zip(ids, calls, strict=False)
+    } | {
+        (created, at(line), name, "inferred")
+        for line in (calls[0], create)
+        for name in (rule, "entity_class_static_create")
     }
     assert [(line, r) for _, line, r, _ in report.skipped] == [
         (at(own), rule),

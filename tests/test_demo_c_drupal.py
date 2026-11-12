@@ -1268,26 +1268,42 @@ function my_module_user_login($account) {
 def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_the_methods_around(
     tmp_path: Path,
 ) -> None:
-    """A constant of an Event class or an *Events class is an event; each key of
-    getSubscribedEvents, in either form, joins its listener, and each dispatch its method, all
-    inferred. A second constant of one statement is an event too. An outside event and an
-    own-class constant end at referenced events; an array outside getSubscribedEvents gives
-    nothing; a class in the file's namespace joins in the map and keeps its skipped row."""
+    """A constant of an Event class or an *Events class is an event, named by the text it holds,
+    with a drupal.event_constant that names it; each key of getSubscribedEvents, in either form,
+    joins its listener, and each dispatch its method, all inferred, at the key's line. A second
+    constant of one statement, whose text is not read, is an event named by the constant. An
+    outside event keeps its constant's name; an own-class constant ends at a referenced event of
+    its text; an array outside getSubscribedEvents gives nothing; a class in the file's namespace
+    joins in the map."""
     _plant(tmp_path, EVENTS)
     document, report = _map(tmp_path)
     own = "Drupal\\my_module\\"
-    event = "drupal.event::" + own
     sub = f"php.method::{own}EventSubscriber\\OrderSubscriber::"
     notify = f"php.method::{own}Service\\Notifier::notify"
-    states = {n["id"]: n["state"] for n in document["nodes"] if n["type"] == "drupal.event"}
+    cancelled = f"drupal.event::{own}Event\\OrderEvent::CANCELLED"
+    constant = f"drupal.event_constant::{own}"
+    states = {
+        n["id"]: n["state"]
+        for n in document["nodes"]
+        if n["type"] in ("drupal.event", "drupal.event_constant")
+    }
     assert states == {
-        event + "Event\\OrderEvent::PLACED": "mapped",
-        event + "Event\\OrderEvent::CANCELLED": "mapped",
-        event + "Event\\OrderEvents::PAID": "mapped",
-        event + "EventSubscriber\\LocalEvents::LOCAL": "mapped",
-        event + "EventSubscriber\\OrderSubscriber::MINE": "referenced",
-        event + "Service\\Notifier::SENT": "referenced",
+        "drupal.event::my_module.placed": "mapped",
+        cancelled: "mapped",
+        "drupal.event::my_module.paid": "mapped",
+        "drupal.event::my_module.local": "mapped",
+        "drupal.event::my_module.mine": "referenced",
+        "drupal.event::my_module.sent": "referenced",
         "drupal.event::Symfony\\Component\\HttpKernel\\KernelEvents::REQUEST": "referenced",
+        constant + "Event\\OrderEvent::PLACED": "mapped",
+        constant + "Event\\OrderEvents::PAID": "mapped",
+        constant + "EventSubscriber\\LocalEvents::LOCAL": "mapped",
+    }
+    names = {(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "names_event"}
+    assert names == {
+        (constant + "Event\\OrderEvent::PLACED", "drupal.event::my_module.placed"),
+        (constant + "Event\\OrderEvents::PAID", "drupal.event::my_module.paid"),
+        (constant + "EventSubscriber\\LocalEvents::LOCAL", "drupal.event::my_module.local"),
     }
     found = {
         (e["kind"], e["from"], e["to"], e["locations"][0]["line"], p["rule"], p["confidence"])
@@ -1296,98 +1312,30 @@ def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_t
         for p in e["provenance"]
     }
     request = "drupal.event::Symfony\\Component\\HttpKernel\\KernelEvents::REQUEST"
+    text = "event_subscribed_by_text"
+    sent = "event_dispatched_by_text"
+    by_constant = "event_subscribed_by_constant"
     assert found == {
-        (
-            "subscribed_by",
-            event + "Event\\OrderEvent::CANCELLED",
-            sub + "onCancelled",
-            15,
-            "event_subscribed_by",
-            "inferred",
-        ),
-        (
-            "subscribed_by",
-            event + "EventSubscriber\\OrderSubscriber::MINE",
-            sub + "onMine",
-            16,
-            "event_subscribed_by_own_class",
-            "inferred",
-        ),
-        (
-            "subscribed_by",
-            event + "Event\\OrderEvent::PLACED",
-            sub + "onPlaced",
-            18,
-            "event_subscribed_by",
-            "inferred",
-        ),
-        ("subscribed_by", request, sub + "onRequest", 19, "event_subscribed_by", "inferred"),
-        (
-            "subscribed_by",
-            event + "Event\\OrderEvents::PAID",
-            sub + "onPaid",
-            20,
-            "event_subscribed_by",
-            "inferred",
-        ),
-        (
-            "subscribed_by",
-            event + "EventSubscriber\\LocalEvents::LOCAL",
-            sub + "onLocal",
-            21,
-            "event_subscribed_in_namespace",
-            "inferred",
-        ),
-        (
-            "dispatched_by",
-            event + "Event\\OrderEvent::PLACED",
-            notify,
-            14,
-            "event_dispatched_by",
-            "inferred",
-        ),
-        (
-            "dispatched_by",
-            event + "Event\\OrderEvents::PAID",
-            notify,
-            15,
-            "event_dispatched_by",
-            "inferred",
-        ),
-        (
-            "dispatched_by",
-            event + "Service\\Notifier::SENT",
-            notify,
-            16,
-            "event_dispatched_by_own_class",
-            "inferred",
-        ),
-        (
-            "dispatched_by",
-            event + "Event\\OrderEvent::CANCELLED",
-            notify,
-            18,
-            "event_dispatched_by",
-            "inferred",
-        ),
+        ("subscribed_by", cancelled, sub + "onCancelled", 15, by_constant, "inferred"),
+        ("subscribed_by", "drupal.event::my_module.mine", sub + "onMine", 16, text, "inferred"),
+        ("subscribed_by", "drupal.event::my_module.placed", sub + "onPlaced", 18, text, "inferred"),
+        ("subscribed_by", request, sub + "onRequest", 19, by_constant, "inferred"),
+        ("subscribed_by", "drupal.event::my_module.paid", sub + "onPaid", 20, text, "inferred"),
+        ("subscribed_by", "drupal.event::my_module.local", sub + "onLocal", 21, text, "inferred"),
+        ("dispatched_by", "drupal.event::my_module.placed", notify, 14, sent, "inferred"),
+        ("dispatched_by", "drupal.event::my_module.paid", notify, 15, sent, "inferred"),
+        ("dispatched_by", "drupal.event::my_module.sent", notify, 16, sent, "inferred"),
+        ("dispatched_by", cancelled, notify, 18, "event_dispatched_by_constant", "inferred"),
         (
             "dispatched_by_function",
-            event + "Event\\OrderEvent::PLACED",
+            "drupal.event::my_module.placed",
             "php.function::my_module_user_login",
             6,
-            "event_dispatched_by_function",
+            "event_dispatched_by_function_text",
             "inferred",
         ),
     }
-    rows = [(file.rsplit("/", 1)[-1], line, rule, why) for file, line, rule, why in report.skipped]
-    assert rows == [
-        (
-            "OrderSubscriber.php",
-            21,
-            "event_subscribed_by",
-            "edge subscribed_by: no resolution step holds for capture key",
-        )
-    ]
+    assert report.skipped == ()
 
 
 TWIG_EXTENSIONS = {
@@ -1570,13 +1518,15 @@ function my_module_node_presave($node) {
 }
 
 
-def test_code_and_templates_that_name_a_field_access_each_storage_of_that_name_or_leave_a_mark(
+def test_code_and_templates_that_name_a_field_access_its_storage_its_shared_name_or_a_mark(
     tmp_path: Path,
 ) -> None:
-    """get, set and hasField in a method or a function, and x.field_y in Twig, give accesses_field
-    to every storage of that name, inferred, at the method's or the template's line. A field_ name
-    with no storage ends at an unresolved field.storage.<name>; any other unmapped name, a
-    variable and a name in plain text give nothing."""
+    """get, set and hasField in a method or a function give accesses_field to the one storage of
+    that name, and accesses_shared_field_name to the shared name when storages on two entity types
+    hold it, inferred, at the method's line. node.field_y and content.field_y in a node template
+    reach the node storage, at the read's line. A field_ name with no storage ends at an
+    unresolved field.storage.<name>, or field.storage.<entity type>.<name> when the read names its
+    entity type; any other unmapped name, a variable and a name in plain text give nothing."""
     _plant(tmp_path, FIELD_FILES)
     document, report = _map(tmp_path)
     assert report.skipped == (), report.skipped
@@ -1585,29 +1535,45 @@ def test_code_and_templates_that_name_a_field_access_each_storage_of_that_name_o
     template = "drupal.template::node--article--full"
     storage = "drupal.config::field.storage."
     found = {
-        (e["from"], e["to"], e["locations"][0]["line"], p["rule"])
+        (e["kind"], e["from"], e["to"], e["locations"][0]["line"], p["rule"])
         for e in document["edges"]
-        if e["kind"] == "accesses_field"
+        if e["kind"] in ("accesses_field", "accesses_shared_field_name")
         for p in e["provenance"]
     }
+    shared = ("accesses_shared_field_name", "drupal.shared_field_name::field_color")
     assert found == {
-        (paint, storage + "node.field_color", 9, "code_accesses_field_or_mark"),
-        (paint, storage + "user.field_color", 9, "code_accesses_field_or_mark"),
-        (paint, storage + "field_size", 9, "code_accesses_field_or_mark"),
-        (paint, storage + "field_gone", 9, "code_accesses_field_or_mark"),
-        (paint, storage + "field_gone", 9, "code_accesses_field_by_class_constant"),
-        (paint, storage + "node.body", 9, "code_accesses_field"),
-        (presave, storage + "node.field_color", 3, "code_accesses_field_or_mark"),
-        (presave, storage + "user.field_color", 3, "code_accesses_field_or_mark"),
-        (template, storage + "node.field_color", 1, "template_accesses_field_or_mark"),
-        (template, storage + "user.field_color", 1, "template_accesses_field_or_mark"),
-        (template, storage + "field_width", 1, "template_accesses_field_or_mark"),
+        ("accesses_field", paint, storage + "field_size", 9, "code_accesses_field_mark"),
+        ("accesses_field", paint, storage + "field_gone", 9, "code_accesses_field_mark"),
+        (
+            "accesses_field",
+            paint,
+            storage + "field_gone",
+            9,
+            "code_accesses_field_by_class_constant_mark",
+        ),
+        ("accesses_field", paint, storage + "node.body", 9, "code_accesses_field"),
+        (shared[0], paint, shared[1], 9, "code_accesses_shared_field_name"),
+        (shared[0], presave, shared[1], 3, "code_accesses_shared_field_name"),
+        (
+            "accesses_field",
+            template,
+            storage + "node.field_color",
+            1,
+            "template_accesses_entity_field",
+        ),
+        (
+            "accesses_field",
+            template,
+            storage + "node.field_width",
+            1,
+            "template_accesses_entity_field",
+        ),
     }
     marks = sorted((n["id"], n["type"]) for n in document["nodes"] if n["state"] == "unresolved")
     assert marks == [
         (storage + "field_gone", "drupal.field_storage"),
         (storage + "field_size", "drupal.field_storage"),
-        (storage + "field_width", "drupal.field_storage"),
+        (storage + "node.field_width", "drupal.field_storage"),
     ]
 
 
@@ -2640,20 +2606,13 @@ def test_a_name_given_as_a_constant_of_an_interface_or_a_parent_links_to_its_tar
         ("changes_role", run, role, 7, "code_changes_role_by_constant", "inferred"),
         ("reads_config_object", run, settings, 7, "config_read_by_class_constant", "inferred"),
         ("edits_config_object", run, settings, 7, "config_edited_by_class_constant", "inferred"),
-        (
-            "accesses_field",
-            run,
-            storage + "node.field_size",
-            7,
-            "code_accesses_field_by_class_constant",
-            "inferred",
-        ),
+        ("accesses_field", run, storage + "node.field_size", 7, "code_accesses_field", "inferred"),
         (
             "accesses_field",
             run,
             storage + "field_gone",
             7,
-            "code_accesses_field_by_class_constant",
+            "code_accesses_field_by_class_constant_mark",
             "inferred",
         ),
     }

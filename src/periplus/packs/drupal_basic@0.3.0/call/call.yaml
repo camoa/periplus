@@ -363,7 +363,8 @@ rules:
 # up: the end's separator, a space, is in no class name. So a module's own User class gives no
 # edge to core's user, and an import that renames a class still finds it. A rutter that depends on
 # this one adds its module's classes to the table under add_table_rows. Inferred: the table, not
-# the file, names the entity type. static::, self:: and parent:: are not read.
+# the file, names the entity type. static::, self:: and parent:: are not read. A class the table
+# does not hold leaves a skipped row, a module's own entity class among them.
 - rule: entity_class_static_call
   reads: file
   in: [source]
@@ -373,7 +374,28 @@ rules:
     filetype: php
     where:
     - name_matches: {child: scope, pattern: '\\?(?:\w+\\)*[A-Z]\w*'}
-    - name_matches: {child: name, pattern: 'load|loadMultiple|create'}
+    - name_matches: {child: name, pattern: 'load|loadMultiple'}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: entity_classes], separator: ' ', types: [drupal.entity_type]}
+  confidence: inferred
+
+# Term::create([...]), as entity_class_static_call. An entity's create() takes an array of values
+# or nothing, so create('/path'), create($container) and create($this->container), the factory
+# methods of a request, a form, a controller or a plugin, are not read.
+- rule: entity_class_static_create
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: scope
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?(?:\w+\\)*[A-Z]\w*'}
+    - name_matches: {child: name, pattern: 'create'}
+    - name_matches: {child: arguments, pattern: '(?s)\((?!\s*(?:[''"]|\$container\b|\$this->container\b)).*\)'}
   emits:
   - edge:
       kind: uses_entity_type

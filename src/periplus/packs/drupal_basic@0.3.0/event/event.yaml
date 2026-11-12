@@ -1,20 +1,32 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# An event, named by the class constant that holds its name, fully qualified:
-# drupal.event::Drupal\mymod\Event\OrderEvents::PLACED. A subscriber method subscribes to it and a
-# method dispatches it. An event of core, Symfony or a contributed module, such as
-# KernelEvents::REQUEST, is a referenced node: its class is outside the mapped code.
+# An event, named as Symfony names it, by the text its name constant holds: drupal.event::<text>,
+# as drupal.event::mymod.order_placed, whenever a mapped file declares that constant with a text.
+# Each such constant of an event class is a drupal.event_constant, <class>::<CONST>, with a
+# names_event edge to the event, so two constants that hold one text name one event. An event
+# whose constant's text is not in the mapped code, as core's, Symfony's or a contributed
+# module's KernelEvents::REQUEST, is named by its constant, fully qualified, and stays referenced.
+# A subscriber method subscribes to an event and a method dispatches it.
 
 node_types:
 - name: drupal.event
   id_namespace: drupal.event
+# The id drupal.event::<text> of each text a mapped constant holds, as an end that only an event
+# rule's node or edge brings into the map (event/event_name.yaml).
+- name: drupal.event_text
+  parent: drupal.event
+  internal: true
+- name: drupal.event_constant
+  id_namespace: drupal.event_constant
 # Each class constant, as <class>::<CONST>; event/event_name.yaml reads it in the map.
 - name: drupal.class_constant
   id_namespace: drupal.class_constant
   internal: true
-# A subscription or a dispatch whose class is written with no use, read in the file's own
-# namespace: <kind>|<event>|<method>. A map rule keeps it only when a mapped class declares that
-# constant.
+# A subscription or a dispatch, at the line of its event's key: <event>|<use>|<listener>, the
+# event as <class>::<CONST>. The use is subscribed or dispatched for a class written through a
+# use statement, dispatched_function for a dispatch in a function, and subscribed_here or
+# dispatched_here for a class of the file's own namespace or self:: and static::, which a map rule
+# keeps only when a mapped class declares that constant.
 - name: drupal.event_use
   id_namespace: drupal.event_use
   internal: true
@@ -30,4 +42,20 @@ edge_kinds:
 # dispatch in a function has its own kind.
 - kind: dispatched_by_function
   from: drupal.event
+  to: php.function
+- kind: names_event
+  from: drupal.event_constant
+  to: drupal.event
+- kind: is_event_constant
+  from: drupal.class_constant
+  to: drupal.class_constant
+- kind: text_may_name_event
+  from: drupal.constant_text
+  to: drupal.event
+# A use's listener, so a listener no mapped file declares stays in the map as a referenced end.
+- kind: use_names_listener
+  from: drupal.event_use
+  to: php.method
+- kind: use_names_function
+  from: drupal.event_use
   to: php.function
