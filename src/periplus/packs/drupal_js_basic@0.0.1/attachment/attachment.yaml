@@ -2,7 +2,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: attaches_library
-  from: [php.class, php.function]
+  from: [php.class, php.method, php.function]
   to: drupal.library
 - kind: template_attaches_library
   from: drupal.template

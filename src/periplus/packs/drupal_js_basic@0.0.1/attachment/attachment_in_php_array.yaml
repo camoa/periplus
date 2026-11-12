@@ -1,10 +1,12 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 rules:
-# '#attached' => ['library' => ['module/library', ...]] in a class file under src: each text in
-# the list is a library the class attaches. The id names both spans, so a text outside either
-# one makes nothing.
-- rule: library_attached_in_array
+# '#attached' => ['library' => ['module/library', ...]] in a method of a class file under src:
+# each text in the list is a library the method attaches. The id names both spans, so a text
+# outside either one makes nothing. A closure reads the named method around it. A list outside
+# any named function, such as a property's default, has an empty method, so the edge is not made
+# and the match is listed under skipped.
+- rule: library_attached_in_array_method
   reads: file
   in: [source]
   match:
@@ -14,6 +16,7 @@ rules:
   values:
     in_attached: &in_attached {from: {enclosing: attached, capture: mark}}
     in_library: &in_library {from: {enclosing: library_list, capture: mark}}
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
   id: &library_id
     template: '{in_attached}|{in_library}|{library}'
     normalize:
@@ -22,7 +25,7 @@ rules:
   emits:
   - edge:
       kind: attaches_library
-      from: {template: '{psr4_class}', types: [php.class]}
+      from: {template: '{psr4_class}::{method}', types: [php.method]}
       to: this_node
   confidence: inferred
 # The same list in a function of a procedural file, such as a hook in a .module file: the

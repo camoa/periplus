@@ -1,15 +1,30 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 rules:
-# $x['#attached']['library'][] = 'module/library' in a method: the class attaches the library.
-- rule: library_attached_in_class
+# $x['#attached']['library'][] = 'module/library' in a method: the method attaches the library.
+# Outside any method there is no enclosing method, so this rule makes no edge.
+- rule: library_attached_in_method
   reads: file
   in: [source]
   match:
     declaration: assignment_expression
     name_child: right
     filetype: php
-    where: [{name_matches: {child: left, pattern: '(?s).*\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"]library[''"]\s*\]\s*\[\s*\]'}}]
-  id: {from: declared_name, pattern: '^[''"](?<library>[^''"]+)[''"]$', template: '{library}'}
+    where: &library_left [{name_matches: {child: left, pattern: '(?s).*\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"]library[''"]\s*\]\s*\[\s*\]'}}]
+  id: &library_name {from: declared_name, pattern: '^[''"](?<library>[^''"]+)[''"]$', template: '{library}'}
+  emits: [{edge: {kind: attaches_library, from: enclosing_method, to: this_node}}]
+  confidence: declared
+# The same assignment in a function of a procedural file, such as a hook in a .module file: the
+# function attaches the library. Its node is the one php_function_holds_body makes for it.
+- rule: library_attached_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: assignment_expression
+    name_child: right
+    filetype: php
+    ending: [module, theme, inc, install, profile]
+    where: *library_left
+  id: *library_name
   emits: [{edge: {kind: attaches_library, from: enclosing_class, to: this_node}}]
   confidence: declared
