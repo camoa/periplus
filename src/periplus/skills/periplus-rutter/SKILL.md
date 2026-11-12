@@ -10,7 +10,7 @@ description: Writes or changes a Periplus rutter, the pack of data that tells Pe
 1. Rules are small and add to each other: one rule solves one case, and several cases are several rules. Split by rule file inside one rutter, never by adding rutters for one stack; a new rutter repeats the file types and folders the covering one already holds, and a small rule can be read, tested and removed alone. A case is not a literal: four files that differ only in a quoted key are one rule with an alternation.
 2. A rutter reads in passes by depth: order 1 is the structure, order 2 one layer inside each class as nodes at their lines, order 3 joins in the map with map rules. Each pass reads what the one before it found, so no rule has to look a thing up itself.
 3. There is no stack knowledge in the engine: a new stack is a rutter, never engine code, even where a request seems to ask for engine code. The engine then stays the same for every stack, and a third-party rutter can do all a built-in one does.
-4. Probe before saying a rutter cannot do something: write the rule, run it, and quote the engine's message before you call it an engine gap. A guess about the format's limits has been wrong before; the message is the evidence. A text rule on a method call, written because a variable argument seemed to leave no row, is the misreading: a reference rule lists that call under `skipped`.
+4. Probe before saying a rutter cannot do something: write two formulations of the rule, run each, and quote the engine's message for each before you call it an engine gap. A guess about the format's limits has been wrong before; the message is the evidence. A text rule on a method call, written because a variable argument seemed to leave no row, is the misreading: a reference rule lists that call under `skipped`.
 5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose. The name leaks the project and ties the rule to one site.
 
 ## Where the detail lives
@@ -47,6 +47,10 @@ project's own `.periplus/packs` first, and map that project until the map holds 
    an explicit declaration and a rule firing on a naming convention cannot emit the same
    confidence: the first is `declared`, the second `inferred`.
 
+Language-level knowledge lives in the language rutter, framework-level knowledge in the framework
+rutter, and the framework rutter shares into the language rutter's lists through tables. Each
+rule is small, covers one case, and adds to the others.
+
 The example adds a rule file to `python_text` in a project that already holds the
 [second-stack example](https://github.com/camoa/periplus/blob/v0.6.0/examples/second-stack) rutters. A module-level name in capitals is a constant only by convention,
 so the rule is `inferred`:
@@ -78,6 +82,46 @@ Check the rutter, then map the project; the map report's `not_executed` and `pro
 $ periplus validate python_text
 $ periplus map
 ```
+
+## Close a gap through an internal node
+
+Most gaps close with two rules. A file rule writes an internal node where the code names a thing:
+a call site, a hub for a name, or a name guessed from how it is written. A map rule joins that
+node to the real target, and only when the map holds the target. A target the map lacks leaves a
+mark, an end with `on_miss: unresolved` or a referenced node: never silence, and never an invented
+target. Mark the node's type `internal: true`, so the written map leaves it out; the detail is in
+[Internal node types](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-map-rules.md#internal-node-types).
+
+Copy from the bundled rule files `role/role_call.yaml` of `drupal_basic`, a role-name hub joined to
+the role's configuration; `member/member_call.yaml` of `js_basic`, a member call joined to the
+member function its script declares; and `edges/var_type_as_written.yaml` of `php_basic`, a name
+kept as written and as resolved, joined to whichever the map holds.
+
+No mark is removed unless the real target replaces it. No false edge is acceptable: narrow the
+rule instead.
+
+## Keys that keep a rule small
+
+Each key below has its detail in the guide section linked:
+
+- `add_table_rows` in `pack.yaml` adds rows to a table a rutter this one depends on owns, and the
+  owner's rules read them. Use it in place of copying the owner's rule
+  ([Adding rows to a table another rutter owns](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-references.md#adding-rows-to-a-table-another-rutter-owns)).
+- An item of `skip_names` may be `{table: <name>}`, which skips the table's keys too. The skip
+  list is checked before the test that the name is written, so a keyword such as `self` can be
+  skipped ([Tree references](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-references.md)).
+- The `where` conditions `in_table: <table>` and `not_in_table: <table>` pass over a name that is
+  not, or is, a key of the table; `{table: <table>, capture: <name>}` tests a named capture
+  instead. Two small rules then split one shape
+  ([Tree references](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-references.md)).
+- `on_miss_name: fallback`, on an end that holds `on_miss` and `fallback`, puts the miss mark
+  under the fallback name ([Tree references](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-references.md)).
+- A declaration rule's `name_child` list is a path of one step or more; each step is a field, else
+  the first named child of that node type, so `[name]` reaches a name with no field
+  ([A name below the match](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-abilities.md#a-name-below-the-match-and-a-value-from-the-docblock)).
+- On a call node without the field `call_arguments` names, the engine reads the arguments from
+  its first named child of that node type
+  ([A call's argument and its name](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide-imports.md#a-calls-argument-and-its-name)).
 
 ## Start a rutter
 

@@ -17,6 +17,10 @@ description: Navigates a Periplus map by the question being asked, and records w
 
 Run `periplus map` first. Then pick the one command that answers the question.
 
+Read `periplus types` before you choose: a relation the question asks about often has an edge kind
+of its own. Narrow to it with `--kind` on `periplus neighbors`, and to a node type with `--type`
+on `periplus find`.
+
 | Question | Command |
 |---|---|
 | What is one thing, and what are its neighbours? | `periplus show ID`, then `periplus neighbors ID` |
