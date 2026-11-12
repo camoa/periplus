@@ -193,7 +193,9 @@ With `my_shortcuts` pinned, `drupal_shortcut_call` gives `\Drupal::thing()` the 
 writes it. The owner must be a rutter this one depends on, directly or not, and it must declare
 the table; a key the owner, or another loaded rutter, already gives a different value is refused.
 Each of these stops `periplus map` with exit 19, naming the `pack.yaml` and the row, before any
-source file is read. The same key with the same value is no problem. The bundled rutters for
+source file is read. The same key with the same value is no problem. `periplus validate`
+reports a conflict with another rutter only inside a project that pins both; elsewhere it cannot
+know which rutters load together. The bundled rutters for
 contributed modules, such as `profile_basic`, add their entity classes to `entity_classes` this
 way, so `entity_class_static_call` reads `Profile::load(1)` only in a project that loads them.
 

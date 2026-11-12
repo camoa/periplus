@@ -244,7 +244,7 @@
           "additionalProperties": {"type": "string", "minLength": 1}
         }
       },
-      "description": "Rows this pack adds to tables another pack declares, by that pack's name, then by table name, then written name to node name. The named pack must be one this pack depends on, directly or not, and must declare the table under tables. Every rule that sees that table, the owner's among them, sees the added rows, in a run that loads this pack. A key the owner or another loaded pack already gives a different value is refused; the same value is no problem. The table lists the owner's rows, then the added keys sorted."
+      "description": "Rows this pack adds to tables another pack declares, by that pack's name, then by table name, then written name to node name. The named pack must be one this pack depends on, directly or not, and must declare the table under tables. Every rule that sees that table, the owner's among them, sees the added rows, in a run that loads this pack. A key the owner or another loaded pack already gives a different value is refused; the same value is no problem. periplus validate reports a conflict with another pack only inside a project that pins both; elsewhere it cannot know which packs load together. The table lists the owner's rows, then the added keys sorted."
     },
 
     "values": {

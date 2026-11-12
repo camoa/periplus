@@ -13,6 +13,7 @@ from periplus.manifest import resolve_pack_order
 from periplus.map import MapReport, run
 from periplus.preflight import check_runtime_dependencies
 from periplus.resolution import resolve
+from periplus.validate import validate
 
 OWNER = """\
 pack: own
@@ -187,6 +188,34 @@ def test_a_key_another_extender_gives_another_value_is_refused(tmp_path: Path) -
         "ext_b/pack.yaml: add_table_rows gives Crate in the table kinds of own the value "
         "crate_box, where ext_a gives crate_kind"
     ]
+
+
+def test_validate_in_the_project_reports_a_conflict_among_its_pinned_packs(
+    tmp_path: Path,
+) -> None:
+    """Neither extender conflicts alone; validate of either, run where both are pinned, reports
+    what map refuses, with map's code."""
+    _project(
+        tmp_path,
+        {
+            "ext_b": _extender("ext_b", "own", _crate(value="crate_box")),
+            "ext_a": _extender("ext_a", "own", _crate()),
+        },
+    )
+    refused = _run(tmp_path).problems
+    assert [p.message for p in refused] == [
+        "ext_b/pack.yaml: add_table_rows gives Crate in the table kinds of own the value "
+        "crate_box, where ext_a gives crate_kind"
+    ]
+    for name in ("ext_a", "ext_b"):
+        report = validate(
+            start=tmp_path,
+            env={"PERIPLUS_CONFIG_DIR": str(tmp_path / "config")},
+            dependencies=check_runtime_dependencies(),
+            requested=name,
+        )
+        assert report.problems == refused, name
+        assert report.exit_code == refused[0].code == 19, name
 
 
 def test_a_key_given_the_same_value_twice_is_no_problem(tmp_path: Path) -> None:

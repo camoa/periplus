@@ -33,6 +33,7 @@ a dependency, is reported here with the same code and message. Inside a project 
 pack, or a pack that depends on it, a value the pack declares that the settings do not give is
 refused as ``map`` refuses it; elsewhere no value is asked for. When that project's pinned packs
 all resolve their dependencies, folders resolve against every pinned pack, as ``map`` resolves
+them, and the rows those packs add to tables are checked against each other as ``map`` checks
 them; otherwise against the pack and the packs it depends on.
 """
 
@@ -187,8 +188,9 @@ def validate(
     problems.extend(unreadable)
     if not errors and not unreadable:
         # Imported here: `periplus.engine.check` imports this module.
-        from periplus.engine.check import _folder_conflicts
+        from periplus.engine.check import _folder_conflicts, _schema_problems, reachable
         from periplus.engine.check import checked as engine_checked
+        from periplus.engine.packload import _tables
 
         in_project = any(
             s.kind == "project" and s.status == "used" for s in resolution.settings_sources
@@ -200,6 +202,12 @@ def validate(
             order, values, origins, require_values=in_project and named
         )
         problems.extend(refused)
+        if in_project and named and not unresolved:
+            # Map refuses rows its pinned packs add that disagree, which the pack alone cannot.
+            _, failed = _schema_problems(pinned)
+            rows: list[Problem] = []
+            _tables([p for p in pinned if not reachable(p, pinned) & failed], rows)
+            problems.extend(r for r in rows if r not in problems)
         if rule_set is not None:
             folder_packs = pinned if in_project and named and not unresolved else order
             overrides = folder_overrides(resolution.settings)
