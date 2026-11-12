@@ -526,6 +526,18 @@ files:
           template: '{entity}.{field}'
           normalize:
           - {replace: '-', with: '_'}
+        # The folder right before a module template's templates folder, read as its module's
+        # name; the innermost one, so a nested submodule's template names the submodule. Absent
+        # for a template outside a templates folder.
+        module_of_template:
+          pattern: '^(?:.*/)?(?<module>[^/]+)/templates/(?:[^/]+/)*[^/]+\.html\.twig$'
+          template: '{module}'
+          relative_to: custom_module
+        # The folder below custom_theme that holds a theme template, read as its theme's name.
+        theme_of_template:
+          pattern: '^(?<theme>[^/]+)/(?:[^/]+/)*[^/]+\.html\.twig$'
+          template: '{theme}'
+          relative_to: custom_theme
       sections:
       - name: comment
         open: '\{#'
@@ -606,6 +618,22 @@ files:
     drupal_yml_text:
       endings: [yml]
       reader: text
+      path_values:
+        # The module a <module>.services.yml file names. Absent for drush.services.yml, which
+        # names no module.
+        services_owner:
+          pattern: '^(?:.*/)?(?!drush\.)(?<module>[^/.]+)\.services\.yml$'
+          template: '{module}'
+        # The folder that holds a drush.services.yml, read as its module's name.
+        folder_module:
+          pattern: '^(?:.*/)?(?<module>[^/]+)/drush\.services\.yml$'
+          template: '{module}'
+      spans:
+      # The services block of a services file, from services: to the next top-level key, so the
+      # keys of a parameters block are outside it. The opener never matches; only the end counts.
+      - name: services_block
+        open: '(?m)^(?<mark>services):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^[A-Za-z_]']
 
 grammar:
   provider: tree-sitter

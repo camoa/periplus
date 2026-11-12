@@ -1,0 +1,130 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# What a module or a theme holds: its routes, services, libraries, classes and templates, one edge
+# kind per type, each to the drupal.module or drupal.theme that owns it. Routes and services are
+# read as text, because a data rule cannot end an edge at a name made from the file name. A
+# routing file's route_callbacks key names no route. A services file's services are its two-space
+# keys inside the services block, so a parameters key is no service and neither is _defaults. A
+# service alias written on one line, as name: '@other', is not read. A drush.services.yml belongs
+# to the module whose folder holds it; the folder's name is taken as the module's, so its edge is
+# inferred. A template belongs to the folder right before its templates folder, so a nested
+# submodule's template goes to the submodule; a module folder named other than its machine name
+# gives a wrong owner, so the edge is inferred. A theme template belongs to the folder below
+# custom_theme. Libraries and classes are joined in the map: a library my_module/x goes to the
+# module or theme my_module, a class Drupal\my_module\X to the module my_module. A name with no
+# module or theme in the map gives no edge.
+
+edge_kinds:
+- kind: route_in_module
+  from: drupal.route
+  to: drupal.module
+- kind: service_in_module
+  from: drupal.service
+  to: drupal.module
+- kind: library_in_module
+  from: drupal.library
+  to: drupal.module
+- kind: library_in_theme
+  from: drupal.library
+  to: drupal.theme
+- kind: class_in_module
+  from: php.class_like
+  to: drupal.module
+- kind: template_in_module
+  from: drupal.template
+  to: drupal.module
+- kind: template_in_theme
+  from: drupal.template
+  to: drupal.theme
+
+rules:
+- rule: route_in_module
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.routing'
+    filetype: drupal_yml_text
+    text: '(?m)^(?!route_callbacks:)(?<route>[A-Za-z0-9_][\w.-]*):[ \t]*$'
+  values:
+    owner: {template: '{file_stem}', normalize: [{replace: '\..*$', with: ''}]}
+  id: {template: '{route}'}
+  line: {capture: route}
+  emits: [{edge: {kind: route_in_module, from: this_node, to: {template: '{owner}', types: [drupal.module]}}}]
+  confidence: declared
+
+- rule: service_in_module
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.services'
+    filetype: drupal_yml_text
+    text: '(?m)^  (?<service>[A-Za-z0-9\\][\w.\\-]*):[ \t]*$'
+  values:
+    owner: {template: '{services_owner}'}
+    in_services: {from: {enclosing: services_block, capture: mark}}
+  id: {template: '{in_services}|{service}', normalize: [{replace: '^services\|', with: ''}]}
+  line: {capture: service}
+  emits: [{edge: {kind: service_in_module, from: this_node, to: {template: '{owner}', types: [drupal.module]}}}]
+  confidence: declared
+
+- rule: drush_service_in_module
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.services'
+    filetype: drupal_yml_text
+    text: '(?m)^  (?<service>[A-Za-z0-9\\][\w.\\-]*):[ \t]*$'
+  values:
+    owner: {template: '{folder_module}'}
+    in_services: {from: {enclosing: services_block, capture: mark}}
+  id: {template: '{in_services}|{service}', normalize: [{replace: '^services\|', with: ''}]}
+  line: {capture: service}
+  emits: [{edge: {kind: service_in_module, from: this_node, to: {template: '{owner}', types: [drupal.module]}}}]
+  confidence: inferred
+
+- rule: library_in_module
+  reads: map
+  match:
+    node_type: drupal.library
+    where: [{id_matches: '^drupal\.library::(?<owner>[^/]+)/'}]
+    follow: [{node: 'drupal.module::{owner}'}]
+  emits: [{edge: {kind: library_in_module, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: library_in_theme
+  reads: map
+  match:
+    node_type: drupal.library
+    where: [{id_matches: '^drupal\.library::(?<owner>[^/]+)/'}]
+    follow: [{node: 'drupal.theme::{owner}'}]
+  emits: [{edge: {kind: library_in_theme, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: class_in_module
+  reads: map
+  match:
+    node_type: php.class_like
+    where: [{id_matches: '^php\.type::Drupal\\(?<module>[a-z0-9_]+)\\'}]
+    follow: [{node: 'drupal.module::{module}'}]
+  emits: [{edge: {kind: class_in_module, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: template_in_module
+  reads: file
+  in: [module_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\A(?s:.)'}
+  values:
+    owner: {template: '{module_of_template}'}
+  id: {template: '{template_name}'}
+  emits: [{edge: {kind: template_in_module, from: this_node, to: {template: '{owner}', types: [drupal.module]}}}]
+  confidence: inferred
+
+- rule: template_in_theme
+  reads: file
+  in: [theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\A(?s:.)'}
+  values:
+    owner: {template: '{theme_of_template}'}
+  id: {template: '{template_name}'}
+  emits: [{edge: {kind: template_in_theme, from: this_node, to: {template: '{owner}', types: [drupal.theme]}}}]
+  confidence: inferred
