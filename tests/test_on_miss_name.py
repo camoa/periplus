@@ -127,6 +127,26 @@ def test_neither_mapped_marks_the_fallback_name(tmp_path):
     assert detail["unresolved_detail"]["searched_for"] == "helper"
 
 
+def test_two_candidate_types_mark_the_fallback_name_under_the_first_type(tmp_path):
+    rules = (
+        RULES.format(end=MARKED)
+        .replace(
+            "  - {name: own.function, id_namespace: own.function}\n",
+            "  - {name: own.function, id_namespace: own.function}\n"
+            "  - {name: own.macro, id_namespace: own.macro}\n",
+        )
+        .replace("to: [own.function]}", "to: [own.function, own.macro]}")
+        .replace("{types: [own.function],", "{types: [own.function, own.macro],")
+    )
+    plant(tmp_path, rules, CALL_ONLY)
+    document = _document(_run(tmp_path))
+    assert _targets(document) == ["own.function::helper"]
+    assert _states(document) == {
+        f"own.function::{CALLER}": "mapped",
+        "own.function::helper": "unresolved",
+    }
+
+
 def test_the_first_name_still_wins_when_mapped(tmp_path):
     document = _document(_map(tmp_path, NAMESPACED, extra=GLOBAL_HELPER))
     assert _targets(document) == ["own.function::App\\helper"]
