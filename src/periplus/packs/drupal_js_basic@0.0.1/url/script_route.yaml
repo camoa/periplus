@@ -1,0 +1,51 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A path a script writes in a template literal, joined to the route whose path has the same shape:
+# a script_links_to_route edge from the script to the route, beside the script_links_to_path edge
+# url/script_url.yaml gives. The shape is the path with each ${...} written as *, met with the
+# drupal.path_shape node drupal_basic url/path_route.yaml gives each route path. So
+# `/my/item/${id}/edit` links to the route whose path is /my/item/{id}/edit.
+#
+# Inferred: the shape, not a declaration, says which route a path is. Two routes whose paths have
+# one shape both get an edge from each path of that shape.
+#
+# Limits:
+# - A literal value in a placeholder slot meets no route: `/my/item/5` is not /my/item/*.
+# - A path that no mapped routing file declares gives no edge, nor does a path with no leading
+#   slash, a path built with +, or a URL built at run time.
+# - A query string or a fragment is cut from the path before the shape is made.
+
+node_types:
+# One shape one script writes, its id <script>|<shape>.
+- name: js.path_use
+  id_namespace: js.path_use
+  internal: true
+
+edge_kinds:
+- kind: script_links_to_route
+  from: js.file
+  to: drupal.route
+
+rules:
+# The template literal path_in_script_template in url/script_url.yaml reads.
+- rule: script_template_path_use
+  reads: file
+  in: [js_source]
+  match:
+    file: '*'
+    filetype: js_text
+    text: '[(\[,=:?]\s*`(?<js_template_path>/[^/\s`{}$][^\s`]*)`\s*[^+\s]'
+  values:
+    shape: {template: '{js_template_path}', normalize: [{replace: '[?#].*$', with: ''}, {replace: '\$\{[^}]*\}', with: '*'}]}
+  id: {template: '{script}|{shape}'}
+  emits: [{node: {type: js.path_use}}]
+  confidence: declared
+
+- rule: script_links_to_route_by_shape
+  reads: map
+  match:
+    node_type: js.path_use
+    where: [{id_matches: '^js\.path_use::(?<user>[^|]+)\|(?<shape>.+)$'}]
+    follow: [{node: 'drupal.path_shape::{shape}'}, {edge: shape_of_route}]
+  emits: [{edge: {kind: script_links_to_route, from: {template: '{user}', types: [js.file]}, to: matched_node}}]
+  confidence: inferred

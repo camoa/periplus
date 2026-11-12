@@ -1,0 +1,74 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A path a template writes, joined to the route whose path has the same shape: a
+# template_links_route edge from the template to the route, beside the links_to_path edge
+# url/url.yaml gives to the drupal.url_path hub. A shape is the path with each placeholder written
+# as *: a route's {x} and a template's {{ ... }} hole. So href="/my/item/{{ item.id }}/edit" links
+# to the route whose path is /my/item/{id}/edit. drupal_js_basic url/script_route.yaml joins a
+# script's path to a route the same way.
+#
+# Inferred: the shape, not a declaration, says which route a path is. Two routes whose paths have
+# one shape, such as /my/item/{id} and /my/item/{name}, both get an edge from each path of that
+# shape.
+#
+# Limits:
+# - A literal value in a placeholder slot meets no route: /my/item/5 is not /my/item/*.
+# - A path that no mapped routing file declares, such as a core route's /user/login, gives no edge.
+#   A path with no leading slash gives none either.
+# - A query string or a fragment is cut from the path before the shape is made.
+# - A path built in Twig other than by {{ ... }} holes, as with {% if %} or ~, gives no edge.
+
+node_types:
+# A route path's shape. Its id is the shape, and a shape_of_route edge runs to each route with it.
+- name: drupal.path_shape
+  id_namespace: drupal.path_shape
+  internal: true
+# One shape one template writes, its id <template>|<shape>.
+- name: drupal.path_use
+  id_namespace: drupal.path_use
+  internal: true
+
+edge_kinds:
+- kind: shape_of_route
+  from: drupal.path_shape
+  to: drupal.route
+
+rules:
+# path: '/my/item/{id}' under a top-level route key in a <module>.routing.yml file, read as text
+# because a data rule cannot make an id from a value with its placeholders rewritten.
+- rule: route_path_shape
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.routing'
+    filetype: drupal_yml_text
+    text: '(?m)^(?<route>[A-Za-z0-9_][\w.-]*):[ \t]*\n(?:[ \t]+.*\n)*?[ \t]+path:[ \t]*[''"]?(?<path>/[^''"\s]*)'
+  id: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '*'}]}
+  line: {capture: path}
+  emits: [{edge: {kind: shape_of_route, from: this_node, to: {template: '{route}', types: [drupal.route]}}}]
+  confidence: declared
+
+# href="/my/item/{{ item.id }}?tab=1" or data-endpoint="/my/path" in a <name>.html.twig file: an
+# attribute value that starts with / and holds no space, quote or angle bracket, and no brace
+# outside a {{ ... }} hole.
+- rule: template_path_use
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\s[\w:.-]+=["''](?<path>/(?:[^\s"''<>{]|\{\{[^}]*\}\})+)["'']'
+  values:
+    shape: {template: '{path}', normalize: [{replace: '[?#].*$', with: ''}, {replace: '\{\{[^}]*\}\}', with: '*'}]}
+  id: {template: '{template_name}|{shape}'}
+  emits: [{node: {type: drupal.path_use}}]
+  confidence: declared
+
+- rule: template_links_to_route_by_shape
+  reads: map
+  match:
+    node_type: drupal.path_use
+    where: [{id_matches: '^drupal\.path_use::(?<user>[^|/]+)\|(?<shape>.+)$'}]
+    follow: [{node: 'drupal.path_shape::{shape}'}, {edge: shape_of_route}]
+  emits: [{edge: {kind: template_links_route, from: {template: '{user}', types: [drupal.template]}, to: matched_node}}]
+  confidence: inferred
