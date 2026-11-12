@@ -7,7 +7,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # key follows at its own bracket level; a variable default such as 'link' => ['path' => NULL]
 # has none, so it does not read as a hook. An entry that opens with type, pattern or function is
 # not found. A hook links to the template that renders it: the one
-# its 'template' key names at confidence declared, and when the entry has neither a 'template'
+# its 'template' key names at confidence declared, the last part of it when the value holds a
+# folder, as 'cards/my-card' for my-card, and when the entry has neither a 'template'
 # nor a 'function' key the hook name with underscores written as dashes, at confidence inferred.
 # An entry is read inside a function named theme or ending in _theme, and a template or function
 # key is found beside up to four levels of brackets.
@@ -21,7 +22,7 @@ edge_kinds:
   from: drupal.theme_hook
   to: drupal.template
 - kind: renders_theme_hook
-  from: [php.class, php.trait, php.function]
+  from: [php.class, php.trait, php.method, php.function]
   to: drupal.theme_hook
 
 rules:
@@ -49,6 +50,29 @@ rules:
     file: '**'
     filetype: drupal_php_text
     text: '[\[,(\s][''"](?<hook>(?!variables[''"])[A-Za-z][A-Za-z0-9_]*)[''"]\s*=>\s*\[(?:(?![''"]template[''"]\s*=>)(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*\])*\]))*[''"]template[''"]\s*=>\s*[''"](?<template>[A-Za-z0-9_-]+)[''"]'
+  values:
+    in_theme: {from: {enclosing: hook_theme_body, capture: mark}}
+  id:
+    template: '{in_theme}|{hook}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+  line: {capture: hook}
+  emits:
+  - edge:
+      kind: theme_hook_template
+      from: this_node
+      to: {from: {capture: template}}
+  confidence: declared
+
+# The same with a folder before the template name: 'template' => 'cards/my-card' names my-card.
+# A sibling of theme_hook_template_key, whose template capture stops at the slash.
+- rule: theme_hook_template_key_in_folder
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<hook>(?!variables[''"])[A-Za-z][A-Za-z0-9_]*)[''"]\s*=>\s*\[(?:(?![''"]template[''"]\s*=>)(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*\])*\]))*[''"]template[''"]\s*=>\s*[''"](?:[A-Za-z0-9_-]+/)+(?<template>[A-Za-z0-9_-]+)[''"]'
   values:
     in_theme: {from: {enclosing: hook_theme_body, capture: mark}}
   id:
