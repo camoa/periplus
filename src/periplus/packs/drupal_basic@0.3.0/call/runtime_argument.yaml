@@ -5,9 +5,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # time. Each such call is kept as a php.call_site node marked resolution runtime, with its edges to
 # and from the method around it, and no edge to a route, a service or an entity type. Each twin
 # matches as the rule it twins, and fires only when a variable stands in the argument that rule
-# reads. A $this->container->get() or $this->entityTypeManager->getStorage() call's id ends in
-# (runtime), so it stays apart from the node php_basic's find_call_site gives the same callee; a
-# static call's id is the method around it and the callee as written.
+# reads. A $this->redirect(), $this->container->get() or $this->entityTypeManager->getStorage()
+# call's id ends in (runtime), so it stays apart from the node php_basic's find_this_call or
+# find_call_site gives the same callee; a static call's id is the method around it and the
+# callee as written.
 #
 # Limits:
 # - A call in a method only. One in a function of a module-family file is marked by
@@ -92,9 +93,9 @@ rules:
     - name_matches: {child: object, pattern: '\$this'}
     - name_matches: {child: name, pattern: redirect}
     - name_matches: {child: arguments, pattern: *first_variable}
-  id: &member_id
+  id: &member_runtime_id
     from: [enclosing_type, enclosing_method, declared_name, name]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}(runtime)"
   emits: *runtime_node
   confidence: declared
 
@@ -106,7 +107,7 @@ rules:
     name_child: object
     filetype: php
     where: *redirect_where
-  id: *member_id
+  id: *member_runtime_id
   emits: *runtime_edges
   confidence: declared
 
@@ -150,9 +151,7 @@ rules:
     - name_matches: {child: object, pattern: &container_object '\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\)'}
     - name_matches: {child: name, pattern: get}
     - name_matches: {child: arguments, pattern: *first_variable}
-  id: &member_runtime_id
-    from: [enclosing_type, enclosing_method, declared_name, name]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}(runtime)"
+  id: *member_runtime_id
   emits: *runtime_node
   confidence: declared
 

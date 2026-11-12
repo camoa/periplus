@@ -103,7 +103,7 @@ periplus map
 Map:
   path    /path/to/project/.periplus/map.json
   nodes   11
-  edges   7
+  edges   10
   internal: 3 nodes and 2 edges left out
 
 Files:
@@ -145,7 +145,8 @@ Rules that fired zero times:
 ...
 
 Map rule passes:
-  pass 1: none
+  pass 1: drupal_basic library_in_module fired 2
+  pass 2: none
 
 Rules not executed:
   none
@@ -435,7 +436,7 @@ periplus map
 Map:
   path    /path/to/project/.periplus/map.json
   nodes   11
-  edges   7
+  edges   10
   internal: 3 nodes and 2 edges left out
 
 Files:
@@ -477,7 +478,8 @@ Rules that fired zero times:
 ...
 
 Map rule passes:
-  pass 1: none
+  pass 1: drupal_basic library_in_module fired 2
+  pass 2: none
 
 Rules not executed:
   none

@@ -917,4 +917,6 @@ def test_twig_tweak_calls_in_a_module_and_a_theme_but_not_a_variable_or_a_commen
         ("renders_entity_form", template, "drupal.entity_type::node"),
         ("renders_field", template, "drupal.config::field.storage.node.field_my_field"),
         ("renders_menu", "drupal.template::page", "drupal.config::system.menu.main"),
+        ("template_in_module", template, "drupal.module::mymodule"),
+        ("template_in_theme", "drupal.template::page", "drupal.theme::mytheme"),
     }

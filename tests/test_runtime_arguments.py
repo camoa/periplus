@@ -169,7 +169,7 @@ def test_each_of_the_nine_twin_rules_fires_on_a_variable_only_c3(tmp_path):
 
     assert _marked_lines(document) == expected
     in_edges = _edges(document, "call_site_in")
-    assert len(in_edges) == 9
+    assert len(in_edges) == 11
     assert {e["to"] for e in in_edges} == {METHOD_ID}
     marked_ids = {n["id"] for n in _marked(document)}
     leaving = [e for e in document["edges"] if e["from"] in marked_ids]

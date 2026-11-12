@@ -182,6 +182,7 @@ def test_a_call_through_a_property_a_parent_assigns_ends_on_the_type_it_was_assi
     first, second = report.map_passes
     assert sorted(first[1]) == [
         ("drupal_basic", "calls_through_service_property", 1),
+        ("drupal_basic", "class_in_module", 8),
         ("php_basic", "calls_through_assigned_property", 2),
         ("php_basic", "calls_through_property_assigned_here", 2),
     ]

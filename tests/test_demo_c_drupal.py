@@ -805,7 +805,7 @@ def test_a_route_requirement_joins_the_service_whose_tag_applies_to_it(tmp_path:
         )
     }
     assert not [n for n in document["nodes"] if n["type"] == "drupal.route_requirement"]
-    assert (report.internal.nodes, report.internal.edges) == (2, 3), report.internal
+    assert (report.internal.nodes, report.internal.edges) == (4, 5), report.internal
 
 
 def test_a_list_argument_of_a_service_injects_each_service_it_names(tmp_path: Path) -> None:
