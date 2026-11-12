@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# a.b.c(...): a call through a dotted name. Each one reaches an internal node named by the dotted
+# name, from the nearest named function that holds the call, else from the script, as function_call
+# starts. The map rules below give a js_calls edge only where a member function of that name is
+# mapped, so a call on jQuery, the DOM, console or this gives nothing and no skipped row.
+
+node_types:
+- name: js.member_call
+  id_namespace: js.member_call
+  internal: true
+
+edge_kinds:
+- kind: calls_member
+  from: [js.function, js.file]
+  to: js.member_call
+
+rules:
+- rule: member_call
+  reads: file
+  in: [js_source]
+  match:
+    reference: call_expression
+    name_child: function
+    filetype: javascript
+    where: [{name_matches: '(?<js_callee>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)'}]
+  emits: [{edge: {kind: calls_member, from: enclosing_declaration, to: {template: '{js_callee}'}}}]
+  confidence: declared
+# Inferred: the dotted name is taken to reach one object from every script.
+- rule: member_call_from_function
+  reads: map
+  match:
+    node_type: js.function
+    follow: [{edge: calls_member}, {id_matches: '^js\.member_call::(?<js_callee>.+)$'}, {node: 'js.member_function::{js_callee}'}]
+  emits: [{edge: {kind: js_calls, from: this_node, to: matched_node}}]
+  confidence: inferred
+- rule: member_call_from_script
+  reads: map
+  match:
+    node_type: js.file
+    follow: [{edge: calls_member}, {id_matches: '^js\.member_call::(?<js_callee>.+)$'}, {node: 'js.member_function::{js_callee}'}]
+  emits: [{edge: {kind: js_calls, from: this_node, to: matched_node}}]
+  confidence: inferred

@@ -33,7 +33,7 @@ def test_a_script_links_to_every_function_and_behavior_it_declares(tmp_path: Pat
     )
     functions = [
         f"js.function::{MODULE}/js/all.js:{n}" for n in ("arrow", "declared", "expression")
-    ]
+    ] + ["js.member_function::Drupal.behaviors.mymoduleAll.attach"]
     assert found == sorted(
         [("script_declares_function", f, "declared") for f in functions]
         + [("script_declares_behavior", "drupal.js_behavior::mymoduleAll", "declared")]

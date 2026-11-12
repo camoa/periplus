@@ -159,22 +159,31 @@ a list of its known gaps.
   and no skipped row. `drupal_entity` ends at the entity type, not the entity, and `drupal_field`
   at the field storage. A Twig file not named `.html.twig` gives no edge. A call inside a quoted
   text or a verbatim block still gives one. Two templates of one name in two modules are one node.
-- **JavaScript:** `js_basic` maps named functions only. A call, an import, an export, a
-  generator, a class, a class method and a function that is an object member or an argument give
-  nothing. Two functions of one name in one script are one node. A `.mjs`, `.cjs`, `.jsx` or `.ts`
-  file is not read. A script's id is its path from the project folder.
+- **JavaScript:** `js_basic` maps named functions, and functions assigned to a dotted name or
+  written directly in an object literal assigned to one, each named by the dotted name alone. A
+  local object and an object of the same name in another script meet, a false edge. A member call
+  gives an edge only to a mapped member function, and a map rule places that edge at the function
+  or script it starts at, not at the call. A call to a listed JavaScript or browser global gives
+  nothing. A call on a call or an index, an import, an export, a generator, a class, a class
+  method and a function that is an argument give nothing. Two functions of one name in one script
+  are one node. A `.mjs`, `.cjs`, `.jsx` or `.ts` file is not read. A script's id is its path from
+  the project folder.
 - **Drupal JavaScript:** `drupal_js_basic` reads a behavior only as `Drupal.behaviors.name = ...`,
   and any object so assigned is one, with or without `attach`. An arrow function or a function
   expression so assigned is one too; a value of any other kind, such as a variable, gives none. A behavior call or a settings read
-  outside a behavior object makes no edge and goes under skipped. `detach`, `once()`, `Drupal.t()`,
-  `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge. Only the
+  outside a behavior object, or in a class inside one, makes no edge and goes under skipped.
+  `detach`, `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge.
+  `once()`, `$()` and `jQuery()` stay unresolved, one node each for all scripts, with no edge to
+  their core library. Only the
   first key after `drupalSettings` is read. The array form of a PHP library attachment or of
   `drupalSettings` is read as text, so it is inferred. Under `src` its class is named by PSR-4
   path; in a `.module` file the edge starts at the function around it. A library or a key named
   by a constant or a variable gives no edge, and a key nested below a first-level key gives none,
   whatever wraps the array: a ternary, a call, a cast, a list or old `array( )`. A path in a script
   string joined to another value with `+` on either side links nothing, at any distance and across
-  a line break. A script or stylesheet a
+  a line break. A template literal keeps `${...}` in its path, so it meets no route with a
+  placeholder. A request whose URL is built at run time is a node marked runtime, and
+  `$.ajax({url: x})` gives none. A script's path edges start at the script, not the function. A script or stylesheet a
   `.libraries.yml` file lists by a URL gives no edge. One listed by a path from the Drupal root,
   starting with `/`, gives none in a project whose top folder is the Drupal root itself.
 - **Python:** text rules see no scopes. Every call starts at the module, and a local name that

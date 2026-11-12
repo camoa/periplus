@@ -1,0 +1,109 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A function assigned to a member of an object that is reached by a dotted name, A.b.c = ..., and a
+# function written in an object literal assigned to one, A.b = { open() {}, close: function () {} }.
+# The node is named by the dotted name alone, A.b.c or A.b.open, not by the script: the name is
+# reached the same way from every script that runs on the page. Two scripts that assign one name
+# give one node holding both locations. A name that starts at this is the object a call runs on, so
+# it makes nothing.
+
+node_types:
+- name: js.member_function
+  parent: js.function
+  id_namespace: js.member_function
+# A.b = {...}: the object, so the functions written in it have an enclosing type. Internal: it
+# names those functions only.
+- name: js.namespace_object
+  id_namespace: js.namespace_object
+  internal: true
+
+rules:
+# A.b.c = function (...) {...}.
+- rule: member_function_from_expression
+  reads: file
+  in: [js_source]
+  match: &expression {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: function_expression}]}
+  id: &dotted_id
+    from: declared_name
+    # A dotted name whose first part is not this.
+    pattern: '^(?<js_member>(?:[A-Za-su-z_$][\w$]*|t|t[A-Za-gi-z\d_$][\w$]*|th|th[A-Za-hj-z\d_$][\w$]*|thi|thi[A-Za-rt-z\d_$][\w$]*|this[\w$]+)(?:\.[A-Za-z_$][\w$]*)+)$'
+    template: '{js_member}'
+  emits: [{node: {type: js.member_function}}]
+  confidence: declared
+- rule: member_function_from_expression_in_file
+  reads: file
+  in: [js_source]
+  match: *expression
+  id: *dotted_id
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
+# A.b.c = (...) => {...}.
+- rule: member_function_from_arrow
+  reads: file
+  in: [js_source]
+  match: &arrow {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: arrow_function}]}
+  id: *dotted_id
+  emits: [{node: {type: js.member_function}}]
+  confidence: declared
+- rule: member_function_from_arrow_in_file
+  reads: file
+  in: [js_source]
+  match: *arrow
+  id: *dotted_id
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
+- rule: namespace_object
+  reads: file
+  in: [js_source]
+  match: {declaration: assignment_expression, name_child: left, body_child: object, filetype: javascript, where: [{has_child: object}]}
+  id: *dotted_id
+  emits: [{node: {type: js.namespace_object}}]
+  confidence: declared
+# A class, declared or written as a value, ends the walk to the enclosing type, so the methods of
+# a class written inside a function of A.b = {...} are not taken as A.b's. The id never fits, so
+# neither rule makes a node.
+- rule: class_declaration_ends_object
+  reads: file
+  in: [js_source]
+  match: {declaration: class_declaration, name_child: name, body_child: body, filetype: javascript}
+  id: &no_id {from: declared_name, pattern: '^$'}
+  emits: [{node: {type: js.namespace_object}}]
+  confidence: declared
+- rule: class_expression_ends_object
+  reads: file
+  in: [js_source]
+  match: {declaration: class, name_child: name, body_child: body, filetype: javascript}
+  id: *no_id
+  emits: [{node: {type: js.namespace_object}}]
+  confidence: declared
+# { open(...) {...} } directly in that object. The enclosing type is the object's full name,
+# <script path>:A.b, so the script is cut from the id.
+- rule: member_function_from_method
+  reads: file
+  in: [js_source]
+  match: &method {declaration: method_definition, name_child: name, filetype: javascript, where: [{name_matches: '[A-Za-z_$][\w$]*'}]}
+  id: &member_id {from: [enclosing_type, declared_name], template: '{enclosing_type}.{declared_name}', normalize: [{replace: '^[^:]*:', with: ''}]}
+  emits: [{node: {type: js.member_function}}]
+  confidence: declared
+- rule: member_function_from_method_in_file
+  reads: file
+  in: [js_source]
+  match: *method
+  id: *member_id
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
+# { close: function (...) {...} } directly in that object.
+- rule: member_function_from_pair
+  reads: file
+  in: [js_source]
+  match: &pair {declaration: pair, name_child: key, filetype: javascript, where: [{has_child: function_expression}, {name_matches: '[A-Za-z_$][\w$]*'}]}
+  id: *member_id
+  emits: [{node: {type: js.member_function}}]
+  confidence: declared
+- rule: member_function_from_pair_in_file
+  reads: file
+  in: [js_source]
+  match: *pair
+  id: *member_id
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared

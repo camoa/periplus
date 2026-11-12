@@ -3,7 +3,7 @@
 # A module holds a libraries file, a script with two named functions and four behaviors, a
 # controller and a template. The functions are js.function nodes named by script path and name.
 # Each behavior is a node; the one whose attach calls the other's attach has an attaches_behavior
-# edge to it, and its read of drupalSettings.mymoduleColor is a reads_setting edge. Two behaviors
+# edge to it, and its attach member function a js_calls edge to the other's, and its read of drupalSettings.mymoduleColor is a reads_setting edge. Two behaviors
 # are assigned an arrow function and a function expression; the arrow one's read of
 # drupalSettings.k is a reads_setting edge from it. The controller
 # attaches a library by assignment and by array, each an attaches_library edge from its class,
@@ -89,6 +89,7 @@ method = "php.method::Drupal\\mymodule\\Controller\\WidgetController::"
 widget, other = "drupal.js_behavior::mymoduleWidget", "drupal.js_behavior::mymoduleOther"
 setting = "drupal.js_setting::mymoduleColor"
 arrow, func = "drupal.js_behavior::mymoduleArrow", "drupal.js_behavior::mymoduleFunc"
+member = "js.member_function::Drupal.behaviors."
 
 
 def load(name):
@@ -102,11 +103,11 @@ def line(path, text):
 
 document, report = load("one.json"), load("one-report.json")
 assert report["problems"] == [] and report["not_executed"] == [], report
-# js_basic's function_call skips a call whose callee is no written name: the wrapping IIFE, and
-# the member calls value.toUpperCase() and Drupal.behaviors.mymoduleOther.attach(context).
+# js_basic's function_call skips a call whose callee is no written name: the wrapping IIFE. The
+# member calls value.toUpperCase() and Drupal.behaviors.mymoduleOther.attach(context) are
+# member_call's, and leave no row.
 assert report["skipped"] == [
-    {"file": script, "line": n, "reason": "function is not a written name", "rule": "function_call"}
-    for n in (1, 6, 11)
+    {"file": script, "line": 1, "reason": "function is not a written name", "rule": "function_call"}
 ], report["skipped"]
 
 nodes = {n["id"]: (n["type"], n["state"]) for n in document["nodes"]}
@@ -114,6 +115,10 @@ assert nodes == {
     f"js.function::{script}:format": ("js.function", "mapped"),
     f"js.function::{script}:shout": ("js.function", "mapped"),
     f"js.file::{script}": ("js.file", "mapped"),
+    member + "mymoduleWidget.attach": ("js.member_function", "mapped"),
+    member + "mymoduleOther.attach": ("js.member_function", "mapped"),
+    member + "mymoduleArrow": ("js.member_function", "mapped"),
+    member + "mymoduleFunc": ("js.member_function", "mapped"),
     widget: ("drupal.js_behavior", "mapped"),
     other: ("drupal.js_behavior", "mapped"),
     arrow: ("drupal.js_behavior", "mapped"),
@@ -139,6 +144,17 @@ assert edges == sorted([
      [(script, 2)]),
     ("script_declares_function", f"js.file::{script}", f"js.function::{script}:shout",
      [(script, 6)]),
+    ("script_declares_function", f"js.file::{script}", member + "mymoduleWidget.attach",
+     [(script, line(script, "attach(context) {"))]),
+    ("script_declares_function", f"js.file::{script}", member + "mymoduleOther.attach",
+     [(script, line(script, "attach() {},"))]),
+    ("script_declares_function", f"js.file::{script}", member + "mymoduleArrow",
+     [(script, line(script, "Drupal.behaviors.mymoduleArrow = (context) => {"))]),
+    ("script_declares_function", f"js.file::{script}", member + "mymoduleFunc",
+     [(script, line(script, "Drupal.behaviors.mymoduleFunc = function (context) {};"))]),
+    # A map rule's edge sits at the function that holds the call.
+    ("js_calls", member + "mymoduleWidget.attach", member + "mymoduleOther.attach",
+     [(script, line(script, "attach(context) {"))]),
     ("script_declares_behavior", f"js.file::{script}", widget, [(script, line(script, "Drupal.behaviors.mymoduleWidget = {"))]),
     ("script_declares_behavior", f"js.file::{script}", other, [(script, line(script, "Drupal.behaviors.mymoduleOther = {"))]),
     ("script_declares_behavior", f"js.file::{script}", arrow, [(script, line(script, "Drupal.behaviors.mymoduleArrow = (context) => {"))]),

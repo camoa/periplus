@@ -271,7 +271,12 @@ The pack's `pack.yaml` lists what each one misses and where it is wrong.
   `path_in_script_string` gives `script_links_to_path` from a script's `js.file` node to a path
   it holds in a quoted string, as `"/x"`. Only a path written whole counts: it starts with one
   `/` and holds no space. A path joined to another value with `+` on either side, as `"/x/" + id`
-  or `base + "/x/y"`, links nothing, and `/x/{{ id }}` links nowhere.
+  or `base + "/x/y"`, links nothing, and `/x/{{ id }}` links nowhere. `drupal_url_in_script`
+  links `Drupal.url('x')` to `/x`, and `path_in_script_template` a template literal that starts
+  with one `/`, with each `${...}` kept as written.
+- `script_requests_url`, from a script to a `js.url_call` node marked `resolution: runtime`, for
+  `fetch`, `$.ajax`, `$.get`, `$.getJSON`, `$.post` or `Drupal.url` whose first argument is no
+  quoted text, template literal or object: the URL is built at run time.
 - `links_to_route`, from the method or function around `Url::fromRoute('x')`,
   `Link::createFromRoute('t', 'x')` or `$this->redirect('x')` to the route `x`: declared for the
   two static calls, inferred for `$this->redirect`. A route name that is not a text literal goes

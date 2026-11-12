@@ -13,7 +13,17 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - Two scripts that declare one behavior name give one node holding both locations. Drupal
 #   keeps only the one loaded last on a page.
 # - Drupal.behaviors.other.detach(...): no edge.
-# - once(), Drupal.t() and an Ajax call: no rule reads them.
+# - js_basic maps each function of a behavior as a member function too: attach in
+#   Drupal.behaviors.name = { attach() {} } is js.member_function::Drupal.behaviors.name.attach,
+#   and a function assigned to Drupal.behaviors.name is js.member_function::Drupal.behaviors.name.
+#   A rutter cannot drop a node the rutter it depends on makes, so both stay beside the behavior
+#   node. Drupal.behaviors.other.attach(context) is also js_basic's js_calls edge between the two
+#   attach functions.
+# - once(), $() and jQuery(): this pack adds the three names to js_basic's table library_globals,
+#   so a call that no function of its script declares is one unresolved node for every script,
+#   js.function::once, js.function::$ or js.function::jQuery. No edge joins it to the library
+#   core/once or core/jquery. A call to a core member, such as Drupal.t(), gives an edge only
+#   where a mapped script assigns that name.
 #
 # Settings. $build['#attached']['drupalSettings']['key'] = ... in PHP is a setting node named by
 # that first key, and drupalSettings.key inside a behavior object is an edge to it. A key that
@@ -21,6 +31,22 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - Only the first name after drupalSettings is the key. drupalSettings.a.b reads the key a.
 # - drupalSettings['key'], and a read through the second parameter of attach,
 #   attach(context, settings) { settings.key }: no edge.
+#
+# Paths in scripts. A path a script requests is a script_links_to_path edge from its js.file node
+# to the drupal.url_path node a route serves: a path written whole in a quoted string
+# (behavior/behavior.yaml), and, in url/script_url.yaml, Drupal.url('my/path') as /my/path and a
+# template literal that starts with one /.
+# - A template literal keeps each ${...} as written, `/my/item/${id}`, so it meets no route whose
+#   path holds a placeholder. One joined with +, one holding a space, and one after return or any
+#   character other than ( [ , = : ?, give nothing.
+# - Drupal.url('a/' + id) and a text holding a space: no edge.
+# - fetch(x), $.ajax(x), $.get(x), $.getJSON(x), $.post(x), the same through jQuery, and
+#   Drupal.url(x), whose first argument starts with no quote, backtick or brace, is a js.url_call
+#   node marked resolution runtime, named <script path>|<callee>, with a script_requests_url edge
+#   from the script. Two such calls in one script to one callee are one node with two locations.
+#   $.getJSON(Drupal.url('x')) gives both the path edge and the runtime node.
+# - $.ajax({url: x}) with a variable, window.fetch(x), and fetch(`/a/${id}` + x): no node.
+# - Each edge starts at the script, not at the function that holds the call.
 #
 # The two text file types this pack reads, drupal_template_text and drupal_php_text, are declared
 # by drupal_basic, so every Drupal pack reads them the same way. This pack declares them again to
@@ -67,7 +93,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #
 # An edge that starts at what is around a match needs a behavior object in JavaScript, and a
 # class or a function in PHP. A behavior call or a settings read outside a behavior object makes
-# no edge and is listed under skipped: no value for enclosing_class. In PHP an attachment in a
+# no edge and is listed under skipped: no value for enclosing_class. A class written inside a
+# behavior's function ends that walk, since js_basic ends the walk to an object at a class: a
+# settings read in one of its methods is listed the same way. In PHP an attachment in a
 # function, such as a hook in a .module file, starts at the function, and one in a method starts
 # at the class, not at the method. An attachment outside both makes no edge and is listed the
 # same way; its setting node is still made. In a procedural file, such as a .module or .inc file,
@@ -76,6 +104,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: drupal_js_basic
 version: 0.0.1
 depends: [js_basic, drupal_basic]
+# The globals Drupal core's libraries core/once and core/jquery define. A call to one that no
+# function of the script declares is one unresolved node of that name, not one per script.
+add_table_rows:
+  js_basic:
+    library_globals:
+      once: once
+      $: $
+      jQuery: jQuery
 files:
   types:
     # yaml_basic's type yml, read as data, given the path value libraries_dir: the folder the file

@@ -1,0 +1,70 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A path a script requests, beside path_in_script_string in behavior/behavior.yaml, read as the
+# type js_text. Each gives script_links_to_path to the drupal.url_path node route_serves_path meets
+# (drupal_basic url/url.yaml), so the call joins the route that serves the path.
+
+node_types:
+# A request whose URL the script builds at run time: one node for each script and callee, marked
+# resolution runtime. No path is read from it.
+- name: js.url_call
+  id_namespace: js.url_call
+
+edge_kinds:
+- kind: script_requests_url
+  from: js.file
+  to: js.url_call
+
+rules:
+# Drupal.url('my/path'): Drupal adds the base path, so the path is /my/path. A text that holds a
+# space, or a call with anything after the text, such as Drupal.url('a/' + id), makes nothing. A
+# text that starts with / is path_in_script_string's.
+- rule: drupal_url_in_script
+  reads: file
+  in: [js_source]
+  match:
+    file: '*'
+    filetype: js_text
+    text: '\bDrupal\.url\(\s*[''"](?<js_relative_path>[^/\s''"`{}$][^\s''"`{}$]*)[''"]\s*\)'
+  id: {template: '{script}'}
+  emits: [{edge: {kind: script_links_to_path, from: this_node, to: {template: '/{js_relative_path}'}}}]
+  confidence: declared
+# `/my/path` and `/my/item/${id}`: a template literal that starts with one / and holds no space,
+# after a (, [, comma, =, :, or ?, and followed by no +. The path keeps each ${...} as written, so a
+# route whose path holds a placeholder, /my/item/{id}, meets no such path.
+- rule: path_in_script_template
+  reads: file
+  in: [js_source]
+  match:
+    file: '*'
+    filetype: js_text
+    text: '[(\[,=:?]\s*`(?<js_template_path>/[^/\s`{}$][^\s`]*)`\s*[^+\s]'
+  id: {template: '{script}'}
+  line: {capture: js_template_path}
+  emits: [{edge: {kind: script_links_to_path, from: this_node, to: {template: '{js_template_path}'}}}]
+  confidence: declared
+# fetch(url), $.get(base + id), jQuery.ajax(settings), Drupal.url(path): a request whose first
+# argument does not start with a quote, a backtick or a brace. The URL is built at run time. A call
+# through any other name, such as window.fetch(url), makes nothing.
+- rule: runtime_url_call
+  reads: file
+  in: [js_source]
+  match: &runtime
+    declaration: call_expression
+    name_child: function
+    filetype: javascript
+    where:
+    - name_matches: 'fetch|(?:\$|jQuery)\.(?:ajax|get|getJSON|post)|Drupal\.url'
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[^\s''"`{)].*'}
+  id: &runtime_id {from: [script, declared_name], template: '{script}|{declared_name}'}
+  emits:
+  - node: {type: js.url_call}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+- rule: runtime_url_call_in_file
+  reads: file
+  in: [js_source]
+  match: *runtime
+  id: *runtime_id
+  emits: [{edge: {kind: script_requests_url, from: enclosing_file, to: this_node}}]
+  confidence: declared

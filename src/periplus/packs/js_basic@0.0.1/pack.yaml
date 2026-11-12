@@ -2,20 +2,46 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
 # Known gaps. The basic JavaScript pack maps each function that has a name of its own, as a
 # node named <script path>:<name>: function name() {}, async function name() {}, and a const,
-# let or var whose value is an arrow function or a function expression. Each line below was
-# seen on real code or on a planted file.
+# let or var whose value is an arrow function or a function expression. A function assigned to a
+# dotted name, A.b.c = function () {} or A.b.c = () => {}, and a function written directly in an
+# object literal assigned to one, A.b = { open() {}, close: function () {} }, is a
+# js.member_function node named by the dotted name alone, A.b.c or A.b.open (member/). Each line
+# below was seen on real code or on a planted file.
 # Each script is a js.file node named by its path, and each function above has a
 # script_declares_function edge from its script.
+# Calls: f() is a js_calls edge to <script path>:f; a.b.c() is a js_calls edge to the member
+# function a.b.c when one is mapped, else nothing. Each starts at the nearest named or member
+# function that holds the call, else at the script.
+# False results:
+# - A member function's id leaves out the script, so a local object assigned in one script and an
+#   object of the same name in another meet: obj.run = function () {} in one script and obj.run()
+#   in another give a js_calls edge, though the two objects differ.
 # What it does not map, today:
-# - A member call, a.b(): no edge. Each one is a row of the map report's matches skipped.
+# - A call to a JavaScript or browser global function_call's skip_names lists, such as parseInt(),
+#   setTimeout() or fetch(): no edge and no node, unless the script declares a function of that
+#   name, which the call reaches.
+# - A member call to a name no member function has, such as console.log(), $.ajax() or this.x():
+#   no edge, no node and no skipped row. A call on a call or an index, $('.x').hide(), f()() or
+#   a[i](), and a call through ?. or a private name: no edge, and a row of the map report's
+#   matches skipped.
+# - A js_calls edge to a member function, or to a function of the script named like a global,
+#   sits at the line of the function or the script it starts at, not at the call: a map rule
+#   places it.
 # - A call to a function another script declares: it stays an unresolved end named in the
-#   calling script, <script path>:<name>.
-# - A generator, function* name() {}, a class and a class method: no node.
-# - A function that is a member of an object, { name() {} }, { name: function () {} } or
-#   { name: () => {} }, and a function passed as an argument: no node. A call inside one of
-#   these starts at the nearest named function that holds it, or at the script if none does.
+#   calling script, <script path>:<name>. A name the table library_globals holds, which a rutter
+#   for a library adds, is unresolved under the table's value instead, one node for all scripts.
+# - A generator, function* name() {}, a class and a class method: no node. A class ends the walk
+#   to the object around it, so a class written inside a member function of A.b = {...} gives its
+#   methods no node.
+# - A dotted name that starts at this, this.x = function () {}: no node. A[k] = function () {},
+#   an object literal assigned to a variable, var A = { open() {} }, and one nested inside another,
+#   A.b = { c: { open() {} } }: no node. In the object literal, a key written as a quoted text or
+#   computed, and an arrow function as a value, { name: () => {} }: no node. A call inside one of
+#   these starts at the nearest named function that holds it, or at the script if none does. A
+#   function passed as an argument: no node.
 # - A function declared inside another gets the same kind of id, so two functions of one name in
-#   one script are one node holding both locations.
+#   one script are one node holding both locations. Two scripts that assign one dotted name give
+#   one member function holding both locations.
 # - An import or an export: no rule. A script in a .mjs, .cjs, .jsx or .ts file is not read.
 # - The script path is the path from the project folder, so the same script mapped from another
 #   folder gets another id.
@@ -53,3 +79,7 @@ identity:
   written_names: [identifier]
   # f() names <script path>:f.
   resolve: [prefix_bare_with: namespace]
+# A global name a library defines, as written, to the name an unresolved call to it takes, so the
+# calls of every script meet one node. A rutter for the library adds its rows under add_table_rows.
+tables:
+  library_globals: {}
