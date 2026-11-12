@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The Salesforce ECA contributed module, salesforce_eca: the event plugin id of each Salesforce
+# event it gives ECA, added to eca_basic's table eca_event_names with the SalesforceEvents
+# constant that holds its event name, so an ECA model that reacts to one gives
+# eca_reacts_to_event to the event a custom subscriber's subscribed_by edge starts at. It holds no
+# rule of its own.
+#
+# Known gaps: the table holds salesforce_eca 1.0's event plugins; a later one gives no event edge
+# and lists eca_basic's skipped row.
+pack: salesforce_eca_basic
+version: 0.0.1
+depends: [eca_basic, salesforce_basic]
+
+add_table_rows:
+  eca_basic:
+    eca_event_names:
+      'salesforce:error': Drupal\salesforce\Event\SalesforceEvents::ERROR
+      'salesforce:pull_entity_value': Drupal\salesforce\Event\SalesforceEvents::PULL_ENTITY_VALUE
+      'salesforce:pull_enqueue': Drupal\salesforce\Event\SalesforceEvents::PULL_ENQUEUE
+      'salesforce:pull_prepull': Drupal\salesforce\Event\SalesforceEvents::PULL_PREPULL
+      'salesforce:pull_presave': Drupal\salesforce\Event\SalesforceEvents::PULL_PRESAVE
+      'salesforce:pull_query': Drupal\salesforce\Event\SalesforceEvents::PULL_QUERY
+      'salesforce:push_allowed': Drupal\salesforce\Event\SalesforceEvents::PUSH_ALLOWED
+      'salesforce:push_fail': Drupal\salesforce\Event\SalesforceEvents::PUSH_FAIL
+      'salesforce:push_mapping_object': Drupal\salesforce\Event\SalesforceEvents::PUSH_MAPPING_OBJECT
+      'salesforce:push_params': Drupal\salesforce\Event\SalesforceEvents::PUSH_PARAMS
+      'salesforce:push_success': Drupal\salesforce\Event\SalesforceEvents::PUSH_SUCCESS

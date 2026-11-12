@@ -13,25 +13,28 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # [node:field_y:value], gives an inferred maps_token_field edge to each field storage of that name
 # through drupal_basic's field-name hub, else to the unresolved field.storage.<name>
 # (salesforce_mapping/salesforce_mapping_token_field.yaml). A token
-# [webform_submission:values:<key>] in a mapping of webform_submission.<webform> gives an inferred
-# maps_webform_element edge to that element of the webform, as webform_basic maps it
-# (salesforce_mapping/salesforce_mapping_token_webform.yaml); this is why the pack depends on
-# webform_basic, which a project without webforms loads and which then makes nothing.
+# [webform_submission:values:<key>], or a WebformElements row naming <key>, in a mapping of
+# webform_submission.<webform> gives an inferred maps_webform_element edge to that element of the
+# webform, as webform_basic maps it (salesforce_mapping/salesforce_mapping_token_webform.yaml);
+# this is why the pack depends on webform_basic, which a project without webforms loads and which
+# then makes nothing.
 #
 # Known gaps:
 # - The mapping field manager reads the generic Plugin annotation, so any class in the folder
 #   below that carries a Plugin annotation is read as a mapping field. An id that is not text in
 #   double quotes makes no plugin and is listed under skipped. The other Salesforce plugin types,
 #   such as auth providers and pull queue workers, give nothing.
-# - Of a mapping's field_mappings, only a token value is read. A field mapped by a property path,
-#   such as field_my_date.value, which the dependencies do not list, gives no maps_field edge, and
-#   nor does a row's Salesforce field, direction or mapping field plugin. A WebformElements row,
-#   which names its element without a token, gives nothing. A mapping whose dependencies list no
-#   field instance, as a webform submission mapping, is listed under skipped: fired and emitted
-#   nothing; so is a mapping with field mappings and no webform submission token.
+# - Of a mapping's field_mappings, only a token value and a WebformElements row are read. A field
+#   mapped by a property path, such as field_my_date.value, which the dependencies do not list,
+#   gives no maps_field edge, and nor does a row's Salesforce field, direction or mapping field
+#   plugin. A WebformElements row is read as text, with drupal_field_value on the line after
+#   drupal_field_type, as Drupal exports it. A mapping whose dependencies list no field instance,
+#   as a webform submission mapping, is listed under skipped: fired and emitted nothing; so is a
+#   mapping with field mappings and no webform submission token, even when its WebformElements
+#   rows join their elements.
 # - A token's field is chosen by its name alone, on any entity type, so [user:field_x] also links
-#   to a node's field_x; a token chain gives only its first field_ segment. A token naming an
-#   element the webform does not hold gives nothing and leaves no mark.
+#   to a node's field_x; a token chain gives only its first field_ segment. A token or a row naming
+#   an element the webform does not hold gives nothing and leaves no mark.
 # - A mapping's sync triggers, pull settings and key give nothing. The auth provider config,
 #   salesforce.salesforce_auth.*, and salesforce_logger.settings stay plain config objects.
 # - An event is named by its constant as written, less any namespace. One used through an alias,

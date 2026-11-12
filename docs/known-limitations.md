@@ -155,18 +155,21 @@ a list of its known gaps.
   rutter is loaded, for the classes it adds to `drupal_basic`'s table `entity_classes`.
   `eck_basic` lists `EckEntityType` only: ECK derives one entity type for each ECK type from
   `EckEntity` and `EckEntityBundle`. `salesforce_basic` reads any class with a generic `Plugin` annotation in the
-  mapping field folder as a mapping field. Of a mapping's `field_mappings` it reads only a token,
-  so a field mapped by a property path, a `WebformElements` row, a Salesforce field and a
-  direction give no edge. A token's field is picked by its name alone, on any entity type. Sync triggers, pull
+  mapping field folder as a mapping field. Of a mapping's `field_mappings` it reads only a token
+  and a `WebformElements` row, the latter as text with its value on the line after its type, so a
+  field mapped by a property path, a Salesforce field and a direction give no edge. A token's field is picked by its name alone, on any entity type. Sync triggers, pull
   settings and other Salesforce plugin types give nothing. An event used through an alias, or
   written as its own text, makes no `salesforce.event`; `drupal_basic` joins each key of
   `getSubscribedEvents` to its listener through a referenced `drupal.event`.
 - **ECA:** `eca_basic` reads a model's config file, not its modeller data. A successor's
   condition and a gateway's type give no edge, and the plugin edges start at the model, not at
   its entries. Its table of event plugins holds those of ECA's content entity, config and user
-  submodules and of salesforce_eca; any other event plugin id gives no event edge and a skipped
-  row. A configuration value is read only under `field_name`, `field_name_entity_ref`, `rid`,
-  `role`, `type` and `entity_type`, and a role list gives nothing.
+  submodules, and `salesforce_eca_basic` adds salesforce_eca's; any other event plugin id gives no
+  event edge and a skipped row. A configuration value is read only under `field_name`,
+  `field_name_entity_ref`, `rid`, `role`, `type` and `entity_type`, and a role list gives nothing.
+  A field name reaches the storage on an entity type the model names, whichever event or action
+  names it; when none of those holds the name, a name that storages on two or more entity types
+  share reaches the `drupal.shared_field_name`, not a storage.
 - **Drush:** the `@command` tag is read as text, because the engine reads a docblock annotation
   only in the form `@Name(...)` and allows one text file type per ending. Its class is named from
   the file's path, so its edges are inferred, and a class named otherwise gives unresolved ends.

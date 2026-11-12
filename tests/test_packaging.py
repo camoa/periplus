@@ -80,6 +80,7 @@ BUNDLED_PACKS = {
     "profile_basic@0.0.1": 2,
     "react@0.1.0": 18,
     "salesforce_basic@0.0.1": 8,
+    "salesforce_eca_basic@0.0.1": 1,
     "twig@0.0.1": 2,
     "twig_basic@0.1.0": 1,
     "twig_tweak_basic@0.0.1": 5,

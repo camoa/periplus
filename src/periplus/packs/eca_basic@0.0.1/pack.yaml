@@ -10,7 +10,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - each event, gateway and action as an eca.model_entry, eca.eca.<id>:<entry id>, with an edge to
 #   its model and one to each entry its successors name (model/eca_model_entry.yaml);
 # - the field storages its conditions and actions name, through drupal_basic's field-name hub
-#   (model/eca_model_field.yaml); the roles its actions name by rid and its conditions by role,
+#   (model/eca_model_field.yaml): the storage on an entity type the model names, else the one
+#   storage of that name, else the drupal.shared_field_name of a name storages on two or more
+#   entity types share; the roles its actions name by rid and its conditions by role,
 #   through drupal_basic's role-name hub (model/eca_model_role.yaml); and the bundle or entity
 #   type an event or an action names (model/eca_model_entity_type.yaml);
 # - the event each event plugin reacts to, from the table eca_event_names below, as an edge to
@@ -26,9 +28,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A successor's condition gives no edge, nor does a gateway's type. An entry does not link to
 #   its plugin; the plugin edges start at the model.
 # - The table eca_event_names holds the event plugins of ECA 2.1's eca_content, eca_config and
-#   eca_user and of salesforce_eca 1.0. Any other event plugin id gives no event edge and lists a
-#   skipped row: no resolution step holds. A rutter that knows one adds a row under
-#   add_table_rows. The table is read on each line plugin: <id> of the model whose id holds a
+#   eca_user; salesforce_eca_basic adds salesforce_eca 1.0's. Any other event plugin id gives no
+#   event edge and lists a skipped row: no resolution step holds. A rutter that knows one adds a
+#   row under add_table_rows. The table is read on each line plugin: <id> of the model whose id holds a
 #   colon, so a condition or action plugin id with a colon lists the same skipped row.
 # - A value is read only under the keys named in each rule file. A field name reads up to its first
 #   character that is not a lowercase letter, digit or underscore, so field_x.value names field_x
@@ -67,7 +69,7 @@ folders:
 tables:
   # Each event plugin id, <plugin>:<derivative>, and the class constant that holds the event name
   # its definition gives as event_name, as drupal_basic names an event: ECA 2.1's eca_content,
-  # eca_config and eca_user, and salesforce_eca 1.0.
+  # eca_config and eca_user. salesforce_eca_basic adds salesforce_eca's.
   eca_event_names:
     'content_entity:bundlecreate': Drupal\eca_content\Event\ContentEntityEvents::BUNDLECREATE
     'content_entity:bundledelete': Drupal\eca_content\Event\ContentEntityEvents::BUNDLEDELETE
@@ -107,14 +109,3 @@ tables:
     'user:login': Drupal\eca_user\Event\UserEvents::LOGIN
     'user:logout': Drupal\eca_user\Event\UserEvents::LOGOUT
     'user:set_user': Drupal\Core\Session\AccountEvents::SET_USER
-    'salesforce:error': Drupal\salesforce\Event\SalesforceEvents::ERROR
-    'salesforce:pull_entity_value': Drupal\salesforce\Event\SalesforceEvents::PULL_ENTITY_VALUE
-    'salesforce:pull_enqueue': Drupal\salesforce\Event\SalesforceEvents::PULL_ENQUEUE
-    'salesforce:pull_prepull': Drupal\salesforce\Event\SalesforceEvents::PULL_PREPULL
-    'salesforce:pull_presave': Drupal\salesforce\Event\SalesforceEvents::PULL_PRESAVE
-    'salesforce:pull_query': Drupal\salesforce\Event\SalesforceEvents::PULL_QUERY
-    'salesforce:push_allowed': Drupal\salesforce\Event\SalesforceEvents::PUSH_ALLOWED
-    'salesforce:push_fail': Drupal\salesforce\Event\SalesforceEvents::PUSH_FAIL
-    'salesforce:push_mapping_object': Drupal\salesforce\Event\SalesforceEvents::PUSH_MAPPING_OBJECT
-    'salesforce:push_params': Drupal\salesforce\Event\SalesforceEvents::PUSH_PARAMS
-    'salesforce:push_success': Drupal\salesforce\Event\SalesforceEvents::PUSH_SUCCESS

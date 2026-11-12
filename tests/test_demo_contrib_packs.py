@@ -635,8 +635,9 @@ actions:
 
 def test_eca_model_plugins_events_entries_fields_roles_and_bundles(tmp_path: Path) -> None:
     """A model links to the plugins it names, a custom one where mapped and a derived event to its
-    mapped base; a table event plugin to the event a subscriber subscribes to; its entries to the
-    entries their successors name; and the fields, roles and bundles its configuration names."""
+    mapped base; a table event plugin to its event; its entries to the entries their successors
+    name; and the fields, roles and bundles its configuration names. Without
+    salesforce_eca_basic, a Salesforce event plugin gives no event edge and a skipped row."""
     plugins = f"{MODULE_DIR}/src/Plugin"
     report, document = _map(
         tmp_path,
@@ -719,7 +720,6 @@ def test_eca_model_plugins_events_entries_fields_roles_and_bundles(tmp_path: Pat
         ("eca_reacts_to", model, eca_event + "salesforce:pull_presave"),
         ("eca_reacts_to_event", model, content + "INSERT"),
         ("eca_reacts_to_event", model, content + "PRESAVE"),
-        ("eca_reacts_to_event", model, pull),
         ("eca_checks", model, eca_condition + "eca_current_user_role"),
         ("eca_checks", model, eca_condition + "eca_entity_field_value"),
         ("eca_checks", model, eca_condition + "mymodule_condition"),
@@ -746,8 +746,37 @@ def test_eca_model_plugins_events_entries_fields_roles_and_bundles(tmp_path: Pat
     listener = "php.method::Drupal\\mymodule\\EventSubscriber\\PullSubscriber::pullPresave"
     assert ("subscribed_by", pull, listener) in edges(document)
     no_row = "edge eca_reacts_to_event: no resolution step holds for capture plugin"
-    assert [(rule, why) for _, _, rule, why in report.skipped] == [
-        ("eca_model_event_from_table", no_row)
+    assert [(line, rule, why) for _, line, rule, why in report.skipped] == [
+        (5, "eca_model_event_from_table", no_row),
+        (23, "eca_model_event_from_table", no_row),
+    ]
+
+
+def test_salesforce_eca_rows_join_a_salesforce_event_plugin_to_its_event(tmp_path: Path) -> None:
+    """salesforce_eca_basic adds salesforce_eca's event plugins to eca_basic's table, so a model
+    that reacts to one links to the event a custom subscriber subscribes to."""
+    report, document = _map(
+        tmp_path,
+        "salesforce_eca_basic",
+        {
+            "config/sync/eca.eca.my_model.yml": ECA_MODEL,
+            f"{MODULE_DIR}/src/EventSubscriber/PullSubscriber.php": (
+                "<?php\n\nnamespace Drupal\\mymodule\\EventSubscriber;\n\n"
+                "use Drupal\\salesforce\\Event\\SalesforceEvents;\n\n"
+                "class PullSubscriber {\n\n"
+                "  public static function getSubscribedEvents(): array {\n"
+                "    return [SalesforceEvents::PULL_PRESAVE => 'pullPresave'];\n  }\n\n}\n"
+            ),
+        },
+    )
+    model = "drupal.config::eca.eca.my_model"
+    pull = "drupal.event::Drupal\\salesforce\\Event\\SalesforceEvents::PULL_PRESAVE"
+    listener = "php.method::Drupal\\mymodule\\EventSubscriber\\PullSubscriber::pullPresave"
+    assert ("eca_reacts_to_event", model, pull) in edges(document)
+    assert ("subscribed_by", pull, listener) in edges(document)
+    no_row = "edge eca_reacts_to_event: no resolution step holds for capture plugin"
+    assert [(line, rule, why) for _, line, rule, why in report.skipped] == [
+        (23, "eca_model_event_from_table", no_row)
     ]
 
 

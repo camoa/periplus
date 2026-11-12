@@ -1,13 +1,14 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# A mapping of a webform's submissions names a webform element in a token:
-# [webform_submission:values:<element key>]. The file rule links the mapping to an internal
-# element-name node; the map rule, for a mapping whose bundle is webform_submission.<webform>,
-# gives maps_webform_element to the element webform_basic maps under that webform
+# A mapping of a webform's submissions names a webform element in a token,
+# [webform_submission:values:<element key>], or in a row whose drupal_field_type is
+# WebformElements, by the key alone. The file rules link the mapping to an internal element-name
+# node; the map rule, for a mapping whose bundle is webform_submission.<webform>, gives
+# maps_webform_element to the element webform_basic maps under that webform
 # (webform_element/webform_element.yaml), only when that element is mapped.
 #
-# Limits: a token naming an element the webform does not hold gives nothing and leaves no mark.
-# A WebformElements mapping row, which names its element without a token, gives nothing.
+# Limits: a token or a row naming an element the webform does not hold gives nothing and leaves
+# no mark.
 
 node_types:
 - name: salesforce.token_element
@@ -30,6 +31,21 @@ rules:
   id: {from: file_stem}
   emits:
   - edge: {kind: token_names_element, from: this_node, to: {from: {key: 'field_mappings.*.drupal_field_value'}, pattern: '^\[webform_submission:values:(?<element>[a-z0-9_]+)[:\]]', template: '{element}', type: salesforce.token_element}}
+  confidence: inferred
+
+# Read as text, since field_mappings is a list and a data rule's each reads only a mapping's
+# entries: drupal_field_type: WebformElements with drupal_field_value on the next line, as
+# Drupal exports a row.
+- rule: salesforce_row_names_element
+  reads: file
+  in: [config, module_config]
+  match:
+    file: 'salesforce_mapping.salesforce_mapping.*'
+    filetype: drupal_yml_text
+    text: '(?m)^[ \t]+drupal_field_type:[ \t]*''?WebformElements''?[ \t]*\n[ \t]+drupal_field_value:[ \t]*''?(?<element>[a-z0-9_]+)''?[ \t]*$'
+  id: {template: '{file_stem}'}
+  emits:
+  - edge: {kind: token_names_element, from: this_node, to: {from: {capture: element}, type: salesforce.token_element}}
   confidence: inferred
 
 - rule: salesforce_token_webform_element
