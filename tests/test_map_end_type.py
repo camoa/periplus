@@ -55,8 +55,14 @@ rules:
     node_type: own.config
     where: [{id_matches: '^own\\.config::(?<name>.+)$'}]
   emits:
-  - edge: {kind: calls, from: this_node, to: {template: '{name}.found', type: own.member, on_miss: unresolved}}
-  - edge: {kind: calls, from: this_node, to: {template: '{name}.missing', type: own.member, on_miss: unresolved}}
+  - edge:
+      kind: calls
+      from: this_node
+      to: {template: '{name}.found', type: own.member, on_miss: unresolved}
+  - edge:
+      kind: calls
+      from: this_node
+      to: {template: '{name}.missing', type: own.member, on_miss: unresolved}
   confidence: inferred
 - rule: listed
   reads: map
@@ -64,8 +70,14 @@ rules:
     node_type: own.config
     where: [{id_matches: '^own\\.config::(?<name>.+)$'}]
   emits:
-  - edge: {kind: calls, from: this_node, to: {template: '{name}.found', types: [own.member], on_miss: unresolved}}
-  - edge: {kind: calls, from: this_node, to: {template: '{name}.missing', types: [own.member], on_miss: unresolved}}
+  - edge:
+      kind: calls
+      from: this_node
+      to: {template: '{name}.found', types: [own.member], on_miss: unresolved}
+  - edge:
+      kind: calls
+      from: this_node
+      to: {template: '{name}.missing', types: [own.member], on_miss: unresolved}
   confidence: inferred
 """
 

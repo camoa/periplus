@@ -1776,7 +1776,7 @@ def _references(
     within = _within(rule.pack, packs)
     holders = _holder_rules(rule_set, rule.filetype, within)
     declared: dict[str, list[tuple[Rule, Mapping[str, tuple[Rule, ...]]]]] = {}
-    enclosing: dict[str, list[tuple[Rule, Mapping[str, tuple[Rule, ...]]]]] = {}
+    enclosing_rules: dict[str, list[tuple[Rule, Mapping[str, tuple[Rule, ...]]]]] = {}
     for other in rule_set.rules:
         own = other.pack in within
         if (
@@ -1795,8 +1795,8 @@ def _references(
                 declared.setdefault(other.declaration, []).append((other, holders))
             else:
                 theirs = _holder_rules(rule_set, rule.filetype, _within(other.pack, packs))
-                enclosing.setdefault(other.declaration, []).append((other, theirs))
-    for declaration, taking in enclosing.items():
+                enclosing_rules.setdefault(other.declaration, []).append((other, theirs))
+    for declaration, taking in enclosing_rules.items():
         declared[declaration] = [*taking, *declared.get(declaration, ())]
     tables = rule_set.tables.get(rule.pack, {})
     # The name child must be a written name only when an edge's to end reads it.

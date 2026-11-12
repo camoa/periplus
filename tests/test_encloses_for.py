@@ -49,7 +49,8 @@ rules:
   reads: file
   in: [code]
   match: {reference: function_call_expression, name_child: function, filetype: php}
-  emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [base.fn], on_miss: unresolved}}}]
+  emits:
+  - edge: {kind: calls, from: enclosing_declaration, to: {types: [base.fn], on_miss: unresolved}}
   confidence: declared
 """
 
@@ -64,14 +65,17 @@ rules:
 - rule: unit_class
   reads: file
   in: [code]
-  match: {{declaration: class_declaration, name_child: name, body_child: body, filetype: php{encloses}}}
+  match:
+    {{declaration: class_declaration, name_child: name, body_child: body, filetype: php{encloses}}}
   id: {{from: declared_name}}
   emits: [{{node: {{type: ext.unit}}}}]
   confidence: declared
 - rule: unit_fn
   reads: file
   in: [code]
-  match: {{declaration: function_definition, name_child: name, filetype: php, where: [{{name_matches: 'unit_.*'}}]{encloses}}}
+  match:
+    {{declaration: function_definition, name_child: name, filetype: php,
+      where: [{{name_matches: 'unit_.*'}}]{encloses}}}
   id: {{from: declared_name}}
   emits: [{{node: {{type: ext.unit}}}}]
   confidence: declared
