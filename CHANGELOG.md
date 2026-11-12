@@ -5,6 +5,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-11
+
+### Added
+
+- A rutter's manifest may hold `add_table_rows: {<pack>: {<table>: {<key>: <value>}}}`, rows for a table that a rutter it depends on owns. The owner's rules find the rows in any run that loads the adding rutter. A run is refused before any file is read when the rows name a rutter it does not depend on, a table that rutter does not declare, or a key another rutter gives a different value.
+- An item of a reference rule's `skip_names` may be `{table: <name>}`, so the rule skips that table's keys, the rows other rutters add included.
+- Two `where` conditions, `in_table` and `not_in_table`, pass over a match whose name is not, or is, a key of a table. The form `{table, capture}` tests a named capture of the where's pattern instead, and `{table, fill: enclosing_type}` tests the name of the type that holds the match, so two small rules can split one shape.
+- An edge end with `fallback` and `on_miss` may take `on_miss_name: fallback`, which puts the unresolved mark under the fallback name. The order of the names tried does not change.
+- A declaration rule's `name_child` is a path of one step or more; `[name]` reaches a name that has no field, and a rule on each element of a statement that declares several names fires once per element.
+- A call whose arguments sit in a child with no field name has its arguments read from the first child of the grammar's argument node type.
+- A tree declaration rule may name, under `match.encloses_for`, rutters it depends on; their reference rules then start their edges at its node, so a dependent rutter's node can start another rutter's calls without copying its rules.
+- `php_basic` maps `self::`, `static::` and `parent::` calls through the class and its ancestors. A function call tries the namespaced name, then the global name, as PHP does, and an unmapped one stays unresolved under its global name. A `@var` class name written `Lib\Mailer` is read as written.
+- `drupal_basic` maps much more of a Drupal site:
+  - route and path links from the method or function around the call, in classes, traits and enums;
+  - static `load`, `loadMultiple` and `create` on an entity class, through a table keyed by the full class name that other rutters extend;
+  - the plugins a view uses, `\Drupal::cache()` bins, access checks joined to the services that apply to a route's requirements, and simple configuration owned by a theme;
+  - service arguments that list services, service factories, route subscribers and HTTP exception subscribers by their base class, constraint validators, entity handlers, plugin types and their managers;
+  - events keyed by the text their constant holds, with subscribers and dispatches; Twig extension filters and functions and the templates that use them;
+  - field reads and writes in code and templates, with a field name that storages on several entity types share kept as its own node; template suggestions;
+  - role checks and changes, configuration reads and edits, queue use, form alters, local tasks, local actions and contextual links, the entity and confirm form bases, Twig macro imports, and names given by a class constant.
+- `js_basic` skips calls to the built-in globals it lists, and keeps one unresolved node per library function or shared-object call. It maps functions assigned to a dotted name or written in an object literal as member functions, and calls to them. `drupal_js_basic` maps script URLs, classes inside a behavior, and calls inside a behavior starting at the behavior, `Drupal.behaviors.x.attach()` included.
+- `webform_basic` maps the handlers a webform uses and each of its elements. `salesforce_basic` maps the field and webform element a mapping's tokens and WebformElements rows name. `profile_basic`, `eck_basic`, `paragraphs_basic`, `salesforce_basic` and `webform_basic` add their entity classes to `drupal_basic`'s table.
+- Two bundled rutters: `eca_basic@0.0.1` maps ECA models, their event, condition and action plugins, their entries and successors, and the fields, roles, bundles and events they name; `salesforce_eca_basic@0.0.1` adds the Salesforce ECA event names to it.
+- The gaps skill reads gaps from the map's marks and the code at each mark, groups them by the rule that would close them, and prints a Plain classes section and three more kinds of site fault: an undefined theme library, menu link parent or theme hook. The rutter skill lists the keys added in this release and shows how to close a gap through an internal node and a map rule. The map skill reads `periplus types` before it picks a command.
+
+### Changed
+
+- A reference rule checks `skip_names` before it checks that the name is written as a name, so a listed keyword, such as `self`, leaves no skipped row.
+- The contributed Drupal rutters no longer carry a copy of the entity call rule; they add rows to `drupal_basic`'s table. `salesforce_basic` depends on `webform_basic`. `drupal_next`'s YAML text type is now `drupal_basic`'s `drupal_yml_text`, so `drupal_next` and `webform_basic` map in one project.
+- Node and edge ids move, so a committed map differs after the upgrade. Entity edges come from one rule at the call's line; events are keyed by their name text; route and path links start at methods; calls in a Drupal behavior start at the behavior; fewer calls leave skipped rows. Map again and review the difference.
+
+### Fixed
+
+- A map, data or text rule's end with one type mints its id in that type's namespace, not the edge kind's.
+- An empty `name_child` step is refused; it loaded and fired nothing, or was dropped.
+- `periplus validate` inside a project reports rows that two pinned rutters add with different values to one table, with the message and exit code `periplus map` gives.
+
 ## [0.6.0] - 2026-11-11
 
 ### Added

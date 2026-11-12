@@ -15,11 +15,11 @@ description: Reads a Periplus map and the code behind it, lists what the map lac
 
 ## Where the detail lives
 
-- [Navigation](https://github.com/camoa/periplus/blob/v0.6.0/docs/navigation.md) holds the signature, output rows and exit codes of each command used here.
-- [Where a rule belongs](https://github.com/camoa/periplus/blob/v0.6.0/docs/map-report-guide.md#where-a-rule-belongs) and
-  [When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.6.0/docs/map-report-guide.md#when-a-gap-is-the-engines) hold the full choice of destination.
-- [The rutter author guide](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutter-author-guide.md) and the rutter skill hold how a rule is written and a rutter started.
-- [Bundled rutters](https://github.com/camoa/periplus/blob/v0.6.0/docs/rutters.md) lists every rutter that ships with Periplus.
+- [Navigation](https://github.com/camoa/periplus/blob/v0.7.0/docs/navigation.md) holds the signature, output rows and exit codes of each command used here.
+- [Where a rule belongs](https://github.com/camoa/periplus/blob/v0.7.0/docs/map-report-guide.md#where-a-rule-belongs) and
+  [When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.7.0/docs/map-report-guide.md#when-a-gap-is-the-engines) hold the full choice of destination.
+- [The rutter author guide](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide.md) and the rutter skill hold how a rule is written and a rutter started.
+- [Bundled rutters](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutters.md) lists every rutter that ships with Periplus.
 
 ## Find the gaps
 
@@ -182,7 +182,7 @@ language rutter's rule to change one list.
 A gap is the engine's when the engine refuses the rule you wrote and no other rule can state the
 shape. Claim it only after two formulations were written, run and refused, quoting the engine's
 message for each. The test is in
-[When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.6.0/docs/map-report-guide.md#when-a-gap-is-the-engines).
+[When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.7.0/docs/map-report-guide.md#when-a-gap-is-the-engines).
 
 ## Run it again
 
