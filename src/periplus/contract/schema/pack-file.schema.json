@@ -490,9 +490,19 @@
         },
         "skip_names": {
           "type": "array",
-          "items": {"type": "string"},
+          "items": {
+            "oneOf": [
+              {"type": "string"},
+              {
+                "type": "object",
+                "required": ["table"],
+                "additionalProperties": false,
+                "properties": {"table": {"type": "string", "minLength": 1}}
+              }
+            ]
+          },
           "minItems": 1,
-          "description": "On a reference rule: names that make no edge, no unresolved node and no fire. Each is compared, case-exact and before any resolution, with the text of the first name_child field as written, before that field is checked to be a written name, so a listed scope the grammar does not write as a name, such as a keyword, makes no skipped row either; with a two-field name_child that is the first field, so listing a scope skips every member written under it. A name written with a leading separator, such as \\isset, is another text and is not skipped unless listed so. For a language construct the grammar parses as a call."
+          "description": "On a reference rule: names that make no edge, no unresolved node and no fire. An item {table: <name>} lists the keys of that table, which the rule's pack or a pack it depends on declares under tables, with the rows loaded packs add to it under add_table_rows; a table none of them declares refuses the rule. Each name is compared, case-exact and before any resolution, with the text of the first name_child field as written, before that field is checked to be a written name, so a listed scope the grammar does not write as a name, such as a keyword, makes no skipped row either; with a two-field name_child that is the first field, so listing a scope skips every member written under it. A name written with a leading separator, such as \\isset, is another text and is not skipped unless listed so. For a language construct the grammar parses as a call."
         },
         "whole_written": {
           "type": "boolean",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from types import MappingProxyType
 from typing import Any
 
 from periplus.engine.pattern import compile_pattern, compile_unfilled, value_names
@@ -52,6 +53,9 @@ _RESOLVE = (
 
 #: The key paths, below a rule's id or edge end, of the steps that look a name up in a table.
 _TABLE_STEPS = (".resolve.*.lookup_last_segment_in",)
+
+#: No tables, for a rule read alone.
+_NO_TABLES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
 
 #: The steps of a map rule's follow.
 _FOLLOW_STEPS = ("edge", "ancestors", "node", "id_matches", "try")
@@ -124,6 +128,7 @@ EXECUTED_KEYS = frozenset(
             )
         ),
         *(f"{_RULE}match.follow.*.{k}" for k in _FOLLOW_STEPS),
+        f"{_RULE}match.skip_names.*.table",
         *(
             f"{_RULE}match.where.*.{k}"
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
@@ -593,7 +598,7 @@ def load_rules(
                 (f"{pack.name.pack}/{relative}", entry) for entry in document.get("imports", [])
             )
             for item in document.get("rules", []):
-                rules.append(_read_rule(pack.name.pack, item, frozenset(tables[pack.name.pack])))
+                rules.append(_read_rule(pack.name.pack, item, tables[pack.name.pack]))
                 items.append(item)
                 sources.append(relative)
                 siblings.setdefault(pack.name.pack, []).append(item)
@@ -1501,9 +1506,9 @@ class _Unsupported(Exception):
     """A rule shape the engine does not execute, with the reason."""
 
 
-def _read_rule(pack: str, item: Any, tables: frozenset[str] = frozenset()) -> Rule:
+def _read_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]] = _NO_TABLES) -> Rule:
     """The rule as a record; ``supported`` holds only for the shapes the engine runs. ``tables``
-    names the tables its steps may name."""
+    holds the tables its steps and its ``skip_names`` may name."""
     name = str(item.get("rule")) if isinstance(item, Mapping) else ""
     try:
         keys = unexecuted(item, _RULE)
@@ -1514,7 +1519,7 @@ def _read_rule(pack: str, item: Any, tables: frozenset[str] = frozenset()) -> Ru
         return Rule(pack, name, False, (), "", "", "", "", reason=str(reason))
 
 
-def _build_rule(pack: str, item: Any, tables: frozenset[str]) -> Rule:
+def _build_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]]) -> Rule:
     if "holder" in item.get("match", {}) and "declaration" not in item["match"]:
         raise _Unsupported("only a tree declaration rule takes match.holder")
     if item.get("reads") == "map":
@@ -1526,7 +1531,7 @@ def _build_rule(pack: str, item: Any, tables: frozenset[str]) -> Rule:
     ):
         raise _Unsupported("only the id of a tree declaration rule takes a pattern")
     if "text" in item["match"]:
-        return _build_text(pack, item, tables)
+        return _build_text(pack, item, frozenset(tables))
     if isinstance(item.get("id"), Mapping) and {"resolve", "separator"} & set(item["id"]):
         raise _Unsupported("only the id of a text rule takes resolution steps")
     if "declaration" in item["match"]:
@@ -2086,7 +2091,9 @@ def _types_ok(end: Mapping[str, Any]) -> bool:
     return not {"type", "types"} <= set(end) and all(isinstance(t, str) for t in listed)
 
 
-def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> Rule:
+def _build_reference(
+    pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[str, str]]
+) -> Rule:
     """A rule that fires on each tree node of the ``reference`` type: an edge from the node the
     nearest enclosing declaration was given to the name its ``name_child`` writes."""
     match, emits = item["match"], item["emits"]
@@ -2166,9 +2173,9 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
                 start="enclosing_declaration" if from_template is None else "template",
                 to_type=end.get("type", next(iter(end.get("types", [])), "")),
                 on_miss="on_miss" in end,
-                resolve=_read_steps(end.get("resolve", []), tables),
+                resolve=_read_steps(end.get("resolve", []), frozenset(tables)),
                 separator=str(end.get("separator", "")),
-                fallback=_read_fallback(end, tables),
+                fallback=_read_fallback(end, frozenset(tables)),
                 miss_fallback=_read_miss_name(end),
                 # The one-type form is a list of that one type.
                 types=tuple(end.get("types", ())) or tuple(end.get("type", "").split()),
@@ -2190,10 +2197,27 @@ def _build_reference(pack: str, item: Mapping[str, Any], tables: frozenset[str])
         reference=match["reference"],
         endings=_read_ending(match),
         member_child=fields[1] if len(fields) > 1 else "",
-        skip_names=frozenset(match.get("skip_names", ())),
+        skip_names=_skip_names(match.get("skip_names", ()), tables),
         whole_written=match.get("whole_written") is True,
         name_matches=name_matches,
     )
+
+
+def _skip_names(listed: Iterable[Any], tables: Mapping[str, Mapping[str, str]]) -> frozenset[str]:
+    """A reference rule's ``skip_names``: each name listed, and the keys of each table an item
+    ``{table: <name>}`` names among ``tables``."""
+    names: set[str] = set()
+    for entry in listed:
+        if not isinstance(entry, Mapping):
+            names.add(str(entry))
+        elif entry["table"] in tables:
+            names.update(tables[entry["table"]])
+        else:
+            raise _Unsupported(
+                f"skip_names names the table {entry['table']}, which no tables key of the pack or "
+                "a pack it depends on declares"
+            )
+    return frozenset(names)
 
 
 def _build_attribute(pack: str, item: Mapping[str, Any]) -> Rule:

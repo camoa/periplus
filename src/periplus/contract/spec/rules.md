@@ -211,8 +211,10 @@ An end may also find its name in a table the pack carries. `tables`, a top-level
 `pack.yaml`, maps a table's name to a map of written name to node name; the resolution step
 `lookup_last_segment_in: <table>` gives the value of the name's last segment, and a rule may name
 the tables of its pack and of the packs it depends on, the nearer pack's winning whole. A step
-naming a table none of them declares is refused, naming the `tables` key. The table is data, so the
-engine still holds no language knowledge. A pack adds rows to a table of a pack it depends on,
+naming a table none of them declares is refused, naming the `tables` key. A reference rule's
+`skip_names` may hold `{table: <name>}` beside its names, and skips that table's keys; a table none
+of those packs declares refuses the rule. The table is data, so the engine still holds no language
+knowledge. A pack adds rows to a table of a pack it depends on,
 directly or not, under `add_table_rows: {<pack>: {<table>: {<written name>: <node name>}}}`;
 every rule that sees the table, the owner's among them, then finds them, in a run that loads the
 adding pack. Before any source file is read, the run is refused, exit 19, for rows naming a pack

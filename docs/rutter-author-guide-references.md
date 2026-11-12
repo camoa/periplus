@@ -63,6 +63,19 @@ static, parent]` passes over `self::m()`, though the grammar parses `self` as a 
 `php_basic` lists PHP's language constructs; the grammar parses only isset, empty, die and eval as
 calls, and the rest are listed in case a release does too.
 
+An item of `skip_names` may name a table in place of a name. The rule then skips that table's
+keys as well; the values are not read. The table follows the lookup step's rules: the rule's pack
+or a pack it depends on declares it under `tables`, the nearer pack's winning, and a table none of
+them declares refuses the rule. Rows another rutter adds under `add_table_rows` are skipped in a
+run that loads that rutter, so a rutter for a library can add the library's globals to the skip
+list of the language rutter's call rule:
+
+```yaml
+skip_names:
+- import
+- table: globals
+```
+
 `types` lists the to end's candidate types. The end lands on the first a rule maps under the
 resolved name. If none does, `on_miss: unresolved` gives an unresolved node searched for under that
 name: `\Drupal::service('x')` in a custom module is an unresolved method `Drupal::service`, because
