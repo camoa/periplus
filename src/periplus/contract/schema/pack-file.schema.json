@@ -1142,7 +1142,7 @@
             },
             "type": {
               "type": "string",
-              "description": "The type the end has when no rule finds it: one of the edge kind's to types or a type below one. Without it the end takes the kind's to types."
+              "description": "The type the end has when no rule finds it: one of the edge kind's to types or a type below one. An end that is not a full id takes this type's id namespace, as types with this one type does. Without it the end takes the kind's to types."
             },
             "types": {
               "type": "array",

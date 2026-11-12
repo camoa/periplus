@@ -1653,8 +1653,8 @@ def _edges(
     the id ``whole`` when it is given.
 
     The composed end is the from end when the spec's ``start`` is ``""``. An end that is not a
-    full id takes the one id namespace of the kind's types at its side, and makes no edge when
-    they have none.
+    full id takes the id namespace of its ``type``, else the one of the kind's types at its side,
+    and makes no edge when they have none.
     """
     kind = rule_set.edge_kinds[spec.kind]
     flipped = not spec.start
@@ -1667,7 +1667,11 @@ def _edges(
         if rule.twin_type
         else next(iter(namespaces(types, near)))
     )
-    other = next(iter(namespaces(types, far)), None)
+    other = (
+        namespace_of(types, spec.to_type)
+        if spec.to_type
+        else next(iter(namespaces(types, far)), None)
+    )
     found = []
     for end, at in ends:
         candidates = () if spec.full_id else _candidates(spec, types, end, fallback, other)
