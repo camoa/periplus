@@ -1,0 +1,48 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# ->getForm(X::class): a builds_form edge from the method around the call, of the class the file's
+# path names by Drupal's PSR-4 layout, to the form class X, so the rules are inferred. In a module,
+# install, inc, theme or profile file it runs from the function around the call. X is read as
+# text: a leading backslash names the class in full, else X's first segment goes through the
+# file's use statements, else X is in the file's own namespace, as PHP reads it. A class the map
+# does not hold ends at an unresolved node. A call in a closure counts the named function around
+# it. getForm($variable), getForm('text') and a form built through a service other than ->getForm
+# give nothing.
+
+edge_kinds:
+- kind: builds_form
+  from: [php.method, php.function]
+  to: php.class
+
+rules:
+- rule: form_built_by_class_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->getForm\(\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\b'
+  values:
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', normalize: [{replace: '\\\\', with: '\'}]}
+  line: {capture: class}
+  emits:
+  - edge: {kind: builds_form, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}
+  confidence: inferred
+
+# A file outside src has no namespace of its own, so X is read in full or through the imports.
+- rule: form_built_by_class_name_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '->getForm\(\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\b'
+  values:
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment], separator: '\', normalize: [{replace: '\\\\', with: '\'}]}
+  line: {capture: class}
+  emits:
+  - edge: {kind: builds_form, from: {template: '{function}', types: [php.function]}, to: this_node}
+  confidence: inferred
