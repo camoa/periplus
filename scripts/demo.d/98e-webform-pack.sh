@@ -135,6 +135,14 @@ assert edges == sorted([
      [(my_handler, line(my_handler, "class MyHandler extends WebformHandlerBase {"))]),
     ("inherits", "php.type::Drupal\\mymodule\\Plugin\\WebformHandler\\ComputedHandler", base,
      [(computed, line(computed, "class ComputedHandler extends WebformHandlerBase {"))]),
+    ("class_in_module", "php.type::Drupal\\mymodule\\Plugin\\WebformHandler\\MyHandler",
+     "drupal.module::mymodule",
+     [(my_handler, line(my_handler, "class MyHandler extends WebformHandlerBase {"))]),
+    ("class_in_module", "php.type::Drupal\\mymodule\\Plugin\\WebformHandler\\ComputedHandler",
+     "drupal.module::mymodule",
+     [(computed, line(computed, "class ComputedHandler extends WebformHandlerBase {"))]),
+    ("class_in_module", "php.type::Drupal\\mymodule\\Other\\NotAHandler",
+     "drupal.module::mymodule", [(outside, line(outside, "class NotAHandler {"))]),
 ]), edges
 
 skipped = sorted((row["file"], row["line"], row["rule"], row["reason"]) for row in report["skipped"])

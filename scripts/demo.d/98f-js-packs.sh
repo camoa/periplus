@@ -6,7 +6,7 @@
 # edge to it and a js_calls edge to it, and its read of drupalSettings.mymoduleColor is a reads_setting edge. Two behaviors
 # are assigned an arrow function and a function expression; the arrow one's read of
 # drupalSettings.k is a reads_setting edge from it. The controller
-# attaches a library by assignment and by array, each an attaches_library edge from its class,
+# attaches a library by assignment and by array, each an attaches_library edge from its method,
 # and attaches the setting, a provides_setting edge. The template's attach_library() is a
 # template_attaches_library edge.
 # The grammar is a dependency of periplus-map. With another version installed, periplus map stops
@@ -150,9 +150,9 @@ assert edges == sorted([
      [(script, line(script, "Drupal.behaviors.mymoduleOther.attach(context);"))]),
     ("reads_setting", widget, setting,
      [(script, line(script, "const color = drupalSettings.mymoduleColor;"))]),
-    ("attaches_library", controller, "drupal.library::mymodule/widget",
+    ("attaches_library", method + "page", "drupal.library::mymodule/widget",
      [(php, line(php, "$build['#attached']['library'][] = 'mymodule/widget';"))]),
-    ("attaches_library", controller, "drupal.library::mymodule/card",
+    ("attaches_library", method + "card", "drupal.library::mymodule/card",
      [(php, line(php, "'#attached' => ['library' => ['mymodule/card']],"))]),
     ("provides_setting", controller, setting,
      [(php, line(php, "$build['#attached']['drupalSettings']['mymoduleColor'] = 'red';"))]),
@@ -162,6 +162,12 @@ assert edges == sorted([
      [(php, line(php, "public function page(): array {"))]),
     ("contains", controller, method + "card",
      [(php, line(php, "public function card(): array {"))]),
+    ("class_in_module", controller, "drupal.module::mymodule",
+     [(php, line(php, "final class WidgetController {"))]),
+    ("library_in_module", "drupal.library::mymodule/widget", "drupal.module::mymodule",
+     [(f"{folder}/mymodule.libraries.yml", 1)]),
+    ("template_in_module", "drupal.template::mymodule-widget", "drupal.module::mymodule",
+     [(template, 1)]),
 ]), edges
 PY
 echo "js packs ok"
