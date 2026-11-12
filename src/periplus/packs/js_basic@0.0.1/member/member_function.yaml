@@ -2,10 +2,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A function assigned to a member of an object that is reached by a dotted name, A.b.c = ..., and a
 # function written in an object literal assigned to one, A.b = { open() {}, close: function () {} }.
-# The node is named by the dotted name alone, A.b.c or A.b.open, not by the script: the name is
-# reached the same way from every script that runs on the page. Two scripts that assign one name
-# give one node holding both locations. A name that starts at this is the object a call runs on, so
-# it makes nothing.
+# A name whose first part the table shared_objects holds, such as window.a, is reached the same way
+# from every script that runs on the page, so its node is named by the dotted name alone, and two
+# scripts that assign it give one node holding both locations. A function assigned to any other
+# dotted name, A.b.c = ..., is named in its script, <script path>:A.b.c, since A may be local to it.
+# A function in an object literal is named by the dotted name alone, whatever its first part. A
+# name that starts at this is the object a call runs on, so it makes nothing.
 
 node_types:
 - name: js.member_function
@@ -18,11 +20,12 @@ node_types:
   internal: true
 
 rules:
-# A.b.c = function (...) {...}.
+# A.b.c = function (...) {...}, A's name a key of shared_objects. js_root is the name's first part,
+# empty when it starts with no name.
 - rule: member_function_from_expression
   reads: file
   in: [js_source]
-  match: &expression {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: function_expression}]}
+  match: &expression {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: function_expression}, &root {name_matches: '(?<js_root>[\w$]*)(?s:.*)'}, &shared {in_table: {table: shared_objects, capture: js_root}}]}
   id: &dotted_id
     from: declared_name
     # A dotted name whose first part is not this.
@@ -37,11 +40,29 @@ rules:
   id: *dotted_id
   emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
   confidence: declared
-# A.b.c = (...) => {...}.
+# The same, A's name not a key of shared_objects: named in the script.
+- rule: member_function_from_expression_in_script
+  reads: file
+  in: [js_source]
+  match: &local_expression {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: function_expression}, *root, &local {not_in_table: {table: shared_objects, capture: js_root}}]}
+  id: &local_id
+    from: declared_name
+    pattern: '^(?<js_member>(?:[A-Za-su-z_$][\w$]*|t|t[A-Za-gi-z\d_$][\w$]*|th|th[A-Za-hj-z\d_$][\w$]*|thi|thi[A-Za-rt-z\d_$][\w$]*|this[\w$]+)(?:\.[A-Za-z_$][\w$]*)+)$'
+    template: '{script}:{js_member}'
+  emits: [{node: {type: js.member_function}}]
+  confidence: declared
+- rule: member_function_from_expression_in_script_in_file
+  reads: file
+  in: [js_source]
+  match: *local_expression
+  id: *local_id
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
+# A.b.c = (...) => {...}, A's name a key of shared_objects.
 - rule: member_function_from_arrow
   reads: file
   in: [js_source]
-  match: &arrow {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: arrow_function}]}
+  match: &arrow {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: arrow_function}, *root, *shared]}
   id: *dotted_id
   emits: [{node: {type: js.member_function}}]
   confidence: declared
@@ -50,6 +71,21 @@ rules:
   in: [js_source]
   match: *arrow
   id: *dotted_id
+  emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
+  confidence: declared
+# The same, A's name not a key of shared_objects: named in the script.
+- rule: member_function_from_arrow_in_script
+  reads: file
+  in: [js_source]
+  match: &local_arrow {declaration: assignment_expression, name_child: left, filetype: javascript, where: [{has_child: arrow_function}, *root, *local]}
+  id: *local_id
+  emits: [{node: {type: js.member_function}}]
+  confidence: declared
+- rule: member_function_from_arrow_in_script_in_file
+  reads: file
+  in: [js_source]
+  match: *local_arrow
+  id: *local_id
   emits: [{edge: {kind: script_declares_function, from: enclosing_file, to: this_node}}]
   confidence: declared
 - rule: namespace_object

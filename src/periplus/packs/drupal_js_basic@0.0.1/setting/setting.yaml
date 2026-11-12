@@ -9,5 +9,5 @@ edge_kinds:
   from: [php.class, php.function]
   to: drupal.js_setting
 - kind: reads_setting
-  from: drupal.js_behavior
+  from: [drupal.js_behavior, drupal.js_class]
   to: drupal.js_setting

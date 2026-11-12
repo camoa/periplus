@@ -63,7 +63,7 @@ BUNDLED_PACKS = {
     "crop_basic@0.0.1": 2,
     "drupal@0.1.0": 48,
     "drupal_basic@0.3.0": 129,
-    "drupal_js_basic@0.0.1": 11,
+    "drupal_js_basic@0.0.1": 12,
     "drupal_more@0.1.0": 14,
     "drupal_next@0.1.0": 65,
     "drush_basic@0.0.1": 4,

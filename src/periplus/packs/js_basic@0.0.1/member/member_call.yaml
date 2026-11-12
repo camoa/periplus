@@ -3,7 +3,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # a.b.c(...): a call through a dotted name. Each one reaches an internal node named by the dotted
 # name, from the nearest named function that holds the call, else from the script, as function_call
 # starts. The map rules below give a js_calls edge only where a member function of that name is
-# mapped, so a call on jQuery, the DOM, console or this gives nothing and no skipped row.
+# mapped, so a call on jQuery, the DOM, console or this gives nothing and no skipped row: to
+# a.b.c, named by the dotted name alone, and to <script path>:a.b.c, named in the calling script.
 
 node_types:
 - name: js.member_call
@@ -40,4 +41,31 @@ rules:
     node_type: js.file
     follow: [{edge: calls_member}, {id_matches: '^js\.member_call::(?<js_callee>.+)$'}, {node: 'js.member_function::{js_callee}'}]
   emits: [{edge: {kind: js_calls, from: this_node, to: matched_node}}]
+  confidence: inferred
+# a.b.c() to the member function <script path>:a.b.c of the calling script, from the script, from
+# a function named in it, and, through the script, from a member function named by its dotted name
+# alone; that edge sits at the line of the script.
+- rule: member_call_in_script_from_script
+  reads: map
+  match:
+    node_type: js.file
+    where: [{id_matches: '^js\.file::(?<js_script>.+)$'}]
+    follow: [{edge: calls_member}, {id_matches: '^js\.member_call::(?<js_callee>.+)$'}, {node: 'js.member_function::{js_script}:{js_callee}'}]
+  emits: [{edge: {kind: js_calls, from: this_node, to: matched_node}}]
+  confidence: inferred
+- rule: member_call_in_script_from_function
+  reads: map
+  match:
+    node_type: js.function
+    where: [{id_matches: '^js\.(?:member_)?function::(?<js_script>[^:]+):'}]
+    follow: [{edge: calls_member}, {id_matches: '^js\.member_call::(?<js_callee>.+)$'}, {node: 'js.member_function::{js_script}:{js_callee}'}]
+  emits: [{edge: {kind: js_calls, from: this_node, to: matched_node}}]
+  confidence: inferred
+- rule: member_call_in_script_from_shared_member
+  reads: map
+  match:
+    node_type: js.file
+    where: [{id_matches: '^js\.file::(?<js_script>.+)$'}]
+    follow: [{edge: script_declares_function}, {id_matches: '^js\.member_function::(?<js_caller>[^:]+)$'}, {edge: calls_member}, {id_matches: '^js\.member_call::(?<js_callee>.+)$'}, {node: 'js.member_function::{js_script}:{js_callee}'}]
+  emits: [{edge: {kind: js_calls, from: {template: 'js.member_function::{js_caller}', type: js.member_function, on_miss: unresolved}, to: matched_node}}]
   confidence: inferred

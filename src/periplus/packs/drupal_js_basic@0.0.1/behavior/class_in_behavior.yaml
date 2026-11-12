@@ -1,0 +1,65 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A class written in a behavior's function, class Panel { open() { drupalSettings.key } }. js_basic
+# ends the walk to an enclosing object at a class, so this pack names each class itself: a settings
+# read or a behavior call in a method then starts at the class, and the map rules below give the
+# edge to the behavior the class is written in.
+
+node_types:
+# Internal: it carries the edges of its methods to the behavior around it.
+- name: drupal.js_class
+  id_namespace: drupal.js_class
+  internal: true
+
+edge_kinds:
+- kind: behavior_holds_class
+  from: drupal.js_behavior
+  to: drupal.js_class
+
+rules:
+# class Panel {...} and a named class written as a value, named in the script.
+- rule: js_class
+  reads: file
+  in: [js_source]
+  match: {declaration: class_declaration, name_child: name, body_child: body, filetype: javascript}
+  id: {from: qualified_name}
+  emits: [{node: {type: drupal.js_class}}]
+  confidence: declared
+- rule: js_class_expression
+  reads: file
+  in: [js_source]
+  match: {declaration: class, name_child: name, body_child: body, filetype: javascript}
+  id: {from: qualified_name}
+  emits: [{node: {type: drupal.js_class}}]
+  confidence: declared
+# The behavior around a class, when the behavior is the nearest object or class around it.
+- rule: js_class_in_behavior
+  reads: file
+  in: [js_source]
+  match: {declaration: class_declaration, name_child: name, body_child: body, holder: assignment_expression, filetype: javascript}
+  id: {from: qualified_name}
+  emits: [{edge: {kind: behavior_holds_class, from: enclosing_class, to: this_node}}]
+  confidence: declared
+- rule: js_class_expression_in_behavior
+  reads: file
+  in: [js_source]
+  match: {declaration: class, name_child: name, body_child: body, holder: assignment_expression, filetype: javascript}
+  id: {from: qualified_name}
+  emits: [{edge: {kind: behavior_holds_class, from: enclosing_class, to: this_node}}]
+  confidence: declared
+# A settings read or a behavior call in a class's method: the behavior around the class reads the
+# setting, or runs the other behavior. The edge sits at the behavior's line.
+- rule: setting_read_through_class
+  reads: map
+  match:
+    node_type: drupal.js_behavior
+    follow: [{edge: behavior_holds_class}, {edge: reads_setting}]
+  emits: [{edge: {kind: reads_setting, from: this_node, to: matched_node}}]
+  confidence: declared
+- rule: behavior_attach_call_through_class
+  reads: map
+  match:
+    node_type: drupal.js_behavior
+    follow: [{edge: behavior_holds_class}, {edge: attaches_behavior}]
+  emits: [{edge: {kind: attaches_behavior, from: this_node, to: matched_node}}]
+  confidence: declared

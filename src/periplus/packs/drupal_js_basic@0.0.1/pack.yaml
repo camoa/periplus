@@ -16,9 +16,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - js_basic maps each function of a behavior as a member function too: attach in
 #   Drupal.behaviors.name = { attach() {} } is js.member_function::Drupal.behaviors.name.attach,
 #   and a function assigned to Drupal.behaviors.name is js.member_function::Drupal.behaviors.name.
-#   A rutter cannot drop a node the rutter it depends on makes, so both stay beside the behavior
-#   node. Drupal.behaviors.other.attach(context) is also js_basic's js_calls edge between the two
-#   attach functions.
+#   Both stay beside the behavior node: js_basic's rules for a function in an object literal read
+#   the object's name only as enclosing_type, which no where condition can test, so no table this
+#   pack adds to can leave them out. Drupal.behaviors.other.attach(context) is also js_basic's
+#   js_calls edge between the two attach functions.
 # - once(), $() and jQuery(): this pack adds the three names to js_basic's table globals, so a
 #   call to one makes nothing, as a call to a browser global does, unless its script declares a
 #   function of that name. No edge joins it to the library core/once or core/jquery. A call to a
@@ -91,26 +92,39 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   path meet at one js.file node.
 #
 # An edge that starts at what is around a match needs a behavior object in JavaScript, and a
-# class or a function in PHP. A behavior call or a settings read outside a behavior object makes
-# no edge and is listed under skipped: no value for enclosing_class. A class written inside a
-# behavior's function ends that walk, since js_basic ends the walk to an object at a class: a
-# settings read in one of its methods is listed the same way. In PHP an attachment in a
-# function, such as a hook in a .module file, starts at the function, and one in a method starts
-# at the class, not at the method. An attachment outside both makes no edge and is listed the
-# same way; its setting node is still made. In a procedural file, such as a .module or .inc file,
-# an attachment in the array form inside a class method now makes no edge and one skipped row,
-# no value for fn, as one outside any class or function does; its setting node is still made.
+# class or a function in PHP. A behavior call or a settings read outside a behavior object and
+# outside any class makes no edge and is listed under skipped: no value for enclosing_class. One in
+# a method of a named class written in a behavior's function is the behavior's edge, through an
+# internal drupal.js_class node (behavior/class_in_behavior.yaml), and sits at the behavior's line.
+# One in a class written in another class or in a non-behavior object, or in a class outside any
+# behavior, makes no edge and no skipped row, and a setting read only in such classes is a
+# referenced node with no edge in the written map. Two classes of one name in one script are one
+# node, so each behavior around one of them gets the edges of both. One in an unnamed class,
+# class {...}, makes no edge and is listed under skipped. In PHP an attachment in a function, such
+# as a hook in a .module file, starts at the function, and one in a method starts at the class,
+# not at the method. An attachment outside both makes no edge and is listed the same way; its
+# setting node is still made. In a procedural file, such as a .module or .inc file, an attachment
+# in the array form inside a class method now makes no edge and one skipped row, no value for fn,
+# as one outside any class or function does; its setting node is still made.
 pack: drupal_js_basic
 version: 0.0.1
 depends: [js_basic, drupal_basic]
 # The globals Drupal core's libraries core/once and core/jquery define, each the value of its own
-# key, as in js_basic's table. js_basic's function_call skips a call to one.
+# key, as in js_basic's table. js_basic's function_call skips a call to one. And the global objects
+# of Drupal core's scripts and of core/jquery, whose members every script on a page reaches by one
+# name: js_basic names a function assigned to one of their members, Drupal.x = function () {}, by
+# the dotted name alone.
 add_table_rows:
   js_basic:
     globals:
       once: once
       $: $
       jQuery: jQuery
+    shared_objects:
+      Drupal: Drupal
+      drupalSettings: drupalSettings
+      jQuery: jQuery
+      $: $
 files:
   types:
     # yaml_basic's type yml, read as data, given the path value libraries_dir: the folder the file

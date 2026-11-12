@@ -8,7 +8,7 @@ node_types:
 
 edge_kinds:
 - kind: attaches_behavior
-  from: drupal.js_behavior
+  from: [drupal.js_behavior, drupal.js_class]
   to: drupal.js_behavior
 - kind: library_includes_script
   from: drupal.library

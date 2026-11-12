@@ -160,8 +160,11 @@ a list of its known gaps.
   at the field storage. A Twig file not named `.html.twig` gives no edge. A call inside a quoted
   text or a verbatim block still gives one. Two templates of one name in two modules are one node.
 - **JavaScript:** `js_basic` maps named functions, and functions assigned to a dotted name or
-  written directly in an object literal assigned to one, each named by the dotted name alone. A
-  local object and an object of the same name in another script meet, a false edge. A member call
+  written directly in an object literal assigned to one. One assigned to a dotted name is named by
+  that name alone when its table `shared_objects` holds the first part, such as `window`, and else
+  in its script, so a call from another script to an application's own global object not in the
+  table gives no edge. One in an object literal is named by the dotted name alone, so a local
+  object and an object of the same name in another script meet, a false edge. A member call
   gives an edge only to a mapped member function, and a map rule places that edge at the function
   or script it starts at, not at the call. A call to a listed JavaScript or browser global gives
   nothing. A call on a call or an index, an import, an export, a generator, a class, a class
@@ -171,7 +174,10 @@ a list of its known gaps.
 - **Drupal JavaScript:** `drupal_js_basic` reads a behavior only as `Drupal.behaviors.name = ...`,
   and any object so assigned is one, with or without `attach`. An arrow function or a function
   expression so assigned is one too; a value of any other kind, such as a variable, gives none. A behavior call or a settings read
-  outside a behavior object, or in a class inside one, makes no edge and goes under skipped.
+  outside a behavior object makes no edge and goes under skipped. One in a named class written in
+  a behavior's function is the behavior's edge, at the behavior's line; one in a class outside a
+  behavior, or nested in another class, makes no edge and no skipped row. Two classes of one name
+  in one script share their edges. Each function of a behavior is also a member function.
   `detach`, `drupalSettings['key']` and a read through `attach`'s settings parameter give no edge.
   `once()`, `$()` and `jQuery()` make nothing, as a browser global's call does, unless the script
   declares a function of that name; nothing joins them to their core library. Only the
