@@ -258,6 +258,16 @@ mapping form, `{child: scope, pattern: Config}`, names the child: a field of the
 its first child of that node type. So one rule can test a call's class and its method. A match
 without that child, or whose child does not match, makes nothing and is not a fire.
 
+`in_table: <table>` holds when a name is a key of the table, and `not_in_table: <table>` when it is
+not; the values are not read. The name is the first `name_child` field's text on a tree declaration
+or reference rule, the whole node id on a map rule, and the entry's key or else the file's stem on
+a file rule. `{table: <table>, capture: <name>}` tests a named capture of a `name_matches` pattern
+(tree rules) or an `id_matches` pattern (map and file rules) of the same `where` instead; a capture
+that took no text is a key of none. So two rules, one with each, split one shape by the root of a
+dotted name. The table is found as a lookup step finds one, with the rows `add_table_rows` adds. A
+table none of those packs declares, or a capture no pattern of the `where` defines, refuses the
+rule. The table is data: the engine holds no list of names.
+
 ---
 
 ## 12. Code is text; the tree is an optimisation

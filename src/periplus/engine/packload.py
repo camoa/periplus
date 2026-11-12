@@ -57,6 +57,9 @@ _TABLE_STEPS = (".resolve.*.lookup_last_segment_in",)
 #: No tables, for a rule read alone.
 _NO_TABLES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
 
+#: The ``where`` conditions that test a name, or a capture of it, against a table's keys.
+_TABLE_CONDITIONS = ("in_table", "not_in_table")
+
 #: The steps of a map rule's follow.
 _FOLLOW_STEPS = ("edge", "ancestors", "node", "id_matches", "try")
 
@@ -134,6 +137,11 @@ EXECUTED_KEYS = frozenset(
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
         ),
         *(f"{_RULE}match.where.*.name_matches{k}" for k in ("", ".child", ".pattern")),
+        *(
+            f"{_RULE}match.where.*.{c}{k}"
+            for c in _TABLE_CONDITIONS
+            for k in ("", ".table", ".capture")
+        ),
         *(
             f"{_RULE}id.{k}"
             for k in (
@@ -318,7 +326,18 @@ class IsMapping:
     value: bool
 
 
-Condition = KeyEquals | HasKey | IdMatches | IsMapping
+@dataclass(frozen=True, slots=True)
+class InTable:
+    """A ``where`` condition: the rule's name, or the named ``capture`` of a name or id pattern in
+    the same ``where``, is one of ``keys``, a table's keys; with ``negate`` it is not. A capture
+    that took no text is none of them."""
+
+    keys: frozenset[str]
+    capture: str = ""
+    negate: bool = False
+
+
+Condition = KeyEquals | HasKey | IdMatches | IsMapping | InTable
 
 
 @dataclass(frozen=True, slots=True)
@@ -1523,7 +1542,7 @@ def _build_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]]) -
     if "holder" in item.get("match", {}) and "declaration" not in item["match"]:
         raise _Unsupported("only a tree declaration rule takes match.holder")
     if item.get("reads") == "map":
-        return _build_map(pack, item)
+        return _build_map(pack, item, tables)
     if (
         isinstance(item.get("id"), Mapping)
         and "pattern" in item["id"]
@@ -1535,7 +1554,7 @@ def _build_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]]) -
     if isinstance(item.get("id"), Mapping) and {"resolve", "separator"} & set(item["id"]):
         raise _Unsupported("only the id of a text rule takes resolution steps")
     if "declaration" in item["match"]:
-        return _build_declaration(pack, item)
+        return _build_declaration(pack, item, tables)
     if "reference" in item["match"]:
         return _build_reference(pack, item, tables)
     if "attribute" in item["match"] or "annotation" in item["match"]:
@@ -1596,7 +1615,7 @@ def _build_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]]) -
         filetype=match["filetype"],
         node_type=str(nodes[0]["type"]) if nodes else "",
         confidence=item["confidence"],
-        where=_read_where(match.get("where", [])),
+        where=_read_where(match.get("where", []), tables),
         normalize=_read_normalize(item["id"].get("normalize", [])),
         attributes=tuple(_read_attribute(a) for a in attributes),
         edges=read_edges,
@@ -1855,7 +1874,9 @@ def _capture(source: object) -> str:
     return str(source["capture"])
 
 
-def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
+def _build_declaration(
+    pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[str, str]]
+) -> Rule:
     """A rule that reads a parse tree: it fires on each tree node of the ``declaration`` type."""
     match, emits = item["match"], item["emits"]
     if (
@@ -1873,12 +1894,13 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
     if not isinstance(where, list) or not all(
         isinstance(c, Mapping)
         and len(c) == 1
-        and set(c) <= {"has_child", "name_matches"}
-        and (isinstance(next(iter(c.values())), str) or "name_matches" in c)
+        and set(c) <= {"has_child", "name_matches", *_TABLE_CONDITIONS}
+        and (isinstance(next(iter(c.values())), str) or "has_child" not in c)
         for c in where
     ):
         raise _Unsupported(
-            "the match.where of a declaration rule holds only has_child and name_matches conditions"
+            "the match.where of a declaration rule holds only has_child, name_matches, in_table "
+            "and not_in_table conditions"
         )
     nodes = node_types(item)
     edges = [_read_tree_edge(emit["edge"]) for emit in emits if "edge" in emit]
@@ -1925,6 +1947,9 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         raise _Unsupported("a declaration rule's id has one docblock source")
     name_child = match.get("name_child", "")
     path = tuple(name_child) if isinstance(name_child, list) else ()
+    name_matches = _name_matches(where, None if path else name_child or None)
+    patterns = [pattern for _, pattern in name_matches]
+    named = bool(name_child) and not path
     return Rule(
         pack=pack,
         name=str(item["rule"]),
@@ -1951,11 +1976,14 @@ def _build_declaration(pack: str, item: Mapping[str, Any]) -> Rule:
         holder=match.get("holder", ""),
         has_child=tuple(c["has_child"] for c in where if "has_child" in c),
         id_argument=argument or "",
-        name_matches=_name_matches(where, None if path else name_child or None),
+        name_matches=name_matches,
+        where=_table_conditions(where, tables, patterns, "name_matches", named=named),
     )
 
 
-def _build_map(pack: str, item: Mapping[str, Any]) -> Rule:
+def _build_map(
+    pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[str, str]]
+) -> Rule:
     """A rule that reads the map: it fires on each node of ``match.node_type`` or a type below it
     that its ``where`` holds for, once for each node its ``follow`` steps reach."""
     match, emits = item["match"], item["emits"]
@@ -1967,9 +1995,12 @@ def _build_map(pack: str, item: Mapping[str, Any]) -> Rule:
         raise _Unsupported(
             "a map rule is not a rule with match.node_type, optional where and follow, and no in"
         )
-    where = _read_where(match.get("where", []))
-    if not all(isinstance(condition, IdMatches) for condition in where):
-        raise _Unsupported("the match.where of a map rule holds only id_matches conditions")
+    where = _read_where(match.get("where", []), tables)
+    if not all(isinstance(condition, IdMatches | InTable) for condition in where):
+        raise _Unsupported(
+            "the match.where of a map rule holds only id_matches, in_table and not_in_table "
+            "conditions"
+        )
     follow = _read_follow(match.get("follow", []))
     nodes = node_types(item)
     edges = [_read_map_edge(emit["edge"], bool(follow)) for emit in emits if "edge" in emit]
@@ -2120,9 +2151,13 @@ def _build_reference(
         raise _Unsupported("the name_child of a reference rule is one field, or a name and a member")
     where = match.get("where", [])
     if not isinstance(where, list) or not all(
-        isinstance(c, Mapping) and set(c) == {"name_matches"} for c in where
+        isinstance(c, Mapping) and len(c) == 1 and set(c) <= {"name_matches", *_TABLE_CONDITIONS}
+        for c in where
     ):
-        raise _Unsupported("the match.where of a reference rule holds only name_matches conditions")
+        raise _Unsupported(
+            "the match.where of a reference rule holds only name_matches, in_table and "
+            "not_in_table conditions"
+        )
     name_matches = _name_matches(where, fields[0])
     groups = {group for _, pattern in name_matches for group in pattern.groupindex}
     specs = []
@@ -2200,6 +2235,7 @@ def _build_reference(
         skip_names=_skip_names(match.get("skip_names", ()), tables),
         whole_written=match.get("whole_written") is True,
         name_matches=name_matches,
+        where=_table_conditions(where, tables, (p for _, p in name_matches), "name_matches"),
     )
 
 
@@ -2295,6 +2331,47 @@ def _name_matches(
             raise _Unsupported("a name_matches condition needs match.name_child")
         else:
             found.append((name_child, _regex(condition)))
+    return tuple(found)
+
+
+def _table_conditions(
+    where: Iterable[Mapping[str, Any]],
+    tables: Mapping[str, Mapping[str, str]],
+    patterns: Iterable[re.Pattern[str]],
+    kind: str,
+    *,
+    named: bool = True,
+) -> tuple[InTable, ...]:
+    """Each ``in_table`` and ``not_in_table`` condition of ``where``, holding the keys of the table
+    it names among ``tables``. A capture it names must be a group of one of ``patterns``, the
+    ``kind`` patterns of the same ``where``; one with no capture tests the rule's name, which a rule
+    that is not ``named`` lacks."""
+    groups = {group for pattern in patterns for group in pattern.groupindex}
+    found = []
+    for condition in where:
+        for key in _TABLE_CONDITIONS:
+            if key not in condition:
+                continue
+            given = condition[key]
+            if isinstance(given, str):
+                table, capture = given, ""
+            elif isinstance(given, Mapping) and set(given) == {"table", "capture"}:
+                table, capture = str(given["table"]), str(given["capture"])
+            else:
+                raise _Unsupported(f"{key} is not a table's name, or a table and a capture")
+            if table not in tables:
+                raise _Unsupported(
+                    f"{key} names the table {table}, which no tables key of the pack or a pack it "
+                    "depends on declares"
+                )
+            if capture and capture not in groups:
+                raise _Unsupported(
+                    f"{key} names the capture {capture}, which no {kind} pattern of the rule's "
+                    "where defines"
+                )
+            if not capture and not named:
+                raise _Unsupported(f"{key} with no capture needs match.name_child of one field")
+            found.append(InTable(frozenset(tables[table]), capture, key == "not_in_table"))
     return tuple(found)
 
 
@@ -2469,7 +2546,9 @@ def _key_path(source: object) -> str:
     return source["key"]
 
 
-def _read_where(where: object) -> tuple[Condition, ...]:
+def _read_where(
+    where: object, tables: Mapping[str, Mapping[str, str]] = _NO_TABLES
+) -> tuple[Condition, ...]:
     conditions: list[Condition] = []
     for condition in where if isinstance(where, list) else [None]:
         name, found = (
@@ -2498,12 +2577,15 @@ def _read_where(where: object) -> tuple[Condition, ...]:
             conditions.append(IdMatches(_regex(found)))
         elif name == "is_mapping" and isinstance(found, bool):
             conditions.append(IsMapping(found))
-        else:
+        elif name not in _TABLE_CONDITIONS:
             raise _Unsupported(
                 "a match.where condition is not a key with name and equals or not_equals, "
-                "a has_key with one path, an id_matches, or an is_mapping of true or false"
+                "a has_key with one path, an id_matches, an is_mapping of true or false, or an "
+                "in_table or not_in_table"
             )
-    return tuple(conditions)
+    listed = where if isinstance(where, list) else []
+    patterns = [c.pattern for c in conditions if isinstance(c, IdMatches)]
+    return (*conditions, *_table_conditions(listed, tables, patterns, "id_matches"))
 
 
 def _read_normalize(normalize: object) -> tuple[tuple[re.Pattern[str], str], ...]:

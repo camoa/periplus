@@ -710,8 +710,30 @@
             }
           ],
           "description": "RE2 over the declared name. Executed on a tree declaration or reference rule: the whole text of the first name_child field must match, or the match is passed and is no fire. The mapping form {child, pattern} tests the named child instead, whatever its node type; a match without that child fails. The case that proves confidence belongs on the rule: `^[A-Z]` is `declared` in Go, where capitalisation is visibility the compiler enforces, and `inferred` in React, where it is a convention people can ignore. Same primitive, same character, and only the author knows which."
+        },
+        "in_table": {
+          "$ref": "#/$defs/tableCondition",
+          "description": "The name is a key of the table, or the match is passed and is no fire. The name is the text of the first name_child field on a tree declaration or reference rule, the whole node id on a map rule, and the entry's key or else the file's stem on a file rule. The mapping form {table, capture} tests instead the named capture of a pattern in the same where: a name_matches pattern on a tree rule, an id_matches pattern on a map or file rule; a capture that took no text is a key of no table. The table is one the rule's pack or a pack it depends on declares under tables, the nearer pack's winning, with the rows loaded packs add under add_table_rows; a table none of them declares, or a capture no such pattern defines, refuses the rule."
+        },
+        "not_in_table": {
+          "$ref": "#/$defs/tableCondition",
+          "description": "The opposite of in_table, read the same way: the name, or the capture, is not a key of the table, or the match is passed and is no fire. One rule with in_table and one with not_in_table on the same table split one shape in two."
         }
       }
+    },
+    "tableCondition": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["table", "capture"],
+          "properties": {
+            "table": {"type": "string", "minLength": 1, "description": "The table's name."},
+            "capture": {"type": "string", "minLength": 1, "description": "A named capture of a pattern in the same where."}
+          }
+        }
+      ]
     },
     "idBlock": {
       "type": "object",

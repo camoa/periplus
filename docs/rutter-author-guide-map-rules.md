@@ -10,6 +10,8 @@ rules, one hop each; no rule takes a weight or a number.
 
 A map rule takes no `in`. Its `match` holds `node_type`, the type of the node it fires on (or a
 type below it), an optional `where` of `id_matches` patterns searched in that node's whole id,
+with `in_table` or `not_in_table` conditions on that id or on one of their captures
+([tables](rutter-author-guide-references.md#a-name-tested-against-a-table-in_table-and-not_in_table)),
 and an optional `follow`, a list of steps from that node:
 
 - `edge: <kind>` moves to each node an edge of that kind runs to.

@@ -22,6 +22,7 @@ from periplus.engine.packload import (
     FileInfo,
     HasKey,
     IdMatches,
+    InTable,
     IsMapping,
     Rule,
     RuleSet,
@@ -247,7 +248,11 @@ def run_file_rules(
                     contents[file] = DATA_READERS[form or SHORT_FORM_FORMAT](root / file, file)
                 data = contents[file]
             for key, line, scope, mapping in _entries(rule.each, data):
-                if not all(_holds(scope, key or stem, mapping, c) for c in rule.where):
+                if not all(
+                    _holds(scope, key or stem, mapping, c)
+                    for c in rule.where
+                    if not isinstance(c, InTable)
+                ) or (rule.where and _captured(rule.where, key or stem, {}) is None):
                     continue
                 fired += 1
                 values = {**paths[own], "file_stem": stem}
@@ -360,13 +365,29 @@ def _captured(
     where: Sequence[Condition], node_id: str, values: dict[str, str]
 ) -> dict[str, str] | None:
     """The values with the named captures of each ``id_matches`` pattern searched in the id;
-    ``None`` when one does not fit."""
+    ``None`` when one does not fit, or when an ``in_table`` or ``not_in_table`` condition fails on
+    the id or on one of those captures."""
+    groups: dict[str, str] = {}
     for condition in where:
-        found = condition.pattern.search(node_id) if isinstance(condition, IdMatches) else None
-        if found is None:
-            return None
-        values.update({k: v for k, v in found.groupdict().items() if v is not None})
+        if isinstance(condition, IdMatches):
+            found = condition.pattern.search(node_id)
+            if found is None:
+                return None
+            groups.update({k: v for k, v in found.groupdict().items() if v is not None})
+    if not _in_tables(where, node_id, groups):
+        return None
+    values.update(groups)
     return values
+
+
+def _in_tables(where: Sequence[Condition], name: str | None, groups: Mapping[str, str]) -> bool:
+    """Whether each ``in_table`` condition of ``where`` finds its capture among ``groups``, or
+    ``name`` when it names none, among its keys, and each ``not_in_table`` condition does not."""
+    return all(
+        ((groups.get(c.capture) if c.capture else name) in c.keys) is not c.negate
+        for c in where
+        if isinstance(c, InTable)
+    )
 
 
 def _follow(
@@ -1202,12 +1223,34 @@ def _annotation(
 
 
 def _fires(rule: Rule, node: Node) -> bool:
-    """Whether the tree node has a direct child of each of the rule's ``has_child`` types, and has
-    each ``name_matches`` child, whose whole text matches that condition's pattern."""
-    return all(any(c.type == kind for c in node.children) for kind in rule.has_child) and all(
-        (found := _child(node, child)) is not None and pattern.fullmatch(text_of(found))
-        for child, pattern in rule.name_matches
-    )
+    """Whether the tree node has a direct child of each of the rule's ``has_child`` types, has
+    each ``name_matches`` child, whose whole text matches that condition's pattern, and passes each
+    ``in_table`` and ``not_in_table`` condition on the text of its name child or on a capture of
+    those patterns."""
+    if not (
+        all(any(c.type == kind for c in node.children) for kind in rule.has_child)
+        and all(
+            (found := _child(node, child)) is not None and pattern.fullmatch(text_of(found))
+            for child, pattern in rule.name_matches
+        )
+    ):
+        return False
+    if not rule.where:
+        return True
+    named = _child(node, rule.name_child)
+    name = None if named is None else text_of(named)
+    return _in_tables(rule.where, name, _name_groups(rule, node))
+
+
+def _name_groups(rule: Rule, node: Node) -> dict[str, str]:
+    """The named groups of each of the rule's ``name_matches`` patterns that fits its child."""
+    values: dict[str, str] = {}
+    for child, pattern in rule.name_matches:
+        found = _child(node, child)
+        fits = pattern.fullmatch(text_of(found)) if found is not None else None
+        if fits is not None:
+            values.update({k: v for k, v in fits.groupdict().items() if v is not None})
+    return values
 
 
 def _argument(
@@ -1823,12 +1866,7 @@ def _template_values(
     ``name_matches`` conditions; ``enclosing_type``, the full name of the nearest enclosing type
     declaration; and ``enclosing_method``, the declared name of that type's member holding the
     match. A value the match lacks is left out."""
-    values: dict[str, str] = {}
-    for child, pattern in rule.name_matches:
-        found = _child(match, child)
-        fits = pattern.fullmatch(text_of(found)) if found is not None else None
-        if fits is not None:
-            values.update({k: v for k, v in fits.groupdict().items() if v is not None})
+    values = _name_groups(rule, match)
     holder = _holder(match, holders, rule_set, grammar, parsed)
     if holder is not None:
         values["enclosing_type"] = holder[0]

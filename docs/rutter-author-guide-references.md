@@ -197,6 +197,54 @@ source file is read. The same key with the same value is no problem. The bundled
 contributed modules, such as `profile_basic`, add their entity classes to `entity_classes` this
 way, so `entity_class_static_call` reads `Profile::load(1)` only in a project that loads them.
 
+### A name tested against a table: in_table and not_in_table
+
+A `where` condition `in_table: <table>` passes over a match whose name is not a key of the table,
+with no row and no fire; `not_in_table: <table>` passes over one whose name is. The values are not
+read. On a tree declaration or reference rule the name is the text of the first `name_child`
+field, on a map rule the node's whole id, and on a file rule the entry's key or else the file's
+stem. The mapping form `{table: <table>, capture: <name>}` tests a named capture instead: of a
+`name_matches` pattern in the same `where` on a tree rule, of an `id_matches` pattern on a map or
+file rule. A capture that took no text is a key of no table. The table is found as `skip_names`
+finds one, with the rows loaded rutters add under `add_table_rows`.
+
+Two small rules, one with each condition on the same table, split one shape. These two map a
+function assigned to a dotted name, `A.b = function () {}`, by the first part of that name: a
+name the table `shared` holds is one node for every file, any other is named in its file.
+
+```yaml
+- rule: member_shared
+  reads: file
+  in: [source]
+  match:
+    declaration: assignment_expression
+    name_child: left
+    filetype: javascript
+    where:
+    - {name_matches: '(?<root>\w+)(?:\.\w+)+'}
+    - {in_table: {table: shared, capture: root}}
+  id: {from: declared_name, pattern: '^(?<n>.+)$', template: '{n}'}
+  emits: [{node: {type: my.member}}]
+  confidence: declared
+- rule: member_local
+  reads: file
+  in: [source]
+  match:
+    declaration: assignment_expression
+    name_child: left
+    filetype: javascript
+    where:
+    - {name_matches: '(?<root>\w+)(?:\.\w+)+'}
+    - {not_in_table: {table: shared, capture: root}}
+  id: {from: qualified_name}
+  emits: [{node: {type: my.member}}]
+  confidence: declared
+```
+
+A table none of the visible rutters declares refuses the rule, and so does a capture no pattern of
+the same `where` defines, or, on a declaration rule whose `name_child` is a list, a condition with
+no capture.
+
 ## Where the framework begins: boundary
 
 The project's classes extend and implement classes the map never reads, such as Drupal core's.
@@ -551,18 +599,22 @@ file.rules.*.emits.*.edge.from.from.*: annotation_key argument argument_class ar
     array_key_class attribute_argument capture each_key incoming_edges literal qualified value
 file.rules.*.emits.*.edge.from.where.*: ancestor_reaches applies_to attribute_argument
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
-    has_promoted_constructor_parameter id_matches in_method_with_attribute is_mapping key
-    method_set_covers name name_matches on_service
+    has_promoted_constructor_parameter id_matches in_method_with_attribute in_table is_mapping
+    key method_set_covers name name_matches not_in_table on_service
+file.rules.*.emits.*.edge.from.where.*.in_table: capture table
 file.rules.*.emits.*.edge.from.where.*.name_matches: child pattern
+file.rules.*.emits.*.edge.from.where.*.not_in_table: capture table
 file.rules.*.emits.*.edge.to.from: annotation_key argument_class argument_key array_key_class
     each each_key incoming_edges literal qualified value
 file.rules.*.emits.*.edge.to.from.*: annotation_key argument argument_class argument_key
     array_key_class attribute_argument capture each_key incoming_edges literal qualified value
 file.rules.*.emits.*.edge.to.where.*: ancestor_reaches applies_to attribute_argument
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
-    has_promoted_constructor_parameter id_matches in_method_with_attribute is_mapping key
-    method_set_covers name name_matches on_service
+    has_promoted_constructor_parameter id_matches in_method_with_attribute in_table is_mapping
+    key method_set_covers name name_matches not_in_table on_service
+file.rules.*.emits.*.edge.to.where.*.in_table: capture table
 file.rules.*.emits.*.edge.to.where.*.name_matches: child pattern
+file.rules.*.emits.*.edge.to.where.*.not_in_table: capture table
 file.rules.*.emits.*.node: state
 file.rules.*.id: on_miss
 file.rules.*.id.from: argument_class argument_key array_key_class each each_key incoming_edges
