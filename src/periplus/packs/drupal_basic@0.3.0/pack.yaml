@@ -439,11 +439,12 @@ files:
           pattern: '^(?:.*/)?(?!core\.)(?<owner>[^/.]+)\.[^/]+\.[^/.]+$'
           template: '{owner}'
 
-    # Two text readings, beside the tree readings twig_basic and php_basic give the same files,
-    # for what a tree rule cannot reach: a call inside a template, the array form of an
-    # attachment, a docblock tag, a class constant used as an array key. Declared here because the
-    # engine lets one text type claim a file ending across all packs; drupal_js_basic, drush_basic,
-    # salesforce_basic and twig_tweak_basic read them. A dependent rutter may declare a type again
+    # Three text readings, beside the tree and data readings twig_basic, php_basic and yaml_basic
+    # give the same files, for what those cannot reach: a call inside a template, the array form
+    # of an attachment, a docblock tag, a class constant used as an array key, YAML held in the text
+    # of a key. Declared here because the engine lets one text type claim a file ending across all
+    # packs; drupal_js_basic, drupal_next, drush_basic, salesforce_basic, twig_tweak_basic and
+    # webform_basic read them. A dependent rutter may declare a type again
     # under the same name to add path values or spans, which merge into it, as drupal_js_basic
     # does for drupal_php_text.
     # Templates read as text with their own name as a value, beside the reading twig_basic
@@ -580,6 +581,11 @@ files:
       - name: named_function
         open: '\bfunction\s+(?<function>\w+)\s*\([^)]*\)[^{;]*'
         balance: ['{', '}']
+    # Configuration and the other YAML files read as text, beside the data reading yaml_basic
+    # gives them.
+    drupal_yml_text:
+      endings: [yml]
+      reader: text
 
 grammar:
   provider: tree-sitter

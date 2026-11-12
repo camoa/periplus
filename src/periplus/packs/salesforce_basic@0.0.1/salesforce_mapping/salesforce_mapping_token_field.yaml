@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field mapping whose Drupal side is a token names a field in it: [user:field_x],
+# [node:field_y:value]. The file rule links the mapping to drupal_basic's internal field-name hub
+# (field/field_name.yaml) for the first segment after a colon that starts with field_; the map rule
+# gives maps_token_field to every field storage of that name, on any entity type, else to the
+# unresolved field storage field.storage.<name>, which stays in the map as a mark. A token that
+# names no field_ segment, such as [site:name] or a base field, gives nothing.
+#
+# Inferred: the name, not the token's type, picks the storage, so [user:field_x] also links to a
+# node's field_x. A row of another field type is read too, which gives nothing unless its value
+# holds a colon before field_.
+
+edge_kinds:
+- kind: token_names_field
+  from: salesforce.mapping
+  to: drupal.field_name
+- kind: maps_token_field
+  from: salesforce.mapping
+  to: drupal.field_storage
+
+rules:
+- rule: salesforce_token_names_field
+  reads: file
+  in: [config, module_config]
+  match: {file: 'salesforce_mapping.salesforce_mapping.*', filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - edge: {kind: token_names_field, from: this_node, to: {from: {key: 'field_mappings.*.drupal_field_value'}, pattern: '^\[[^\]]*?:(?<field>field_[a-z0-9_]+)[:\]]', template: '{field}', type: drupal.field_name}}
+  confidence: inferred
+
+- rule: salesforce_token_field_or_mark
+  reads: map
+  match:
+    node_type: salesforce.mapping
+    follow:
+    - edge: token_names_field
+    - id_matches: '^drupal\.field_name::(?<entity>)(?<field>field_\w+)$'
+    - try:
+      - edge: field_name_of
+      - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+\.)(?<field>.+)$'
+  emits: [{edge: {kind: maps_token_field, from: this_node, to: {template: 'field.storage.{entity}{field}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred

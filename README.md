@@ -254,9 +254,9 @@ beside `drupal_basic` when the site uses that module.
 | `eck_basic` | 0.0.1 | Each Entity Construction Kit entity type, and each of its bundles, from their config files. The entity type a static `EckEntityType::load()` names. |
 | `paragraphs_basic` | 0.0.1 | Each paragraph type, from its config file, as a bundle of the entity type `paragraph`. The entity type a static `load()` on `Paragraph` or `ParagraphsType` names. |
 | `profile_basic` | 0.0.1 | Each Profile type, from its config file, as a bundle of the entity type `profile`. The entity type a static `load()` on `Profile` or `ProfileType` names. |
-| `salesforce_basic` | 0.0.1 | Salesforce mapping field plugins; each mapping with its Salesforce object and its edges to the bundle, entity type and fields it maps; the Salesforce events that subscribers name; the entity type a static `load()` on `MappedObject` or `SalesforceMapping` names. |
+| `salesforce_basic` | 0.0.1 | Salesforce mapping field plugins; each mapping with its Salesforce object and its edges to the bundle, entity type and fields it maps, the field storages its tokens name and the webform elements its webform submission tokens name; the Salesforce events that subscribers name; the entity type a static `load()` on `MappedObject` or `SalesforceMapping` names. Depends on `webform_basic`. |
 | `twig_tweak_basic` | 0.0.1 | The block plugins, menus, entity types and field storages that Twig Tweak functions such as `drupal_block('x')` name in templates. |
-| `webform_basic` | 0.0.1 | Webform handler plugins, by annotation, each joined to its class, and each webform, from its config file, as a bundle of `webform_submission`, with the handlers it runs. The entity type a static `load()` on `Webform` or `WebformSubmission` names. |
+| `webform_basic` | 0.0.1 | Webform handler plugins, by annotation, each joined to its class, and each webform, from its config file, as a bundle of `webform_submission`, with the handlers it runs and its elements. The entity type a static `load()` on `Webform` or `WebformSubmission` names. |
 
 </details>
 

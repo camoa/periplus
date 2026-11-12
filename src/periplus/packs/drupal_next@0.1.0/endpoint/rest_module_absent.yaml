@@ -6,7 +6,7 @@ rules:
 - rule: rest_module_absent
   reads: file
   in: [config]
-  match: {file: 'core.extension', filetype: drupal_next_yml_text, text: '(?m)\A(?![\s\S]*^  rest: -?\d)'}
+  match: {file: 'core.extension', filetype: drupal_yml_text, text: '(?m)\A(?![\s\S]*^  rest: -?\d)'}
   id: {template: 'rest'}
   emits: [{node: {type: drupal_next.module_absent}}]
   confidence: declared

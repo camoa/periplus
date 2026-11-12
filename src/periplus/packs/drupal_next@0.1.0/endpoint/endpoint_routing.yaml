@@ -10,7 +10,7 @@ rules:
   - module_root
   match:
     file: '*.routing'
-    filetype: drupal_next_yml_text
+    filetype: drupal_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t]+.*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)
   values:
     target:
@@ -34,7 +34,7 @@ rules:
   - module_root
   match:
     file: '*.routing'
-    filetype: drupal_next_yml_text
+    filetype: drupal_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t]+.*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)
   values:
     target:

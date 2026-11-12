@@ -13,7 +13,7 @@ rules:
   - config
   match:
     file: simple_oauth.oauth2_scope.*
-    filetype: drupal_next_yml_text
+    filetype: drupal_yml_text
     text: (?m)^granularity_configuration:\n[ \t]+role:[ \t]*(?<role>[\w-]+)
   id:
     template: '{oauth_scope}'

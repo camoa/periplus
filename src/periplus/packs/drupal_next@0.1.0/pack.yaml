@@ -28,9 +28,9 @@ files:
       - name: oauth_scope_string
         open: '(?<mark>\w*(?:SCOPE|scope))\b\s*[:=]\s*(?=["''`])'
         balance: ["\x01", "\n"]
-    # Drupal's YAML read as text, because a rule can reshape a value only on a text match. The
-    # path values name the file a rule reads.
-    drupal_next_yml_text:
+    # Drupal's YAML read as text, because a rule can reshape a value only on a text match:
+    # drupal_basic's type drupal_yml_text, given the path values that name the file a rule reads.
+    drupal_yml_text:
       endings: [yml]
       reader: text
       path_values:

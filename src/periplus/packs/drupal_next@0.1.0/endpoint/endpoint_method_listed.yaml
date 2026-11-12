@@ -12,7 +12,7 @@ rules:
   in: [module_root]
   match: &m0
     file: '*.routing'
-    filetype: drupal_next_yml_text
+    filetype: drupal_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
   values: &v0
     target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
@@ -36,7 +36,7 @@ rules:
   in: [module_root]
   match: &m1
     file: '*.routing'
-    filetype: drupal_next_yml_text
+    filetype: drupal_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){1}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
   values: &v1
     target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}
@@ -60,7 +60,7 @@ rules:
   in: [module_root]
   match: &m2
     file: '*.routing'
-    filetype: drupal_next_yml_text
+    filetype: drupal_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:[ \t]*\n(?:[ \t]+-[^\n]*\n){2}[ \t]+-[ \t]*['"]?(?<m>[A-Z]+)
   values: &v2
     target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}

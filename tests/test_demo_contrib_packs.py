@@ -550,6 +550,78 @@ def test_salesforce_mapping_config_field_plugin_and_event_subscriber(tmp_path: P
     }
 
 
+def test_salesforce_tokens_name_field_storages_and_webform_elements(tmp_path: Path) -> None:
+    """A token names a field storage through the field-name hub, or leaves a mark for a field_
+    name no storage has; a webform submission token names an element of the mapping's webform,
+    which webform_basic maps at any depth whatever its first property. Other tokens give nothing."""
+
+    def storage(entity: str, field: str) -> str:
+        return f"id: {entity}.{field}\nfield_name: {field}\nentity_type: {entity}\ntype: string\n"
+
+    def row(value: str) -> str:
+        return f"  -\n    drupal_field_type: Token\n    drupal_field_value: '{value}'\n"
+
+    contact = "config/sync/salesforce_mapping.salesforce_mapping.contact_map.yml"
+    article = "config/sync/salesforce_mapping.salesforce_mapping.article_map.yml"
+    report, document = _map(
+        tmp_path,
+        "salesforce_basic",
+        {
+            "config/sync/field.storage.node.field_color.yml": storage("node", "field_color"),
+            "config/sync/field.storage.user.field_ext_id.yml": storage("user", "field_ext_id"),
+            "config/sync/webform.webform.contact_form.yml": (
+                "id: contact_form\ntitle: Contact form\nelements: |-\n"
+                "  first_name:\n    '#type': textfield\n"
+                "  email:\n    '#title': Email\n    '#type': email\n"
+                "  details:\n    '#type': fieldset\n"
+                "    topic:\n      '#title': Topic\n      '#type': select\n"
+                "      '#options':\n        one: One\n"
+            ),
+            contact: (
+                "id: contact_map\ndrupal_entity_type: webform_submission\n"
+                "drupal_bundle: contact_form\nfield_mappings:\n"
+                + row("[webform_submission:values:first_name]")
+                + row("[webform_submission:values:topic]")
+                + row("[webform_submission:values:missing]")
+                + row("[webform_submission:user:field_ext_id]")
+                + row("[site:name]")
+            ),
+            article: (
+                "id: article_map\ndrupal_entity_type: node\ndrupal_bundle: article\n"
+                "field_mappings:\n"
+                + row("[node:field_color:value]")
+                + row("[node:field_gone]")
+                + row("[node:values:first_name]")
+                + "  -\n    drupal_field_type: properties\n    drupal_field_value: field_color\n"
+            ),
+        },
+    )
+    element = "webform.element::webform_submission.contact_form:"
+    assert {
+        node_id: node["type"]
+        for node_id, node in nodes(document).items()
+        if node_id.startswith("webform.element::")
+    } == {
+        f"{element}details": "webform.element",
+        f"{element}email": "webform.element",
+        f"{element}first_name": "webform.element",
+        f"{element}topic": "webform.element",
+    }
+    contact_id = "drupal.config::salesforce_mapping.salesforce_mapping.contact_map"
+    article_id = "drupal.config::salesforce_mapping.salesforce_mapping.article_map"
+    assert edges(document, "maps_token_field") | edges(document, "maps_webform_element") == {
+        ("maps_token_field", contact_id, "drupal.config::field.storage.user.field_ext_id"),
+        ("maps_token_field", article_id, "drupal.config::field.storage.node.field_color"),
+        ("maps_token_field", article_id, "drupal.config::field.storage.field_gone"),
+        ("maps_webform_element", contact_id, f"{element}first_name"),
+        ("maps_webform_element", contact_id, f"{element}topic"),
+    }
+    assert nodes(document)["drupal.config::field.storage.field_gone"]["state"] == "unresolved"
+    assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
+        (article, "salesforce_token_names_element", "fired and emitted nothing")
+    ]
+
+
 def test_twig_tweak_calls_in_a_module_and_a_theme_but_not_a_variable_or_a_comment(
     tmp_path: Path,
 ) -> None:

@@ -6,6 +6,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # webform_submission.
 # Each handler a webform's config file lists gives a webform_uses_handler edge from its bundle to
 # the handler plugin its id names (webform_handler/webform_handler_use.yaml).
+# Each element of a webform, at any depth, is a webform.element node,
+# webform_submission.<webform>:<element key>, read from the elements text of its config file
+# (webform_element/webform_element.yaml).
 # Webform and WebformSubmission join drupal_basic's table entity_classes, so drupal_basic's
 # entity_class_static_call gives a static load, loadMultiple or create call on either an inferred
 # uses_entity_type edge to its entity type.
@@ -13,8 +16,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # Known gaps: an id that is not text in double quotes makes no plugin and is listed under skipped. A
 # handler declared by an attribute gives nothing: this pack reads the annotation only, and the
 # attribute class was not checked against a Webform release. Webform's other plugin types, such as
-# elements and exporters, give nothing. A webform's elements and settings in its config file give
-# nothing, nor does its category or status. A disabled handler gives the same webform_uses_handler
+# element plugins and exporters, give nothing. An element's type, title and other properties give
+# nothing; an element key with a capital letter or a leading digit is not read, and a composite
+# element's sub-elements read as elements of the webform. A webform's settings, category and
+# status give nothing. A disabled handler gives the same webform_uses_handler
 # edge as an enabled one. The entity type webform_submission is declared by the module's PHP, which
 # is not mapped, so it stays referenced.
 pack: webform_basic

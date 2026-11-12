@@ -1,0 +1,48 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A mapping of a webform's submissions names a webform element in a token:
+# [webform_submission:values:<element key>]. The file rule links the mapping to an internal
+# element-name node; the map rule, for a mapping whose bundle is webform_submission.<webform>,
+# gives maps_webform_element to the element webform_basic maps under that webform
+# (webform_element/webform_element.yaml), only when that element is mapped.
+#
+# Limits: a token naming an element the webform does not hold gives nothing and leaves no mark.
+# A WebformElements mapping row, which names its element without a token, gives nothing.
+
+node_types:
+- name: salesforce.token_element
+  id_namespace: salesforce.token_element
+  internal: true
+
+edge_kinds:
+- kind: token_names_element
+  from: salesforce.mapping
+  to: salesforce.token_element
+- kind: maps_webform_element
+  from: salesforce.mapping
+  to: webform.element
+
+rules:
+- rule: salesforce_token_names_element
+  reads: file
+  in: [config, module_config]
+  match: {file: 'salesforce_mapping.salesforce_mapping.*', filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - edge: {kind: token_names_element, from: this_node, to: {from: {key: 'field_mappings.*.drupal_field_value'}, pattern: '^\[webform_submission:values:(?<element>[a-z0-9_]+)[:\]]', template: '{element}', type: salesforce.token_element}}
+  confidence: inferred
+
+- rule: salesforce_token_webform_element
+  reads: map
+  match:
+    node_type: salesforce.mapping
+    where: [{id_matches: '^drupal\.config::(?<mapping>.+)$'}]
+    follow:
+    - edge: maps_bundle
+    - id_matches: '^drupal\.bundle::(?<bundle>webform_submission\..+)$'
+    - node: 'drupal.config::{mapping}'
+    - edge: token_names_element
+    - id_matches: '^salesforce\.token_element::(?<element>.+)$'
+    - node: 'webform.element::{bundle}:{element}'
+  emits: [{edge: {kind: maps_webform_element, from: this_node, to: matched_node}}]
+  confidence: inferred

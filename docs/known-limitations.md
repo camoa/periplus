@@ -130,7 +130,7 @@ a list of its known gaps.
 - **Drupal contributed modules, bundles:** `config_pages_basic`, `crop_basic`, `eck_basic`,
   `paragraphs_basic`, `profile_basic` and `webform_basic` map each type's label and nothing else of
   its settings, such as a paragraph type's behaviors, a crop type's aspect ratio, a profile type's
-  roles or a webform's elements. Their entity types, other than an ECK one, are
+  roles or a webform's settings; a webform's elements are nodes, with none of their properties. Their entity types, other than an ECK one, are
   declared by the module's PHP, which is not mapped, so they stay `referenced`. An image style's
   crop effect and a field's allowed paragraph types give no edge. An ECK bundle's entity type is
   read from its file name, so a file renamed by hand gives a wrong edge. `eck_basic` declares its
@@ -144,8 +144,9 @@ a list of its known gaps.
   rutter is loaded, for the classes it adds to `drupal_basic`'s table `entity_classes`.
   `eck_basic` lists `EckEntityType` only: ECK derives one entity type for each ECK type from
   `EckEntity` and `EckEntityBundle`. `salesforce_basic` reads any class with a generic `Plugin` annotation in the
-  mapping field folder as a mapping field. It does not read a mapping's `field_mappings`, so a field
-  mapped by a property path, a Salesforce field and a direction give no edge. Sync triggers, pull
+  mapping field folder as a mapping field. Of a mapping's `field_mappings` it reads only a token,
+  so a field mapped by a property path, a `WebformElements` row, a Salesforce field and a
+  direction give no edge. A token's field is picked by its name alone, on any entity type. Sync triggers, pull
   settings and other Salesforce plugin types give nothing. An event used through an alias, or
   written as its own text, makes no `salesforce.event`; `drupal_basic` joins each key of
   `getSubscribedEvents` to its listener through a referenced `drupal.event`.

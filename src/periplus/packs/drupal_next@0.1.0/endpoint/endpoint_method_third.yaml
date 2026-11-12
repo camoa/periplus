@@ -9,7 +9,7 @@ rules:
   in: [module_root]
   match: &m0
     file: '*.routing'
-    filetype: drupal_next_yml_text
+    filetype: drupal_yml_text
     text: (?m)^(?<route>[\w.]+):\n(?:[ \t][^\n]*\n)*?[ \t]+path:[ \t]*['"]?(?<path>/[^'"\n]*)['"]?\n(?:[ \t][^\n]*\n)*?[ \t]+methods:\s*\[\s*['"]?[A-Z]+['"]?\s*,\s*['"]?[A-Z]+['"]?\s*,\s*['"]?(?<m>[A-Z]+)
   values: &v0
     target: {template: '{path}', normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]}

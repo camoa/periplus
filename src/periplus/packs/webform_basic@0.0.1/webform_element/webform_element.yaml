@@ -1,0 +1,23 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each element of a webform, as webform_submission.<webform>:<element key>, the bundle id and the
+# key a submission stores its value under. A webform's config file holds its elements as YAML
+# inside the text of its elements key, so the rule reads the file as text, through drupal_basic's
+# file type drupal_yml_text. A line '<key>:' followed by a line that opens with '# is an element,
+# at any depth, so an element inside a fieldset or a container is found too.
+#
+# Limits: an element whose key holds a capital letter, or starts with a digit, gives nothing. A
+# composite element's own sub-elements under '#element' read as elements of the webform.
+
+node_types:
+- name: webform.element
+  id_namespace: webform.element
+
+rules:
+- rule: webform_element_from_config
+  reads: file
+  in: [config, module_config]
+  match: {file: 'webform.webform.*', filetype: drupal_yml_text, text: '(?m)^ +(?<element>[a-z][a-z0-9_]*):\n +''#'}
+  id: {template: '{file_stem}:{element}', normalize: [{replace: '^webform\.webform\.', with: 'webform_submission.'}]}
+  emits: [{node: {type: webform.element}}]
+  confidence: declared

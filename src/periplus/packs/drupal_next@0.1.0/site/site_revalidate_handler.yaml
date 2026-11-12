@@ -15,7 +15,7 @@ rules:
   - module_config
   match:
     file: next.next_site.*
-    filetype: drupal_next_yml_text
+    filetype: drupal_yml_text
     text: (?m)^revalidate_url:\s*['"]?https?://[^/'"\s]+(?<path>/[^'"\s?]*)
   id:
     template: '{next_site}'
