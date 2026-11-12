@@ -24,7 +24,7 @@ rules:
       - node: {type: drupal.block_type}
       - attribute: {name: label, from: {key: label}}
     confidence: declared
-    # Verified against three types made three different ways, all reaching one shape:
+    # Three types made three different ways all reach one shape:
     #   config/default/block_content.type.type_way_install.yml
     #   config/default/block_content.type.type_way_code.yml
     #   config/default/block_content.type.type_way_recipe.yml

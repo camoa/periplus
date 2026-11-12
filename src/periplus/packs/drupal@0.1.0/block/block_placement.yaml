@@ -6,7 +6,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # it is a refinement of drupal.config_object rather than a separate kind of thing — a reader
 # asking for all configuration still gets these.
 #
-# One block, many placements. Verified in the export:
+# One block, many placements, as in the export:
 #   block.block.claro_page_title.yml     plugin: page_title_block
 #   block.block.gin_page_title.yml       plugin: page_title_block
 #   block.block.olivero_page_title.yml   plugin: page_title_block

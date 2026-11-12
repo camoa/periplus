@@ -20,5 +20,5 @@ rules:
       - attribute: {name: field_type,  from: {key: type}}
       - attribute: {name: cardinality, from: {key: cardinality}}
     confidence: declared
-    # Verified: field.storage.block_content.body.yml, and the six the test modules ship as
+    # The shape of field.storage.block_content.body.yml, and of the six the test modules ship as
     # field.storage.block_content.field_tw_*.yml.

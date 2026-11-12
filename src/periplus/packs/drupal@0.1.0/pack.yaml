@@ -11,8 +11,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # The dark one is not an oversight. It is the test for what happens when first-party code
 # leans on something no pack describes, which is the ordinary state of any real codebase.
 #
-# Every Drupal claim below was read from drupal-cms on 2026-08-28 and carries its file and
-# line. Nothing here is recalled.
+# Every Drupal fact below names its file and line in Drupal CMS as of 2026-08-28.
 
 pack: drupal
 version: 0.1.0
@@ -61,7 +60,7 @@ files:
     # code anyone wrote to be read. Excluded rather than bounded: nothing in these files
     # should ever be a node, not even the target of a reference.
     #
-    # Verified present in drupal-cms on 2026-08-28.
+    # Each is present in Drupal CMS as of 2026-08-28.
     - "web/sites/*/settings.php"           # web/sites/default/settings.php
     - "web/sites/*/settings.*.php"         # web/sites/default/settings.ddev.php
     - "web/sites/*/default.settings.php"   # the template shipped by core
@@ -102,7 +101,7 @@ boundary:
   # ContentEntityBase`, and the interface is two hops up inside core. A rule matching the
   # written clause would match nothing real.
   #
-  # Both families are diamonds. Verified:
+  # Both families are diamonds:
   #
   #   ContentEntityForm extends EntityForm implements ContentEntityFormInterface
   #     ContentEntityForm.php:16 / ContentEntityFormInterface.php:11
@@ -154,7 +153,7 @@ boundary:
       "Drupal\\Core\\Cache\\CacheTagsInvalidatorInterface": ~
 
   # ------------------------------------------------------------------------------------
-  # Deliberately NOT shipped, so the unknown path is exercised by real code.
+  # Deliberately NOT shipped, so the worked example exercises the unknown path.
   #
   # Nothing below appears in names. Each is referenced by first-party code in the
   # worked example, so each becomes a boundary node whose state is `referenced` rather

@@ -20,14 +20,16 @@ rules:
   confidence: declared
 
 # Each text a constant holds, as the end drupal.event::<text>, so a map rule can reach the event
-# of that text; constant_text_may_name_event's edge itself stays out of the map.
+# of that text; constant_text_may_name_event's edge itself stays out of the map. A name after a
+# comma or a space is read too, so const A = 'a', B = 'b'; gives both texts; a text read that no
+# event constant holds reaches nothing. Without a space after the comma, B is not read here.
 - rule: constant_text_may_name_event
   reads: file
   in: [source]
   match:
     file: '**'
     filetype: drupal_php_text
-    text: '\bconst\s+(?:\w+\s+)?(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?:''(?<single_text>[^''\\]*)''|"(?<double_text>[^"\\$]*)")\s*[;,]'
+    text: '(?:\bconst\s+(?:\w+\s+)?|[,\s]\s*)(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?:''(?<single_text>[^''\\]*)''|"(?<double_text>[^"\\$]*)")\s*[;,]'
   id: {template: '{single_text}{double_text}'}
   emits: [{edge: {kind: text_may_name_event, from: this_node, to: {template: '{single_text}{double_text}', types: [drupal.event_text]}}}]
   confidence: inferred

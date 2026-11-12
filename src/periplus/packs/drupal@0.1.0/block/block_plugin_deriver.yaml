@@ -23,8 +23,8 @@ rules:
     emits:
       - edge: {kind: deriver_class, from: this_node, to: {from: {argument_class: deriver}}}
     confidence: declared
-    # Verified first-party: DerivedBlock.php:20-25, deriver: NodeTypeBlockDeriver::class.
-    # Verified in core, the same shape three times:
+    # First-party: DerivedBlock.php:20-25, deriver: NodeTypeBlockDeriver::class.
+    # In core, the same shape three times:
     #   modules/views/src/Plugin/Block/ViewsBlock.php:17,19
     #   modules/system/src/Plugin/Block/SystemMenuBlock.php:21,24
     #   modules/block_content/src/Plugin/Block/BlockContentBlock.php:24,27

@@ -6,7 +6,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # pack keeps every id and refines every type to a descendant. That is the monotonic layering
 # check, and it is testable by running twice and diffing.
 #
-# Verified by grep over core lib and modules: no class implements both an entity interface
+# In core's lib and modules, no class implements both an entity interface
 # and a form interface. The two families are disjoint, so a class can never match both — a
 # form that edits a node is not a node.
 #

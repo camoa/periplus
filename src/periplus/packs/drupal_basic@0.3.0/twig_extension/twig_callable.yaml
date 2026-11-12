@@ -1,10 +1,11 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # new TwigFilter('name', ...) and new TwigFunction('name', ...), written by the short name, as
-# \Twig\TwigFilter and \Twig\TwigFunction, or as Twig\TwigFilter and Twig\TwigFunction, which
-# name Twig's classes after use Twig; or in a file with no namespace, each give an internal drupal.twig_callable with an edge
-# to the class around the call. A map rule keeps a name only when that class extends Twig's
-# AbstractExtension, directly or through mapped parents: it makes the twig.filter or twig.function
+# \Twig\TwigFilter and \Twig\TwigFunction, or as Twig\TwigFilter and Twig\TwigFunction, each give
+# an internal drupal.twig_callable with an edge to the class around the call. The class name is
+# matched as written, in any namespace and whatever the file's use statements bind, so another
+# vendor's class of one of these names matches too. A map rule keeps a name only when the class
+# around the call extends Twig's AbstractExtension, directly or through mapped parents: it makes the twig.filter or twig.function
 # node, at the call's line, and its provided_by edge to the class. A name that is not a text
 # literal, a class that implements ExtensionInterface without AbstractExtension, and the old
 # Twig_SimpleFilter form give nothing.

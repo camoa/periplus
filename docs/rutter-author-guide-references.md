@@ -16,7 +16,9 @@ src/periplus/packs.
     filetype: php
     where: [{name_matches: {child: function, pattern: '[^\W\d]\w*'}}]
     skip_names: [isset, empty, unset, list, array, echo, print, exit, die, eval, include, require,
-      include_once, require_once]
+      include_once, require_once, _, abs, acos,
+      # ...
+      zlib_get_coding_type]
   emits: [{edge: {kind: calls, from: enclosing_declaration, to: {types: [php.function], fallback: [as_written], on_miss: unresolved, on_miss_name: fallback}}}]
   confidence: declared
 
@@ -61,7 +63,8 @@ all, before any `resolve` step runs, so `isset(` is skipped in every namespace w
 comparison comes before the check that the field is a written name, so `skip_names: [self,
 static, parent]` passes over `self::m()`, though the grammar parses `self` as a keyword.
 `php_basic` lists PHP's language constructs; the grammar parses only isset, empty, die and eval as
-calls, and the rest are listed in case a release does too.
+calls, and the rest are listed in case a release does too. After them the list holds the functions
+PHP reports as internal, such as `strlen`, so a call to a builtin makes nothing.
 
 An item of `skip_names` may name a table in place of a name. The rule then skips that table's
 keys as well; the values are not read. The table follows the lookup step's rules: the rule's pack
@@ -82,9 +85,13 @@ resolved name. If none does, `on_miss: unresolved` gives an unresolved node sear
 name: `\Drupal::service('x')` in a custom module is an unresolved method `Drupal::service`, because
 Drupal core is outside the project folders. An unresolved node's type is the first candidate, so its
 id ignores how many a rule lists, and its `unresolved_detail` holds `types_tried`, every candidate
-in the order tried. An end of one type may be written `type` in place of a one-item `types`.
+in the order tried. An end of one type may be written `type` in place of a one-item `types`. Either
+way, its id is minted in that type's id namespace, not the kind's, so a type declared below the
+kind's type with a namespace of its own gets ids under that namespace.
 Confidence is `declared`: the call is written in the file. The grammar's imports resolve the name;
 [Import paths](rutter-author-guide-imports.md) binds slashed paths; the next section lists gaps.
+
+### A second name: fallback and on_miss_name
 
 `fallback` lists resolve steps run on the name as written, after the first name is settled. The
 first name is what the grammar's identity `resolve` and the end's own `resolve` make of the written
@@ -201,6 +208,13 @@ reports a conflict with another rutter only inside a project that pins both; els
 know which rutters load together. The bundled rutters for
 contributed modules, such as `profile_basic`, add their entity classes to `entity_classes` this
 way, so `entity_class_static_call` reads `Profile::load(1)` only in a project that loads them.
+
+Each fact lives in the rutter whose stack it belongs to. A language's own names, such as
+JavaScript's globals, belong in the language rutter; what a framework adds, such as Drupal's
+`Drupal` and `once`, belongs in the framework rutter. The framework rutter shares its part by
+adding rows to the language rutter's table, as `drupal_js_basic` adds to `js_basic`'s
+`shared_objects` and `library_globals`, and never by copying the language rutter's rule into its
+own pack.
 
 ### A name tested against a table: in_table and not_in_table
 
@@ -374,8 +388,11 @@ cleaned id, so a method id must repeat that normalize to match.
 
 `where: [{has_child: struct_type}]` fires a declaration rule only on a node with a direct child of
 that type, and an enclosing class comes from the rule that fires. Elsewhere it refuses the map with
-exit 26, as a `where` other than `name_matches` on a reference rule does. `name_child` takes field
-names only, so Go's package_identifier, which has none, cannot be one. A path value added alone to
+exit 26, as a `where` other than `name_matches`, `in_table` or `not_in_table` on a reference rule
+does. A declaration rule's `name_child` written as a string names a field. Its list form is a path
+whose steps are each a field or else the first named child of that node type, so
+`[package_identifier]` reaches Go's package name, which has no field. A reference rule's
+`name_child`, one entry or two, reads each entry the same way. A path value added alone to
 a parent's file type still needs the type declared again in full.
 
 `id: {from: declared_name, pattern: '^{module}_(?<hook>\w+)$', template: '{hook}'}` gives a

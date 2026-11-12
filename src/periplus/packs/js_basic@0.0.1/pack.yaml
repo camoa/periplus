@@ -7,9 +7,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # named by the dotted name alone, A.b.c, when the table shared_objects holds A, such as window,
 # and else named in its script, <script path>:A.b.c. A function written directly in an object
 # literal assigned to a dotted name, A.b = { open() {}, close: function () {} }, is named the same
-# way, A.b.open or <script path>:A.b.open. Each line below was seen on real code or on a planted
-# file. Each script is a js.file node named by its path, and each function above has a
-# script_declares_function edge from its script.
+# way, A.b.open or <script path>:A.b.open. Each script is a js.file node named by its path, and
+# each function above has a script_declares_function edge from its script.
 # Calls: f() is a js_calls edge to <script path>:f; a.b.c() is a js_calls edge to the member
 # function a.b.c, and to the member function <script path>:a.b.c of the calling script, when one
 # is mapped. When shared_objects holds a and builtin_objects does not, a call no script assigns is

@@ -336,7 +336,9 @@ field, and a PHP constant's name has none, so the one-step list `[name]` reads i
 match: {declaration: const_element, name_child: [name], filetype: php}
 ```
 
-This rule fires once per constant, so `const A = 'a', B = 'b';` names `A` and `B`.
+This rule fires once per constant, so `const A = 'a', B = 'b';` names `A` and `B`. An empty step,
+as `[scope, ""]`, and an empty string `name_child: ""` are refused at load, by `periplus validate`
+and `periplus map` alike.
 
 The id may also list one docblock source, `{docblock: <pattern>}`. The engine searches the
 pattern in the comment that is the matched node's previous sibling, of the node type the grammar's

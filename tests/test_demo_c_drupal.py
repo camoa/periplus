@@ -1271,16 +1271,15 @@ def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_t
     """A constant of an Event class or an *Events class is an event, named by the text it holds,
     with a drupal.event_constant that names it; each key of getSubscribedEvents, in either form,
     joins its listener, and each dispatch its method, all inferred, at the key's line. A second
-    constant of one statement, whose text is not read, is an event named by the constant. An
-    outside event keeps its constant's name; an own-class constant ends at a referenced event of
-    its text; an array outside getSubscribedEvents gives nothing; a class in the file's namespace
-    joins in the map."""
+    constant of one statement is an event named by its text too. An outside event keeps its
+    constant's name; an own-class constant ends at a referenced event of its text; an array
+    outside getSubscribedEvents gives nothing; a class in the file's namespace joins in the map."""
     _plant(tmp_path, EVENTS)
     document, report = _map(tmp_path)
     own = "Drupal\\my_module\\"
     sub = f"php.method::{own}EventSubscriber\\OrderSubscriber::"
     notify = f"php.method::{own}Service\\Notifier::notify"
-    cancelled = f"drupal.event::{own}Event\\OrderEvent::CANCELLED"
+    cancelled = "drupal.event::my_module.cancelled"
     constant = f"drupal.event_constant::{own}"
     states = {
         n["id"]: n["state"]
@@ -1296,12 +1295,14 @@ def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_t
         "drupal.event::my_module.sent": "referenced",
         "drupal.event::Symfony\\Component\\HttpKernel\\KernelEvents::REQUEST": "referenced",
         constant + "Event\\OrderEvent::PLACED": "mapped",
+        constant + "Event\\OrderEvent::CANCELLED": "mapped",
         constant + "Event\\OrderEvents::PAID": "mapped",
         constant + "EventSubscriber\\LocalEvents::LOCAL": "mapped",
     }
     names = {(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "names_event"}
     assert names == {
         (constant + "Event\\OrderEvent::PLACED", "drupal.event::my_module.placed"),
+        (constant + "Event\\OrderEvent::CANCELLED", cancelled),
         (constant + "Event\\OrderEvents::PAID", "drupal.event::my_module.paid"),
         (constant + "EventSubscriber\\LocalEvents::LOCAL", "drupal.event::my_module.local"),
     }
@@ -1316,7 +1317,7 @@ def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_t
     sent = "event_dispatched_by_text"
     by_constant = "event_subscribed_by_constant"
     assert found == {
-        ("subscribed_by", cancelled, sub + "onCancelled", 15, by_constant, "inferred"),
+        ("subscribed_by", cancelled, sub + "onCancelled", 15, text, "inferred"),
         ("subscribed_by", "drupal.event::my_module.mine", sub + "onMine", 16, text, "inferred"),
         ("subscribed_by", "drupal.event::my_module.placed", sub + "onPlaced", 18, text, "inferred"),
         ("subscribed_by", request, sub + "onRequest", 19, by_constant, "inferred"),
@@ -1325,7 +1326,7 @@ def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_t
         ("dispatched_by", "drupal.event::my_module.placed", notify, 14, sent, "inferred"),
         ("dispatched_by", "drupal.event::my_module.paid", notify, 15, sent, "inferred"),
         ("dispatched_by", "drupal.event::my_module.sent", notify, 16, sent, "inferred"),
-        ("dispatched_by", cancelled, notify, 18, "event_dispatched_by_constant", "inferred"),
+        ("dispatched_by", cancelled, notify, 18, sent, "inferred"),
         (
             "dispatched_by_function",
             "drupal.event::my_module.placed",

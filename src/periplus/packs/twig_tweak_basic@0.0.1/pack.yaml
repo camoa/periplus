@@ -5,9 +5,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # drupal_block('plugin_id') to the block plugin, drupal_menu('name') to the config object
 # system.menu.<name>, drupal_entity('type', ...) and drupal_entity_form('type', ...) to the entity
 # type, and drupal_field('field', 'type', ...) to the config object field.storage.<type>.<field>.
-# Each line below was seen on real code or on a planted file.
 # - drupal_view, drupal_region, drupal_config, drupal_image, drupal_token, drupal_contextual_links
-#   and drupal_breadcrumb: no rule. The site this pack was written on calls none of them.
+#   and drupal_breadcrumb: no rule.
 # - drupal_messages() and drupal_url() name nothing a node stands for: no edge.
 # - A name held in a variable or joined from parts, as drupal_block(block_id): no edge, and no
 #   skipped row.

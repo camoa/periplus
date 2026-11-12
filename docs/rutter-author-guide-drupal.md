@@ -235,7 +235,13 @@ meet at one node. A third party gets the same links from a project-local pack
 ## Configuration owners, theme hooks, stylesheets, forms, entity hooks and paths
 
 Each relation below is an edge kind `drupal_basic@0.3.0` or `drupal_js_basic@0.0.1` declares.
-The pack's `pack.yaml` lists what each one misses and where it is wrong.
+The pack's `pack.yaml` lists what each one misses and where it is wrong. The list is partial:
+`drupal_basic` also maps plugin types and their managers (`plugin_of_type`,
+`manages_plugin_type`), entity handlers (`has_access_handler` and its siblings), constraint
+validators (`validated_by`), route access checks (`access_checked_by_service`,
+`access_checked_by`), route alters (`alters_routes`), the views plugins a view uses
+(`view_uses_field_plugin` and its siblings) and `has_attribute`. [Bundled rutters](rutters.md)
+names each rutter's reach, and the head of its `pack.yaml` lists it in full.
 
 - `config_provided_by` and `config_provided_by_theme`, from a configuration object to a module
   or a theme: each simple configuration file, one with no top-level `uuid`, names the extension

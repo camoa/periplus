@@ -213,7 +213,9 @@ An end may also find its name in a table the pack carries. `tables`, a top-level
 the tables of its pack and of the packs it depends on, the nearer pack's winning whole. A step
 naming a table none of them declares is refused, naming the `tables` key. A reference rule's
 `skip_names` may hold `{table: <name>}` beside its names, and skips that table's keys; a table none
-of those packs declares refuses the rule. The table is data, so the engine still holds no language
+of those packs declares refuses the rule. `skip_names` is compared with the first `name_child`
+field's text as written, before the test that the text is a written name, so a listed keyword
+leaves no skipped row. The table is data, so the engine still holds no language
 knowledge. A pack adds rows to a table of a pack it depends on,
 directly or not, under `add_table_rows: {<pack>: {<table>: {<written name>: <node name>}}}`;
 every rule that sees the table, the owner's among them, then finds them, in a run that loads the
@@ -225,6 +227,9 @@ declared as text, when the grammar block declares `constant_access` and `constan
 the node types of a constant read and of a declaration; one without the other is refused.
 An end or id read `{argument: N}` finds the arguments in the field `identity.call_arguments`
 names, else in the matched node's first named child of that node type.
+
+An end of one type mints its id in that type's id namespace, and an end that names no type in the
+kind's.
 
 An end with `fallback` tries a second name after the first, and `on_miss` marks the first when
 neither is mapped. `on_miss_name: fallback` marks the fallback name instead, for a language that
@@ -258,7 +263,8 @@ reference rule of the same file type that could start at the type.
 
 A declaration rule's `name_child` list is a path of one step or more, each step a field or else
 the first named child of that node type; `[name]` reaches a name that has no field. A reference
-rule's list is one field or two, the name and a member.
+rule's list is one field or two, the name and a member. An empty step, or an empty string
+`name_child`, is refused at load.
 
 `name_matches` tests a child's whole text. Its string form tests the first `name_child`. Its
 mapping form, `{child: scope, pattern: Config}`, names the child: a field of the match, or else
@@ -273,7 +279,10 @@ a file rule. `{table: <table>, capture: <name>}` tests a named capture of a `nam
 that took no text is a key of none. So two rules, one with each, split one shape by the root of a
 dotted name. The table is found as a lookup step finds one, with the rows `add_table_rows` adds. A
 table none of those packs declares, or a capture no pattern of the `where` defines, refuses the
-rule. The table is data: the engine holds no list of names.
+rule. On a tree declaration or reference rule, `{table: <table>, fill: enclosing_type}` tests the
+full name of the type that holds the match, and with `pattern` and `capture` a capture of that
+pattern searched in it. On a declaration rule whose `name_child` is a list, a condition with no
+capture and no fill is refused. The table is data: the engine holds no list of names.
 
 ---
 

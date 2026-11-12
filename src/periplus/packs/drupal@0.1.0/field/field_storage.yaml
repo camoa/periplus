@@ -6,7 +6,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # bundles point at one storage, and the fan-in is information the individual files do not
 # carry.
 #
-# Verified in the export — one core storage, three instances, three different origins:
+# In the export, one core storage, three instances, three different origins:
 #   field.storage.block_content.body            core's own (_core hash at line 8)
 #     field.field.block_content.basic.body            core's basic type
 #     field.field.block_content.block_ways_note.body  block_ways config/install

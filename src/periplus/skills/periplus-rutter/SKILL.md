@@ -41,6 +41,7 @@ project's own `.periplus/packs` first, and map that project until the map holds 
    each find `php.call_site` in their own way, and neither file's rules are stretched over the other's case.
 3. Declare each node type and edge kind the rule emits, in that rule file or in a pack the rutter
    depends on. A rule may name only those types. Name a contributed-module type for its module, as `drupal.webform_handler` does, so a later `drupal_basic` type cannot collide.
+   An edge end that names one type mints its id in that type's id namespace, not the kind's.
 4. Pick the shape from the guide: a whole-file rule, a text rule, a binding rule, a reference rule
    or a map rule.
 5. Set the confidence. Confidence is declared on the rule, not decided at runtime. A rule firing on
@@ -90,7 +91,8 @@ a call site, a hub for a name, or a name guessed from how it is written. A map r
 node to the real target, and only when the map holds the target. A target the map lacks leaves a
 mark, an end with `on_miss: unresolved` or a referenced node: never silence, and never an invented
 target. Mark the node's type `internal: true`, so the written map leaves it out; the detail is in
-[Internal node types](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-map-rules.md#internal-node-types).
+[Internal node types](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-map-rules.md#internal-node-types), and the pattern in
+[Join an internal node to its real target](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-map-rules.md#join-an-internal-node-to-its-real-target).
 
 Copy from the bundled rule files `role/role_call.yaml` of `drupal_basic`, a role-name hub joined to
 the role's configuration; `member/member_call.yaml` of `js_basic`, a member call joined to the
@@ -105,7 +107,8 @@ rule instead.
 Each key below has its detail in the guide section linked:
 
 - `add_table_rows` in `pack.yaml` adds rows to a table a rutter this one depends on owns, and the
-  owner's rules read them. Use it in place of copying the owner's rule
+  owner's rules read them. Use it in place of copying the owner's rule. Inside a project,
+  `periplus validate` reports rows that two pinned rutters add in conflict
   ([Adding rows to a table another rutter owns](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-references.md#adding-rows-to-a-table-another-rutter-owns)).
 - An item of `skip_names` may be `{table: <name>}`, which skips the table's keys too. The skip
   list is checked before the test that the name is written, so a keyword such as `self` can be
@@ -113,11 +116,11 @@ Each key below has its detail in the guide section linked:
 - The `where` conditions `in_table: <table>` and `not_in_table: <table>` pass over a name that is
   not, or is, a key of the table; `{table: <table>, capture: <name>}` tests a named capture
   instead. Two small rules then split one shape
-  ([Tree references](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-references.md)).
+  ([Tree references](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-references.md#a-name-tested-against-a-table-in_table-and-not_in_table)).
   `{table: <table>, fill: enclosing_type}` tests the enclosing type's full name, and with `pattern` and `capture` a capture of it.
 - `match.encloses_for: [<pack>]` on a declaration rule makes its node the start of that pack's reference-rule edges written inside it, in place of copying those rules ([Tree references](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-references.md#a-dependents-node-as-the-start-of-another-rutters-edges)).
 - `on_miss_name: fallback`, on an end that holds `on_miss` and `fallback`, puts the miss mark
-  under the fallback name ([Tree references](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-references.md)).
+  under the fallback name ([Tree references](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-references.md#a-second-name-fallback-and-on_miss_name)).
 - A declaration rule's `name_child` list is a path of one step or more; each step is a field, else
   the first named child of that node type, so `[name]` reaches a name with no field
   ([A name below the match](https://github.com/camoa/periplus/blob/v0.7.0/docs/rutter-author-guide-abilities.md#a-name-below-the-match-and-a-value-from-the-docblock)).
@@ -361,7 +364,8 @@ the gap is accepted.
    in `fallback`, run on the name as written after the first name is settled: under `php_basic`,
    whose identity resolves `helper()` in namespace `App` to `App\helper`, `fallback: [as_written]`
    alone lands the call on `App\helper`, else on `helper`, and `on_miss` applies under `App\helper`
-   when neither is mapped. A pack whose identity does not prefix the namespace writes
+   when neither is mapped. With `on_miss_name: fallback`, as `php_basic` writes it, the mark falls
+   under `helper` instead, the likelier miss for a global function. A pack whose identity does not prefix the namespace writes
    `resolve: [prefix_with: namespace]` beside it.
 3. Offer one next rule from those rows, in plain words, and write it only when the person agrees.
 

@@ -206,6 +206,12 @@ which no mapped file declares.
 
 Each edge has `from`, `to`, `kind`, its locations, an `occurrences` count and its provenance.
 
+- A call whose target is built at run time, such as `$this->$name()`, is a call-site node, as
+  `php.call_site`, whose `attributes` hold `resolution: runtime`. The map keeps the call and draws
+  no edge from it, because no rule can name the target. A node of a type a rutter marks
+  `internal` serves that rutter's map rules and is left out of the written map, with every edge
+  that has an end on it.
+
 **Determinism.** `tests/test_demo_b_map_determinism.py` maps one project in separate processes
 under different hash seeds and locales, and the maps are byte-identical. This ran on one Linux
 machine. The design aims for identical maps across machines, but no test has
@@ -229,8 +235,8 @@ are copied into a project's `.periplus/packs`. The tables group them by language
 | `yaml_basic` | 0.1.0 | Claims `.yml` and `.yaml` files for rutters that depend on it. No rules of its own. |
 | `twig_basic` | 0.1.0 | Claims `.twig` files for rutters that depend on it. No rules of its own. |
 | `typescript` | 0.1.0 | TypeScript modules, imports, packages and functions in `.ts` and `.tsx` files, and calls from one function to a function the file binds by name. It reads the files as text; the project sets the folder the `@/` alias points at as `typescript_alias_root`. |
-| `react` | 0.1.0 | React components and hooks, named by convention, the components a function renders, the hooks it uses, and the `use client` or `use server` directive. It reads the files as text. |
-| `nextjs` | 0.2.0 | Next.js App Router pages, layouts, route handlers with their HTTP methods, middleware and special files under `app`. A `fetch` of a route, a link to a page, and a name or prop that holds a route URL. It reads the files as text. |
+| `react` | 0.1.0 | React components and hooks, named by convention, the components a function renders, the hooks it uses, and the `use client` or `use server` directive. It reads the files as text. Depends on `typescript`. |
+| `nextjs` | 0.2.0 | Next.js App Router pages, layouts, route handlers with their HTTP methods, middleware and special files under `app`. A `fetch` of a route, a link to a page, and a name or prop that holds a route URL. It reads the files as text. Depends on `react`. |
 
 </details>
 
@@ -242,9 +248,9 @@ beside `drupal_basic` when the site uses that module.
 
 | Rutter | Version | What it finds |
 |---|---|---|
-| `drupal_basic` | 0.3.0 | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays and plugins. The services and entity types that `\Drupal::service('x')`, `$container->get('x')`, `\Drupal::entityQuery('x')` and an entity type manager's `getStorage('x')` name in PHP functions and methods, with a static `load()` on a module's own entity class. The route and path a method or function links to, and the views plugins a view uses. Plugin types with their plugins and managers, an entity type's handler classes, a constraint's validator, and the service that answers a custom route requirement. Events with their subscribers and dispatchers, custom Twig filters and functions with the templates that call them, the field storages that code and templates name, and the block, theme hook or field a suggestion template's name points to. The roles that `hasRole`, `addRole` and `removeRole` name, the configuration objects that `\Drupal::config('x')` and a config factory name, the queue workers whose queues a queue factory gets, and the forms a `form_<id>_alter` hook alters. The factory a service is built by, local tasks, local actions and contextual links with their routes and classes, entity and confirm forms typed as forms, and the macro files a template imports. Hooks from `Hook` attribute methods, and from procedural functions named by their file's name, such as `mymod_cron` in `mymod.module`. Depends on `php_basic`, `yaml_basic` and `twig_basic`. |
-| `drupal_js_basic` | 0.0.1 | Drupal behaviors, the behaviors they attach and the calls written in them, `drupalSettings` keys that PHP attaches and behaviors read, the libraries that PHP and templates attach, and the paths scripts request. Depends on `js_basic` and `drupal_basic`. |
-| `drupal_more` | 0.1.0 | Base fields an entity class defines and the entity type a reference field targets, the PHP class or trait that reads or writes a field by name, the handler classes an entity annotation names, `Job::create('type')` calls, and `->hasPermission('literal')` checks. Depends on `drupal_basic` and `advancedqueue_basic`. |
+| `drupal_basic` | 0.3.0 | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays and plugins. The services and entity types that `\Drupal::service('x')`, `$container->get('x')`, `\Drupal::entityQuery('x')` and an entity type manager's `getStorage('x')` name in PHP functions and methods, with a static `load()` on a module's own entity class. The route and path a method or function links to, and the views plugins a view uses. Plugin types with their plugins and managers, an entity type's handler classes, a constraint's validator, and the service that answers a custom route requirement. Events with their subscribers and dispatchers, custom Twig filters and functions with the templates that call them, the field storages that code and templates name, and the block, theme hook or field a suggestion template's name points to. The roles that `hasRole`, `addRole` and `removeRole` name, the configuration objects that `\Drupal::config('x')` and a config factory name, the queue workers whose queues a queue factory gets, and the forms a `form_<id>_alter` hook alters. The factory a service is built by, local tasks, local actions and contextual links with their routes and classes, entity and confirm forms typed as forms, and the macro files a template imports. Hooks from `Hook` attribute methods, and from procedural functions named by their file's name, such as `mymod_cron` in `mymod.module`. Each PHP attribute with the class, method, function, property or parameter it sits on, each route subscriber as a route alter marked `resolution: runtime`, and the themes `core.extension` installs. Depends on `php_basic`, `yaml_basic` and `twig_basic`. |
+| `drupal_js_basic` | 0.0.1 | Drupal behaviors, the behaviors they attach and the calls written in them, `drupalSettings` keys that PHP attaches and behaviors read, the libraries that PHP, templates and components attach, the library scripts and stylesheets, and the paths that script strings, template literals and `Drupal.url()` write. A request whose URL is built at run time is a node marked `resolution: runtime`. Depends on `js_basic` and `drupal_basic`. |
+| `drupal_more` | 0.1.0 | Base fields an entity class defines and the entity type a reference field targets, the PHP class or trait that reads or writes a field by name, a `has_handler` edge from an entity class to each handler class its annotation names, the storage schema, views data and translation handlers among them, which `drupal_basic` does not read, `Job::create('type')` calls, and `->hasPermission('literal')` checks. Depends on `drupal_basic` and `advancedqueue_basic`. |
 | `ai_basic` | 0.0.1 | The AI module's agent plugins and function call plugins, by attribute, each joined to its class. |
 | `advancedqueue_basic` | 0.0.1 | The Advanced Queue module's job type plugins, by attribute or annotation, each joined to its class. |
 | `config_pages_basic` | 0.0.1 | Each Config Pages type, from its config file, as a bundle of the entity type `config_pages`. |
@@ -257,7 +263,7 @@ beside `drupal_basic` when the site uses that module.
 | `profile_basic` | 0.0.1 | Each Profile type, from its config file, as a bundle of the entity type `profile`. The entity type a static `load()` on `Profile` or `ProfileType` names. |
 | `salesforce_basic` | 0.0.1 | Salesforce mapping field plugins; each mapping with its Salesforce object and its edges to the bundle, entity type and fields it maps, the field storages its tokens name and the webform elements its webform submission tokens and `WebformElements` rows name; the Salesforce events that subscribers name; the entity type a static `load()` on `MappedObject` or `SalesforceMapping` names. Depends on `webform_basic`. |
 | `salesforce_eca_basic` | 0.0.1 | The ECA event plugins of the Salesforce ECA module, added to `eca_basic`'s table of event plugins, so a model that reacts to one links to the Salesforce event a subscriber subscribes to. Depends on `eca_basic` and `salesforce_basic`. |
-| `twig_tweak_basic` | 0.0.1 | The block plugins, menus, entity types and field storages that Twig Tweak functions such as `drupal_block('x')` name in templates. |
+| `twig_tweak_basic` | 0.0.1 | The block plugins, menus, entity types, entity forms and field storages that Twig Tweak functions such as `drupal_block('x')` name in templates. |
 | `webform_basic` | 0.0.1 | Webform handler plugins, by annotation, each joined to its class, and each webform, from its config file, as a bundle of `webform_submission`, with the handlers it runs and its elements. The entity type a static `load()` on `Webform` or `WebformSubmission` names. |
 
 </details>
@@ -301,8 +307,8 @@ reports for a project that pins them, such as the rules in them the engine does 
 
 The bundled rutters are in `src/periplus/packs`. The examples are in
 `examples/second-stack/packs`. The manifest of every rutter in the tables above, except
-`yaml_basic`, `twig_basic`, the examples and the reference packs, opens with a list of its known
-gaps.
+`yaml_basic`, `twig_basic`, `typescript`, `react`, `nextjs`, `drupal_more`, `drupal_next`, the
+examples and the reference packs, opens with a list of its known gaps.
 
 To map a Go module, run Periplus at the module's root. Give the module
 path in the settings, because Periplus does not read `go.mod`:
@@ -467,7 +473,7 @@ from this file and compares the map with the lines above.
 | [`docs/rutter-author-guide.md`](docs/rutter-author-guide.md) | Start here: the files of a rutter, one rule of each shape, and how to check a rutter. |
 | [`docs/rutter-author-guide-text.md`](docs/rutter-author-guide-text.md) | Text files: spans, values from enclosing spans, the line of a node, and a path below a folder. |
 | [`docs/rutter-author-guide-drupal.md`](docs/rutter-author-guide-drupal.md) | Parse-tree rules, read through the PHP and Drupal rutters. |
-| [`docs/rutter-author-guide-references.md`](docs/rutter-author-guide-references.md) | Calls read from a parse tree, and every key the schemas accept that the engine does not run. |
+| [`docs/rutter-author-guide-references.md`](docs/rutter-author-guide-references.md) | Calls read from a parse tree; tables, `add_table_rows` and `in_table`; `encloses_for`; and every key the schemas accept that the engine does not run. |
 | [`docs/rutter-author-guide-imports.md`](docs/rutter-author-guide-imports.md) | Import paths and a call's arguments. |
 | [`docs/rutter-author-guide-abilities.md`](docs/rutter-author-guide-abilities.md) | A condition on a second child, an id that must fit a pattern, a declared end, and a class constant as a call's argument. |
 | [`docs/rutter-author-guide-map-rules.md`](docs/rutter-author-guide-map-rules.md) | Map rules: rules that read the map the file rules made, run in passes, one hop each. |

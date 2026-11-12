@@ -208,8 +208,7 @@ def greet():
 ```
 
 Then map it. `periplus map` writes `.periplus/map.json` by default, which is where the commands
-look. Each block below is run by `scripts/demo.d/99zb-navigation.sh` and its output compared with
-what is shown, so it cannot drift. Text after the output, as `(exit N)`, is the exit code.
+look. Text after the output, as `(exit N)`, is the exit code.
 
 Count what the map holds:
 

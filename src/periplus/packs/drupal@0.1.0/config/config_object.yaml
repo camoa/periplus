@@ -4,11 +4,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #
 # The catch-all is the reason a gap is visible instead of silent. Every file in the config
 # folders becomes a node here, and the specific rules elsewhere refine the ones they
-# understand. Measured on a private Drupal site: 431 files in, 162 refined by a specific rule,
-# 269 left as plain drupal.config_object — present, named, not understood.
+# understand. A file no specific rule refines stays a plain drupal.config_object: present,
+# named, not understood.
 #
-# The path used to be written into this rule as **/config/{install,sync}/*.yml. All three
-# real sites keep config somewhere else, so it matched nothing and 431 files vanished
+# The path used to be written into this rule as **/config/{install,sync}/*.yml. A site
+# that keeps config somewhere else matched nothing, and every config file vanished
 # without a word. That is exactly the failure the catch-all exists to prevent.
 
 node_types:

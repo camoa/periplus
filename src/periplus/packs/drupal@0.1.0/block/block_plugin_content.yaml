@@ -25,7 +25,7 @@ rules:
     emits:
       - node: {type: drupal.block_plugin}
     confidence: declared
-    # Verified: block_ways.install:41   'plugin' => 'block_content:' . $note->uuid(),
+    # block_ways.install:41   'plugin' => 'block_content:' . $note->uuid(),
     # A concatenation, not a literal. The uuid comes from a content entity saved seven lines
     # earlier, and core keys the derivative by exactly that value:
     #   block_content/src/Plugin/Derivative/BlockContent.php:51

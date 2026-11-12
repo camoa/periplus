@@ -14,6 +14,8 @@ The PHP and Drupal rutters read a parse tree; [Reading the Drupal rutters](rutte
 walks through them. [Text spans](rutter-author-guide-text.md) covers nested regions of a text file.
 [Second children and id patterns](rutter-author-guide-abilities.md) tests a call's class and its
 method in one rule, and keeps an id only when its source fits a pattern. [Map rules](rutter-author-guide-map-rules.md) chain files.
+[Tree references](rutter-author-guide-references.md) covers calls read from a parse tree, tables,
+`add_table_rows`, `in_table` and `encloses_for`.
 
 ## The files of a rutter, and how a project loads one
 

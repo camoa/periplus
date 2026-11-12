@@ -45,6 +45,3 @@ rules:
     emits:
       - type: drupal.content_entity_form
     confidence: declared
-    # Verified in a private Drupal site: 1 class extends ContentEntityForm, 1 extends
-    # ConfigFormBase. Small, and the rule that finds them is the same one that would find
-    # 258 in core.

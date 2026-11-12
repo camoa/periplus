@@ -1,7 +1,7 @@
 $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
 # Known gaps. This pack maps the Drupal side of a project's JavaScript and what joins it to
-# Drupal. Each line below was seen on real code or on a planted file.
+# Drupal.
 #
 # Behaviors. Drupal.behaviors.name = {...} is a node named by its name, and
 # Drupal.behaviors.other.attach(...) inside a behavior object is an edge to the other behavior.

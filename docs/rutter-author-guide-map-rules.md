@@ -26,7 +26,8 @@ and an optional `follow`, a list of steps from that node:
 
 It emits edges whose ends are `this_node`, the node it matched, `matched_node`, the node its
 `follow` reached, or one template end filled from the captures, with `type` or `types` and
-`on_miss` as on any end; or one node, whose `id` is a template. What a fire makes sits at each
+`on_miss` as on any end; or one node, whose `id` is a template. A template end of one type mints
+its id in that type's id namespace, and in the kind's only when it names no type. What a fire makes sits at each
 location of the node it matched, whatever its ends name, so a rule that matches a call-site node
 places its edge at the call. Every kind and type it names is
 declared by its rutter or one it depends on. A map rule reads only the nodes the rules found and
@@ -157,3 +158,17 @@ internal type, or of a type below one, is left out, with every edge that has an 
 of another type stays, even when every edge it had is gone. When the map leaves anything out, the
 Map section of the report prints `internal: <n> nodes and <m> edges left out`; the JSON report's
 `internal` holds both counts on every run.
+
+## Join an internal node to its real target
+
+Many shapes take two rules. A file rule writes an internal node where the code names a thing: a
+call site, a hub for a name, or a name guessed from how it is written. A map rule joins that node
+to the real target, and only when the map holds the target. A target the map lacks leaves a mark:
+an end with `on_miss: unresolved`, or a referenced node. The map never gets an invented target,
+and the call is never dropped in silence. The internal type keeps the file rule's node out of the
+written map.
+
+Three bundled rule files show the pattern: `role/role_call.yaml` of `drupal_basic`, a role-name
+hub joined to the role's configuration; `member/member_call.yaml` of `js_basic`, a member call
+joined to the member function its script declares; and `edges/var_type_as_written.yaml` of
+`php_basic`, a name kept as written and as resolved, joined to whichever the map holds.

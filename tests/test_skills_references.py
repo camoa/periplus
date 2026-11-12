@@ -35,7 +35,9 @@ _QUOTED = re.compile(r"[\"“]([^\"”\n]+)[\"”]")
 
 
 def _slug(heading: str) -> str:
-    text = re.sub(r"[`*_]", "", heading).strip().lower()
+    """GitHub's anchor: lowercase, characters other than letters, digits, spaces, hyphens and
+    underscores dropped, each space a hyphen."""
+    text = re.sub(r"[`*]", "", heading).strip().lower()
     return re.sub(r"\s", "-", re.sub(r"[^\w\s-]", "", text))
 
 

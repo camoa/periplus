@@ -2,8 +2,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # drupal pack — block plugin declared by a docblock annotation. One rule.
 #
-# The pre-attribute form, still read in Drupal 11. Verified at
-# web/core/lib/Drupal/Core/Block/BlockManager.php:49, which passes both:
+# The pre-attribute form, still read in Drupal 11.
+# web/core/lib/Drupal/Core/Block/BlockManager.php:49 passes both:
 #
 #   parent::__construct('Plugin/Block', $namespaces, $module_handler,
 #     BlockPluginInterface::class, Block::class, 'Drupal\Core\Block\Annotation\Block');

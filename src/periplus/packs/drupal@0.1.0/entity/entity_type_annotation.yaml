@@ -2,13 +2,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # drupal pack — entity type declared by a docblock annotation. One rule.
 #
-# Not a legacy tail, and the measurement that says so is the strongest argument in this
-# directory. A private Drupal site, a 2026 codebase:
-#
-#   20 files carry @ContentEntityType
-#    0 files carry #[ContentEntityType]
-#
-# A pack supporting attributes only would map that site's entire entity layer as nothing.
+# Not a legacy tail: a current codebase may declare every entity type with
+# @ContentEntityType and none with #[ContentEntityType]. A pack supporting attributes only
+# would map such a site's entire entity layer as nothing.
 
 needs:
   types:

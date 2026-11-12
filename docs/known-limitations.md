@@ -1,8 +1,9 @@
 # Known limitations
 
 The README's Known limitations section lists the limits a new user meets first. This page lists
-the rest. The `pack.yaml` of every bundled rutter except `yaml_basic` and `twig_basic` opens with
-a list of its known gaps.
+the rest. The `pack.yaml` of every bundled rutter except `yaml_basic`, `twig_basic`, `typescript`,
+`react`, `nextjs`, `drupal_more`, `drupal_next` and the reference packs opens with a list of its
+known gaps.
 
 ## The engine
 
@@ -85,10 +86,11 @@ a list of its known gaps.
   attribute class fifth to `parent::__construct`, such as one with YAML discovery, gives no
   `manages_plugin_type` edge, and the edge starts at the manager's constructor, not its service.
   An entity type handler written as text in an attribute, a form operation other than default,
-  add, edit and delete, and a handler set in code by `hook_entity_type_alter` give no edge; the
-  form operation is not recorded. A route subscriber that extends another project class, not
+  add, edit and delete, a route provider other than `html`, and a handler set in code by
+  `hook_entity_type_alter` give no edge; the form operation is not recorded. A route subscriber that extends another project class, not
   `RouteSubscriberBase`, gets no `alters_routes` edge. A display in the mode `default` has no `in_mode` edge, and an entity reference field's
-  target bundles give no edge.
+  target bundles give no edge. A `'#theme'` written in a function, such as a hook in a module
+  file, gives no edge. A form id is read only from a `getFormId()` that returns a literal text.
 - **Drupal, routes and roles:** route requirements and options other than those the manifest
   lists give nothing, such as `_entity_create_access` or `_auth`. A `_custom_access` written
   `service:method` gives an edge to the service only. A parameter converted to an entity by its
@@ -100,13 +102,16 @@ a list of its known gaps.
   A simple configuration file's owner is the theme of its name when the map holds one, from a
   custom theme, a reference or the theme list of `core.extension`, else the module of its name.
   When the map holds neither, the owner is an inferred referenced module: the module list of
-  `core.extension` is not read.
+  `core.extension` is not read. Only a file in the exported configuration folder gets an owner
+  edge: Drupal strips the `uuid` from a module's `config/install` and `config/optional` files, so
+  simple configuration there cannot be told from a configuration entity.
   A constraint whose `validatedBy()` returns a text in double quotes, a concatenation or a call
   gets no `validated_by` edge, and a `validatedBy()` written on a parent is not read.
 - **Drupal, events, Twig extensions, field access and suggestions:** every constant of an `Event`
   class or a class named `*Events` reads as an event name. An event is named by the text its
   constant holds when a mapped file declares it; an event of core or a contributed module keeps
-  its constant's name, and so does a constant read from a parent of the class a key names. A
+  its constant's name, and so does a constant read from a parent of the class a key names, or one
+  whose text holds a backslash. A
   subscriber key or dispatch name written with its namespace, as text or as a variable gives
   nothing, and so does `dispatch($event)` with no name or a call in a plain PHP file outside a
   `src` folder; only a key's first listener is read. A filter after a hash in the same print and
@@ -147,10 +152,12 @@ a list of its known gaps.
   read from its file name, so a file renamed by hand gives a wrong edge. `eck_basic` declares its
   path value on `yaml_basic`'s type `yml`, so a type of another name that claims the ending `yml`
   is refused beside it.
-- **Drupal contributed modules, plugins:** in `ai_basic`, `advancedqueue_basic`,
+- **Drupal contributed modules, plugins:** in `ai_basic`, `advancedqueue_basic`, `eca_basic`,
   `salesforce_basic` and `webform_basic`, a plugin id that is not a text literal, or in an
   annotation not text in double quotes, makes no plugin and is listed under skipped. `webform_basic` reads handlers declared by annotation only, and no other
-  Webform plugin type; a webform's disabled handler gives the same edge as an enabled one. A
+  Webform plugin type; a webform's disabled handler gives the same edge as an enabled one. A webform
+  element key with a capital letter or a leading digit is not read, and a composite element's
+  sub-elements read as elements of the webform. A
   static `load` on a contributed module's entity class gives an edge only when that module's
   rutter is loaded, for the classes it adds to `drupal_basic`'s table `entity_classes`.
   `eck_basic` lists `EckEntityType` only: ECK derives one entity type for each ECK type from
@@ -168,7 +175,9 @@ a list of its known gaps.
   condition and a gateway's type give no edge, and the plugin edges start at the model, not at
   its entries. Its table of event plugins holds those of ECA's content entity, config and user
   submodules, and `salesforce_eca_basic` adds salesforce_eca's; any other event plugin id gives no
-  event edge and a skipped row. A configuration value is read only under `field_name`,
+  event edge and a skipped row, and so does a condition or action plugin id that holds a colon. A
+  model that names a derived event plugin, `<base>:<derivative>`, also links to the base plugin
+  when it is mapped; a derived condition or action plugin id gets no such link. A configuration value is read only under `field_name`,
   `field_name_entity_ref`, `rid`, `role`, `type` and `entity_type`, and a role list gives nothing.
   A field name reaches the storage on an entity type the model names, whichever event or action
   names it; when none of those holds the name, a name that storages on two or more entity types
@@ -194,7 +203,7 @@ a list of its known gaps.
   `document`, gives nothing. A dotted name split over lines is read up to three parts. A call to a
   listed JavaScript or browser global gives nothing, and one to a name the table `library_globals`
   holds is one unresolved function for every script. A callee computed at run time, such as
-  `a[i]()` or `f()()`, is listed under skipped; a method on a call or an index, an import, an
+  `a[i]()` or `f()()`, is listed under skipped, and so is `super()`; a method on a call or an index, an import, an
   export, a generator, a class, a class method and a function that is an argument give nothing.
   Two functions of one name in one script are one node. A `.mjs`, `.cjs`, `.jsx` or `.ts` file is not read. A script's id is its path from
   the project folder.

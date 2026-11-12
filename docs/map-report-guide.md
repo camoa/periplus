@@ -4,7 +4,7 @@
 report says how far to trust it: what stopped the run, which files no rule read, and which matches
 a rule could not finish. This page lists each part of the report in the order to read it, says what
 it means, and says what to do when it is not empty. It runs on a small Drupal module, planted
-below, and every command on the page prints what is shown, which a check confirms.
+below, and every command on the page prints what is shown.
 
 The report comes in two forms. `periplus map` prints text for a person; `periplus map --format
 json` prints one JSON document for a script. The JSON keys and the text headings differ, so each
@@ -270,7 +270,8 @@ Text: the line `internal: N nodes and M edges left out` under Map, printed only 
 is above zero. JSON: `{"nodes": N, "edges": M}`. How many nodes of a type marked `internal`, or
 below one, the written map leaves out, and how many edges with an end on one. Those types serve
 the map rules only. There is nothing to fix here; it explains why `nodes` and `edges` are lower
-than the rules made.
+than the rules made. The README's [What the map holds](../README.md#what-the-map-holds) says what
+stays in the map, call sites marked `resolution: runtime` among them.
 
 ### `map`
 
@@ -605,13 +606,16 @@ Incoming (0):
 
 ## When a gap is the engine's
 
-A gap is the engine's only when no rule can state the shape. The test is to write the rule: if
-`periplus validate` refuses it, or the map command refuses it with an engine message, the engine
-cannot run that rule. Any other gap is a rule not yet written. A gap no rule can state is the only
-reason to touch the engine; quote the engine's message when you report it.
+A gap is the engine's only when no rule can state the shape. The test is to write the rule two
+ways: two formulations, each written and run, and each refused by `periplus validate` or by the
+map command with an engine message. One refusal shows only that one formulation cannot run; the
+other may. Any other gap is a rule not yet written. A gap no rule can state is the only reason to
+touch the engine; quote the engine's message for each formulation when you report it.
 
 A third project, `broken`, beside the planted one, pins its own rutter `own@0.0.1`. Its one rule
-takes the node's id from a call's argument and also sets `match.body_child`.
+takes the node's id from a call's argument and also sets `match.body_child`. The run below shows
+one refusal; a second formulation of the same shape must be refused as well before the gap is the
+engine's.
 
 <!-- nav-file: broken/.periplus/settings.yml -->
 ```yaml

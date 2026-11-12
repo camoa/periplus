@@ -175,7 +175,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - Any function whose name starts with the first part of the file name reads as a hook: the form
 #   callback mymod_settings_submit reads as the hook settings_submit, the helper mymod_build_list
 #   as build_list, and mymod_update_NEXT as update_NEXT. The same holds for a theme's inc file
-#   and the theme folder's name. On one site, 8 of 165 hooks were such callbacks or helpers.
+#   and the theme folder's name.
 # - The prefix is the file name, not an installed module's name. If Drupal core were inside the
 #   mapped folders, its files such as form.inc would give false hooks, such as select_options from
 #   form_select_options.
@@ -300,7 +300,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   binds joins its event only when a mapped class of the file's namespace declares that
 #   constant. A constant read from a parent of the class the key names, or one whose text holds a
 #   backslash, keys its event by the constant and meets no other constant of that text. A
-#   listener the map holds no method for gives no edge. Only the first listener of a key is
+#   constant written after a comma with no space, as B in const A = 'a',B = 'b';, gets its event
+#   but no names_event edge to it. A listener the map holds no method for gives no edge. Only the first listener of a key is
 #   read. dispatch($event)
 #   with no name, the name written first, a first argument four levels of parentheses deep, a
 #   subscriber outside a src folder, and a dispatch in a plain PHP file outside a src folder give
@@ -375,9 +376,8 @@ detect:
     # The dependency, which is the claim the repository makes about itself. `drupal/core`
     # rather than `drupal/core-recommended`: the substring covers core, core-recommended
     # and core-composer-scaffold, and every Drupal site requires at least one of them.
-    # Verified against drupal-cms/composer.json on 2026-08-28, which requires
-    # drupal/core-composer-scaffold, drupal/core-project-message and
-    # drupal/core-recommended.
+    # Drupal CMS's composer.json, on 2026-08-28, requires drupal/core-composer-scaffold,
+    # drupal/core-project-message and drupal/core-recommended.
     - path: composer.json
       contains: "drupal/core"
 

@@ -2,12 +2,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # The text a class constant is declared with, const X = 'x'; or const X = "x";, as an internal
 # drupal.constant_text node, joined from the internal drupal.class_constant node of
-# <class>::<CONST> (event/event.yaml) by has_constant_text. The class is the one the file's path
-# names by Drupal's PSR-4 layout, so the rule is inferred. The map rules that read a name given as
-# self::X or static::X, in queue_worker/, role/ and config/, walk from the class to its parents
-# and interfaces and read the text of the nearest one that declares X. Only the first constant of
-# a const statement is read, and a text holding a backslash, or a double-quoted text holding $,
-# gives nothing.
+# <class>::<CONST> (event/event_name.yaml) by has_constant_text. Each rule matches each
+# const_element, so const A = 'a', B = 'b'; gives the text of A and of B, and its from end is the
+# class constant event/event_name.yaml declares at the same element. The map rules that read a
+# name given as self::X or static::X, in queue_worker/, role/ and config/, walk from the class to
+# its parents and interfaces and read the text of the nearest one that declares X. A text holding
+# a backslash, a double-quoted text holding $, and an empty text give nothing.
 
 node_types:
 - name: drupal.constant_text
@@ -24,13 +24,30 @@ rules:
   reads: file
   in: [source]
   match:
-    file: '**'
-    filetype: drupal_php_text
-    text: '\bconst\s+(?:\w+\s+)?(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?:''(?<single_text>[^''\\]*)''|"(?<double_text>[^"\\$]*)")\s*[;,]'
-  id: {template: '{single_text}{double_text}'}
+    declaration: const_element
+    name_child: [string, string_content]
+    filetype: php
+    where: [{name_matches: {child: string, pattern: '^''[^''\\]*''$'}}]
+  id: {from: declared_name}
   emits:
   - edge:
       kind: has_constant_text
-      from: {template: '{psr4_class}::{constant}', type: drupal.class_constant}
+      from: {declared: drupal.class_constant}
       to: this_node
-  confidence: inferred
+  confidence: declared
+
+- rule: constant_text_double_quoted
+  reads: file
+  in: [source]
+  match:
+    declaration: const_element
+    name_child: [encapsed_string, string_content]
+    filetype: php
+    where: [{name_matches: {child: encapsed_string, pattern: '^"[^"\\$]*"$'}}]
+  id: {from: declared_name}
+  emits:
+  - edge:
+      kind: has_constant_text
+      from: {declared: drupal.class_constant}
+      to: this_node
+  confidence: declared
