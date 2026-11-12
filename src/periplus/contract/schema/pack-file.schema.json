@@ -479,8 +479,8 @@
         },
         "name_child": {
           "oneOf": [
-            {"type": "string"},
-            {"type": "array", "items": {"type": "string"}, "minItems": 1}
+            {"type": "string", "minLength": 1},
+            {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
           ],
           "description": "Which child holds the declared name. A string names a field only, so a child with no field name is named by a list. On a declaration rule, a list is a path of one step or more walked from the matched node, each step the child in that field or else the first named child of that node type, and the declared name is the leaf's text; [name] reads a name that has no field, and a rule on the node that repeats, such as one element of a statement that declares several, fires once per element. On a reference rule, a list is one field or two, each read the same way: the first is the written name, and the second's text follows it once resolved; the engine refuses a third."
         },

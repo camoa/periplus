@@ -99,3 +99,26 @@ def test_a_reference_name_child_of_three_fields_is_refused(tmp_path):
     assert [r for _, r, _ in report.executed if r == "calls_function"] == []
     messages = [p.message for p in report.problems]
     assert any("calls_function" in m and "name_child" in m for m in messages), messages
+
+
+def test_an_empty_step_in_a_declaration_path_is_refused(tmp_path):
+    plant(tmp_path, RULES.format(declaration="const_element", path='[""]'), SOURCE)
+    report = _run(tmp_path)
+    assert any("name_child" in p.message for p in report.problems), report.problems
+    assert report.map_path is None
+
+
+def test_an_empty_string_name_child_is_refused(tmp_path):
+    plant(tmp_path, RULES.format(declaration="const_element", path='""'), SOURCE)
+    report = _run(tmp_path)
+    assert any("name_child" in p.message for p in report.problems), report.problems
+    assert report.map_path is None
+
+
+def test_an_empty_second_field_of_a_reference_name_child_is_refused(tmp_path):
+    rules = REFERENCE.replace("[function, name, name]", '[function, ""]')
+    plant(tmp_path, rules, "<?php\nfunction run() { go(); }\n")
+    report = _run(tmp_path)
+    messages = [p.message for p in report.problems]
+    assert any("name_child" in m for m in messages), messages
+    assert report.map_path is None
