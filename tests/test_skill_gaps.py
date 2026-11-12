@@ -412,3 +412,139 @@ def test_unknown_boundaries_list_each_marked_node_with_file_line_and_rule_c5(
     for other in ("App\\Page::gone", "App\\Page::lost", "run::$this->helper->go"):
         assert other not in listed, f"{other} listed as an unknown boundary: {unknown}"
     assert _state_lines(_section(out, "Resolution gaps")).get("referenced") == 1, out
+
+
+def _plain_map(tmp_path: Path) -> Path:
+    """Class-likes of an invented stack, so no stack name in the program can make the test pass."""
+
+    def cls(name: str, file: str, node_type: str = "lang.class") -> dict[str, Any]:
+        return _node(f"lang.type::{name}", node_type, rule="class", pack="lang", file=file)
+
+    def outside(name: str, node_type: str, state: str) -> dict[str, Any]:
+        return _node(f"lang.type::{name}", node_type, state, "class", "lang", None)
+
+    nodes = [
+        outside("Out\\Base", "lang.class_like", "declared"),
+        outside("Out\\Iface", "lang.interface", "referenced"),
+        outside("Out\\Attr", "lang.class", "referenced"),
+        cls("App\\Mid", "app/Mid.x"),
+        cls("App\\A", "app/A.x"),
+        cls("App\\B", "app/B.x"),
+        cls("App\\C", "app/C.x"),
+        cls("App\\Mid2", "app/Mid2.x"),
+        cls("App\\D", "app/D.x"),
+        cls("App\\Form", "app/Form.x", "fw.form_class"),
+        cls("App\\Svc", "app/Svc.x"),
+        cls("App\\Shared", "app/Svc.x"),
+        cls("App\\Plain", "app/Plain.x"),
+        cls("App\\Plug", "app/Plug.x"),
+        cls("App\\Plug2", "app/Plug2.x"),
+        _node("fw.service::svc", "fw.service", rule="service", pack="fw", file="app/Svc.x"),
+    ]
+    edges = [
+        _edge("lang.type::App\\Mid", "lang.type::Out\\Base", "inherits"),
+        _edge("lang.type::App\\A", "lang.type::App\\Mid", "inherits"),
+        _edge("lang.type::App\\B", "lang.type::Out\\Base", "inherits"),
+        _edge("lang.type::App\\B", "lang.type::Out\\Iface", "implements"),
+        _edge("lang.type::App\\C", "lang.type::Out\\Iface", "implements"),
+        _edge("lang.type::App\\Mid2", "lang.type::Out\\Iface", "implements"),
+        _edge("lang.type::App\\D", "lang.type::App\\Mid2", "inherits"),
+        _edge("lang.type::App\\Form", "lang.type::Out\\Base", "inherits"),
+        _edge("lang.type::App\\Svc", "lang.type::Out\\Base", "inherits"),
+        _edge("fw.service::svc", "lang.type::App\\Svc", "service_class"),
+        _edge("lang.type::App\\Shared", "lang.type::Out\\Base", "inherits"),
+        _edge("lang.type::App\\Plain", "lang.type::App\\A", "calls"),
+        _edge("lang.type::App\\Plug", "lang.type::Out\\Attr", "has_attribute"),
+        _edge("lang.type::App\\Plug2", "lang.type::Out\\Attr", "has_attribute"),
+        _edge("lang.type::App\\Plug2", "lang.type::Out\\Base", "inherits"),
+    ]
+    hierarchy: list[dict[str, Any]] = [
+        {"parent": None, "type": "lang.class_like"},
+        {"parent": "lang.class_like", "type": "lang.class"},
+        {"parent": "lang.class_like", "type": "lang.interface"},
+        {"parent": "lang.class", "type": "fw.form_class"},
+        {"parent": None, "type": "fw.service"},
+    ]
+    return _write_map(tmp_path / "map.json", nodes, edges, hierarchy, ["lang", "fw"])
+
+
+@pytest.mark.criterion(id="c2")
+def test_plain_classes_group_by_the_first_outside_parent_then_interface_c2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = _run_gap_read(_plain_map(tmp_path), capsys)
+    rows = [_fields(x) for x in _section(out, "Plain classes")]
+    assert ["claimed", "2"] in rows, rows
+    assert ["plain", "10"] in rows, rows
+    assert ["inherits", "lang.type::Out\\Base", "5", "lang.type::App\\A"] in rows, rows
+    assert ["implements", "lang.type::Out\\Iface", "3", "lang.type::App\\C"] in rows, rows
+    assert ["none", "1"] in rows, rows
+    grouped = [r for r in rows if r[0] in ("inherits", "implements")]
+    assert len(grouped) == 2, f"a claimed class was grouped: {rows}"
+
+
+@pytest.mark.criterion(id="c2")
+def test_plain_classes_group_by_attribute_class_beside_the_parent_groups_c2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = _run_gap_read(_plain_map(tmp_path), capsys)
+    rows = [_fields(x) for x in _section(out, "Plain classes")]
+    attributes = [r for r in rows if r[0] == "has_attribute"]
+    assert attributes == [["has_attribute", "lang.type::Out\\Attr", "2", "lang.type::App\\Plug"]]
+
+
+@pytest.mark.criterion(id="c3")
+def test_site_faults_cover_theme_libraries_menu_parents_and_undeclared_theme_hooks_c3(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def ext(node_id: str, node_type: str, file: str) -> dict[str, Any]:
+        return _node(node_id, node_type, rule="info", pack="drupal", file=file)
+
+    def ref(node_id: str, node_type: str) -> dict[str, Any]:
+        return _node(node_id, node_type, "referenced", "use", "drupal", None)
+
+    caller = "php.type::Drupal\\mymod\\Page"
+    nodes = [
+        ext("drupal.theme::mytheme", "drupal.theme", "themes/mytheme/mytheme.info.yml"),
+        ext("drupal.module::mymod", "drupal.module", "modules/mymod/mymod.info.yml"),
+        ext(caller, "php.class", "modules/mymod/src/Page.php"),
+        ext("drupal.library::mytheme/fooBar", "drupal.library", "themes/mytheme/t.libraries.yml"),
+        ref("drupal.library::mytheme/FooBar", "drupal.library"),
+        ref("drupal.library::mytheme/gone", "drupal.library"),
+        ref("drupal.library::othertheme/x", "drupal.library"),
+        ext("drupal.menu_link::mymod.child", "drupal.menu_link", "modules/mymod/m.links.menu.yml"),
+        ref("drupal.menu_link::mymod.parent", "drupal.menu_link"),
+        ref("drupal.menu_link::system.admin", "drupal.menu_link"),
+        ref("drupal.menu_link::mymod.base:derived", "drupal.menu_link"),
+        ext("drupal.template::my-card", "drupal.template", "modules/mymod/templates/my-card.twig"),
+        ext("drupal.template::item-list", "drupal.template", "themes/mytheme/item-list.twig"),
+        ref("drupal.theme_hook::my_card", "drupal.theme_hook"),
+        ref("drupal.theme_hook::item_list", "drupal.theme_hook"),
+        ref("drupal.theme_hook::table", "drupal.theme_hook"),
+    ]
+    edges = [
+        _edge(caller, "drupal.library::mytheme/FooBar", "attaches_library", line=5),
+        _edge(caller, "drupal.library::mytheme/gone", "attaches_library", line=6),
+        _edge(caller, "drupal.library::othertheme/x", "attaches_library", line=7),
+        _edge("drupal.menu_link::mymod.child", "drupal.menu_link::mymod.parent", "child_of_link"),
+        _edge("drupal.menu_link::mymod.child", "drupal.menu_link::system.admin", "child_of_link"),
+        _edge(
+            "drupal.menu_link::mymod.child", "drupal.menu_link::mymod.base:derived", "child_of_link"
+        ),
+        _edge(caller, "drupal.theme_hook::my_card", "renders_theme_hook", line=8),
+        _edge(caller, "drupal.theme_hook::item_list", "renders_theme_hook", line=9),
+        _edge(caller, "drupal.theme_hook::table", "renders_theme_hook", line=10),
+    ]
+    out = _run_gap_read(_write_map(tmp_path / "map.json", nodes, edges), capsys)
+    faults = sorted(_fields(x) for x in _section(out, "Site faults"))
+    assert faults == [
+        [
+            "drupal.library::mytheme/FooBar",
+            "shop/a.py:5",
+            "library no libraries file defines",
+            "near drupal.library::mytheme/fooBar",
+        ],
+        ["drupal.library::mytheme/gone", "shop/a.py:6", "library no libraries file defines"],
+        ["drupal.menu_link::mymod.parent", "shop/a.py:2", "menu link no links file defines"],
+        ["drupal.theme_hook::my_card", "shop/a.py:8", "theme hook no hook_theme declares"],
+    ], faults

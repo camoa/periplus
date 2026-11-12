@@ -70,6 +70,7 @@ class MapFile(TypedDict):
 NOWHERE: Location = {"file": "-", "line": 0}
 MAP_KEYS = {"nodes", "edges", "packs", "type_hierarchy"}
 CHAIN_KINDS = ("inherits", "mixes_in", "implements")
+ROLE_KINDS = ("inherits", "implements")
 MAGIC_CALLS = ("__call", "__callStatic")
 # PHP ignores the case of a method name, for ASCII letters only.
 METHOD_CASE = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
@@ -86,6 +87,10 @@ def module_of(ns: str) -> str | None:
 
 def first_party(n: Node) -> bool:
     return n["state"] == "mapped" and bool(n["locations"])
+
+
+def stack(t: str) -> str:
+    return t.split(".")[0]
 
 
 def split(found: list[Node]) -> str:
@@ -128,8 +133,15 @@ class GapReport:
         self.nodes: dict[str, Node] = {n["id"]: n for n in m["nodes"]}
         self.edges: list[Edge] = m["edges"]
         self.edges_from: dict[str, list[Edge]] = {}
+        self.edges_to: dict[str, list[Edge]] = {}
         for e in self.edges:
             self.edges_from.setdefault(e["from"], []).append(e)
+            self.edges_to.setdefault(e["to"], []).append(e)
+        self.module_folders = [
+            n["locations"][0]["file"].rpartition("/")[0] + "/"
+            for n in m["nodes"]
+            if n["type"] == "drupal.module" and first_party(n)
+        ]
         self.backing: dict[str, bool | None] = {}
         faults = {
             n["id"]: self.fault(n) for n in m["nodes"] if n["state"] in ("referenced", "unresolved")
@@ -201,12 +213,110 @@ class GapReport:
                     return self.method_fault(c, meth)
             return None
         if t == "drupal.library":
-            k, kind = nm.split("/")[0], "library no libraries file defines"
+            return self.library_fault(nm)
+        if t == "drupal.menu_link":
+            # A parent id holding a colon is a derivative, made at run time.
+            k = None if ":" in nm else nm.split(".")[0]
+            kind = "menu link no links file defines"
+        elif t == "drupal.theme_hook":
+            return self.theme_hook_fault(n)
         elif n["id"].startswith("php.type::"):
             k, kind = module_of(nm), "class no file holds"
         else:
             return None
         return kind if k and self.mapped("drupal.module::" + k) else None
+
+    def library_fault(self, nm: str) -> str | None:
+        """A library of a mapped module or theme that its libraries file does not define."""
+        ext = nm.split("/")[0]
+        if not any(self.mapped(f"drupal.{e}::{ext}") for e in ("module", "theme")):
+            return None
+        kind = "library no libraries file defines"
+        near = sorted(
+            i
+            for i, x in self.nodes.items()
+            if x["type"] == "drupal.library" and first_party(x) and name(i).lower() == nm.lower()
+        )
+        return f"{kind}  near {near[0]}" if near else kind
+
+    def theme_hook_fault(self, n: Node) -> str | None:
+        """A rendered hook whose template a mapped module holds, so that module should declare it.
+
+        A hook's name says nothing of who declares it; a template a theme holds may override a
+        hook core declares, so only a module's template marks the place.
+        """
+        if not any(e["kind"] == "renders_theme_hook" for e in self.edges_to.get(n["id"], [])):
+            return None
+        template = self.nodes.get("drupal.template::" + name(n["id"]).replace("_", "-"))
+        if template is None or not first_party(template):
+            return None
+        files = [x["file"] for x in template["locations"]]
+        if any(f.startswith(d) for f in files for d in self.module_folders):
+            return "theme hook no hook_theme declares"
+        return None
+
+    def outside(self, start: str, kinds: tuple[str, ...]) -> list[str]:
+        """The ids outside the mapped code that `kinds` edges reach, walking through mapped ids."""
+        seen, todo, found = {start}, [start], []
+        while todo:
+            for e in self.edges_from.get(todo.pop(), []):
+                if e["kind"] not in kinds or e["to"] in seen:
+                    continue
+                seen.add(e["to"])
+                (todo if first_party(self.nodes[e["to"]]) else found).append(e["to"])
+        return sorted(found)
+
+    def print_plain(self) -> None:
+        """Group the class-likes no more specific type claims by what gives them a role.
+
+        The class-like types are those under the roots of the types an inherits or implements edge
+        joins. A class is claimed when its type belongs to another stack than its root, or when an
+        edge from a node of another stack reaches it.
+        """
+        print("Plain classes")
+        parent_of = {r["type"]: r["parent"] for r in self.m["type_hierarchy"]}
+
+        def root(t: str) -> str:
+            while parent_of.get(t):
+                t = str(parent_of[t])
+            return t
+
+        roots = {
+            root(self.nodes[i]["type"])
+            for e in self.edges
+            if e["kind"] in ROLE_KINDS
+            for i in (e["from"], e["to"])
+        }
+        claimed, plain, none = 0, 0, 0
+        roles: dict[tuple[str, str], list[str]] = {}
+        for i, n in sorted(self.nodes.items()):
+            lang = stack(root(n["type"]))
+            if not first_party(n) or root(n["type"]) not in roots:
+                continue
+            if stack(n["type"]) != lang or any(
+                stack(self.nodes[e["from"]]["type"]) != lang for e in self.edges_to.get(i, [])
+            ):
+                claimed += 1
+                continue
+            plain += 1
+            parents = self.outside(i, ("inherits",))
+            ifaces = [x for x in self.outside(i, ROLE_KINDS) if x not in parents]
+            attrs = {e["to"] for e in self.edges_from.get(i, []) if e["kind"] == "has_attribute"}
+            if parents:
+                roles.setdefault(("inherits", parents[0]), []).append(i)
+            elif ifaces:
+                roles.setdefault(("implements", ifaces[0]), []).append(i)
+            for a in sorted(attrs):
+                roles.setdefault(("has_attribute", a), []).append(i)
+            none += not (parents or ifaces or attrs)
+        print(f"claimed  {claimed}")
+        print(f"plain  {plain}")
+        # The parent and interface groups split the plain classes; attribute groups overlap them.
+        for (kind, to), found in sorted(
+            roles.items(), key=lambda r: (r[0][0] == "has_attribute", -len(r[1]), r[0])
+        ):
+            print(f"{kind}  {to}  {len(found)}  {found[0]}")
+        print(f"none  {none}")
 
     def print_resolution(self) -> None:
         reached = {e["to"] for e in self.edges if first_party(self.nodes[e["from"]])}
@@ -324,6 +434,7 @@ def main(argv: list[str] | None = None) -> int:
     report.print_detail()
     report.print_site_faults()
     report.print_unknown_boundaries()
+    report.print_plain()
     return 0
 
 

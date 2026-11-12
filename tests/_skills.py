@@ -16,7 +16,7 @@ from jsonschema import Draft202012Validator
 from periplus.cli import main
 
 ROOT = Path(__file__).resolve().parents[1]
-HEADINGS = ("Resolution gaps", "Detail gaps", "Site faults", "Unknown boundaries")
+HEADINGS = ("Resolution gaps", "Detail gaps", "Site faults", "Unknown boundaries", "Plain classes")
 MAP = ".periplus/map.json"
 DESCRIPTIONS_SCHEMA = ROOT / "src/periplus/skills/periplus-map/references/descriptions.schema.json"
 
