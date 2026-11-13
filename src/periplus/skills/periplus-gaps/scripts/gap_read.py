@@ -86,7 +86,9 @@ def module_of(ns: str) -> str | None:
 
 
 def first_party(n: Node) -> bool:
-    return n["state"] == "mapped" and bool(n["locations"])
+    # Only a node a rule found has a location; a run-time call site is one, in state
+    # unknown_boundary.
+    return n["state"] in ("mapped", "unknown_boundary") and bool(n["locations"])
 
 
 def stack(t: str) -> str:
@@ -412,6 +414,17 @@ class GapReport:
                 "-",
             )
             print(f"{n['id']}  {where}  {rule}")
+        # An end that leaves the mapped code with no rule identifying it: a rule to write.
+        unnamed = [
+            n
+            for n in self.m["nodes"]
+            if n["state"] == "unknown_boundary" and "unresolved_detail" in n
+        ]
+        print(f"no rule  {len(unnamed)}")
+        for n in sorted(unnamed, key=lambda n: n["id"]):
+            where = (self.edges_to.get(n["id"]) or [{"locations": [NOWHERE]}])[0]["locations"]
+            place = (where or [NOWHERE])[0]
+            print(f"{n['id']}  {place['file']}:{place['line']}  {n['unresolved_detail']['rule']}")
 
 
 def main(argv: list[str] | None = None) -> int:
