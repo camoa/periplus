@@ -157,48 +157,31 @@ def test_words_are_searched_as_find_searches_and_say_where_they_matched(tmp_path
     assert f"  1 --defines--> {PAY}" in text
 
 
-def test_a_mapped_node_is_picked_before_one_only_named(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "charge", starts=1)
+def test_a_text_that_fails_whole_falls_back_to_its_words_and_says_so(tmp_path: Path) -> None:
+    report = _piece(tmp_path, "mail charge")
 
-    assert [start.row.id for start in report.starts] == [CARD, PAY]
-
-
-def test_each_place_a_word_matches_gives_its_own_starts_and_a_satellite_comes_last(
-    tmp_path: Path,
-) -> None:
-    report = _piece(tmp_path, "mail", starts=1)
-
-    assert [start.row.id for start in report.starts] == [MAILER, PAY]
-    assert report.starts[1].words == (("mail", "description", None),)
-
-
-def test_each_word_picks_starts_and_a_text_that_fails_whole_falls_back_to_them(
-    tmp_path: Path,
-) -> None:
-    report = _piece(tmp_path, "mail charge", starts=1)
-
-    assert [start.row.id for start in report.starts] == [MAILER, PAY, CARD]
+    assert {query for start in report.starts for query, _, _ in start.words} == {"mail", "charge"}
     assert slicing.render_text(report).splitlines()[1] == (
         "no node matches 'mail charge' as a whole; started from its words"
     )
 
 
 def test_the_cut_keeps_a_node_several_starts_reach_first(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "mail charge", starts=1, limit=1)
+    report = _piece(tmp_path, "Mailer", "pay", limit=1)
 
     assert [(row.id, row.again) for row in report.rows.items] == [(SITE, False)]
 
 
 def test_the_cut_then_keeps_a_node_the_words_match(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "mail charge", starts=1, limit=2)
+    report = _piece(tmp_path, "pay", "charge", limit=1)
 
-    assert [(row.id, row.again) for row in report.rows.items] == [(BANK, False), (SITE, False)]
+    assert [(row.id, row.again) for row in report.rows.items] == [(BANK, False)]
 
 
 def test_starts_type_and_path_narrow_the_word_matches(tmp_path: Path) -> None:
-    assert [s.row.id for s in _piece(tmp_path / "a", "shop", starts=2).starts] == [CHECKOUT, MAILER]
+    assert [s.row.id for s in _piece(tmp_path / "a", "shop", starts=2).starts] == [MAILER, CHECKOUT]
     typed = _piece(tmp_path / "b", "shop", types=("t.method",))
-    assert [s.row.id for s in typed.starts] == [CARD, PAY, SEND]
+    assert [s.row.id for s in typed.starts] == [SEND, CARD]
     placed = _piece(tmp_path / "c", "shop", prefixes=(MA,))
     assert [s.row.id for s in placed.starts] == [MAILER, SEND]
 
@@ -211,16 +194,16 @@ def test_words_that_match_nothing_say_so_and_exit_0(tmp_path: Path) -> None:
     assert slicing.render_text(report).splitlines() == ["periplus slice", "no matches"]
 
 
-def test_the_row_cap_keeps_near_hops_and_says_what_it_left_out(tmp_path: Path) -> None:
+def test_the_row_cap_says_what_it_left_out(tmp_path: Path) -> None:
     report = _piece(tmp_path, "pay", limit=3)
     lines = slicing.render_text(report).splitlines()
 
-    assert [row.id for row in report.rows.items] == [BANK, CHECKOUT, MAILER]
+    assert [row.id for row in report.rows.items] == [CHECKOUT, SITE, MAILER]
     assert lines[-7:-1] == [
         "folded into the node above, all their edges joining it: t.site 1",
         "showing 3 of 6 rows",
         "left out by hop: 1: 1, 2: 2",
-        "left out by kind: calls 1, defines 1, holds 1",
+        "left out by kind: calls 2, defines 1",
         "narrow with --kind K (kinds here: calls, defines, holds, instantiates),"
         " --direction out, --direction in or --depth 1",
         "show all with --limit 0",
@@ -280,10 +263,22 @@ def test_a_source_line_with_under_two_word_characters_is_not_printed() -> None:
 
 
 def test_the_cut_takes_full_rows_before_back_references(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "mail charge", starts=1, limit=3)
+    report = _piece(tmp_path, "Mailer", "pay", limit=3)
 
     assert [(row.id, row.again) for row in report.rows.items] == [
-        (BANK, False),
+        (SEND, False),
         (CHECKOUT, False),
         (SITE, False),
     ]
+
+
+def test_the_cut_counts_starts_of_one_word_apart(tmp_path: Path) -> None:
+    report = _piece(tmp_path, "shop", starts=2, limit=1)
+
+    assert [(row.id, row.again) for row in report.rows.items] == [(PAY, False)]
+
+
+def test_the_cut_prefers_a_node_more_other_files_depend_on(tmp_path: Path) -> None:
+    report = _piece(tmp_path, "pay", limit=1)
+
+    assert [row.id for row in report.rows.items] == [MAILER]

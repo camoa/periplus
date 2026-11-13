@@ -6,6 +6,7 @@ import re
 from collections import Counter
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -49,9 +50,13 @@ __all__ = [
     "run",
 ]
 
-#: The most start nodes each word, and the whole text, picks from each place it can match (id,
-#: attribute, description), unless ``starts`` says otherwise.
-START_LIMIT = 3
+#: The most start nodes the words pick in all, unless ``starts`` says otherwise.
+START_LIMIT = 8
+#: The most start nodes the words pick of any one node type.
+TYPE_STARTS = 2
+#: A word that matches more than this share of the map's nodes picks no start, unless every word
+#: does; it still counts when starts and rows are ranked.
+COMMON_SHARE = Fraction(1, 10)
 #: The fewest characters a word needs to be searched; a shorter one matches too much.
 MIN_WORD = 3
 #: The most rows a printed piece shows, unless ``limit`` says otherwise.
@@ -277,14 +282,27 @@ def _piece(
             whole = " ".join(rest).casefold().strip()
             queries = list(dict.fromkeys(([whole] if whole and whole not in words else []) + words))
             matched: dict[str, set[str]] = {}
-            for word in words:
-                for match in find.search(index, word, None, (), described):
-                    matched.setdefault(match[1], set()).add(word)
             notes: list[str] = []
+            common: dict[str, int] = {}
+            for word in words:
+                hits = find.search(index, word, None, (), described)
+                for match in hits:
+                    matched.setdefault(match[1], set()).add(word)
+                if len(hits) > COMMON_SHARE * len(index.nodes):
+                    common[word] = len(hits)
+            if len(common) < len(words):
+                for word, count in common.items():
+                    queries.remove(word)
+                    notes.append(
+                        f"{word!r} matches {count} of {len(index.nodes)} nodes; it picks no start"
+                    )
+            standing = _Standing(index)
             if queries:
                 wanted, narrowed, noted = find.narrowing(index, types, prefixes)
                 warnings += noted
-                found = _starts(index, queries, wanted, narrowed, described, matched, most)
+                found = _starts(
+                    index, queries, wanted, narrowed, described, matched, most, standing
+                )
                 for node_id, chosen in found.items():
                     picked.setdefault(node_id, chosen)
                 lone = found and queries[0] == whole and len(queries) > 1
@@ -298,7 +316,7 @@ def _piece(
                 return SliceReport(printed=True, problems=(Problem(ExitCode.USAGE, message, {}),))
             order = list(picked)
             rows, deeper, folded = _grow(index, order, direction, depth, set(kinds))
-            kept = _keep(rows, picked, matched, limit)
+            kept = _keep(rows, picked, matched, limit, standing)
             held = {edge["kind"] for edge in index.edges}
     except HarnessError as error:
         return SliceReport(printed=True, problems=(error.problem(),))
@@ -343,6 +361,33 @@ def _satellite(index: MapIndex, node_id: str) -> str | None:
     return others.pop() if len(edges) > 1 and len(others) == 1 and node_id not in others else None
 
 
+class _Standing:
+    """What the map alone says about a node: how many nodes share its type, and how many other
+    files hold nodes with an edge into it. Each is counted once per run."""
+
+    def __init__(self, index: MapIndex) -> None:
+        self._index = index
+        self._types = Counter(as_text(node["type"]) for node in index.nodes.values())
+        self._files: dict[str, int] = {}
+
+    def rarity(self, node_id: str) -> int:
+        """How many nodes of the map share ``node_id``'s type; fewer is rarer."""
+        return self._types[as_text(self._index.nodes[node_id]["type"])]
+
+    def depended(self, node_id: str) -> int:
+        """How many files, other than the node's own, hold a node with an edge into it."""
+        if node_id not in self._files:
+            nodes = self._index.nodes
+            own = {loc["file"] for loc in nodes[node_id]["locations"]}
+            files = {
+                loc["file"]
+                for edge in self._index.incoming(node_id)
+                if (loc := first_location(nodes[edge["from"]])) is not None
+            }
+            self._files[node_id] = len(files - own)
+        return self._files[node_id]
+
+
 def _starts(
     index: MapIndex,
     queries: list[str],
@@ -351,38 +396,53 @@ def _starts(
     described: Mapping[str, str],
     matched: Mapping[str, set[str]],
     most: int,
+    standing: _Standing,
 ) -> dict[str, Start]:
-    """Up to ``most`` start nodes per query and per place it matched, in query order.
+    """Up to ``most`` start nodes that the queries find, at most ``TYPE_STARTS`` of one type.
 
-    A query is the whole text or one word. Each place (id, attribute, description) gives its own
-    best, so an attribute match is not pushed behind every id match. Within a place, a node that
-    more words find comes first, then a mapped node, then one that is not a satellite of another
-    node, then ``find``'s rank, then the id.
+    A query is the whole text or one word. Rarer types come first. Inside a type, a mapped node
+    comes before one that is not, then the node more other files depend on, then the one more
+    words match, then the one whose id the matched words cover most, then ``find``'s rank, then
+    the id.
     """
     said: dict[str, list[tuple[str, str, str | None]]] = {}
     nearest: dict[str, find.Match] = {}
     for query in queries:
-        matches = find.search(index, query, wanted, prefixes, described)
-        for match in matches:
+        for match in find.search(index, query, wanted, prefixes, described):
             place = _place(match[0])
             said.setdefault(match[1], []).append((query, place, match[3][0] if match[3] else None))
-        for place in _PLACES:
-            here = [m for m in matches if _place(m[0]) == place]
-            here.sort(
-                key=lambda m: (
-                    -len(matched.get(m[1], ())),
-                    m[2]["state"] != "mapped",
-                    _satellite(index, m[1]) is not None,
-                    m[0],
-                    m[1],
-                )
-            )
-            for match in here[:most]:
-                nearest.setdefault(match[1], match)
-    return {
-        node_id: Start(find.found_row(match, described), words=tuple(said[node_id]))
-        for node_id, match in nearest.items()
-    }
+            if match[1] not in nearest or match[0] < nearest[match[1]][0]:
+                nearest[match[1]] = match
+
+    def key(node_id: str) -> tuple[int, str, bool, int, int, Fraction, int, str]:
+        node = index.nodes[node_id]
+        words = matched.get(node_id, set())
+        folded = node_id.casefold()
+        share = Fraction(sum(len(w) for w in words if w in folded), len(node_id) or 1)
+        return (
+            standing.rarity(node_id),
+            as_text(node["type"]),
+            node["state"] != "mapped",
+            -standing.depended(node_id),
+            -len(words),
+            -share,
+            nearest[node_id][0],
+            node_id,
+        )
+
+    taken: Counter[str] = Counter()
+    chosen: dict[str, Start] = {}
+    for node_id in sorted(nearest, key=key):
+        kind = as_text(index.nodes[node_id]["type"])
+        if len(chosen) == most:
+            break
+        if taken[kind] == TYPE_STARTS:
+            continue
+        taken[kind] += 1
+        chosen[node_id] = Start(
+            find.found_row(nearest[node_id], described), words=tuple(said[node_id])
+        )
+    return chosen
 
 
 def _keep(
@@ -390,13 +450,17 @@ def _keep(
     picked: Mapping[str, Start],
     matched: Mapping[str, set[str]],
     limit: int,
+    standing: _Standing,
 ) -> list[int]:
     """The indexes of the rows the cap keeps, in walk order; a limit of 0 keeps them all.
 
     Rows are taken best first: full rows before back-references, then a node more starts reach,
     then one reached from starts of more words, then one whose own id, attributes or description
-    more words match, then the nearer hop, then the id. Each row brings the rows above it, and
-    a back-reference the full row it points to; a row whose rows do not fit is passed over.
+    more words match, then a rarer type, then a node more other files depend on, then the
+    nearer hop, then the id. A first pass takes rows in that order while each start holds no
+    more than an even share of the cap; a second pass fills the cap with the best rows left.
+    Each row brings the rows above it, and a back-reference the full row it points to; a row
+    whose rows do not fit is passed over.
     """
     if not limit or len(rows) <= limit:
         return list(range(len(rows)))
@@ -421,17 +485,34 @@ def _keep(
             todo += [full[n] for n in (row.parent, row.id if row.again else None) if n in full]
         return chain
 
-    def rank(i: int) -> tuple[bool, int, int, int, int, str, int]:
+    def rank(i: int) -> tuple[bool, int, int, int, int, int, int, str, int]:
         row = rows[i]
-        own = len(matched.get(row.id, ()))
-        return (row.again, -len(reach[row.id]), -len(groups[row.id]), -own, row.hop, row.id, i)
+        return (
+            row.again,
+            -len(reach[row.id]),
+            -len(groups[row.id]),
+            -len(matched.get(row.id, ())),
+            standing.rarity(row.id),
+            -standing.depended(row.id),
+            row.hop,
+            row.id,
+            i,
+        )
 
+    ranked = sorted(range(len(rows)), key=rank)
+    starts = list(dict.fromkeys(row.start for row in rows))
+    share = max(1, limit // len(starts))
     kept: set[int] = set()
-    for i in sorted(range(len(rows)), key=rank):
+    taken: Counter[str] = Counter()
+    for i in ranked:
         new = needs(i) - kept
-        if len(kept) + len(new) > limit:
-            continue
-        kept |= new
+        if taken[rows[i].start] + len(new) <= share and len(kept) + len(new) <= limit:
+            taken[rows[i].start] += len(new)
+            kept |= new
+    for i in ranked:
+        new = needs(i) - kept
+        if len(kept) + len(new) <= limit:
+            kept |= new
     return sorted(kept)
 
 
