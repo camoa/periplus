@@ -75,8 +75,7 @@ the answer:
 
 `0 items` from `--kind K` means the item has no edge of that kind. It does not mean the map lacks
 the link: run `show` first to see which kinds the item has. What each stack does not map yet is in
-[Known limitations](https://github.com/camoa/periplus/blob/v0.8.0/docs/known-limitations.md). To
-record a gap, use the periplus-gaps skill.
+the header of its rutter's `pack.yaml`. To record a gap, use the periplus-gaps skill.
 
 ## Recipes by question
 

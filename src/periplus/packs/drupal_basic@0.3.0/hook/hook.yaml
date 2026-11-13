@@ -23,12 +23,12 @@ edge_kinds:
 # installer and update system call; this rule keeps them. Themes name their hook functions the
 # same way. Inferred, because a name is a convention.
 #
-# Gaps: any prefixed function reads as a hook, such as the form callback mymod_settings_submit,
-# the helper mymod_build_list or mymod_update_NEXT. A file named other than its module gives no
-# hook. A theme file named other than its theme, such as includes/content.theme holding mytheme_
-# functions, is read by the theme's folder name, by hook_theme_include.yaml. A hook with a variable
-# part keeps it, so mymod_form_user_login_form_alter names the hook form_user_login_form_alter. A
-# function in a file of another ending leaves two skipped rows.
+# False results to know about: any prefixed function reads as a hook, such as the form callback
+# mymod_settings_submit, the helper mymod_build_list or mymod_update_NEXT. A file named other than
+# its module gives no hook. A theme file named other than its theme, such as includes/content.theme
+# holding mytheme_ functions, is read by the theme's folder name, by hook_theme_include.yaml. A hook
+# with a variable part keeps it, so mymod_form_user_login_form_alter names the hook
+# form_user_login_form_alter. A function in a file of another ending leaves two skipped rows.
 
 rules:
 - rule: hook_from_function_name
@@ -79,10 +79,10 @@ rules:
 #
 # A hook named by a Hook attribute gets the same edge from hook_attribute.yaml.
 #
-# Gaps: an entity type whose id starts with entity_ gets none. Another subsystem's hook of the
-# same shape, not listed above, gives a false edge, and so does a helper read as a hook, such as
-# user_cookie_delete or node_mass_update; it ends at a referenced drupal.entity_type node, here
-# cookie or mass.
+# False results to know about: an entity type whose id starts with entity_ gets none. Another
+# subsystem's hook of the same shape, not listed above, gives a false edge, and so does a helper
+# read as a hook, such as user_cookie_delete or node_mass_update; it ends at a referenced
+# drupal.entity_type node, here cookie or mass.
 - rule: hook_acts_on_entity_type
   reads: file
   in:

@@ -44,7 +44,7 @@ line. To improve a map, improve the rutters. The engine stays the same.
 - [CLI reference](#cli-reference)
 - [Troubleshooting](#troubleshooting)
 - [Tests and checks](#tests-and-checks)
-- [Known limitations](#known-limitations)
+- [How Periplus behaves](#how-periplus-behaves)
 - [License](#license)
 
 ## Get started
@@ -587,10 +587,14 @@ behind the checks badge does not run them.
 
 To propose a change, read [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Known limitations
+## How Periplus behaves
 
-These are the limits a new user meets first. [`docs/known-limitations.md`](docs/known-limitations.md)
-lists the rest, each rutter's among them.
+A shape the map does not hold is a rule not written yet. The map marks what it could not resolve:
+unresolved names, run-time marks, call sites with no edge, and skipped rows in the map report. Each
+rutter's `pack.yaml` header says what it does not map yet, and the `periplus-gaps` skill reads a map
+and says which rule is missing.
+
+The engine and the map format work as follows.
 
 - **Keys accepted but not executed.** The schemas accept more than the engine runs, for example
   `resolution` and `excluded_tokens`. A rule with such a key does

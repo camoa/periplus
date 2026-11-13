@@ -322,10 +322,9 @@ periplus neighbors js.file::web/modules/custom/greet/js/banner.js
 
 ## A shape the map lacks
 
-The map lacks a node or an edge the code holds. Before you write a rule for it, look for it in two
-places: [docs/known-limitations.md](known-limitations.md), and the Not mapped yet comment at the top
-of the `pack.yaml` of the rutter that maps that part of the stack. A shape listed there is a rule not
-written yet: the rutter's authors saw it and left it out, so it needs a new rule, not a fix.
+The map lacks a node or an edge the code holds. Before you write a rule for it, look for it in the
+Not mapped yet comment at the top of the `pack.yaml` of the rutter that maps that part of the stack.
+A shape listed there is a rule not written yet: the rutter's authors saw it and left it out, so it needs a new rule, not a fix.
 
 Do not wait for the report to point at it. A rutter refuses a shape by not matching it, so a
 refused shape beside shapes the rule accepts leaves no report row at all: the rule fires on the
