@@ -1,0 +1,44 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Login Destination rule, login_destination.destination.<name>, redirects the person after the
+# form its trigger names: a redirects_after_form edge from the rule's config object to the form
+# id. The trigger login acts after core's user_login_form, the trigger registration after
+# user_register_form; the contributed module fixes that pairing in its form submit handlers. The
+# trigger is a key under triggers, written with itself as its value:
+#
+#   triggers:
+#     login: login
+#
+# A trigger key with an empty or false value, as login: 0 from an unticked box, gives nothing, and
+# so do the other triggers, one_time_login and logout, which have no form. The form id is core's,
+# so it ends at a referenced node unless a class of the map returns it.
+#
+# Declared: the config file states the trigger.
+
+edge_kinds:
+- kind: redirects_after_form
+  from: drupal.config_object
+  to: drupal.form_id
+
+rules:
+- rule: login_destination_after_login_form
+  reads: file
+  in: [config, module_config]
+  match:
+    file: login_destination.destination.*
+    filetype: yaml
+    where: [{key: {name: triggers.login, equals: login}}]
+  id: {from: file_stem}
+  emits: [{edge: {kind: redirects_after_form, from: this_node, to: {from: {key: triggers.login}, template: 'user_login_form', type: drupal.form_id}}}]
+  confidence: declared
+
+- rule: login_destination_after_register_form
+  reads: file
+  in: [config, module_config]
+  match:
+    file: login_destination.destination.*
+    filetype: yaml
+    where: [{key: {name: triggers.registration, equals: registration}}]
+  id: {from: file_stem}
+  emits: [{edge: {kind: redirects_after_form, from: this_node, to: {from: {key: triggers.registration}, template: 'user_register_form', type: drupal.form_id}}}]
+  confidence: declared

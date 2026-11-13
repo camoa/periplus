@@ -395,9 +395,17 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   gets no validated_by edge, declared or inferred. A validatedBy() a parent writes is not read,
 #   so its subclass still gets the inferred edge.
 # - A template path with a literal value in a placeholder slot, as /my/item/5, a path with no
-#   leading slash, a path no mapped routing file declares, such as a core route's, and a path
-#   built in Twig other than by {{ ... }} holes give no route edge. A query string and a fragment
-#   are cut before the shape is made.
+#   leading slash in an attribute, a path no mapped routing file declares, such as a core route's,
+#   and a path built in Twig other than by {{ ... }} holes or a {% set %} joined with ~ give no
+#   route edge. A query string and a fragment are cut before the shape is made. Two pieces of a ~
+#   join that are not quoted and stand side by side give no route edge.
+# - A hook that core runs from a form links to the form only for hook_user_login. A Login
+#   Destination rule links only its login and registration triggers. A form display links to its
+#   entity form only for a type without bundles and a mode other than default, and only when the
+#   map holds the form id.
+# - An entity type test links a generic entity hook only when it is a whole if condition on
+#   $entity with == or ===, in a function of a module file; a test in a hook implemented by a
+#   method, the name written first, and a test joined with && or || give nothing.
 # - getForm($variable), getForm('text') and a form built other than by ->getForm(X::class) give
 #   no builds_form edge. A form class the map does not hold ends at a referenced node. A grouped
 #   use, use A\{B, C}, binds no name for it.
@@ -641,7 +649,7 @@ files:
     # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
     # attachment. The sections are the comments and the strings. The spans kept here are attached,
     # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
-    # subscribed_events and named_function.
+    # subscribed_events, named_function and any_function.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
       reader: text
@@ -706,6 +714,11 @@ files:
       # opens none, so a match inside one reads the function around it.
       - name: named_function
         open: '\bfunction\s+(?<function>\w+)\s*\([^)]*\)[^{;]*'
+        balance: ['{', '}']
+      # The body of a named function, a method or a closure; function is function <name>, or
+      # function alone for a closure, so a match inside a closure reads the closure.
+      - name: any_function
+        open: '\b(?<function>function(?:\s+\w+)?)\s*\([^)]*\)[^{;]*'
         balance: ['{', '}']
     # Configuration and the other YAML files read as text, beside the data reading yaml_basic
     # gives them.
