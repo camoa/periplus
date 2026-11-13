@@ -124,6 +124,7 @@ EXPECTED_MODULE_FILES = {
     "periplus/navigate/path.py",
     "periplus/navigate/show.py",
     "periplus/navigate/slice.py",
+    "periplus/navigate/source.py",
     "periplus/navigate/types.py",
     "periplus/navigate/walk.py",
     "periplus/engine/__init__.py",
