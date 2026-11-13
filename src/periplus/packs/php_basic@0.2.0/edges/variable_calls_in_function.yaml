@@ -14,7 +14,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # Limits: a call at file level, outside any function, makes nothing. A closure or arrow function is
 # no holder, so its parameter shares the id of the function's parameter of the same name: a
 # closure's Other $m and the function's Mailer $m both join each $m call in that function. A
-# parameter reassigned in the body still joins its declared type. A union type gives no edge. A
+# parameter assigned anywhere in the function body gets no edge here. A union type gives no edge. A
 # variable method name, $x->$name(), is types/find_runtime_calls.yaml's.
 
 rules:
@@ -160,6 +160,8 @@ rules:
       - node: 'php.method::{declarer}::{method}'
     - node: 'php.call_site::{site}'
     - edge: call_site_in
+    unless: &assigned_in_body
+    - [{node: 'php.local_variable::{function}::${var}'}]
   emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
   confidence: inferred
 
@@ -169,5 +171,6 @@ rules:
     node_type: php.call_site
     where: [{id_matches: '^php\.call_site::(?<site>(?<function>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
     follow: *parameter_walk
+    unless: *assigned_in_body
   emits: *calls_edge
   confidence: inferred
