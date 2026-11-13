@@ -1,0 +1,388 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# More values a local variable of a class method can hold, read through the value hub of
+# local_types.yaml: <class>::<method>::$y joined by local_assigned to <class>::$y=<text as written>.
+#
+# A call result: $y = $x->make(...) or $y = $x?->make(...), where $x is a parameter of the same
+# method typed by a class name, or a local whose one value is new Foo(). The map rules give a call
+# site $y->m or $y?->m of variable_calls.yaml its calls edge, inferred: they look make up on the
+# type of $x and then its ancestors through extends, take its declared return type from
+# types/return_types.yaml, and look m up on that type and then its ancestors through extends.
+#
+# A static call: $y = Foo::create(...). The file rules keep the class written before ::, resolved
+# through the imports and namespace, as an internal php.local_static_class <class>::$y::<Foo>,
+# joined from the value by local_value_static_call. The map rules look create up on Foo and then
+# its ancestors through extends and take its declared return type; a return type of static means
+# Foo itself, the class the call names, so each method declared : static gets a returns_static
+# edge to the class that declares it, which the map rules read as that mark alone. A call
+# on self:: or static:: looks the method up on the enclosing class and then its ancestors through
+# extends and used traits, and one on parent:: on the class its extends clause names and then that
+# class's ancestors; for these three a return type of static gives no edge, as static there is
+# the class the method runs on. A static method the map does not hold, a class outside the map, or
+# a method with no return type gives no edge: create() may return any type. The call site stays.
+#
+# A reference assignment: $y = &$x. The value <class>::$y=&<right as written> joins $y, and when
+# the right side is a plain variable, the value <class>::$x referenced by <left as written> joins
+# $x as well. Each counts as another value in the blocks of local_types.yaml and of the rules here,
+# so $y and $x, which share one slot after it, get no edge from a value either may lose.
+#
+# A variable with two different values in the method gets no edge from these rules, nor does a
+# call result whose $x is assigned in the method as well as typed as a parameter, or whose local
+# $x has two different values: the map does not know which one holds at the call.
+node_types:
+- name: php.local_static_class
+  id_namespace: php.local_static_class
+  internal: true
+
+edge_kinds:
+- kind: local_value_static_call
+  from: php.local_value
+  to: php.local_static_class
+
+- kind: returns_static
+  from: php.method
+  to: php.class_like
+
+rules:
+
+# Arguments at most one parenthesis deep, the whole right side, so Foo::create()->again() is not
+# read as Foo::create().
+- rule: find_local_static_class
+  reads: file
+  in: [source]
+  match: &static_match
+    declaration: assignment_expression
+    name_child: left
+    filetype: php
+    where:
+    - name_matches: {child: left, pattern: &plain_variable '\$(?!this$)\w+'}
+    - name_matches: {child: right, pattern: '(?!(?i:self|static|parent)\s*::)\\?[A-Za-z_][\w\\]*\s*::\s*\w+\s*\([^()]*(?:\([^()]*\)[^()]*)*\)'}
+  id:
+    from: [enclosing_type, declared_name, {qualified: right}]
+    template: "{enclosing_type}::{declared_name}::{right}"
+  emits: [{node: {type: php.local_static_class}}]
+  confidence: declared
+
+- rule: local_value_static_call
+  reads: file
+  in: [source]
+  match: *static_match
+  id:
+    from: [enclosing_type, declared_name, right]
+    template: "{enclosing_type}::{declared_name}={right}"
+  emits: [{edge: {kind: local_value_static_call, from: this_node, to: {declared: php.local_static_class}}}]
+  confidence: declared
+
+- rule: method_returns_static
+  reads: file
+  in: [source]
+  match:
+    declaration: method_declaration
+    name_child: name
+    filetype: php
+    where:
+    - has_child: named_type
+    - name_matches: {child: return_type, pattern: '(?i:static)'}
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{edge: {kind: returns_static, from: this_node, to: enclosing_class}}]
+  confidence: declared
+
+- rule: find_reference_variable
+  reads: file
+  in: [source]
+  match: &reference_match
+    declaration: reference_assignment_expression
+    name_child: left
+    filetype: php
+    where: [{name_matches: {child: left, pattern: *plain_variable}}]
+  id: &variable_id
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
+  emits: [{node: {type: php.local_variable}}]
+  confidence: declared
+
+- rule: find_reference_value
+  reads: file
+  in: [source]
+  match: *reference_match
+  id:
+    from: [enclosing_type, declared_name, right]
+    template: "{enclosing_type}::{declared_name}=&{right}"
+  emits: [{node: {type: php.local_value}}]
+  confidence: declared
+
+- rule: reference_assigned_value
+  reads: file
+  in: [source]
+  match: *reference_match
+  id: *variable_id
+  emits: &assigned_edge [{edge: {kind: local_assigned, from: this_node, to: {declared: php.local_value}}}]
+  confidence: declared
+
+- rule: find_referenced_variable
+  reads: file
+  in: [source]
+  match: &referenced_match
+    declaration: reference_assignment_expression
+    name_child: right
+    filetype: php
+    where: [{name_matches: {child: right, pattern: *plain_variable}}]
+  id: *variable_id
+  emits: [{node: {type: php.local_variable}}]
+  confidence: declared
+
+- rule: find_referenced_value
+  reads: file
+  in: [source]
+  match: *referenced_match
+  id:
+    from: [enclosing_type, declared_name, left]
+    template: "{enclosing_type}::{declared_name} referenced by {left}"
+  emits: [{node: {type: php.local_value}}]
+  confidence: declared
+
+- rule: referenced_assigned_value
+  reads: file
+  in: [source]
+  match: *referenced_match
+  id: *variable_id
+  emits: *assigned_edge
+  confidence: declared
+
+- rule: calls_through_local_parameter_call
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: &plain_site '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)->(?<method>\w+))$'}]
+    follow: &parameter_call_walk
+    - node: 'php.local_variable::{class}::{meth}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
+    - id_matches: &call_value '^php\.local_value::[^:]+::\$\w+=\$(?<source>(?!this\b)\w+)\s*\??->\s*(?<inner>\w+)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$'
+    - node: 'php.parameter::{class}::{meth}::${source}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<holder>\\?[A-Za-z_][\w\\]*)$'
+    - &return_walk
+      node: 'php.type::{holder}'
+    - &return_ancestors
+      ancestors: [inherits]
+    - &return_owner
+      id_matches: '^php\.type::(?<owner>.+)$'
+    - &return_method
+      node: 'php.method::{owner}::{inner}'
+    - &return_edge
+      edge: returns_type
+    - &return_type
+      id_matches: '^php\.return_type::[^:]+::\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - &on_type
+      try:
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: &parameter_call_blocks
+    - &assigned_another_value
+      - node: 'php.local_variable::{class}::{meth}::${var}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::(?!{value}$)'
+    - [{node: 'php.local_variable::{class}::{meth}::${source}'}]
+  emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: calls_through_local_parameter_call_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: &nullsafe_site '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
+    follow: *parameter_call_walk
+    unless_matched: *parameter_call_blocks
+  emits: *calls_edge
+  confidence: inferred
+
+# $f = new Factory(); $y = $f->make(); $y->m(): $f's one value gives the type make is looked up on.
+- rule: calls_through_local_new_call
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *plain_site}]
+    follow: &new_call_walk
+    - node: 'php.local_variable::{class}::{meth}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
+    - id_matches: *call_value
+    - node: 'php.local_variable::{class}::{meth}::${source}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<source_value>.+)$'
+    - edge: local_value_typed_as
+    - id_matches: '^php\.local_type::[^:]+::\$\w+::(?<holder>\\?[A-Za-z_][\w\\]*)$'
+    - *return_walk
+    - *return_ancestors
+    - *return_owner
+    - *return_method
+    - *return_edge
+    - *return_type
+    - *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: &new_call_blocks
+    - *assigned_another_value
+    - - node: 'php.local_variable::{class}::{meth}::${source}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::(?!{source_value}$)'
+    - [{node: 'php.parameter::{class}::{meth}::${source}'}]
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_local_new_call_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *nullsafe_site}]
+    follow: *new_call_walk
+    unless_matched: *new_call_blocks
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_local_static_call
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *plain_site}]
+    follow: &static_call_walk
+    - node: 'php.local_variable::{class}::{meth}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
+    - id_matches: &static_value '^php\.local_value::[^:]+::\$\w+=\\?[A-Za-z_][\w\\]*\s*::\s*(?<inner>\w+)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$'
+    - edge: local_value_static_call
+    - id_matches: '^php\.local_static_class::[^:]+::\$\w+::(?<holder>\\?[A-Za-z_][\w\\]*)$'
+    - *return_walk
+    - *return_ancestors
+    - *return_owner
+    - *return_method
+    - *return_edge
+    - *return_type
+    - *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: &static_call_blocks [*assigned_another_value]
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_local_static_call_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *nullsafe_site}]
+    follow: *static_call_walk
+    unless_matched: *static_call_blocks
+  emits: *calls_edge
+  confidence: inferred
+
+# Foo::create() declared : static gives Foo, the class the call names, then m on Foo and its
+# ancestors.
+- rule: calls_through_local_static_call_returning_static
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *plain_site}]
+    follow: &static_return_walk
+    - node: 'php.local_variable::{class}::{meth}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
+    - id_matches: *static_value
+    - edge: local_value_static_call
+    - id_matches: '^php\.local_static_class::[^:]+::\$\w+::(?<holder>(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*)))$'
+    - *return_walk
+    - *return_ancestors
+    - *return_owner
+    - *return_method
+    - edge: returns_static
+    - *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: *static_call_blocks
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_local_static_call_returning_static_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *nullsafe_site}]
+    follow: *static_return_walk
+    unless_matched: *static_call_blocks
+  emits: *calls_edge
+  confidence: inferred
+
+# self::create() and static::create(): the enclosing class and its ancestors, as calls_self_method
+# reads them.
+- rule: calls_through_local_self_call
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *plain_site}]
+    follow: &self_call_walk
+    - node: 'php.local_variable::{class}::{meth}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
+    - id_matches: '^php\.local_value::[^:]+::\$\w+=(?i:self|static)\s*::\s*(?<inner>\w+)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, mixes_in]
+    - *return_owner
+    - *return_method
+    - *return_edge
+    - *return_type
+    - *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: *static_call_blocks
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_local_self_call_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *nullsafe_site}]
+    follow: *self_call_walk
+    unless_matched: *static_call_blocks
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_local_parent_call
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *plain_site}]
+    follow: &parent_call_walk
+    - node: 'php.local_variable::{class}::{meth}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
+    - id_matches: '^php\.local_value::[^:]+::\$\w+=(?i:parent)\s*::\s*(?<inner>\w+)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$'
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - *return_ancestors
+    - *return_owner
+    - *return_method
+    - *return_edge
+    - *return_type
+    - *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: *static_call_blocks
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_local_parent_call_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *nullsafe_site}]
+    follow: *parent_call_walk
+    unless_matched: *static_call_blocks
+  emits: *calls_edge
+  confidence: inferred
