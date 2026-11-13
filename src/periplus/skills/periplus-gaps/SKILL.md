@@ -37,8 +37,9 @@ classes.
    standard library. Run it from the project root:
    `python3 ${CLAUDE_SKILL_DIR}/scripts/gap_read.py .periplus/map.json`. Under Resolution gaps it prints the count of `referenced` nodes,
    of `unresolved` nodes and of edges whose confidence is `inferred`, each followed by a
-   `first-party` split. A node is first-party when its state is `mapped` and it has a location,
-   so a `referenced` or `unresolved` node is always outside; for those two lists a
+   `first-party` split. A node is first-party when it has a location: it is `mapped`, or a
+   run-time call site in state `unknown_boundary`. A `referenced` or `unresolved` node is always
+   outside; for those two lists a
    `reached from first-party` line counts the ones an edge from a first-party node reaches. The
    map file holds no folder list, so read the folders `custom_module`, `custom_theme` and
    `js_source` in `settings.yml` to tell which first-party files a gap sits in.
@@ -124,8 +125,14 @@ interface gives it no method: on an enum only an outside trait keeps the name a 
 
 ## Unknown boundaries
 
-An unknown boundary is a place where static reading stops: a call whose method name, callee or
-argument is built at run time. A rule marks it with the node attribute `resolution` set to
+An unknown boundary is anything the map could not make known; every one reads `unknown_boundary`.
+An end whose detail names a rule left the mapped code with no rule identifying it: it is the list
+of rules to write. The program prints a `no rule  <count>` line and one line per node as
+`<id>  <file>:<line>  <pack>/<rule>`; write the rule in the rutter that owns what it reaches,
+with `boundary` on the end.
+
+The other reason is run-time, a place where static reading stops: a call whose method name, callee
+or argument is built at run time. A rule marks it with the node attribute `resolution` set to
 `runtime` and gives it no target, because any target would be invented. The program prints a
 `runtime  <count>` line, the `first-party` split, then one line per marked node as
 `<id>  <file>:<line>  <pack>.<rule>`, with every location of the node and the rule that set the

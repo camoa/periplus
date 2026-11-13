@@ -48,6 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `php_basic` adds the edge kind `implements_method`, from a class method to the interface method it implements.
 - `drupal_basic` maps entity type manager, container, config factory and queue factory calls on a parameter or property whose declared type is the core, Symfony or PSR interface.
 - A tree declaration rule's `where` list takes `within` and `not_within`, each a list of tree node types between the match and its nearest holder. Two rules can so tell a call in a method's own body from one in a closure inside it.
+- The node states `boundary` and `unknown_boundary`. A rule end takes `on_miss: unknown_boundary`, or `boundary: {into: {template, type}, kind}` to name the API node it enters, and a node type takes `boundary: true`. When rules mark one end differently, mapped beats boundary, boundary beats unresolved, and unresolved beats unknown boundary. The map report counts boundaries by node and unknown boundaries by pack and reason.
+- Rules that type one node as types on different branches of one ancestor no longer stop the map. The node keeps the nearest type they share, and its `type_conflict` attribute names each candidate as `<type> by <pack>/<rule>`. An edge only a candidate type could carry is not written. A boundary classification adds its type to the list and changes no type, and a rule that writes `type_conflict` refuses the map with exit 19. The map report's Type conflicts section, `type_conflicts` in JSON, lists each node with its candidates and counts those edges. Types that share no ancestor still refuse the map with exit 21.
 
 ### Changed
 
@@ -56,6 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A theme hook link (`renders_theme_hook`) and a library attachment in PHP (`attaches_library`) start at the method or function around them, no longer at the class. One written outside any named function, such as a property default, gives no edge and one skipped row.
 - A runtime `$this->redirect($route)` call site has an id that ends in `(runtime)`, apart from the plain call site at the same line.
 - Node and edge ids move and the map grows, so a committed map differs after the upgrade. Map again and review the difference.
+- A name a pack's `boundary` block lists reads `boundary`, not `declared`, and two packs listing one name keep a row each instead of refusing the map. A call site marked `resolution: runtime` reads `unknown_boundary`, not `mapped`. Maps built before still validate.
 - The known limitations page is removed. A shape no rule maps is listed as not mapped yet in its rutter's `pack.yaml` header.
 
 ### Fixed

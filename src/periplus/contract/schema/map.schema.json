@@ -48,6 +48,17 @@
       "required": ["id", "type", "state", "locations", "provenance"],
       "if": {"properties": {"state": {"const": "unresolved"}}, "required": ["state", "unresolved_detail"]},
       "then": {"properties": {"unresolved_detail": {"required": ["types_tried"]}}},
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "unknown_boundary"}}, "required": ["state"]},
+          "then": {
+            "anyOf": [
+              {"required": ["unresolved_detail"], "properties": {"unresolved_detail": {"required": ["types_tried"]}}},
+              {"required": ["attributes"], "properties": {"attributes": {"required": ["resolution"]}}}
+            ]
+          }
+        }
+      ],
       "properties": {
 
         "id": {
@@ -56,12 +67,12 @@
           "description": "<id namespace>::<name>. The namespace is never empty and never the literal None; that it is one a loaded pack declares is checked by periplus map before writing, since the schema cannot know the packs. Namespaced, and minted from the thing rather than from the rule that found it. Renaming a rule must not churn ids across the map. Two config files in one Drupal module carry the same internal id, so machine names alone are not unique and the namespace is load-bearing."
         },
 
-        "type": {"type": "string", "description": "Exactly one. A second matching type is a real collision and the build refuses."},
+        "type": {"type": "string", "description": "Exactly one. Rules that type one id on different branches of a declared ancestor give that nearest ancestor, and attributes.type_conflict names each candidate. Types that share no ancestor are an id collision and the build refuses."},
         "roles": {"type": "array", "items": {"type": "string"}, "description": "Capabilities, which accumulate and never collide. One cache backend that also invalidates tags is not ambiguous."},
 
         "state": {
-          "enum": ["mapped", "declared", "referenced", "unresolved", "out_of_reach"],
-          "description": "How much of the thing is known — a different question from rule confidence, which says how sure we are the rule fired correctly. The state decides which edges are legal: a declared node can be the target of a typed edge, a referenced one only a generic edge. mapped: read it, first-party. declared: not read, but a pack describes it. referenced: saw the name, nothing describes it. unresolved: a rule looked and failed, and this node records what it was doing. out_of_reach: not code, not in the repository, and no pack change will ever resolve it."
+          "enum": ["mapped", "declared", "referenced", "unresolved", "out_of_reach", "boundary", "unknown_boundary"],
+          "description": "How much of the thing is known — a different question from rule confidence, which says how sure we are the rule fired correctly. mapped: read it, first-party. boundary: outside the mapped code, and a rule identified what it is: an end a rule marks with boundary, a node of a type declared boundary, or a name a pack's boundary block lists. unknown_boundary: the map could not make it known; the reason rides along: unresolved_detail names the rule whose end leaves the mapped code with no rule identifying it, and attributes.resolution runtime marks a call site whose target is built at run time. unresolved: a rule looked inside the mapped code and failed, and this node records what it was doing. referenced: saw the name, and no rule marked it. When rules mark one end differently, mapped beats boundary, boundary beats unresolved, unresolved beats unknown_boundary, and any mark beats referenced. declared: written by maps of earlier versions for a boundary block name, now boundary. out_of_reach: not code, not in the repository, and no pack change will ever resolve it; no engine writes it."
         },
 
         "locations": {
@@ -74,7 +85,11 @@
           "properties": {
             "resolution": {
               "enum": ["runtime"],
-              "description": "The unknown-boundary mark: a rule read this call site, its target or argument is built at run time, and no rule will ever draw the edge."
+              "description": "An unknown boundary, reason run-time: a rule read this call site, its target or argument is built at run time, and no rule will ever draw the edge. The node's state is unknown_boundary."
+            },
+            "type_conflict": {
+              "type": "array", "minItems": 2, "items": {"type": "string"},
+              "description": "Written by the engine, never by a rule: rules typed this node as types on different branches of one ancestor, and the node's type is the nearest type they share. One entry per type, pack and rule, sorted, as '<type> by <pack>/<rule>'; a boundary classification adds its type as '<type> by <pack>/boundary.<group>' and changes no type. An edge only a candidate type could carry is not written."
             }
           }
         },
@@ -99,7 +114,7 @@
             "why_permanent": {"type": ["string", "null"]},
             "types_tried":   {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "The end's candidate types, in the order the build tried them. The node's type is the first, so its id does not depend on which candidates a rule lists."}
           },
-          "description": "Required in spirit whenever state is unresolved or out_of_reach. \"Unresolved\" alone is a shrug; the entry has to read as \"add an anchor for this symbol\" rather than \"unknown\". Every failure in the record that motivated this project was silent, and the graph still looked populated."
+          "description": "Required whenever state is unresolved, and for an unknown_boundary that is not a run-time call site. \"Unresolved\" alone is a shrug; the entry has to read as \"add an anchor for this symbol\" rather than \"unknown\". Every failure in the record that motivated this project was silent, and the graph still looked populated."
         }
       }
     },

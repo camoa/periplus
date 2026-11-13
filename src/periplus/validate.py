@@ -46,7 +46,7 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
-from jsonschema.exceptions import ValidationError
+from jsonschema.exceptions import ValidationError, best_match
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
@@ -105,7 +105,9 @@ class SchemaError:
     failing at one pointer are two different faults.
 
     ``context`` holds the sub-errors of a branch failure, already sorted. It is empty for every
-    other kind, which is a value and not a placeholder.
+    other kind, which is a value and not a placeholder. ``best`` is the pointer and message of the
+    sub-error ``best_match`` picks from it, ``""`` when there is none; ``periplus map`` prints it,
+    because it prints no context.
     """
 
     file: str
@@ -113,6 +115,7 @@ class SchemaError:
     keyword: str
     message: str
     context: tuple[SchemaError, ...] = field(default_factory=tuple)
+    best: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -537,7 +540,15 @@ def _error(file: str, error: ValidationError) -> SchemaError:
         keyword=str(error.validator),
         message=error.message,
         context=tuple(sorted((_error(file, sub) for sub in error.context), key=_sort_key)),
+        best=_best(error),
     )
+
+
+def _best(error: ValidationError) -> str:
+    """The pointer and message of the sub-error ``best_match`` picks, ``""`` when it picks the
+    error itself."""
+    best = best_match([error])
+    return "" if best is None or best is error else f"{best.json_path}: {best.message}"
 
 
 def _sort_key(error: SchemaError) -> tuple[str, str, str, str]:

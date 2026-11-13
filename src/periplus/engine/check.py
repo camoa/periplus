@@ -10,12 +10,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from periplus.engine.emit import type_chain
+from periplus.engine.emit import TYPE_CONFLICT, _boundary_type, type_chain
 from periplus.engine.packload import (
     _BOUNDARY_SHAPE,
     RuleSet,
     declared_values,
     load_rules,
+    namespace_of,
     node_types,
     twin_type,
     unexecuted,
@@ -85,6 +86,7 @@ def _schema_problems(packs: Sequence[LoadedPack]) -> tuple[list[Problem], set[st
             Problem(
                 ExitCode.SCHEMA_INVALID,
                 f"{pack.name.pack}/{error.file} {error.pointer}: {error.message}"
+                + (f"; {error.best}" if error.best else "")
                 + (f"; write {_BOUNDARY_SHAPE}" if error.pointer.startswith("$.boundary") else ""),
                 {"pack": pack.name.pack, "file": error.file, "pointer": error.pointer},
             )
@@ -104,7 +106,8 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
     execute, no folder name has two values across the packs that neither pack's dependency settles,
     a ``files.extends`` beside ``add_extensions`` names one pack, no ending or whole file name is
     claimed for two file types read the same way, a type read as a tree belongs to a pack that
-    pins a grammar, and every grammar pin is met.
+    pins a grammar, every grammar pin is met, and no two rules enter one into node as different
+    types.
     """
     documents = {pack.name.pack: _documents(pack) for pack in packs}
     reach = {pack.name.pack: reachable(pack, packs) for pack in packs}
@@ -179,6 +182,33 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
             for rule in rule_set.rules
             if rule.pack == name and not rule.supported
         )
+    problems.extend(
+        Problem(
+            ExitCode.PACK_RULES_UNREADABLE,
+            f"{rule.pack}/{rule_files.get((rule.pack, rule.name), rule.name)}: the rule "
+            f"{rule.name} emits the boundary type {rule.node_type}, which "
+            f"{rule_set.types[rule.node_type].pack} declares boundary: true; a node of a "
+            "boundary type is one no rule finds",
+            {"pack": rule.pack, "rule": rule.name, "type": rule.node_type},
+        )
+        for rule in rule_set.rules
+        if rule.supported
+        and rule.node_type in rule_set.types
+        and _boundary_type(rule_set.types, rule.node_type)
+    )
+    problems.extend(
+        Problem(
+            ExitCode.PACK_RULES_UNREADABLE,
+            f"{rule.pack}/{rule_files.get((rule.pack, rule.name), rule.name)}: the rule "
+            f"{rule.name} writes the attribute {TYPE_CONFLICT}, which only the engine writes, on "
+            "a node rules type as conflicting types",
+            {"pack": rule.pack, "rule": rule.name, "attribute": TYPE_CONFLICT},
+        )
+        for rule in rule_set.rules
+        if rule.supported
+        and TYPE_CONFLICT in {name for name, _ in (*rule.attributes, *rule.templates)}
+    )
+    problems.extend(_into_collisions(rule_set, rule_files))
     problems.extend(_folder_conflicts(packs))
     problems.extend(_extends_ambiguous(packs))
     problems.extend(_type_conflicts(packs))
@@ -299,6 +329,8 @@ def _undeclared(
             for side in ("from", "to")
             if isinstance(edge, Mapping) and _has(edge.get(side), "declared")
         ]
+        intos = [into for edge in _emits(rule, "edge") for into in _intos(edge)]
+        used += [into["into"]["type"] for into in intos]
         problems.extend(
             Problem(
                 ExitCode.UNDECLARED_TYPE,
@@ -316,7 +348,7 @@ def _undeclared(
                 f"neither {pack} nor a pack it depends on declares",
                 {"pack": pack, "file": file, "rule": str(rule_name), "kind": str(edge["kind"])},
             )
-            for edge in _emits(rule, "edge")
+            for edge in [*_emits(rule, "edge"), *intos]
             if isinstance(edge, Mapping) and edge.get("kind") not in kinds
         )
         found = rule.get("match")
@@ -394,6 +426,7 @@ def _illegal_ends(
                         {"pack": pack, "file": file, "rule": str(rule.get("rule"))},
                     )
                 )
+            problems.extend(_illegal_into(pack, file, rule, edge, rule_set))
             twin = twin_type(rule, [other for _, d in siblings for other in _rules(d)])
             if kind is None or twin is None:
                 continue
@@ -410,6 +443,87 @@ def _illegal_ends(
                             {"pack": pack, "file": file, "rule": str(rule.get("rule"))},
                         )
                     )
+    return problems
+
+
+def _intos(edge: object) -> list[Mapping[str, Any]]:
+    """The ``boundary`` of each end of an emitted edge that has one."""
+    ends = [edge.get(side) for side in ("from", "to")] if isinstance(edge, Mapping) else []
+    return [end["boundary"] for end in ends if isinstance(end, Mapping) and "boundary" in end]
+
+
+def _illegal_into(
+    pack: str, file: str, rule: Mapping[str, Any], edge: Mapping[str, Any], rule_set: RuleSet
+) -> list[Problem]:
+    """Each end of the edge whose ``boundary`` enters a type no pack declares boundary, or whose
+    into kind does not allow the into type at its to end or the end's types at its from end. An
+    undeclared type or kind is refused as undeclared instead."""
+    problems: list[Problem] = []
+    outer = rule_set.edge_kinds.get(str(edge.get("kind")))
+    for side in ("from", "to"):
+        end = edge.get(side)
+        if not isinstance(end, Mapping) or "boundary" not in end:
+            continue
+        into = end["boundary"]["into"]["type"]
+        kind = rule_set.edge_kinds.get(end["boundary"]["kind"])
+        if into not in rule_set.types or kind is None:
+            continue
+        said = (
+            f"{pack}/{file}: the rule {rule.get('rule')} marks its {side} end a boundary into "
+            f"{into}"
+        )
+        if not _boundary_type(rule_set.types, into):
+            reasons = [f"{said}, which no pack declares boundary: true"]
+        elif not set(kind.to_types) & set(type_chain(rule_set.types, into)):
+            reasons = [f"{said}, and the edge {kind.name} allows {', '.join(kind.to_types)} there"]
+        else:
+            named = [end["type"]] if end.get("type") else _strings(end.get("types"))
+            if not named and outer is not None:
+                named = list(outer.to_types if side == "to" else outer.from_types)
+            reasons = [
+                f"{said} by the edge {kind.name}, which allows {', '.join(kind.from_types)} at "
+                f"its from end, and the end is a {t}"
+                for t in named
+                if t in rule_set.types
+                and not set(kind.from_types) & set(type_chain(rule_set.types, t))
+            ]
+        problems.extend(
+            Problem(
+                ExitCode.EDGE_ILLEGAL,
+                reason,
+                {"pack": pack, "file": file, "rule": str(rule.get("rule"))},
+            )
+            for reason in reasons
+        )
+    return problems
+
+
+def _into_collisions(rule_set: RuleSet, rule_files: Mapping[tuple[str, str], str]) -> list[Problem]:
+    """Each into node two rules enter as different types, named by the first two by pack and
+    rule."""
+    entered: dict[str, set[tuple[str, str, str]]] = {}
+    for rule in rule_set.rules:
+        for spec in rule.edges if rule.supported else ():
+            if spec.into is not None:
+                name, kind, _ = spec.into
+                into = f"{namespace_of(rule_set.types, kind)}::{name}"
+                entered.setdefault(into, set()).add((rule.pack, rule.name, kind))
+    problems: list[Problem] = []
+    for into, rows in sorted(entered.items()):
+        if len({kind for _, _, kind in rows}) < 2:
+            continue
+        first = min(rows)
+        second = min(row for row in rows if row[2] != first[2])
+        files = [f"{p}/{rule_files.get((p, r), r)}" for p, r, _ in (first, second)]
+        problems.append(
+            Problem(
+                ExitCode.TYPE_COLLISION,
+                f"{files[0]}: the rule {first[1]} enters {into} as a {first[2]}, and the rule "
+                f"{second[0]}/{second[1]} in {files[1]} enters it as a {second[2]}; one into "
+                "node takes one type",
+                {"pack": first[0], "rule": first[1], "node": into},
+            )
+        )
     return problems
 
 

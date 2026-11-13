@@ -71,9 +71,11 @@ Each rule states its own confidence. A rule that reads an explicit declaration s
 A rule that relies on a naming convention says `inferred`. The rule declares the value. The
 engine does not decide it at run time.
 
-Each node states how it was found. `mapped` means a rule found its definition. `referenced`
-means the code names it, and its definition is outside the mapped files. `unresolved` means a
-rule searched for it and found nothing. A thing that no rule explains is marked. It is never
+Each node states how it was found. `mapped` means a rule found its definition. `boundary` means
+it is outside the mapped files, and a rule identified what it is. `unknown_boundary` means the map
+could not make it known: a call whose target is built at run time, or an end that leaves the
+mapped files with no rule identifying it yet. `unresolved` means a rule searched the mapped files
+for it and found nothing. `referenced` means the code names it, and no rule marked it. A thing that no rule explains is marked. It is never
 filled with a guess.
 
 ## What this design costs

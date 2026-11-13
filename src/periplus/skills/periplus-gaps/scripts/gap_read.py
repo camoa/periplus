@@ -34,8 +34,13 @@ class NodeKeys(TypedDict):
     provenance: list[Provenance]
 
 
+class Detail(TypedDict):
+    rule: str
+
+
 class Node(NodeKeys, total=False):
     attributes: dict[str, object]
+    unresolved_detail: Detail
 
 
 # `from` is a keyword, so this type cannot use the class form.
@@ -86,7 +91,9 @@ def module_of(ns: str) -> str | None:
 
 
 def first_party(n: Node) -> bool:
-    return n["state"] == "mapped" and bool(n["locations"])
+    # Only a node a rule found has a location; a run-time call site is one, in state
+    # unknown_boundary.
+    return n["state"] in ("mapped", "unknown_boundary") and bool(n["locations"])
 
 
 def stack(t: str) -> str:
@@ -412,6 +419,18 @@ class GapReport:
                 "-",
             )
             print(f"{n['id']}  {where}  {rule}")
+        # An end that leaves the mapped code with no rule identifying it: a rule to write.
+        unnamed = [
+            n
+            for n in self.m["nodes"]
+            if n["state"] == "unknown_boundary" and "unresolved_detail" in n
+        ]
+        print(f"no rule  {len(unnamed)}")
+        for n in sorted(unnamed, key=lambda n: n["id"]):
+            edges = self.edges_to.get(n["id"], [])
+            place = ((edges[0]["locations"] if edges else []) or [NOWHERE])[0]
+            rule = n["unresolved_detail"]["rule"] if "unresolved_detail" in n else "-"
+            print(f"{n['id']}  {place['file']}:{place['line']}  {rule}")
 
 
 def main(argv: list[str] | None = None) -> int:

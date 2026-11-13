@@ -211,6 +211,9 @@ Each edge has `from`, `to`, `kind`, its locations, an `occurrences` count and it
   no edge from it, because no rule can name the target. A node of a type a rutter marks
   `internal` serves that rutter's map rules and is left out of the written map, with every edge
   that has an end on it.
+- A node that two rules type as two kinds of one type, such as two kinds of form, keeps the type
+  both kinds descend from. Its `attributes` hold `type_conflict`, each candidate type with the
+  pack and rule that gave it, and the map report lists it under Type conflicts.
 
 **Determinism.** `tests/test_demo_b_map_determinism.py` maps one project in separate processes
 under different hash seeds and locales, and the maps are byte-identical. This ran on one Linux

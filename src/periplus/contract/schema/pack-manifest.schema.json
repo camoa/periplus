@@ -222,7 +222,7 @@
           }
         }
       },
-      "description": "Named groups of the names where a framework begins. An edge end no rule found that lands on a listed name becomes a declared node this pack drew, with no location; the engine never reads that code. A boundary node enters the map because first-party code refers to it, never because a pack knows about it, so a listed name no edge reaches is not in the map. Every loaded pack's groups apply, and an id two packs list refuses the map."
+      "description": "Named groups of the names where a framework begins. An edge end no rule found that lands on a listed name becomes a node in state boundary that this pack drew, with no location; the engine never reads that code. A boundary node enters the map because first-party code refers to it, never because a pack knows about it, so a listed name no edge reaches is not in the map. Every loaded pack's groups apply, and an id several groups list is one node with a provenance row per group."
     },
 
     "tables": {

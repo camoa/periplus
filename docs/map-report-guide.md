@@ -106,6 +106,16 @@ Map:
   edges   10
   internal: 4 nodes and 2 edges left out
 
+Boundaries:
+  total 0
+
+Unknown boundaries:
+  total 0
+
+Type conflicts:
+  total 0
+  edges left out 0
+
 Files:
   selected  5
   excluded  0
@@ -274,6 +284,32 @@ the map rules only. There is nothing to fix here; it explains why `nodes` and `e
 than the rules made. The README's [What the map holds](../README.md#what-the-map-holds) says what
 stays in the map, call sites marked `resolution: runtime` among them.
 
+### `boundaries`
+
+Text: the Boundaries section. JSON: `{"total": N, "by_node": [{"node", "edges"}]}`. `total` counts
+the nodes in state `boundary`: what a rule identified outside the mapped code. Each row is one such
+node and the number of edges into it, most first; the text shows ten. An API node's row counts the
+project things and the marked ends that enter it.
+
+### `unknown_boundaries`
+
+Text: the Unknown boundaries section. JSON: `{"total": N, "by_pack": {...}, "by_reason": {...}}`.
+`total` counts the nodes in state `unknown_boundary`: what the map could not make known.
+`by_pack` names the pack whose rule set the mark. `by_reason` is `no rule`, an end that leaves the
+mapped code with no rule identifying it yet, or `run-time`, a call whose target is built at run
+time. Each `no rule` node is a rule a rutter still lacks; `periplus find` lists them by id.
+
+### `type_conflicts`
+
+Text: the Type conflicts section. JSON: `{"total": N, "edges_left_out": M, "by_node": [{"node",
+"candidates"}]}`. `total` counts the nodes that rules typed as types on different branches of one
+ancestor, such as two kinds of form for one class. Each such node keeps the nearest type the
+candidates share, and its `type_conflict` attribute names each candidate as `<type> by
+<pack>/<rule>`. `edges_left_out` counts the edges only a candidate type could carry, which the map
+does not write. Each row is one node and its candidates; the text shows ten. Fix the rule that
+should not match the node, or declare one candidate below the other. `periplus find <type>` lists
+the nodes a candidate type names.
+
 ### `map`
 
 Text: the `path` row under Map. Where the map was written, or `null` when a problem stopped the
@@ -369,6 +405,16 @@ Map:
   edges   0
   internal: 2 nodes and 2 edges left out
 
+Boundaries:
+  total 0
+
+Unknown boundaries:
+  total 0
+
+Type conflicts:
+  total 0
+  edges left out 0
+
 Files:
   selected  1
   excluded  0
@@ -441,6 +487,16 @@ Map:
   nodes   12
   edges   10
   internal: 4 nodes and 2 edges left out
+
+Boundaries:
+  total 0
+
+Unknown boundaries:
+  total 0
+
+Type conflicts:
+  total 0
+  edges left out 0
 
 Files:
   selected  5
@@ -670,6 +726,16 @@ Map:
   path    not written
   nodes   0
   edges   0
+
+Boundaries:
+  total 0
+
+Unknown boundaries:
+  total 0
+
+Type conflicts:
+  total 0
+  edges left out 0
 
 Files:
   selected  0

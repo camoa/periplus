@@ -79,6 +79,12 @@ class MapReport:
     map_passes: tuple[MapPass, ...] = ()
     #: The nodes and the edges of an internal type the written map leaves out.
     internal: LeftOut = LeftOut()
+    #: Each boundary node and the number of edges into it, most first, then by id.
+    boundaries: tuple[tuple[str, int], ...] = ()
+    #: Each unknown boundary node as the pack whose rule set the mark and the reason.
+    unknown: tuple[tuple[str, str], ...] = ()
+    #: Each node of conflicting types and its candidates, by id.
+    conflicts: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -222,7 +228,41 @@ def run(
         unlisted=tuple(unlisted),
         map_passes=tuple(map_passes),
         internal=left_out,
+        boundaries=_boundaries(document),
+        unknown=_unknown(document),
+        conflicts=tuple(
+            (n["id"], tuple(n["attributes"]["type_conflict"]))
+            for n in document["nodes"]
+            if "type_conflict" in n.get("attributes", {})
+        ),
     )
+
+
+def _boundaries(document: Mapping[str, Any]) -> tuple[tuple[str, int], ...]:
+    """Each boundary node and the number of edges into it, most first, then by id."""
+    into = Counter(str(edge["to"]) for edge in document["edges"])
+    found = [(n["id"], into[n["id"]]) for n in document["nodes"] if n["state"] == "boundary"]
+    return tuple(sorted(found, key=lambda row: (-row[1], row[0])))
+
+
+def _unknown(document: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+    """Each unknown boundary node as its marking pack and reason, sorted. A run-time call site's
+    pack is the first that set its ``resolution``; another node's is its detail's rule's."""
+    found = []
+    for node in document["nodes"]:
+        if node["state"] != "unknown_boundary":
+            continue
+        if "unresolved_detail" in node:
+            found.append((node["unresolved_detail"]["rule"].partition("/")[0], "no rule"))
+        else:
+            packs = sorted(p["pack"] for p in node["provenance"] if "resolution" in p["sets"])
+            found.append((packs[0], "run-time"))
+    return tuple(sorted(found))
+
+
+def _counted(rows: Sequence[str]) -> str:
+    """Each distinct row and how many times it occurs, by row."""
+    return ", ".join(f"{_escape(row)} {n}" for row, n in sorted(Counter(rows).items()))
 
 
 def _differing(document: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
@@ -260,6 +300,39 @@ def render_text(report: MapReport) -> str:
                 if report.internal.nodes or report.internal.edges
                 else []
             ),
+        ],
+    )
+    shown_boundaries = [f"{_escape(node)} {n}" for node, n in report.boundaries[:10]]
+    if len(report.boundaries) > 10:
+        shown_boundaries.append(
+            f"and {len(report.boundaries) - 10} more; the JSON report lists them all"
+        )
+    lines += _section("Boundaries", [f"total {len(report.boundaries)}", *shown_boundaries])
+    lines += _section(
+        "Unknown boundaries",
+        [
+            f"total {len(report.unknown)}",
+            *(
+                [
+                    f"by pack: {_counted([p for p, _ in report.unknown])}",
+                    f"by reason: {_counted([r for _, r in report.unknown])}",
+                ]
+                if report.unknown
+                else []
+            ),
+        ],
+    )
+    shown_conflicts = [f"{_escape(n)}: {_escape('; '.join(c))}" for n, c in report.conflicts[:10]]
+    if len(report.conflicts) > 10:
+        shown_conflicts.append(
+            f"and {len(report.conflicts) - 10} more; the JSON report lists them all"
+        )
+    lines += _section(
+        "Type conflicts",
+        [
+            f"total {len(report.conflicts)}",
+            f"edges left out {report.internal.unclear_edges}",
+            *shown_conflicts,
         ],
     )
     lines += _section(
@@ -352,6 +425,20 @@ def render_json(report: MapReport) -> str:
             {"pass": n, "fired": [{"pack": p, "rule": r, "fires": k} for p, r, k in rows]}
             for n, rows in report.map_passes
         ],
+        "boundaries": {
+            "total": len(report.boundaries),
+            "by_node": [{"node": node, "edges": n} for node, n in report.boundaries],
+        },
+        "unknown_boundaries": {
+            "total": len(report.unknown),
+            "by_pack": dict(Counter(p for p, _ in report.unknown)),
+            "by_reason": dict(Counter(r for _, r in report.unknown)),
+        },
+        "type_conflicts": {
+            "total": len(report.conflicts),
+            "edges_left_out": report.internal.unclear_edges,
+            "by_node": [{"node": n, "candidates": list(c)} for n, c in report.conflicts],
+        },
         "problems": [_json_problem(p) for p in report.problems],
     }
     return json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
