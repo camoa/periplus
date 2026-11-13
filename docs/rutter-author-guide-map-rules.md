@@ -73,7 +73,10 @@ location of the node it matched, whatever its ends name, so a rule that matches 
 places its edge at the call. Every kind and type it names is
 declared by its rutter or one it depends on. A map rule reads only the nodes the rules found and
 the edges the file rules made, and edges map rules made between those; an end a map rule composed
-is never read, so the passes end. Two steps, in a file type `fleet`:
+is never read, so the passes end. A node a map rule makes is read only when a file rule found the
+same id; when a later map rule would start from it or reach it by a `node` step, the map report
+lists that rule under Matches skipped. A node that is only referenced, an edge end no rule found,
+is never a start for `node_type`. Two steps, in a file type `fleet`:
 
 <!-- map-example: .periplus/packs/fleet@0.0.1/pack.yaml -->
 ```yaml
