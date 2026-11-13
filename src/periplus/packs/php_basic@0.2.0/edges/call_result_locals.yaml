@@ -13,8 +13,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # through the imports and namespace, as an internal php.local_static_class <class>::$y::<Foo>,
 # joined from the value by local_value_static_call. The map rules look create up on Foo and then
 # its ancestors through extends and take its declared return type; a return type of static means
-# Foo itself, the class the call names, so each method declared : static gets a returns_static
-# edge to the class that declares it, which the map rules read as that mark alone. A call
+# Foo itself, the class the call names, read through the returns_static edge of
+# edges/return_chains.yaml as that mark alone. A call
 # on self:: or static:: looks the method up on the enclosing class and then its ancestors through
 # extends and used traits, and one on parent:: on the class its extends clause names and then that
 # class's ancestors; for these three a return type of static gives no edge, as static there is
@@ -38,10 +38,6 @@ edge_kinds:
 - kind: local_value_static_call
   from: php.local_value
   to: php.local_static_class
-
-- kind: returns_static
-  from: php.method
-  to: php.class_like
 
 rules:
 
@@ -71,22 +67,6 @@ rules:
     from: [enclosing_type, declared_name, right]
     template: "{enclosing_type}::{declared_name}={right}"
   emits: [{edge: {kind: local_value_static_call, from: this_node, to: {declared: php.local_static_class}}}]
-  confidence: declared
-
-- rule: method_returns_static
-  reads: file
-  in: [source]
-  match:
-    declaration: method_declaration
-    name_child: name
-    filetype: php
-    where:
-    - has_child: named_type
-    - name_matches: {child: return_type, pattern: '(?i:static)'}
-  id:
-    from: [enclosing_type, declared_name]
-    template: "{enclosing_type}::{declared_name}"
-  emits: [{edge: {kind: returns_static, from: this_node, to: enclosing_class}}]
   confidence: declared
 
 - rule: find_reference_variable

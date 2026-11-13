@@ -121,30 +121,6 @@ rules:
   emits: *assigned
   confidence: declared
 
-# local_types.yaml joins a variable to its values in a method only; these two do it in a function,
-# so a catch variable assigned again there has a second value. find_local_value already mints the
-# value, its id naming no method.
-- rule: find_local_variable_in_function
-  reads: file
-  in: [source]
-  match: &function_assignment_match
-    declaration: assignment_expression
-    name_child: left
-    filetype: php
-    holder: function_definition
-    where: [{name_matches: {child: left, pattern: '\$(?!this$)\w+'}}]
-  id: *function_variable_id
-  emits: [{node: {type: php.local_variable}}]
-  confidence: declared
-
-- rule: local_assigned_value_in_function
-  reads: file
-  in: [source]
-  match: *function_assignment_match
-  id: *function_variable_id
-  emits: *assigned
-  confidence: declared
-
 - rule: calls_through_catch_variable
   reads: map
   match:
