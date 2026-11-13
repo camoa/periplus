@@ -375,6 +375,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="most start nodes the words pick, at most two of one type (default: 12)",
     )
     cut.add_argument(
+        "--support",
+        action="store_true",
+        help="print nodes in supporting code, as tests, and let a start come from it; by default "
+        "each piece counts them in one line",
+    )
+    cut.add_argument(
         "--out",
         type=Path,
         default=None,
@@ -727,6 +733,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             map_path=args.map,
             types=args.type,
             starts=args.starts,
+            support=args.support,
         )
         sys.stdout.write(SLICE_RENDERERS[args.format](sliced))
         return sliced.exit_code

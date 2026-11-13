@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TypeGuard
 
+from periplus.engine.select import _glob
 from periplus.errors import ExitCode, HarnessError
 from periplus.layout import PROJECT_MARKER
 from periplus.mapshared import _DEFAULT_MAP
@@ -78,6 +79,10 @@ class MapIndex:
                 self._subtypes[parent].append(row["type"])
         self.edges: list[dict[str, Any]] = list(document["edges"])
         self.realizing = frozenset(as_text(k) for k in document.get("realizing_kinds", ()))
+        self._supporting = [
+            (as_text(p), _glob(as_text(p))) for p in document.get("supporting_paths", ())
+        ]
+        self._support: dict[str, str | None] = {}
 
     def outgoing(self, id: str) -> list[dict[str, Any]]:
         """The edges leaving ``id``, in map order."""
@@ -94,6 +99,18 @@ class MapIndex:
     def subtypes(self, type: str) -> list[str]:
         """The types whose parent is ``type``, sorted."""
         return sorted(self._subtypes.get(type, ()))
+
+    def supporting(self, id: str) -> str | None:
+        """The first of the map's ``supporting_paths`` that the file of the node's first location
+        matches, or ``None``: the node is not supporting code."""
+        if id not in self._support:
+            locations = self.nodes[id]["locations"]
+            file = as_text(locations[0]["file"]).removeprefix("./") if locations else None
+            self._support[id] = next(
+                (text for text, pattern in self._supporting if file and pattern.fullmatch(file)),
+                None,
+            )
+        return self._support[id]
 
     def stand_ins(
         self, id: str, inward: bool = False

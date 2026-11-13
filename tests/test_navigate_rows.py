@@ -87,6 +87,7 @@ PINNED: dict[str, str] = {
       "matched_attribute": null,
       "source": null,
       "state": "mapped",
+      "supporting": false,
       "type": "php.method"
     },
     {
@@ -97,6 +98,7 @@ PINNED: dict[str, str] = {
       "matched_attribute": null,
       "source": null,
       "state": "referenced",
+      "supporting": false,
       "type": "php.method"
     }
   ],
@@ -120,7 +122,9 @@ PINNED: dict[str, str] = {
         "kind": "calls",
         "location": "src/a.php:7",
         "source": null,
+        "stands_for": false,
         "state": "mapped",
+        "supporting": false,
         "type": "php.method",
         "via": "php.method::A::go"
       },
@@ -131,7 +135,9 @@ PINNED: dict[str, str] = {
         "kind": "calls",
         "location": "src/a.php:9",
         "source": null,
+        "stands_for": false,
         "state": "referenced",
+        "supporting": false,
         "type": "php.method",
         "via": "php.method::A::go"
       }
@@ -157,7 +163,9 @@ PINNED: dict[str, str] = {
         "kind": "calls",
         "location": "src/a.php:4",
         "source": null,
+        "stands_for": false,
         "state": "mapped",
+        "supporting": false,
         "type": "php.method",
         "via": "php.method::A::go"
       },
@@ -168,7 +176,9 @@ PINNED: dict[str, str] = {
         "kind": "defines",
         "location": "src/a.php:1",
         "source": null,
+        "stands_for": false,
         "state": "mapped",
+        "supporting": false,
         "type": "php.type",
         "via": "php.method::A::go"
       }
@@ -210,7 +220,8 @@ PINNED: dict[str, str] = {
         "rules": [
           "php:r"
         ],
-        "source": null
+        "source": null,
+        "supporting": false
       },
       {
         "confidences": [
@@ -232,7 +243,8 @@ PINNED: dict[str, str] = {
         "rules": [
           "php:r"
         ],
-        "source": null
+        "source": null,
+        "supporting": false
       }
     ],
     "shown": 2,
@@ -269,7 +281,8 @@ PINNED: dict[str, str] = {
           "php:x",
           "php:y"
         ],
-        "source": null
+        "source": null,
+        "supporting": false
       },
       {
         "confidences": [
@@ -291,7 +304,8 @@ PINNED: dict[str, str] = {
         "rules": [
           "php:x"
         ],
-        "source": null
+        "source": null,
+        "supporting": false
       }
     ],
     "shown": 2,
@@ -307,6 +321,10 @@ PINNED: dict[str, str] = {
       "sets": []
     }
   ],
+  "realized_by": {
+    "items": [],
+    "more": 0
+  },
   "roles": [
     "entry"
   ],

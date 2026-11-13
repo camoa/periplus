@@ -74,7 +74,7 @@ class EdgeRow:
     """One edge at the shown node: its kind, the other end, where it is, and why it is there.
 
     ``location`` is the edge's first location, or the other end's when the edge has none, and
-    ``source`` the line of code there.
+    ``source`` the line of code there. ``supporting`` marks an other end in supporting code.
     """
 
     kind: str
@@ -88,6 +88,7 @@ class EdgeRow:
     description: Description | None = None
     location: str | None = None
     source: str | None = None
+    supporting: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,7 +136,8 @@ def _rows(
     end: str,
     described: Mapping[tuple[str, str, str], Description],
 ) -> list[EdgeRow]:
-    """Edge rows sorted by kind, then other-end id, then first location."""
+    """Edge rows sorted by kind, then other-end id, then first location; those whose other end is
+    supporting code after the rest."""
     rows = []
     for edge in edges:
         other = index.nodes[edge[end]]
@@ -155,9 +157,10 @@ def _rows(
                 tuple(sorted({f"{p['pack']}:{p['rule']}" for p in edge["provenance"]})),
                 described.get((edge["from"], edge["kind"], edge["to"])),
                 where(edge, other),
+                supporting=index.supporting(edge[end]) is not None,
             )
         )
-    return sorted(rows, key=lambda r: (r.kind, r.other, _first(r.locations)))
+    return sorted(rows, key=lambda r: (r.supporting, r.kind, r.other, _first(r.locations)))
 
 
 def run(
@@ -290,13 +293,18 @@ def _json_row(row: EdgeRow) -> dict[str, Any]:
         "description": _json_description(row.description),
         "location": row.location,
         "source": row.source,
+        "supporting": row.supporting,
     }
 
 
 def _edge_lines(listing: Listing[EdgeRow]) -> list[str]:
     lines = []
     kind = None
+    supporting = False
     for row in listing.items:
+        if row.supporting and not supporting:
+            supporting, kind = True, None
+            lines.append("  in supporting code:")
         if row.kind != kind:
             kind = row.kind
             lines.append(f"  {_escape(kind)}:")

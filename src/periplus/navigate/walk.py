@@ -49,6 +49,7 @@ class WalkRow:
     and ``source`` the line of code there. ``description`` is the item's descriptions entry.
     ``stands_for`` marks an item added because it stands for ``via`` across a realizing edge,
     at ``via``'s depth: a form of a declaration, or with ``in`` the declaration of a form.
+    ``supporting`` marks an item in supporting code.
     """
 
     id: str
@@ -61,6 +62,7 @@ class WalkRow:
     source: str | None = None
     description: str | None = None
     stands_for: bool = False
+    supporting: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,7 +184,10 @@ def run(
         with reading_fields(start, map_path):
             node_id, resolved = resolve(index, node_id)
             more: dict[str, int] = {}
-            rows = walk(index, node_id, direction, depth, set(kinds), more)
+            walked = walk(index, node_id, direction, depth, set(kinds), more)
+            rows = [replace(r, supporting=index.supporting(r.id) is not None) for r in walked]
+            # Supporting code after the rest, each part by depth and id.
+            rows.sort(key=lambda row: row.supporting)
             held = {edge["kind"] for edge in index.edges}
     except HarnessError as error:
         return WalkReport(direction=direction, problems=(error.problem(),))
@@ -211,7 +216,11 @@ def render_text(report: WalkReport) -> str:
         lines.append(f"{report.rows.total} items")
     # An affected row's edge points to the item the walk came from.
     toward = "from" if report.direction == "out" else "to"
+    supporting = False
     for row in report.rows.items:
+        if row.supporting and not supporting:
+            supporting = True
+            lines.append("  in supporting code:")
         how = f"via {_escape(row.kind)} {toward} {_escape(row.via)}"
         if row.stands_for:
             relation = "realized by" if report.direction == "in" else "realizes"
@@ -240,6 +249,7 @@ def stand_in_line(node: str, count: int) -> str:
 def _json_row(row: WalkRow) -> dict[str, Any]:
     return {
         "stands_for": row.stands_for,
+        "supporting": row.supporting,
         "id": row.id,
         "type": row.type,
         "state": row.state,

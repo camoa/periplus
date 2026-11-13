@@ -96,7 +96,7 @@ def test_linked_starts_share_a_piece_and_a_grouping_edge_joins_none(tmp_path: Pa
         "piece 1 of 4: 3 things, starts: TokenCheck, TokenForm",
         "piece 2 of 4: 7 things, starts: TokenRule",
         "piece 3 of 4: 2 things, starts: look_token_alter",
-        "piece 4 of 4: 1 things, starts: token_js",
+        "piece 4 of 4: 1 thing, starts: token_js",
     ]
 
 
@@ -120,7 +120,7 @@ def test_the_last_piece_ends_with_the_absence_of_a_mapped_link_and_the_path_comm
         " not printed, or relate in ways the map does not hold; test two with"
         " periplus path TokenCheck TokenRule"
     ) in lines
-    assert lines.index("piece 4 of 4: 1 things, starts: token_js") < lines.index(
+    assert lines.index("piece 4 of 4: 1 thing, starts: token_js") < lines.index(
         "inventory: 13 nodes"
     )
 
