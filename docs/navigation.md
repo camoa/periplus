@@ -7,7 +7,7 @@ starts a server.
 | Command | Question it answers |
 |---|---|
 | `periplus types` | Which node types and edge kinds does the map hold, and how many of each? |
-| `periplus find TEXT` | Which node ids hold this text? |
+| `periplus find TEXT` | Which nodes hold this text in their id or description? |
 | `periplus show ID` | What is this node, and which edges leave and arrive at it? |
 | `periplus neighbors ID` | Which items do this item's edges lead to? |
 | `periplus affected ID` | Which items have edges that lead to this item? |
@@ -26,14 +26,29 @@ A ninth command, `periplus check-map`, checks the whole map against the map sche
   `text`). The JSON report has sorted keys and is described by the shipped
   `navigation.schema.json`, which `periplus spec` also emits. `export` prints the graph itself and
   takes `--report text|json` for the warnings and problems it writes to standard error.
+- An `ID` argument (`show`, `neighbors`, `affected`, `path`, `slice`) is a node id or a short name: the
+  id's name after its first `::`, or a tail of that name starting after `::`, `\`, `/` or `.`,
+  compared without case. So `helper` and `tools.helper` both name
+  `python.function::shop.tools.helper`. A short name that fits one node is used, with the warning
+  `resolved 'helper' to python.function::shop.tools.helper`. One that fits several nodes exits 31
+  and lists up to 20 of them, each with its type and location. One that fits none exits 31 with
+  `hint: run periplus find TEXT`.
 - `--limit N` caps the rows shown (`find`, `show`, `neighbors`, `affected`: default 50; `path`:
   default 10). `--limit 0` shows all. A cut list ends with `showing N of TOTAL` in text, and has
-  `"truncated": true` in JSON. For `slice`, the limit (default 500) is the most items the slice
+  `"truncated": true` in JSON. A cut `find` list adds two lines: `by type:` with the match count of
+  each type, and `narrow with --type T or --path P`. For `slice`, the limit (default 500) is the most items the slice
   may hold. Over it, the command writes nothing and exits 32.
 - Output is the same on every run for the same map.
 
-The six question commands report ids and nothing else. They have no `between` query, and they
-print no source spans: a location is a file and a line. `export` labels each node with its id (DOT and Mermaid add its type); GraphML labels it with the short name instead.
+The six question commands report ids, locations and source lines. A row of `find`, `neighbors`,
+`affected` or `path`, and an edge row of `show`, carries a location as `file:line`: where the edge
+is written, else the node's first location. Under the row, marked `|`, comes the source line at
+that place, stripped and cut to 160 characters. It is left out when the file or the line cannot be
+read, as when the map is older than the tree. Files are read under the project root above the map
+file, or beside the map file when no project is found. A row of `find`, `neighbors`, `affected` or `path` then prints the first line of its node's
+entry in `.periplus/descriptions.yaml`, marked `#`, when it has one. The first line of each text
+report names its command, also when the command stops before its answer. The commands have no
+`between` query. `export` labels each node with its id (DOT and Mermaid add its type); GraphML labels it with the short name instead.
 
 A slice is a smaller map, told apart from the full map by its file name. `slice` and `export`
 read it with `--map`, like any other map. Do not give `--out` the path of the map you read: the
@@ -52,12 +67,19 @@ Counts the node types, each with its parent type, and the edge kinds.
 ### find
 
 ```
-periplus find TEXT [--type T] [--limit N] [--map PATH] [--format text|json]
+periplus find TEXT [--type T]... [--path P]... [--limit N] [--map PATH] [--format text|json]
 ```
 
-Lists the nodes whose id holds `TEXT`, closest match first. Each row is the id, the type, the
-state and the first location. `--type T` keeps type `T` and its subtypes. A type the map does not
-hold prints a warning and no rows.
+Lists the nodes whose id holds `TEXT`, closest match first, then the nodes whose description alone
+holds it. Each row is the id, the type, the state and the first location, then the source line and
+the description. A row matched by its description ends with `[description]`. `--type T` keeps type
+`T` and its subtypes. `--path P` keeps the nodes with a file that starts with `P`. Repeat either to
+keep several types or paths. Given both, a node must fit a type and a path. A type the map does not hold prints a warning,
+with up to five node types it may mean (`did you mean: ...`). A `--path` that no file in the map
+starts with prints a warning.
+
+The JSON report adds `by_type`, every match counted by type, also when the list is cut. Each item
+has `location`, `source`, `matched` (`id` or `description`) and `description`.
 
 ### show
 
@@ -67,7 +89,9 @@ periplus show ID [--limit N] [--map PATH] [--format text|json]
 
 Prints the node's type, state, location and provenance, then its outgoing and incoming edges
 grouped by kind. Each edge row names the other end, the first location, the occurrence count, the
-confidence and the rule. `--limit` applies to each of the two edge lists. Take `ID` from `find`.
+confidence and the rule, with the source line under it. `--limit` applies to each of the two edge
+lists. Take `ID` from `find`. In JSON each edge row adds `location` and `source`, and the report
+adds `warnings`.
 
 `show` also reads the project's `.periplus/descriptions.yaml`, when it exists. It finds the project
 by walking up from the folder of the `--map` file, or of the default map when no `--map` is given.
@@ -85,8 +109,10 @@ periplus neighbors ID [--depth N] [--kind K] [--limit N] [--map PATH] [--format 
 ```
 
 Follows the edges that leave `ID`. Each row gives the depth at which the item was first reached,
-its id, type and state, and the edge it was reached by. `--depth N` (1 or more, default 1) sets
-how many edges to follow. `--kind K` keeps only edges of kind `K`; repeat it for several kinds.
+its id, type and state, the edge it was reached by and that edge's location, with the source line
+and description under it. `--depth N` (1 or more, default 1) sets how many edges to follow.
+`--kind K` keeps only edges of kind `K`; repeat it for several kinds. In JSON each row adds
+`location`, `source` and `description`.
 
 ### affected
 
@@ -103,8 +129,10 @@ periplus path FROM TO [--kind K] [--limit N] [--map PATH] [--format text|json]
 ```
 
 Prints every shortest chain of edges from `FROM` to `TO`, following each edge in its own
-direction. Without a chain it prints `no path`, and exits 0. `--kind K` follows only edges of kind
-`K`; repeat it for several kinds.
+direction. Each step names its edge's location, with the source line and the description of the
+node it reaches under it; in JSON a step adds `location`, `source` and `description`. Without a
+chain it prints `no path`, and exits 0. `--kind K` follows only edges of kind `K`; repeat it for
+several kinds.
 
 ### slice
 
@@ -159,7 +187,7 @@ periplus export --format dot --map foo.map.json > foo.dot
 | 27 | `slice --out` names the map being read, or the file cannot be written. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
 | 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. Also a descriptions file `show` reads that is not YAML or does not match the descriptions schema. |
-| 31 | An id names no node in the map. |
+| 31 | An id names no node in the map, or a short name fits more than one node. |
 | 32 | The slice reaches more items than `--limit` allows. |
 
 ## Checking the map
@@ -241,6 +269,7 @@ $ periplus find helper
 periplus find
 
 python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
+      | def helper():
 ```
 
 <!-- nav-run -->
@@ -249,7 +278,10 @@ $ periplus find shop --type python.function --limit 1
 periplus find
 
 python.function::shop.cli.greet  python.function  mapped  shop/cli.py:8
+      | def greet():
 showing 1 of 2
+by type: python.function 2
+narrow with --type T or --path P
 ```
 
 Show the helper and its edges:
@@ -270,8 +302,10 @@ Outgoing (0):
 Incoming (2):
   calls:
     python.module::shop.cli  python.module  mapped  shop/cli.py:9  x1  inferred  python_text:call
+      | helper()
   contains:
     python.module::shop.tools  python.module  mapped  shop/tools.py:1  x1  declared  python_text:function_contained
+      | def helper():
 ```
 
 See what the `shop.cli` module imports:
@@ -281,19 +315,24 @@ See what the `shop.cli` module imports:
 $ periplus neighbors python.module::shop.cli --kind imports
 periplus neighbors python.module::shop.cli
 2 items
-  1  python.module::shop.tools  python.module  mapped  via imports from python.module::shop.cli
-  1  python.module::typer  python.module  referenced  via imports from python.module::shop.cli
+  1  python.module::shop.tools  python.module  mapped  via imports from python.module::shop.cli  shop/cli.py:2
+      | from shop.tools import helper
+  1  python.module::typer  python.module  referenced  via imports from python.module::shop.cli  shop/cli.py:1
+      | import typer
 ```
 
-See what leads to the helper:
+See what leads to the helper, named by its short name:
 
 <!-- nav-run -->
 ```console
-$ periplus affected python.function::shop.tools.helper
+$ periplus affected helper
 periplus affected python.function::shop.tools.helper
 2 items
-  1  python.module::shop.cli  python.module  mapped  via calls to python.function::shop.tools.helper
-  1  python.module::shop.tools  python.module  mapped  via contains to python.function::shop.tools.helper
+  1  python.module::shop.cli  python.module  mapped  via calls to python.function::shop.tools.helper  shop/cli.py:9
+      | helper()
+  1  python.module::shop.tools  python.module  mapped  via contains to python.function::shop.tools.helper  shop/tools.py:1
+      | def helper():
+warning: resolved 'helper' to python.function::shop.tools.helper
 ```
 
 Find the chain from the module to the helper. Edges are followed in their own direction, so the
@@ -305,7 +344,8 @@ $ periplus path python.module::shop.cli python.function::shop.tools.helper
 periplus path python.module::shop.cli python.function::shop.tools.helper
 1 shortest chains
   chain 1:
-    python.module::shop.cli --calls--> python.function::shop.tools.helper
+    python.module::shop.cli --calls--> python.function::shop.tools.helper  shop/cli.py:9
+      | helper()
 ```
 
 <!-- nav-run -->
@@ -322,6 +362,19 @@ An id that is not in the map exits 31:
 $ periplus show nope
 periplus show
 31 no node has the id 'nope'; periplus find searches the ids
+  hint: run periplus find nope
+(exit 31)
+```
+
+A short name that fits two nodes lists them, and exits 31:
+
+<!-- nav-run -->
+```console
+$ periplus show typer
+periplus show
+31 'typer' matches 2 nodes; give one of these ids
+  python.function::typer.Typer  python.function  no location
+  python.module::typer  python.module  no location
 (exit 31)
 ```
 
