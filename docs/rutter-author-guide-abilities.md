@@ -386,7 +386,9 @@ With `use App\Service\Registration;` in `namespace App\Ctl;`, `/** @var Registra
 `protected $reg;` gives `$reg:App\Service\Registration`. Without `qualified` it gives
 `$reg:Registration`. A match with no comment before it, or whose comment the pattern does not fit,
 makes nothing, and no row under `skipped` reports it. The template may leave the value out; the
-source is then only a condition, and an edge rule can use it to start at the property's own id.
+source is then only a condition, and an edge rule can use it to start at the property's own id. An
+attribute template may name the value too
+([An attribute on a declaration rule's node](rutter-author-guide-references.md#an-attribute-on-a-declaration-rules-node)).
 
 ## A class constant as a call's argument
 

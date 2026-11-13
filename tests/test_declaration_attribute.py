@@ -61,7 +61,7 @@ def test_constant_attribute_lands_on_the_found_node_and_its_provenance_wo1(tmp_p
 
 
 @pytest.mark.criterion(id="wo1")
-def test_attribute_template_with_a_placeholder_is_refused_at_load_wo1(
+def test_attribute_template_naming_no_id_source_is_refused_at_load_wo1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _plant(tmp_path, "  - attribute:\n      name: kind\n      template: '{name}'\n")
@@ -70,7 +70,10 @@ def test_attribute_template_with_a_placeholder_is_refused_at_load_wo1(
     code = main(["map", "--output", "bad.json"])
     seen = capsys.readouterr()
     assert code != 0
-    assert "a declaration rule's attribute template is constant text" in seen.out + seen.err
+    assert (
+        "a declaration rule's attribute template names only the sources of its id"
+        in seen.out + seen.err
+    )
     assert not (tmp_path / "bad.json").exists()
 
 

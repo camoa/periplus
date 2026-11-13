@@ -130,9 +130,11 @@ A run fails, loudly, on any of these. None of them may be a warning.
 attempt. It never emits an edge to a name it could not resolve. The spike did, and produced
 221 call edges to bare words — `Draft -> t`, where `t` is a translation method.
 
-**Write prose.** Nothing a model wrote enters the map. The determinism gate extracts twice
-and byte-compares; a model writing during extraction fails on the first run. Descriptions are
-a separate committed artifact keyed by node id, joined through each node's `source_hash`.
+**Write prose.** Nothing a model or a person wrote about the code enters the map. The
+determinism gate extracts twice and byte-compares; a model writing during extraction fails on
+the first run. Descriptions are a separate committed artifact keyed by node id, joined through
+each node's `source_hash`. A short text a rule reads from the source, such as a declaration's
+summary line, is a value it read and may sit in a node's attributes.
 
 **Carry advice.** A pack may recommend; the map holds the count and the pack holds the note,
 joined at read time.

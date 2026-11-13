@@ -133,6 +133,10 @@ Each key below has its detail in the guide section linked:
 - A declaration rule's `name_child` list is a path of one step or more; each step is a field, else
   the first named child of that node type, so `[name]` reaches a name with no field
   ([A name below the match](https://github.com/camoa/periplus/blob/v0.8.0/docs/rutter-author-guide-abilities.md#a-name-below-the-match-and-a-value-from-the-docblock)).
+- A declaration rule's attribute `{name, template}` may name its id's sources, such as the group
+  of a `{docblock: <pattern>}` source, to store a short text read from the source, like a
+  docblock's summary line, cut at 300 characters
+  ([An attribute on a declaration rule's node](https://github.com/camoa/periplus/blob/v0.8.0/docs/rutter-author-guide-references.md#an-attribute-on-a-declaration-rules-node)).
 - On a call node without the field `call_arguments` names, the engine reads the arguments from
   its first named child of that node type
   ([A call's argument and its name](https://github.com/camoa/periplus/blob/v0.8.0/docs/rutter-author-guide-imports.md#a-calls-argument-and-its-name)).

@@ -70,7 +70,7 @@
         },
 
         "attributes": {
-          "type": "object", "description": "Values a rule read or computed. No prose.",
+          "type": "object", "description": "Values a rule read or computed, a short text a rule read from the source among them, such as a declaration's summary line. Never text a person or a model wrote about the code; that lives in the descriptions file.",
           "properties": {
             "resolution": {
               "enum": ["runtime"],
@@ -86,7 +86,7 @@
 
         "source_hash": {
           "type": "string", "pattern": "^[a-f0-9]{64}$",
-          "description": "SHA-256 of the source this node was read from. This is the whole of the map's connection to descriptions. A description is written once by a model, reviewed and committed in a SEPARATE artifact keyed by node id, recording the hash it was written against. Comparing that hash to this one tells a current description from a stale one, and limits a regeneration pass to the nodes that actually moved. The prose never enters the map, because the determinism gate extracts twice and byte-compares, and a model writing during extraction fails on the first run."
+          "description": "SHA-256 of the source this node was read from. This is the whole of the map's connection to descriptions. A description is written once by a model, reviewed and committed in a SEPARATE artifact keyed by node id, recording the hash it was written against. Comparing that hash to this one tells a current description from a stale one, and limits a regeneration pass to the nodes that actually moved. A model's prose never enters the map, because the determinism gate extracts twice and byte-compares, and a model writing during extraction fails on the first run."
         },
 
         "unresolved_detail": {

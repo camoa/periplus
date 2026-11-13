@@ -35,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A node argument of `show`, `neighbors`, `affected`, `path` and `slice` may be a short name, such as `helper`. One name that fits several nodes exits 31 and lists them as a pick-list; in JSON the problem holds `candidates` (`id`, `type`, `location`) and `total`. A name that fits none adds a hint.
 - Rows of `find`, `show`, `neighbors`, `affected` and `path` print `file:line`, the source line under it, and the node's description line when the descriptions file has one. A source line is read only from a regular file inside the project, up to 5 MB.
 - `find` matches description text and string attribute values too, and marks those rows `[description]` or `[attribute NAME]`. JSON adds `matched`, `matched_attribute`, `by_type` and `description`.
+- A declaration rule's attribute template may name its id's sources, such as a docblock group, cut at 300 characters; `php_basic` sets `summary` on classes, interfaces, traits, enums, functions and methods from the docblock's first line, and `js_basic` on function declarations, so `find` reaches a node by a word of its summary.
 - `find --type` and `--path` may repeat. A wrong type name gets suggestions. A cut list prints counts by type and a line on how to narrow.
 - `php_basic` joins more method calls, each with an inferred `calls` edge:
   - a call on a `catch` variable, to the method on the caught class or its nearest ancestor;

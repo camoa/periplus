@@ -410,13 +410,16 @@ with a list of sources, an id from a call's argument, or a pattern on a text or 
 A class whose name the pattern does not fit gives its members no enclosing type, and an enclosing
 declaration it does not fit is passed for the next one out.
 
-## A constant attribute on a declaration rule's node
+## An attribute on a declaration rule's node
 
 An annotation or key-file rule reads an attribute with `{name, from}`, and a text rule fills one
 with `{name, template}`. A declaration rule that emits a node may also carry attribute entries
-`{name, template}`, where the template is constant text and the name a lowercase word. The node
-gets the value under that name, and its provenance row lists the name in `sets`. A template with a
-placeholder refuses the map with exit 26: a declaration rule's attribute template is constant text.
+`{name, template}`, the name a lowercase word. The template is constant text, kept as written, or
+it names only sources the rule's id reads: `declared_name`, a field, or the group of the id's
+docblock source. A filled value has each run of whitespace made one space and is cut at 300
+characters; a value that comes out empty sets nothing. The node gets the value under that name,
+and its provenance row lists the name in `sets`. A template that names anything else refuses the
+map with exit 26: a declaration rule's attribute template names only the sources of its id.
 
 The map schema declares one such mark, `resolution: runtime`, the unknown boundary: a rule read
 this call site, but its target or argument is built at run time, and no rule will draw the edge.
@@ -426,6 +429,29 @@ this call site, but its target or argument is built at run time, and no rule wil
   - node: {type: own.call_site}
   - attribute: {name: resolution, template: runtime}
 ```
+
+A docblock source in the id is also a condition: a match with no docblock, or one the pattern does
+not fit, makes nothing. A rule that repeats another rule's id and adds the docblock source so sets
+an attribute only on the nodes whose comment fits. `php_basic`'s `types/summary.yaml` sets
+`summary`, the first content line of the docblock, beside the node `find_method` makes:
+
+```yaml
+- rule: method_summary
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '\A/\*\*(?:[ \t]*\n[ \t]*\*)*[ \t]*(?<summary>[^@{\s*/][^\n]*?)[ \t]*(?:\*/)?[ \t]*(?:\n|\Z)'}]
+    template: "{enclosing_type}::{declared_name}"
+  emits:
+  - node: {type: php.method}
+  - attribute: {name: summary, template: "{summary}"}
+  confidence: declared
+```
+
+The pattern's group is one line, so a summary that runs over two lines keeps its first. A comment
+says what its author wrote, not what the code does; text a person or a model writes about the
+code goes in the descriptions file, not in the map.
 
 ## The grammar's node kinds
 
