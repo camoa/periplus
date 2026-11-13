@@ -27,7 +27,7 @@ from periplus.engine.rules import MapPass, run_file_rules, run_map_rules
 from periplus.engine.select import Selection, files_in, folder_problems, resolve_folders
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER, SETTINGS_FILENAME
-from periplus.manifest import resolve_pack_order
+from periplus.manifest import LoadedPack, resolve_pack_order
 from periplus.mapshared import _DEFAULT_MAP as _DEFAULT_MAP
 from periplus.mapshared import MAP_SCHEMA as MAP_SCHEMA
 from periplus.mapshared import _section as _section
@@ -35,6 +35,7 @@ from periplus.mapshared import first_error
 from periplus.preflight import DependencyStatus
 from periplus.report import _escape, _json_problem
 from periplus.resolution import folder_overrides, resolve, settings_values
+from periplus.settings import ResolvedSettings
 from periplus.validate import _schema
 
 __all__ = ["RENDERERS", "MapReport", "render_json", "render_text", "run", "write_document"]
@@ -187,6 +188,7 @@ def run(
             Path(os.path.relpath(project.path, root)).as_posix(),
             boundary=rule_set.boundary,
             skipped=skipped,
+            supporting=_supporting_paths(packs, settings),
         )
     except HarnessError as error:
         return _failed([error.problem()])
@@ -450,3 +452,15 @@ RENDERERS: Mapping[str, Callable[[MapReport], str]] = {
     "text": render_text,
     "json": render_json,
 }
+
+
+def _supporting_paths(packs: Sequence[LoadedPack], settings: ResolvedSettings) -> list[str]:
+    """The packs' ``files.supporting`` patterns, unless the settings set ``supporting_from_packs``
+    to false, and the settings' ``supporting``."""
+    found: list[str] = []
+    keep = settings.supporting_from_packs is None or settings.supporting_from_packs.value
+    for pack in packs if keep else ():
+        files = pack.manifest.document.get("files")
+        listed = files.get("supporting") if isinstance(files, dict) else None
+        found += [p for p in listed if isinstance(p, str)] if isinstance(listed, list) else []
+    return found + list(settings.supporting.value if settings.supporting else ())

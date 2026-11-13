@@ -62,6 +62,7 @@ def build_document(
     settings: str,
     boundary: Mapping[str, Sequence[BoundaryEntry]] | None = None,
     skipped: list[Skipped] | None = None,
+    supporting: Sequence[str] = (),
 ) -> tuple[dict[str, Any], LeftOut]:
     """The map document, and what it leaves out.
 
@@ -214,6 +215,8 @@ def build_document(
         document["grouping_kinds"] = grouping
     if realizing:
         document["realizing_kinds"] = realizing
+    if supporting:
+        document["supporting_paths"] = sorted(set(supporting))
     return document, left_out
 
 

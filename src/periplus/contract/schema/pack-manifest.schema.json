@@ -96,6 +96,10 @@
         "add_extensions": {"type": "array", "items": {"type": "string"}},
         "exclude":        {"type": "array", "items": {"type": "string"}},
         "add_excludes":   {"type": "array", "items": {"type": "string"}},
+        "supporting": {
+          "type": "array", "items": {"type": "string"},
+          "description": "Path patterns of this stack's supporting code, as its tests and fixtures, written as exclude patterns are. The files are mapped; navigation prints their nodes after the others, or folds them into a count. The settings add to them with supporting, or drop every pack's with supporting_from_packs: false."
+        },
         "cache_key_includes": {"type": "array", "items": {"type": "string"}},
         "types": {
           "type": "object",

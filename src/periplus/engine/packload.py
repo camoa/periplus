@@ -90,6 +90,7 @@ EXECUTED_KEYS = frozenset(
             f"manifest.files{k}"
             for k in (
                 *("", ".extends", ".extensions", ".add_extensions", ".exclude", ".add_excludes"),
+                ".supporting",
                 *(".types", ".types.*.endings", ".types.*.names", ".types.*.reader"),
                 ".types.*.format",
                 *(f".types.*.path_values{k}" for k in ("", ".*.pattern", ".*.template")),

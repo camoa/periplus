@@ -60,6 +60,14 @@
     },
 
     "exclude":    {"type": "array", "items": {"type": "string"}},
+    "supporting": {
+      "type": "array", "items": {"type": "string"},
+      "description": "Path patterns of supporting code, as tests and fixtures, added to the ones the packs name. The files are mapped; navigation prints their nodes after the others, or folds them into a count."
+    },
+    "supporting_from_packs": {
+      "type": "boolean",
+      "description": "false drops every pack's supporting patterns, so only supporting above counts."
+    },
     "re_include": {
       "type": "array", "items": {"type": "string"},
       "description": "Takes back a pack's exclusion without forking the pack. It has to exist for the same reason the extension override does: a pack states a convention, and one repository is always the exception."

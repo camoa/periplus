@@ -79,6 +79,16 @@ periplus_version: 0
 #   - web/sites/default/files/custom-module/**
 
 
+# Supporting code, such as tests and fixtures: mapped, but printed after the rest, and folded into
+# a count in a printed slice. The packs name their stack's own; this adds to them, and
+# setting `supporting_from_packs` to false drops every pack's.
+#
+# supporting:
+#   - qa/**
+#
+# supporting_from_packs:
+
+
 # Named text values no pack can know, such as the module path this project's packages sit under.
 # Any template of any pack may name one as {module}, as it names a value from a file's path.
 #
