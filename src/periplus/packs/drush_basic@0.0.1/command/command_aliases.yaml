@@ -1,0 +1,134 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An alias of a Drush command, from the @aliases tag in the docblock of a method that also carries
+# the @command tag, read from the tree. Each alias is a node in its own namespace, so an alias
+# written like another command's name stays apart from that command, and alias_of_command joins
+# it to the command that the @command tag declares on the same method. The list is read by
+# position, one rule pair per position, up to the fourth alias; the items are split by commas,
+# with or without spaces.
+
+rules:
+# The first alias.
+- rule: command_alias_1
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '\A(?=[\s\S]*@command\s+[\w:.-])[\s\S]*?@aliases[ \t]+(?<alias>[\w:.-]+)'}]
+    template: '{declared_name}:{alias}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - node:
+      type: drush.command_alias
+  confidence: declared
+- rule: command_alias_1_edges
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '\A(?=[\s\S]*@command\s+[\w:.-])[\s\S]*?@aliases[ \t]+(?<alias>[\w:.-]+)'}]
+    template: '{declared_name}:{alias}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - edge:
+      kind: alias_of_command
+      from: this_node
+      to: {declared: drush.command}
+  confidence: declared
+# The second alias.
+- rule: command_alias_2
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '\A(?=[\s\S]*@command\s+[\w:.-])[\s\S]*?@aliases[ \t]+(?:[\w:.-]+[ \t]*,[ \t]*){1}(?<alias>[\w:.-]+)'}]
+    template: '{declared_name}:{alias}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - node:
+      type: drush.command_alias
+  confidence: declared
+- rule: command_alias_2_edges
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '\A(?=[\s\S]*@command\s+[\w:.-])[\s\S]*?@aliases[ \t]+(?:[\w:.-]+[ \t]*,[ \t]*){1}(?<alias>[\w:.-]+)'}]
+    template: '{declared_name}:{alias}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - edge:
+      kind: alias_of_command
+      from: this_node
+      to: {declared: drush.command}
+  confidence: declared
+# The third alias.
+- rule: command_alias_3
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '\A(?=[\s\S]*@command\s+[\w:.-])[\s\S]*?@aliases[ \t]+(?:[\w:.-]+[ \t]*,[ \t]*){2}(?<alias>[\w:.-]+)'}]
+    template: '{declared_name}:{alias}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - node:
+      type: drush.command_alias
+  confidence: declared
+- rule: command_alias_3_edges
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '\A(?=[\s\S]*@command\s+[\w:.-])[\s\S]*?@aliases[ \t]+(?:[\w:.-]+[ \t]*,[ \t]*){2}(?<alias>[\w:.-]+)'}]
+    template: '{declared_name}:{alias}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - edge:
+      kind: alias_of_command
+      from: this_node
+      to: {declared: drush.command}
+  confidence: declared
+# The fourth alias.
+- rule: command_alias_4
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '\A(?=[\s\S]*@command\s+[\w:.-])[\s\S]*?@aliases[ \t]+(?:[\w:.-]+[ \t]*,[ \t]*){3}(?<alias>[\w:.-]+)'}]
+    template: '{declared_name}:{alias}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - node:
+      type: drush.command_alias
+  confidence: declared
+- rule: command_alias_4_edges
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '\A(?=[\s\S]*@command\s+[\w:.-])[\s\S]*?@aliases[ \t]+(?:[\w:.-]+[ \t]*,[ \t]*){3}(?<alias>[\w:.-]+)'}]
+    template: '{declared_name}:{alias}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - edge:
+      kind: alias_of_command
+      from: this_node
+      to: {declared: drush.command}
+  confidence: declared

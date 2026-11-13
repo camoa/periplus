@@ -1,10 +1,13 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# A Drush command, named by its name, and the method and class that run it.
+# A Drush command, named by its name, the method and class that run it, the service that registers
+# that class, and each alias of the command, named by the alias.
 
 node_types:
 - name: drush.command
   id_namespace: drush.command
+- name: drush.command_alias
+  id_namespace: drush.command_alias
 
 edge_kinds:
 - kind: command_method
@@ -13,3 +16,9 @@ edge_kinds:
 - kind: command_class
   from: drush.command
   to: php.class
+- kind: alias_of_command
+  from: drush.command_alias
+  to: drush.command
+- kind: command_service
+  from: drush.command
+  to: drupal.service

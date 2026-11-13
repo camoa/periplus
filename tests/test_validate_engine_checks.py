@@ -2,8 +2,10 @@
 settings values its rules read.
 
 Every test calls ``periplus.cli.main`` in process. The broken packs are copies of the bundled
-``drush_basic`` rutter, renamed, with one edit each. The oracle for the first group is ``map``
-itself: the problems ``validate`` gives equal the problems ``map`` gives for the same pack.
+``drush_basic`` rutter, renamed, with one edit each; a test that needs a text rule first adds
+one to the copy, since the rutter reads its commands from the tree. The oracle for the first
+group is ``map`` itself: the problems ``validate`` gives equal the problems ``map`` gives
+for the same pack.
 """
 
 from __future__ import annotations
@@ -24,7 +26,37 @@ from test_validate import (
 )
 
 SOURCE = "drush_basic@0.0.1"
-RULE_FILE = Path("command") / "command_annotation.yaml"
+RULE_FILE = Path("command") / "command_docblock.yaml"
+TEXT_RULE_FILE = Path("command") / "command_text.yaml"
+TEXT_RULE = r"""$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+rules:
+- rule: command_from_text
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<name>[\w:.-]+)'
+  id: {template: '{name}'}
+  emits: [{node: {type: drush.command}}]
+  confidence: declared
+- rule: command_method_from_text
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<name>[\w:.-]+)[\s\S]*?function\s+(?<method>\w+)'
+  id: {template: '{name}'}
+  emits:
+  - edge:
+      kind: command_method
+      from: this_node
+      to: {template: '{psr4_class}::{method}', types: [php.method], on_miss: unresolved}
+  confidence: inferred
+"""
 RULE_NOT_EXECUTABLE = 26
 
 
@@ -81,7 +113,10 @@ def test_a_reads_sections_name_the_file_type_lacks_gives_the_map_problem_c1(
     project: Project,  # noqa: F811
 ) -> None:
     pack = _fixture(project.packs, "sectionfix")
-    _edit(pack, RULE_FILE, "reads_sections: [block_comment]", "reads_sections: [no_such_section]")
+    (pack / TEXT_RULE_FILE).write_text(TEXT_RULE, encoding="utf-8")
+    _edit(
+        pack, TEXT_RULE_FILE, "reads_sections: [block_comment]", "reads_sections: [no_such_section]"
+    )
     _pin(project, "sectionfix")
 
     map_status, expected, status, actual = _both(project, "sectionfix")
@@ -116,6 +151,7 @@ def test_edge_kind_from_types_in_two_id_namespaces_give_the_map_problem_c1(
     project: Project,  # noqa: F811
 ) -> None:
     pack = _fixture(project.packs, "endfix")
+    (pack / TEXT_RULE_FILE).write_text(TEXT_RULE, encoding="utf-8")
     _edit(
         pack,
         Path("command") / "command.yaml",
@@ -136,7 +172,10 @@ def test_a_problem_in_a_pack_the_named_pack_depends_on_is_reported_c1(
     project: Project,  # noqa: F811
 ) -> None:
     base = _fixture(project.packs, "basefix")
-    _edit(base, RULE_FILE, "reads_sections: [block_comment]", "reads_sections: [no_such_section]")
+    (base / TEXT_RULE_FILE).write_text(TEXT_RULE, encoding="utf-8")
+    _edit(
+        base, TEXT_RULE_FILE, "reads_sections: [block_comment]", "reads_sections: [no_such_section]"
+    )
     top = project.packs / "topfix@0.0.1"
     top.mkdir()
     (top / "pack.yaml").write_text(
@@ -155,7 +194,8 @@ def test_a_problem_in_a_pack_the_named_pack_depends_on_is_reported_c1(
 
 def _valued_pack(packs: Path, name: str, *, declared: bool) -> None:
     pack = _fixture(packs, name)
-    _edit(pack, RULE_FILE, "template: '{name}'", "template: '{drush_prefix}{name}'")
+    (pack / TEXT_RULE_FILE).write_text(TEXT_RULE, encoding="utf-8")
+    _edit(pack, TEXT_RULE_FILE, "template: '{name}'", "template: '{drush_prefix}{name}'")
     if declared:
         _edit(
             pack,
