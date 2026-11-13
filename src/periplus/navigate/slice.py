@@ -55,6 +55,9 @@ __all__ = [
 START_LIMIT = 8
 #: The most start nodes the words pick of any one node type.
 TYPE_STARTS = 2
+#: The share of the start budget the first pass gives to the words, one start each in turn from
+#: the rarest word down; it gives every word one start while the budget lasts.
+WORD_SHARE = Fraction(1, 2)
 #: The decimal places a word's weight keeps, so equal scores are equal on every machine.
 WEIGHT_PLACES = 6
 #: The fewest characters a word needs to be searched; a shorter one matches too much.
@@ -308,7 +311,16 @@ def _piece(
                     node_id: round(sum(weights[w] for w in found_), WEIGHT_PLACES)
                     for node_id, found_ in owned.items()
                 }
-                found = _starts(index, queries, wanted, narrowed, described, scores, most, standing)
+                rarest = sorted(weights, key=lambda w: (-weights[w], w))
+                found = _starts(
+                    index,
+                    queries,
+                    (wanted, narrowed),
+                    described,
+                    (scores, owned, rarest),
+                    most,
+                    standing,
+                )
                 for node_id, chosen in found.items():
                     picked.setdefault(node_id, chosen)
                 lone = found and queries[0] == whole and len(queries) > 1
@@ -397,14 +409,17 @@ class _Standing:
 def _starts(
     index: MapIndex,
     queries: list[str],
-    wanted: set[str] | None,
-    prefixes: Collection[str],
+    narrowing: tuple[set[str] | None, Collection[str]],
     described: Mapping[str, str],
-    scores: Mapping[str, float],
+    weighed: tuple[Mapping[str, float], Mapping[str, set[str]], list[str]],
     most: int,
     standing: _Standing,
 ) -> dict[str, Start]:
-    """Up to ``most`` start nodes that the queries find, the highest word score first.
+    """Up to ``most`` start nodes that the queries find, in two passes.
+
+    The first pass covers the words: in turn from the rarest word down, it takes the best node
+    that holds the word and is not yet taken, until it holds ``WORD_SHARE`` of ``most``, or one
+    start per word when that is more. The second fills the rest by score, as follows.
 
     A query is the whole text or one word. A node's score is the sum of the weights of the words
     it holds in its own name, an attribute or its description, a word weighing the log of the
@@ -415,6 +430,8 @@ def _starts(
     other files depend on, then the one whose id the words cover most, then ``find``'s rank,
     then the id.
     """
+    wanted, prefixes = narrowing
+    scores, owned, rarest = weighed
     said: dict[str, list[tuple[str, str, str | None]]] = {}
     nearest: dict[str, find.Match] = {}
     for query in queries:
@@ -440,11 +457,24 @@ def _starts(
             node_id,
         )
 
-    taken: Counter[str] = Counter()
-    order: list[str] = []
     ranked = sorted(nearest, key=key)
+    first = min(most, max(math.ceil(most * WORD_SHARE), len(rarest)))
+    order: list[str] = []
+    while len(order) < first:
+        before = len(order)
+        for word in rarest:
+            best = next((n for n in ranked if word in owned.get(n, ()) and n not in order), None)
+            if best is not None and len(order) < first:
+                order.append(best)
+        if len(order) == before:
+            break
+    taken = Counter(as_text(index.nodes[node_id]["type"]) for node_id in order)
     for score in dict.fromkeys(-key(node_id)[0] for node_id in ranked):
-        level = [node_id for node_id in ranked if scores.get(node_id, 0.0) == score]
+        level = [
+            node_id
+            for node_id in ranked
+            if scores.get(node_id, 0.0) == score and node_id not in order
+        ]
         spread: list[str] = []
         rest: list[str] = []
         for node_id in level:

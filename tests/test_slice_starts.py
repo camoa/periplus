@@ -182,3 +182,15 @@ def test_inside_a_start_a_rarer_type_ranks_before_a_common_one(tmp_path: Path) -
     report = _piece(tmp_path, "Store::run", limit=1, edges=[*EDGES, *callers])
 
     assert [row.id for row in report.rows.items] == [SERVICE]
+
+
+def test_the_rarest_word_has_its_best_node_among_the_starts(tmp_path: Path) -> None:
+    zephyr = "t.method::app.zephyrHook"
+    group = [
+        _node(f"t.class::app.alpha_beta_gamma_delta_{k}", "t.class", line=k, file="src/g.php")
+        for k in range(10)
+    ]
+    nodes = [*NODES, *group, _node(zephyr, "t.method", line=1, file="src/z.php")]
+    words = ("zephyr", "alpha", "beta", "gamma", "delta")
+
+    assert zephyr in _ids(_piece(tmp_path, *words, starts=3, nodes=nodes))

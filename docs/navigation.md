@@ -158,7 +158,10 @@ that names a node is searched as a word too. Each word weighs the natural log of
 node count over the number of nodes it matches, rounded to 6 places, so a rare word outweighs a
 common one. A start's score is the sum of the weights of the words it holds in its own name,
 an attribute or its description; a word found only in the id's type, or in the part before the
-id's last `::` that names its owner, adds nothing. A start of
+id's last `::` that names its owner, adds nothing. The starts are picked in two passes. The
+first covers the words: in turn from the rarest word down, it takes the best node that holds
+the word, by score, until it holds half the starts, or one per word when that is more. The
+second fills the rest by score. In the second pass, a start of
 lower score never comes before one of higher score. Among starts of equal score, rarer types
 come first, counted over the whole map, and at most two of a type, counted over all the starts,
 come before the rest of that score. Inside a type, a mapped node comes first, then the node that
