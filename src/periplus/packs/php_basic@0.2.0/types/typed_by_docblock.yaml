@@ -29,7 +29,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # to bind. The map rules give a call on $x in that method its calls edge, inferred, by the same
 # lookup. No edge comes when the map cannot tell which type holds at the call: a second @var with
 # another type for $x, a local with two different values in the method, or one whose value already
-# types it, new Bar() or a $this->m() with a declared return type.
+# types it, new Bar() or a $this->m() with a declared return type. A @var, and a parameter's
+# signature type, inside a closure or arrow function make nothing here.
 #
 # This file sits in types/, after find_declarations.yaml: an enclosing_method end takes the first
 # node rule that fires on the method, which must be find_method, not these.
@@ -487,7 +488,7 @@ rules:
     declaration: simple_parameter
     name_child: name
     filetype: php
-    where: [{name_matches: {child: type, pattern: '(?s).+'}}]
+    where: [{name_matches: {child: type, pattern: '(?s).+'}}, {not_within: &closures [anonymous_function, arrow_function]}]
   id:
     from: [enclosing_type, enclosing_method, declared_name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}"
@@ -507,7 +508,11 @@ rules:
 - rule: find_doc_var_type
   reads: file
   in: [source]
-  match: &assignment {declaration: expression_statement, name_child: [assignment_expression, left], filetype: php}
+  match: &assignment
+    declaration: expression_statement
+    name_child: [assignment_expression, left]
+    filetype: php
+    where: [{not_within: *closures}]
   id:
     from: [enclosing_type, declared_name, {qualified: {docblock: '@var\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+\$\w+'}}]
     template: "{enclosing_type}::{declared_name}::{type}"
@@ -568,7 +573,7 @@ rules:
 - rule: find_doc_foreach_type
   reads: file
   in: [source]
-  match: &foreach {declaration: foreach_statement, filetype: php}
+  match: &foreach {declaration: foreach_statement, filetype: php, where: [{not_within: *closures}]}
   id:
     from: [enclosing_type, {qualified: {docblock: '@var\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+\$\w+'}}]
     template: "{enclosing_type}::{type}"

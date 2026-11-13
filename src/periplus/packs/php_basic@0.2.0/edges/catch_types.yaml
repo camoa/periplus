@@ -21,8 +21,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # catch variable also stops calls_through_typed_parameter from joining a call on a parameter of the
 # same name; calls_through_function_parameter reads no variable and still joins one in a function.
 #
-# A closure or arrow function shares the variable's id with the method or function around it, so
-# its parameter $e is a parameter of that holder here and blocks the edge. A catch in a function
+# A catch inside a closure or arrow function makes nothing here, and a call in one keeps a call
+# site of its own, closure() in its id, that these rules do not join. A catch in a function
 # shares the value and type ids with a method's catch only when a class and a function have one
 # full name; the variable ids stay apart.
 node_types:
@@ -45,7 +45,7 @@ rules:
     declaration: catch_clause
     name_child: name
     filetype: php
-    where: [{has_child: variable_name}]
+    where: [{has_child: variable_name}, {not_within: [anonymous_function, arrow_function]}]
   id: &method_variable_id
     from: [enclosing_type, enclosing_method, declared_name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}"
@@ -82,6 +82,7 @@ rules:
     where:
     - has_child: variable_name
     - name_matches: {child: type, pattern: '\\?[A-Za-z_][\w\\]*'}
+    - not_within: [anonymous_function, arrow_function]
   id:
     from: [enclosing_type, declared_name, {qualified: type}]
     template: "{enclosing_type}::{declared_name}::{type}"
@@ -106,7 +107,7 @@ rules:
     name_child: name
     filetype: php
     holder: function_definition
-    where: [{has_child: variable_name}]
+    where: [{has_child: variable_name}, {not_within: [anonymous_function, arrow_function]}]
   id: &function_variable_id
     from: [enclosing_type, declared_name]
     template: "{enclosing_type}::{declared_name}"

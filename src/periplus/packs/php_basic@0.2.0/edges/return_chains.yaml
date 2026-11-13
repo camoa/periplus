@@ -307,8 +307,8 @@ rules:
   confidence: inferred
 
 # The nullsafe twin of calls_through_local_this_call: $x?->n, $x assigned $this->m(...) alone. A
-# variable that is also a parameter makes nothing: a closure's or an arrow function's parameter
-# shares the id of the method's variable of the same name, and may hold another type.
+# variable that is also a parameter of the method makes nothing: the parameter may hold its
+# declared type at the call.
 - rule: calls_through_local_this_call_nullsafe
   reads: map
   match:

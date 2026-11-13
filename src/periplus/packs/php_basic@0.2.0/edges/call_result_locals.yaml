@@ -53,6 +53,7 @@ rules:
     where:
     - name_matches: {child: left, pattern: &plain_variable '\$(?!this$)\w+'}
     - name_matches: {child: right, pattern: '(?!(?i:self|static|parent)\s*::)\\?[A-Za-z_][\w\\]*\s*::\s*\w+\s*\([^()]*(?:\([^()]*\)[^()]*)*\)'}
+    - not_within: &closures [anonymous_function, arrow_function]
   id:
     from: [enclosing_type, declared_name, {qualified: right}]
     template: "{enclosing_type}::{declared_name}::{right}"
@@ -76,7 +77,7 @@ rules:
     declaration: reference_assignment_expression
     name_child: left
     filetype: php
-    where: [{name_matches: {child: left, pattern: *plain_variable}}]
+    where: [{name_matches: {child: left, pattern: *plain_variable}}, {not_within: *closures}]
   id: &variable_id
     from: [enclosing_type, enclosing_method, declared_name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}"
@@ -108,7 +109,7 @@ rules:
     declaration: reference_assignment_expression
     name_child: right
     filetype: php
-    where: [{name_matches: {child: right, pattern: *plain_variable}}]
+    where: [{name_matches: {child: right, pattern: *plain_variable}}, {not_within: *closures}]
   id: *variable_id
   emits: [{node: {type: php.local_variable}}]
   confidence: declared

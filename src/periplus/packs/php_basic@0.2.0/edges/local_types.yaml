@@ -16,9 +16,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # $x = make() or $x = $x ?? new Foo(), gets no edge: the map does not know which one holds at the
 # call, so the call site stays without one. The same text assigned twice is one value.
 #
-# Limits: a closure's variable shares the id of the method's variable of the same name. new
-# self(), new static(), new parent() and new $class() give no type. Values set by foreach, catch,
-# list(), =&, static or global make no node.
+# An assignment inside a closure or arrow function makes nothing here: the closure's variable is
+# its own. A closure that captures the variable by reference, use (&$x), adds one more value, as it
+# may assign the variable when it runs. No rule here types new self(), new static(), new parent()
+# or new $class(), or reads a value set by foreach, list(), static or global.
 node_types:
 - name: php.local_variable
   id_namespace: php.local_variable
@@ -50,7 +51,9 @@ rules:
     declaration: assignment_expression
     name_child: left
     filetype: php
-    where: [{name_matches: {child: left, pattern: &plain_variable '\$(?!this$)\w+'}}]
+    where:
+    - name_matches: {child: left, pattern: &plain_variable '\$(?!this$)\w+'}
+    - not_within: &closures [anonymous_function, arrow_function]
   id: &variable_id
     from: [enclosing_type, enclosing_method, declared_name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}"
@@ -88,6 +91,7 @@ rules:
     where:
     - name_matches: {child: left, pattern: *plain_variable}
     - name_matches: {child: right, pattern: '(?s)new\s+(?!(?i:self|static|parent)\b)\\?[A-Za-z_][\w\\]*\s*(?:\(.*\))?'}
+    - not_within: *closures
   id:
     from: [enclosing_type, declared_name, {qualified: right}]
     template: "{enclosing_type}::{declared_name}::{right}"
@@ -100,6 +104,39 @@ rules:
   match: *new_match
   id: *value_id
   emits: [{edge: {kind: local_value_typed_as, from: this_node, to: {declared: php.local_type}}}]
+  confidence: declared
+
+# A closure that captures a variable by reference, use (&$x), may give it another value when it
+# runs: the capture is one more value of the method's variable, <class>::$x=use (&$x), which no
+# assignment writes.
+- rule: find_variable_captured_by_reference
+  reads: file
+  in: [source]
+  match: &capture_match
+    declaration: by_ref
+    name_child: [variable_name]
+    filetype: php
+    where: [{within: [anonymous_function_use_clause]}]
+  id: *variable_id
+  emits: [{node: {type: php.local_variable}}]
+  confidence: declared
+
+- rule: find_captured_by_reference_value
+  reads: file
+  in: [source]
+  match: *capture_match
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}=use (&{declared_name})"
+  emits: [{node: {type: php.local_value}}]
+  confidence: declared
+
+- rule: captured_by_reference_value
+  reads: file
+  in: [source]
+  match: *capture_match
+  id: *variable_id
+  emits: [{edge: {kind: local_assigned, from: this_node, to: {declared: php.local_value}}}]
   confidence: declared
 
 - rule: calls_through_local_new

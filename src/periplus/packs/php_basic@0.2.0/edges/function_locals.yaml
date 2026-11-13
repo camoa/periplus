@@ -18,9 +18,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # A variable with two different values in the function, new Foo() and new Bar(), or a new beside
 # $x = make(), gets no edge, and neither does a variable that is also a parameter of the function
 # or of a closure or arrow function in it: the map does not know which one holds at the call, so
-# the call site stays without one. The same text assigned twice is one value. A closure's
-# assignment to a variable of the same name adds its value to the function's variable, so the
-# function's call on it gets no edge.
+# the call site stays without one. The same text assigned twice is one value. An assignment inside
+# a closure or arrow function makes nothing here, and a closure that captures the variable by
+# reference, use (&$x), adds one more value, as local_types.yaml reads it.
 node_types: []
 edge_kinds: []
 
@@ -35,7 +35,9 @@ rules:
     name_child: left
     filetype: php
     holder: function_definition
-    where: [{name_matches: {child: left, pattern: &plain_variable '\$(?!this$)\w+'}}]
+    where:
+    - name_matches: {child: left, pattern: &plain_variable '\$(?!this$)\w+'}
+    - not_within: [anonymous_function, arrow_function]
   id: &variable_id
     from: [enclosing_type, declared_name]
     template: "{enclosing_type}::{declared_name}"
@@ -46,6 +48,29 @@ rules:
   reads: file
   in: [source]
   match: *local_match
+  id: *variable_id
+  emits: [{edge: {kind: local_assigned, from: this_node, to: {declared: php.local_value}}}]
+  confidence: declared
+
+# The function twins of local_types.yaml's capture by reference, use (&$x); its value rule names no
+# method, so it already mints the value in a function.
+- rule: find_function_variable_captured_by_reference
+  reads: file
+  in: [source]
+  match: &capture_match
+    declaration: by_ref
+    name_child: [variable_name]
+    filetype: php
+    holder: function_definition
+    where: [{within: [anonymous_function_use_clause]}]
+  id: *variable_id
+  emits: [{node: {type: php.local_variable}}]
+  confidence: declared
+
+- rule: function_captured_by_reference_value
+  reads: file
+  in: [source]
+  match: *capture_match
   id: *variable_id
   emits: [{edge: {kind: local_assigned, from: this_node, to: {declared: php.local_value}}}]
   confidence: declared

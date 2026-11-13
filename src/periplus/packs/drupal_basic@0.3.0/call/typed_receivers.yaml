@@ -35,7 +35,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #
 # A call gets no edge when the map cannot tell which object it runs on: a parameter assigned in
 # the body; a parameter whose name a closure or arrow function in the same method or function
-# declares as its own, among its first three parameters; and an untyped property assigned more
+# declares as its own; and an untyped property assigned more
 # than one value. The internal drupal.closure_parameter node, <class>::<method>::$<name> or
 # <function>::$<name>, marks such a name. A variable or constant argument makes no node here, and
 # php_basic's call site for the call stays.
@@ -128,140 +128,35 @@ rules:
   emits: [{edge: {kind: typed_call_in, from: this_node, to: enclosing_class}}]
   confidence: declared
 
-# The first, second and third parameter of a closure or arrow function. The id is built from the
-# parameter list as written: the first normalize cuts it before the parameter's $, the second
-# after its name.
-- rule: closure_first_parameter
+# A parameter of a closure or arrow function, in a method or in a plain function. A call in a
+# closure keeps the id of the same call in the method or function around it, so the closure's own
+# parameter of that name marks the name.
+- rule: closure_parameter
   reads: file
   in: [source]
-  match: &closure_in_method
-    declaration: anonymous_function
-    name_child: parameters
+  match:
+    declaration: simple_parameter
+    name_child: name
     filetype: php
-  id: &first_in_method
-    from: [enclosing_type, enclosing_method, parameters]
-    template: "{enclosing_type}::{enclosing_method}::{parameters}"
-    normalize: &first_parameter
-    - {replace: '::\([^$]*', with: '::'}
-    - {replace: '(?s)[^\w$:\\][\s\S]*$', with: ''}
+    where: [{within: &closures [anonymous_function, arrow_function]}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
   emits: [{node: {type: drupal.closure_parameter}}]
   confidence: declared
 
-- rule: closure_second_parameter
+- rule: closure_parameter_in_function
   reads: file
   in: [source]
-  match: *closure_in_method
-  id: &second_in_method
-    from: [enclosing_type, enclosing_method, parameters]
-    template: "{enclosing_type}::{enclosing_method}::{parameters}"
-    normalize: &second_parameter
-    - {replace: '::\([^$]*\$\w+[^,]*,[^$]*', with: '::'}
-    - {replace: '(?s)[^\w$:\\][\s\S]*$', with: ''}
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: closure_third_parameter
-  reads: file
-  in: [source]
-  match: *closure_in_method
-  id: &third_in_method
-    from: [enclosing_type, enclosing_method, parameters]
-    template: "{enclosing_type}::{enclosing_method}::{parameters}"
-    normalize: &third_parameter
-    - {replace: '::\([^$]*\$\w+[^,]*,[^$]*\$\w+[^,]*,[^$]*', with: '::'}
-    - {replace: '(?s)[^\w$:\\][\s\S]*$', with: ''}
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: arrow_first_parameter
-  reads: file
-  in: [source]
-  match: &arrow_in_method
-    declaration: arrow_function
-    name_child: parameters
-    filetype: php
-  id: *first_in_method
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: arrow_second_parameter
-  reads: file
-  in: [source]
-  match: *arrow_in_method
-  id: *second_in_method
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: arrow_third_parameter
-  reads: file
-  in: [source]
-  match: *arrow_in_method
-  id: *third_in_method
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: closure_first_parameter_in_function
-  reads: file
-  in: [source]
-  match: &closure_in_function
-    declaration: anonymous_function
-    name_child: parameters
+  match:
+    declaration: simple_parameter
+    name_child: name
     filetype: php
     holder: function_definition
-  id: &first_in_function
-    from: [enclosing_type, parameters]
-    template: "{enclosing_type}::{parameters}"
-    normalize: *first_parameter
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: closure_second_parameter_in_function
-  reads: file
-  in: [source]
-  match: *closure_in_function
-  id: &second_in_function
-    from: [enclosing_type, parameters]
-    template: "{enclosing_type}::{parameters}"
-    normalize: *second_parameter
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: closure_third_parameter_in_function
-  reads: file
-  in: [source]
-  match: *closure_in_function
-  id: &third_in_function
-    from: [enclosing_type, parameters]
-    template: "{enclosing_type}::{parameters}"
-    normalize: *third_parameter
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: arrow_first_parameter_in_function
-  reads: file
-  in: [source]
-  match: &arrow_in_function
-    declaration: arrow_function
-    name_child: parameters
-    filetype: php
-    holder: function_definition
-  id: *first_in_function
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: arrow_second_parameter_in_function
-  reads: file
-  in: [source]
-  match: *arrow_in_function
-  id: *second_in_function
-  emits: [{node: {type: drupal.closure_parameter}}]
-  confidence: declared
-
-- rule: arrow_third_parameter_in_function
-  reads: file
-  in: [source]
-  match: *arrow_in_function
-  id: *third_in_function
+    where: [{within: *closures}]
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
   emits: [{node: {type: drupal.closure_parameter}}]
   confidence: declared
 
