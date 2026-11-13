@@ -1,16 +1,25 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A method that replaces one its class inherits: overrides, from the child's method to the method
-# of the nearest ancestor, through extends, that declares the same name. A grandparent's method
-# the middle class does not declare is the target. Both methods are declarations in the files, so
-# the edge is declared. With it, what breaks if Base::step changes reaches Child::step, which a
-# $this->step() call in Base does not show.
+# of the nearest ancestor, through extends and the traits each ancestor uses, that declares the same
+# name as public or protected. A grandparent's method the middle class does not declare is the
+# target. Both methods are declarations in the files, so the edge is declared. With it, what
+# breaks if Base::step changes reaches Child::step, which a $this->step() call in Base does not
+# show. The two file rules mark each public or protected method on an internal node; a private
+# method gets none, so a same-named method below it gets no edge.
 #
-# Limits: only extends is walked. A method that implements an interface method gets no edge, and
-# neither does one that replaces a method a used trait brings, in the class or in an ancestor; when
-# an ancestor further up also declares the name, the edge goes to that ancestor. A parent outside
-# the map gives no edge and no mark. Visibility is not read: a method with the name of a private
-# method in an ancestor, which PHP does not treat as a replacement, still gets the edge.
+# Limits: a method that implements an interface method gets no edge, and neither does one that
+# replaces a method of a trait its own class uses. A trait and a parent at the same distance both
+# get an edge. A method declared with no visibility keyword, public in PHP, gets no mark: the edge
+# passes it and goes to a marked ancestor further up, else nowhere. A promoted constructor
+# parameter's public or protected marks its constructor, so a private constructor with one still
+# gets the edge. A parent outside the map gives no edge and no mark.
+node_types:
+
+- name: php.inheritable_method
+  id_namespace: php.inheritable_method
+  internal: true
+
 edge_kinds:
 
 - kind: overrides
@@ -18,6 +27,24 @@ edge_kinds:
   to: php.method
 
 rules:
+
+- rule: find_public_method
+  reads: file
+  in: [source]
+  match: {declaration: visibility_modifier, filetype: php, where: [{has_child: public}]}
+  id: &inheritable_id
+    from: [enclosing_type, enclosing_method]
+    template: "{enclosing_type}::{enclosing_method}"
+  emits: [{node: {type: php.inheritable_method}}]
+  confidence: declared
+
+- rule: find_protected_method
+  reads: file
+  in: [source]
+  match: {declaration: visibility_modifier, filetype: php, where: [{has_child: protected}]}
+  id: *inheritable_id
+  emits: [{node: {type: php.inheritable_method}}]
+  confidence: declared
 
 - rule: method_overrides_ancestor
   reads: map
@@ -27,8 +54,9 @@ rules:
     follow:
     - node: 'php.type::{class}'
     - edge: inherits
-    - ancestors: [inherits]
+    - ancestors: [inherits, mixes_in]
     - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.inheritable_method::{owner}::{method}'
     - node: 'php.method::{owner}::{method}'
   emits: [{edge: {kind: overrides, from: this_node, to: matched_node}}]
   confidence: declared
