@@ -153,12 +153,16 @@ periplus slice [ID ...] [--path PREFIX]... --out FILE [--direction out|in|both] 
 Without `--out`, `slice` prints the piece of the map around some start nodes, in one call. An
 argument that names a node, by id or short name, starts there. Any other text is searched the
 way `find` searches: as a whole, and word by word. A word is a run of letters, digits and
-underscores, at least 3 long, so `sign-up` searches `sign`. A word that matches more than a
-tenth of the map's nodes picks no start, unless every word does, and the piece says so; it still
-counts when starts and rows are ranked. The starts come from all the matches, spread over node
-types: rarer types first, counted over the whole map, and at most two starts of one type.
-Inside a type, a mapped node comes first, then the node that nodes in more other files have
-edges into, then the node more words match, then the one whose id the words cover most, then
+underscores, at least 3 long, so `sign-up` searches `sign`. When several words are given, one
+that names a node is searched as a word too. Each word weighs the natural log of the map's
+node count over the number of nodes it matches, rounded to 6 places, so a rare word outweighs a
+common one. A start's score is the sum of the weights of the words it holds in its own name,
+an attribute or its description; a word found only in the id's type, or in the part before the
+id's last `::` that names its owner, adds nothing. A start of
+lower score never comes before one of higher score. Among starts of equal score, rarer types
+come first, counted over the whole map, and at most two of a type, counted over all the starts,
+come before the rest of that score. Inside a type, a mapped node comes first, then the node that
+nodes in more other files have edges into, then the one whose id the words cover most, then
 `find`'s order. `--starts N` sets how many starts the words pick in all (default 8). `--type T`
 and `--path P` keep only the starts the words find of type `T` or under `P`, as they narrow
 `find`.
@@ -171,7 +175,8 @@ where it matched), as a `find` row. Then, under `around START`, it prints the ro
 each start, breadth-first. Each row sits under the node it was reached from, indented one step
 per hop, and names the hop, the edge kind and its direction: `--calls-->` when the node above
 has the edge, `<--calls--` when the row's node has it. Then come the node's id, type, state and
-`file:line`, with the source line and the description under it. A node reached by a second
+`file:line`, with the source line and the description under it. When the file is the one the
+node above was printed with, the row shows only `:line`; JSON keeps the full location. A node reached by a second
 route prints once in full and then as `(again)`. A source line with fewer than two letters,
 digits or underscores, such as `{#`, is not printed.
 
@@ -418,14 +423,14 @@ python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
 around python.function::shop.tools.helper
   1 <--calls-- python.module::shop.cli  python.module  mapped  shop/cli.py:9
         | helper()
-    2 --calls--> python.function::typer.Typer  python.function  unresolved  shop/cli.py:4
+    2 --calls--> python.function::typer.Typer  python.function  unresolved  :4
           | app = typer.Typer()
-    2 --contains--> python.function::shop.cli.greet  python.function  mapped  shop/cli.py:8
+    2 --contains--> python.function::shop.cli.greet  python.function  mapped  :8
           | def greet():
-    2 --imports--> python.module::shop.tools  (again)  shop/cli.py:2
-    2 --imports--> python.module::typer  python.module  referenced  shop/cli.py:1
+    2 --imports--> python.module::shop.tools  (again)  :2
+    2 --imports--> python.module::typer  python.module  referenced  :1
           | import typer
-  1 <--contains-- python.module::shop.tools  python.module  mapped  shop/tools.py:1
+  1 <--contains-- python.module::shop.tools  python.module  mapped  :1
         | def helper():
 warning: resolved 'helper' to python.function::shop.tools.helper
 ```
@@ -443,7 +448,7 @@ python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
 around python.function::shop.tools.helper
   1 <--calls-- python.module::shop.cli  python.module  mapped  shop/cli.py:9
         | helper()
-  1 <--contains-- python.module::shop.tools  python.module  mapped  shop/tools.py:1
+  1 <--contains-- python.module::shop.tools  python.module  mapped  :1
         | def helper():
 showing 2 of 6 rows
 left out by hop: 2: 4
@@ -468,7 +473,7 @@ python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
 around python.function::shop.tools.helper
   1 <--calls-- python.module::shop.cli  python.module  mapped  shop/cli.py:9
         | helper()
-  1 <--contains-- python.module::shop.tools  python.module  mapped  shop/tools.py:1
+  1 <--contains-- python.module::shop.tools  python.module  mapped  :1
         | def helper():
 go deeper with --depth 2
 ```

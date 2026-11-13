@@ -145,9 +145,20 @@ def test_a_common_word_never_puts_its_starts_before_a_rare_words(tmp_path: Path)
 def test_a_node_that_matches_a_rare_and_a_common_word_beats_one_with_the_rare_alone(
     tmp_path: Path,
 ) -> None:
-    nodes = [n for n in NODES if n["id"] != CLASS]
+    tools = "t.method::app.claim_tools"
+    nodes = [
+        *(n for n in NODES if n["id"] != CLASS),
+        _node(tools, "t.method", line=1, file="t.php"),
+    ]
 
-    assert _ids(_piece(tmp_path, "claim", "app", starts=1, nodes=nodes)) == [CLAIM]
+    assert _ids(_piece(tmp_path, "claim", "app", starts=1, nodes=nodes)) == [tools]
+
+
+def test_a_word_only_in_the_type_or_owner_part_of_an_id_scores_nothing(tmp_path: Path) -> None:
+    arg = "t.arg::app.ClaimService::makeClaim::$x"
+    nodes = [*NODES, _node(arg, "t.arg", line=5, file="src/ClaimService.php")]
+
+    assert _ids(_piece(tmp_path, "claim", starts=1, nodes=nodes)) == [CLASS]
 
 
 def test_a_unique_name_among_several_words_is_also_searched_as_a_word(tmp_path: Path) -> None:

@@ -234,6 +234,8 @@ def _under(document: Mapping[str, Any], prefixes: Collection[str]) -> set[str]:
 
 #: A word: a run of letters, digits and underscores.
 _WORD = re.compile(r"\w+")
+#: ``find``'s rank for a word found in the id but not in its last ``::`` segment.
+_OUTSIDE_NAME = 4
 #: Where a match was found, by ``find``'s rank: 0 to 4 the id, 5 an attribute, 6 a description.
 _PLACES = ("id", "attribute", "description")
 
@@ -285,12 +287,17 @@ def _piece(
             whole = " ".join(rest).casefold().strip()
             queries = list(dict.fromkeys(([whole] if whole and whole not in words else []) + words))
             matched: dict[str, set[str]] = {}
+            # The words a node holds in its own name, an attribute or its description: a word
+            # only in the id's type or in the owner part before its last ``::`` is not the node's.
+            owned: dict[str, set[str]] = {}
             weights: dict[str, float] = {}
             notes: list[str] = []
             for word in words:
                 hits = find.search(index, word, None, (), described)
                 for match in hits:
                     matched.setdefault(match[1], set()).add(word)
+                    if match[0] != _OUTSIDE_NAME:
+                        owned.setdefault(match[1], set()).add(word)
                 if hits:
                     weights[word] = round(math.log(len(index.nodes) / len(hits)), WEIGHT_PLACES)
             standing = _Standing(index)
@@ -299,7 +306,7 @@ def _piece(
                 warnings += noted
                 scores = {
                     node_id: round(sum(weights[w] for w in found_), WEIGHT_PLACES)
-                    for node_id, found_ in matched.items()
+                    for node_id, found_ in owned.items()
                 }
                 found = _starts(index, queries, wanted, narrowed, described, scores, most, standing)
                 for node_id, chosen in found.items():
@@ -400,12 +407,13 @@ def _starts(
     """Up to ``most`` start nodes that the queries find, the highest word score first.
 
     A query is the whole text or one word. A node's score is the sum of the weights of the words
-    it matches, a word weighing the log of the map's node count over the nodes it matches, so a
-    rare word outweighs a common one. A start of a lower score never comes before one of a
-    higher score. Among equal scores, rarer types come first, and at most ``TYPE_STARTS`` of a
-    type, counted over all the starts, are taken before the rest of that score; inside a type, a
-    mapped node comes first, then the node more other files depend on, then the one whose id the
-    words cover most, then ``find``'s rank, then the id.
+    it holds in its own name, an attribute or its description, a word weighing the log of the
+    map's node count over the nodes it matches, so a rare word outweighs a common one. A start
+    of a lower score never comes before one of a higher score. Among equal scores, rarer types
+    come first, and at most ``TYPE_STARTS`` of a type, counted over all the starts, are taken
+    before the rest of that score; inside a type, a mapped node comes first, then the node more
+    other files depend on, then the one whose id the words cover most, then ``find``'s rank,
+    then the id.
     """
     said: dict[str, list[tuple[str, str, str | None]]] = {}
     nearest: dict[str, find.Match] = {}
