@@ -164,7 +164,12 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   name part, class_in_module from a class named Drupal\<module>\..., inferred, and
 #   template_in_module or template_in_theme from a template's folder, inferred;
 # - each ->getForm(X::class), as an inferred builds_form edge from the method around it, or the
-#   function around it in a module, install, inc, theme or profile file, to the form class X.
+#   function around it in a module, install, inc, theme or profile file, to the form class X;
+# - a method called on a service, as \Drupal::service('x')->m() or $container->get('x')->m(), or on
+#   a method's local variable assigned such a service, as an inferred calls edge to the method on
+#   the class the services file gives that service;
+# - each page display of a view that has a path, as the route view.<view>.<display>, with its
+#   path, a route_from_view edge to the view's config object and a shape_of_route edge.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
@@ -198,7 +203,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A misspelled service or entity type name ends at a referenced node, as a real one from core
 #   does, and not at an unresolved one.
 # - A $container or $this->container that is not Drupal's service container gives a false
-#   service.
+#   service, and a false calls edge for a method called on it.
 # - Every constant of an Event class or an *Events class reads as an event name, so one that holds
 #   something else is a false event.
 # - The object of ->get('x'), ->set('x') and ->hasField('x') is read only to leave out a config
@@ -372,6 +377,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - getForm($variable), getForm('text') and a form built other than by ->getForm(X::class) give
 #   no builds_form edge. A form class the map does not hold ends at a referenced node. A grouped
 #   use, use A\{B, C}, binds no name for it.
+# - Only the first call of a service chain is joined. A service no mapped services file declares,
+#   or one a variable or a constant names, gives no calls edge, nor does a local variable that
+#   holds another value in its method, a local variable in a plain function such as a hook, or a
+#   call in a function of a plain .php file.
+# - A view's page display with no path, a display of another plugin, such as a feed, and a route
+#   a module alters give no route. The route_from_view and shape_of_route edges are read as text,
+#   at the indentation Drupal exports; a view file indented otherwise gets the route and its path
+#   only.
 # - A routing file's route_callbacks key names no route, and a service alias written on one line,
 #   name: '@other', gives no service_in_module edge. A library, class or template whose module or
 #   theme the map does not hold gives no ownership edge.

@@ -11,44 +11,83 @@ known gaps.
 
 ## The rutters
 
-- **PHP:** a method call on an object, `$x->m()`, is not stated, except on `$this` itself and
-  through a property of `$this` whose type the class declares, both `inferred`. A `$this->m()`
-  that no mapped class or ancestor declares is unresolved under the calling class, a call in a
-  parent to a method a child overrides lands on the parent's method, and inside a trait `$this`
-  names the trait. `new parent()`, an anonymous class and a class name built by an expression
+- **PHP, method calls:** a call on a variable, `$x->m()` or `$x?->m()`, in a method or a plain
+  function, keeps a call site, and gets a `calls` edge, `inferred`, only when the map knows the
+  variable's class. It knows it for a parameter typed by a class name, `Foo $x` or `?Foo $x`; for a
+  method's local variable assigned `new Foo()`, or assigned `$this->m()` where `m` declares its
+  return type; and for a property of `$this` that declares its type, or is assigned a typed
+  parameter or `new Foo()`. Any other variable keeps its call site with no edge, such as a
+  `foreach` value, a `catch` variable, an untyped parameter or a local assigned the result of any
+  other call. A call at file level, outside any function, makes nothing. A parameter or return type
+  written as a union, even `Foo|null`, gives no edge, and so does a property typed by a union of
+  two or more class names, `Foo|Bar`. A method's local variable with two different values gets no
+  edge, because the map keeps no statement order; so does a method's parameter assigned in its
+  body, unless every value is the same `new`. A plain function's local variable gets no edge, and
+  its parameter assigned in its body still joins its declared type. A closure or arrow function's
+  parameter, or variable, shares the id of the one of the same name in the method or function
+  around it, so a call on it joins both types. A local assigned `new self()`, `new static()`,
+  `new parent()` or `new $class()` gets no type, and a value set by `foreach`, `catch`, `list()`, `=&`,
+  `static` or `global` makes no local node. A call on what `$this->m()` returns reads `m`'s
+  declared return type, `Foo`, `?Foo` or `self`: a return type of `static`, a union or a scalar, or
+  none, gives no edge. In `$this->a()->b()->c()` only `b` is joined, and `$this->m()?->n()`, a
+  nullsafe call on such a local and `$this->p->m()->n()` give nothing. A property assigned `new` in
+  several places gives an edge to each class, and one assigned `new self()`, `new static()`,
+  `new parent()`, an anonymous class, a class held in a variable, or another call's result gives none
+  from that assignment.
+- **PHP, inheritance and traits:** a `$this->m()` that no mapped class or ancestor declares is
+  unresolved under the calling class. A call in a parent to a method a child overrides lands on the
+  parent's method; the child's method has an `overrides` edge to it. A method that implements an
+  interface method, or replaces a method of a trait its own class uses, gets no `overrides` edge,
+  nor does one whose parent is outside the map. An ancestor that declares a method and uses a trait
+  that declares it too is read as the trait's, though PHP keeps the class's own. A private promoted
+  constructor parameter marks its constructor private, so a constructor below it gets no
+  `overrides` edge. Inside a trait, `$this->m()` stays joined under the trait, and also joins the
+  `m()` PHP runs for each class that uses it: the class's own, the nearest ancestor's through
+  `extends`, or a subclass's own one or two levels down. A subclass three or more levels down gets
+  no edge, nor does an `m()` declared by another trait the class uses. A trait that uses the trait
+  counts as a using class, and the classes that use it are not walked.
+- **PHP, other forms:** `new parent()`, an anonymous class and a class name built by an expression
   give no `instantiates` edge, and `new $class()` is kept as a call site marked runtime.
-  `self::class`, `static::class`, `parent::class` and `$x::class` give no `references_class`
-  edge. A `new` or a `::class` outside any function or method, such as in an attribute, lists a
-  skipped row. A
-  property typed by a union of two or more class names, `Helper|Other`, gives no edge, and neither
-  does a call in a parent class through a property only a child assigns. `use function` aliases
-  do not bind. A call to a PHP built-in function makes nothing, but the names are compared as
-  written: `\strlen()` and `StrLen()` still give an unresolved function. A built-in of an extension that
-  was not loaded when the list was taken is not listed. A project's own function named like a
-  built-in, `function strlen()` in its namespace, gets no edge from an unqualified call. Drupal's
-  global functions, such as `t()`, are not built-ins and give an unresolved function under the
-  global name. An unqualified call tries the namespaced name before the global one, as PHP does,
-  and when the map holds neither it is unresolved under the global name, even where the callee is a
-  namespaced function outside the map. `static::m()` is read
-  as `self::m()`, and inside a trait `self` and `static` name the trait. A `@var` written
-  `Lib\Mailer`, with a backslash inside and none in front, joins a call to the class of that full
-  name when the map holds it, else to the name resolved through the namespace. Such a property's
-  `property_typed_as` edge ends at a `referenced` type node, and when the map holds neither name,
-  that node takes the name as written unless an import binds its first segment.
-  `skip_names` matches the exact case, so `ISSET(` still gives an unresolved function. A call
-  whose method name or callee is built at run time, such as `$this->$name()` or `$fn()`, gives no
-  edge; inside a class method it is kept as a `php.call_site` marked `resolution: runtime`,
-  instead of leaving nothing. A function callee that is not a written name, such as `$fn()` or
-  `f()()`, lists a skipped row wherever it is.
+  `self::class`, `static::class`, `parent::class` and `$x::class` give no `references_class` edge.
+  A `new` or a `::class` outside any function or method, such as in an attribute, lists a skipped
+  row. A call in a parent class through a property only a child assigns gives no edge.
+  `use function` aliases do not bind. A call to a PHP built-in function makes nothing, but the names are
+  compared as written: `\strlen()` and `StrLen()` still give an unresolved function. A built-in of
+  an extension that was not loaded when the list was taken is not listed. A project's own function
+  named like a built-in, `function strlen()` in its namespace, gets no edge from an unqualified
+  call. Drupal's global functions, such as `t()`, are not built-ins and give an unresolved function
+  under the global name. An unqualified call tries the namespaced name before the global one, as
+  PHP does, and when the map holds neither it is unresolved under the global name, even where the
+  callee is a namespaced function outside the map. `static::m()` is read as `self::m()`, and inside
+  a trait `self` and `static` name the trait. A `@var` written `Lib\Mailer`, with a backslash
+  inside and none in front, joins a call to the class of that full name when the map holds it, else
+  to the name resolved through the namespace. Such a property's `property_typed_as` edge ends at a
+  `referenced` type node, and when the map holds neither name, that node takes the name as written
+  unless an import binds its first segment. `skip_names` matches the exact case, so `ISSET(` still
+  gives an unresolved function. A call whose method name or callee is built at run time, such as
+  `$this->$name()` or `$fn()`, gives no edge; inside a class method it is kept as a `php.call_site`
+  marked `resolution: runtime`, instead of leaving nothing. A function callee that is not a written
+  name, such as `$fn()` or `f()()`, lists a skipped row wherever it is.
 - **Drupal:** a template name held in a variable, a concatenation or a list gives no edge. A contributed module's plugins and
   bundle config files are mapped only by that module's rutter, listed below. Without one, its
   bundle config file stays a plain config object and its bundle is `referenced`, with no label.
-  Things generated at run time, such as a route from a view, appear as `referenced`. A service or entity type that no mapped file declares, such as `config.factory`
+  Things generated at run time appear as `referenced`. A view's page display with a path is a
+  route; a page display with no path, a display of another plugin, such as a feed, and a route a
+  module alters make none. A link to `/my-view/5` meets the route of `/my-view/%` only by shape.
+  A view route's edges to its view and to its shape are read as text, as Drupal exports a view: a
+  view file indented otherwise gets the route and its path without them.
+  A service or entity type that no mapped file declares, such as `config.factory`
   or `node`, appears as `referenced`, and so does a misspelled name. A service that `get('x')`
   or `?->get('x')` names on an object written `$container`, `$this->container`,
   `\Drupal::getContainer()`, or `getContainer()` on `$this`, `static` or `self`, gives
   an edge with confidence `inferred`, so a `$container` or `$this->container` that is not Drupal's
-  service container gives a false service.
+  service container gives a false service, and a false `calls` edge for a method called on it. A
+  method called on a service, written in one expression or on a method's local variable assigned
+  the service, joins the method on the class the services file names. Only the first call of a
+  longer chain is joined. A service that no mapped services file declares keeps the call site with
+  no `calls` edge, and one that a variable or a constant names gives no `calls` edge. A local
+  variable that also holds any other value in the method, a local variable in a plain function
+  such as a hook, and a call in a function of a plain `.php` file give no `calls` edge.
 - **Drupal, hooks:** a function in a module, install, include, theme, profile, `post_update.php` or
   `deploy.php` file is a hook
   when its name starts with the first part of the file name and an underscore. So any function
@@ -198,9 +237,8 @@ known gaps.
   A field name reaches the storage on an entity type the model names, whichever event or action
   names it; when none of those holds the name, a name that storages on two or more entity types
   share reaches the `drupal.shared_field_name`, not a storage.
-- **Drush:** the `@command` tag is read as text, because the engine reads a docblock annotation
-  only in the form `@Name(...)` and allows one text file type per ending. Its class is named from
-  the file's path, so its edges are inferred, and a class named otherwise gives unresolved ends.
+- **Drush:** the `@command` tag is read as text. Its class is named from the file's path, so its
+  edges are inferred, and a class named otherwise gives unresolved ends.
   An attribute without the named argument `name:`, aliases, options, arguments, hooks and
   validators give nothing. Nothing joins a command class's service to its command.
 - **Twig Tweak:** only `drupal_block`, `drupal_menu`, `drupal_entity`, `drupal_entity_form` and
@@ -253,9 +291,10 @@ known gaps.
   `$.ajax({url: x})` gives none. A script's path edges start at the script, not the function. A script or stylesheet a
   `.libraries.yml` file lists by a URL gives no edge. One listed by a path from the Drupal root,
   starting with `/`, gives none in a project whose top folder is the Drupal root itself.
-- **Python:** text rules see no scopes. Every call starts at the module, and a local name that
-  shadows an import gives a false edge. Method calls on objects and imports re-exported through
-  another file are not followed. More forms are listed in the author guide.
+- **Python:** no Python rutter is bundled. The example `python_text`, in
+  `examples/second-stack/packs`, reads text, and text rules see no scopes. Every call starts at
+  the module, and a local name that shadows an import gives a false edge. Method calls on objects
+  and imports re-exported through another file are not followed. More forms are listed in the author guide.
 - **Go:** a method call on a value, `s.Serve()`, makes no edge, and neither does the outer call of
   a chained call; its inner call is mapped on its own. An import binds its alias, else its path's
   last segment less a `/vN` suffix with N 2 or more, or a `.vN` suffix, so a
@@ -321,8 +360,8 @@ known gaps.
 
 ## Not yet built
 
-- Go method calls on a value. A call written `v.M()` is not mapped, because the rutter cannot know the
-  type of `v`. Calls of an imported package's function, `pkg.F()`, are mapped.
+- Go method calls on a value. A call written `v.M()` is not mapped: `go_basic` has no rule that
+  reads the type of `v`. Calls of an imported package's function, `pkg.F()`, are mapped.
 - An order among rutters that state the same thing.
 - A choice between one map file and a map split by pack or by folder. This is an open design
   question.
