@@ -173,29 +173,37 @@ Without words, `--path PREFIX` starts from every node whose first file starts wi
 When the whole text matches nothing and its words do, the piece says so on its second line.
 Words that match nothing print `no matches`, and exit 0.
 
-The output lists each start first, with why it was picked (`given as 'helper'`, or each word and
-where it matched), as a `find` row. Then, under `around START`, it prints the rows reached from
-each start, breadth-first. Each row sits under the node it was reached from, indented one step
-per hop, and names the hop, the edge kind and its direction: `--calls-->` when the node above
-has the edge, `<--calls--` when the row's node has it. Then come the node's id, type, state and
-`file:line`, with the source line and the description under it. When the file is the one the
-node above was printed with, the row shows only `:line`; JSON keeps the full location. A node reached by a second
-route prints once in full and then as `(again)`. A source line with fewer than two letters,
-digits or underscores, such as `{#`, is not printed.
+The output names each node by its short name: the shortest tail of its id that `slice NAME`, or
+any command that takes an id, resolves back to that node alone, else the full id. Any name it
+prints can be pasted into the next command.
+
+The output lists each start first, on one line: its short name, its type, and why it was picked
+(`given as 'helper'`, or each word and where it matched). Then come the nodes the walk reached,
+grouped by file. Each file prints once, as a header, with `in X` naming the containers its nodes
+belong to by grouping edges. Under it, in line order, each node prints `:LINE  name  type`, its
+source line and its description, then one line per edge kind and direction to other nodes of
+the piece: `calls -> a, b` for edges the node has, `calls <- c` for edges to it. Far ends a rule
+did not map fold to `(+N outside the project: x, y)`, naming the first 3. Three or more far ends
+that share an owner, the part of their ids before the last `::`, fold to the owner and a count,
+`Mailer (3)`. A clause names at most 5 far ends and counts the rest, `(+N more)`. A node with
+edges the piece does not show ends with `+N more links: calls -> 8, calls <- 3; see periplus
+slice NAME`. A source line with fewer than two letters, digits or underscores, such as `{#`, is
+not printed.
+
+The piece ends with an inventory: every node it names, grouped by type with a count, rarest type
+first. Check an answer against it.
 
 An edge of a grouping kind, one the map lists under `grouping_kinds`, says its `from` end belongs
 to the container at its `to` end, as a class belongs to its module. The walk follows such an
-edge only from the member to the container. The container prints once per start, marked
-`(container; list its members with periplus slice ID)`, and the walk goes no further from it,
+edge only from the member to the container. The container is named once, in the header of
+its members' files, and the walk goes no further from it,
 so one module does not pull every class, service and route it holds into the piece. `--kind K`
 naming a grouping kind walks it as any other kind.
 
-A start that is a container lists its members first, under `members of ID: N`. Each member
-type follows with its count, rarest type first, and under it the member rows: the edge kind,
-the member's id, type, state and `file:line`, with the source line and the description. Rows are
-taken one type at a time in turn, the member more other files depend on first, up to the start's
-share of `--limit`. The list ends with `list one type in full: periplus slice ID --type T
---limit 0`. With `--type T` and no words, a container start lists only its members of type `T`
+A start that is a container prints `members of NAME: N (type n, ...); list one type: periplus
+slice NAME --type T --limit 0`, the types rarest first. Its members join the piece one type at a
+time in turn, the member more other files depend on first, up to the start's share of
+`--limit`. With `--type T` and no words, a container start lists only its members of type `T`
 and its subtypes, and nothing else. In JSON, `members` holds, per container start, `container`,
 `total`, `by_type` and `rows`; a walk row has `container: true` at a container.
 
@@ -203,15 +211,18 @@ A node whose edges, two or more, all join it to the node above is a satellite of
 gets no row and costs no hop. The piece ends with how many were folded, by type.
 
 `--depth N` sets how many edges to follow (default 2). `--direction` defaults to `both`, since a
-chain often goes up one kind and down another. `--limit N` caps the rows (default 50, `0` for
-all). The cap keeps full rows before back-references. Among them it keeps first the nodes more
+chain often goes up one kind and down another. Without `--limit`, the piece holds at most 50
+rows and aims at 8 KB of text: over that, it leaves out the rows of the farthest hop first, then
+the `more links` lines, then names per link, then the nearest rows, never the inventory, and
+says so in a line `cut to fit 8192 bytes: ...`. `--limit N` caps the rows at `N` (`0` for all)
+with no byte aim. The cap keeps full rows before back-references. Among them it keeps first the nodes more
 starts reach, then those reached from the starts of more words, then those whose own id,
 attributes or description more of the words match, then rarer types, then nodes more other
 files have edges into, then the nearer hop, then by id. It first gives each start an even share
 of the cap, then fills the rest with the best rows left. A kept row brings the rows above it. A cut piece ends with what it left out, counted by hop and by edge
 kind, and the flags that narrow it (`--kind`, `--direction`, `--depth`, and `--type`, `--path`
 or `--starts` when words picked the starts). A piece that was not cut and has edges past its
-last hop ends with `go deeper with --depth N`. `--format json` prints the same piece: `starts`,
+last hop ends with `go deeper with --depth N`. `--format json` prints the same piece with full ids: `starts`,
 `rows` (each with `start`, `hop`, `from`, `kind`, `direction`, `again`, `location`, `source` and
 `description`), `left_out`, `deeper`, `folded`, `notes`, `depth` and `direction`.
 
@@ -429,46 +440,70 @@ periplus path python.function::shop.tools.helper python.module::shop.cli
 no path
 ```
 
-Print what lies around the helper, two hops out, in one call:
+Print what lies around the helper, two hops out, in one call. Nodes group by file, and each
+names its links:
 
 <!-- nav-run -->
 ```console
 $ periplus slice helper
 periplus slice
-start 1 (given as 'helper')
-python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
-      | def helper():
+start helper  python.function  (given as 'helper')
 
-around python.function::shop.tools.helper
-  1 <--calls-- python.module::shop.cli  python.module  mapped  shop/cli.py:9
-        | helper()
-    2 --calls--> python.function::typer.Typer  python.function  unresolved  :4
-          | app = typer.Typer()
-    2 --contains--> python.function::shop.cli.greet  python.function  mapped  :8
-          | def greet():
-    2 --imports--> python.module::shop.tools  (again)  :2
-    2 --imports--> python.module::typer  python.module  referenced  :1
-          | import typer
-  1 <--contains-- python.module::shop.tools  python.module  mapped  :1
-        | def helper():
+shop/tools.py
+  :1  helper  python.function
+      | def helper():
+      calls <- cli
+      contains <- tools
+  :1  tools  python.module
+      | def helper():
+      contains -> helper
+      imports <- cli
+
+shop/cli.py
+  :1  cli  python.module
+      | import typer
+      calls -> helper (+1 outside the project: typer.Typer)
+      contains -> greet
+      imports -> tools (+1 outside the project: python.module::typer)
+  :8  greet  python.function
+      | def greet():
+      contains <- cli
+
+inventory: 6 nodes
+  python.function 3: greet, helper, typer.Typer
+  python.module 3: cli, python.module::typer, tools
 warning: resolved 'helper' to python.function::shop.tools.helper
 ```
 
-The same piece, cut to two rows, says what it left out:
+The same piece, cut to two rows, says what it left out, and `cli` counts the links it no longer
+shows:
 
 <!-- nav-run -->
 ```console
 $ periplus slice helper --limit 2
 periplus slice
-start 1 (given as 'helper')
-python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
-      | def helper():
+start helper  python.function  (given as 'helper')
 
-around python.function::shop.tools.helper
-  1 <--calls-- python.module::shop.cli  python.module  mapped  shop/cli.py:9
-        | helper()
-  1 <--contains-- python.module::shop.tools  python.module  mapped  :1
-        | def helper():
+shop/tools.py
+  :1  helper  python.function
+      | def helper():
+      calls <- cli
+      contains <- tools
+  :1  tools  python.module
+      | def helper():
+      contains -> helper
+      imports <- cli
+
+shop/cli.py
+  :1  cli  python.module
+      | import typer
+      calls -> helper
+      imports -> tools
+      +3 more links: calls -> 1, contains -> 1, imports -> 1; see periplus slice cli
+
+inventory: 3 nodes
+  python.function 1: helper
+  python.module 2: cli, tools
 showing 2 of 6 rows
 left out by hop: 2: 4
 left out by kind: calls 1, contains 1, imports 2
@@ -485,15 +520,28 @@ is searched alone. Both find the helper:
 $ periplus slice tool help --starts 1 --depth 1
 periplus slice
 no node matches 'tool help' as a whole; started from its words
-start 1 (words: 'tool' in id, 'help' in id)
-python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
-      | def helper():
+start helper  python.function  (words: 'tool' in id, 'help' in id)
 
-around python.function::shop.tools.helper
-  1 <--calls-- python.module::shop.cli  python.module  mapped  shop/cli.py:9
-        | helper()
-  1 <--contains-- python.module::shop.tools  python.module  mapped  :1
-        | def helper():
+shop/tools.py
+  :1  helper  python.function
+      | def helper():
+      calls <- cli
+      contains <- tools
+  :1  tools  python.module
+      | def helper():
+      contains -> helper
+      imports <- cli
+
+shop/cli.py
+  :1  cli  python.module
+      | import typer
+      calls -> helper
+      imports -> tools
+      +3 more links: calls -> 1, contains -> 1, imports -> 1; see periplus slice cli
+
+inventory: 3 nodes
+  python.function 1: helper
+  python.module 2: cli, tools
 go deeper with --depth 2
 ```
 
