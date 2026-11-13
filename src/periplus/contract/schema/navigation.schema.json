@@ -27,6 +27,8 @@
     },
     "problems": {"type": "array", "items": {"$ref": "#/$defs/problem"}},
     "warnings": {"type": "array", "items": {"type": "string"}},
+    "place": {"description": "Where a row's edge is written as file:line, else the node it reaches, or null when neither has a location.", "type": ["string", "null"]},
+    "source": {"description": "The stripped source line at the row's place, at most 160 characters, or null when the file or line cannot be read.", "type": ["string", "null"]},
 
     "location": {
       "type": "object", "required": ["file", "line"],
@@ -95,12 +97,13 @@
         "items": {
           "type": "array",
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location"],
+            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "source"],
             "properties": {
               "id": {"type": "string"},
               "type": {"type": "string"},
               "state": {"type": "string"},
-              "location": {"type": ["string", "null"]}
+              "location": {"type": ["string", "null"]},
+              "source": {"$ref": "#/$defs/source"}
             }
           }
         },
@@ -114,7 +117,7 @@
 
     "edge_row": {
       "type": "object", "additionalProperties": false,
-      "required": ["kind", "other", "other_type", "other_state", "locations", "occurrences", "confidences", "rules", "description"],
+      "required": ["kind", "other", "other_type", "other_state", "locations", "occurrences", "confidences", "rules", "description", "location", "source"],
       "properties": {
         "kind": {"type": "string"},
         "other": {"type": "string"},
@@ -124,7 +127,9 @@
         "occurrences": {"type": ["integer", "null"]},
         "confidences": {"type": "array", "items": {"enum": ["declared", "inferred"]}},
         "rules": {"type": "array", "items": {"type": "string"}},
-        "description": {"$ref": "#/$defs/description"}
+        "description": {"$ref": "#/$defs/description"},
+        "location": {"$ref": "#/$defs/place"},
+        "source": {"$ref": "#/$defs/source"}
       }
     },
     "edge_listing": {
@@ -134,7 +139,7 @@
 
     "show": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "type", "state", "roles", "attributes", "locations", "provenance", "description", "outgoing", "incoming", "problems"],
+      "required": ["id", "type", "state", "roles", "attributes", "locations", "provenance", "description", "outgoing", "incoming", "warnings", "problems"],
       "properties": {
         "id": {"type": "string"},
         "type": {"type": "string"},
@@ -146,6 +151,7 @@
         "description": {"$ref": "#/$defs/description"},
         "outgoing": {"$ref": "#/$defs/edge_listing"},
         "incoming": {"$ref": "#/$defs/edge_listing"},
+        "warnings": {"$ref": "#/$defs/warnings"},
         "problems": {"$ref": "#/$defs/problems"}
       }
     },
@@ -162,14 +168,16 @@
               "type": "array",
               "items": {
                 "type": "object", "additionalProperties": false,
-                "required": ["id", "type", "state", "depth", "kind", "via"],
+                "required": ["id", "type", "state", "depth", "kind", "via", "location", "source"],
                 "properties": {
                   "id": {"type": "string"},
                   "type": {"type": "string"},
                   "state": {"type": "string"},
                   "depth": {"type": "integer", "minimum": 1},
                   "kind": {"type": "string"},
-                  "via": {"type": "string"}
+                  "via": {"type": "string"},
+                  "location": {"$ref": "#/$defs/place"},
+                  "source": {"$ref": "#/$defs/source"}
                 }
               }
             }
@@ -195,11 +203,13 @@
               "items": {
                 "type": "array",
                 "items": {
-                  "type": "object", "additionalProperties": false, "required": ["from", "kind", "to"],
+                  "type": "object", "additionalProperties": false, "required": ["from", "kind", "to", "location", "source"],
                   "properties": {
                     "from": {"type": "string"},
                     "kind": {"type": "string"},
-                    "to": {"type": "string"}
+                    "to": {"type": "string"},
+                    "location": {"$ref": "#/$defs/place"},
+                    "source": {"$ref": "#/$defs/source"}
                   }
                 }
               }

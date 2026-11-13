@@ -6,6 +6,9 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Generic, Never, TypeVar
 
+from periplus.errors import Problem
+from periplus.report import _escape
+
 __all__ = [
     "NONE",
     "Listing",
@@ -15,6 +18,7 @@ __all__ = [
     "kind_warnings",
     "payload",
     "place",
+    "problem_lines",
 ]
 
 
@@ -73,3 +77,17 @@ def payload(listing: Listing[Row], project: Callable[[Row], Any]) -> dict[str, A
 def footer(listing: Listing[Any]) -> str | None:
     """``showing N of M`` when the list was cut, and ``None`` when nothing was left out."""
     return f"showing {listing.shown} of {listing.total}" if listing.truncated else None
+
+
+def problem_lines(problems: Sequence[Problem]) -> list[str]:
+    """Each problem as ``code message``, then its ``lines`` detail one per line, indented.
+
+    The ``lines`` detail is escaped where it is built, so a separator inside it is a line break
+    and never part of an id; it is printed as given.
+    """
+    lines = []
+    for problem in problems:
+        lines.append(f"{int(problem.code)} {_escape(problem.message)}")
+        extra = problem.detail.get("lines")
+        lines += [f"  {line}" for line in extra.split("\n")] if extra else []
+    return lines

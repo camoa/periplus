@@ -110,15 +110,15 @@ def test_via_line_names_the_item_reached_from_in_the_walk_direction_c3(
     )
     assert out.code == 0, out.both
     rows = {line.split()[1]: line for line in out.out.splitlines() if re.match(r"^\s+\d+\s", line)}
-    assert rows[b].endswith(f"via {k1} from {a}"), rows[b]
-    assert rows[c].endswith(f"via {k2} from {b}"), rows[c]
+    assert f"via {k1} from {a}  " in rows[b], rows[b]
+    assert f"via {k2} from {b}  " in rows[c], rows[c]
     back = _run(
         ["affected", c, "--depth", "2", "--map", str(planted)], site, config, monkeypatch, capsys
     )
     assert back.code == 0, back.both
     rows = {line.split()[1]: line for line in back.out.splitlines() if re.match(r"^\s+\d+\s", line)}
-    assert rows[b].endswith(f"via {k2} to {c}"), rows[b]
-    assert rows[a].endswith(f"via {k1} to {b}"), rows[a]
+    assert f"via {k2} to {c}  " in rows[b], rows[b]
+    assert f"via {k1} to {b}  " in rows[a], rows[a]
 
 
 @pytest.mark.criterion(id="c4")

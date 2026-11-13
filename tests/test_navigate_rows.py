@@ -42,7 +42,8 @@ DOCUMENT: dict[str, Any] = {
     ],
 }
 
-# What each command printed with --format json on DOCUMENT before rows were dataclasses.
+# What each command printed with --format json on DOCUMENT before rows were dataclasses, plus the
+# location, source and warnings fields added since.
 PINNED: dict[str, str] = {
     "types": """\
 {
@@ -77,12 +78,14 @@ PINNED: dict[str, str] = {
     {
       "id": "php.method::B::run",
       "location": "src/a.php:3",
+      "source": null,
       "state": "mapped",
       "type": "php.method"
     },
     {
       "id": "php.method::C::run",
       "location": null,
+      "source": null,
       "state": "referenced",
       "type": "php.method"
     }
@@ -104,6 +107,8 @@ PINNED: dict[str, str] = {
         "depth": 1,
         "id": "php.method::B::run",
         "kind": "calls",
+        "location": "src/a.php:7",
+        "source": null,
         "state": "mapped",
         "type": "php.method",
         "via": "php.method::A::go"
@@ -112,6 +117,8 @@ PINNED: dict[str, str] = {
         "depth": 1,
         "id": "php.method::C::run",
         "kind": "calls",
+        "location": "src/a.php:9",
+        "source": null,
         "state": "referenced",
         "type": "php.method",
         "via": "php.method::A::go"
@@ -135,6 +142,8 @@ PINNED: dict[str, str] = {
         "depth": 1,
         "id": "php.method::B::run",
         "kind": "calls",
+        "location": "src/a.php:4",
+        "source": null,
         "state": "mapped",
         "type": "php.method",
         "via": "php.method::A::go"
@@ -143,6 +152,8 @@ PINNED: dict[str, str] = {
         "depth": 1,
         "id": "php.type::A",
         "kind": "defines",
+        "location": "src/a.php:1",
+        "source": null,
         "state": "mapped",
         "type": "php.type",
         "via": "php.method::A::go"
@@ -171,6 +182,7 @@ PINNED: dict[str, str] = {
         ],
         "description": null,
         "kind": "calls",
+        "location": "src/a.php:4",
         "locations": [
           {
             "file": "src/a.php",
@@ -183,7 +195,8 @@ PINNED: dict[str, str] = {
         "other_type": "php.method",
         "rules": [
           "php:r"
-        ]
+        ],
+        "source": null
       },
       {
         "confidences": [
@@ -191,6 +204,7 @@ PINNED: dict[str, str] = {
         ],
         "description": null,
         "kind": "defines",
+        "location": "src/a.php:1",
         "locations": [
           {
             "file": "src/a.php",
@@ -203,7 +217,8 @@ PINNED: dict[str, str] = {
         "other_type": "php.type",
         "rules": [
           "php:r"
-        ]
+        ],
+        "source": null
       }
     ],
     "shown": 2,
@@ -225,6 +240,7 @@ PINNED: dict[str, str] = {
         ],
         "description": null,
         "kind": "calls",
+        "location": "src/a.php:7",
         "locations": [
           {
             "file": "src/a.php",
@@ -238,7 +254,8 @@ PINNED: dict[str, str] = {
         "rules": [
           "php:x",
           "php:y"
-        ]
+        ],
+        "source": null
       },
       {
         "confidences": [
@@ -246,6 +263,7 @@ PINNED: dict[str, str] = {
         ],
         "description": null,
         "kind": "calls",
+        "location": "src/a.php:9",
         "locations": [
           {
             "file": "src/a.php",
@@ -258,7 +276,8 @@ PINNED: dict[str, str] = {
         "other_type": "php.method",
         "rules": [
           "php:x"
-        ]
+        ],
+        "source": null
       }
     ],
     "shown": 2,
@@ -278,7 +297,8 @@ PINNED: dict[str, str] = {
     "entry"
   ],
   "state": "mapped",
-  "type": "php.method"
+  "type": "php.method",
+  "warnings": []
 }
 """,
     "path": """\
@@ -289,6 +309,8 @@ PINNED: dict[str, str] = {
         {
           "from": "php.method::A::go",
           "kind": "calls",
+          "location": "src/a.php:7",
+          "source": null,
           "to": "php.method::B::run"
         }
       ]

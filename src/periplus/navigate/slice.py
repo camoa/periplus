@@ -11,7 +11,7 @@ from periplus.engine.emit import counts, hierarchy
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.map import write_document
 from periplus.navigate.ids import resolve
-from periplus.navigate.listing import first_location, kind_warnings
+from periplus.navigate.listing import first_location, kind_warnings, problem_lines
 from periplus.navigate.mapfile import MapIndex, NodeNotFound, as_json, load_document, reading_fields
 from periplus.navigate.walk import walk
 from periplus.report import _escape, _json_problem
@@ -65,7 +65,8 @@ def run(
             )
         with reading_fields(start, map_path):
             index = MapIndex(document)
-            starts = {index.node(resolve(index, text))["id"] for text in ids}
+            resolved = [resolve(index, text) for text in ids]
+            starts = {node_id for node_id, _ in resolved}
             for prefix in prefixes:
                 under = {
                     node["id"]
@@ -96,7 +97,8 @@ def run(
     problems = write_document(piece, target)
     if problems:
         return SliceReport(problems=problems)
-    return SliceReport(str(target), len(nodes), len(edges), kind_warnings(kinds, held))
+    warnings = tuple(w for _, said in resolved for w in said) + kind_warnings(kinds, held)
+    return SliceReport(str(target), len(nodes), len(edges), warnings)
 
 
 def render_text(report: SliceReport) -> str:
@@ -105,7 +107,7 @@ def render_text(report: SliceReport) -> str:
     if report.out is not None:
         lines.append(f"wrote {_escape(report.out)}: {report.nodes} nodes, {report.edges} edges")
     lines += [f"warning: {_escape(w)}" for w in report.warnings]
-    lines += [f"{int(p.code)} {_escape(p.message)}" for p in report.problems]
+    lines += problem_lines(report.problems)
     return "\n".join(lines) + "\n"
 
 

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.listing import NONE, Listing, cut, first_location, footer, payload, place
 from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
+from periplus.navigate.source import SourceLines, source_line
 from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "FindReport", "FindRow", "render_json", "render_text", "run"]
@@ -17,12 +18,13 @@ __all__ = ["RENDERERS", "FindReport", "FindRow", "render_json", "render_text", "
 
 @dataclass(frozen=True, slots=True)
 class FindRow:
-    """One matching node: its id, type, state and first location as ``file:line``."""
+    """One matching node: its id, type, state, first location as ``file:line``, and the line."""
 
     id: str
     type: str
     state: str
     location: str | None
+    source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,9 +86,12 @@ def run(
     try:
         index = load_map(start, env, map_path)
         with reading_fields(start, map_path):
-            return _find(index, text, type_name, limit)
+            report = _find(index, text, type_name, limit)
     except HarnessError as error:
         return FindReport(problems=(error.problem(),))
+    lines = SourceLines(start, map_path)
+    items = tuple(replace(row, source=lines.at(row.location)) for row in report.matches.items)
+    return replace(report, matches=replace(report.matches, items=items))
 
 
 def _find(index: MapIndex, text: str, type_name: str | None, limit: int) -> FindReport:
@@ -118,6 +123,7 @@ def render_text(report: FindReport) -> str:
         lines.append(
             f"{_escape(row.id)}  {_escape(row.type)}  {_escape(row.state)}  {_escape(where)}"
         )
+        lines += source_line(row.source)
     if not report.matches.items:
         lines.append("no matches")
     note = footer(report.matches)
@@ -128,7 +134,13 @@ def render_text(report: FindReport) -> str:
 
 
 def _json_row(row: FindRow) -> dict[str, Any]:
-    return {"id": row.id, "type": row.type, "state": row.state, "location": row.location}
+    return {
+        "id": row.id,
+        "type": row.type,
+        "state": row.state,
+        "location": row.location,
+        "source": row.source,
+    }
 
 
 def render_json(report: FindReport) -> str:

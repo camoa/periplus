@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -17,7 +17,7 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER
 from periplus.mapshared import first_error
 from periplus.navigate.ids import resolve
-from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place
+from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place, problem_lines
 from periplus.navigate.mapfile import (
     MapIndex,
     _locate,
@@ -27,6 +27,7 @@ from periplus.navigate.mapfile import (
     load_map,
     reading_fields,
 )
+from periplus.navigate.source import SourceLines, located, source_line, where
 from periplus.report import _escape, _json_problem
 from periplus.settings import find_project_root
 from periplus.skills_install import SKILLS_DIRECTORY
@@ -69,7 +70,11 @@ class Location:
 
 @dataclass(frozen=True, slots=True)
 class EdgeRow:
-    """One edge at the shown node: its kind, the other end, where it is, and why it is there."""
+    """One edge at the shown node: its kind, the other end, where it is, and why it is there.
+
+    ``location`` is the edge's first location, or the other end's when the edge has none, and
+    ``source`` the line of code there.
+    """
 
     kind: str
     other: str
@@ -80,6 +85,8 @@ class EdgeRow:
     confidences: tuple[str, ...]
     rules: tuple[str, ...]
     description: Description | None = None
+    location: str | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +103,7 @@ class ShowReport:
     description: Description | None = None
     outgoing: Listing[EdgeRow] = NONE
     incoming: Listing[EdgeRow] = NONE
+    warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
 
     @property
@@ -140,6 +148,7 @@ def _rows(
                 tuple(sorted(confidences)),
                 tuple(sorted({f"{p['pack']}:{p['rule']}" for p in edge["provenance"]})),
                 described.get((edge["from"], edge["kind"], edge["to"])),
+                where(edge, other),
             )
         )
     return sorted(rows, key=lambda r: (r.kind, r.other, _first(r.locations)))
@@ -155,11 +164,12 @@ def run(
     """Show the node ``node_id``; a missing map or node is a problem, not a raise."""
     try:
         index = load_map(start, env, map_path)
-        node_id = resolve(index, node_id)
         document, problems = _descriptions(_locate(start, map_path))
         nodes = document.get("nodes", {})
         edges = {(e["from"], e["kind"], e["to"]): _entry(e) for e in document.get("edges", [])}
+        lines = SourceLines(start, map_path)
         with reading_fields(start, map_path):
+            node_id, resolved = resolve(index, node_id)
             node = index.node(node_id)
             attributes = node.get("attributes", {})
             if not isinstance(attributes, dict):
@@ -177,12 +187,20 @@ def run(
                 locations=tuple(_placed(node["locations"])),
                 provenance=tuple(node["provenance"]),
                 description=_entry(nodes[node_id]) if node_id in nodes else None,
-                outgoing=cut(_rows(index, index.outgoing(node_id), "to", edges), limit),
-                incoming=cut(_rows(index, index.incoming(node_id), "from", edges), limit),
+                outgoing=_shown(_rows(index, index.outgoing(node_id), "to", edges), limit, lines),
+                incoming=_shown(_rows(index, index.incoming(node_id), "from", edges), limit, lines),
+                warnings=resolved,
                 problems=problems,
             )
     except HarnessError as error:
         return ShowReport(problems=(error.problem(),))
+
+
+def _shown(rows: list[EdgeRow], limit: int, lines: SourceLines) -> Listing[EdgeRow]:
+    """The first ``limit`` rows, each with its source line read."""
+    listing = cut(rows, limit)
+    items = tuple(replace(row, source=lines.at(row.location)) for row in listing.items)
+    return replace(listing, items=items)
 
 
 def _descriptions(map_file: Path) -> tuple[Mapping[str, Any], tuple[Problem, ...]]:
@@ -249,6 +267,8 @@ def _json_row(row: EdgeRow) -> dict[str, Any]:
         "confidences": list(row.confidences),
         "rules": list(row.rules),
         "description": _json_description(row.description),
+        "location": row.location,
+        "source": row.source,
     }
 
 
@@ -259,7 +279,9 @@ def _edge_lines(listing: Listing[EdgeRow]) -> list[str]:
         if row.kind != kind:
             kind = row.kind
             lines.append(f"  {_escape(kind)}:")
-        where = ", ".join(place(_json_location(loc)) for loc in row.locations) or "no location"
+        where = ", ".join(place(_json_location(loc)) for loc in row.locations) or located(
+            row.location
+        )
         count = f"  x{row.occurrences}" if row.occurrences else ""
         confidences = ",".join(_escape(c) for c in row.confidences) or "no confidence"
         lines.append(
@@ -268,6 +290,7 @@ def _edge_lines(listing: Listing[EdgeRow]) -> list[str]:
             f"  {_escape(where)}{count}  {confidences}"
             f"  {_escape(', '.join(row.rules))}"
         )
+        lines += source_line(row.source)
         if row.description is not None:
             lines.append(f"      description: {_described(row.description)}")
     note = footer(listing)
@@ -292,7 +315,8 @@ def render_text(report: ShowReport) -> str:
         lines.append(f"description: {_described(report.description)}")
         lines += ["", f"Outgoing ({report.outgoing.total}):", *_edge_lines(report.outgoing)]
         lines += ["", f"Incoming ({report.incoming.total}):", *_edge_lines(report.incoming)]
-    lines += [f"{int(p.code)} {_escape(p.message)}" for p in report.problems]
+    lines += [f"warning: {_escape(w)}" for w in report.warnings]
+    lines += problem_lines(report.problems)
     return "\n".join(lines) + "\n"
 
 
@@ -309,6 +333,7 @@ def render_json(report: ShowReport) -> str:
         "description": _json_description(report.description),
         "outgoing": payload(report.outgoing, _json_row),
         "incoming": payload(report.incoming, _json_row),
+        "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
     }
     return as_json(document)

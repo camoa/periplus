@@ -3,14 +3,23 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
-from periplus.navigate.listing import NONE, Listing, cut, footer, kind_warnings, payload
+from periplus.navigate.listing import (
+    NONE,
+    Listing,
+    cut,
+    footer,
+    kind_warnings,
+    payload,
+    problem_lines,
+)
 from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
+from periplus.navigate.source import SourceLines, located, source_line, where
 from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "WalkReport", "WalkRow", "render_json", "render_text", "run"]
@@ -18,7 +27,11 @@ __all__ = ["RENDERERS", "WalkReport", "WalkRow", "render_json", "render_text", "
 
 @dataclass(frozen=True, slots=True)
 class WalkRow:
-    """One item reached: its id, type and state, the depth, and the edge kind and end it came by."""
+    """One item reached: its id, type and state, the depth, and the edge kind and end it came by.
+
+    ``location`` is where that edge is written, or the item's own place when the edge has none,
+    and ``source`` the line of code there.
+    """
 
     id: str
     type: str
@@ -26,6 +39,8 @@ class WalkRow:
     depth: int
     kind: str
     via: str
+    location: str | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +98,7 @@ def walk(
                         level,
                         as_text(edge["kind"]),
                         as_text(edge["from" if end == "to" else "to"]),
+                        where(edge, node),
                     )
                 )
         frontier = reached
@@ -102,15 +118,17 @@ def run(
     """Walk from ``node_id`` along edges (``out``) or against them (``in``), ``depth`` levels."""
     try:
         index = load_map(start, env, map_path)
-        node_id = resolve(index, node_id)
         with reading_fields(start, map_path):
-            index.node(node_id)
+            node_id, resolved = resolve(index, node_id)
             rows = walk(index, node_id, direction, depth, set(kinds))
             held = {edge["kind"] for edge in index.edges}
     except HarnessError as error:
-        return WalkReport(problems=(error.problem(),))
-    warnings = kind_warnings(kinds, held)
-    return WalkReport(node_id, direction, cut(rows, limit), warnings)
+        return WalkReport(direction=direction, problems=(error.problem(),))
+    shown = cut(rows, limit)
+    lines = SourceLines(start, map_path)
+    items = tuple(replace(row, source=lines.at(row.location)) for row in shown.items)
+    shown = replace(shown, items=items)
+    return WalkReport(node_id, direction, shown, resolved + kind_warnings(kinds, held))
 
 
 def render_text(report: WalkReport) -> str:
@@ -126,12 +144,14 @@ def render_text(report: WalkReport) -> str:
             f"  {row.depth}  {_escape(row.id)}  {_escape(row.type)}"
             f"  {_escape(row.state)}"
             f"  via {_escape(row.kind)} {toward} {_escape(row.via)}"
+            f"  {_escape(located(row.location))}"
         )
+        lines += source_line(row.source)
     note = footer(report.rows)
     if note:
         lines.append(note)
     lines += [f"warning: {_escape(w)}" for w in report.warnings]
-    lines += [f"{int(p.code)} {_escape(p.message)}" for p in report.problems]
+    lines += problem_lines(report.problems)
     return "\n".join(lines) + "\n"
 
 
@@ -143,6 +163,8 @@ def _json_row(row: WalkRow) -> dict[str, Any]:
         "depth": row.depth,
         "kind": row.kind,
         "via": row.via,
+        "location": row.location,
+        "source": row.source,
     }
 
 

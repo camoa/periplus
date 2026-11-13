@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
-from periplus.navigate.listing import NONE, Listing, footer, kind_warnings, payload
+from periplus.navigate.listing import (
+    NONE,
+    Listing,
+    footer,
+    kind_warnings,
+    payload,
+    problem_lines,
+)
 from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
+from periplus.navigate.source import SourceLines, located, source_line, where
 from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "PathReport", "Step", "render_json", "render_text", "run"]
@@ -18,11 +26,17 @@ __all__ = ["RENDERERS", "PathReport", "Step", "render_json", "render_text", "run
 
 @dataclass(frozen=True, slots=True)
 class Step:
-    """One edge of a chain: the item it leaves, its kind, and the item it reaches."""
+    """One edge of a chain: the item it leaves, its kind, and the item it reaches.
+
+    ``location`` is where the first such edge is written, or the item reached when it has none,
+    and ``source`` the line of code there.
+    """
 
     start: str
     kind: str
     end: str
+    location: str | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,26 +126,39 @@ def run(
     """Find the shortest chains from ``from_id`` to ``to_id``; an unknown id is a problem."""
     try:
         index = load_map(start, env, map_path)
-        from_id = resolve(index, from_id)
-        to_id = resolve(index, to_id)
         with reading_fields(start, map_path):
-            index.node(from_id)
-            index.node(to_id)
+            from_id, from_resolved = resolve(index, from_id)
+            to_id, to_resolved = resolve(index, to_id)
             held = {edge["kind"] for edge in index.edges}
             chains, total = shortest_chains(index, from_id, to_id, set(kinds), limit)
+            lines = SourceLines(start, map_path)
+            placed = tuple(tuple(_placed(index, step, lines) for step in chain) for chain in chains)
     except HarnessError as error:
         return PathReport(problems=(error.problem(),))
-    warnings = kind_warnings(kinds, held)
-    listing = Listing(
-        tuple(tuple(chain) for chain in chains), total, len(chains), len(chains) < total
-    )
+    warnings = from_resolved + to_resolved + kind_warnings(kinds, held)
+    listing = Listing(placed, total, len(chains), len(chains) < total)
     return PathReport(from_id, to_id, listing, warnings)
+
+
+def _placed(index: MapIndex, step: Step, lines: SourceLines) -> Step:
+    """``step`` with the location of the first edge it stands for, and the source line there."""
+    edges = index.outgoing(step.start)
+    edge = next(e for e in edges if e["kind"] == step.kind and e["to"] == step.end)
+    location = where(edge, index.nodes[step.end])
+    return replace(step, location=location, source=lines.at(location))
 
 
 def _chain_lines(chain: tuple[Step, ...]) -> list[str]:
     if not chain:
         return ["    (same item)"]
-    return [f"    {_escape(s.start)} --{_escape(s.kind)}--> {_escape(s.end)}" for s in chain]
+    lines = []
+    for s in chain:
+        lines.append(
+            f"    {_escape(s.start)} --{_escape(s.kind)}--> {_escape(s.end)}"
+            f"  {_escape(located(s.location))}"
+        )
+        lines += source_line(s.source)
+    return lines
 
 
 def render_text(report: PathReport) -> str:
@@ -149,12 +176,15 @@ def render_text(report: PathReport) -> str:
         if note:
             lines.append(note)
     lines += [f"warning: {_escape(w)}" for w in report.warnings]
-    lines += [f"{int(p.code)} {_escape(p.message)}" for p in report.problems]
+    lines += problem_lines(report.problems)
     return "\n".join(lines) + "\n"
 
 
-def _json_chain(chain: tuple[Step, ...]) -> list[dict[str, str]]:
-    return [{"from": s.start, "kind": s.kind, "to": s.end} for s in chain]
+def _json_chain(chain: tuple[Step, ...]) -> list[dict[str, str | None]]:
+    return [
+        {"from": s.start, "kind": s.kind, "to": s.end, "location": s.location, "source": s.source}
+        for s in chain
+    ]
 
 
 def render_json(report: PathReport) -> str:
