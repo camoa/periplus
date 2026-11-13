@@ -8,10 +8,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # declares lands unresolved under the service's class. The id is read in single or double quotes.
 # Inferred: the services file, not the call, names the class.
 #
-# Limits: a variable also assigned a value that is not one of these three forms gives no edge here.
-# A variable assigned two services in one method joins each call to both classes, so one of the two
-# edges is false. A service the services files do not declare, a service named by a variable, and
-# a call in a plain function such as a hook give no edge; the call site stays.
+# Limits: the map does not keep statement order, so a variable also assigned any other value in the
+# method, a second service or anything else, gives no edge here; the call site stays. A service the
+# services files do not declare, a service named by a variable, and a call in a plain function such
+# as a hook give no edge; the call site stays.
 rules:
 
 - rule: calls_through_local_service
@@ -22,7 +22,7 @@ rules:
     follow: &service_walk
     - node: 'php.local_variable::{class}::{meth}::${var}'
     - edge: local_assigned
-    - id_matches: '^php\.local_value::[^:]+::\$\w+=(?:\\?Drupal::service|\$container->get|\$this->container->get)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)$'
+    - id_matches: '^php\.local_value::(?<value>[^:]+::\$\w+=(?:\\?Drupal::service|\$container->get|\$this->container->get)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\))$'
     - node: 'drupal.service::{svc}'
     - edge: service_class
     - id_matches: '^php\.type::(?<type>(?<declarer>.+))$'
@@ -33,10 +33,10 @@ rules:
       - node: 'php.method::{declarer}::{method}'
     - node: 'php.call_site::{site}'
     - edge: call_site_in
-    unless: &other_value
+    unless_matched: &other_value
     - - node: 'php.local_variable::{class}::{meth}::${var}'
       - edge: local_assigned
-      - id_matches: '^php\.local_value::[^:]+::\$\w+=(?!(?:\\?Drupal::service|\$container->get|\$this->container->get)\(\s*[''"][\w.-]+[''"]\s*\)$)'
+      - id_matches: '^php\.local_value::(?!{value}$)'
   emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
   confidence: inferred
 
@@ -46,6 +46,6 @@ rules:
     node_type: php.call_site
     where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
     follow: *service_walk
-    unless: *other_value
+    unless_matched: *other_value
   emits: *calls_edge
   confidence: inferred
