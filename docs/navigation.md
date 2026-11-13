@@ -168,7 +168,7 @@ lower score never comes before one of higher score. Among starts of equal score,
 come first, counted over the whole map, and at most two of a type, counted over all the starts,
 come before the rest of that score. Inside a type, a mapped node comes first, then the node that
 nodes in more other files have edges into, then the one whose id the words cover most, then
-`find`'s order. `--starts N` sets how many starts the words pick in all (default 8). `--type T`
+`find`'s order. `--starts N` sets how many starts the words pick in all (default 12). `--type T`
 and `--path P` keep only the starts the words find of type `T` or under `P`, as they narrow
 `find`.
 Without words, `--path PREFIX` starts from every node whose first file starts with `PREFIX`.
@@ -180,8 +180,21 @@ any command that takes an id, resolves back to that node alone, else the full id
 prints can be pasted into the next command.
 
 The output lists each start first, on one line: its short name, its type, and why it was picked
-(`given as 'helper'`, or each word and where it matched). Then come the nodes the walk reached,
-grouped by file. Each file prints once, as a header, with `in X` naming the containers its nodes
+(`given as 'helper'`, or each word and where it matched). Then `paths under: DIR/` names once the
+longest folder that holds every printed file, and each file prints below it: `cli.py` under
+`paths under: shop/` is `shop/cli.py`.
+
+The words gather pieces of the map. A piece is a set of the printed nodes that edges of the map
+join. An edge of a grouping kind joins none: two classes of one module are two pieces unless
+another edge joins them. Each piece prints a header, `piece 1 of 4: 12 things, starts: A, B`,
+then its nodes grouped by file. Pieces go by the summed word score of their starts, highest
+first, then by the things they name, most first, then by their smallest start id. A start that
+an edge joins to another start's piece prints in that piece. After the last of several pieces,
+one line says that no edge of the map joins them as printed, that they may still meet through
+nodes not printed or relate in ways the map does not hold, and gives `periplus path A B` with
+the first starts of the first two pieces.
+
+Inside a piece, each file prints once, as a header, with `in X` naming the containers its nodes
 belong to by grouping edges. Under it, in line order, each node prints `:LINE  name  type`, its
 source line and its description, then one line per edge kind and direction to other nodes of
 the piece: `calls -> a, b` for edges the node has, `calls <- c` for edges to it. An edge between two nodes of one
@@ -193,8 +206,9 @@ edges the piece does not show ends with `+N more links: calls -> 8, calls <- 3; 
 slice NAME`. A source line with fewer than two letters, digits or underscores, such as `{#`, is
 not printed.
 
-The piece ends with an inventory: every node it names, grouped by type with a count, rarest type
-first. Check an answer against it.
+The output ends with an inventory: every node it names, grouped by type with a count, rarest type
+first. When there are several pieces, each name is followed by its piece number, `send [2]`.
+Check an answer against it.
 
 An edge of a grouping kind, one the map lists under `grouping_kinds`, says its `from` end belongs
 to the container at its `to` end, as a class belongs to its module. The walk follows such an
@@ -213,11 +227,15 @@ and its subtypes, and nothing else. In JSON, `members` holds, per container star
 A node whose edges, two or more, all join it to the node above is a satellite of that node. It
 gets no row and costs no hop. The piece ends with how many were folded, by type.
 
-`--depth N` sets how many edges to follow (default 2). `--direction` defaults to `both`, since a
-chain often goes up one kind and down another. Without `--limit`, the piece holds at most 50
-rows and aims at 8 KB of text: over that, it leaves out the rows of the farthest hop first, then
-the `more links` lines, then names per link, then the nearest rows, never the inventory, and
-says so in a line `cut to fit 8192 bytes: ...`. `--limit N` caps the rows at `N` (`0` for all)
+`--depth N` sets how many edges to follow from every start. Without it, the first 8 starts walk
+2 hops and any later start 1 hop, so that more separate pieces fit; the output then says so on
+a line `walked 2 hops from the first 8 starts and 1 hop from the other N`. `--direction`
+defaults to `both`, since a chain often goes up one kind and down another. Without `--limit`,
+the piece holds at most 50 rows and aims at 8 KB of text: over that, it leaves out the rows past
+the first hop, farthest and lowest-ranked start first, then the `more links` lines, then names
+per link, then the first-hop rows of the piece that names the most things, and says what it left
+out in a line `cut to fit 8192 bytes: ...`. It never leaves out a start's own line or the
+inventory. `--limit N` caps the rows at `N` (`0` for all)
 with no byte aim. The cap keeps full rows before back-references. Among them it keeps first the nodes more
 starts reach, then those reached from the starts of more words, then those whose own id,
 attributes or description more of the words match, then rarer types, then nodes more other
@@ -225,9 +243,11 @@ files have edges into, then the nearer hop, then by id. It first gives each star
 of the cap, then fills the rest with the best rows left. A kept row brings the rows above it. A cut piece ends with what it left out, counted by hop and by edge
 kind (at most 6 kinds, most left out first), and the flags that narrow it (`--kind`, `--direction`, `--depth`, and `--type`, `--path`
 or `--starts` when words picked the starts). A piece that was not cut and has edges past its
-last hop ends with `go deeper with --depth N`. `--format json` prints the same piece with full ids: `starts`,
-`rows` (each with `start`, `hop`, `from`, `kind`, `direction`, `again`, `location`, `source` and
-`description`), `left_out`, `deeper`, `folded`, `notes`, `depth` and `direction`.
+last hop ends with `go deeper with --depth N`. `--format json` prints the same piece with full ids and full paths: `starts`,
+`pieces` (each with `piece`, its number, `starts` and `things`),
+`rows` (each with `start`, `hop`, `from`, `kind`, `direction`, `again`, `location`, `source`,
+`description` and `piece`), `left_out`, `deeper`, `folded`, `notes`, `depth` and `direction`. Each
+start and each row carries the `piece` number of its node.
 
 With `--out FILE`, `slice` writes the items around the start items to a map file of their own
 instead, and takes ids, not words. Name the start items as `ID`s, with `--path PREFIX` (every
@@ -451,8 +471,11 @@ names its links:
 $ periplus slice helper
 periplus slice
 start helper  python.function  (given as 'helper')
+paths under: shop/
 
-shop/tools.py
+piece 1 of 1: 6 things, starts: helper
+
+tools.py
   :1  helper  python.function
       | def helper():
       calls <- cli
@@ -461,7 +484,7 @@ shop/tools.py
       contains -> helper
       imports <- cli
 
-shop/cli.py
+cli.py
   :1  cli  python.module
       | import typer
       calls -> helper (+1 outside the project: typer.Typer)
@@ -484,8 +507,11 @@ shows:
 $ periplus slice helper --limit 2
 periplus slice
 start helper  python.function  (given as 'helper')
+paths under: shop/
 
-shop/tools.py
+piece 1 of 1: 3 things, starts: helper
+
+tools.py
   :1  helper  python.function
       | def helper():
       calls <- cli
@@ -494,7 +520,7 @@ shop/tools.py
       contains -> helper
       imports <- cli
 
-shop/cli.py
+cli.py
   :1  cli  python.module
       | import typer
       calls -> helper
@@ -521,8 +547,11 @@ $ periplus slice tool help --starts 1 --depth 1
 periplus slice
 no node matches 'tool help' as a whole; started from its words
 start helper  python.function  (words: 'tool' in id, 'help' in id)
+paths under: shop/
 
-shop/tools.py
+piece 1 of 1: 3 things, starts: helper
+
+tools.py
   :1  helper  python.function
       | def helper():
       calls <- cli
@@ -531,7 +560,7 @@ shop/tools.py
       contains -> helper
       imports <- cli
 
-shop/cli.py
+cli.py
   :1  cli  python.module
       | import typer
       calls -> helper
