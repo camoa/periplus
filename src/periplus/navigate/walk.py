@@ -19,7 +19,8 @@ from periplus.navigate.listing import (
     problem_lines,
 )
 from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
-from periplus.navigate.source import SourceLines, located, source_line, where
+from periplus.navigate.show import node_descriptions
+from periplus.navigate.source import SourceLines, description_line, located, source_line, where
 from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "WalkReport", "WalkRow", "render_json", "render_text", "run"]
@@ -30,7 +31,7 @@ class WalkRow:
     """One item reached: its id, type and state, the depth, and the edge kind and end it came by.
 
     ``location`` is where that edge is written, or the item's own place when the edge has none,
-    and ``source`` the line of code there.
+    and ``source`` the line of code there. ``description`` is the item's descriptions entry.
     """
 
     id: str
@@ -41,6 +42,7 @@ class WalkRow:
     via: str
     location: str | None = None
     source: str | None = None
+    description: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +120,7 @@ def run(
     """Walk from ``node_id`` along edges (``out``) or against them (``in``), ``depth`` levels."""
     try:
         index = load_map(start, env, map_path)
+        described, problems = node_descriptions(start, map_path)
         with reading_fields(start, map_path):
             node_id, resolved = resolve(index, node_id)
             rows = walk(index, node_id, direction, depth, set(kinds))
@@ -126,9 +129,12 @@ def run(
         return WalkReport(direction=direction, problems=(error.problem(),))
     shown = cut(rows, limit)
     lines = SourceLines(start, map_path)
-    items = tuple(replace(row, source=lines.at(row.location)) for row in shown.items)
+    items = tuple(
+        replace(row, source=lines.at(row.location), description=described.get(row.id))
+        for row in shown.items
+    )
     shown = replace(shown, items=items)
-    return WalkReport(node_id, direction, shown, resolved + kind_warnings(kinds, held))
+    return WalkReport(node_id, direction, shown, resolved + kind_warnings(kinds, held), problems)
 
 
 def render_text(report: WalkReport) -> str:
@@ -147,6 +153,7 @@ def render_text(report: WalkReport) -> str:
             f"  {_escape(located(row.location))}"
         )
         lines += source_line(row.source)
+        lines += description_line(row.description)
     note = footer(report.rows)
     if note:
         lines.append(note)
@@ -165,6 +172,7 @@ def _json_row(row: WalkRow) -> dict[str, Any]:
         "via": row.via,
         "location": row.location,
         "source": row.source,
+        "description": row.description,
     }
 
 

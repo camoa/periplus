@@ -178,7 +178,7 @@ def _run_library(argv: list[str], start: Path, map_path: Path) -> Any:
     if command == "types":
         return types.run(start, {}, map_path)
     if command == "find":
-        return find.run(start, {}, ids[0], None, 50, map_path)
+        return find.run(start, {}, ids[0], (), 50, map_path)
     if command == "show":
         return show.run(start, {}, ids[0], 50, map_path)
     if command in ("neighbors", "affected"):

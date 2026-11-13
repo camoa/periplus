@@ -251,11 +251,27 @@ def build_parser() -> argparse.ArgumentParser:
     add_map(check, "the map file to check")
     find = subcommands.add_parser(
         "find",
-        help="find the nodes whose id holds a text",
-        description="List the nodes whose id holds TEXT, closest match first, and stop.",
+        help="find the nodes whose id or description holds a text",
+        description="List the nodes whose id or description holds TEXT, closest match first, "
+        "and stop.",
     )
-    find.add_argument("text", metavar="TEXT", help="the text to look for in node ids")
-    find.add_argument("--type", default=None, metavar="T", help="keep type T and its subtypes")
+    find.add_argument(
+        "text", metavar="TEXT", help="the text to look for in node ids and descriptions"
+    )
+    find.add_argument(
+        "--type",
+        action="append",
+        default=[],
+        metavar="T",
+        help="keep type T and its subtypes; give it again to keep several types",
+    )
+    find.add_argument(
+        "--path",
+        action="append",
+        default=[],
+        metavar="P",
+        help="keep nodes with a file starting with P; give it again to keep several",
+    )
     add_limit(find, 50, "rows")
     add_map(find, "the map file to read")
     find.add_argument(
@@ -619,9 +635,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             start=Path.cwd(),
             env=os.environ,
             text=args.text,
-            type_name=args.type,
+            types=args.type,
             limit=args.limit,
             map_path=args.map,
+            paths=args.path,
         )
         sys.stdout.write(FIND_RENDERERS[args.format](found))
         return found.exit_code

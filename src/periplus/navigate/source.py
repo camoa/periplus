@@ -11,7 +11,7 @@ from periplus.navigate.mapfile import _locate
 from periplus.report import _escape
 from periplus.settings import find_project_root
 
-__all__ = ["SOURCE_WIDTH", "SourceLines", "located", "source_line", "where"]
+__all__ = ["SOURCE_WIDTH", "SourceLines", "description_line", "located", "source_line", "where"]
 
 #: The most characters of a source line a row carries.
 SOURCE_WIDTH = 160
@@ -31,6 +31,17 @@ def located(location: str | None) -> str:
 def source_line(source: str | None) -> list[str]:
     """The text line that shows a row's source line, deeper than any row; none when absent."""
     return [] if source is None else [f"      | {_escape(source)}"]
+
+
+def description_line(text: str | None) -> list[str]:
+    """The text line that shows a row's node description, marked ``#`` so it is not read as code.
+
+    Only the first line, stripped and cut to ``SOURCE_WIDTH``; none when the node has no entry.
+    """
+    if text is None:
+        return []
+    first = text.strip().partition("\n")[0].strip()[:SOURCE_WIDTH]
+    return [f"      # {_escape(first)}"]
 
 
 class SourceLines:

@@ -29,6 +29,7 @@
     "warnings": {"type": "array", "items": {"type": "string"}},
     "place": {"description": "Where a row's edge is written as file:line, else the node it reaches, or null when neither has a location.", "type": ["string", "null"]},
     "source": {"description": "The stripped source line at the row's place, at most 160 characters, or null when the file or line cannot be read.", "type": ["string", "null"]},
+    "node_text": {"description": "The descriptions.yaml text of the row's node, or null when it has none.", "type": ["string", "null"]},
 
     "location": {
       "type": "object", "required": ["file", "line"],
@@ -92,20 +93,26 @@
 
     "find": {
       "type": "object", "additionalProperties": false,
-      "required": ["items", "total", "shown", "truncated", "warnings", "problems"],
+      "required": ["items", "total", "shown", "truncated", "by_type", "warnings", "problems"],
       "properties": {
         "items": {
           "type": "array",
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "source"],
+            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "source", "matched", "description"],
             "properties": {
               "id": {"type": "string"},
               "type": {"type": "string"},
               "state": {"type": "string"},
               "location": {"type": ["string", "null"]},
-              "source": {"$ref": "#/$defs/source"}
+              "source": {"$ref": "#/$defs/source"},
+              "matched": {"description": "id when the node id holds the text, description when only its description does.", "enum": ["id", "description"]},
+              "description": {"$ref": "#/$defs/node_text"}
             }
           }
+        },
+        "by_type": {
+          "description": "Every match, not only the rows shown, counted by node type.",
+          "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}
         },
         "total": {"type": "integer", "minimum": 0},
         "shown": {"type": "integer", "minimum": 0},
@@ -168,7 +175,7 @@
               "type": "array",
               "items": {
                 "type": "object", "additionalProperties": false,
-                "required": ["id", "type", "state", "depth", "kind", "via", "location", "source"],
+                "required": ["id", "type", "state", "depth", "kind", "via", "location", "source", "description"],
                 "properties": {
                   "id": {"type": "string"},
                   "type": {"type": "string"},
@@ -177,7 +184,8 @@
                   "kind": {"type": "string"},
                   "via": {"type": "string"},
                   "location": {"$ref": "#/$defs/place"},
-                  "source": {"$ref": "#/$defs/source"}
+                  "source": {"$ref": "#/$defs/source"},
+                  "description": {"$ref": "#/$defs/node_text"}
                 }
               }
             }
@@ -203,13 +211,14 @@
               "items": {
                 "type": "array",
                 "items": {
-                  "type": "object", "additionalProperties": false, "required": ["from", "kind", "to", "location", "source"],
+                  "type": "object", "additionalProperties": false, "required": ["from", "kind", "to", "location", "source", "description"],
                   "properties": {
                     "from": {"type": "string"},
                     "kind": {"type": "string"},
                     "to": {"type": "string"},
                     "location": {"$ref": "#/$defs/place"},
-                    "source": {"$ref": "#/$defs/source"}
+                    "source": {"$ref": "#/$defs/source"},
+                    "description": {"$ref": "#/$defs/node_text", "description": "The descriptions.yaml text of the step's to node, or null."}
                   }
                 }
               }

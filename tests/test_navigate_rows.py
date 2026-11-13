@@ -43,7 +43,7 @@ DOCUMENT: dict[str, Any] = {
 }
 
 # What each command printed with --format json on DOCUMENT before rows were dataclasses, plus the
-# location, source and warnings fields added since.
+# location, source, warnings, description, matched and by_type fields added since.
 PINNED: dict[str, str] = {
     "types": """\
 {
@@ -74,17 +74,24 @@ PINNED: dict[str, str] = {
 """,
     "find": """\
 {
+  "by_type": {
+    "php.method": 2
+  },
   "items": [
     {
+      "description": null,
       "id": "php.method::B::run",
       "location": "src/a.php:3",
+      "matched": "id",
       "source": null,
       "state": "mapped",
       "type": "php.method"
     },
     {
+      "description": null,
       "id": "php.method::C::run",
       "location": null,
+      "matched": "id",
       "source": null,
       "state": "referenced",
       "type": "php.method"
@@ -105,6 +112,7 @@ PINNED: dict[str, str] = {
     "items": [
       {
         "depth": 1,
+        "description": null,
         "id": "php.method::B::run",
         "kind": "calls",
         "location": "src/a.php:7",
@@ -115,6 +123,7 @@ PINNED: dict[str, str] = {
       },
       {
         "depth": 1,
+        "description": null,
         "id": "php.method::C::run",
         "kind": "calls",
         "location": "src/a.php:9",
@@ -140,6 +149,7 @@ PINNED: dict[str, str] = {
     "items": [
       {
         "depth": 1,
+        "description": null,
         "id": "php.method::B::run",
         "kind": "calls",
         "location": "src/a.php:4",
@@ -150,6 +160,7 @@ PINNED: dict[str, str] = {
       },
       {
         "depth": 1,
+        "description": null,
         "id": "php.type::A",
         "kind": "defines",
         "location": "src/a.php:1",
@@ -307,6 +318,7 @@ PINNED: dict[str, str] = {
     "items": [
       [
         {
+          "description": null,
           "from": "php.method::A::go",
           "kind": "calls",
           "location": "src/a.php:7",
@@ -367,7 +379,7 @@ def _kind_row(root: Path) -> Any:
 
 
 def _find_row(root: Path) -> Any:
-    return find.run(root, {}, "run", None, 50, _map(root)).matches.items[0]
+    return find.run(root, {}, "run", (), 50, _map(root)).matches.items[0]
 
 
 def _walk_row(root: Path) -> Any:

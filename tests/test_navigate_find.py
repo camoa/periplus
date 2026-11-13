@@ -47,7 +47,7 @@ def _ids(report: find.FindReport) -> list[str]:
 
 
 def test_matches_are_closest_first_with_ties_broken_by_id(tmp_path: Path) -> None:
-    report = find.run(tmp_path, {}, "CACHE", None, 50, _map(tmp_path))
+    report = find.run(tmp_path, {}, "CACHE", (), 50, _map(tmp_path))
 
     assert _ids(report) == [
         "php.method::Foo::cache",  # name equals the text, id order
@@ -57,11 +57,11 @@ def test_matches_are_closest_first_with_ties_broken_by_id(tmp_path: Path) -> Non
         "php.type::MyCache",  # name holds it
         "php.type::Cache::Zed",  # only the id holds it
     ]
-    assert find.run(tmp_path, {}, "CACHE", None, 50, _map(tmp_path)) == report
+    assert find.run(tmp_path, {}, "CACHE", (), 50, _map(tmp_path)) == report
 
 
 def test_a_row_carries_type_state_and_first_location(tmp_path: Path) -> None:
-    report = find.run(tmp_path, {}, "CacheBackend", None, 50, _map(tmp_path))
+    report = find.run(tmp_path, {}, "CacheBackend", (), 50, _map(tmp_path))
 
     assert report.matches.items == (
         find.FindRow(
@@ -72,13 +72,13 @@ def test_a_row_carries_type_state_and_first_location(tmp_path: Path) -> None:
         ),
     )
     assert (
-        find.run(tmp_path, {}, "MyCache", None, 50, _map(tmp_path)).matches.items[0].location
+        find.run(tmp_path, {}, "MyCache", (), 50, _map(tmp_path)).matches.items[0].location
         is None
     )
 
 
 def test_the_whole_id_ranks_first(tmp_path: Path) -> None:
-    report = find.run(tmp_path, {}, "yaml.key::cache", None, 50, _map(tmp_path))
+    report = find.run(tmp_path, {}, "yaml.key::cache", (), 50, _map(tmp_path))
 
     assert _ids(report)[0] == "yaml.key::cache"
 
@@ -86,20 +86,20 @@ def test_the_whole_id_ranks_first(tmp_path: Path) -> None:
 def test_type_keeps_the_type_and_its_subtypes(tmp_path: Path) -> None:
     path = _map(tmp_path)
 
-    assert set(_ids(find.run(tmp_path, {}, "cache", "php.symbol", 50, path))) == {
+    assert set(_ids(find.run(tmp_path, {}, "cache", ("php.symbol",), 50, path))) == {
         "php.method::Foo::cache",
         "php.type::Cache",
         "php.type::CacheBackend",
         "php.type::MyCache",
         "php.type::Cache::Zed",
     }
-    assert _ids(find.run(tmp_path, {}, "cache", "php.method", 50, path)) == [
+    assert _ids(find.run(tmp_path, {}, "cache", ("php.method",), 50, path)) == [
         "php.method::Foo::cache"
     ]
 
 
 def test_an_unknown_type_is_an_empty_listing_with_a_warning_and_exit_0(tmp_path: Path) -> None:
-    report = find.run(tmp_path, {}, "cache", "nope.type", 50, _map(tmp_path))
+    report = find.run(tmp_path, {}, "cache", ("nope.type",), 50, _map(tmp_path))
 
     assert report.matches.total == 0
     assert "nope.type" in report.warnings[0]
@@ -107,13 +107,13 @@ def test_an_unknown_type_is_an_empty_listing_with_a_warning_and_exit_0(tmp_path:
 
 
 def test_a_known_type_with_no_match_gives_no_warning(tmp_path: Path) -> None:
-    report = find.run(tmp_path, {}, "zzz", "php.type", 50, _map(tmp_path))
+    report = find.run(tmp_path, {}, "zzz", ("php.type",), 50, _map(tmp_path))
 
     assert report.warnings == ()
 
 
 def test_text_matching_nothing_is_empty_with_total_0_and_exit_0(tmp_path: Path) -> None:
-    report = find.run(tmp_path, {}, "zzz", None, 50, _map(tmp_path))
+    report = find.run(tmp_path, {}, "zzz", (), 50, _map(tmp_path))
 
     assert (report.matches.items, report.matches.total, report.exit_code) == ((), 0, ExitCode.OK)
     assert json.loads(find.render_json(report))["total"] == 0
@@ -122,15 +122,15 @@ def test_text_matching_nothing_is_empty_with_total_0_and_exit_0(tmp_path: Path) 
 
 def test_limit_cuts_the_list_and_says_so(tmp_path: Path) -> None:
     path = _map(tmp_path)
-    report = find.run(tmp_path, {}, "cache", None, 2, path)
+    report = find.run(tmp_path, {}, "cache", (), 2, path)
 
     assert (report.matches.shown, report.matches.total, report.matches.truncated) == (2, 6, True)
     assert "showing 2 of 6" in find.render_text(report)
-    assert find.run(tmp_path, {}, "cache", None, 0, path).matches.shown == 6
+    assert find.run(tmp_path, {}, "cache", (), 0, path).matches.shown == 6
 
 
 def test_a_missing_map_is_a_problem_with_its_exit_code(tmp_path: Path) -> None:
-    report = find.run(tmp_path, {}, "x", None, 50, None)
+    report = find.run(tmp_path, {}, "x", (), 50, None)
 
     assert report.exit_code is ExitCode.MAP_NOT_FOUND
 

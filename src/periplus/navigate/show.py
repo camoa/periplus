@@ -38,6 +38,7 @@ __all__ = [
     "EdgeRow",
     "Location",
     "ShowReport",
+    "node_descriptions",
     "render_json",
     "render_text",
     "run",
@@ -228,6 +229,14 @@ def _descriptions(map_file: Path) -> tuple[Mapping[str, Any], tuple[Problem, ...
         return document, ()
     message = f"{path} does not match the descriptions schema: {invalid.message}"
     return {}, (Problem(ExitCode.NOT_A_MAP, message, {"path": str(path)}),)
+
+
+def node_descriptions(
+    start: Path, map_path: Path | None
+) -> tuple[dict[str, str], tuple[Problem, ...]]:
+    """Each described node's text by id, and the problems ``_descriptions`` found."""
+    document, problems = _descriptions(_locate(start, map_path))
+    return {i: entry["text"] for i, entry in document.get("nodes", {}).items()}, problems
 
 
 def _entry(entry: Mapping[str, Any]) -> Description:

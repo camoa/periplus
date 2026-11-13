@@ -257,7 +257,7 @@ def test_path_steps_carry_location_and_source(tmp_path: Path) -> None:
 
 
 def test_find_rows_carry_the_declaration_line(tmp_path: Path) -> None:
-    report = find.run(_site(tmp_path), {}, "MyForm", None, 1, None)
+    report = find.run(_site(tmp_path), {}, "MyForm", (), 1, None)
 
     lines = find.render_text(report).splitlines()
     assert lines[2].endswith(f"  {FILE}:5")
@@ -271,7 +271,7 @@ def test_a_map_given_by_path_reads_source_under_its_project(tmp_path: Path) -> N
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
 
-    report = find.run(elsewhere, {}, "MyForm", None, 1, site / ".periplus" / "map.json")
+    report = find.run(elsewhere, {}, "MyForm", (), 1, site / ".periplus" / "map.json")
 
     assert report.matches.items[0].source == "class MyForm extends FormBase {"
 
