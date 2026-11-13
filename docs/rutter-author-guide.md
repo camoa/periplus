@@ -29,6 +29,11 @@ A rutter may name only the types it declares, or the types of a pack it depends 
 reads rutters from its own `.periplus/packs` folder and names them in `.periplus/settings.yml`. The
 project folder is the import root. In the settings, `pack_paths` adds rutter folders, relative to
 the project folder, and `re_include` takes back by glob what a rutter's `files.exclude` leaves out.
+A rutter names its stack's supporting code, such as tests, in `files.supporting`, as globs written
+as `files.exclude` is, as `supporting: ['**/tests/**']`. Those files are mapped; the map lists the
+patterns under `supporting_paths`, and the navigation commands print such nodes after the rest,
+or fold them into a count. The settings add patterns with `supporting`, and
+`supporting_from_packs: false` drops every rutter's.
 `values` names strings, as `values: {module: example.com/app}`, that any template may name, a
 path value's too. A setting that a path value, a capture or the engine also gives, and a path value
 template naming what neither its pattern nor a setting gives, refuse the map with exit 19.
@@ -303,7 +308,7 @@ name. After `from shop.cli import Config`, `Config()` lands on the class. After 
 `<package>.cli.app.command` name beside the command's `registered_on` edge.
 
 An edge kind is one name in every rutter a project loads. Two rutters giving one kind different ends
-or a different `groups` refuse the map with exit 19, naming the kind and both files: `python_text` and `php_basic` each
+or a different `groups` or `realizes` refuse the map with exit 19, naming the kind and both files: `python_text` and `php_basic` each
 declare `calls` and `contains`, so one project cannot load both. Give the types at each end of a
 kind one id namespace, or a rule building that end from the kind's types is not executed. An end
 filled only by whole ids, such as `{declared: <type>}`, may list types of different id namespaces.
@@ -324,6 +329,26 @@ slice that starts at a container lists its members by type. Leave `groups` out, 
 for a kind that relates two things as peers or as user and used. Two rutters that declare one kind
 must agree on `groups` as on its ends. `periplus validate` refuses a value other than `true` or
 `false`.
+
+An edge kind may set `realizes: true` when its `from` end is a concrete form of its `to` end: a
+method that implements an interface method, a method that overrides another, a class that
+implements an interface.
+
+```yaml
+- kind: implements_method
+  from: php.method
+  to: php.method
+  realizes: true
+```
+
+The map then lists the kind under `realizing_kinds`. A walk in `slice`, `neighbors` and `affected`
+that reaches the `to` end adds the `from` ends at the same hop, so the code behind a declaration
+costs no extra hop, and `show` lists them under `Realized by`. Set it only when the `to` end is
+the declaration and the `from` end the code: on `service_class`, from a service to its class, the
+concrete end is the `to` end, so it stays unset. Leave it unset too on a kind where one `to` end
+gathers many `from` ends that are peers more than forms, such as a parent class and its children.
+Two rutters that declare one kind must agree on `realizes`. `periplus validate` refuses a value
+other than `true` or `false`.
 
 ## What the format cannot say today
 
