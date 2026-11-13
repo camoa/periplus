@@ -434,3 +434,105 @@ def test_two_rules_entering_one_api_node_as_different_types_are_refused(tmp_path
             "one type",
         )
     ]
+
+
+#: One pack that reads a tree, a text and a data file, for an end marked by each kind of file rule.
+KINDS_MANIFEST = """\
+pack: own
+version: 0.0.1
+depends: []
+folders:
+  source: ./src
+grammar:
+  provider: tree-sitter
+  provider_version: 0.26.0
+  language: php
+  grammar_version: 0.24.1
+files:
+  types:
+    php:
+      endings: [php]
+      reader: tree
+    note:
+      endings: [txt]
+      reader: text
+    conf:
+      endings: [yml]
+      reader: data
+      format: yaml
+identity:
+  qualified_name: {parts: [namespace, declared_name], separator: "\\\\"}
+  namespace: {declaration: namespace_definition, name_child: name}
+  written_names: [name, qualified_name]
+"""
+
+KINDS_RULES = """\
+node_types:
+- {name: own.fn, id_namespace: own.fn}
+- {name: own.api, id_namespace: own.api, boundary: true}
+edge_kinds:
+- {kind: calls, from: own.fn, to: own.fn}
+- {kind: enters, from: own.fn, to: own.api}
+rules:
+- rule: fn
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id: {from: declared_name}
+  emits: [{node: {type: own.fn}}]
+  confidence: declared
+"""
+
+INTO = "boundary: {into: {template: settings, type: own.api}, kind: enters}"
+
+KIND_RULES = {
+    "reference": f"""\
+- rule: marks
+  reads: file
+  in: [source]
+  match: {{reference: function_call_expression, name_child: function, filetype: php}}
+  emits: [{{edge: {{kind: calls, from: enclosing_declaration, to: {{types: [own.fn], {INTO}}}}}}}]
+  confidence: declared
+""",
+    "text": f"""\
+- rule: marks
+  reads: file
+  in: [source]
+  match: {{file: '*', filetype: note, text: '(?m)^(?<caller>\\w+) calls config$'}}
+  id: {{from: {{capture: caller}}}}
+  emits: [{{edge: {{kind: calls, from: this_node, to: {{template: config, {INTO}}}}}}}]
+  confidence: declared
+""",
+    "data": f"""\
+- rule: marks
+  reads: file
+  in: [source]
+  match: {{file: '*', filetype: conf}}
+  id: {{from: file_stem}}
+  emits: [{{edge: {{kind: calls, from: this_node, to: {{from: {{key: uses}}, {INTO}}}}}}}]
+  confidence: declared
+""",
+}
+
+
+@pytest.mark.parametrize("kind", sorted(KIND_RULES))
+def test_a_reference_text_or_data_rule_marks_its_end_a_boundary(tmp_path: Path, kind: str) -> None:
+    rutter(tmp_path, "own", KINDS_MANIFEST, {"own.yaml": KINDS_RULES + KIND_RULES[kind]})
+    pin(tmp_path, "own@0.0.1")
+    plant(
+        tmp_path,
+        {
+            "src/alpha.php": "<?php\nfunction alpha() {\n  config();\n}\n",
+            "src/alpha.txt": "alpha calls config\n",
+            "src/alpha.yml": "uses: config\n",
+        },
+    )
+    document = _mapped(tmp_path)
+    found, edges = nodes(document), _edges(document)
+    assert ("calls", "own.fn::alpha", "own.fn::config") in edges, edges
+    end = found["own.fn::config"]
+    assert (end["state"], end["locations"]) == ("boundary", []), end
+    into = edges[("enters", "own.fn::config", "own.api::settings")]
+    assert _rules_of(into) == [("own", "marks")], into
+    api = found["own.api::settings"]
+    assert (api["type"], api["state"]) == ("own.api", "boundary"), api
