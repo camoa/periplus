@@ -168,7 +168,8 @@ rules:
   confidence: declared
 
 # $container?->get($id), as container_nullsafe_get_call. The id writes ?-> so it does not merge
-# with a -> call to the same callee.
+# with a -> call to the same callee, and ends in (runtime) so it stays apart from the site
+# php_basic's find_variable_nullsafe_call gives every $container?->get() call.
 - rule: runtime_container_nullsafe_get_call
   reads: file
   in: [source]
@@ -182,7 +183,7 @@ rules:
     - name_matches: {child: arguments, pattern: *first_variable}
   id: &nullsafe_id
     from: [enclosing_type, enclosing_method, declared_name, name]
-    template: "{enclosing_type}::{enclosing_method}::{declared_name}?->{name}"
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}?->{name}(runtime)"
   emits: *runtime_node
   confidence: declared
 

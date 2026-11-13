@@ -155,8 +155,9 @@ def test_literal_named_calls_get_no_marked_site_wo2(tmp_path: Path) -> None:
     document = _map_files(tmp_path, {"Page.php": LITERAL_SHAPES})
     assert [n["id"] for n in document["nodes"] if _resolution(n) == "runtime"] == []
     # self::go() keeps the unmarked site that relative_scope_calls.yaml gives it, and $this->go()
-    # the one this_calls.yaml gives it.
+    # the one this_calls.yaml gives it; $obj?->go() the unmarked site variable_calls.yaml gives it.
     assert sorted(s["id"] for s in _sites(document)) == [
+        "php.call_site::App\\Page::run::$obj?->go",
         "php.call_site::App\\Page::run::$this->go",
         "php.call_site::App\\Page::run::self::go",
     ]

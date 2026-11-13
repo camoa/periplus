@@ -1776,10 +1776,14 @@ def test_a_role_named_in_code_is_checked_or_changed_and_a_variable_role_is_a_run
     }
     marks = sorted((n["id"], n["type"]) for n in document["nodes"] if n["state"] == "unresolved")
     assert marks == [(role + "ghost", "drupal.role")]
+    # php_basic's variable_calls rules give each $account call its own unmarked site besides.
+    marked = {
+        n["id"] for n in document["nodes"] if n.get("attributes", {}).get("resolution") == "runtime"
+    }
     runtime = {
         (e["from"], e["to"], e["locations"][0]["line"])
         for e in document["edges"]
-        if e["kind"] == "has_call_site"
+        if e["kind"] == "has_call_site" and e["to"] in marked
     }
     assert runtime == {
         (

@@ -179,7 +179,7 @@ rules:
     - name_matches: {child: arguments, pattern: *first_variable}
   id: &nullsafe_id
     from: [enclosing_type, declared_name, name]
-    template: "{enclosing_type}::{declared_name}?->{name}"
+    template: "{enclosing_type}::{declared_name}?->{name}(runtime)"
   emits: *runtime_node
   confidence: declared
 
