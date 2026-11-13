@@ -1,6 +1,6 @@
 """The refusals of a wrong boundary each name the shape that works: a group type no pack declares,
-a names value no pack declares, an ancestry kind no pack declares, and one id two packs list. The
-old path-based keys are refused by the manifest schema, naming the key."""
+a names value no pack declares, and an ancestry kind no pack declares. One id two packs list is not
+refused. The old path-based keys are refused by the manifest schema, naming the key."""
 
 from __future__ import annotations
 
@@ -86,9 +86,8 @@ def _run(root: Path, boundary: str, *, second: str | None = None) -> MapReport:
         (_boundary(group_type="own.missing"), None, "own.missing"),
         (_boundary(value="own.missing"), None, "own.missing"),
         (_boundary(kind="extends_missing"), None, "extends_missing"),
-        (_boundary(), _boundary(), "own.cls::Fw\\Base"),
     ],
-    ids=["group-type", "names-value", "ancestry-kind", "two-packs-one-id"],
+    ids=["group-type", "names-value", "ancestry-kind"],
 )
 def test_a_wrong_boundary_is_refused_naming_the_working_shape(
     tmp_path: Path, boundary: str, second: str | None, names: str
@@ -100,6 +99,13 @@ def test_a_wrong_boundary_is_refused_naming_the_working_shape(
     message = report.problems[0].message
     assert names in message and "boundary" in message, message
     assert not (tmp_path / "map.json").exists()
+
+
+def test_one_id_two_packs_list_is_not_refused(tmp_path: Path) -> None:
+    """Both listings stay; tests/test_boundary.py checks the rows on a node an edge reaches."""
+    report = _run(tmp_path, _boundary(), second=_boundary())
+    assert (report.exit_code, report.problems) == (0, ()), report
+    assert (tmp_path / "map.json").exists()
 
 
 @pytest.mark.parametrize("key", ["applies_to_paths", "emit_boundary_nodes", "type_hierarchy"])

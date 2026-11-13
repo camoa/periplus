@@ -492,7 +492,7 @@ class Helper extends UnlistedBase {}
 def test_core_bases_the_code_reaches_become_declared_nodes_and_type_their_subclasses(
     tmp_path: Path,
 ) -> None:
-    """No core file is planted. Each listed base is a declared node with no location; the
+    """No core file is planted. Each listed base is a boundary node with no location; the
     classes that extend or implement one take its type at inferred; an unlisted base stays
     referenced and keeps php_basic's provenance."""
     _plant(tmp_path, BOUNDARY_FILES)
@@ -511,7 +511,7 @@ def test_core_bases_the_code_reaches_become_declared_nodes_and_type_their_subcla
     }
     for base, (kind, group) in bases.items():
         node = nodes[base]
-        assert (node["type"], node["state"], node["locations"]) == (kind, "declared", [])
+        assert (node["type"], node["state"], node["locations"]) == (kind, "boundary", [])
         assert "unresolved_detail" not in node, node
         assert node["provenance"] == [
             {

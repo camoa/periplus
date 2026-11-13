@@ -537,7 +537,7 @@ def test_salesforce_mapping_config_field_plugin_and_event_subscriber(tmp_path: P
         sub_class: ("drupal.event_subscriber_class", "mapped"),
         field_class: ("php.class", "mapped"),
         field_base: ("php.class_like", "referenced"),
-        interface: ("php.interface", "declared"),
+        interface: ("php.interface", "boundary"),
         "salesforce.event::SalesforceEvents::PULL_PRESAVE": ("salesforce.event", "referenced"),
         "salesforce.event::SalesforceEvents::PUSH_PARAMS": ("salesforce.event", "referenced"),
         event + "PULL_PRESAVE": ("drupal.event", "referenced"),
