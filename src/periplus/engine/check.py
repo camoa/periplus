@@ -486,9 +486,7 @@ def _illegal_into(
     return problems
 
 
-def _into_collisions(
-    rule_set: RuleSet, rule_files: Mapping[tuple[str, str], str]
-) -> list[Problem]:
+def _into_collisions(rule_set: RuleSet, rule_files: Mapping[tuple[str, str], str]) -> list[Problem]:
     """Each into node two rules enter as different types, named by the first two by pack and
     rule."""
     entered: dict[str, set[tuple[str, str, str]]] = {}

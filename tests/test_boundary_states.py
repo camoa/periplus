@@ -414,7 +414,6 @@ def test_an_into_edge_its_kind_or_type_cannot_carry_is_refused(
     assert problems == [(ExitCode.EDGE_ILLEGAL, f"spec/rules/spec.yaml: {words}")], problems
 
 
-
 def test_two_rules_entering_one_api_node_as_different_types_are_refused(tmp_path: Path) -> None:
     """Which into type the node took would depend on which rule file loaded first."""
     types = (
