@@ -1,8 +1,8 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # <base>--<anything>.html.twig suggests the theme hook <base>, its dashes read as underscores:
-# my-card--wide suggests my_card. A core hook such as node or block is not a mapped node, so a
-# template that suggests one links to nothing.
+# my-card--wide suggests my_card. A core hook such as node or block is a referenced node only
+# where theme_hook/core_theme_hook.yaml makes it; that file also links its suggestions.
 
 rules:
 - rule: hook_suggestion

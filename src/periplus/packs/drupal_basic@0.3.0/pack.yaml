@@ -191,6 +191,21 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the class the services file gives that service;
 # - each page display of a view that has a path, as the route view.<view>.<display>, with its
 #   path, a route_from_view edge to the view's config object and a shape_of_route edge.
+# - each function or method that implements preprocess_<hook> or preprocess_<hook>__<suggestion>,
+#   as an inferred preprocesses_theme_hook edge to the theme hook <hook> when the map holds it; a
+#   template named exactly for a core theme hook, as node.html.twig, as an inferred
+#   theme_hook_template edge from that hook, and <core hook>--<anything>.html.twig as a
+#   suggests_theme_hook edge to it, the core hook a referenced node;
+# - each menu--<name>.html.twig, as an inferred suggests_menu edge to system.menu.<name> when the
+#   map holds it; each menu link's menu_name, as a link_in_menu edge to system.menu.<name>; and
+#   each comparison of a menu_name key to a text, or case of a switch on one, as a mentioned
+#   checks_menu edge from the function or method around it to system.menu.<name>;
+# - each region a theme's info file lists, as a drupal.theme_region <theme>.<region> with a
+#   region_of_theme edge; each block placement's theme and region, as a placed_in_region edge; and
+#   each region--<region>.html.twig in a theme, as an inferred suggests_region edge to the region
+#   when the map holds it;
+# - each module core.extension lists, as an installs_module edge, and each mapped module or theme
+#   it does not list, as an inferred not_installed_by edge to core.extension.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
@@ -383,6 +398,13 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   edge at the method's or function's line.
 # - A generic hook_form_alter that tests $form_id with ==, in_array or switch gives no alters_form
 #   edge.
+# - A menu name compared with the text written first, as 'main' == $variables['menu_name'], or
+#   compared through getMenuName() or a variable gives no checks_menu edge. A comparison in a
+#   method of a second class in one file reads as the method of that name on the file's class.
+#   A theme hook of core not listed in the core_hook path value gives no template edge, and a
+#   preprocess function of such a hook links only when another rule makes the hook. A
+#   region--<region> template of a sub-theme that takes its regions from its base theme links to
+#   nothing. Whether a module is installed is an edge, not an attribute on the module.
 # - A factory class written without a namespace, and a factory set in code, give no edge; a factory
 #   service no mapped file declares names no method. A local task, local action or contextual link
 #   that a deriver makes at run time is not a node: the entry that names the deriver is. A menu
@@ -586,6 +608,39 @@ files:
           template: '{base}'
           normalize:
           - {replace: '-', with: '_'}
+        # A template named exactly for a theme hook of Drupal core, read by
+        # theme_hook/core_theme_hook.yaml, its dashes written back as underscores: node for
+        # node.html.twig. core_hook_suggestion is the same hook before a --, node for
+        # node--article.html.twig. Each is absent for any other name.
+        core_hook:
+          pattern: '^(?:.*/)?(?<hook>html|page|region|block|node|user|field|menu|comment|taxonomy-term|media|breadcrumb|status-messages|links|item-list|page-title|pager|table|form|form-element|form-element-label|input|select|textarea|details|fieldset|container|image|username|maintenance-page|menu-local-tasks|menu-local-task|menu-local-action|views-view|views-view-unformatted|views-view-fields|views-view-field|views-view-list|views-view-table|views-view-grid|views-exposed-form|views-mini-pager)\.html\.twig$'
+          template: '{hook}'
+          normalize:
+          - {replace: '-', with: '_'}
+        core_hook_suggestion:
+          pattern: '^(?:.*/)?(?<hook>html|page|region|block|node|user|field|menu|comment|taxonomy-term|media|breadcrumb|status-messages|links|item-list|page-title|pager|table|form|form-element|form-element-label|input|select|textarea|details|fieldset|container|image|username|maintenance-page|menu-local-tasks|menu-local-task|menu-local-action|views-view|views-view-unformatted|views-view-fields|views-view-field|views-view-list|views-view-table|views-view-grid|views-exposed-form|views-mini-pager)--[^/]+\.html\.twig$'
+          template: '{hook}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # menu--<name>, and the same with --<anything> after it: the menu <name>, read by
+        # theme_hook/suggestion_menu.yaml, with its dashes as underscores and as written, since
+        # Drupal writes a menu's dashes as underscores in its suggestion.
+        menu_suggestion:
+          pattern: '^(?:.*/)?menu--(?<name>[a-z0-9_]+(?:-[a-z0-9_]+)*)(?:--[^/]*)?\.html\.twig$'
+          template: '{name}'
+          normalize:
+          - {replace: '-', with: '_'}
+        menu_suggestion_as_written:
+          pattern: '^(?:.*/)?menu--(?<name>[a-z0-9_]+(?:-[a-z0-9_]+)*)(?:--[^/]*)?\.html\.twig$'
+          template: '{name}'
+        # region--<region>, and the same with --<anything> after it, in a theme folder: the
+        # region <theme>.<region>, read by theme/theme_region.yaml.
+        region_suggestion:
+          pattern: '^(?<theme>[^/]+)/(?:[^/]+/)*region--(?<region>[a-z0-9_]+(?:-[a-z0-9_]+)*)(?:--[^/]*)?\.html\.twig$'
+          template: '{theme}.{region}'
+          relative_to: custom_theme
+          normalize:
+          - {replace: '-', with: '_'}
         # block--<id>: a block plugin id or a block placement id. A placement id may hold __, which
         # the file name writes as --.
         block_suggestion:
@@ -706,6 +761,11 @@ files:
       # opens none, so a match inside one reads the function around it.
       - name: named_function
         open: '\bfunction\s+(?<function>\w+)\s*\([^)]*\)[^{;]*'
+        balance: ['{', '}']
+      # The body of a switch statement; subject is what it switches on. Read by
+      # menu_link/menu_name_compared.yaml.
+      - name: switch_body
+        open: '\bswitch\s*\((?<subject>[^{;]*)\)\s*'
         balance: ['{', '}']
     # Configuration and the other YAML files read as text, beside the data reading yaml_basic
     # gives them.

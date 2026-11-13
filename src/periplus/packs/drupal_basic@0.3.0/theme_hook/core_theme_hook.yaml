@@ -1,0 +1,34 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A template in a module or theme named exactly for a theme hook of Drupal core overrides that
+# hook's template: node.html.twig is the template of the theme hook node, views-view-fields.html.twig
+# of views_view_fields. A suggestion of one, <core hook>--<anything>.html.twig, suggests that hook:
+# node--article--teaser suggests node. The hook is a referenced drupal.theme_hook node, which
+# theme_hook/suggestion_hook.yaml and theme_hook/preprocess_theme_hook.yaml then join to. The core
+# hooks are the path values core_hook and core_hook_suggestion of drupal_template_text in pack.yaml;
+# a template of another name gives nothing here. Inferred, because the file name is a convention.
+
+rules:
+- rule: core_theme_hook_template
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '**', filetype: drupal_template_text, text: '\Z'}
+  id: {template: '{template_name}'}
+  emits:
+  - edge:
+      kind: theme_hook_template
+      from: {template: '{core_hook}', type: drupal.theme_hook}
+      to: this_node
+  confidence: inferred
+
+- rule: core_theme_hook_suggestion
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '**', filetype: drupal_template_text, text: '\Z'}
+  id: {template: '{template_name}'}
+  emits:
+  - edge:
+      kind: suggests_theme_hook
+      from: this_node
+      to: {template: '{core_hook_suggestion}', type: drupal.theme_hook}
+  confidence: inferred

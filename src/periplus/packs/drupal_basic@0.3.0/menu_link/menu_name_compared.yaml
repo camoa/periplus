@@ -1,0 +1,110 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Code that compares a menu name to a text acts on that menu: $variables['menu_name'] == 'main', the
+# same with ===, != or !==, on any array's menu_name key, and each case 'main': whose nearest switch
+# switches on such a key, give checks_menu from the function or method around the comparison to the
+# menu's configuration system.menu.<name>, a referenced node when the mapped configuration holds no
+# such menu. A test that excludes a menu, as !== 'footer' before a return, still names the one menu
+# the code is about, so both senses give the edge. Mentioned, because the menu is linked only by a
+# name written as text.
+#
+# A file rule writes the internal node drupal.menu_check::<function|method>|<owner>|<menu>: in a
+# module, install, inc, theme or profile file the named function around the comparison, under src
+# the method of that name on the class the file's path names by Drupal's PSR-4 layout. A map rule
+# joins it only to a function or method the map holds, so a comparison in a method of an anonymous
+# class gives nothing. A comparison in a closure counts the named function around it. A comparison
+# to a variable, one with the text written first, and a case of a switch on anything else give
+# nothing.
+
+node_types:
+- name: drupal.menu_check
+  id_namespace: drupal.menu_check
+  internal: true
+
+edge_kinds:
+- kind: checks_menu
+  from: [php.method, php.function]
+  to: drupal.config_object
+
+rules:
+- rule: menu_name_compared_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '\$\w+\[\s*''menu_name''\s*\]\s*(?:===?|!==?)\s*''(?<menu>[A-Za-z0-9_-]+)'''
+  values:
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: 'function|{function}|{menu}'}
+  line: {capture: menu}
+  emits: [{node: {type: drupal.menu_check}}]
+  confidence: mentioned
+
+- rule: menu_name_compared_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [php]
+    text: '\$\w+\[\s*''menu_name''\s*\]\s*(?:===?|!==?)\s*''(?<menu>[A-Za-z0-9_-]+)'''
+  values:
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: 'method|{psr4_class}::{method}|{menu}'}
+  line: {capture: menu}
+  emits: [{node: {type: drupal.menu_check}}]
+  confidence: mentioned
+
+# in_switch is ! when the nearest switch_body span of drupal_php_text switches on a menu_name key,
+# and empty otherwise; an id that names an empty value makes nothing.
+- rule: menu_name_case_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '\bcase\s+[''"](?<menu>[A-Za-z0-9_-]+)[''"]\s*:'
+  values:
+    in_switch: {from: {enclosing: switch_body, capture: subject}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '!', with: ''}, {replace: '^\s*\$\w+\[\s*''menu_name''\s*\]\s*$', with: '!'}, {replace: '[^!]+', with: ''}]}
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{in_switch}function|{function}|{menu}', normalize: [{replace: '^!', with: ''}]}
+  line: {capture: menu}
+  emits: [{node: {type: drupal.menu_check}}]
+  confidence: mentioned
+
+- rule: menu_name_case_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [php]
+    text: '\bcase\s+[''"](?<menu>[A-Za-z0-9_-]+)[''"]\s*:'
+  values:
+    in_switch: {from: {enclosing: switch_body, capture: subject}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '!', with: ''}, {replace: '^\s*\$\w+\[\s*''menu_name''\s*\]\s*$', with: '!'}, {replace: '[^!]+', with: ''}]}
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{in_switch}method|{psr4_class}::{method}|{menu}', normalize: [{replace: '^!', with: ''}]}
+  line: {capture: menu}
+  emits: [{node: {type: drupal.menu_check}}]
+  confidence: mentioned
+
+- rule: menu_check_by_function
+  reads: map
+  match:
+    node_type: drupal.menu_check
+    where: [{id_matches: '^drupal\.menu_check::function\|(?<function>[^|]+)\|(?<menu>.+)$'}]
+    follow: [{node: 'php.function::{function}'}]
+  emits: [{edge: {kind: checks_menu, from: matched_node, to: {template: 'system.menu.{menu}', type: drupal.config_object}}}]
+  confidence: mentioned
+
+- rule: menu_check_by_method
+  reads: map
+  match:
+    node_type: drupal.menu_check
+    where: [{id_matches: '^drupal\.menu_check::method\|(?<method>[^|]+)\|(?<menu>.+)$'}]
+    follow: [{node: 'php.method::{method}'}]
+  emits: [{edge: {kind: checks_menu, from: matched_node, to: {template: 'system.menu.{menu}', type: drupal.config_object}}}]
+  confidence: mentioned

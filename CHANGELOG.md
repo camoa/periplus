@@ -33,6 +33,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `drupal_basic` maps:
   - a method called on a service, as `\Drupal::service('x')->m()`, `$container->get('x')->m()` or a local variable assigned the service, as a `calls` edge to the method on the service's class;
   - each page display of a view as the route `view.<view>.<display>`, with its path, and the new edge kind `route_from_view` to the view.
+  - `theme_hook/preprocess_theme_hook.yaml`: a `preprocess_<hook>` implementation as `preprocesses_theme_hook` to the theme hook, when the map holds it;
+  - `theme_hook/core_theme_hook.yaml`: a template named for a core theme hook, as `node.html.twig`, as that hook's template, and its `--` suggestions as suggesting it;
+  - `theme_hook/suggestion_menu.yaml`: `menu--<name>.html.twig` as `suggests_menu` to the menu's configuration;
+  - `menu_link/menu_link_in_menu.yaml`: a menu link's `menu_name` as `link_in_menu`;
+  - `menu_link/menu_name_compared.yaml`: a `menu_name` key compared to a text, or a `case` of a switch on it, as `checks_menu`, mentioned;
+  - `theme/theme_region.yaml`: a theme's regions as `drupal.theme_region` nodes, with `region_of_theme`, `placed_in_region` from block placements and `suggests_region` from `region--<region>` templates;
+  - `module/module_installed.yaml`: `installs_module` from `core.extension`, and `not_installed_by` for a mapped module or theme it does not list.
 - Map rules take `unless`, chains that stop a rule for the matched node, and `unless_matched`, chains that block one result. A `follow` step may be `incoming_edge`, which walks an edge backwards, and an `id_matches` in a chain may name an earlier capture as `{name}`. The pack check refuses an undeclared edge kind inside a `try` at any depth.
 - The map skill has one recipe per kind of question, and tells the reader to answer from the map first and then read the code the map points at. The skill is rewritten around a short loop that starts from the map.
 - An edge kind may declare `groups: true`: its `from` end belongs to the container at its `to` end. The map lists the grouping kinds it holds edges of under `grouping_kinds`, sorted, and leaves the key out when there are none. `periplus validate` refuses a value other than `true` or `false`.
