@@ -1,4 +1,4 @@
-"""A pack's boundary groups: an edge end that lands on a listed name becomes a declared node that
+"""A pack's boundary groups: an edge end that lands on a listed name becomes a boundary node that
 pack drew, and a group whose shape the engine cannot use refuses the map."""
 
 from __future__ import annotations
@@ -143,13 +143,13 @@ def _nodes(root: Path) -> dict[str, dict[str, Any]]:
     return {node["id"]: node for node in document["nodes"]}
 
 
-def test_a_listed_base_becomes_a_declared_node_the_listing_pack_drew(tmp_path: Path) -> None:
+def test_a_listed_base_becomes_a_boundary_node_the_listing_pack_drew(tmp_path: Path) -> None:
     report = _run(tmp_path)
     assert report.problems == () and report.not_executed == (), report
     assert _nodes(tmp_path)["own.type::Fw\\Base"] == {
         "id": "own.type::Fw\\Base",
         "type": "own.class_like",
-        "state": "declared",
+        "state": "boundary",
         "locations": [],
         "provenance": [
             {
@@ -187,7 +187,7 @@ def test_a_group_a_dependency_declares_is_visible(tmp_path: Path) -> None:
     report = _run(tmp_path, boundary="", types="", base=(BOUNDARY, TYPES))
     assert report.problems == (), report
     node = _nodes(tmp_path)["own.type::Fw\\Base"]
-    assert node["state"] == "declared", node
+    assert node["state"] == "boundary", node
     assert node["provenance"][0]["pack"] == "base", node
 
 
@@ -202,21 +202,22 @@ def test_two_sibling_packs_groups_of_one_name_both_apply(tmp_path: Path) -> None
     nodes = _nodes(tmp_path)
     for name, pack in (("Fw\\Base", "fw1"), ("Other\\Plain", "fw2")):
         node = nodes[f"own.type::{name}"]
-        assert node["state"] == "declared", node
+        assert node["state"] == "boundary", node
         assert node["provenance"][0]["pack"] == pack, node
         assert node["provenance"][0]["rule"] == "boundary.framework", node
 
 
-def test_two_packs_listing_one_name_refuse_the_map(tmp_path: Path) -> None:
-    """own and base both list Fw\\Base; which pack draws it is not decided, so the map refuses
-    and names both packs."""
+def test_two_packs_listing_one_name_keep_both_rows(tmp_path: Path) -> None:
+    """own and base both list Fw\\Base; the map draws one boundary node with a row per pack."""
     own = BOUNDARY.replace('      "Fw\\\\Unused": own.form\n', "")
     report = _run(tmp_path, boundary=own, types="", base=(BOUNDARY, TYPES))
-    _refused(report, "framework", "own.type::Fw\\Base")
-    message = report.problems[0].message
-    assert ("own/pack.yaml" in message and "the pack base" in message) or (
-        "base/pack.yaml" in message and "the pack own" in message
-    ), message
+    assert report.problems == (), report.problems
+    node = _nodes(tmp_path)["own.type::Fw\\Base"]
+    assert node["state"] == "boundary", node
+    assert [(p["pack"], p["rule"]) for p in node["provenance"]] == [
+        ("base", "boundary.framework"),
+        ("own", "boundary.framework"),
+    ], node
 
 
 def _refused(report: MapReport, *words: str) -> None:
@@ -311,7 +312,7 @@ def test_a_name_in_an_ancestor_group_takes_the_type_its_edge_needs(tmp_path: Pat
     report = _contract(tmp_path, "own.class_like")
     assert report.problems == (), report.problems
     node = _nodes(tmp_path)["own.type::Fw\\Contract"]
-    assert (node["type"], node["state"]) == ("own.interface", "declared"), node
+    assert (node["type"], node["state"]) == ("own.interface", "boundary"), node
     assert [(p["pack"], p["sets"]) for p in node["provenance"]] == [("own", ["id", "type"])], node
 
 
@@ -319,7 +320,7 @@ def test_the_same_name_in_a_group_of_an_allowed_type_maps(tmp_path: Path) -> Non
     report = _contract(tmp_path, "own.interface")
     assert report.problems == (), report.problems
     node = _nodes(tmp_path)["own.type::Fw\\Contract"]
-    assert (node["type"], node["state"]) == ("own.interface", "declared"), node
+    assert (node["type"], node["state"]) == ("own.interface", "boundary"), node
 
 
 def test_a_kind_ending_on_a_class_types_a_class_like_name_a_class(tmp_path: Path) -> None:
@@ -331,7 +332,7 @@ def test_a_kind_ending_on_a_class_types_a_class_like_name_a_class(tmp_path: Path
     )
     assert report.problems == (), report.problems
     node = _nodes(tmp_path)["own.type::Fw\\Base"]
-    assert (node["type"], node["state"]) == ("own.class", "declared"), node
+    assert (node["type"], node["state"]) == ("own.class", "boundary"), node
     assert node["provenance"] == [
         {
             "pack": "own",

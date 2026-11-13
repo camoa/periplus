@@ -122,6 +122,11 @@
           "type": "boolean",
           "description": "Nothing matches this directly; its descendants do."
         },
+        "boundary": {
+          "type": "boolean",
+          "default": false,
+          "description": "A node of this type, or of a type below it, is outside the mapped code and no rule finds it: an edge end of it reads boundary, not referenced. A rule that emits a node of it is refused."
+        },
         "internal": {
           "type": "boolean",
           "default": false,
@@ -1205,8 +1210,26 @@
               "description": "fallback: when no candidate is mapped, the end takes on_miss under the fallback name's first candidate id, and the unresolved node searches for the fallback name. The order tried stays: the first name under each candidate type, then the fallback name under each. Without it the mark goes under the first name. Needs on_miss and fallback in the same end; the engine refuses it otherwise, naming the rule. A fallback name equal to the first name leaves one name to mark."
             },
             "on_miss": {
-              "enum": ["unresolved"],
-              "description": "When no rule maps a node of the composed id, the end is a node in state unresolved recording the rule, the name searched for and what was found. Without it the end is a node in state referenced."
+              "enum": ["unresolved", "unknown_boundary"],
+              "description": "When no rule maps a node of the composed id, the end is a node in this state, recording the rule, the name searched for and what was found. unresolved: the rule looked inside the mapped code and found nothing. unknown_boundary: the end leaves the mapped code and no rule identified what it reaches. Without it, and without boundary, the end is a node in state referenced."
+            },
+            "boundary": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["into", "kind"],
+              "properties": {
+                "into": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["template", "type"],
+                  "properties": {
+                    "template": {"type": "string", "description": "The name of the node entered, with no placeholder."},
+                    "type": {"$ref": "#/$defs/typeName", "description": "A type declared boundary: true; the node takes its id namespace."}
+                  }
+                },
+                "kind": {"type": "string", "description": "The edge kind drawn from the end to the into node."}
+              },
+              "description": "The rule identifies the end as a boundary into a named node. When no rule maps a node of the composed id, the end is a node in state boundary, with an edge of kind from it to the into node, which reads boundary too. A mapped end gets neither."
             }
           },
           "anyOf": [
