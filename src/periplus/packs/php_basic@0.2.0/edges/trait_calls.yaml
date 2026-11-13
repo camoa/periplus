@@ -4,17 +4,18 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # trait, $this is the object of the class that uses it, so the call runs that class's m().
 # edges/this_calls.yaml joins the call under the trait: to the trait's own m() when the trait
 # declares it, else to an unresolved <trait>::m. This rule adds, for each class that uses the
-# trait, directly or through an ancestor, a calls edge from the trait method to the m() that
-# class or its nearest ancestor declares, inferred. A class with no such m() gets no edge, and
-# the unresolved mark under the trait stays. The rule fires on the using class, since a follow
-# walks an edge only forward, so the edge sits at that class's declaration, not at the call.
+# trait, directly or through an ancestor, a calls edge from the trait method to the m() PHP runs
+# for that class, inferred: the class's own m(), else the trait's, else the one its nearest
+# ancestor declares. A class with no such m() gets no edge, and the unresolved mark under the
+# trait stays. The rule fires on the using class, since a follow walks an edge only forward, so
+# the edge sits at that class's declaration, not at the call.
 #
 # Limits: a trait used by two classes gets an edge to each; each is a true possibility. When the
-# trait declares m() itself, the edge this rule makes is the one this_calls.yaml already holds, so
-# that edge also lists each using class's declaration among its locations. A using class that
-# declares its own m() over the trait's still gets the trait's m(). The walk from the using class
-# reads extends only: an m() declared by another trait the class uses gets no edge, and a trait
-# used by another trait is not walked. A call on a property, $this->a->b(), is find_call_site's.
+# trait's m() is the one PHP runs, the edge this rule makes is the one this_calls.yaml already
+# holds, so that edge also lists the using class's declaration among its locations. The walk from
+# the using class reads extends only: an m() declared by another trait the class uses gets no
+# edge, and a trait used by another trait is not walked. A call on a property, $this->a->b(), is
+# find_call_site's.
 rules:
 
 - rule: trait_this_call_in_user
