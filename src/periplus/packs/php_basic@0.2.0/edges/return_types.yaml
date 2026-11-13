@@ -16,8 +16,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # call sites stay. A chain $this->a()->b()->c() joins b only: ->c, and any call whose $this->m(...)
 # holds parentheses two deep, keeps no call site here. A nullsafe call, $this->m()?->n() or
 # $x?->n(), and a call on a property's method result, $this->p->m()->n(), make nothing here. A
-# variable assigned $this->a() and again $this->b() in one method joins each call to both return
-# types, so one of the two edges is false; a variable also assigned anything else gets no edge here.
+# variable with two different values in one method, $this->a() and $this->b() or anything else,
+# gets no edge here: the map does not know which one holds at the call.
 node_types:
 - name: php.return_type
   id_namespace: php.return_type
@@ -164,6 +164,7 @@ rules:
     follow:
     - node: 'php.local_variable::{class}::{meth}::${var}'
     - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
     - id_matches: '^php\.local_value::[^:]+::\$\w+=\$this->(?<inner>\w+)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$'
     - node: 'php.type::{class}'
     - ancestors: [inherits, mixes_in]
@@ -174,9 +175,9 @@ rules:
     - try: *on_type
     - node: 'php.call_site::{site}'
     - edge: call_site_in
-    unless:
+    unless_matched:
     - - node: 'php.local_variable::{class}::{meth}::${var}'
       - edge: local_assigned
-      - id_matches: '^php\.local_value::[^:]+::\$\w+=(?!\$this->\w+\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$)'
+      - id_matches: '(?s)^php\.local_value::(?!{value}$)'
   emits: *calls_edge
   confidence: inferred
