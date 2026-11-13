@@ -238,6 +238,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="how to print the report (default: text)",
     )
     add_map(types, "the map file to read")
+    legend = subcommands.add_parser(
+        "legend",
+        help="say what each edge kind and node type in the written map means",
+        description="List the edge kinds and node types the map holds, most frequent first, "
+        "each with its count, the types it joins and its pack's description, and stop.",
+    )
+    legend.add_argument(
+        "--kind",
+        action="append",
+        default=[],
+        metavar="K",
+        help="print edge kind K in full; repeat for several",
+    )
+    legend.add_argument(
+        "--type",
+        action="append",
+        default=[],
+        metavar="T",
+        help="print node type T in full, with the kinds of its edges; repeat for several",
+    )
+    legend.add_argument(
+        "--all",
+        action="store_true",
+        help="print every kind and type, past the default of about 3 KB",
+    )
+    legend.add_argument(
+        "--format",
+        # A literal for the reason `types`' is; a test asserts it equals `tuple(legend.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
+    add_map(legend, "the map file to read")
     check = subcommands.add_parser(
         "check-map",
         help="check the written map against the map schema",
@@ -653,6 +686,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         listed = run_types(start=Path.cwd(), env=os.environ, map_path=args.map)
         sys.stdout.write(TYPES_RENDERERS[args.format](listed))
         return listed.exit_code
+
+    if args.command == "legend":
+        from periplus.navigate.legend import RENDERERS as LEGEND_RENDERERS
+        from periplus.navigate.legend import run as run_legend
+
+        told = run_legend(
+            start=Path.cwd(),
+            env=os.environ,
+            map_path=args.map,
+            kinds=args.kind,
+            types=args.type,
+            everything=args.all,
+        )
+        sys.stdout.write(LEGEND_RENDERERS[args.format](told))
+        return told.exit_code
 
     if args.command == "check-map":
         from periplus.checkmap import RENDERERS as CHECK_RENDERERS
