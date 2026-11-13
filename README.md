@@ -186,7 +186,9 @@ kinds of tool that page describes.
 The map is one JSON file. It holds the nodes, the edges, counts by type and by kind, the packs
 loaded and the settings file used. When it holds an edge of a kind its rutter declares grouping
 (`groups: true`: the edge's `from` end belongs to the container at its `to` end), it lists those
-kinds, sorted, under `grouping_kinds`. Each node has an `id`, a `type`, a `state` and its `locations`
+kinds, sorted, under `grouping_kinds`. When its rutters describe a node type or edge kind it holds,
+it carries those one-line texts under `legend`, as `edge_kinds` and `node_types` maps from name to
+text, keys sorted; a map whose rutters describe none has no `legend`. Each node has an `id`, a `type`, a `state` and its `locations`
 (file and line). Its `provenance` names the pack, the rule and the rule's declared confidence.
 
 The engine writes three states today:
@@ -497,8 +499,9 @@ Then it runs the loop. The map's `referenced` and `unresolved` nodes say which r
 
 ## Read the map
 
-Six commands answer a question about a written map, and stop: `periplus types` counts the node
-types and edge kinds, `periplus find TEXT` searches node ids, attributes and descriptions, `periplus show ID` prints a node
+Seven commands answer a question about a written map, and stop: `periplus types` counts the node
+types and edge kinds, `periplus legend` says what each kind and type means and which types a kind
+joins, `periplus find TEXT` searches node ids, attributes and descriptions, `periplus show ID` prints a node
 and its edges, `periplus neighbors ID` and `periplus affected ID` follow edges out of and into a
 node, and `periplus path FROM TO` prints the shortest chains between two. They read the map, the
 descriptions file and the source line under each row, and nothing more. `periplus check-map` runs the full schema check that these commands
@@ -550,6 +553,7 @@ periplus validate PACK             # check one rutter against the schemas and wh
 periplus update                    # move each pin to the installed version of that rutter
 periplus map --output map.json     # map this project and write the map, with a run report
 periplus types                     # count the node types and edge kinds in the written map
+periplus legend                    # say what each edge kind and node type in the map means
 periplus check-map                 # check every node and edge of the map against the map schema
 periplus find TEXT                 # find the nodes whose id, attributes or description hold a text
 periplus show ID                   # show one node and the edges at it

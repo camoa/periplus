@@ -325,6 +325,30 @@ for a kind that relates two things as peers or as user and used. Two rutters tha
 must agree on `groups` as on its ends. `periplus validate` refuses a value other than `true` or
 `false`.
 
+Give each node type and edge kind a `description`: one line of at most 200 characters, in the
+words a developer would use. For a kind, say what the edge means read from its `from` end to its
+`to` end; for a type, say what the node is:
+
+```yaml
+node_types:
+  - name: drupal.service
+    description: "a service declared in a module's services.yml"
+edge_kinds:
+  - kind: service_class
+    from: drupal.service
+    to: php.class_like
+    description: "the service is built from that class"
+```
+
+Read the rules that emit the kind before you write its text, and say what they find, which may
+be narrower or wider than the name. Say so in a few words when a rule finds the link by a naming
+convention or by a name written in a string. The map carries the descriptions of the types and
+kinds it holds under `legend`, and `periplus legend` and a printed `periplus slice` print them, so
+an agent reading the map knows what a link means without opening the rutter. `periplus validate`
+refuses a longer text or one with a line break. Two rutters that declare one kind with different
+descriptions refuse the map with exit 19, as different ends do; a declaration without one agrees
+with one that has it, and the map keeps that text.
+
 ## What the format cannot say today
 
 - Python's scopes, in bindings. A binding holds for the whole file and the later one wins, so a

@@ -1,6 +1,6 @@
 # Navigating the map
 
-`periplus map` writes the map. Nine commands read it. Six answer a question about it. `slice` prints the
+`periplus map` writes the map. Ten commands read it. Seven answer a question about it. `slice` prints the
 piece of the map around some words or items, or cuts it into a map file of its own; `export` prints the map in
 another format. Each one loads the map, prints its output and stops. None of them changes the map or
 starts a server. The question commands read a source file only to print one line of it under a row.
@@ -8,6 +8,7 @@ starts a server. The question commands read a source file only to print one line
 | Command | Question it answers |
 |---|---|
 | `periplus types` | Which node types and edge kinds does the map hold, and how many of each? |
+| `periplus legend` | What does each edge kind and node type of the map mean, and which types does a kind join? |
 | `periplus find TEXT` | Which nodes hold this text in their id, attributes or description? |
 | `periplus show ID` | What is this node, and which edges leave and arrive at it? |
 | `periplus neighbors ID` | Which items do this item's edges lead to? |
@@ -23,7 +24,7 @@ A ninth command, `periplus check-map`, checks the whole map against the map sche
 
 - `--map PATH` names the map file. Without it, the command reads `.periplus/map.json` under the
   project root, found by walking up from the working directory.
-- The six question commands and `slice` take `--format text|json` to pick the report (default
+- The seven question commands and `slice` take `--format text|json` to pick the report (default
   `text`). The JSON report has sorted keys and is described by the shipped
   `navigation.schema.json`, which `periplus spec` also emits. `export` prints the graph itself and
   takes `--report text|json` for the warnings and problems it writes to standard error.
@@ -67,6 +68,28 @@ periplus types [--map PATH] [--format text|json]
 ```
 
 Counts the node types, each with its parent type, and the edge kinds.
+
+### legend
+
+```
+periplus legend [--kind K]... [--type T]... [--all] [--map PATH] [--format text|json]
+```
+
+Says what the map holds and what it means. It lists the edge kinds, most edges first, each as
+`kind  count  from types -> to types` with the pack's description under it, then the node
+types, most nodes first, each as `type  count  parent: P` with its description. An end names its
+two most frequent types and counts the rest, `+N`. A kind or type whose pack gives no description
+prints its line alone. Read it before a question, to learn which kind answers it: a kind that
+is listed is a fact the map holds, so read it from the map, not from the source files.
+
+The text aims at 3 KB. Over that, it leaves out the kinds and types with the fewest edges or
+nodes, and ends with `N left out, ...`. `--all` prints every one. `--kind K` or `--type T`
+prints only that kind or type, in full: a kind with every type at each end and its count, a type
+with the kinds of the edges leaving it (`out:`) and reaching it (`in:`). A name the map holds no
+edge or node of is a warning. `--format json` prints `edge_kinds` (each with `kind`, `count`,
+`from`, `to` and `description`), `node_types` (each with `type`, `count`, `parent`,
+`description`, `out` and `in`), `left_out`, `warnings` and `problems`. The descriptions come from
+the map's `legend`, which `periplus map` writes from the packs.
 
 ### find
 
@@ -194,7 +217,9 @@ slice NAME`. A source line with fewer than two letters, digits or underscores, s
 not printed.
 
 The piece ends with an inventory: every node it names, grouped by type with a count, rarest type
-first. Check an answer against it.
+first. Check an answer against it. When the map's packs describe an edge kind the piece's links
+show, a `legend:` block comes last, one `kind: description` line per such kind, in up to 640
+bytes; past them it counts the rest, `+N more: periplus legend --kind K`.
 
 An edge of a grouping kind, one the map lists under `grouping_kinds`, says its `from` end belongs
 to the container at its `to` end, as a class belongs to its module. The walk follows such an
@@ -217,7 +242,8 @@ gets no row and costs no hop. The piece ends with how many were folded, by type.
 chain often goes up one kind and down another. Without `--limit`, the piece holds at most 50
 rows and aims at 8 KB of text: over that, it leaves out the rows of the farthest hop first, then
 the `more links` lines, then names per link, then the nearest rows, never the inventory, and
-says so in a line `cut to fit 8192 bytes: ...`. `--limit N` caps the rows at `N` (`0` for all)
+says so in a line `cut to fit 8192 bytes: ...`. The legend is left out before any of these, and the
+line says `legend left out`. `--limit N` caps the rows at `N` (`0` for all)
 with no byte aim. The cap keeps full rows before back-references. Among them it keeps first the nodes more
 starts reach, then those reached from the starts of more words, then those whose own id,
 attributes or description more of the words match, then rarer types, then nodes more other
