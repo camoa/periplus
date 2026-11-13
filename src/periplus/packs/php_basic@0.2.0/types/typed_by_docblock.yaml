@@ -1,0 +1,723 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Types written in comments, and the calls they type.
+#
+# A @param line of the docblock before a method or a function, @param Foo $x, with the type written
+# Foo, ?Foo, Foo|null or null|Foo. The rules count the docblock's @param lines in order and read the
+# first five: the k-th that names a class keeps an internal php.doc_param_type,
+# <class>::<method>::<k>::<Foo resolved through the imports and namespace>, and an internal
+# php.doc_param_name, <class>::<method>::<k>::$x, each joined from the method; in a plain function
+# the function's full name stands for <class>::<method>. The map rules give a call $x->m() or
+# $x?->m() of variable_calls.yaml or variable_calls_in_function.yaml its calls edge, inferred, when
+# $x is a parameter of that method or function and the @param at the same k names it: they look m up
+# on the type and then its ancestors through extends. A method no class in the map declares, or a
+# type outside the map, lands unresolved under the type.
+#
+# A parameter with a type in its signature, of any kind, keeps an internal php.signature_typed node,
+# and the @param adds nothing for it. A @param for a name the signature lacks, a second @param for
+# the same name, a variadic ...$x, a scalar, mixed, Foo[], array<Foo>, a generic, Foo|Bar, and a
+# name with a backslash inside and none in front, Lib\Foo, give no edge. In a method, a parameter
+# assigned anywhere in its body gives none either, as in variable_calls.yaml.
+#
+# A @var line in the docblock just before an assignment in a method, /** @var Foo $x */ $x = ...; or
+# /** @var Foo */ $x = ...;, or before a foreach, /** @var Foo $x */ foreach (...): the variable
+# keeps an internal php.doc_var_name, <class>::<method>::$x::$x, joined by doc_var_typed_as to an
+# internal php.doc_var_type of the name resolved through the imports and namespace,
+# <class>::$x::<type> for an assignment and <class>::<type> for a foreach. The comment must sit just
+# before the statement, so one written after the assignment types the next statement when that one
+# assigns the same variable. A foreach takes the variable the @var names, which the foreach is taken
+# to bind. The map rules give a call on $x in that method its calls edge, inferred, by the same
+# lookup. No edge comes when the map cannot tell which type holds at the call: a second @var with
+# another type for $x, a local with two different values in the method, or one whose value already
+# types it, new Bar() or a $this->m() with a declared return type.
+#
+# This file sits in types/, after find_declarations.yaml: an enclosing_method end takes the first
+# node rule that fires on the method, which must be find_method, not these.
+node_types:
+- name: php.doc_param_type
+  id_namespace: php.doc_param_type
+  internal: true
+
+- name: php.doc_param_name
+  id_namespace: php.doc_param_name
+  internal: true
+
+- name: php.signature_typed
+  id_namespace: php.signature_typed
+  internal: true
+
+- name: php.doc_var_type
+  id_namespace: php.doc_var_type
+  internal: true
+
+- name: php.doc_var_name
+  id_namespace: php.doc_var_name
+  internal: true
+
+edge_kinds:
+- kind: method_doc_param_type
+  from: php.method
+  to: php.doc_param_type
+
+- kind: method_doc_param_name
+  from: php.method
+  to: php.doc_param_name
+
+- kind: function_doc_param_type
+  from: php.function
+  to: php.doc_param_type
+
+- kind: function_doc_param_name
+  from: php.function
+  to: php.doc_param_name
+
+- kind: doc_var_typed_as
+  from: php.doc_var_name
+  to: php.doc_var_type
+
+rules:
+
+# The k-th rule of each pair skips k-1 @param lines from the docblock's start, so the type and the
+# name of one pair always come from the same line.
+
+- rule: find_method_doc_param_type_1
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::1::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: method_doc_param_type_1
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::1::{type}"
+  emits: [{edge: {kind: method_doc_param_type, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_method_doc_param_name_1
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::1::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: method_doc_param_name_1
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::1::{named}"
+  emits: [{edge: {kind: method_doc_param_name, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_method_doc_param_type_2
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::2::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: method_doc_param_type_2
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::2::{type}"
+  emits: [{edge: {kind: method_doc_param_type, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_method_doc_param_name_2
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::2::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: method_doc_param_name_2
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::2::{named}"
+  emits: [{edge: {kind: method_doc_param_name, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_method_doc_param_type_3
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::3::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: method_doc_param_type_3
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::3::{type}"
+  emits: [{edge: {kind: method_doc_param_type, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_method_doc_param_name_3
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::3::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: method_doc_param_name_3
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::3::{named}"
+  emits: [{edge: {kind: method_doc_param_name, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_method_doc_param_type_4
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::4::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: method_doc_param_type_4
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::4::{type}"
+  emits: [{edge: {kind: method_doc_param_type, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_method_doc_param_name_4
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::4::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: method_doc_param_name_4
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::4::{named}"
+  emits: [{edge: {kind: method_doc_param_name, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_method_doc_param_type_5
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::5::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: method_doc_param_type_5
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::5::{type}"
+  emits: [{edge: {kind: method_doc_param_type, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_method_doc_param_name_5
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::5::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: method_doc_param_name_5
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{declared_name}::5::{named}"
+  emits: [{edge: {kind: method_doc_param_name, from: {declared: php.method}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_type_1
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::1::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: function_doc_param_type_1
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::1::{type}"
+  emits: [{edge: {kind: function_doc_param_type, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_name_1
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::1::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: function_doc_param_name_1
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::1::{named}"
+  emits: [{edge: {kind: function_doc_param_name, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_type_2
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::2::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: function_doc_param_type_2
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::2::{type}"
+  emits: [{edge: {kind: function_doc_param_type, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_name_2
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::2::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: function_doc_param_name_2
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::2::{named}"
+  emits: [{edge: {kind: function_doc_param_name, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_type_3
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::3::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: function_doc_param_type_3
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::3::{type}"
+  emits: [{edge: {kind: function_doc_param_type, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_name_3
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::3::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: function_doc_param_name_3
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::3::{named}"
+  emits: [{edge: {kind: function_doc_param_name, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_type_4
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::4::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: function_doc_param_type_4
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::4::{type}"
+  emits: [{edge: {kind: function_doc_param_type, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_name_4
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::4::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: function_doc_param_name_4
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::4::{named}"
+  emits: [{edge: {kind: function_doc_param_name, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_type_5
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::5::{type}"
+  emits: [{node: {type: php.doc_param_type}}]
+  confidence: declared
+
+- rule: function_doc_param_type_5
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {qualified: {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+(?:&\s*)?\$\w+'}}]
+    template: "{qualified_name}::5::{type}"
+  emits: [{edge: {kind: function_doc_param_type, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_function_doc_param_name_5
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::5::{named}"
+  emits: [{node: {type: php.doc_param_name}}]
+  confidence: declared
+
+- rule: function_doc_param_name_5
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: '(?s)\A(?:(?!@param\b).)*(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)(?:@param\b(?:(?!@param\b).)*)@param\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?:&\s*)?(?<named>\$\w+)'}]
+    template: "{qualified_name}::5::{named}"
+  emits: [{edge: {kind: function_doc_param_name, from: {declared: php.function}, to: this_node}}]
+  confidence: declared
+
+- rule: find_signature_typed
+  reads: file
+  in: [source]
+  match: &signature_typed
+    declaration: simple_parameter
+    name_child: name
+    filetype: php
+    where: [{name_matches: {child: type, pattern: '(?s).+'}}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
+  emits: [{node: {type: php.signature_typed}}]
+  confidence: declared
+
+- rule: find_function_signature_typed
+  reads: file
+  in: [source]
+  match: {<<: *signature_typed, holder: function_definition}
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{node: {type: php.signature_typed}}]
+  confidence: declared
+
+- rule: find_doc_var_type
+  reads: file
+  in: [source]
+  match: &assignment {declaration: expression_statement, name_child: [assignment_expression, left], filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '@var\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+\$\w+'}}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.doc_var_type}}]
+  confidence: declared
+
+- rule: find_doc_var_name
+  reads: file
+  in: [source]
+  match: *assignment
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, {docblock: '@var\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}::{named}"
+  emits: [{node: {type: php.doc_var_name}}]
+  confidence: declared
+
+- rule: doc_var_typed_as
+  reads: file
+  in: [source]
+  match: *assignment
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, {docblock: '@var\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}::{named}"
+  emits: [{edge: {kind: doc_var_typed_as, from: this_node, to: {declared: php.doc_var_type}}}]
+  confidence: declared
+
+# @var Foo with no variable names the assigned one.
+- rule: find_doc_var_type_unnamed
+  reads: file
+  in: [source]
+  match: *assignment
+  id:
+    from: [enclosing_type, declared_name, {qualified: {docblock: '@var\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s*\*/'}}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.doc_var_type}}]
+  confidence: declared
+
+- rule: find_doc_var_name_unnamed
+  reads: file
+  in: [source]
+  match: *assignment
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, {docblock: '@var\s+\??(?i:null\|)?(?<bare>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s*\*/'}]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}::{declared_name}"
+  emits: [{node: {type: php.doc_var_name}}]
+  confidence: declared
+
+- rule: doc_var_unnamed_typed_as
+  reads: file
+  in: [source]
+  match: *assignment
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, {docblock: '@var\s+\??(?i:null\|)?(?<bare>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s*\*/'}]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}::{declared_name}"
+  emits: [{edge: {kind: doc_var_typed_as, from: this_node, to: {declared: php.doc_var_type}}}]
+  confidence: declared
+
+- rule: find_doc_foreach_type
+  reads: file
+  in: [source]
+  match: &foreach {declaration: foreach_statement, filetype: php}
+  id:
+    from: [enclosing_type, {qualified: {docblock: '@var\s+\??(?i:null\|)?(?<type>(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*))(?i:\|null)?\s+\$\w+'}}]
+    template: "{enclosing_type}::{type}"
+  emits: [{node: {type: php.doc_var_type}}]
+  confidence: declared
+
+- rule: find_doc_foreach_name
+  reads: file
+  in: [source]
+  match: *foreach
+  id:
+    from: [enclosing_type, enclosing_method, {docblock: '@var\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{enclosing_method}::{named}::{named}"
+  emits: [{node: {type: php.doc_var_name}}]
+  confidence: declared
+
+- rule: doc_foreach_typed_as
+  reads: file
+  in: [source]
+  match: *foreach
+  id:
+    from: [enclosing_type, enclosing_method, {docblock: '@var\s+\??(?i:null\|)?(?!(?i:string|int|float|bool|boolean|integer|double|array|iterable|callable|mixed|object|void|null|false|true|self|static|parent|resource|never)\b)(?:\\[A-Za-z_][A-Za-z0-9_\\]*|[A-Za-z_][A-Za-z0-9_]*)(?i:\|null)?\s+(?<named>\$\w+)'}]
+    template: "{enclosing_type}::{enclosing_method}::{named}::{named}"
+  emits: [{edge: {kind: doc_var_typed_as, from: this_node, to: {declared: php.doc_var_type}}}]
+  confidence: declared
+
+- rule: calls_through_doc_param
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)->(?<method>\w+))$'}]
+    follow: &method_param_walk
+    - node: 'php.parameter::{class}::{meth}::${var}'
+    - node: 'php.method::{class}::{meth}'
+    - edge: method_doc_param_name
+    - id_matches: '^php\.doc_param_name::[^:]+::[^:]+::(?<pos>\d+)::\${var}$'
+    - node: 'php.method::{class}::{meth}'
+    - edge: method_doc_param_type
+    - id_matches: '^php\.doc_param_type::[^:]+::[^:]+::{pos}::(?<type>(?<declarer>[A-Za-z_][\w\\]*))$'
+    - try: &on_type
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless: &method_param_unless
+    - [{node: 'php.signature_typed::{class}::{meth}::${var}'}]
+    - [{node: 'php.local_variable::{class}::{meth}::${var}'}]
+    unless_matched: &method_named_twice
+    - - node: 'php.method::{class}::{meth}'
+      - edge: method_doc_param_name
+      - id_matches: '::(?!{pos}::)\d+::\${var}$'
+  emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: calls_through_doc_param_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
+    follow: *method_param_walk
+    unless: *method_param_unless
+    unless_matched: *method_named_twice
+  emits: *calls_edge
+  confidence: inferred
+
+# One :: before the variable, so a method's call site never matches.
+- rule: calls_through_function_doc_param
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<function>[^:]+)::\$(?<var>(?!this->)\w+)->(?<method>\w+))$'}]
+    follow: &function_param_walk
+    - node: 'php.parameter::{function}::${var}'
+    - node: 'php.function::{function}'
+    - edge: function_doc_param_name
+    - id_matches: '^php\.doc_param_name::[^:]+::(?<pos>\d+)::\${var}$'
+    - node: 'php.function::{function}'
+    - edge: function_doc_param_type
+    - id_matches: '^php\.doc_param_type::[^:]+::{pos}::(?<type>(?<declarer>[A-Za-z_][\w\\]*))$'
+    - try: *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless: &function_param_unless
+    - [{node: 'php.signature_typed::{function}::${var}'}]
+    unless_matched: &function_named_twice
+    - - node: 'php.function::{function}'
+      - edge: function_doc_param_name
+      - id_matches: '::(?!{pos}::)\d+::\${var}$'
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_function_doc_param_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<function>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
+    follow: *function_param_walk
+    unless: *function_param_unless
+    unless_matched: *function_named_twice
+  emits: *calls_edge
+  confidence: inferred
+
+# The chains under unless_matched stop the edge when $x has another @var type in the method, two
+# different values, a new Bar() value, or a $this->m() value whose method declares a return type,
+# as calls_through_local_this_call reads it.
+- rule: calls_through_doc_var
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)->(?<method>\w+))$'}]
+    follow: &doc_var_walk
+    - node: 'php.doc_var_name::{class}::{meth}::${var}::${var}'
+    - edge: doc_var_typed_as
+    - id_matches: '^php\.doc_var_type::.+::(?<type>(?<declarer>[A-Za-z_][\w\\]*))$'
+    - try: *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: &doc_var_unless
+    - - node: 'php.doc_var_name::{class}::{meth}::${var}::${var}'
+      - edge: doc_var_typed_as
+      - id_matches: '::(?!{type}$)[^:]+$'
+    - - node: 'php.local_variable::{class}::{meth}::${var}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::(?<first>.+)$'
+      - node: 'php.local_variable::{class}::{meth}::${var}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::(?!{first}$)'
+    - - node: 'php.local_variable::{class}::{meth}::${var}'
+      - edge: local_assigned
+      - edge: local_value_typed_as
+    - - node: 'php.local_variable::{class}::{meth}::${var}'
+      - edge: local_assigned
+      - id_matches: '^php\.local_value::[^:]+::\$\w+=\$this->(?<inner>\w+)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$'
+      - node: 'php.type::{class}'
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<owner>.+)$'
+      - node: 'php.method::{owner}::{inner}'
+      - edge: returns_type
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_doc_var_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
+    follow: *doc_var_walk
+    unless_matched: *doc_var_unless
+  emits: *calls_edge
+  confidence: inferred
