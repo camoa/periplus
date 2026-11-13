@@ -3,46 +3,65 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # A $this->m() call inside a trait method, joined in each class that uses the trait. Inside a
 # trait, $this is the object of the class that uses it, so the call runs that class's m().
 # edges/this_calls.yaml joins the call under the trait: to the trait's own m() when the trait
-# declares it, else to an unresolved <trait>::m. This rule adds, for each class that uses the
-# trait, directly or through an ancestor, a calls edge from the trait method to the m() PHP runs
-# for that class, inferred: the class's own m(), else the trait's, else the one its nearest
-# ancestor declares. A class with no such m() gets no edge, and the unresolved mark under the
-# trait stays. The rule fires on the using class, since a follow walks an edge only forward, so
-# the edge sits at that class's declaration, not at the call.
+# declares it, else to an unresolved <trait>::m. These rules add, for each class that uses the
+# trait, a calls edge from the trait method to the m() PHP runs for that class, inferred, at the
+# call's line. PHP runs the class's own m() first, then the trait's, then an inherited one. The
+# first rule takes the class's own m(), else the one its nearest ancestor declares, and makes
+# nothing when the trait declares m() and the class does not: that edge is this_calls.yaml's. The
+# other two take the own m() of a subclass of the using class, one and two levels down, which PHP
+# runs before the trait's. A class with no such m() gets no edge, and the unresolved mark under the
+# trait stays.
 #
-# Limits: a trait used by two classes gets an edge to each; each is a true possibility. When the
-# trait's m() is the one PHP runs, the edge this rule makes is the one this_calls.yaml already
-# holds, so that edge also lists the using class's declaration among its locations. The walk from
-# the using class reads extends only: an m() declared by another trait the class uses gets no
-# edge, and a trait used by another trait is not walked. A call on a property, $this->a->b(), is
-# find_call_site's.
+# Limits: a trait used by two classes gets an edge to each; each is a true possibility. A subclass
+# three or more levels below the using class gets no edge for its own m(). The lookup from the
+# using class reads extends only: an m() declared by another trait the class uses gets no edge. A
+# trait that uses this trait counts as a using class, so its own m() gets an edge; the classes that
+# use that trait are not walked. A call on a property, $this->a->b(), is find_call_site's.
 rules:
 
 - rule: trait_this_call_in_user
   reads: map
   match:
-    node_type: php.class
-    where: [{id_matches: '^php\.type::(?=(?<own>.+)$)(?<user>.+)$'}]
+    node_type: php.call_site
+    where: &trait_site [{id_matches: '^php\.call_site::(?<trait>[^:]+)::(?<tmethod>[^:]+)::\$this->(?<method>\w+)$'}]
     follow:
-    - ancestors: [inherits]
-    - edge: mixes_in
-    - id_matches: '^php\.type::(?<trait>.+)$'
-    - edge: contains
-    - id_matches: '^php\.method::[^:]+::(?<tmethod>\w+)$'
-    - edge: has_call_site
-    - id_matches: '^php\.call_site::[^:]+::[^:]+::\$this->(?<method>\w+)$'
-    # PHP runs the class's own m() first, then the trait's, then an inherited one. The first try
-    # rebinds user to the trait when the trait declares m(); the second rebinds it back to the
-    # class when the class declares m() itself. The walk below then ends on the m() PHP runs.
-    - try:
-      - node: 'php.method::{trait}::{method}'
-      - id_matches: '^php\.method::(?<user>[^:]+)::'
-    - try:
-      - node: 'php.method::{own}::{method}'
-      - id_matches: '^php\.method::(?<user>[^:]+)::'
-    - node: 'php.type::{user}'
+    - node: 'php.type::{trait}'
+    - incoming_edge: mixes_in
+    - id_matches: '^php\.type::(?<user>.+)$'
     - ancestors: [inherits]
     - id_matches: '^php\.type::(?<declarer>.+)$'
     - node: 'php.method::{declarer}::{method}'
+    # An inherited m() loses to the trait's own.
+    unless_matched:
+    - [{node: 'php.type::{declarer}'}, {id_matches: '^php\.type::(?!{user}$)'}, {node: 'php.method::{trait}::{method}'}]
+  emits: [{edge: {kind: calls, from: {template: '{trait}::{tmethod}', types: [php.method]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: trait_this_call_in_subclass
+  reads: map
+  match:
+    node_type: php.call_site
+    where: *trait_site
+    follow:
+    - node: 'php.type::{trait}'
+    - incoming_edge: mixes_in
+    - incoming_edge: inherits
+    - id_matches: '^php\.type::(?<sub>.+)$'
+    - node: 'php.method::{sub}::{method}'
+  emits: [{edge: {kind: calls, from: {template: '{trait}::{tmethod}', types: [php.method]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: trait_this_call_in_second_subclass
+  reads: map
+  match:
+    node_type: php.call_site
+    where: *trait_site
+    follow:
+    - node: 'php.type::{trait}'
+    - incoming_edge: mixes_in
+    - incoming_edge: inherits
+    - incoming_edge: inherits
+    - id_matches: '^php\.type::(?<sub>.+)$'
+    - node: 'php.method::{sub}::{method}'
   emits: [{edge: {kind: calls, from: {template: '{trait}::{tmethod}', types: [php.method]}, to: matched_node}}]
   confidence: inferred
