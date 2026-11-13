@@ -34,8 +34,13 @@ class NodeKeys(TypedDict):
     provenance: list[Provenance]
 
 
+class Detail(TypedDict):
+    rule: str
+
+
 class Node(NodeKeys, total=False):
     attributes: dict[str, object]
+    unresolved_detail: Detail
 
 
 # `from` is a keyword, so this type cannot use the class form.
@@ -422,9 +427,10 @@ class GapReport:
         ]
         print(f"no rule  {len(unnamed)}")
         for n in sorted(unnamed, key=lambda n: n["id"]):
-            where = (self.edges_to.get(n["id"]) or [{"locations": [NOWHERE]}])[0]["locations"]
-            place = (where or [NOWHERE])[0]
-            print(f"{n['id']}  {place['file']}:{place['line']}  {n['unresolved_detail']['rule']}")
+            edges = self.edges_to.get(n["id"], [])
+            place = ((edges[0]["locations"] if edges else []) or [NOWHERE])[0]
+            rule = n["unresolved_detail"]["rule"] if "unresolved_detail" in n else "-"
+            print(f"{n['id']}  {place['file']}:{place['line']}  {rule}")
 
 
 def main(argv: list[str] | None = None) -> int:
