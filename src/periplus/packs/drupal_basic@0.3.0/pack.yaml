@@ -177,7 +177,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   route alteration, Twig filter and function, event constant and the event its text names, and a
 #   route entity.<type>.<name> no routing file gives a module, by its entity type's class, as
 #   plugin_in_module, form_id_in_module and the like. A test class Drupal\Tests\<module>\... is a
-#   class_in_module of that module;
+#   class_in_module of that module, and each class, trait, interface or enum in a theme's folder a
+#   class_in_theme of that theme;
 # - the same entity type manager, service container, config factory and queue factory calls on an
 #   object known by its declared type, not its name: a parameter of the method or function around
 #   the call, or a property of $this typed on the property, on a promoted constructor parameter, in
@@ -412,10 +413,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   name: '@other', gives no service_in_module edge. A library, class or template whose module or
 #   theme the map does not hold gives no ownership edge.
 # - A file more than eight folders below its extension's folder gives no membership edge. A
-#   method, property or call site, a script's functions, behaviors and settings, and a hook name
-#   get no membership edge of their own: they reach the module through their class, script or
-#   function, and a hook name is shared by every module that implements it. A class of a theme
-#   gets no edge to the theme. A plugin, form id, Twig callable or event of a class the map holds
+#   method, property or call site, a script's settings and URL calls, a script function inside a
+#   block, and a hook name get no membership edge of their own: they reach the module through their
+#   class, script or function, and a hook name is shared by every module that implements it. A
+#   plugin, form id, Twig callable or event of a class the map holds
 #   under no module gives none, and an event a constant names only by its own name gives none.
 #
 # Settings to know:

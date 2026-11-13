@@ -3,8 +3,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # What a module or a theme holds: its routes, services, libraries, classes and templates, one edge
 # kind per type, each to the drupal.module or drupal.theme that owns it. Routes and services are
 # read as text, because a data rule cannot end an edge at a name made from the file name. A
-# routing file's route_callbacks key names no route. A services file's services are its two-space
-# keys inside the services block, so a parameters key is no service and neither is _defaults. A
+# routing file's route_callbacks key names no route; a route name may hold a slash. A services
+# file's services are its two-space keys inside the services block, so a parameters key is no
+# service and neither is _defaults. A
 # service alias written on one line, as name: '@other', is not read. A drush.services.yml belongs
 # to the module whose folder holds it; the folder's name is taken as the module's, so its edge is
 # inferred. A template belongs to the folder right before its templates folder, so a nested
@@ -44,7 +45,7 @@ rules:
   match:
     file: '*.routing'
     filetype: drupal_yml_text
-    text: '(?m)^(?!route_callbacks:)(?<route>[A-Za-z0-9_][\w.-]*):[ \t]*$'
+    text: '(?m)^(?!route_callbacks:)(?<route>[A-Za-z0-9_][\w./-]*):[ \t]*$'
   values:
     owner: {template: '{file_stem}', normalize: [{replace: '\..*$', with: ''}]}
   id: {template: '{route}'}

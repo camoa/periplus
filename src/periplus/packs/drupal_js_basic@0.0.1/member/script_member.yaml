@@ -1,0 +1,92 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each function a script declares at its top level, and each behavior a script declares, as
+# js_function_in_module, js_function_in_theme, behavior_in_module or behavior_in_theme to the
+# extension that holds the script, found as member/asset_member.yaml finds the script's own. A
+# top-level function is a function declaration, or a const, let or var given an arrow function or a
+# function expression, outside any block. One inside a block, such as another function's body or
+# the (function ($) {...})(jQuery) wrapper, gets no edge of its own: it is reached through its
+# script. A behavior two scripts declare gets an edge to the extension of each.
+
+edge_kinds:
+- kind: js_function_in_module
+  from: js.function
+  to: drupal.module
+- kind: js_function_in_theme
+  from: js.function
+  to: drupal.theme
+- kind: behavior_in_module
+  from: drupal.js_behavior
+  to: drupal.module
+- kind: behavior_in_theme
+  from: drupal.js_behavior
+  to: drupal.theme
+
+rules:
+- rule: js_function_declaration_claim
+  reads: file
+  in: [js_source]
+  match: {declaration: function_declaration, name_child: name, filetype: javascript, where: [{not_within: [statement_block]}]}
+  id: {from: [script, qualified_name], template: '{script}|js_function|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: js_function_from_arrow_claim
+  reads: file
+  in: [js_source]
+  match: {declaration: variable_declarator, name_child: name, filetype: javascript, where: [{has_child: arrow_function}, {not_within: [statement_block]}]}
+  id: {from: [script, qualified_name], template: '{script}|js_function|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: js_function_from_expression_claim
+  reads: file
+  in: [js_source]
+  match: {declaration: variable_declarator, name_child: name, filetype: javascript, where: [{has_child: function_expression}, {not_within: [statement_block]}]}
+  id: {from: [script, qualified_name], template: '{script}|js_function|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: js_function_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::[^|]+\|js_function\|(?<function>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: js_function_in_module, from: {template: '{function}', type: js.function}, to: matched_node}}]
+  confidence: declared
+
+- rule: js_function_in_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::[^|]+\|js_function\|(?<function>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: js_function_in_theme, from: {template: '{function}', type: js.function}, to: matched_node}}]
+  confidence: declared
+
+- rule: behavior_in_module
+  reads: map
+  match:
+    node_type: drupal.js_behavior
+    follow:
+    - incoming_edge: script_declares_behavior
+    - id_matches: '^js\.file::(?<path>.+)$'
+    - node: 'drupal.member_claim::{path}|script|'
+    - edge: claim_in_folder
+    - edge: folder_of_module
+  emits: [{edge: {kind: behavior_in_module, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: behavior_in_theme
+  reads: map
+  match:
+    node_type: drupal.js_behavior
+    follow:
+    - incoming_edge: script_declares_behavior
+    - id_matches: '^js\.file::(?<path>.+)$'
+    - node: 'drupal.member_claim::{path}|script|'
+    - edge: claim_in_folder
+    - edge: folder_of_theme
+  emits: [{edge: {kind: behavior_in_theme, from: this_node, to: matched_node}}]
+  confidence: declared

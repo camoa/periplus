@@ -66,7 +66,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # script_in_module, script_in_theme, stylesheet_in_module or stylesheet_in_theme edge to the
 # extension whose info file sits in the nearest folder above it (member/asset_member.yaml), so a
 # script two libraries list, or another extension's library lists, belongs to the folder that
-# holds it. A file more than seven folders below its extension's folder gets no edge.
+# holds it. A file more than seven folders below its extension's folder gets no edge. Each
+# function a script declares outside any block, and each behavior, has a js_function_in_module,
+# js_function_in_theme, behavior_in_module or behavior_in_theme edge to its script's extension
+# (member/script_member.yaml); a function inside the (function ($) {...})(jQuery) wrapper or
+# another function's body is reached through its script.
 #
 # Library attachments. In PHP, $build['#attached']['library'][] = 'module/library' is an edge
 # from the method or the function around it. The array form,
