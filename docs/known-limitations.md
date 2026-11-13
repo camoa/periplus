@@ -236,10 +236,10 @@ known gaps.
   A field name reaches the storage on an entity type the model names, whichever event or action
   names it; when none of those holds the name, a name that storages on two or more entity types
   share reaches the `drupal.shared_field_name`, not a storage.
-- **Drush:** the `@command` tag is read as text. Its class is named from the file's path, so its
-  edges are inferred, and a class named otherwise gives unresolved ends.
-  An attribute without the named argument `name:`, aliases, options, arguments, hooks and
-  validators give nothing. Nothing joins a command class's service to its command.
+- **Drush:** an attribute without the named argument `name:`, the attribute's `aliases:`, a fifth
+  or later alias in the `@aliases` tag, usages, options, arguments, hooks and validators give
+  nothing. A command in an anonymous class gives nothing. A command a class inherits from a
+  grandparent is not joined to that class's service.
 - **Twig Tweak:** only `drupal_block`, `drupal_menu`, `drupal_entity`, `drupal_entity_form` and
   `drupal_field` give edges, each from a quoted first argument; a name in a variable gives no edge
   and no skipped row. `drupal_entity` ends at the entity type, not the entity, and `drupal_field`

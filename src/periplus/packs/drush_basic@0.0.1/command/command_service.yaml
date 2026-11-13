@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The service that registers a Drush command's class: a service whose class, in a services file
+# such as drush.services.yml, is the class command_class names. The services file, not the
+# command, names the class, so the edge is inferred. A command declared in a parent class also
+# joins the service of each class that inherits it directly. A command class no services file
+# names gets no edge.
+
+rules:
+- rule: command_service_from_class
+  reads: map
+  match:
+    node_type: drush.command
+    follow:
+    - edge: command_class
+    - incoming_edge: service_class
+  emits: [{edge: {kind: command_service, from: this_node, to: matched_node}}]
+  confidence: inferred
+- rule: command_service_from_child_class
+  reads: map
+  match:
+    node_type: drush.command
+    follow:
+    - edge: command_class
+    - incoming_edge: inherits
+    - incoming_edge: service_class
+  emits: [{edge: {kind: command_service, from: this_node, to: matched_node}}]
+  confidence: inferred

@@ -1,0 +1,44 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Drush command declared by the @command tag in a method's docblock, read from the tree: the
+# docblock is the comment just before the method, so a tag in a method's body or in a string makes
+# nothing. The command sits at the method's name and joins php_basic's node for that method, and
+# the class around it, as resolved through the file's namespace. A method of an anonymous class
+# makes nothing, since no class name holds it. The id template names the method's name so that
+# the id reads the docblock; normalize strips it, leaving the command's name.
+
+rules:
+- rule: command_from_docblock
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '@command\s+(?<command>[\w:.-]+)'}]
+    template: '{declared_name}:{command}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - node:
+      type: drush.command
+  confidence: declared
+- rule: command_from_docblock_edges
+  reads: file
+  in:
+  - source
+  match: {declaration: method_declaration, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_class]}]}
+  id:
+    from: [declared_name, {docblock: '@command\s+(?<command>[\w:.-]+)'}]
+    template: '{declared_name}:{command}'
+    normalize: [{replace: '^[^:]*:', with: ''}]
+  emits:
+  - edge:
+      kind: command_method
+      from: this_node
+      to: {declared: php.method}
+  - edge:
+      kind: command_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
