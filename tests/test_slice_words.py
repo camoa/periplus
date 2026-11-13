@@ -116,29 +116,44 @@ def _piece(root: Path, *words: str, **kw: Any) -> slicing.SliceReport:
     return slicing.run(_site(root), {}, words, **args)
 
 
-def test_an_id_starts_the_piece_and_prints_the_chain_by_hop(tmp_path: Path) -> None:
+def test_an_id_starts_the_piece_and_each_node_names_its_links(tmp_path: Path) -> None:
     report = _piece(tmp_path, "pay")
 
     assert report.exit_code is ExitCode.OK
     assert slicing.render_text(report).splitlines() == [
         "periplus slice",
-        "start 1 (given as 'pay')",
-        f"{PAY}  t.method  mapped  {CO}:5",
+        "start pay  t.method  (given as 'pay')",
+        "",
+        f"{CO}",
+        "  :3  Checkout  t.class",
+        "      | class Checkout {",
+        "      defines -> pay",
+        "  :5  pay  t.method",
         "      | public function pay() {",
         "      # Charges the card and mails a receipt",
+        "      calls -> (+1 outside the project: Bank::charge)",
+        "      defines <- Checkout",
+        "      holds -> 9",
+        "      instantiates -> Mailer",
+        "  :9  9  t.site",
+        "      | $m->send();",
+        "      calls -> send",
+        "      holds <- pay",
         "",
-        f"around {PAY}",
-        f"  1 --calls--> {BANK}  t.method  unresolved  :7",
-        "        | $this->gateway->charge();",
-        f"  1 <--defines-- {CHECKOUT}  t.class  mapped  :5",
-        "        | public function pay() {",
-        f"  1 --holds--> {SITE}  t.site  mapped  :9",
-        "        | $m->send();",
-        f"    2 --calls--> {SEND}  t.method  mapped  :9",
-        "          | $m->send();",
-        f"  1 --instantiates--> {MAILER}  t.class  mapped  :8",
-        "        | $m = new Mailer();",
-        f"    2 --defines--> {SEND}  (again)  {MA}:3",
+        f"{MA}",
+        "  :2  Mailer  t.class",
+        "      | class Mailer {",
+        "      defines -> send",
+        "      instantiates <- pay",
+        "  :3  send  t.method",
+        "      | public function send() {}",
+        "      calls <- 9",
+        "      defines <- Mailer",
+        "",
+        "inventory: 6 nodes",
+        "  t.class 2: Checkout, Mailer",
+        "  t.site 1: 9",
+        "  t.method 3: Bank::charge, pay, send",
         "folded into the node above, all their edges joining it: t.site 1",
         f"warning: resolved 'pay' to {PAY}",
     ]
@@ -147,14 +162,11 @@ def test_an_id_starts_the_piece_and_prints_the_chain_by_hop(tmp_path: Path) -> N
 def test_words_are_searched_as_find_searches_and_say_where_they_matched(tmp_path: Path) -> None:
     text = slicing.render_text(_piece(tmp_path, "takes payment", depth=1))
 
-    assert text.splitlines()[1:5] == [
-        "start 1 (words: 'takes payment' in attribute summary, 'takes' in attribute summary,"
-        " 'payment' in attribute summary)",
-        f"{CHECKOUT}  t.class  mapped  {CO}:3  [attribute summary]",
-        "      | class Checkout {",
-        "      @ summary: Takes payment for an order",
-    ]
-    assert f"  1 --defines--> {PAY}" in text
+    assert text.splitlines()[1] == (
+        "start Checkout  t.class  (words: 'takes payment' in attribute summary,"
+        " 'takes' in attribute summary, 'payment' in attribute summary)"
+    )
+    assert "      defines -> pay" in text.splitlines()
 
 
 def test_a_text_that_fails_whole_falls_back_to_its_words_and_says_so(tmp_path: Path) -> None:
@@ -242,10 +254,7 @@ def test_the_cli_prints_the_piece_and_refuses_word_flags_with_out(tmp_path: Path
     with contextlib.chdir(root), contextlib.redirect_stdout(printed):
         code = main(["slice", "takes", "payment", "--depth", "1"])
     assert code == 0
-    assert (
-        printed.getvalue().splitlines()[2]
-        == f"{CHECKOUT}  t.class  mapped  {CO}:3  [attribute summary]"
-    )
+    assert printed.getvalue().splitlines()[1].startswith("start Checkout  t.class  (words:")
 
     refused = io.StringIO()
     with contextlib.chdir(root), contextlib.redirect_stdout(refused):

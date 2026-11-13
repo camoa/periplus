@@ -104,8 +104,10 @@ def test_a_container_start_lists_its_members_by_type_rarest_first(tmp_path: Path
 
     assert list(members.by_type.items()) == [("t.service", 1), ("t.route", 2), ("t.class", 3)]
     assert [row.id for row in members.rows] == [S, R1, C3, R2]
-    assert f"list one type in full: periplus slice {BOX} --type T --limit 0" in lines
-    assert "  t.class 3" in lines
+    assert lines[2] == (
+        "members of app: 6 (t.service 1, t.route 2, t.class 3);"
+        " list one type: periplus slice app --type T --limit 0"
+    )
 
 
 def test_a_type_with_a_container_start_lists_that_type_alone_in_full(tmp_path: Path) -> None:
