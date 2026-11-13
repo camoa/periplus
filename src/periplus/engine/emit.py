@@ -53,7 +53,7 @@ def build_document(
     packs: Sequence[LoadedPack],
     tool_version: str,
     settings: str,
-    boundary: Mapping[str, BoundaryEntry] | None = None,
+    boundary: Mapping[str, Sequence[BoundaryEntry]] | None = None,
     skipped: list[Skipped] | None = None,
 ) -> tuple[dict[str, Any], LeftOut]:
     """The map document, and what it leaves out.
@@ -67,13 +67,22 @@ def build_document(
     types that edge's end tried, in order. An end that lists none tried its one declared type,
     else its kind's types at that end. An end with candidate ids lands on the first a rule
     found, else on the first. An end no rule found whose id ``boundary`` lists is instead a
-    declared node, its one provenance the group's pack, of the deepest type the group's type and
-    its edges' claimed types that share a chain with it agree on, as for a referenced end; an edge
-    whose kind has no type on a chain with the group's type at that end raises ``EdgeIllegal``.
+    boundary node, one provenance row per listing group, of the deepest type the groups' types and
+    its edges' claimed types that share a chain with them agree on, as for a referenced end; an
+    edge whose kind has no type on a chain with a group's type at that end raises ``EdgeIllegal``.
     Then each mapped node whose ancestry reaches such a node with a classification is classified,
-    as ``_classify`` says, and its rows join ``skipped``. Locations and provenance de-duplicate and
-    sort. Last, a node whose type is internal, or lies below an internal type, is left out with
-    every edge that has an end on it; ``LeftOut`` counts each.
+    as ``_classify`` says, and its rows join ``skipped``.
+
+    An end no rule found takes the strongest mark its edges and its type give, whatever the rule
+    and file order: an edge whose end has ``boundary``, or a type at or below a boundary type,
+    makes it boundary, which beats ``on_miss: unresolved``, which beats ``on_miss:
+    unknown_boundary``; an end with no mark stays referenced. The detail of an unresolved or
+    unknown boundary end names the first edge of that mark, by pack, rule and name searched for.
+    An end that reads boundary by an edge's ``boundary`` also gets that edge's into edge, to the
+    into node, which reads boundary by its type. A node a rule found is mapped, except one whose
+    ``resolution`` attribute is runtime, which is an unknown boundary. Locations and provenance
+    de-duplicate and sort. Last, a node whose type is internal, or lies below an internal type, is
+    left out with every edge that has an end on it; ``LeftOut`` counts each.
     """
     groups: dict[str, list[FoundNode]] = {}
     for found in nodes:
@@ -110,11 +119,10 @@ def build_document(
             ),
         ):
             if end not in merged and boundary and end in boundary:
-                merged[end] = _declared(end, boundary[end])
+                merged[end] = _listed(end, boundary[end])
             if end not in merged:
                 merged[end] = {"id": end, "type": "", "state": "referenced", "locations": []}
-            if boundary and end in boundary and merged[end]["state"] == "declared":
-                entry = boundary[end]
+            for entry in boundary.get(end, ()) if boundary and end not in groups else ():
                 chain = type_chain(types, entry.type)
                 fits = {
                     t
@@ -145,31 +153,22 @@ def build_document(
         rows = _classify(merged, merged_edges, boundary, types)
         if skipped is not None:
             skipped.extend(rows)
-    missed = sorted(
-        (
-            (edge.source if edge.on_miss == "source" else edge.target, edge.pack, edge.rule, edge)
-            for edge in edges
-            if edge.on_miss
-        ),
-        key=lambda item: (*item[:3], item[3].searched_for),
-    )
-    for end, pack, rule, edge in missed:
-        if merged[end]["state"] == "referenced":
-            allowed = edge_kinds[edge.kind]
-            if edge.on_miss == "source":
-                declared, kind_types = edge.source_type, allowed.from_types
-            else:
-                declared, kind_types = edge.target_type, allowed.to_types
-            merged[end]["state"] = "unresolved"
-            merged[end]["unresolved_detail"] = {
-                "rule": f"{pack}/{rule}",
-                "searched_for": edge.searched_for,
-                "found": "no mapped node of this name",
-                "types_tried": list(edge.types_tried or ((declared,) if declared else kind_types)),
-            }
+    marks: dict[str, list[tuple[str, str, str, str, FoundEdge]]] = {}
+    for edge in edges:
+        if edge.on_miss:
+            end = edge.source if edge.on_miss == "source" else edge.target
+            mark = "boundary" if edge.into else edge.miss
+            marks.setdefault(end, []).append((mark, edge.pack, edge.rule, edge.searched_for, edge))
+    _enter(marks, merged, merged_edges, set(groups))
+    for end, node in merged.items():
+        if node["state"] == "referenced":
+            _mark(node, marks.get(end, []), types, edge_kinds)
+        elif node["state"] == "mapped" and _runtime(node):
+            node["state"] = "unknown_boundary"
     ordered = [merged[node_id] for node_id in sorted(merged)]
     written = [
-        _edge(key, group, merged, edge_kinds, types) for key, group in sorted(merged_edges.items())
+        _edge(key, group, merged, edge_kinds, types, set(groups))
+        for key, group in sorted(merged_edges.items())
     ]
     hidden = {node["id"] for node in ordered if _internal(types, node["type"])}
     kept = [edge for edge in written if edge["from"] not in hidden and edge["to"] not in hidden]
@@ -218,16 +217,98 @@ def _landed(edge: FoundEdge, merged: Mapping[str, Any]) -> FoundEdge:
     return replace(edge, source=chosen) if edge.source_type else replace(edge, target=chosen)
 
 
-def _declared(node_id: str, entry: BoundaryEntry) -> dict[str, Any]:
-    """The node a boundary group draws for a name an edge reached."""
-    rule = f"boundary.{entry.group}"
+#: The marks an end no rule found may take, strongest first.
+_RANK = ("boundary", "unresolved", "unknown_boundary")
+
+
+def _mark(
+    node: dict[str, Any],
+    rows: Sequence[tuple[str, str, str, str, FoundEdge]],
+    types: Mapping[str, TypeInfo],
+    edge_kinds: Mapping[str, EdgeKind],
+) -> None:
+    """Give the referenced node the strongest mark its type or its edges' rows give, and an
+    unresolved or unknown boundary node the detail of its first row of that mark."""
+    marked = [row for row in rows if row[0]]
+    if _boundary_type(types, node["type"]):
+        node["state"] = "boundary"
+    if not marked or node["state"] == "boundary":
+        return
+    state = min((row[0] for row in marked), key=_RANK.index)
+    node["state"] = state
+    if state == "boundary":
+        return
+    _, pack, rule, _, edge = min((row for row in marked if row[0] == state), key=lambda r: r[:4])
+    allowed = edge_kinds[edge.kind]
+    if edge.on_miss == "source":
+        declared, kind_types = edge.source_type, allowed.from_types
+    else:
+        declared, kind_types = edge.target_type, allowed.to_types
+    node["unresolved_detail"] = {
+        "rule": f"{pack}/{rule}",
+        "searched_for": edge.searched_for,
+        "found": "no mapped node of this name",
+        "types_tried": list(edge.types_tried or ((declared,) if declared else kind_types)),
+    }
+
+
+def _enter(
+    marks: Mapping[str, Sequence[tuple[str, str, str, str, FoundEdge]]],
+    merged: dict[str, dict[str, Any]],
+    merged_edges: dict[tuple[str, str, str], list[FoundEdge]],
+    found: set[str],
+) -> None:
+    """Draw each into edge of an end no rule found that an edge's ``boundary`` marks, and the
+    into node each reaches, with the rule in its provenance."""
+    for end in sorted(marks):
+        for _, _, _, _, edge in marks[end] if end not in found else ():
+            if edge.into is None:
+                continue
+            into, kind, carrier = edge.into
+            merged_edges.setdefault((carrier, end, into), []).append(
+                FoundEdge(
+                    carrier, end, into, edge.file, edge.line, edge.pack, edge.rule, edge.confidence
+                )
+            )
+            node = merged.setdefault(
+                into,
+                {
+                    "id": into,
+                    "type": kind,
+                    "state": "referenced",
+                    "locations": [],
+                    "provenance": [],
+                },
+            )
+            if node["state"] == "referenced":
+                rows = {(p["pack"], p["rule"], p["confidence"]) for p in node["provenance"]}
+                rows.add((edge.pack, edge.rule, edge.confidence))
+                node["provenance"] = [
+                    {"pack": p, "rule": r, "confidence": c, "sets": ["id"]}
+                    for p, r, c in sorted(rows)
+                ]
+
+
+def _runtime(node: Mapping[str, Any]) -> bool:
+    """Whether a rule marked the found node's target as built at run time."""
+    return bool(node.get("attributes", {}).get("resolution") == "runtime")
+
+
+def _listed(node_id: str, entries: Sequence[BoundaryEntry]) -> dict[str, Any]:
+    """The node the boundary groups listing a name draw for it once an edge reached it."""
     return {
         "id": node_id,
-        "type": entry.type,
-        "state": "declared",
+        "type": entries[0].type,
+        "state": "boundary",
         "locations": [],
         "provenance": [
-            {"pack": entry.pack, "rule": rule, "confidence": "declared", "sets": ["id", "type"]}
+            {
+                "pack": pack,
+                "rule": f"boundary.{group}",
+                "confidence": "declared",
+                "sets": ["id", "type"],
+            }
+            for pack, group in sorted({(e.pack, e.group) for e in entries})
         ],
     }
 
@@ -235,12 +316,12 @@ def _declared(node_id: str, entry: BoundaryEntry) -> dict[str, Any]:
 def _classify(
     merged: dict[str, dict[str, Any]],
     merged_edges: Mapping[tuple[str, str, str], Sequence[FoundEdge]],
-    boundary: Mapping[str, BoundaryEntry],
+    boundary: Mapping[str, Sequence[BoundaryEntry]],
     types: Mapping[str, TypeInfo],
 ) -> list[Skipped]:
-    """Classify each mapped node whose ancestry reaches a declared boundary node that classifies.
+    """Classify each mapped node whose ancestry reaches a listed boundary node that classifies.
 
-    From each such boundary node the walk follows its entry's ancestry edges backwards, through
+    From each such boundary node the walk follows each listing's ancestry edges backwards, through
     mapped nodes only. A node reached takes the deepest classification that reaches it when its
     type is on that one's chain, and keeps a type equal to or below it; either way it gains an
     inferred provenance row per listing group. A node whose type, or whose classifications, do not
@@ -249,41 +330,44 @@ def _classify(
     sources: dict[tuple[str, str], set[str]] = {}
     for kind, source, target in merged_edges:
         sources.setdefault((kind, target), set()).add(source)
-    reached: dict[str, set[str]] = {}
+    reached: dict[str, set[tuple[str, BoundaryEntry]]] = {}
     for start in sorted(boundary):
-        entry = boundary[start]
-        if not entry.classifies or start not in merged or merged[start]["state"] != "declared":
+        if start not in merged or merged[start]["state"] != "boundary":
             continue
-        seen, pending = {start}, [start]
-        while pending:
-            current = pending.pop(0)
-            below = {s for kind in entry.ancestry for s in sources.get((kind, current), ())}
-            for node_id in sorted(below):
-                if node_id not in seen and merged[node_id]["state"] == "mapped":
-                    seen.add(node_id)
-                    reached.setdefault(node_id, set()).add(start)
-                    pending.append(node_id)
+        for entry in boundary[start]:
+            if not entry.classifies:
+                continue
+            seen, pending = {start}, [start]
+            while pending:
+                current = pending.pop(0)
+                below = {s for kind in entry.ancestry for s in sources.get((kind, current), ())}
+                for node_id in sorted(below):
+                    if node_id not in seen and merged[node_id]["state"] == "mapped":
+                        seen.add(node_id)
+                        reached.setdefault(node_id, set()).add((start, entry))
+                        pending.append(node_id)
     rows: list[Skipped] = []
     for node_id in sorted(reached):
-        node, starts = merged[node_id], sorted(reached[node_id])
-        deepest = max(starts, key=lambda s: len(type_chain(types, str(boundary[s].classifies))))
-        target = str(boundary[deepest].classifies)
+        node = merged[node_id]
+        starts = sorted(reached[node_id], key=lambda s: (s[0], s[1].pack, s[1].group))
+        deepest = max(starts, key=lambda s: len(type_chain(types, str(s[1].classifies))))
+        target = str(deepest[1].classifies)
         chain = type_chain(types, target)
-        off = [s for s in starts if boundary[s].classifies not in chain]
+        off = [s for s in starts if s[1].classifies not in chain]
         if off or node["type"] not in chain and target not in type_chain(types, node["type"]):
-            start = off[0] if off else deepest
+            start, entry = off[0] if off else deepest
             reason = (
-                f"{node_id}: classification {boundary[start].classifies} from {start} "
+                f"{node_id}: classification {entry.classifies} from {start} "
                 f"does not descend from {target if off else node['type']}"
             )
             place = node["locations"][0]
-            rows.append((place["file"], place["line"], f"boundary.{boundary[start].group}", reason))
+            rows.append((place["file"], place["line"], f"boundary.{entry.group}", reason))
             continue
         if node["type"] in chain:
             node["type"] = target
         node["provenance"] += [
             {"pack": pack, "rule": f"boundary.{group}", "confidence": "inferred", "sets": ["type"]}
-            for pack, group in sorted({(boundary[s].pack, boundary[s].group) for s in starts})
+            for pack, group in sorted({(e.pack, e.group) for _, e in starts})
         ]
     return rows
 
@@ -303,6 +387,11 @@ def type_chain(types: Mapping[str, TypeInfo], name: str) -> list[str]:
 def _internal(types: Mapping[str, TypeInfo], name: str) -> bool:
     """Whether the type is internal, or lies below an internal type."""
     return any(types[t].internal for t in type_chain(types, name) if t in types)
+
+
+def _boundary_type(types: Mapping[str, TypeInfo], name: str) -> bool:
+    """Whether the type is declared boundary, or lies below a boundary type."""
+    return any(types[t].boundary for t in type_chain(types, name) if t in types)
 
 
 def _referenced_type(names: set[str], types: Mapping[str, TypeInfo]) -> str:
@@ -365,13 +454,14 @@ def _edge(
     merged: Mapping[str, Mapping[str, Any]],
     edge_kinds: Mapping[str, EdgeKind],
     types: Mapping[str, TypeInfo],
+    found: set[str],
 ) -> dict[str, Any]:
     kind, source, target = key
     for end, allowed in (
         (source, edge_kinds[kind].from_types),
         (target, edge_kinds[kind].to_types),
     ):
-        if merged[end]["state"] != "mapped":
+        if end not in found:
             continue
         if not set(allowed) & set(type_chain(types, merged[end]["type"])):
             raise EdgeIllegal(
