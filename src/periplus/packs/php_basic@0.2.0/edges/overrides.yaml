@@ -1,0 +1,89 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method that replaces one its class inherits: overrides, from the child's method to the method
+# of the nearest ancestor, through extends, that declares the same name. At each ancestor a method
+# of a trait it uses comes before the ancestor's parents. A grandparent's method the middle class
+# does not declare is the target. Both methods are declarations in the files, so the edge is
+# declared. With it, what breaks if Base::step changes reaches Child::step, which a $this->step()
+# call in Base does not show. method_nearest_declaration joins the method to that declaration on
+# an internal slot node, one per method; method_overrides_ancestor, a pass later, emits the edge
+# unless the declaration is private, which PHP does not treat as replaced.
+#
+# Limits: a method that implements an interface method gets no edge, and neither does one that
+# replaces a method of a trait its own class uses. An ancestor that declares the method and also
+# uses a trait that declares it gives the trait's method, though PHP keeps the class's own. A
+# private promoted constructor parameter marks its constructor private, so a constructor below
+# that one gets no edge. A parent outside the map gives no edge and no mark.
+node_types:
+
+- name: php.private_method
+  id_namespace: php.private_method
+  internal: true
+
+- name: php.method_slot
+  id_namespace: php.method_slot
+  internal: true
+
+edge_kinds:
+
+- kind: overrides
+  from: php.method
+  to: php.method
+
+- kind: nearest_declaration
+  from: php.method
+  to: php.method_slot
+
+rules:
+
+- rule: find_private_method
+  reads: file
+  in: [source]
+  match: {declaration: visibility_modifier, filetype: php, where: [{has_child: private}]}
+  id: &slot_id
+    from: [enclosing_type, enclosing_method]
+    template: "{enclosing_type}::{enclosing_method}"
+  emits: [{node: {type: php.private_method}}]
+  confidence: declared
+
+- rule: find_method_slot
+  reads: file
+  in: [source]
+  match: {declaration: formal_parameters, filetype: php}
+  id: *slot_id
+  emits: [{node: {type: php.method_slot}}]
+  confidence: declared
+
+- rule: method_nearest_declaration
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<class>[^:]+)::(?<method>\w+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - try:
+      - edge: mixes_in
+      - id_matches: '^php\.type::(?<owner>.+)$'
+      - node: 'php.method_slot::{owner}::{method}'
+    - node: 'php.method_slot::{owner}::{method}'
+  emits: [{edge: {kind: nearest_declaration, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: method_overrides_ancestor
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<class>[^:]+)::(?<method>\w+)$'}]
+    follow:
+    - edge: nearest_declaration
+    - id_matches: '^php\.method_slot::(?<owner>[^:]+)::\w+$'
+    - node: 'php.method::{owner}::{method}'
+    unless:
+    - - edge: nearest_declaration
+      - id_matches: '^php\.method_slot::(?<owner>[^:]+)::\w+$'
+      - node: 'php.private_method::{owner}::{method}'
+  emits: [{edge: {kind: overrides, from: this_node, to: matched_node}}]
+  confidence: declared
