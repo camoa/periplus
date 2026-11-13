@@ -1,0 +1,71 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A class method that implements an interface method: implements_method, from the class's method to
+# the interface's method of the same name. The interface is one the class implements, or one its
+# nearest ancestor that implements an interface declaring the name implements, and the method is
+# found on that interface or on the nearest interface it extends that declares it. A class that
+# implements two interfaces declaring the name gets an edge to each. Both methods are declarations
+# in the files, so the edge is declared. With it, what implements Base::run and what breaks if it
+# changes both reach the class's run(). An interface the map does not hold gives no edge and no
+# mark: a mark for each method of each class that implements an outside interface would name
+# methods the interface may not declare.
+#
+# A class method that replaces a method of a trait the class itself uses: overrides, from the
+# class's method to the trait's method, or to the method of the nearest trait that trait uses when
+# the trait does not declare it. PHP copies a trait's methods into the class, and the class's own
+# method wins at any visibility, so a private trait method is replaced too. A trait that uses a
+# trait is read the same way. edges/overrides.yaml joins a method to what an ancestor declares; a
+# trait used by an ancestor is its own.
+edge_kinds:
+
+- kind: implements_method
+  from: php.method
+  to: php.method
+
+rules:
+
+- rule: method_implements_own_interface
+  reads: map
+  match:
+    node_type: php.method
+    where: &method_id [{id_matches: '^php\.method::(?<class>[^:]+)::(?<method>\w+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: implements
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<iface>.+)$'
+    - node: 'php.method::{iface}::{method}'
+  emits: [{edge: {kind: implements_method, from: this_node, to: matched_node}}]
+  confidence: declared
+
+# The interfaces of the nearest ancestor whose interfaces declare the name. When the class
+# implements the same interface, both rules give the same edge, which the map holds once.
+- rule: method_implements_inherited_interface
+  reads: map
+  match:
+    node_type: php.method
+    where: *method_id
+    follow:
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - ancestors: [inherits]
+    - edge: implements
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<iface>.+)$'
+    - node: 'php.method::{iface}::{method}'
+  emits: [{edge: {kind: implements_method, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: method_overrides_own_trait
+  reads: map
+  match:
+    node_type: php.method
+    where: *method_id
+    follow:
+    - node: 'php.type::{class}'
+    - edge: mixes_in
+    - ancestors: [mixes_in]
+    - id_matches: '^php\.type::(?<trait>.+)$'
+    - node: 'php.method::{trait}::{method}'
+  emits: [{edge: {kind: overrides, from: this_node, to: matched_node}}]
+  confidence: declared
