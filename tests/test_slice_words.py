@@ -7,6 +7,7 @@ An invented shop. Edges, files in brackets:
         -instantiates-> Mailer [8]
     pay@9 -calls-> Mailer::send [9];  Mailer -defines-> Mailer::send [Mailer.php:3]
     Card::charge, mapped, with no edges
+    pay::mail@8, whose two edges both join it to Checkout::pay: a satellite of it
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from jsonschema import Draft202012Validator
 from periplus.cli import main
 from periplus.errors import ExitCode
 from periplus.navigate import slice as slicing
+from periplus.navigate.source import source_line
 
 SCHEMA = (
     Path(__file__).resolve().parent.parent / "src/periplus/contract/schema/navigation.schema.json"
@@ -35,6 +37,7 @@ MAILER = "t.class::shop.Mailer"
 SEND = "t.method::shop.Mailer::send"
 BANK = "t.method::shop.Bank::charge"
 CARD = "t.method::shop.Card::charge"
+SATELLITE = "t.site::shop.Checkout::pay::mail@8"
 CO = "src/Checkout.php"
 MA = "src/Mailer.php"
 
@@ -63,6 +66,7 @@ NODES = [
     _node(SEND, "t.method", line=3, file=MA),
     _node(BANK, "t.method", state="unresolved"),
     _node(CARD, "t.method", line=1, file="src/Card.php"),
+    _node(SATELLITE, "t.site", line=8, file=CO),
 ]
 EDGES = [
     _edge("defines", CHECKOUT, PAY, 5, file=CO),
@@ -71,6 +75,8 @@ EDGES = [
     _edge("instantiates", PAY, MAILER, 8, file=CO),
     _edge("calls", SITE, SEND, 9, file=CO),
     _edge("defines", MAILER, SEND, 3, file=MA),
+    _edge("has_site", PAY, SATELLITE, 8, file=CO),
+    _edge("site_in", SATELLITE, PAY, 8, file=CO),
 ]
 
 
@@ -133,6 +139,7 @@ def test_an_id_starts_the_piece_and_prints_the_chain_by_hop(tmp_path: Path) -> N
         f"  1 --instantiates--> {MAILER}  t.class  mapped  {CO}:8",
         "        | $m = new Mailer();",
         f"    2 --defines--> {SEND}  (again)  {MA}:3",
+        "folded into the node above, all their edges joining it: t.site 1",
         f"warning: resolved 'pay' to {PAY}",
     ]
 
@@ -141,7 +148,8 @@ def test_words_are_searched_as_find_searches_and_say_where_they_matched(tmp_path
     text = slicing.render_text(_piece(tmp_path, "takes payment", depth=1))
 
     assert text.splitlines()[1:5] == [
-        "start 1 (words: takes in attribute summary, payment in attribute summary)",
+        "start 1 (words: 'takes payment' in attribute summary, 'takes' in attribute summary,"
+        " 'payment' in attribute summary)",
         f"{CHECKOUT}  t.class  mapped  {CO}:3  [attribute summary]",
         "      | class Checkout {",
         "      @ summary: Takes payment for an order",
@@ -152,7 +160,39 @@ def test_words_are_searched_as_find_searches_and_say_where_they_matched(tmp_path
 def test_a_mapped_node_is_picked_before_one_only_named(tmp_path: Path) -> None:
     report = _piece(tmp_path, "charge", starts=1)
 
-    assert [start.row.id for start in report.starts] == [CARD]
+    assert [start.row.id for start in report.starts] == [CARD, PAY]
+
+
+def test_each_place_a_word_matches_gives_its_own_starts_and_a_satellite_comes_last(
+    tmp_path: Path,
+) -> None:
+    report = _piece(tmp_path, "mail", starts=1)
+
+    assert [start.row.id for start in report.starts] == [MAILER, PAY]
+    assert report.starts[1].words == (("mail", "description", None),)
+
+
+def test_each_word_picks_starts_and_a_text_that_fails_whole_falls_back_to_them(
+    tmp_path: Path,
+) -> None:
+    report = _piece(tmp_path, "mail charge", starts=1)
+
+    assert [start.row.id for start in report.starts] == [MAILER, PAY, CARD]
+    assert slicing.render_text(report).splitlines()[1] == (
+        "no node matches 'mail charge' as a whole; started from its words"
+    )
+
+
+def test_the_cut_keeps_a_node_several_starts_reach_first(tmp_path: Path) -> None:
+    report = _piece(tmp_path, "mail charge", starts=1, limit=1)
+
+    assert [(row.id, row.again) for row in report.rows.items] == [(SITE, False)]
+
+
+def test_the_cut_then_keeps_a_node_the_words_match(tmp_path: Path) -> None:
+    report = _piece(tmp_path, "mail charge", starts=1, limit=2)
+
+    assert [(row.id, row.again) for row in report.rows.items] == [(BANK, False), (SITE, False)]
 
 
 def test_starts_type_and_path_narrow_the_word_matches(tmp_path: Path) -> None:
@@ -175,11 +215,12 @@ def test_the_row_cap_keeps_near_hops_and_says_what_it_left_out(tmp_path: Path) -
     report = _piece(tmp_path, "pay", limit=3)
     lines = slicing.render_text(report).splitlines()
 
-    assert [row.id for row in report.rows.items] == [BANK, CHECKOUT, SITE]
-    assert lines[-6:-1] == [
+    assert [row.id for row in report.rows.items] == [BANK, CHECKOUT, MAILER]
+    assert lines[-7:-1] == [
+        "folded into the node above, all their edges joining it: t.site 1",
         "showing 3 of 6 rows",
         "left out by hop: 1: 1, 2: 2",
-        "left out by kind: calls 1, defines 1, instantiates 1",
+        "left out by kind: calls 1, defines 1, holds 1",
         "narrow with --kind K (kinds here: calls, defines, holds, instantiates),"
         " --direction out, --direction in or --depth 1",
         "show all with --limit 0",
@@ -228,3 +269,11 @@ def test_the_cli_prints_the_piece_and_refuses_word_flags_with_out(tmp_path: Path
         code = main(["slice", "pay", "--type", "t.class", "--out", str(tmp_path / "s.json")])
     assert code == ExitCode.USAGE
     assert not (tmp_path / "s.json").exists()
+
+
+def test_a_source_line_with_under_two_word_characters_is_not_printed() -> None:
+    assert (source_line("{#"), source_line("}"), source_line("x = 1")) == (
+        [],
+        [],
+        ["      | x = 1"],
+    )

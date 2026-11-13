@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
-from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +17,6 @@ from periplus.navigate.ids import resolve
 from periplus.navigate.listing import (
     NONE,
     Listing,
-    cut,
     first_location,
     footer,
     kind_warnings,
@@ -50,8 +49,11 @@ __all__ = [
     "run",
 ]
 
-#: The most start nodes words pick, unless ``starts`` says otherwise.
+#: The most start nodes each word, and the whole text, picks from each place it can match (id,
+#: attribute, description), unless ``starts`` says otherwise.
 START_LIMIT = 3
+#: The fewest characters a word needs to be searched; a shorter one matches too much.
+MIN_WORD = 3
 #: The most rows a printed piece shows, unless ``limit`` says otherwise.
 ROW_LIMIT = 50
 #: How many edges a printed piece follows, unless ``depth`` says otherwise.
@@ -65,8 +67,8 @@ FILE_LIMIT = 500
 class Start:
     """A start node of a printed piece, as ``find`` shows it, and why it was picked.
 
-    ``given`` is the argument that named it; ``words`` each word that found it, with where it
-    matched (``id``, ``attribute`` or ``description``) and the attribute's name.
+    ``given`` is the argument that named it; ``words`` each word, or the whole text, that found
+    it, with where it matched (``id``, ``attribute`` or ``description``) and the attribute's name.
     """
 
     row: find.FindRow
@@ -101,7 +103,8 @@ class SliceReport:
     """One slice run. ``out`` is ``None`` when nothing was written.
 
     A printed piece (``printed``) holds its ``starts`` and ``rows``, what the row cap left out by
-    hop and by kind, the kinds its rows hold, and whether an edge leads on past ``depth``.
+    hop and by kind, the kinds its rows hold, whether an edge leads on past ``depth``, the nodes
+    folded into the node above by type, and ``notes`` on how the words were read.
     """
 
     out: str | None = None
@@ -119,6 +122,8 @@ class SliceReport:
     depth: int = PRINT_DEPTH
     direction: str = "both"
     searched: bool = False
+    folded: Mapping[str, int] | None = None
+    notes: tuple[str, ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -222,6 +227,16 @@ def _under(document: Mapping[str, Any], prefixes: Collection[str]) -> set[str]:
     return starts
 
 
+#: A word: a run of letters, digits and underscores.
+_WORD = re.compile(r"\w+")
+#: Where a match was found, by ``find``'s rank: 0 to 4 the id, 5 an attribute, 6 a description.
+_PLACES = ("id", "attribute", "description")
+
+
+def _place(rank: int) -> str:
+    return _PLACES[max(rank - 4, 0)]
+
+
 def _piece(
     start: Path,
     env: Mapping[str, str],
@@ -237,9 +252,9 @@ def _piece(
 ) -> SliceReport:
     """The piece around the start nodes, as rows to print.
 
-    An argument that names a node starts there. The rest is split into words, each searched as
-    ``find`` searches; up to ``most`` of the best matches start, narrowed by ``types`` and, when
-    there are words, by ``prefixes``. Without words, each prefix adds the nodes under it.
+    An argument that names a node starts there. The rest is searched as ``find`` searches, as a
+    whole and word by word; see ``_starts``. ``types`` and, when there are words, ``prefixes``
+    narrow those starts. Without words, each prefix adds the nodes under it.
     """
     try:
         document = load_document(start, env, map_path)[1]
@@ -248,20 +263,33 @@ def _piece(
             index = MapIndex(document)
             picked: dict[str, Start] = {}
             warnings: list[str] = []
-            words: list[str] = []
+            rest: list[str] = []
             for text in given:
                 try:
                     node_id, said = resolve(index, text)
                 except NodeNotFound:
-                    words += [w for w in text.casefold().split() if w not in words]
+                    rest.append(text)
                     continue
                 warnings += said
                 picked.setdefault(node_id, Start(_row(index, node_id, described), given=text))
-            if words:
-                wanted, narrowed, notes = find.narrowing(index, types, prefixes)
-                warnings += notes
-                for found in _best(index, words, wanted, narrowed, described, most):
-                    picked.setdefault(found.row.id, found)
+            words = list(dict.fromkeys(_WORD.findall(" ".join(rest).casefold())))
+            words = [word for word in words if len(word) >= MIN_WORD]
+            whole = " ".join(rest).casefold().strip()
+            queries = list(dict.fromkeys(([whole] if whole and whole not in words else []) + words))
+            matched: dict[str, set[str]] = {}
+            for word in words:
+                for match in find.search(index, word, None, (), described):
+                    matched.setdefault(match[1], set()).add(word)
+            notes: list[str] = []
+            if queries:
+                wanted, narrowed, said = find.narrowing(index, types, prefixes)
+                warnings += said
+                found = _starts(index, queries, wanted, narrowed, described, matched, most)
+                for node_id, begun in found.items():
+                    picked.setdefault(node_id, begun)
+                lone = found and queries[0] == whole and len(queries) > 1
+                if lone and not find.search(index, whole, wanted, narrowed, described):
+                    notes.append(f"no node matches {whole!r} as a whole; started from its words")
             elif prefixes:
                 for node_id in sorted(_under(document, prefixes)):
                     picked.setdefault(node_id, Start(_row(index, node_id, described)))
@@ -269,7 +297,8 @@ def _piece(
                 message = "give some words, an id or a path prefix"
                 return SliceReport(printed=True, problems=(Problem(ExitCode.USAGE, message, {}),))
             order = list(picked)
-            rows, deeper = _grow(index, order, direction, depth, set(kinds))
+            rows, deeper, folded = _grow(index, order, direction, depth, set(kinds))
+            kept = _keep(rows, picked, matched, limit)
             held = {edge["kind"] for edge in index.edges}
     except HarnessError as error:
         return SliceReport(printed=True, problems=(error.problem(),))
@@ -277,12 +306,11 @@ def _piece(
     begun = tuple(
         replace(s, row=replace(s.row, source=lines.at(s.row.location))) for s in picked.values()
     )
-    shown = cut(rows, limit)
     items = tuple(
-        replace(r, source=lines.at(r.location), description=described.get(r.id))
-        for r in shown.items
+        replace(rows[i], source=lines.at(rows[i].location), description=described.get(rows[i].id))
+        for i in kept
     )
-    left = rows[shown.shown :]
+    left = [row for i, row in enumerate(rows) if i not in set(kept)]
     return SliceReport(
         nodes=len({r.id for r in rows} | set(order)),
         edges=len(rows),
@@ -290,14 +318,16 @@ def _piece(
         problems=problems,
         printed=True,
         starts=begun,
-        rows=replace(shown, items=items),
+        rows=Listing(items, len(rows), len(items), len(items) < len(rows)),
         left_by_hop=dict(sorted(Counter(r.hop for r in left).items())),
         left_by_kind=dict(sorted(Counter(r.kind for r in left).items())),
         kinds=tuple(sorted({r.kind for r in rows})),
         deeper=deeper,
         depth=depth,
         direction=direction,
-        searched=bool(words),
+        searched=bool(queries),
+        folded=dict(sorted(folded.items())),
+        notes=tuple(notes),
     )
 
 
@@ -306,51 +336,120 @@ def _row(index: MapIndex, node_id: str, described: Mapping[str, str]) -> find.Fi
     return find.found_row((0, node_id, index.nodes[node_id], None), described)
 
 
-def _best(
+def _satellite(index: MapIndex, node_id: str) -> str | None:
+    """The one other node all of ``node_id``'s edges join it to, when it has two edges or more."""
+    edges = index.outgoing(node_id) + index.incoming(node_id)
+    others = {e["to"] if e["from"] == node_id else e["from"] for e in edges}
+    return others.pop() if len(edges) > 1 and len(others) == 1 and node_id not in others else None
+
+
+def _starts(
     index: MapIndex,
-    words: list[str],
+    queries: list[str],
     wanted: set[str] | None,
     prefixes: Collection[str],
     described: Mapping[str, str],
+    matched: Mapping[str, set[str]],
     most: int,
-) -> list[Start]:
-    """Up to ``most`` nodes the words find, best first.
+) -> dict[str, Start]:
+    """Up to ``most`` start nodes per query and per place it matched, in query order.
 
-    A word counts 1 divided by how many nodes it matches, so a rare word outweighs a common one.
-    Ties go to a mapped node, then to the lower sum of ``find`` ranks, then to the id.
+    A query is the whole text or one word. Each place (id, attribute, description) gives its own
+    best, so an attribute match is not pushed behind every id match. Within a place, a node that
+    more words find comes first, then a mapped node, then one that is not a satellite of another
+    node, then ``find``'s rank, then the id.
     """
-    hits: dict[str, list[tuple[str, find.Match]]] = {}
-    weight: dict[str, Fraction] = {}
-    for word in words:
-        matches = find.search(index, word, wanted, prefixes, described)
+    said: dict[str, list[tuple[str, str, str | None]]] = {}
+    nearest: dict[str, find.Match] = {}
+    for query in queries:
+        matches = find.search(index, query, wanted, prefixes, described)
         for match in matches:
-            hits.setdefault(match[1], []).append((word, match))
-            weight[match[1]] = weight.get(match[1], Fraction(0)) + Fraction(1, len(matches))
+            place = _place(match[0])
+            said.setdefault(match[1], []).append((query, place, match[3][0] if match[3] else None))
+        for place in _PLACES:
+            here = [m for m in matches if _place(m[0]) == place]
+            here.sort(
+                key=lambda m: (
+                    -len(matched.get(m[1], ())),
+                    m[2]["state"] != "mapped",
+                    _satellite(index, m[1]) is not None,
+                    m[0],
+                    m[1],
+                )
+            )
+            for match in here[:most]:
+                nearest.setdefault(match[1], match)
+    return {
+        node_id: Start(find.found_row(match, described), words=tuple(said[node_id]))
+        for node_id, match in nearest.items()
+    }
 
-    def key(node_id: str) -> tuple[Fraction, bool, int, str]:
-        rank = sum(match[0] for _, match in hits[node_id])
-        return (-weight[node_id], index.nodes[node_id]["state"] != "mapped", rank, node_id)
 
-    best = []
-    for node_id in sorted(hits, key=key)[:most]:
-        found = hits[node_id]
-        nearest = min(found, key=lambda pair: pair[1][0])[1]
-        said = tuple(
-            (word, find.found_row(match, described).matched, match[3][0] if match[3] else None)
-            for word, match in found
-        )
-        best.append(Start(find.found_row(nearest, described), words=said))
-    return best
+def _keep(
+    rows: list[PieceRow],
+    picked: Mapping[str, Start],
+    matched: Mapping[str, set[str]],
+    limit: int,
+) -> list[int]:
+    """The indexes of the rows the cap keeps, in walk order; a limit of 0 keeps them all.
+
+    Rows are taken best first: a node more starts reach, then one reached from starts of more
+    words, then one whose own id, attributes or description more words match, then the nearer
+    hop, a full row before a back-reference, then the id. Each row brings the rows above it, and
+    a back-reference the full row it points to; a row whose rows do not fit is passed over.
+    """
+    if not limit or len(rows) <= limit:
+        return list(range(len(rows)))
+    reach: dict[str, set[str]] = {}
+    for row in rows:
+        reach.setdefault(row.id, set()).add(row.start)
+    groups = {
+        node_id: {q for s in starts for q in _queries(picked[s])}
+        for node_id, starts in reach.items()
+    }
+    full = {row.id: i for i, row in enumerate(rows) if not row.again}
+
+    def needs(i: int) -> set[int]:
+        chain: set[int] = set()
+        todo = [i]
+        while todo:
+            j = todo.pop()
+            if j in chain:
+                continue
+            chain.add(j)
+            row = rows[j]
+            todo += [full[n] for n in (row.parent, row.id if row.again else None) if n in full]
+        return chain
+
+    def rank(i: int) -> tuple[int, int, int, int, bool, str, int]:
+        row = rows[i]
+        own = len(matched.get(row.id, ()))
+        return (-len(reach[row.id]), -len(groups[row.id]), -own, row.hop, row.again, row.id, i)
+
+    kept: set[int] = set()
+    for i in sorted(range(len(rows)), key=rank):
+        new = needs(i) - kept
+        if len(kept) + len(new) > limit:
+            continue
+        kept |= new
+    return sorted(kept)
+
+
+def _queries(start: Start) -> set[str]:
+    """The words, or the argument, that picked ``start``."""
+    return {start.given} if start.given is not None else {q for q, _, _ in start.words}
 
 
 def _grow(
     index: MapIndex, starts: list[str], direction: str, depth: int, kinds: Collection[str]
-) -> tuple[list[PieceRow], bool]:
-    """Every row breadth-first, hop by hop across all starts, and whether an edge leads on.
+) -> tuple[list[PieceRow], bool, Counter[str]]:
+    """Every row breadth-first, hop by hop across all starts, whether an edge leads on, and the
+    nodes folded into the node above, counted by type.
 
     Each edge is one row at most. A node first reached is a full row and is followed at the next
-    hop; one reached again is a back-reference. Edges go in (kind, other end, end) order, so the
-    rows are the same on every run.
+    hop; one reached again is a back-reference. A node all of whose edges join it to the node
+    above, two edges or more, is folded: it makes no row and costs no hop. Edges go in (kind,
+    other end, end) order, so the rows are the same on every run.
     """
     ways = {"out": (("to", index.outgoing),), "in": (("from", index.incoming),)}.get(
         direction, (("to", index.outgoing), ("from", index.incoming))
@@ -359,6 +458,7 @@ def _grow(
     used: set[tuple[str, str, str]] = set()
     frontiers = {s: [s] for s in starts}
     rows: list[PieceRow] = []
+    folded: Counter[str] = Counter()
 
     def edges(item: str) -> list[tuple[Mapping[str, Any], str]]:
         found = [
@@ -377,9 +477,17 @@ def _grow(
                     key = (edge["from"], edge["kind"], edge["to"])
                     if key in used:
                         continue
-                    used.add(key)
                     target = as_text(edge[end])
                     node = index.nodes[target]
+                    if target not in seen and _satellite(index, target) == item:
+                        seen.add(target)
+                        folded[as_text(node["type"])] += 1
+                        used.update(
+                            (e["from"], e["kind"], e["to"])
+                            for e in index.outgoing(target) + index.incoming(target)
+                        )
+                        continue
+                    used.add(key)
                     again = target in seen
                     rows.append(
                         PieceRow(
@@ -400,14 +508,14 @@ def _grow(
                         reached.append(target)
             frontiers[begun] = reached
     deeper = any(edges(item) for items in frontiers.values() for item in items)
-    return rows, deeper
+    return rows, deeper, folded
 
 
 def _why(start: Start) -> str:
     if start.given is not None:
         return f"given as {start.given!r}"
     said = [
-        f"{word} in {'attribute ' + (name or '') if matched == 'attribute' else matched}"
+        f"{word!r} in {'attribute ' + (name or '') if matched == 'attribute' else matched}"
         for word, matched, name in start.words
     ]
     return "words: " + ", ".join(said)
@@ -426,7 +534,8 @@ def _tree(report: SliceReport) -> list[str]:
             arrow = f"--{_escape(row.kind)}-->" if row.outward else f"<--{_escape(row.kind)}--"
             if row.again:
                 lines.append(
-                    f"{pad}{row.hop} {arrow} {_escape(row.id)}  (again)  {_escape(located(row.location))}"
+                    f"{pad}{row.hop} {arrow} {_escape(row.id)}  (again)"
+                    f"  {_escape(located(row.location))}"
                 )
                 continue
             lines.append(
@@ -445,10 +554,15 @@ def _tree(report: SliceReport) -> list[str]:
 
 
 def _left_out(report: SliceReport) -> list[str]:
-    """What the row cap left out, by hop and by kind, and the flags that narrow or deepen."""
+    """The folded nodes, what the row cap left out, by hop and by kind, and the flags that narrow
+    or deepen."""
+    lines = []
+    if report.folded:
+        counted = ", ".join(f"{_escape(t)} {n}" for t, n in report.folded.items())
+        lines.append(f"folded into the node above, all their edges joining it: {counted}")
     note = footer(report.rows)
     if note is None:
-        return [f"go deeper with --depth {report.depth + 1}"] if report.deeper else []
+        return lines + ([f"go deeper with --depth {report.depth + 1}"] if report.deeper else [])
     hops = ", ".join(f"{hop}: {n}" for hop, n in (report.left_by_hop or {}).items())
     kinds = ", ".join(f"{_escape(k)} {n}" for k, n in (report.left_by_kind or {}).items())
     ways = [f"--kind K (kinds here: {', '.join(_escape(k) for k in report.kinds)})"]
@@ -456,7 +570,7 @@ def _left_out(report: SliceReport) -> list[str]:
         ways += ["--direction out", "--direction in"]
     if report.depth > 1:
         ways.append(f"--depth {report.depth - 1}")
-    lines = [
+    lines += [
         f"{note} rows",
         f"left out by hop: {hops}",
         f"left out by kind: {kinds}",
@@ -473,6 +587,7 @@ def render_text(report: SliceReport) -> str:
     """The report as lines a person reads. Every outside string goes through ``_escape``."""
     lines = ["periplus slice"]
     if report.printed and not report.problems:
+        lines += [_escape(note) for note in report.notes]
         if not report.starts:
             lines.append("no matches")
         for number, start in enumerate(report.starts, 1):
@@ -521,6 +636,8 @@ def render_json(report: SliceReport) -> str:
                     "by_kind": dict(report.left_by_kind or {}),
                 },
                 "deeper": report.deeper,
+                "folded": dict(report.folded or {}),
+                "notes": list(report.notes),
                 "depth": report.depth,
                 "direction": report.direction,
                 "warnings": list(report.warnings),

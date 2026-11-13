@@ -246,7 +246,7 @@
     "slice_piece": {
       "description": "What slice prints without --out: the start nodes, then the rows reached from them breadth-first.",
       "type": "object", "additionalProperties": false,
-      "required": ["starts", "rows", "left_out", "deeper", "depth", "direction", "warnings", "problems"],
+      "required": ["starts", "rows", "left_out", "deeper", "folded", "notes", "depth", "direction", "warnings", "problems"],
       "properties": {
         "starts": {
           "type": "array",
@@ -313,6 +313,8 @@
           }
         },
         "deeper": {"description": "true when an edge leads on past the last hop.", "type": "boolean"},
+        "folded": {"description": "Nodes left out of the rows because all their edges, two or more, join them to the node above, counted by type.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+        "notes": {"description": "How the words were read, such as a text that matched nothing as a whole.", "type": "array", "items": {"type": "string"}},
         "depth": {"type": "integer", "minimum": 1},
         "direction": {"enum": ["out", "in", "both"]},
         "warnings": {"$ref": "#/$defs/warnings"},
