@@ -2,10 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://periplus.dev/schema/0/navigation.schema.json",
   "title": "Periplus navigation result",
-  "description": "What `--format json` prints for the navigation commands: types, find, show, neighbors, affected, path and slice, and what `export --report json` prints to standard error. Each command has one definition under $defs, slice two (slice with --out, slice_piece without), and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
+  "description": "What `--format json` prints for the navigation commands: types, legend, find, show, neighbors, affected, path and slice, and what `export --report json` prints to standard error. Each command has one definition under $defs, slice two (slice with --out, slice_piece without), and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
 
   "anyOf": [
     {"$ref": "#/$defs/types"},
+    {"$ref": "#/$defs/legend"},
     {"$ref": "#/$defs/find"},
     {"$ref": "#/$defs/show"},
     {"$ref": "#/$defs/neighbors"},
@@ -88,6 +89,43 @@
             "properties": {"kind": {"type": "string"}, "count": {"type": "integer", "minimum": 0}}
           }
         },
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "legend": {
+      "description": "The edge kinds and node types the map holds, most frequent first, each with the pack's one-line description from the map's legend, or null.",
+      "type": "object", "additionalProperties": false, "required": ["edge_kinds", "node_types", "left_out", "warnings", "problems"],
+      "properties": {
+        "edge_kinds": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["kind", "count", "from", "to", "description"],
+            "properties": {
+              "kind": {"type": "string"},
+              "count": {"type": "integer", "minimum": 1},
+              "from": {"description": "The types at the edges' from ends, with how many edges each.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+              "to": {"description": "The types at the edges' to ends, with how many edges each.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+              "description": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "node_types": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["type", "count", "parent", "description", "out", "in"],
+            "properties": {
+              "type": {"type": "string"},
+              "count": {"type": "integer", "minimum": 1},
+              "parent": {"type": ["string", "null"]},
+              "description": {"type": ["string", "null"]},
+              "out": {"description": "The kinds of the edges leaving nodes of this type, with how many edges each.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+              "in": {"description": "The kinds of the edges reaching nodes of this type, with how many edges each.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}}
+            }
+          }
+        },
+        "left_out": {"description": "How many rows the default text's byte budget left out, the least frequent first; 0 with --all, --kind or --type.", "type": "integer", "minimum": 0},
+        "warnings": {"$ref": "#/$defs/warnings"},
         "problems": {"$ref": "#/$defs/problems"}
       }
     },

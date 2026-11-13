@@ -9,10 +9,15 @@ from typing import Any
 
 import pytest
 from _navigate import _edge, _node
+from jsonschema import Draft202012Validator
 
 from periplus.cli import build_parser, main
 from periplus.errors import ExitCode
 from periplus.navigate import legend
+
+SCHEMA = (
+    Path(__file__).resolve().parent.parent / "src/periplus/contract/schema/navigation.schema.json"
+)
 
 DOCUMENT: dict[str, Any] = {
     "periplus_map_version": 0,
@@ -154,6 +159,9 @@ def test_json_carries_the_rows(tmp_path: Path) -> None:
         "in": {},
     }
     assert document["left_out"] == 0
+    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    validator = Draft202012Validator({**schema, "anyOf": [{"$ref": "#/$defs/legend"}]})
+    assert list(validator.iter_errors(document)) == []
 
 
 def test_a_missing_map_is_a_problem(tmp_path: Path) -> None:
