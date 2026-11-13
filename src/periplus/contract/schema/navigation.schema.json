@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://periplus.dev/schema/0/navigation.schema.json",
   "title": "Periplus navigation result",
-  "description": "What `--format json` prints for the navigation commands: types, find, show, neighbors, affected, path and slice, and what `export --report json` prints to standard error. Each command has one definition under $defs, and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
+  "description": "What `--format json` prints for the navigation commands: types, find, show, neighbors, affected, path and slice, and what `export --report json` prints to standard error. Each command has one definition under $defs, slice two (slice with --out, slice_piece without), and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
 
   "anyOf": [
     {"$ref": "#/$defs/types"},
@@ -12,6 +12,7 @@
     {"$ref": "#/$defs/affected"},
     {"$ref": "#/$defs/path"},
     {"$ref": "#/$defs/slice"},
+    {"$ref": "#/$defs/slice_piece"},
     {"$ref": "#/$defs/export"}
   ],
 
@@ -237,6 +238,99 @@
         "out": {"type": ["string", "null"]},
         "nodes": {"type": "integer", "minimum": 0},
         "edges": {"type": "integer", "minimum": 0},
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "slice_piece": {
+      "description": "What slice prints without --out: the start nodes, then the rows reached from them breadth-first.",
+      "type": "object", "additionalProperties": false,
+      "required": ["starts", "rows", "left_out", "deeper", "folded", "notes", "members", "depth", "direction", "warnings", "problems"],
+      "properties": {
+        "starts": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description", "given", "words"],
+            "properties": {
+              "id": {"type": "string"},
+              "type": {"type": "string"},
+              "state": {"type": "string"},
+              "location": {"type": ["string", "null"]},
+              "source": {"$ref": "#/$defs/source"},
+              "matched": {"description": "Where the best word matched, as find reports it; id for a given start.", "enum": ["id", "attribute", "description"]},
+              "matched_attribute": {"type": ["string", "null"]},
+              "description": {"$ref": "#/$defs/node_text"},
+              "given": {"description": "The argument that named this node, or null when words found it.", "type": ["string", "null"]},
+              "words": {
+                "description": "Each word that found this node, and where it matched.",
+                "type": "array",
+                "items": {
+                  "type": "object", "additionalProperties": false, "required": ["word", "matched", "matched_attribute"],
+                  "properties": {
+                    "word": {"type": "string"},
+                    "matched": {"enum": ["id", "attribute", "description"]},
+                    "matched_attribute": {"type": ["string", "null"]}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "rows": {
+          "allOf": [{"$ref": "#/$defs/listing"}],
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "again", "location", "source", "description", "container"],
+                "properties": {
+                  "start": {"description": "The start node this row hangs under.", "type": "string"},
+                  "hop": {"type": "integer", "minimum": 1},
+                  "from": {"description": "The node the row was reached from.", "type": "string"},
+                  "kind": {"type": "string"},
+                  "direction": {"description": "out when the edge runs from the from node to id, in when it runs from id to the from node.", "enum": ["out", "in"]},
+                  "id": {"type": "string"},
+                  "type": {"type": "string"},
+                  "state": {"type": "string"},
+                  "again": {"description": "true when id is printed in full on another row of this piece.", "type": "boolean"},
+                  "container": {"description": "true when id is the container end of a grouping edge; the walk does not go on from it.", "type": "boolean"},
+                  "location": {"$ref": "#/$defs/place"},
+                  "source": {"$ref": "#/$defs/source"},
+                  "description": {"$ref": "#/$defs/node_text"}
+                }
+              }
+            }
+          }
+        },
+        "left_out": {
+          "description": "The rows --limit cut, counted by hop and by edge kind.",
+          "type": "object", "additionalProperties": false, "required": ["by_hop", "by_kind"],
+          "properties": {
+            "by_hop": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+            "by_kind": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}}
+          }
+        },
+        "deeper": {"description": "true when an edge leads on past the last hop.", "type": "boolean"},
+        "folded": {"description": "Nodes left out of the rows because all their edges, two or more, join them to the node above, counted by type.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+        "members": {
+          "description": "For each start that is a container: its members by grouping edges, counted by type, rarest type first, and the rows shown.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["container", "total", "by_type", "rows"],
+            "properties": {
+              "container": {"type": "string"},
+              "total": {"type": "integer", "minimum": 0},
+              "by_type": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+              "rows": {"type": "array", "items": {"$ref": "#/$defs/slice_piece/properties/rows/properties/items/items"}}
+            }
+          }
+        },
+        "notes": {"description": "How the words were read, such as a text that matched nothing as a whole.", "type": "array", "items": {"type": "string"}},
+        "depth": {"type": "integer", "minimum": 1},
+        "direction": {"enum": ["out", "in", "both"]},
         "warnings": {"$ref": "#/$defs/warnings"},
         "problems": {"$ref": "#/$defs/problems"}
       }

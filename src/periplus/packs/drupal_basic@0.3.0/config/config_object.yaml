@@ -12,7 +12,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # config_provided_by_theme; else the mapped or referenced module of that name; else, inferred, a
 # referenced module of that name, by config_provided_by. Drupal keeps module and theme names
 # apart, so a name the map holds as both makes both edges. core.extension's theme list gives
-# installs_theme to each theme it names.
+# installs_theme to each theme it names. The two owner kinds group: the file belongs to its owner.
 node_types:
 - name: drupal.config_object
   id_namespace: drupal.config
@@ -37,9 +37,11 @@ edge_kinds:
 - kind: config_provided_by
   from: drupal.config_object
   to: drupal.module
+  groups: true
 - kind: config_provided_by_theme
   from: drupal.config_object
   to: drupal.theme
+  groups: true
 - kind: config_owner_named
   from: drupal.config_object
   to: drupal.config_owner

@@ -184,7 +184,9 @@ kinds of tool that page describes.
 ## What the map holds
 
 The map is one JSON file. It holds the nodes, the edges, counts by type and by kind, the packs
-loaded and the settings file used. Each node has an `id`, a `type`, a `state` and its `locations`
+loaded and the settings file used. When it holds an edge of a kind its rutter declares grouping
+(`groups: true`: the edge's `from` end belongs to the container at its `to` end), it lists those
+kinds, sorted, under `grouping_kinds`. Each node has an `id`, a `type`, a `state` and its `locations`
 (file and line). Its `provenance` names the pack, the rule and the rule's declared confidence.
 
 The engine writes three states today:

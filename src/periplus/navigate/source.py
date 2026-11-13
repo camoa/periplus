@@ -41,8 +41,11 @@ def located(location: str | None) -> str:
 
 
 def source_line(source: str | None) -> list[str]:
-    """The text line that shows a row's source line, deeper than any row; none when absent."""
-    return [] if source is None else [f"      | {_escape(source)}"]
+    """The text line that shows a row's source line, deeper than any row; none when absent or
+    when it holds fewer than two letters, digits or underscores, such as ``{#``."""
+    if source is None or sum(c.isalnum() or c == "_" for c in source) < 2:
+        return []
+    return [f"      | {_escape(source)}"]
 
 
 def description_line(text: str | None) -> list[str]:

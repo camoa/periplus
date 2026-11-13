@@ -103,7 +103,7 @@ EXECUTED_KEYS = frozenset(
         ),
         *(f"file.needs{k}" for k in ("", ".types", ".roles")),
         *("file.roles", "file.roles.*.name"),
-        *(f"file.edge_kinds{k}" for k in ("", ".*.kind", ".*.from", ".*.to")),
+        *(f"file.edge_kinds{k}" for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups")),
         *(
             f"file.node_types{k}"
             for k in ("", ".*.name", ".*.parent", ".*.abstract", ".*.id_namespace", ".*.internal")
@@ -567,11 +567,13 @@ class EdgeSpec:
 
 @dataclass(frozen=True, slots=True)
 class EdgeKind:
-    """One edge kind: the types allowed at each end."""
+    """One edge kind: the types allowed at each end, and whether its from end belongs to the
+    container at its to end."""
 
     name: str
     from_types: tuple[str, ...]
     to_types: tuple[str, ...]
+    groups: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -797,9 +799,7 @@ def _add_rows(
                         "declare under tables"
                     )
                     problems.append(
-                        Problem(
-                            ExitCode.PACK_RULES_UNREADABLE, message, {**detail, "table": table}
-                        )
+                        Problem(ExitCode.PACK_RULES_UNREADABLE, message, {**detail, "table": table})
                     )
                     continue
                 for key, value in rows.items():
@@ -1587,11 +1587,11 @@ def _read_kinds(
                 f"an edge_kinds entry of {pack} is not a mapping with a string kind and its ends",
                 {"pack": pack},
             )
-        kind = EdgeKind(name, ends[0], ends[1])
+        kind = EdgeKind(name, ends[0], ends[1], entry.get("groups") is True)
         first_pack, first_file = declared_at.setdefault(name, (pack, file))
         if kinds.setdefault(name, kind) != kind:
             message = (
-                f"the edge kind {name} is declared with different ends in {pack}/{file}, "
+                f"the edge kind {name} is declared with different ends or groups in {pack}/{file}, "
                 f"after {first_pack}/{first_file}"
             )
             detail = {"kind": name, "pack": pack, "file": file}
@@ -2113,9 +2113,7 @@ def _build_declaration(
     )
 
 
-def _build_map(
-    pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[str, str]]
-) -> Rule:
+def _build_map(pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[str, str]]) -> Rule:
     """A rule that reads the map: it fires on each node of ``match.node_type`` or a type below it
     that its ``where`` holds for and no ``unless`` chain reaches a node from, once for each node
     its ``follow`` steps reach that no ``unless_matched`` chain reaches a node from."""
