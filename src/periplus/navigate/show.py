@@ -92,7 +92,10 @@ class EdgeRow:
 
 @dataclass(frozen=True, slots=True)
 class ShowReport:
-    """One node, and its ``outgoing`` and ``incoming`` edge rows as a ``Listing`` each."""
+    """One node, and its ``outgoing`` and ``incoming`` edge rows as a ``Listing`` each.
+
+    ``forms`` are the nodes that stand for it across realizing edges, as (id, type, kind, the node
+    each stands for), and ``more_forms`` how many more there are past the cap."""
 
     id: str = ""
     type: str = ""
@@ -104,6 +107,8 @@ class ShowReport:
     description: Description | None = None
     outgoing: Listing[EdgeRow] = NONE
     incoming: Listing[EdgeRow] = NONE
+    forms: tuple[tuple[str, str, str, str], ...] = ()
+    more_forms: int = 0
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
 
@@ -175,6 +180,11 @@ def run(
             attributes = node.get("attributes", {})
             if not isinstance(attributes, dict):
                 raise TypeError(f"attributes is a {type(attributes).__name__}, not an object")
+            found, more_forms = index.stand_ins(node_id)
+            forms = tuple(
+                (other, as_text(index.nodes[other]["type"]), as_text(edge["kind"]), via)
+                for other, edge, via in found
+            )
             for p in node["provenance"]:
                 as_text(p["pack"])
                 as_text(p["rule"])
@@ -190,6 +200,8 @@ def run(
                 description=_entry(nodes[node_id]) if node_id in nodes else None,
                 outgoing=_shown(_rows(index, index.outgoing(node_id), "to", edges), limit, lines),
                 incoming=_shown(_rows(index, index.incoming(node_id), "from", edges), limit, lines),
+                forms=forms,
+                more_forms=more_forms,
                 warnings=resolved,
                 problems=problems,
             )
@@ -306,6 +318,18 @@ def _edge_lines(listing: Listing[EdgeRow]) -> list[str]:
     return lines + ([f"  {note}"] if note else []) or ["  none"]
 
 
+def _form_lines(report: ShowReport) -> list[str]:
+    """The nodes that stand for the shown node: each with its type, the realizing kind, and the
+    node it stands for when that is not the shown node; none when there are none."""
+    if not report.forms:
+        return []
+    lines = ["", f"Realized by ({len(report.forms) + report.more_forms}):"]
+    for other, kind_of, kind, via in report.forms:
+        through = f" from {_escape(via)}" if via != report.id else ""
+        lines.append(f"  {_escape(other)}  {_escape(kind_of)}  by {_escape(kind)}{through}")
+    return lines + ([f"  +{report.more_forms} more"] if report.more_forms else [])
+
+
 def render_text(report: ShowReport) -> str:
     """The report as lines a person reads. Every outside string goes through ``_escape``."""
     lines = [f"periplus show {_escape(report.id)}" if report.id else "periplus show"]
@@ -325,6 +349,7 @@ def render_text(report: ShowReport) -> str:
         lines.append(f"description: {_described(report.description)}")
         lines += ["", f"Outgoing ({report.outgoing.total}):", *_edge_lines(report.outgoing)]
         lines += ["", f"Incoming ({report.incoming.total}):", *_edge_lines(report.incoming)]
+        lines += _form_lines(report)
     lines += [f"warning: {_escape(w)}" for w in report.warnings]
     lines += problem_lines(report.problems)
     return "\n".join(lines) + "\n"
@@ -343,6 +368,13 @@ def render_json(report: ShowReport) -> str:
         "description": _json_description(report.description),
         "outgoing": payload(report.outgoing, _json_row),
         "incoming": payload(report.incoming, _json_row),
+        "realized_by": {
+            "items": [
+                {"id": other, "type": kind_of, "kind": kind, "stands_for": via}
+                for other, kind_of, kind, via in report.forms
+            ],
+            "more": report.more_forms,
+        },
         "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
     }

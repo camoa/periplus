@@ -148,7 +148,7 @@
 
     "show": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "type", "state", "roles", "attributes", "locations", "provenance", "description", "outgoing", "incoming", "warnings", "problems"],
+      "required": ["id", "type", "state", "roles", "attributes", "locations", "provenance", "description", "outgoing", "incoming", "realized_by", "warnings", "problems"],
       "properties": {
         "id": {"type": "string"},
         "type": {"type": "string"},
@@ -160,6 +160,14 @@
         "description": {"$ref": "#/$defs/description"},
         "outgoing": {"$ref": "#/$defs/edge_listing"},
         "incoming": {"$ref": "#/$defs/edge_listing"},
+        "realized_by": {
+          "description": "The mapped nodes that stand for this node across realizing edges, breadth first, at most 8, and how many more.",
+          "type": "object", "additionalProperties": false, "required": ["items", "more"],
+          "properties": {
+            "items": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "type", "kind", "stands_for"], "properties": {"id": {"type": "string"}, "type": {"type": "string"}, "kind": {"type": "string"}, "stands_for": {"description": "The node this one stands for: the shown node, or a node that stands for it.", "type": "string"}}}},
+            "more": {"type": "integer", "minimum": 0}
+          }
+        },
         "warnings": {"$ref": "#/$defs/warnings"},
         "problems": {"$ref": "#/$defs/problems"}
       }
@@ -177,14 +185,15 @@
               "type": "array",
               "items": {
                 "type": "object", "additionalProperties": false,
-                "required": ["id", "type", "state", "depth", "kind", "via", "location", "source", "description"],
+                "required": ["id", "type", "state", "depth", "kind", "via", "location", "source", "description", "stands_for"],
                 "properties": {
                   "id": {"type": "string"},
                   "type": {"type": "string"},
                   "state": {"type": "string"},
-                  "depth": {"type": "integer", "minimum": 1},
+                  "depth": {"description": "Hops from the start; 0 for a node that stands for the start.", "type": "integer", "minimum": 0},
                   "kind": {"type": "string"},
                   "via": {"type": "string"},
+                  "stands_for": {"description": "true when the item was added because it stands for via across a realizing edge, at via's depth: a form of a declaration, or in affected the declaration of a form.", "type": "boolean"},
                   "location": {"$ref": "#/$defs/place"},
                   "source": {"$ref": "#/$defs/source"},
                   "description": {"$ref": "#/$defs/node_text"}
@@ -340,7 +349,7 @@
       "properties": {
         "piece": {"$ref": "#/$defs/piece_number"},
         "start": {"description": "The start node this row hangs under.", "type": "string"},
-        "hop": {"type": "integer", "minimum": 1},
+        "hop": {"description": "Hops from the start; 0 for a node that stands for the start.", "type": "integer", "minimum": 0},
         "from": {"description": "The node the row was reached from.", "type": "string"},
         "kind": {"type": "string"},
         "direction": {"description": "out when the edge runs from the from node to id, in when it runs from id to the from node.", "enum": ["out", "in"]},

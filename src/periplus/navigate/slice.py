@@ -37,7 +37,7 @@ from periplus.navigate.mapfile import (
 )
 from periplus.navigate.show import node_descriptions
 from periplus.navigate.source import SourceLines, description_line, source_line, where
-from periplus.navigate.walk import walk
+from periplus.navigate.walk import stand_in_line, walk
 from periplus.report import _escape, _json_problem
 
 __all__ = [
@@ -142,7 +142,8 @@ class Link:
 
     ``owners`` are far ends folded into their owner, with a count; ``more`` counts the mapped far
     ends past the names shown; ``outside`` names the first far ends not mapped, of
-    ``outside_count``.
+    ``outside_count``. ``realized`` marks the far ends of a realizing kind at its to end: the
+    forms of this node.
     """
 
     kind: str
@@ -152,12 +153,14 @@ class Link:
     owners: tuple[tuple[str, int], ...]
     outside: tuple[str, ...]
     outside_count: int
+    realized: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class Subject:
     """A mapped node of the piece under its file: line, short name, type, source line, its links
-    in the piece, and its edges the piece does not show, as (kind, outward, count)."""
+    in the piece, its edges the piece does not show, as (kind, outward, count), and how many nodes
+    stand for it past the cap."""
 
     id: str
     short: str
@@ -167,6 +170,7 @@ class Subject:
     description: str | None
     links: tuple[Link, ...]
     unwalked: tuple[tuple[str, bool, int], ...]
+    more_forms: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,9 +451,11 @@ def _piece(
             found_members = (_members(index, s, grouping, only, share, standing) for s in order)
             members = [m for m in found_members if m is not None]
             rows: list[PieceRow] = []
-            deeper, folded = False, Counter[str]()
+            deeper, folded, more_forms = False, Counter[str](), dict[str, int]()
             if not (alone and members):
-                rows, deeper, folded = _grow(index, depths, direction, set(kinds), grouping)
+                rows, deeper, folded, more_forms = _grow(
+                    index, depths, direction, set(kinds), grouping
+                )
             left_over = limit - sum(len(m.rows) for m in members) if limit else 0
             kept = (
                 []
@@ -476,6 +482,7 @@ def _piece(
                     (lines, described),
                     (cap, more),
                     scores,
+                    more_forms,
                 )
                 shorts = {i: names.short(i) for i in [*picked, *(m.container for m in members)]}
                 left = [row for i, row in enumerate(rows) if i not in set(chosen)]
@@ -601,6 +608,7 @@ def _layout(
     reading: tuple[SourceLines, Mapping[str, str]],
     folding: tuple[int, bool],
     scores: Mapping[str, float],
+    more_forms: Mapping[str, int],
 ) -> tuple[
     tuple[FileGroup, ...],
     tuple[tuple[str, tuple[tuple[str, int], ...]], ...],
@@ -619,7 +627,7 @@ def _layout(
     a grouping edge from the node to its container left to the header. An edge between two nodes
     of one file prints only at its ``from`` end.
     ``folding`` gives the most names per link and whether to count the edges the piece leaves
-    out.
+    out. ``more_forms`` counts, by node, the nodes that stand for it past the cap.
     """
     starts, rows, members, grouping, homes = piece
     lines, described = reading
@@ -667,6 +675,7 @@ def _layout(
             tuple(sorted((names.short(h), n) for h, n in folded.items())),
             tuple(names.short(e) for e in outside[:OUTSIDE_NAMES]),
             len(outside),
+            kind in index.realizing and not outward,
         )
 
     found: list[tuple[str | None, Subject]] = []
@@ -715,6 +724,7 @@ def _layout(
                     )
                     if more
                     else (),
+                    more_forms.get(node_id, 0),
                 ),
             )
         )
@@ -1076,7 +1086,7 @@ def _grow(
     direction: str,
     kinds: Collection[str],
     grouping: Collection[str] = (),
-) -> tuple[list[PieceRow], bool, Counter[str]]:
+) -> tuple[list[PieceRow], bool, Counter[str], dict[str, int]]:
     """Every row breadth-first, hop by hop across all starts, each start to its own depth in
     ``depths``, whether an edge leads on, and the nodes folded into the node above, counted by
     type.
@@ -1086,7 +1096,9 @@ def _grow(
     above, two edges or more, is folded: it makes no row and costs no hop. Edges go in (kind,
     other end, end) order, so the rows are the same on every run. An edge of a ``grouping``
     kind is followed only from its member to its container: the container is a row once per
-    start, marked, and the walk does not go on from it.
+    start, marked, and the walk does not go on from it. A start, and a node first reached by an
+    edge of a kind that does not realize, brings the nodes that stand for it as rows at its own
+    hop, as ``walk`` does; the last value counts those past the cap, by node.
     """
     ways = {"out": (("to", index.outgoing),), "in": (("from", index.incoming),)}.get(
         direction, (("to", index.outgoing), ("from", index.incoming))
@@ -1094,10 +1106,40 @@ def _grow(
     starts = list(depths)
     seen = set(starts)
     used: set[tuple[str, str, str]] = set()
-    frontiers = {s: [s] for s in starts}
     rows: list[PieceRow] = []
     folded: Counter[str] = Counter()
     boxed: set[tuple[str, str]] = set()
+    more: dict[str, int] = {}
+
+    def stand(begun: str, item: str, hop: int) -> list[str]:
+        found, left = index.stand_ins(item, direction == "in")
+        if left:
+            more[item] = left
+        added = []
+        for other, edge, via in found:
+            if other in seen:
+                continue
+            seen.add(other)
+            used.add((edge["from"], edge["kind"], edge["to"]))
+            added.append(other)
+            node = index.nodes[other]
+            rows.append(
+                PieceRow(
+                    begun,
+                    hop,
+                    via,
+                    as_text(edge["kind"]),
+                    edge["from"] == via,
+                    other,
+                    as_text(node["type"]),
+                    as_text(node["state"]),
+                    False,
+                    where(edge, node),
+                )
+            )
+        return added
+
+    frontiers = {s: [s, *stand(s, s, 0)] for s in starts}
 
     def edges(item: str) -> list[tuple[Mapping[str, Any], str]]:
         found = [
@@ -1156,9 +1198,11 @@ def _grow(
                         seen.add(target)
                         if not container:
                             reached.append(target)
+                            if edge["kind"] not in index.realizing:
+                                reached += stand(begun, target, hop)
             frontiers[begun] = reached
     deeper = any(edges(item) for items in frontiers.values() for item in items)
-    return rows, deeper, folded
+    return rows, deeper, folded, more
 
 
 def _why(start: Start) -> str:
@@ -1176,7 +1220,12 @@ def _clause(link: Link) -> str:
     arrow = "->" if link.outward else "<-"
     parts = [f"{_escape(name)} ({count})" for name, count in link.owners]
     parts += [_escape(name) for name in link.names]
-    text = f"{_escape(link.kind)} {arrow} {', '.join(parts)}".rstrip()
+    head = (
+        f"realized by ({_escape(link.kind)}) ->"
+        if link.realized
+        else f"{_escape(link.kind)} {arrow}"
+    )
+    text = f"{head} {', '.join(parts)}".rstrip()
     text += f" (+{link.more} more)" if link.more else ""
     if link.outside_count:
         listed = ", ".join(_escape(name) for name in link.outside)
@@ -1197,6 +1246,8 @@ def _file_lines(group: FileGroup, under: str) -> list[str]:
         lines += source_line(subject.source)
         lines += description_line(subject.description)
         lines += [f"      {_clause(link)}" for link in subject.links]
+        if subject.more_forms:
+            lines.append(f"    {stand_in_line(subject.short, subject.more_forms)}")
         if subject.unwalked:
             total = sum(n for _, _, n in subject.unwalked)
             counted = ", ".join(

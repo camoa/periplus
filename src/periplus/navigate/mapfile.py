@@ -21,6 +21,7 @@ from periplus.mapshared import MAP_SCHEMA as MAP_SCHEMA
 from periplus.settings import find_project_root
 
 __all__ = [
+    "STAND_INS",
     "MapIndex",
     "MapNotFound",
     "NodeNotFound",
@@ -53,6 +54,10 @@ class NodeNotFound(HarnessError):
     code = ExitCode.NODE_NOT_FOUND
 
 
+#: The most nodes a walk adds at one node because they stand for it across realizing edges.
+STAND_INS = 8
+
+
 class MapIndex:
     """A loaded map with its edges indexed by end and its type hierarchy by parent."""
 
@@ -72,6 +77,7 @@ class MapIndex:
             if parent is not None:
                 self._subtypes[parent].append(row["type"])
         self.edges: list[dict[str, Any]] = list(document["edges"])
+        self.realizing = frozenset(as_text(k) for k in document.get("realizing_kinds", ()))
 
     def outgoing(self, id: str) -> list[dict[str, Any]]:
         """The edges leaving ``id``, in map order."""
@@ -88,6 +94,41 @@ class MapIndex:
     def subtypes(self, type: str) -> list[str]:
         """The types whose parent is ``type``, sorted."""
         return sorted(self._subtypes.get(type, ()))
+
+    def stand_ins(
+        self, id: str, inward: bool = False
+    ) -> tuple[list[tuple[str, dict[str, Any], str]], int]:
+        """The mapped nodes that stand for ``id`` across realizing edges, as (node, edge, the node
+        it stands for), breadth first and by (kind, id) at each step, at most ``STAND_INS``; and
+        how many more there are.
+
+        A from end stands for the to end: the forms of a declaration. ``inward`` turns it around:
+        the declarations a form stands for. A node outside the project stands for nothing, and
+        nothing stands for it: every class built on a framework would stand for its interface.
+        """
+        found: list[tuple[str, dict[str, Any], str]] = []
+        if self.nodes[id]["state"] != "mapped":
+            return found, 0
+        near, far = ("to", "from") if inward else ("from", "to")
+        seen = {id}
+        step = [id]
+        while step:
+            following: list[str] = []
+            for at in step:
+                edges = self.outgoing(at) if inward else self.incoming(at)
+                held = sorted(
+                    (e for e in edges if e["kind"] in self.realizing),
+                    key=lambda e: (e["kind"], e[near]),
+                )
+                for edge in held:
+                    other = as_text(edge[near])
+                    if other in seen or self.nodes[other]["state"] != "mapped":
+                        continue
+                    seen.add(other)
+                    found.append((other, edge, as_text(edge[far])))
+                    following.append(other)
+            step = following
+        return found[:STAND_INS], max(0, len(found) - STAND_INS)
 
     def node(self, id: str) -> dict[str, Any]:
         """The node with this id, or ``NodeNotFound`` naming the id and the closest ids."""
