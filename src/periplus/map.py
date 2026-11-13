@@ -170,10 +170,10 @@ def run(
         found_nodes, found_edges, fires, opened, read, removed, broken, skipped = run_file_rules(
             root, rule_set, packs, folders, selection
         )
-        map_nodes, map_edges, map_fires, map_passes, unread = run_map_rules(
+        map_nodes, map_edges, map_fires, map_passes, unread_by_map = run_map_rules(
             rule_set, found_nodes, found_edges
         )
-        skipped.extend(unread)
+        skipped.extend(unread_by_map)
         fires.update(map_fires)
         directories = sorted({path for name in wanted for path in folders[name]})
         listed, unlisted = files_in(root, directories, selection)
