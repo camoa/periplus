@@ -15,6 +15,9 @@ with `in_table` or `not_in_table` conditions on that id or on one of their captu
 and an optional `follow`, a list of steps from that node:
 
 - `edge: <kind>` moves to each node an edge of that kind runs to.
+- `incoming_edge: <kind>` walks the other way: it moves to each node an edge of that kind runs
+  from, in id order. From a class, `[{incoming_edge: assigned}]` reaches each variable
+  assigned from it.
 - `ancestors: [<kind>]` runs the steps after it from the current node, else from the nearest
   node those kinds reach that gives a result: a member found on a class or its nearest ancestor.
 - `node: <template>` moves to the node whose whole id the template gives from the captures.

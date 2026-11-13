@@ -165,3 +165,53 @@ def test_the_refusals_are_the_same_on_two_runs(tmp_path: Path) -> None:
     second, _ = _map(tmp_path, match, YARD, "two.json")
     assert _undeclared(first, "a") and _undeclared(first, "b"), first.problems
     assert [p.message for p in first.problems] == [p.message for p in second.problems]
+
+# 3. incoming_edge walks an edge from its target to its sources.
+
+BACK = "    node_type: own.class\n    follow: [{incoming_edge: assigned}]"
+
+
+def test_incoming_edge_reaches_each_source_of_the_kind(tmp_path: Path) -> None:
+    yard = "class Engine\nclass Wheel\nvar b Engine\nvar a Engine\nvar c Wheel\n"
+    report, doc = _map(tmp_path, BACK, yard)
+    assert report.problems == () and report.not_executed == (), report
+    assert _reaches(doc) == [
+        ("own.class::Engine", "own.var::a"),
+        ("own.class::Engine", "own.var::b"),
+        ("own.class::Wheel", "own.var::c"),
+    ]
+
+
+def test_incoming_edge_reaches_nothing_without_an_edge_into_the_node(tmp_path: Path) -> None:
+    report, doc = _map(tmp_path, BACK, "class Engine\nclass Wheel\nvar a Wheel\n")
+    assert report.problems == (), report
+    assert _reaches(doc) == [("own.class::Wheel", "own.var::a")]
+
+
+def test_edge_still_runs_from_source_to_target(tmp_path: Path) -> None:
+    match = "    node_type: own.class\n    follow: [{edge: assigned}]"
+    report, doc = _map(tmp_path, match, "class Engine\nvar a Engine\n")
+    assert report.problems == (), report
+    assert _reaches(doc) == []
+
+
+def test_incoming_edge_runs_inside_try_and_unless(tmp_path: Path) -> None:
+    match = (
+        "    node_type: own.class\n    follow: [{try: [{incoming_edge: assigned}]}]\n"
+        "    unless: [[{incoming_edge: guarded}]]"
+    )
+    yard = "class Engine\nclass Wheel\nvar a Engine\nvar b Wheel\nuse u\nguard u Wheel\n"
+    report, doc = _map(tmp_path, match, yard)
+    assert report.problems == () and report.not_executed == (), report
+    assert _reaches(doc) == [("own.class::Engine", "own.var::a")]
+
+
+def test_an_undeclared_incoming_edge_kind_is_refused(tmp_path: Path) -> None:
+    match = "    node_type: own.class\n    follow: [{try: [{incoming_edge: nowhere}]}]"
+    report, _ = _map(tmp_path, match, YARD)
+    assert _undeclared(report, "nowhere"), report.problems
+
+
+def test_incoming_edge_gives_a_byte_identical_map_on_two_runs(tmp_path: Path) -> None:
+    yard = "class Engine\nvar d Engine\nvar b Engine\nvar a Engine\nvar c Engine\n"
+    _twice(tmp_path, BACK, yard)

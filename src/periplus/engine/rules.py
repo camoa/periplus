@@ -318,10 +318,11 @@ def run_map_rules(
                 typed.setdefault(node.id, set()).add(node.type)
                 places.setdefault(node.id, set()).add((node.file, node.line))
         found = set(typed)
-        out: dict[tuple[str, str], set[str]] = {}
+        out: dict[tuple[str, str, str], set[str]] = {}
         for edge in (*ends, *(_landed_end(edge, found) for edge in made_edges)):
             if edge.source in known and edge.target in known:
-                out.setdefault((edge.kind, edge.source), set()).add(edge.target)
+                out.setdefault(("edge", edge.kind, edge.source), set()).add(edge.target)
+                out.setdefault(("incoming_edge", edge.kind, edge.target), set()).add(edge.source)
         added: list[FoundNode | FoundEdge] = []
         fired: list[tuple[str, str, int]] = []
         for rule in rules:
@@ -416,10 +417,11 @@ def _follow(
     at: str,
     values: dict[str, str],
     known: set[str],
-    out: Mapping[tuple[str, str], set[str]],
+    out: Mapping[tuple[str, str, str], set[str]],
 ) -> list[tuple[str, dict[str, str]]]:
     """Each id the steps reach from the id ``at``, in order, with the values its ``id_matches``
-    steps captured. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
+    steps captured. ``out`` holds the ids an ``edge`` or ``incoming_edge`` step of a kind reaches
+    from an id. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
     ids its kinds reach, breadth first, that give any. A ``try`` step runs its steps and the steps
     after it from ``at``, else the steps after it from ``at`` with the values it had."""
     if not steps:
@@ -428,10 +430,10 @@ def _follow(
     if name == "try":
         tried = _follow((*value, *rest), at, values, known, out)
         return tried or _follow(rest, at, values, known, out)
-    if name == "edge":
+    if name in ("edge", "incoming_edge"):
         return [
             r
-            for to in sorted(out.get((value, at), ()))
+            for to in sorted(out.get((name, value, at), ()))
             for r in _follow(rest, to, values, known, out)
         ]
     if name == "node":
@@ -445,7 +447,9 @@ def _follow(
         reached = [r for here in level for r in _follow(rest, here, values, known, out)]
         if reached:
             return reached
-        level = sorted({t for h in level for k in value for t in out.get((k, h), ())} - seen)
+        level = sorted(
+            {t for h in level for k in value for t in out.get(("edge", k, h), ())} - seen
+        )
         seen.update(level)
     return []
 

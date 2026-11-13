@@ -61,7 +61,7 @@ _NO_TABLES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
 _TABLE_CONDITIONS = ("in_table", "not_in_table")
 
 #: The steps of a map rule's follow.
-_FOLLOW_STEPS = ("edge", "ancestors", "node", "id_matches", "try")
+_FOLLOW_STEPS = ("edge", "incoming_edge", "ancestors", "node", "id_matches", "try")
 
 #: Every key path of the two pack schemas that the engine or the pack check executes. ``*`` is one
 #: key or item. A path starts with the document it sits in: ``manifest.`` or ``file.``.

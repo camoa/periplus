@@ -342,7 +342,8 @@ def _undeclared(
                 {"pack": pack, "file": file, "rule": str(rule_name), "kind": kind},
             )
             for step in steps
-            for kind in _strings(step.get("edge")) + _strings(step.get("ancestors"))
+            for key in ("edge", "incoming_edge", "ancestors")
+            for kind in _strings(step.get(key))
             if kind not in kinds
         )
     return problems
