@@ -176,6 +176,7 @@ def build_document(
     left_out = LeftOut(nodes=len(hidden), edges=len(written) - len(kept))
     ordered = [node for node in ordered if node["id"] not in hidden]
     written = kept
+    grouping = sorted({str(edge["kind"]) for edge in written if edge_kinds[edge["kind"]].groups})
     document = {
         "periplus_map_version": 0,
         "generated_by": f"periplus {tool_version}",
@@ -192,6 +193,8 @@ def build_document(
         "nodes": ordered,
         "edges": written,
     }
+    if grouping:
+        document["grouping_kinds"] = grouping
     return document, left_out
 
 

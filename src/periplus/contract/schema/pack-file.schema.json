@@ -168,6 +168,10 @@
             "nearest_enclosing_container"
           ],
           "description": "Which end the from side attaches to. why: the containment source was hardcoded to the file node across 15 language configs, so a method's container was the file rather than its class."
+        },
+        "groups": {
+          "type": "boolean",
+          "description": "true when the edge says its from end belongs to the container at its to end, as a class belongs to its module, not that one uses or reaches the other. The map lists such kinds under grouping_kinds, and a printed slice does not walk on from the container. why: one hop through a module reached every class, service and route in it, and filled the rows a question had."
         }
       }
     },
