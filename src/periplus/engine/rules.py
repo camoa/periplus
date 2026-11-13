@@ -5,7 +5,7 @@ from __future__ import annotations
 import posixpath
 import re
 from bisect import bisect_right
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from fnmatch import fnmatchcase
 from itertools import islice, product
@@ -868,9 +868,8 @@ def _declarations(
         holder = _holder(match, holders, rule_set, grammar, parsed)
         if rule.holder and (holder is None or holder[2] != rule.holder):
             continue
-        holder_id = None
         if holder is not None:
-            values["enclosing_type"], holder_id, _ = holder
+            values["enclosing_type"] = holder[0]
         method = None
         if needs_method:
             enclosing = holder[0] if holder else None
@@ -923,9 +922,14 @@ def _declarations(
                     twin = namespace_of(types, rule.twin_type) if rule.twin_type else namespace
                     ends.append([(f"{twin}::{node_id}", line)])
                 elif end == "enclosing_class":
-                    ends.append([(holder_id, line)] if holder_id else [])
+                    held = _holder(match, holders, rule_set, grammar, parsed, allowed)
+                    ends.append([(held[1], line)] if held else [])
                 elif end == "enclosing_method":
-                    ends.append([(method[0], line)] if method else [])
+                    enclosing = holder[0] if holder else None
+                    member = _method(
+                        match, enclosing, holders, rule, rule_set, within, grammar, parsed, allowed
+                    )
+                    ends.append([(member[0], line)] if member else [])
                     unwritten = method is None
                 elif end == "enclosing_file":
                     root = match
@@ -1069,10 +1073,6 @@ def _attributes(
                     attributes=tuple(a for a in found if a[1] is not None),
                 )
             )
-        method = None
-        if owner.type not in holders and holder is not None:
-            minted = _minted(owner, holder[0], rule.filetype, rule_set, within, grammar, parsed)
-            method = minted[0] if minted else None
         for spec in rule.edges:
             kind = rule_set.edge_kinds[spec.kind]
             ends: list[str | None] = []
@@ -1083,9 +1083,24 @@ def _attributes(
                     twin = namespace_of(types, rule.twin_type) if rule.twin_type else namespace
                     ends.append(f"{twin}::{node_id}")
                 elif end == "enclosing_class":
-                    ends.append(holder[1] if holder else None)
+                    held = _holder(match, holders, rule_set, grammar, parsed, allowed)
+                    ends.append(held[1] if held else None)
                 elif end == "enclosing_method":
-                    ends.append(method)
+                    minted = (
+                        _minted(
+                            owner,
+                            holder[0],
+                            rule.filetype,
+                            rule_set,
+                            within,
+                            grammar,
+                            parsed,
+                            keep=lambda t, allowed=allowed: _allows(rule_set, t, allowed),
+                        )
+                        if owner.type not in holders and holder is not None
+                        else None
+                    )
+                    ends.append(minted[0] if minted else None)
                 else:
                     value = argument_of(match, spec.key, grammar)
                     text = (
@@ -1169,9 +1184,6 @@ def _annotations(
                         attributes=tuple(a for a in read if a[1] is not None),
                     )
                 )
-            # The declaration's first child has the declaration itself as its nearest enclosing
-            # type.
-            holder = _holder(match.children[0], holders, rule_set, grammar, parsed)
             for spec in rule.edges:
                 kind = rule_set.edge_kinds[spec.kind]
                 ends: list[str | None] = []
@@ -1180,7 +1192,11 @@ def _annotations(
                         allowed = (rule.twin_type,) if rule.twin_type else allowed
                         ends.append(f"{next(iter(namespaces(types, allowed)), None)}::{node_id}")
                     else:
-                        ends.append(holder[1] if holder else None)
+                        # The declaration's first child has the declaration itself as its nearest
+                        # enclosing type.
+                        first = match.children[0]
+                        held = _holder(first, holders, rule_set, grammar, parsed, allowed)
+                        ends.append(held[1] if held else None)
                     if not ends[-1]:
                         lacking = f"edge {spec.kind}: no value for {end}"
                         skipped.append((file, line, rule.name, lacking))
@@ -1416,10 +1432,11 @@ def _minted(
     grammar: Grammar,
     parsed: ParsedFile,
     node_type: str = "",
+    keep: Callable[[str], bool] | None = None,
 ) -> tuple[str, str | None] | None:
     """The id the first node rule that fires on the tree node and mints an id there gives it, and
     the declared name that rule reads, inside the type ``holder`` when there is one, of the type
-    ``node_type`` when that is given.
+    ``node_type`` when that is given, and of a type ``keep`` holds for when that is given.
 
     Only rules of the packs in ``within`` count, as in ``_holder_rules``. A rule that fires and
     mints no id passes the node to the next, for ``enclosing_method`` as for ``{declared: <type>}``.
@@ -1430,6 +1447,7 @@ def _minted(
             rule.supported
             and rule.node_type
             and rule.node_type == (node_type or rule.node_type)
+            and (keep is None or keep(rule.node_type))
             and rule.declaration == node.type
             and rule.filetype == filetype
             and rule.pack in within
@@ -1460,16 +1478,55 @@ def _method(
     within: frozenset[str],
     grammar: Grammar,
     parsed: ParsedFile,
+    allowed: Sequence[str] = (),
 ) -> tuple[str, str | None] | None:
     """The id and the declared name ``_minted`` gives the member of the enclosing type ``holder``
-    that holds the match, as for an attribute's ``enclosing_method``; ``None`` outside a type."""
+    that holds the match, as for an attribute's ``enclosing_method``; ``None`` outside a type.
+
+    With ``allowed``, the edge end's types, the node is of one of them or below one. Without, it
+    is the first node of a type that is not internal, else the first node: an internal node is a
+    rule's helper and does not name the member."""
     bodies = {other.body_child for rules in holders.values() for other in rules}
     member = match.parent
     while holder is not None and member is not None and member.parent is not None:
         if member.parent.type in bodies:
-            return _minted(member, holder, rule.filetype, rule_set, within, grammar, parsed)
+            return _member_node(member, holder, rule, rule_set, within, grammar, parsed, allowed)
         member = member.parent
     return None
+
+
+def _member_node(
+    member: Node,
+    holder: str,
+    rule: Rule,
+    rule_set: RuleSet,
+    within: frozenset[str],
+    grammar: Grammar,
+    parsed: ParsedFile,
+    allowed: Sequence[str],
+) -> tuple[str, str | None] | None:
+    """The id and the declared name ``_minted`` gives the member, as ``_method`` chooses them."""
+    if allowed:
+        return _minted(
+            member,
+            holder,
+            rule.filetype,
+            rule_set,
+            within,
+            grammar,
+            parsed,
+            keep=lambda t: _allows(rule_set, t, allowed),
+        )
+    return _minted(
+        member,
+        holder,
+        rule.filetype,
+        rule_set,
+        within,
+        grammar,
+        parsed,
+        keep=lambda t: not rule_set.types[t].internal,
+    ) or _minted(member, holder, rule.filetype, rule_set, within, grammar, parsed)
 
 
 def _names(node: Node, rule: Rule, grammar: Grammar, parsed: ParsedFile) -> dict[str, Any] | None:
@@ -1552,25 +1609,29 @@ def _holder(
     rule_set: RuleSet,
     grammar: Grammar,
     parsed: ParsedFile,
+    allowed: Sequence[str] = (),
 ) -> tuple[str, str, str] | None:
     """The full name, the node id and the tree node type of the nearest enclosing type
     declaration, or ``None``.
 
     A type declaration is a tree node a declaration rule with a ``body_child`` fires on, and that
     rule mints its id. A nearer node that holds such a body but no rule fires on, an anonymous
-    class, ends the walk with ``None``.
+    class, ends the walk with ``None``. With ``allowed``, an edge end's types, the id is the first
+    such rule's of one of them or below one, and ``None`` when no rule of them fires there.
     """
     bodies = {rule.body_child for rules in holders.values() for rule in rules}
     parent = node.parent
     while parent is not None:
-        rule = next(
-            (
-                r
-                for r in holders.get(parent.type, ())
-                if _fires(r, parent, holders, rule_set, grammar, parsed)
-            ),
-            None,
+        firing = (
+            r
+            for r in holders.get(parent.type, ())
+            if _fires(r, parent, holders, rule_set, grammar, parsed)
         )
+        rule = next(firing, None)
+        if rule is not None and allowed and not _allows(rule_set, rule.node_type, allowed):
+            rule = next((r for r in firing if _allows(rule_set, r.node_type, allowed)), None)
+            if rule is None:
+                return None
         if rule is not None:
             values = _names(parent, rule, grammar, parsed)
             node_id = _node_id(rule, values, empty_ok=True) if values is not None else None
