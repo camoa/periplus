@@ -190,7 +190,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   a method's local variable assigned such a service, as an inferred calls edge to the method on
 #   the class the services file gives that service;
 # - each page display of a view that has a path, as the route view.<view>.<display>, with its
-#   path, a route_from_view edge to the view's config object and a shape_of_route edge.
+#   path, a route_from_view edge to the view's config object and a shape_of_route edge;
+# - a core theme hook, such as user or node, from a theme template named exactly that hook or a
+#   suggestion of it, a preprocesses_theme_hook edge from each preprocess_<hook> implementation
+#   to a theme hook the map holds, and a route_renders_theme_hook edge from the route
+#   entity.<type>.canonical to the theme hook <type>;
+# - a quoted '@<namespace>/.../<name>.html.twig' held as a value in a template, as an inferred
+#   template_includes edge, and a relative path in a template's data-* attribute, joined by its
+#   shape to a route as template_links_route.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
@@ -268,7 +275,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   gives neither.
 # - A template is known by its file stem, and a component by its name without the theme: two
 #   themes that define a component of one name meet at one node, as templates of one name do.
-#   A template or component named by a variable, a concatenation or a list gives no edge. Only
+#   A template or component named by a variable or a concatenation gives no edge, beyond a
+#   quoted @<namespace> path held as a value. A path held without its @namespace gives none. Only
 #   a name ending in .html.twig gives a template edge. A component's own
 #   components/<name>/<name>.twig gives its include, route and path edges from
 #   drupal.component::<name>, under the mirror kinds component_includes_template,
@@ -369,8 +377,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the method's line, or at the line of the read in the template file that holds it.
 # - A field suggestion is read only for a field name that starts with field_: field--body and
 #   field--node--body give nothing, since field--<name> may name a field type and
-#   field--<entity type>--<name> a bundle. A base hook of core, such as node or block, and
-#   block--<module> link to nothing, since the map holds no such node. A derivative written with
+#   field--<entity type>--<name> a bundle. A core hook outside the list core_hook_template
+#   gives, and block--<module>, link to nothing, since the map holds no such node. A preprocess of
+#   such a hook gives no preprocesses_theme_hook edge, nor does a theme_suggestions_<hook> hook.
+#   A canonical route whose entity type has no theme hook in the map gives no
+#   route_renders_theme_hook edge. A derivative written with
 #   a dash in it, as block--x--main-2 for x:main-2, is read with an underscore and links nothing.
 # - A config or queue name held in a variable leaves a skipped row and keeps no call site; a role,
 #   config or queue name given by a constant of core or contrib leaves a skipped row. One given as
@@ -395,7 +406,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   gets no validated_by edge, declared or inferred. A validatedBy() a parent writes is not read,
 #   so its subclass still gets the inferred edge.
 # - A template path with a literal value in a placeholder slot, as /my/item/5, a path with no
-#   leading slash, a path no mapped routing file declares, such as a core route's, and a path
+#   leading slash outside a data-* attribute, a path no mapped routing file declares, such as a core route's, and a path
 #   built in Twig other than by {{ ... }} holes give no route edge. A query string and a fragment
 #   are cut before the shape is made.
 # - getForm($variable), getForm('text') and a form built other than by ->getForm(X::class) give
@@ -584,6 +595,20 @@ files:
         hook_suggestion:
           pattern: '^(?:.*/)?(?<base>[a-z0-9_]+(?:-[a-z0-9_]+)*)--[^/]+\.html\.twig$'
           template: '{base}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # A theme template named exactly a core theme hook, as user or views-view-unformatted, and
+        # the base of a suggestion of one, as node for node--article, read by
+        # theme_hook/core_theme_hook.yaml with dashes written as underscores. Absent for any other
+        # name.
+        core_hook_template:
+          pattern: '^(?:.*/)?(?<hook>html|page|region|block|field|node|user|taxonomy-term|comment|media|menu|menu-local-tasks?|menu-local-action|links|breadcrumb|pager|page-title|status-messages|maintenance-page|form|form-element|form-element-label|input|select|textarea|fieldset|details|container|item-list|table|image|username|views-view|views-view-(?:unformatted|fields|field|list|table|grid)|views-exposed-form)\.html\.twig$'
+          template: '{hook}'
+          normalize:
+          - {replace: '-', with: '_'}
+        core_hook_suggestion:
+          pattern: '^(?:.*/)?(?<hook>html|page|region|block|field|node|user|taxonomy-term|comment|media|menu|menu-local-tasks?|menu-local-action|links|breadcrumb|pager|page-title|status-messages|maintenance-page|form|form-element|form-element-label|input|select|textarea|fieldset|details|container|item-list|table|image|username|views-view|views-view-(?:unformatted|fields|field|list|table|grid)|views-exposed-form)--[^/]+\.html\.twig$'
+          template: '{hook}'
           normalize:
           - {replace: '-', with: '_'}
         # block--<id>: a block plugin id or a block placement id. A placement id may hold __, which

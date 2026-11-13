@@ -1,0 +1,26 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A relative path in a data-* attribute of a <name>.html.twig file, as
+# data-endpoint="api/item/{{ id }}?full=1", which a script requests below the site root. It gives
+# the same drupal.path_use node url/path_route.yaml's template_path_use gives an absolute path,
+# with / written before the path, so template_links_to_route_by_shape joins it to each route whose
+# path has that shape. The value starts with a letter, holds a / after its first part of letters,
+# digits, _ and -, and holds no space, quote, angle bracket, or brace outside a {{ ... }} hole, so
+# a host name or a scheme such as https: gives nothing. A query string and a fragment are cut. Only
+# data-* attributes are read: src="img/x.png" or href="next/page" gives nothing, and a relative
+# asset path in a data-* attribute meets no route's shape. An attribute inside a Twig comment gives
+# nothing.
+
+rules:
+- rule: template_relative_path_use
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\sdata-[\w-]+=["''](?<path>[A-Za-z][\w-]*/(?:[^\s"''<>{]|\{\{[^}]*\}\})+)["'']'
+  values:
+    shape: {template: '/{path}', normalize: [{replace: '[?#].*$', with: ''}, {replace: '\{\{[^}]*\}\}', with: '*'}]}
+  id: {template: '{template_name}|{shape}'}
+  emits: [{node: {type: drupal.path_use}}]
+  confidence: inferred

@@ -1,0 +1,26 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The canonical route of a content entity type renders that type's theme hook: Drupal's entity
+# view builder gives the entity's render array the theme hook named as the entity type, so the
+# page of route entity.user.canonical renders the theme hook user. Inferred: core's convention,
+# not a declaration in the mapped code.
+#
+# The rule starts from a theme hook the map holds, one a hook_theme declares or one a core hook
+# template gives (theme_hook/core_theme_hook.yaml), and joins the route entity.<hook>.canonical
+# only when the map holds that route, mapped from a routing file or referenced by a link to it.
+# A config entity type has no theme hook, so its canonical route links nothing.
+
+edge_kinds:
+- kind: route_renders_theme_hook
+  from: drupal.route
+  to: drupal.theme_hook
+
+rules:
+- rule: entity_canonical_route_renders_theme_hook
+  reads: map
+  match:
+    node_type: drupal.theme_hook
+    where: [{id_matches: '^drupal\.theme_hook::(?<hook>[a-z0-9_]+)$'}]
+    follow: [{node: 'drupal.route::entity.{hook}.canonical'}]
+  emits: [{edge: {kind: route_renders_theme_hook, from: matched_node, to: this_node}}]
+  confidence: inferred
