@@ -348,6 +348,9 @@ def test_an_explicit_name_gives_declared_and_a_name_read_from_the_receiver_gives
         ("drupal.service::c", "container_get_call", "inferred"),
         ("drupal.service::d", "container_nullsafe_get_call", "inferred"),
         ("drupal.service::e", "container_get_call", "inferred"),
+        ("drupal.service::my_module.helper", "service_get_on_typed_parameter", "inferred"),
+        ("drupal.service::entity_type.manager", "service_get_on_typed_parameter", "inferred"),
+        ("drupal.service::dq.get", "service_get_on_typed_parameter", "inferred"),
     }
 
 
