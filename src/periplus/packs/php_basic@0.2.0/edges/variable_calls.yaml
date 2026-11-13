@@ -1,0 +1,124 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method call on a plain variable, $x->m() or $x?->m(), inside a class method. The first rules
+# keep each as a php.call_site at its line, <class>::<method>::$x->m, or <class>::<method>::$x?->m
+# for the nullsafe form, joined to and from the method around it. Every such call keeps its node,
+# whether or not a rule types $x. The map rules give a call its calls edge, inferred, when $x is a
+# parameter of the same method typed by a class name, Foo $x or ?Foo $x: they look the method up on
+# the type and then its ancestors through extends. A method no class in the map declares, or a type
+# outside the map, lands unresolved under the parameter's type.
+#
+# Limits: a variable no parameter types gets its call site and no edge. A closure or arrow function
+# parameter shares the id of the method's parameter of the same name, so a closure's Other $m and
+# the method's Mailer $m both join each $m call in that method. A parameter reassigned in the body,
+# $m = new Other(), still joins its declared type. A union type gives no edge. A call in a plain
+# function or at file level makes nothing here. A variable method name, $x->$name(), is
+# types/find_runtime_calls.yaml's.
+rules:
+
+- rule: find_variable_call
+  reads: file
+  in: [source]
+  match: &variable_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: &plain_variable '\$(?!this$)\w+'}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &variable_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: variable_call_method
+  reads: file
+  in: [source]
+  match: *variable_match
+  id: *variable_id
+  emits: &site_edges
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+# Written ?->, so a nullsafe call and a plain call to one method keep separate nodes.
+- rule: find_variable_nullsafe_call
+  reads: file
+  in: [source]
+  match: &nullsafe_match
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *plain_variable}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &nullsafe_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}?->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: variable_nullsafe_call_method
+  reads: file
+  in: [source]
+  match: *nullsafe_match
+  id: *nullsafe_id
+  emits: *site_edges
+  confidence: declared
+
+# The nullable twin of find_parameter_type and parameter_typed_as: ?Foo $x gives the type node
+# <class>::$x::Foo and the edge from the parameter to it. The id template carries the type and the
+# normalize drops it again, so the edge starts at the parameter, <class>::<method>::$x.
+- rule: find_nullable_parameter_type
+  reads: file
+  in: [source]
+  match: &nullable_match
+    declaration: simple_parameter
+    name_child: name
+    filetype: php
+    where: [{has_child: optional_type}]
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.parameter_type}}]
+  confidence: declared
+
+- rule: nullable_parameter_typed_as
+  reads: file
+  in: [source]
+  match: *nullable_match
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}::{type}"
+    normalize: [{replace: '::[^:]+$', with: ''}]
+  emits: [{edge: {kind: parameter_typed_as, from: this_node, to: {declared: php.parameter_type}}}]
+  confidence: declared
+
+- rule: calls_through_typed_parameter
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)->(?<method>\w+))$'}]
+    follow: &parameter_walk
+    - node: 'php.parameter::{class}::{meth}::${var}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try:
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: calls_through_typed_parameter_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
+    follow: *parameter_walk
+  emits: *calls_edge
+  confidence: inferred
