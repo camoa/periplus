@@ -40,9 +40,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   method; the overrides edge joins the child's method to it. A method no mapped class or
 #   ancestor declares lands unresolved under the calling class. new static() is read as the
 #   enclosing class.
-# - A closure or arrow function shares its parameters' and variables' ids with the method or
-#   function around it, so a call on one of the same name joins both types. A plain function's
-#   parameter reassigned in its body still joins its declared type.
+# - A closure or arrow function shares its local variables' ids with the method or function around
+#   it. A plain function's parameter reassigned in its body still joins its declared type.
 #
 # Missing results:
 # - A call on a variable gets no calls edge, and keeps its php.call_site node, when no rule knows

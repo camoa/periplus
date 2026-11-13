@@ -231,6 +231,32 @@ def test_a_named_function_inside_a_method_gets_no_method_rules(tmp_path: Path) -
     }
 
 
+def test_a_closure_parameter_does_not_join_the_method_parameter(tmp_path: Path) -> None:
+    """The closure's Other $h and the arrow function's Other $o make no parameter, so run's $h is
+    typed Helper alone and run calls Helper::ping only. Each call in a closure keeps a call site
+    in run with no calls edge; so does the closure's call inside nested_helper."""
+    document = _shapes(tmp_path)
+    assert _ids(document, "php.parameter") == [
+        "php.parameter::App\\Shapes::run::$h",
+        "php.parameter::App\\nested_helper::$n",
+    ]
+    typed = {target for _, source, target in edge_set(document, "parameter_typed_as")}
+    assert "php.parameter_type::App\\Shapes::$h::App\\Other" not in typed
+    calls = {(source, target) for _, source, target in edge_set(document, "calls")}
+    assert calls == {
+        ("php.method::App\\Shapes::run", "php.method::App\\Helper::ping"),
+        ("php.function::App\\nested_helper", "php.method::App\\Helper::ping"),
+    }
+    sites = {
+        "php.call_site::App\\Shapes::run::closure()::$h->ping": "php.method::App\\Shapes::run",
+        "php.call_site::App\\Shapes::run::closure()::$o?->ping": "php.method::App\\Shapes::run",
+        "php.call_site::App\\nested_helper::closure()::$n->ping": "php.function::App\\nested_helper",
+    }
+    assert {(s, o) for _, s, o in edge_set(document, "call_site_in") if s in sites} == set(
+        sites.items()
+    )
+
+
 THIRD = """\
 node_types:
 - {name: own.unit, id_namespace: own.unit}

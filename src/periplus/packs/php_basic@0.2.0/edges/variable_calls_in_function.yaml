@@ -9,12 +9,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # php.parameter_type <function>::$x::Foo and the edge to it. The map rules give a call on such a
 # parameter its calls edge, inferred, from the function to the method on the type or its nearest
 # ancestor through extends; a method no class in the map declares, or a type outside the map, lands
-# unresolved under the parameter's type.
+# unresolved under the parameter's type. A closure or arrow function in the function makes no
+# parameter node for its own parameters, and a call $x->m() or $x?->m() in it keeps a
+# php.call_site <function>::closure()::$x->m, or ?->m, joined to and from the function, with no
+# calls edge from this file.
 #
-# Limits: a call at file level, outside any function, makes nothing. A closure or arrow function is
-# no holder, so its parameter shares the id of the function's parameter of the same name: a
-# closure's Other $m and the function's Mailer $m both join each $m call in that function. A
-# parameter reassigned in the body still joins its declared type. A union type gives no edge. A
+# Limits: a call at file level, outside any function, makes nothing. A parameter reassigned in the
+# body still joins its declared type. A union type gives no edge. A
 # variable method name, $x->$name(), is types/find_runtime_calls.yaml's.
 
 rules:
@@ -41,6 +42,7 @@ rules:
     where:
     - name_matches: {child: object, pattern: &plain_variable '\$(?!this$)\w+'}
     - name_matches: {child: name, pattern: '\w+'}
+    - not_within: &closures [anonymous_function, arrow_function]
   id: &variable_id
     from: [enclosing_type, declared_name, name]
     template: "{enclosing_type}::{declared_name}->{name}"
@@ -68,6 +70,7 @@ rules:
     where:
     - name_matches: {child: object, pattern: *plain_variable}
     - name_matches: {child: name, pattern: '\w+'}
+    - not_within: *closures
   id: &nullsafe_id
     from: [enclosing_type, declared_name, name]
     template: "{enclosing_type}::{declared_name}?->{name}"
@@ -82,6 +85,59 @@ rules:
   emits: *site_edges
   confidence: declared
 
+# The twins of the four rules above for a call in a closure or arrow function.
+- rule: find_closure_variable_call_in_function
+  reads: file
+  in: [source]
+  match: &closure_variable_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    holder: function_definition
+    where:
+    - name_matches: {child: object, pattern: *plain_variable}
+    - name_matches: {child: name, pattern: '\w+'}
+    - within: *closures
+  id: &closure_variable_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::closure()::{declared_name}->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: closure_variable_call_in_function_in
+  reads: file
+  in: [source]
+  match: *closure_variable_match
+  id: *closure_variable_id
+  emits: *site_edges
+  confidence: declared
+
+- rule: find_closure_variable_nullsafe_call_in_function
+  reads: file
+  in: [source]
+  match: &closure_nullsafe_match
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    holder: function_definition
+    where:
+    - name_matches: {child: object, pattern: *plain_variable}
+    - name_matches: {child: name, pattern: '\w+'}
+    - within: *closures
+  id: &closure_nullsafe_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::closure()::{declared_name}?->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: closure_variable_nullsafe_call_in_function_in
+  reads: file
+  in: [source]
+  match: *closure_nullsafe_match
+  id: *closure_nullsafe_id
+  emits: *site_edges
+  confidence: declared
+
 # find_parameter names enclosing_method, which a function lacks.
 - rule: find_function_parameter
   reads: file
@@ -91,6 +147,7 @@ rules:
     name_child: name
     filetype: php
     holder: function_definition
+    where: [{not_within: *closures}]
   id: &parameter_id
     from: [enclosing_type, declared_name]
     template: "{enclosing_type}::{declared_name}"
@@ -107,7 +164,7 @@ rules:
     name_child: name
     filetype: php
     holder: function_definition
-    where: [{has_child: named_type}]
+    where: [{has_child: named_type}, {not_within: *closures}]
   id: &type_id
     from: [enclosing_type, declared_name, {qualified: type}]
     template: "{enclosing_type}::{declared_name}::{type}"
@@ -130,7 +187,7 @@ rules:
     name_child: name
     filetype: php
     holder: function_definition
-    where: [{has_child: optional_type}]
+    where: [{has_child: optional_type}, {not_within: *closures}]
   id: *type_id
   emits: [{node: {type: php.parameter_type}}]
   confidence: declared

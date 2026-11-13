@@ -8,10 +8,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # the type and then its ancestors through extends. A method no class in the map declares, or a type
 # outside the map, lands unresolved under the parameter's type.
 #
-# Limits: a variable no parameter types gets its call site and no edge. A closure or arrow function
-# parameter shares the id of the method's parameter of the same name, so a closure's Other $m and
-# the method's Mailer $m both join each $m call in that method. A parameter assigned anywhere in the
-# method body, $m = new Other() or $m = $m ?? new Mailer(), gets no edge here; local_types.yaml
+# A closure or arrow function in the method makes no parameter node for its own parameters, and a
+# call $x->m() or $x?->m() in it keeps a php.call_site <class>::<method>::closure()::$x->m, or ?->m,
+# joined to and from the method, with no calls edge from this file.
+#
+# Limits: a variable no parameter types gets its call site and no edge. A parameter assigned
+# anywhere in the method body, $m = new Other() or $m = $m ?? new Mailer(), gets no edge here; local_types.yaml
 # joins it when every assignment is a new. A union type gives no edge. A call in a plain
 # function or at file level makes nothing here. A variable method name, $x->$name(), is
 # types/find_runtime_calls.yaml's.
@@ -27,6 +29,7 @@ rules:
     where:
     - name_matches: {child: object, pattern: &plain_variable '\$(?!this$)\w+'}
     - name_matches: {child: name, pattern: '\w+'}
+    - not_within: &closures [anonymous_function, arrow_function]
   id: &variable_id
     from: [enclosing_type, enclosing_method, declared_name, name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
@@ -54,6 +57,7 @@ rules:
     where:
     - name_matches: {child: object, pattern: *plain_variable}
     - name_matches: {child: name, pattern: '\w+'}
+    - not_within: *closures
   id: &nullsafe_id
     from: [enclosing_type, enclosing_method, declared_name, name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}?->{name}"
@@ -68,6 +72,58 @@ rules:
   emits: *site_edges
   confidence: declared
 
+# The twins of the four rules above for a call in a closure or arrow function. closure() in the id
+# keeps the call apart from a call on the method's own variable of the same name.
+- rule: find_closure_variable_call
+  reads: file
+  in: [source]
+  match: &closure_variable_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *plain_variable}
+    - name_matches: {child: name, pattern: '\w+'}
+    - within: *closures
+  id: &closure_variable_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::closure()::{declared_name}->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: closure_variable_call_method
+  reads: file
+  in: [source]
+  match: *closure_variable_match
+  id: *closure_variable_id
+  emits: *site_edges
+  confidence: declared
+
+- rule: find_closure_variable_nullsafe_call
+  reads: file
+  in: [source]
+  match: &closure_nullsafe_match
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *plain_variable}
+    - name_matches: {child: name, pattern: '\w+'}
+    - within: *closures
+  id: &closure_nullsafe_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::closure()::{declared_name}?->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: closure_variable_nullsafe_call_method
+  reads: file
+  in: [source]
+  match: *closure_nullsafe_match
+  id: *closure_nullsafe_id
+  emits: *site_edges
+  confidence: declared
+
 # The nullable twin of find_parameter_type and parameter_typed_as: ?Foo $x gives the type node
 # <class>::$x::Foo and the edge from the parameter to it. The id template carries the type and the
 # normalize drops it again, so the edge starts at the parameter, <class>::<method>::$x.
@@ -78,7 +134,7 @@ rules:
     declaration: simple_parameter
     name_child: name
     filetype: php
-    where: [{has_child: optional_type}]
+    where: [{has_child: optional_type}, {not_within: *closures}]
   id:
     from: [enclosing_type, declared_name, {qualified: type}]
     template: "{enclosing_type}::{declared_name}::{type}"

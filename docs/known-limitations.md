@@ -24,8 +24,7 @@ known gaps.
   edge, because the map keeps no statement order; so does a method's parameter assigned in its
   body, unless every value is the same `new`. A plain function's local variable gets no edge, and
   its parameter assigned in its body still joins its declared type. A closure or arrow function's
-  parameter, or variable, shares the id of the one of the same name in the method or function
-  around it, so a call on it joins both types. A local assigned `new self()`, `new static()`,
+  local variable shares the id of the one of the same name in the method or function around it. A local assigned `new self()`, `new static()`,
   `new parent()` or `new $class()` gets no type, and a value set by `foreach`, `catch`, `list()`, `=&`,
   `static` or `global` makes no local node. A call on what `$this->m()` returns reads `m`'s
   declared return type, `Foo`, `?Foo` or `self`: a return type of `static`, a union or a scalar, or

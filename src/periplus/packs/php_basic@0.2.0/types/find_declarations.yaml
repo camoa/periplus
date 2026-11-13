@@ -88,11 +88,13 @@ rules:
 # A parameter of a method, <class>::<method>::$<name>, and for one typed by a class name its twin,
 # <class>::$<name>::<type>, the type resolved through the file's imports and namespace. A scalar,
 # nullable or union type gives no twin, and a function's parameter makes nothing. The twin keeps
-# the method out of its id, so find_structure.yaml's parameter_typed_as reaches it.
+# the method out of its id, so find_structure.yaml's parameter_typed_as reaches it. A closure's or
+# arrow function's own parameter makes neither.
 - rule: find_parameter
   reads: file
   in: [source]
-  match: {declaration: simple_parameter, name_child: name, filetype: php}
+  match: {declaration: simple_parameter, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_function, arrow_function]}]}
   id:
     from: [enclosing_type, enclosing_method, declared_name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}"
@@ -102,7 +104,8 @@ rules:
 - rule: find_parameter_type
   reads: file
   in: [source]
-  match: {declaration: simple_parameter, name_child: name, filetype: php, where: [{has_child: named_type}]}
+  match: {declaration: simple_parameter, name_child: name, filetype: php,
+    where: [{has_child: named_type}, {not_within: [anonymous_function, arrow_function]}]}
   id:
     from: [enclosing_type, declared_name, {qualified: type}]
     template: "{enclosing_type}::{declared_name}::{type}"

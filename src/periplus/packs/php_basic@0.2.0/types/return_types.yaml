@@ -18,9 +18,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # $x?->n(), and a call on a property's method result, $this->p->m()->n(), make nothing here. A
 # variable with two different values in one method, $this->a() and $this->b() or anything else,
 # gets no edge here: the map does not know which one holds at the call.
-#
-# This file sits in types/, after find_declarations.yaml: an enclosing_method end takes the first
-# node rule that fires on the method, which must be find_method, not find_return_type.
 node_types:
 - name: php.return_type
   id_namespace: php.return_type

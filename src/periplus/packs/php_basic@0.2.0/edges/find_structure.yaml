@@ -576,7 +576,8 @@ rules:
 - rule: parameter_typed_as
   reads: file
   in: [source]
-  match: {declaration: simple_parameter, name_child: name, filetype: php, where: [{has_child: named_type}]}
+  match: {declaration: simple_parameter, name_child: name, filetype: php,
+    where: [{has_child: named_type}, {not_within: [anonymous_function, arrow_function]}]}
   id:
     from: [enclosing_type, enclosing_method, declared_name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}"
