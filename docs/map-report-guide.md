@@ -112,6 +112,10 @@ Boundaries:
 Unknown boundaries:
   total 0
 
+Type conflicts:
+  total 0
+  edges left out 0
+
 Files:
   selected  5
   excluded  0
@@ -295,6 +299,17 @@ Text: the Unknown boundaries section. JSON: `{"total": N, "by_pack": {...}, "by_
 mapped code with no rule identifying it yet, or `run-time`, a call whose target is built at run
 time. Each `no rule` node is a rule a rutter still lacks; `periplus find` lists them by id.
 
+### `type_conflicts`
+
+Text: the Type conflicts section. JSON: `{"total": N, "edges_left_out": M, "by_node": [{"node",
+"candidates"}]}`. `total` counts the nodes that rules typed as types on different branches of one
+ancestor, such as two kinds of form for one class. Each such node keeps the nearest type the
+candidates share, and its `type_conflict` attribute names each candidate as `<type> by
+<pack>/<rule>`. `edges_left_out` counts the edges only a candidate type could carry, which the map
+does not write. Each row is one node and its candidates; the text shows ten. Fix the rule that
+should not match the node, or declare one candidate below the other. `periplus find <type>` lists
+the nodes a candidate type names.
+
 ### `map`
 
 Text: the `path` row under Map. Where the map was written, or `null` when a problem stopped the
@@ -396,6 +411,10 @@ Boundaries:
 Unknown boundaries:
   total 0
 
+Type conflicts:
+  total 0
+  edges left out 0
+
 Files:
   selected  1
   excluded  0
@@ -474,6 +493,10 @@ Boundaries:
 
 Unknown boundaries:
   total 0
+
+Type conflicts:
+  total 0
+  edges left out 0
 
 Files:
   selected  5
@@ -709,6 +732,10 @@ Boundaries:
 
 Unknown boundaries:
   total 0
+
+Type conflicts:
+  total 0
+  edges left out 0
 
 Files:
   selected  0

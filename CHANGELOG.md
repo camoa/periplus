@@ -49,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `drupal_basic` maps entity type manager, container, config factory and queue factory calls on a parameter or property whose declared type is the core, Symfony or PSR interface.
 - A tree declaration rule's `where` list takes `within` and `not_within`, each a list of tree node types between the match and its nearest holder. Two rules can so tell a call in a method's own body from one in a closure inside it.
 - The node states `boundary` and `unknown_boundary`. A rule end takes `on_miss: unknown_boundary`, or `boundary: {into: {template, type}, kind}` to name the API node it enters, and a node type takes `boundary: true`. When rules mark one end differently, mapped beats boundary, boundary beats unresolved, and unresolved beats unknown boundary. The map report counts boundaries by node and unknown boundaries by pack and reason.
+- Rules that type one node as types on different branches of one ancestor no longer stop the map. The node keeps the nearest type they share, and its `type_conflict` attribute names each candidate as `<type> by <pack>/<rule>`. An edge only a candidate type could carry is not written. The map report's Type conflicts section, `type_conflicts` in JSON, lists each node with its candidates and counts those edges. Types that share no ancestor still refuse the map with exit 21.
 
 ### Changed
 
