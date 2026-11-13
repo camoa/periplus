@@ -1,0 +1,117 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A call on what a method returns, reached through a property of the object, inside a class method.
+#
+# $this->p->m(...)->n(), where the property p declares its type: find_property_chain_call keeps a
+# php.call_site at its line, <class>::<method>::$this->p->m()->n, its arguments dropped, joined to
+# and from the method around it. calls_through_typed_property_return finds p as
+# calls_through_typed_property does, on the call's class or its nearest ancestor that declares it,
+# looks m up on p's type and then its ancestors through extends and used traits, takes m's
+# returns_type (types/return_types.yaml), and looks n up on that type and then its ancestors. An
+# interface type serves as a class does: its m's return type joins n.
+#
+# $this->x = $this->make(...) and a call $this->x->run(): calls_through_property_assigned_call
+# walks from the call's class and its ancestors to an assignment of the property, as
+# calls_through_property_assigned_new does, reads the bundled php.member_assignment_value, looks
+# make up on the call's class and then its ancestors through extends and used traits, takes its
+# return type and looks run up on it. The lookup starts at the call's class because $this->make()
+# runs on the object the call runs on.
+#
+# Inferred: a declared return type is a claim about what runs. Each assignment of a typed call to
+# the property gives its own edge, so $this->x = $this->a() in one method and $this->x = $this->b()
+# in another give both targets, as two new classes do in property_new.yaml: a property keeps its
+# value across methods, so either may hold at the call. When the call's own class assigns the
+# property and an ancestor's assignment gave the result, the edge is not made: the class's own
+# value may hold. A return type outside the map, or a method n no class in the map declares, lands
+# unresolved under the return type. A method m with no return type, or one of static, a union or a
+# scalar, gives no edge, and the call site stays.
+#
+# This file sits in edges/, after types/: an enclosing_method end takes the first node rule that
+# fires on the method, which must be find_method.
+rules:
+
+# The property's call with its arguments at most one parenthesis deep, so that
+# $this->p->a()->b()->c is never read as $this->p->a()->c.
+- rule: find_property_chain_call
+  reads: file
+  in: [source]
+  match: &chain_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this->\w+->\w+\s*\([^()]*(?:\([^()]*\)[^()]*)*\)'}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &chain_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+    normalize: [{replace: '(?s)\s*\(.*\)(?=->\w+$)', with: '()'}]
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: property_chain_call_method
+  reads: file
+  in: [source]
+  match: *chain_match
+  id: *chain_id
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+- rule: calls_through_typed_property_return
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<inner>\w+)\(\)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_typed_as
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::(?<held>\\?[A-Za-z_][\w\\]*)$'
+    - node: 'php.type::{held}'
+    - ancestors: [inherits, mixes_in]
+    - id_matches: '^php\.type::(?<maker>.+)$'
+    - node: 'php.method::{maker}::{inner}'
+    - edge: returns_type
+    - id_matches: '^php\.return_type::[^:]+::\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: &on_type
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+# The value's text is as written, so the pattern allows spaces and arguments.
+- rule: calls_through_property_assigned_call
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.member_assignment::{owner}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::[^:]+::\$this->\w+=\$this->(?<inner>\w+)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, mixes_in]
+    - id_matches: '^php\.type::(?<maker>.+)$'
+    - node: 'php.method::{maker}::{inner}'
+    - edge: returns_type
+    - id_matches: '^php\.return_type::[^:]+::\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched:
+    - - node: 'php.member_assignment::{class}::$this->{member}'
+      - edge: assigned_value
+      - id_matches: '^php\.member_assignment_value::(?!{owner}::)'
+  emits: *calls_edge
+  confidence: inferred
