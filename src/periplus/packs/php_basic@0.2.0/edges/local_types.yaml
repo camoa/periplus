@@ -12,12 +12,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # new Foo(): they look the method up on Foo and then its ancestors through extends. A method no
 # class in the map declares, or a class outside the map, lands unresolved under the class.
 #
-# A variable with any assignment in the method that is not a new, $x = make() or
-# $x = $x ?? new Foo(), gets no edge, even beside a new: the call site stays without one.
+# A variable with two different values in the method, new Foo() and new Bar(), or a new beside
+# $x = make() or $x = $x ?? new Foo(), gets no edge: the map does not know which one holds at the
+# call, so the call site stays without one. The same text assigned twice is one value.
 #
-# Limits: a variable assigned new Foo() and again new Bar() in one method joins each call to both
-# classes, so one of the two edges is false; its variable has two local_assigned edges. Telling the
-# two apart needs a not-equal test the map rules do not have. A closure's variable shares the id of the method's variable of the same name. new
+# Limits: a closure's variable shares the id of the method's variable of the same name. new
 # self(), new static(), new parent() and new $class() give no type. Values set by foreach, catch,
 # list(), =&, static or global make no node.
 node_types:
@@ -111,6 +110,7 @@ rules:
     follow: &local_walk
     - node: 'php.local_variable::{class}::{meth}::${var}'
     - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
     - edge: local_value_typed_as
     - id_matches: '^php\.local_type::[^:]+::\$\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
     - try:
@@ -120,10 +120,10 @@ rules:
       - node: 'php.method::{declarer}::{method}'
     - node: 'php.call_site::{site}'
     - edge: call_site_in
-    unless: &assigned_other_than_new
+    unless_matched: &assigned_another_value
     - - node: 'php.local_variable::{class}::{meth}::${var}'
       - edge: local_assigned
-      - id_matches: '^php\.local_value::[^:]+::\$\w+=(?!\s*new\s)'
+      - id_matches: '(?s)^php\.local_value::(?!{value}$)'
   emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
   confidence: inferred
 
@@ -133,6 +133,6 @@ rules:
     node_type: php.call_site
     where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
     follow: *local_walk
-    unless: *assigned_other_than_new
+    unless_matched: *assigned_another_value
   emits: *calls_edge
   confidence: inferred
