@@ -1,0 +1,34 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method that replaces one its class inherits: overrides, from the child's method to the method
+# of the nearest ancestor, through extends, that declares the same name. A grandparent's method
+# the middle class does not declare is the target. Both methods are declarations in the files, so
+# the edge is declared. With it, what breaks if Base::step changes reaches Child::step, which a
+# $this->step() call in Base does not show.
+#
+# Limits: only extends is walked. A method that implements an interface method gets no edge, and
+# neither does one that replaces a method a used trait brings, in the class or in an ancestor; when
+# an ancestor further up also declares the name, the edge goes to that ancestor. A parent outside
+# the map gives no edge and no mark. Visibility is not read: a method with the name of a private
+# method in an ancestor, which PHP does not treat as a replacement, still gets the edge.
+edge_kinds:
+
+- kind: overrides
+  from: php.method
+  to: php.method
+
+rules:
+
+- rule: method_overrides_ancestor
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<class>[^:]+)::(?<method>\w+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.method::{owner}::{method}'
+  emits: [{edge: {kind: overrides, from: this_node, to: matched_node}}]
+  confidence: declared
