@@ -1,0 +1,82 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The summary line of a class, interface, trait, enum, function or method: the first content line
+# of the /** */ docblock just before it, set on the node find_declarations.yaml finds as the
+# attribute summary. Blank comment lines before it are passed. The text is what the comment's
+# author wrote, not what the code does, and a comment left behind by a rewrite stays as it was.
+# A block whose first content line starts with @ or {, such as {@inheritdoc}, @inheritDoc or a
+# tags-only block, gives no summary. A summary that runs over two lines keeps its first line: the
+# docblock source gives one value, and a value spanning lines would keep each line's star.
+rules:
+
+- rule: class_summary
+  reads: file
+  in: [source]
+  match: {declaration: class_declaration, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: &summary '\A/\*\*(?:[ \t]*\n[ \t]*\*)*[ \t]*(?<summary>[^@{\s*/][^\n]*?)[ \t]*(?:\*/)?[ \t]*(?:\n|\Z)'}]
+    template: "{qualified_name}"
+  emits:
+  - node: {type: php.class}
+  - attribute: {name: summary, template: "{summary}"}
+  confidence: declared
+
+- rule: interface_summary
+  reads: file
+  in: [source]
+  match: {declaration: interface_declaration, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: *summary}]
+    template: "{qualified_name}"
+  emits:
+  - node: {type: php.interface}
+  - attribute: {name: summary, template: "{summary}"}
+  confidence: declared
+
+- rule: trait_summary
+  reads: file
+  in: [source]
+  match: {declaration: trait_declaration, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: *summary}]
+    template: "{qualified_name}"
+  emits:
+  - node: {type: php.trait}
+  - attribute: {name: summary, template: "{summary}"}
+  confidence: declared
+
+- rule: enum_summary
+  reads: file
+  in: [source]
+  match: {declaration: enum_declaration, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: *summary}]
+    template: "{qualified_name}"
+  emits:
+  - node: {type: php.enum}
+  - attribute: {name: summary, template: "{summary}"}
+  confidence: declared
+
+- rule: function_summary
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id:
+    from: [qualified_name, {docblock: *summary}]
+    template: "{qualified_name}"
+  emits:
+  - node: {type: php.function}
+  - attribute: {name: summary, template: "{summary}"}
+  confidence: declared
+
+- rule: method_summary
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name, {docblock: *summary}]
+    template: "{enclosing_type}::{declared_name}"
+  emits:
+  - node: {type: php.method}
+  - attribute: {name: summary, template: "{summary}"}
+  confidence: declared

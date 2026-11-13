@@ -96,6 +96,8 @@ identity:
   written_names: [identifier]
   # f() names <script path>:f.
   resolve: [prefix_bare_with: namespace]
+  # The tree node type of a comment; a docblock is the comment just before a declaration.
+  comment: comment
 # The JavaScript and browser global functions, each the value of its own key. function_call skips
 # a call to one, and function_call_named_like_global joins it to a function of that name the
 # script declares. A rutter for a library adds the library's globals under add_table_rows, each the

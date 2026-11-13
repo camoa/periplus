@@ -1,0 +1,22 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The summary line of a function declaration: the first content line of the /** */ JSDoc block
+# just before it, set on the node function.yaml finds as the attribute summary, as php_basic's
+# types/summary.yaml reads a PHP docblock. Blank comment lines before it are passed. The text is
+# what the comment's author wrote, not what the code does. A block whose first content line starts
+# with @ or {, such as {@inheritDoc} or a tags-only block, gives no summary, and a summary that runs
+# over two lines keeps its first line. A function written as a value, const f = () => {}, or after
+# export has its comment before the statement, not before the function, and gets none here.
+rules:
+
+- rule: function_summary
+  reads: file
+  in: [js_source]
+  match: {declaration: function_declaration, name_child: name, filetype: javascript}
+  id:
+    from: [qualified_name, {docblock: '\A/\*\*(?:[ \t]*\n[ \t]*\*)*[ \t]*(?<summary>[^@{\s*/][^\n]*?)[ \t]*(?:\*/)?[ \t]*(?:\n|\Z)'}]
+    template: "{qualified_name}"
+  emits:
+  - node: {type: js.function}
+  - attribute: {name: summary, template: "{summary}"}
+  confidence: declared
