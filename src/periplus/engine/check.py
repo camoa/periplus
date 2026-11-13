@@ -235,6 +235,14 @@ def _strings(value: object) -> list[str]:
     return [item for item in (value if isinstance(value, list) else []) if isinstance(item, str)]
 
 
+def _steps(chain: object) -> list[Mapping[str, Any]]:
+    """Each step of a chain of follow steps, and each step inside its ``try`` steps at any
+    depth."""
+    listed = chain if isinstance(chain, list) else []
+    steps = [step for step in listed if isinstance(step, Mapping)]
+    return [s for step in steps for s in (step, *_steps(step.get("try")))]
+
+
 def _emits(rule: Mapping[str, Any], key: str) -> list[Any]:
     emits = rule.get("emits")
     return [e[key] for e in (emits if isinstance(emits, list) else []) if _has(e, key)]
@@ -325,7 +333,7 @@ def _undeclared(
         )
         unless = match.get("unless")
         chains = [match.get("follow"), *(unless if isinstance(unless, list) else [])]
-        steps = [step for chain in chains if isinstance(chain, list) for step in chain]
+        steps = [step for chain in chains for step in _steps(chain)]
         problems.extend(
             Problem(
                 ExitCode.UNDECLARED_EDGE_KIND,
@@ -334,7 +342,6 @@ def _undeclared(
                 {"pack": pack, "file": file, "rule": str(rule_name), "kind": kind},
             )
             for step in steps
-            if isinstance(step, Mapping)
             for kind in _strings(step.get("edge")) + _strings(step.get("ancestors"))
             if kind not in kinds
         )
