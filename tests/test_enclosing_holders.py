@@ -219,7 +219,11 @@ def test_a_named_function_inside_a_method_gets_no_method_rules(tmp_path: Path) -
     assert not [i for i in ids if "nested_helper::run" in i]
     assert "php.call_site::App\\nested_helper::$n->ping" in ids
     assert {
-        ("call_site_in", "php.call_site::App\\nested_helper::$n->ping", "php.function::App\\nested_helper"),
+        (
+            "call_site_in",
+            "php.call_site::App\\nested_helper::$n->ping",
+            "php.function::App\\nested_helper",
+        ),
         ("calls", "php.function::App\\nested_helper", "php.method::App\\Helper::ping"),
     } <= edge_set(document)
     assert edge_set(document, "parameter_typed_as") >= {
@@ -250,7 +254,9 @@ def test_a_closure_parameter_does_not_join_the_method_parameter(tmp_path: Path) 
     sites = {
         "php.call_site::App\\Shapes::run::closure()::$h->ping": "php.method::App\\Shapes::run",
         "php.call_site::App\\Shapes::run::closure()::$o?->ping": "php.method::App\\Shapes::run",
-        "php.call_site::App\\nested_helper::closure()::$n->ping": "php.function::App\\nested_helper",
+        "php.call_site::App\\nested_helper::closure()::$n->ping": (
+            "php.function::App\\nested_helper"
+        ),
     }
     assert {(s, o) for _, s, o in edge_set(document, "call_site_in") if s in sites} == set(
         sites.items()
@@ -290,7 +296,8 @@ rules:
   in: [source]
   match: {declaration: function_call_expression, name_child: function, filetype: php,
     where: [{within: [anonymous_function, arrow_function]}]}
-  id: {from: [enclosing_type, declared_name], template: '{enclosing_type}::closure::{declared_name}'}
+  id: {from: [enclosing_type, declared_name],
+    template: '{enclosing_type}::closure::{declared_name}'}
   emits: [{node: {type: own.site}}]
   confidence: declared
 - rule: in_function_only
@@ -389,7 +396,11 @@ def test_the_map_is_the_same_bytes_from_two_folders(tmp_path: Path) -> None:
     first, second = tmp_path / "one", tmp_path / "two"
     for root in (first, second):
         _shapes(root)
-        _probe(root / "probe", {"a_return.yaml": FIRST, "b_main.yaml": MAIN, "c_shell.yaml": SHELL}, THING)
+        _probe(
+            root / "probe",
+            {"a_return.yaml": FIRST, "b_main.yaml": MAIN, "c_shell.yaml": SHELL},
+            THING,
+        )
         clean_map(root / "probe")
     assert (first / "map.json").read_bytes() == (second / "map.json").read_bytes()
     assert (first / "probe" / "map.json").read_bytes() == (

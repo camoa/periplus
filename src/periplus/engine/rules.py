@@ -1498,7 +1498,7 @@ def _method(
     if holder is None or next(firing, None) is None:
         return None
     # The member sits in a body of the nearest holder, the last node passed.
-    for member, parent in zip(passed, passed[1:-1]):
+    for member, parent in zip(passed, passed[1:-1], strict=False):
         if parent.type in bodies:
             return _member_node(member, holder, rule, rule_set, within, grammar, parsed, allowed)
     return None
