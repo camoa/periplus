@@ -330,7 +330,10 @@ New in this release: `php_basic` maps `$this->method()` calls, `new Foo()` and `
 starts a theme hook link at the method or function that renders it, joins a template or script
 path to the route of the same shape, and maps `getForm(Foo::class)`; `drupal_js_basic` starts a
 library attachment at the method; and a `name_matches` condition can test a later child with
-`nth`. Node and edge ids move, so map again after upgrading.
+`nth`. `php_basic` also joins calls on a variable through its parameter type, a `new`, a return
+type or a trait's using class, and marks a method that `overrides` an inherited one;
+`drupal_basic` joins calls on a service and maps a view's page display as a route. Node and edge
+ids move, so map again after upgrading.
 
 ## Write a rutter
 

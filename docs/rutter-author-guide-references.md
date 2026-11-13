@@ -112,9 +112,10 @@ either, the rule is refused.
 
 ## What a tree reference cannot say today
 
-- A method call on an object, `$x->m()`, whose class is known only at run time. `$this->m()` is
-  joined in the map through the enclosing class and its ancestors, so a call in a parent to a
-  method a child overrides lands on the parent's method.
+- A method call on an object, `$x->m()`, whose class is known only at run time. `$this->m()`, and
+  a call on a variable whose class a parameter type, a `new` or a return type names, are joined in
+  the map by map rules, so a call in a parent to a method a child overrides lands on the parent's
+  method; an `overrides` edge joins the child's method to it.
 - A function imported by `use function x as y`. The imports bind type names only, so `y()` is an
   unresolved `y` in the namespace: one table would merge a function and a class PHP keeps apart.
 - A call in a class constant or a property default, which no function or method holds: skipped.
@@ -593,8 +594,8 @@ imports; an assignment `$this-><member> = ...`, one node for each class and memb
 site `$this-><member>-><method>()`, with an edge to and from its enclosing method through
 `enclosing_method`. A `{declared: <type>}` end reaches only a node whose id leaves out
 `enclosing_method`: the type twin in the parameter pair, and in the assignment pair the assignment
-node, not its twin. A function's parameter has no enclosing method and makes nothing. The map
-rule reads each call site:
+node, not its twin. A function's parameter has no enclosing method;
+`variable_calls_in_function.yaml` gives it the id `<function>::$<name>`. The map rule reads each call site:
 
 ```yaml php_basic@0.2.0/edges/find_structure.yaml
 - rule: calls_through_assigned_property
@@ -621,20 +622,21 @@ rule reads each call site:
 
 It goes up `inherits` to the call's class or its nearest ancestor that declares the property, to
 that class's assignment of it, to the assigned parameter of the assigning method, and to its type.
-Every step names a whole id with `node:` or follows an edge, because a follow pattern cannot name
-an earlier capture. The `calls` edge runs from the method around the call to `<type>::<method>`,
-at the call site's line, inferred. `drupal_basic@0.3.0/service` holds the same walk for a
-property assigned `\Drupal::service('<id>')`, in single or double quotes: it follows
-`service_class` from that service to its class.
+Every step names a whole id with `node:` or follows an edge. The `calls` edge runs from the method
+around the call to `<type>::<method>`, at the call site's line, inferred.
+`drupal_basic@0.3.0/service` holds the same walk for a property assigned `\Drupal::service('<id>')`, in single or double quotes: it follows
+`service_class` from that service to its class. Its `service_chain_calls.yaml` and
+`service_local_calls.yaml` take the same walk for a call on the service written in one expression
+and on a method's local variable assigned the service.
 
 `calls_through_property_assigned_here` is the same walk without the `php.type` node, the
 `ancestors` step, the owner `id_matches` and the property node. It follows
 `php.member_assignment::{class}::$this->{member}` in the calling class itself, so a child that
 assigns a property its parent declares joins its own calls. A class that declares and assigns its
 own property is matched by both map rules, and its edge carries two provenance rows. A call in a
-parent class through a property only a child assigns gives no edge: no follow step walks an edge
-backwards. A property typed by a union of two or more class names gives no edge either, and
-neither does a property set in `create()` from `$container->get('<id>')`. Such a call keeps its
+parent class through a property only a child assigns gives no edge: no rule walks from the parent
+to the child's assignment. A property typed by a union of two or more class names gives no edge
+either, and neither does a property set in `create()` from `$container->get('<id>')`. Such a call keeps its
 call site node, with no `calls` edge.
 
 ## Keys the schemas accept and the engine does not run

@@ -20,6 +20,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - `getForm(Foo::class)` as a `builds_form` edge from the method or function around it;
   - a `'#theme'` in a function of a module, theme, install, inc or profile file, and a `hook_theme` `template` value that names a folder;
   - an `on403`-style handler of a class that descends from `HttpExceptionSubscriberBase`, as a subscriber of the kernel exception event.
+- `php_basic` joins a method call on a variable, `$x->m()` or `$x?->m()`, in a method or a plain function, so the map shows what a method calls through its parameters, locals and return values. Each call keeps a call site; its `calls` edge is inferred:
+  - through a parameter typed `Foo $x` or `?Foo $x`, in a method or a function;
+  - through a local variable assigned `new Foo()`;
+  - through a declared return type, as `$this->m()->n()` or `$x = $this->m(); $x->n()`;
+  - through a property assigned `new Foo()`;
+  - inside a trait, a `$this->m()` also joins the `m()` of each class that uses the trait;
+  - the new edge kind `overrides` runs from a method to the inherited method it replaces, so the map shows which child methods replace a parent's.
+- `drupal_basic` maps:
+  - a method called on a service, as `\Drupal::service('x')->m()`, `$container->get('x')->m()` or a local variable assigned the service, as a `calls` edge to the method on the service's class;
+  - each page display of a view as the route `view.<view>.<display>`, with its path, and the new edge kind `route_from_view` to the view.
+- Map rules take `unless`, chains that stop a rule for the matched node, and `unless_matched`, chains that block one result. A `follow` step may be `incoming_edge`, which walks an edge backwards, and an `id_matches` in a chain may name an earlier capture as `{name}`. The pack check refuses an undeclared edge kind inside a `try` at any depth.
 - The map skill has one recipe per kind of question, and tells the reader to answer from the map first and then read the code the map points at. The skill is rewritten around a short loop that starts from the map.
 - A node argument of `show`, `neighbors`, `affected`, `path` and `slice` may be a short name, such as `helper`. One name that fits several nodes exits 31 and lists them as a pick-list; in JSON the problem holds `candidates` (`id`, `type`, `location`) and `total`. A name that fits none adds a hint.
 - Rows of `find`, `show`, `neighbors`, `affected` and `path` print `file:line`, the source line under it, and the node's description line when the descriptions file has one. A source line is read only from a regular file inside the project, up to 5 MB.
@@ -29,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - `affected` prints its own header when it stops on a problem.
+- Every PHP function is now a holder in `php_basic`, as a class is: the enclosing type of a call or a parameter in a function's body is the function.
 - A theme hook link (`renders_theme_hook`) and a library attachment in PHP (`attaches_library`) start at the method or function around them, no longer at the class. One written outside any named function, such as a property default, gives no edge and one skipped row.
 - A runtime `$this->redirect($route)` call site has an id that ends in `(runtime)`, apart from the plain call site at the same line.
 - Node and edge ids move and the map grows, so a committed map differs after the upgrade. Map again and review the difference.

@@ -368,6 +368,10 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   map, and a template by its folder's name, inferred.
 - `builds_form`, inferred, from the method around `->getForm(X::class)`, or the function around it
   in a module file, to the form class `X`, resolved through the file's namespace and imports.
+- `route_from_view`, from the route `view.<view>.<display>` of each page display of a view that
+  has a path, to the view's configuration object. The route also gets its `route_serves_path`
+  edge, and a `shape_of_route` edge from its path's shape, each `%` argument written as `*`. The
+  edges to the view and the shape are read as text, at the indentation Drupal exports.
 
 ## Where to look when the map misses a thing
 
@@ -385,8 +389,9 @@ not listed. `skipped` names matches that made nothing. An `unresolved` node is a
 
 ## What the parse-tree side cannot say today
 
-- A method call on an object, `$x->m()`; plain and static calls are stated, and so are a call on
-  `$this` and a call through a property of `$this` whose type the class declares.
+- A method call on an object, `$x->m()`, whose class no parameter type, `new`, return type or
+  property states; plain and static calls are stated, and so are a call on `$this` and a call
+  through a variable or a property whose class the code states.
   [Tree references](rutter-author-guide-references.md) lists the other calls not stated.
 - The tree layout. A rule names node types and fields; how the engine walks the tree, finds the
   enclosing class and nests namespace blocks is engine code. A text rule on PHP names its own
