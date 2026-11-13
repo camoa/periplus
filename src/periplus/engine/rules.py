@@ -907,7 +907,7 @@ def _declarations(
                     pack=rule.pack,
                     rule=rule.name,
                     confidence=rule.confidence,
-                    attributes=tuple((name, text, line) for name, text in rule.templates),
+                    attributes=_read_attributes(rule, values, line),
                 )
             )
         for spec in rule.edges:
@@ -1536,6 +1536,26 @@ def _member_node(
         parsed,
         keep=lambda t: not rule_set.types[t].internal,
     ) or _minted(member, holder, rule.filetype, rule_set, within, grammar, parsed)
+
+
+#: The longest text an attribute filled from a declaration's sources holds; the rest is cut.
+_ATTRIBUTE_CAP = 300
+
+
+def _read_attributes(
+    rule: Rule, values: Mapping[str, Any], line: int
+) -> tuple[tuple[str, str, int], ...]:
+    """Each attribute of a declaration rule at ``line``. A constant template is kept as written; one
+    naming the id's sources is filled from ``values``, its whitespace runs made single spaces, cut
+    at ``_ATTRIBUTE_CAP`` characters, and left out when that leaves no text."""
+    read = []
+    for name, template in rule.templates:
+        if not PLACEHOLDER.search(template):
+            read.append((name, template, line))
+            continue
+        text = " ".join(str(_fill(template, values) or "").split())[:_ATTRIBUTE_CAP].rstrip()
+        read += [(name, text, line)] if text else []
+    return tuple(read)
 
 
 def _names(node: Node, rule: Rule, grammar: Grammar, parsed: ParsedFile) -> dict[str, Any] | None:

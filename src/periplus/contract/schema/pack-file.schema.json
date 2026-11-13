@@ -1054,7 +1054,7 @@
             },
             "template": {
               "type": "string",
-              "description": "The value, filled from captures, path values and values. On a declaration rule, constant text with no placeholder, set on the rule's node."
+              "description": "The value, filled from captures, path values and values. On a declaration rule, set on the rule's node: constant text kept as written, or a template naming only sources of the rule's id, such as its docblock source's group; a filled value has each whitespace run made one space, is cut at 300 characters, and sets nothing when empty."
             }
           },
           "if": {

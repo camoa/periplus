@@ -2021,18 +2021,23 @@ def _build_declaration(
         raise _Unsupported("a declaration rule emits one node with a type, or edges only")
     if "encloses_for" in match and not nodes:
         raise _Unsupported("match.encloses_for needs a rule that emits a node")
+    block = item.get("id", {})
+    source = block.get("from") if isinstance(block, Mapping) and "pattern" not in block else None
+    listed = [source] if isinstance(source, str) else source if isinstance(source, list) else []
+    read = {_qualified(s) if isinstance(s, Mapping) else s for s in listed} if attributes else set()
     if not all(
         isinstance(a, Mapping)
         and set(a) == {"name", "template"}
         and isinstance(a["name"], str)
         and re.fullmatch(r"[a-z][a-z0-9_]*", a["name"])
         and isinstance(a["template"], str)
-        and not PLACEHOLDER.search(a["template"])
+        and set(PLACEHOLDER.findall(a["template"])) <= read
         for a in attributes
     ):
-        raise _Unsupported("a declaration rule's attribute template is constant text")
+        raise _Unsupported(
+            "a declaration rule's attribute template names only the sources of its id"
+        )
     _refuse_resolution_value(pack, "declaration", ((a["name"], a["template"]) for a in attributes))
-    block = item.get("id", {})
     argument = _argument(block.get("from"), "argument") if isinstance(block, Mapping) else None
     if argument is not None and not set(block) <= {"from", "normalize"}:
         raise _Unsupported("an id from a call's argument takes only an optional normalize")
