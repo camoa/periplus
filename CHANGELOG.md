@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The map skill has one recipe per kind of question, and tells the reader to answer from the map first and then read the code the map points at. The skill is rewritten around a short loop that starts from the map.
 - A node argument of `show`, `neighbors`, `affected`, `path` and `slice` may be a short name, such as `helper`. One name that fits several nodes exits 31 and lists them as a pick-list; in JSON the problem holds `candidates` (`id`, `type`, `location`) and `total`. A name that fits none adds a hint.
 - Rows of `find`, `show`, `neighbors`, `affected` and `path` print `file:line`, the source line under it, and the node's description line when the descriptions file has one. A source line is read only from a regular file inside the project, up to 5 MB.
-- `find` matches description text too, and marks those rows `[description]`. JSON adds `matched`, `by_type` and `description`.
+- `find` matches description text and string attribute values too, and marks those rows `[description]` or `[attribute NAME]`. JSON adds `matched`, `matched_attribute`, `by_type` and `description`.
 - `find --type` and `--path` may repeat. A wrong type name gets suggestions. A cut list prints counts by type and a line on how to narrow.
 
 ### Changed

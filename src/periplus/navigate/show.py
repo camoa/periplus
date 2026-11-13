@@ -314,7 +314,8 @@ def render_text(report: ShowReport) -> str:
         if report.roles:
             lines.append(f"roles: {_escape(', '.join(report.roles))}")
         for key, value in sorted((report.attributes or {}).items()):
-            lines.append(f"attribute {_escape(key)}: {_escape(json.dumps(value, sort_keys=True))}")
+            # json.dumps prints one line of ASCII; _escape would double its backslashes.
+            lines.append(f"attribute {_escape(key)}: {json.dumps(value, sort_keys=True)}")
         lines += [f"location: {_escape(place(loc))}" for loc in report.locations]
         for p in report.provenance:
             lines.append(

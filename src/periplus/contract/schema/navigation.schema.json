@@ -98,14 +98,15 @@
         "items": {
           "type": "array",
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "source", "matched", "description"],
+            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description"],
             "properties": {
               "id": {"type": "string"},
               "type": {"type": "string"},
               "state": {"type": "string"},
               "location": {"type": ["string", "null"]},
               "source": {"$ref": "#/$defs/source"},
-              "matched": {"description": "id when the node id holds the text, description when only its description does.", "enum": ["id", "description"]},
+              "matched": {"description": "id when the node id holds the text, attribute when a string attribute value or list item does, description when only its description does.", "enum": ["id", "attribute", "description"]},
+              "matched_attribute": {"description": "The name of the attribute that matched, the first in sorted order when several do; null unless matched is attribute.", "type": ["string", "null"]},
               "description": {"$ref": "#/$defs/node_text"}
             }
           }
