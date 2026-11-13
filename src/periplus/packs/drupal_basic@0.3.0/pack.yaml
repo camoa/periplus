@@ -812,7 +812,7 @@ tables:
     user: entity.user
 
 # The core and Symfony classes and interfaces that the custom code builds on and the map never
-# reads. Each one an inherits or implements edge reaches becomes a declared node this pack draws,
+# reads. Each one an inherits or implements edge reaches becomes a boundary node this pack draws,
 # with no location. A custom class that descends from a name with a type takes that type: those
 # roles have no attribute to read. A plugin base names no type, because its attribute or
 # annotation already gives the plugin. Contributed modules' bases belong to their own rutters.
