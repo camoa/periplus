@@ -26,7 +26,7 @@ __all__ = [
 
 
 class TypeCollision(HarnessError):
-    """Rules found types for one id that do not lie on one ancestor chain."""
+    """Rules found types for one id that share no ancestor type."""
 
     code = ExitCode.TYPE_COLLISION
 
@@ -39,10 +39,12 @@ class EdgeIllegal(HarnessError):
 
 @dataclass(frozen=True, slots=True)
 class LeftOut:
-    """How many nodes and edges of an internal type the written map leaves out."""
+    """How many nodes and edges of an internal type the written map leaves out, and how many
+    edges it leaves out because a node of conflicting types cannot carry them."""
 
     nodes: int = 0
     edges: int = 0
+    unclear_edges: int = 0
 
 
 def build_document(
@@ -58,7 +60,11 @@ def build_document(
 ) -> tuple[dict[str, Any], LeftOut]:
     """The map document, and what it leaves out.
 
-    Nodes merge on id and the most specific type found wins. An attribute whose contributions
+    Nodes merge on id and the most specific type found wins. Types on different branches of one
+    ancestor give the nearest type every one descends from, and ``_merge_node`` names each
+    candidate in the attribute ``type_conflict``; an edge an end of such a node cannot carry as
+    that type is left out, and ``LeftOut`` counts it. Types that share no ancestor raise
+    ``TypeCollision``. An attribute whose contributions
     differ is written as ``{"differs": [...]}``. Edges merge on kind, from and to, and an end no
     rule found becomes a referenced node, of the deepest type its edges claim that is not
     internal, an edge's named ``target_type`` among them; an end written ``{declared: <type>}``
@@ -89,6 +95,10 @@ def build_document(
         groups.setdefault(found.id, []).append(found)
     merged = {node_id: _merge_node(group, types) for node_id, group in groups.items()}
     edges = [_landed(edge, merged) for edge in edges]
+    unclear = {
+        (e.kind, e.source, e.target) for e in edges if not _carried(e, merged, edge_kinds, types)
+    }
+    edges = [e for e in edges if (e.kind, e.source, e.target) not in unclear]
 
     merged_edges: dict[tuple[str, str, str], list[FoundEdge]] = {}
     for edge in edges:
@@ -172,7 +182,9 @@ def build_document(
     ]
     hidden = {node["id"] for node in ordered if _internal(types, node["type"])}
     kept = [edge for edge in written if edge["from"] not in hidden and edge["to"] not in hidden]
-    left_out = LeftOut(nodes=len(hidden), edges=len(written) - len(kept))
+    left_out = LeftOut(
+        nodes=len(hidden), edges=len(written) - len(kept), unclear_edges=len(unclear)
+    )
     ordered = [node for node in ordered if node["id"] not in hidden]
     written = kept
     document = {
@@ -407,14 +419,48 @@ def _referenced_type(names: set[str], types: Mapping[str, TypeInfo]) -> str:
     return min(names, key=lambda name: (name in hidden, name))
 
 
+def _carried(
+    edge: FoundEdge,
+    merged: Mapping[str, Mapping[str, Any]],
+    edge_kinds: Mapping[str, EdgeKind],
+    types: Mapping[str, TypeInfo],
+) -> bool:
+    """Whether each end of the edge that is a node of conflicting types may take the edge."""
+    allowed = edge_kinds[edge.kind]
+    return all(
+        set(kinds) & set(type_chain(types, merged[end]["type"]))
+        for end, kinds in ((edge.source, allowed.from_types), (edge.target, allowed.to_types))
+        if "type_conflict" in merged.get(end, {}).get("attributes", {})
+    )
+
+
 def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> dict[str, Any]:
     found = sorted({node.type for node in group})
     deepest = max(found, key=lambda name: len(type_chain(types, name)))
+    conflict: list[str] = []
     if any(name not in type_chain(types, deepest) for name in found):
-        raise TypeCollision(
-            f"{group[0].id} was found as {', '.join(found)}, which do not lie on one type chain",
-            {"id": group[0].id, "types": ", ".join(found)},
-        )
+        # A type found that is an ancestor of another found type is on that one's chain.
+        leaves = [n for n in found if not any(n in type_chain(types, m)[1:] for m in found)]
+        shared = [
+            t for t in type_chain(types, deepest) if all(t in type_chain(types, n) for n in leaves)
+        ]
+        if not shared:
+            raise TypeCollision(
+                f"{group[0].id} was found as {', '.join(found)}, which do not lie on one type "
+                "chain",
+                {"id": group[0].id, "types": ", ".join(found)},
+            )
+        deepest = shared[0]
+        conflict = [
+            f"{t} by {p}/{r}"
+            for t, p, r in sorted(
+                {
+                    (n.type, n.pack, n.rule)
+                    for n in group
+                    if n.type not in type_chain(types, deepest)
+                }
+            )
+        ]
     values: dict[str, dict[tuple[str, int], Any]] = {}
     named: dict[tuple[str, str, str], set[str]] = {}
     for node in group:
@@ -435,6 +481,8 @@ def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> di
         ],
     }
     attributes = {name: _attribute(contributions) for name, contributions in values.items()}
+    if conflict:
+        attributes["type_conflict"] = conflict
     if attributes:
         result["attributes"] = dict(sorted(attributes.items()))
     return result

@@ -83,6 +83,8 @@ class MapReport:
     boundaries: tuple[tuple[str, int], ...] = ()
     #: Each unknown boundary node as the pack whose rule set the mark and the reason.
     unknown: tuple[tuple[str, str], ...] = ()
+    #: Each node of conflicting types and its candidates, by id.
+    conflicts: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -228,6 +230,11 @@ def run(
         internal=left_out,
         boundaries=_boundaries(document),
         unknown=_unknown(document),
+        conflicts=tuple(
+            (n["id"], tuple(n["attributes"]["type_conflict"]))
+            for n in document["nodes"]
+            if "type_conflict" in n.get("attributes", {})
+        ),
     )
 
 
@@ -313,6 +320,19 @@ def render_text(report: MapReport) -> str:
                 if report.unknown
                 else []
             ),
+        ],
+    )
+    shown_conflicts = [f"{_escape(n)}: {_escape('; '.join(c))}" for n, c in report.conflicts[:10]]
+    if len(report.conflicts) > 10:
+        shown_conflicts.append(
+            f"and {len(report.conflicts) - 10} more; the JSON report lists them all"
+        )
+    lines += _section(
+        "Type conflicts",
+        [
+            f"total {len(report.conflicts)}",
+            f"edges left out {report.internal.unclear_edges}",
+            *shown_conflicts,
         ],
     )
     lines += _section(
@@ -413,6 +433,11 @@ def render_json(report: MapReport) -> str:
             "total": len(report.unknown),
             "by_pack": dict(Counter(p for p, _ in report.unknown)),
             "by_reason": dict(Counter(r for _, r in report.unknown)),
+        },
+        "type_conflicts": {
+            "total": len(report.conflicts),
+            "edges_left_out": report.internal.unclear_edges,
+            "by_node": [{"node": n, "candidates": list(c)} for n, c in report.conflicts],
         },
         "problems": [_json_problem(p) for p in report.problems],
     }

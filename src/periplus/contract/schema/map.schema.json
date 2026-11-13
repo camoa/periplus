@@ -67,7 +67,7 @@
           "description": "<id namespace>::<name>. The namespace is never empty and never the literal None; that it is one a loaded pack declares is checked by periplus map before writing, since the schema cannot know the packs. Namespaced, and minted from the thing rather than from the rule that found it. Renaming a rule must not churn ids across the map. Two config files in one Drupal module carry the same internal id, so machine names alone are not unique and the namespace is load-bearing."
         },
 
-        "type": {"type": "string", "description": "Exactly one. A second matching type is a real collision and the build refuses."},
+        "type": {"type": "string", "description": "Exactly one. Rules that type one id on different branches of a declared ancestor give that nearest ancestor, and attributes.type_conflict names each candidate. Types that share no ancestor are an id collision and the build refuses."},
         "roles": {"type": "array", "items": {"type": "string"}, "description": "Capabilities, which accumulate and never collide. One cache backend that also invalidates tags is not ambiguous."},
 
         "state": {
@@ -86,6 +86,10 @@
             "resolution": {
               "enum": ["runtime"],
               "description": "An unknown boundary, reason run-time: a rule read this call site, its target or argument is built at run time, and no rule will ever draw the edge. The node's state is unknown_boundary."
+            },
+            "type_conflict": {
+              "type": "array", "minItems": 2, "items": {"type": "string"},
+              "description": "Written by the engine, never by a rule: rules typed this node as types on different branches of one ancestor, and the node's type is the nearest type they share. One entry per type, pack and rule, sorted, as '<type> by <pack>/<rule>'. An edge only a candidate type could carry is not written."
             }
           }
         },
