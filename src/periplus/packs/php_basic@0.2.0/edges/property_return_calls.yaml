@@ -4,7 +4,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #
 # $this->p->m(...)->n(), where the property p declares its type: find_property_chain_call keeps a
 # php.call_site at its line, <class>::<method>::$this->p->m()->n, its arguments dropped, joined to
-# and from the method around it. calls_through_typed_property_return finds p as
+# and from the method around it. An argument list that is one quoted text, m('x'), stays as
+# written, so a rule of another pack that keeps the same call's text, such as a service id, mints
+# the same node. calls_through_typed_property_return finds p as
 # calls_through_typed_property does, on the call's class or its nearest ancestor that declares it,
 # looks m up on p's type and then its ancestors through extends and used traits, takes m's
 # returns_type (types/return_types.yaml), and looks n up on that type and then its ancestors. An
@@ -45,7 +47,7 @@ rules:
   id: &chain_id
     from: [enclosing_type, enclosing_method, declared_name, name]
     template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
-    normalize: [{replace: '(?s)\s*\(.*\)(?=->\w+$)', with: '()'}]
+    normalize: [{replace: '(?s)\s*\((?!\s*[''"][\w.-]+[''"]\s*\)->\w+$).*\)(?=->\w+$)', with: '()'}]
   emits: [{node: {type: php.call_site}}]
   confidence: declared
 
@@ -63,7 +65,7 @@ rules:
   reads: map
   match:
     node_type: php.call_site
-    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<inner>\w+)\(\)->(?<method>\w+))$'}]
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?<inner>\w+)\((?:\s*[''"][\w.-]+[''"]\s*)?\)->(?<method>\w+))$'}]
     follow:
     - node: 'php.type::{class}'
     - ancestors: [inherits]
