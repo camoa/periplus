@@ -47,7 +47,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum
 from types import MappingProxyType
-from typing import ClassVar
+from typing import Any, ClassVar
 
 __all__ = ["ExitCode", "HarnessError", "Problem"]
 
@@ -289,7 +289,7 @@ class Problem:
 
     code: ExitCode
     message: str
-    detail: Mapping[str, str]
+    detail: Mapping[str, Any]
 
 
 class HarnessError(Exception):
@@ -316,7 +316,7 @@ class HarnessError(Exception):
 
     code: ClassVar[ExitCode]
 
-    def __init__(self, message: str, detail: Mapping[str, str] | None = None) -> None:
+    def __init__(self, message: str, detail: Mapping[str, Any] | None = None) -> None:
         """Take the one-line message and the named facts that go with it.
 
         ``detail`` is accepted here, rather than left for a subclass to add later, because without
@@ -330,7 +330,7 @@ class HarnessError(Exception):
         ``types`` is already resident before user code runs, so the wrap costs nothing measurable.
         """
         super().__init__(message)
-        self.detail: Mapping[str, str] = MappingProxyType(dict(detail or {}))
+        self.detail: Mapping[str, Any] = MappingProxyType(dict(detail or {}))
 
     def problem(self) -> Problem:
         """This failure as a ``Problem``, carrying the raising subclass's own code.

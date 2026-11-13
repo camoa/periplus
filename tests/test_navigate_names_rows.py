@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ from _navigate import _edge, _node
 
 from periplus.errors import ExitCode
 from periplus.navigate import find, path, show, slice, walk
+from periplus.navigate.source import MAX_SOURCE_BYTES, SourceLines
 
 FORM = "php.type::Drupal\\my_module\\Form\\MyForm"
 BUILD = "php.method::Drupal\\my_module\\Form\\MyForm::buildForm"
@@ -283,3 +285,116 @@ def test_affected_on_an_unknown_id_prints_its_own_header(tmp_path: Path) -> None
     report = walk.run(_site(tmp_path), {}, "nothing_like_it", "in", 1, [], 50, None)
 
     assert walk.render_text(report).splitlines()[0] == "periplus affected"
+
+
+# --- review fixes: reading source safely ----------------------------------------------------
+
+
+def _lines_of(root: Path, files: dict[str, bytes]) -> SourceLines:
+    """The source reader for a project at ``root``, after writing ``files`` under it."""
+    _project(root, [], [])
+    for name, content in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_bytes(content)
+    return SourceLines(root, None)
+
+
+def test_no_source_line_is_read_from_outside_the_project_root(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.txt"
+    outside.write_text("SECRET\n", encoding="utf-8")
+    root = tmp_path / "project"
+    lines = _lines_of(root, {"src/inside.txt": b"inside\n"})
+    (root / "src" / "link.txt").symlink_to(outside)
+    (root / "src" / "up").symlink_to(tmp_path)
+
+    assert lines.at("src/inside.txt:1") == "inside"
+    assert lines.at(f"{outside}:1") is None
+    assert lines.at("../outside.txt:1") is None
+    assert lines.at("src/../../outside.txt:1") is None
+    assert lines.at("src/link.txt:1") is None
+    assert lines.at("src/up/outside.txt:1") is None
+
+
+def test_a_link_that_stays_inside_the_root_is_read(tmp_path: Path) -> None:
+    lines = _lines_of(tmp_path, {"src/real.txt": b"real line\n"})
+    (tmp_path / "src" / "alias.txt").symlink_to(tmp_path / "src" / "real.txt")
+
+    assert lines.at("src/alias.txt:1") == "real line"
+
+
+def test_only_a_regular_file_is_read(tmp_path: Path) -> None:
+    lines = _lines_of(tmp_path, {})
+    os.mkfifo(tmp_path / "src" / "fifo.txt")
+    (tmp_path / "src" / "folder").mkdir()
+
+    assert lines.at("src/fifo.txt:1") is None
+    assert lines.at("src/folder:1") is None
+
+
+def test_a_file_over_the_size_cap_gives_no_source_line(tmp_path: Path) -> None:
+    lines = _lines_of(
+        tmp_path,
+        {
+            "big.txt": b"first\n" + b"x" * (MAX_SOURCE_BYTES - 6),
+            "bigger.txt": b"first\n" + b"x" * (MAX_SOURCE_BYTES - 5),
+        },
+    )
+
+    assert lines.at("big.txt:1") == "first"
+    assert lines.at("bigger.txt:1") is None
+
+
+def test_lines_are_counted_on_line_feeds_only_as_the_engine_counts_them(tmp_path: Path) -> None:
+    lines = _lines_of(
+        tmp_path,
+        {"cr.txt": b'line1\nx = "a\rb"\nline3 TARGET\n', "crlf.txt": b"one\r\ntwo  \r\n"},
+    )
+
+    assert lines.at("cr.txt:3") == "line3 TARGET"
+    assert lines.at("cr.txt:2") == 'x = "a\rb"'
+    assert lines.at("crlf.txt:2") == "two"
+
+
+# --- review fixes: escaping what project files hold ------------------------------------------
+
+
+def test_a_source_line_holding_control_characters_is_escaped_in_text(tmp_path: Path) -> None:
+    site = _site(tmp_path)
+    (site / FILE).write_text(
+        "\n".join(["x"] * 4 + ["class \x1b[2KMyForm  {"]) + "\n", encoding="utf-8"
+    )
+
+    report = find.run(site, {}, "MyForm", (), 1, None)
+
+    assert report.matches.items[0].source == "class \x1b[2KMyForm  {"
+    assert find.render_text(report).splitlines()[3] == "      | class \\x1b[2KMyForm\\u2028 {"
+
+
+# --- review fixes: tie candidates as data -----------------------------------------------------
+
+
+def test_json_tie_candidates_are_structured_and_unescaped(tmp_path: Path) -> None:
+    nodes = [_node("t::A\\B\\run", line=1, file=FILE), _node("t::C\\D\\run")]
+    report = show.run(_project(tmp_path, nodes, []), {}, "run", 50, None)
+
+    detail = json.loads(show.render_json(report))["problems"][0]["detail"]
+    assert detail["candidates"] == [
+        {"id": "t::A\\B\\run", "type": "t.x", "location": f"{FILE}:1"},
+        {"id": "t::C\\D\\run", "type": "t.x", "location": None},
+    ]
+    assert "lines" not in detail
+    assert show.render_text(report).splitlines()[2:] == [
+        f"  t::A\\\\B\\\\run  t.x  {FILE}:1",
+        "  t::C\\\\D\\\\run  t.x  no location",
+    ]
+
+
+# --- review fixes: short names at any punctuation ---------------------------------------------
+
+
+def test_a_short_name_starts_after_any_punctuation_and_never_inside_a_word(tmp_path: Path) -> None:
+    site = _project(tmp_path, [_node("rb.method::Foo#bar", line=1, file=FILE)], [])
+
+    assert show.run(site, {}, "bar", 50, None).id == "rb.method::Foo#bar"
+    assert show.run(site, {}, "ar", 50, None).exit_code == ExitCode.NODE_NOT_FOUND
+    assert show.run(site, {}, "o#bar", 50, None).exit_code == ExitCode.NODE_NOT_FOUND

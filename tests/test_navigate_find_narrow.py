@@ -281,6 +281,7 @@ def test_a_description_line_is_cut_and_escaped() -> None:
     assert description_line(None) == []
     assert description_line("  " + "x" * 200 + "\nmore") == ["      # " + "x" * 160]
     assert description_line("a\tb") == ["      # a\\tb"]
+    assert description_line("a\x1b[2Kb\u2028c\x85d") == ["      # a\\x1b[2Kb\\u2028c\\x85d"]
 
 
 def test_main_takes_repeated_type_and_path(

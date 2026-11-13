@@ -10,8 +10,6 @@ from periplus.report import _escape
 
 _ESCAPE = re.compile(r"\\(?:(\\)|n|r|t|x([0-9a-f]{2})|u([0-9a-f]{4}))")
 _SIMPLE = {"n": "\n", "r": "\r", "t": "\t"}
-#: The separators found inside ids; a short name starts right after one of them.
-_SEPARATORS = ("::", "\\", "/", ".")
 #: The most candidates a tie lists.
 _SHOWN = 20
 
@@ -29,13 +27,20 @@ def _unescape(text: str) -> str:
 
 
 def _short(node_id: str, text: str) -> bool:
-    """Whether ``text``, case-folded, is the id's name or a tail of it starting after a separator.
+    """Whether ``text``, case-folded, is the id's name or a tail of it that starts after a
+    character other than a letter, digit or underscore.
 
     The name is the id after its first ``::``, so an id ending in ``.MyForm::build`` has the short
-    names ``MyForm::build`` and ``build``, and the type before the ``::`` names nothing.
+    names ``MyForm::build`` and ``build``, and the type before the ``::`` names nothing. No
+    separator is listed, so an id written with ``#`` or ``->`` splits the same way.
     """
     name = node_id.split("::", 1)[-1].casefold()
-    return name == text or any(name.endswith(sep + text) for sep in _SEPARATORS)
+    if name == text:
+        return True
+    before = len(name) - len(text) - 1
+    if before < 0 or not name.endswith(text):
+        return False
+    return not (name[before].isalnum() or name[before] == "_")
 
 
 def resolve(index: MapIndex, text: str) -> tuple[str, tuple[str, ...]]:
@@ -57,11 +62,13 @@ def resolve(index: MapIndex, text: str) -> tuple[str, tuple[str, ...]]:
     if len(matches) == 1:
         return matches[0], (f"resolved {text!r} to {matches[0]}",)
     if matches:
-        rows = [_candidate(index, i) for i in matches[:_SHOWN]]
-        rows += [f"and {len(matches) - _SHOWN} more"] if len(matches) > _SHOWN else []
         raise NodeNotFound(
             f"{text!r} matches {len(matches)} nodes; give one of these ids",
-            {"id": text, "lines": "\n".join(rows)},
+            {
+                "id": text,
+                "candidates": tuple(_candidate(index, i) for i in matches[:_SHOWN]),
+                "total": len(matches),
+            },
         )
     try:
         index.node(text)
@@ -72,9 +79,8 @@ def resolve(index: MapIndex, text: str) -> tuple[str, tuple[str, ...]]:
     return text, ()
 
 
-def _candidate(index: MapIndex, node_id: str) -> str:
-    """One tie candidate as ``id  type  file:line``, escaped here so it stays one line."""
+def _candidate(index: MapIndex, node_id: str) -> dict[str, str | None]:
+    """One tie candidate as its raw id, type and first ``file:line``, or ``None`` for no place."""
     node = index.nodes[node_id]
     loc = first_location(node)
-    where = place(loc) if loc else "no location"
-    return f"{_escape(node_id)}  {_escape(as_text(node['type']))}  {_escape(where)}"
+    return {"id": node_id, "type": as_text(node["type"]), "location": place(loc) if loc else None}

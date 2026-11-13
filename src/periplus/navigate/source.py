@@ -2,19 +2,31 @@
 
 from __future__ import annotations
 
+import stat
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from periplus.engine.source import SourceUnreadable, load_text
 from periplus.navigate.listing import first_location, place
 from periplus.navigate.mapfile import _locate
 from periplus.report import _escape
 from periplus.settings import find_project_root
 
-__all__ = ["SOURCE_WIDTH", "SourceLines", "description_line", "located", "source_line", "where"]
+__all__ = [
+    "MAX_SOURCE_BYTES",
+    "SOURCE_WIDTH",
+    "SourceLines",
+    "description_line",
+    "located",
+    "source_line",
+    "where",
+]
 
 #: The most characters of a source line a row carries.
 SOURCE_WIDTH = 160
+#: The largest file a source line is read from, in bytes; a larger one shows none.
+MAX_SOURCE_BYTES = 5 * 1024 * 1024
 
 
 def where(edge: Mapping[str, Any] | None, node: Mapping[str, Any]) -> str | None:
@@ -68,14 +80,27 @@ class SourceLines:
         if not number.isdecimal():
             return None
         if file not in self._files:
-            try:
-                text = (self._root / file).read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError, ValueError):
-                self._files[file] = None
-            else:
-                self._files[file] = text.split("\n")
+            self._files[file] = self._read(file)
         lines = self._files[file]
         line = int(number)
         if lines is None or not 1 <= line <= len(lines):
             return None
         return lines[line - 1].strip()[:SOURCE_WIDTH]
+
+    def _read(self, file: str) -> list[str] | None:
+        """The file's lines as the engine counts them, or ``None`` when it is not a regular file
+        of at most ``MAX_SOURCE_BYTES`` whose resolved path stays inside the resolved root.
+
+        A map is a reviewed file a pull request can change, so its locations are not trusted to
+        name only project files: an absolute path, a ``..`` or a link out of the root reads nothing.
+        """
+        try:
+            path = (self._root / file).resolve()
+            if not path.is_relative_to(self._root.resolve()):
+                return None
+            status = path.stat()
+            if not stat.S_ISREG(status.st_mode) or status.st_size > MAX_SOURCE_BYTES:
+                return None
+            return load_text(path, file).split("\n")
+        except (OSError, SourceUnreadable, ValueError, RuntimeError):
+            return None

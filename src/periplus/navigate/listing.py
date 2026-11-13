@@ -80,7 +80,8 @@ def footer(listing: Listing[Any]) -> str | None:
 
 
 def problem_lines(problems: Sequence[Problem]) -> list[str]:
-    """Each problem as ``code message``, then its ``lines`` detail one per line, indented.
+    """Each problem as ``code message``, then its ``lines`` detail one per line, indented, then
+    its tie ``candidates`` as ``id  type  file:line``, each escaped, and how many were left out.
 
     The ``lines`` detail is escaped where it is built, so a separator inside it is a line break
     and never part of an id; it is printed as given.
@@ -90,4 +91,11 @@ def problem_lines(problems: Sequence[Problem]) -> list[str]:
         lines.append(f"{int(problem.code)} {_escape(problem.message)}")
         extra = problem.detail.get("lines")
         lines += [f"  {line}" for line in extra.split("\n")] if extra else []
+        candidates = problem.detail.get("candidates", ())
+        lines += [
+            f"  {_escape(c['id'])}  {_escape(c['type'])}  {_escape(c['location'] or 'no location')}"
+            for c in candidates
+        ]
+        left = problem.detail.get("total", 0) - len(candidates)
+        lines += [f"  and {left} more"] if left > 0 else []
     return lines
