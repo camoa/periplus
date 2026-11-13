@@ -251,12 +251,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_map(check, "the map file to check")
     find = subcommands.add_parser(
         "find",
-        help="find the nodes whose id or description holds a text",
-        description="List the nodes whose id or description holds TEXT, closest match first, "
-        "and stop.",
+        help="find the nodes whose id, attributes or description hold a text",
+        description="List the nodes whose id, string attributes or description hold TEXT, "
+        "closest match first, and stop.",
     )
     find.add_argument(
-        "text", metavar="TEXT", help="the text to look for in node ids and descriptions"
+        "text", metavar="TEXT", help="the text to look for in node ids, attributes and descriptions"
     )
     find.add_argument(
         "--type",

@@ -43,7 +43,8 @@ DOCUMENT: dict[str, Any] = {
 }
 
 # What each command printed with --format json on DOCUMENT before rows were dataclasses, plus the
-# location, source, warnings, description, matched and by_type fields added since.
+# location, source, warnings, description, matched, matched_attribute and by_type fields added
+# since.
 PINNED: dict[str, str] = {
     "types": """\
 {
@@ -83,6 +84,7 @@ PINNED: dict[str, str] = {
       "id": "php.method::B::run",
       "location": "src/a.php:3",
       "matched": "id",
+      "matched_attribute": null,
       "source": null,
       "state": "mapped",
       "type": "php.method"
@@ -92,6 +94,7 @@ PINNED: dict[str, str] = {
       "id": "php.method::C::run",
       "location": null,
       "matched": "id",
+      "matched_attribute": null,
       "source": null,
       "state": "referenced",
       "type": "php.method"

@@ -1,4 +1,4 @@
-"""``periplus find``: the nodes whose id or description holds a text, closest match first."""
+"""``periplus find``: the nodes whose id, attributes or description hold a text, closest first."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.listing import NONE, Listing, cut, first_location, footer, payload, place
 from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
 from periplus.navigate.show import node_descriptions
-from periplus.navigate.source import SourceLines, description_line, source_line
+from periplus.navigate.source import SOURCE_WIDTH, SourceLines, description_line, source_line
 from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "FindReport", "FindRow", "render_json", "render_text", "run"]
@@ -27,7 +27,8 @@ _SUGGESTED = 5
 class FindRow:
     """One matching node: its id, type, state, first location as ``file:line``, and the line.
 
-    ``matched`` is ``id`` or ``description``, and ``description`` the node's descriptions entry.
+    ``matched`` is ``id``, ``attribute`` or ``description``, and ``description`` the node's
+    descriptions entry. An attribute match names the attribute and holds the string that matched.
     """
 
     id: str
@@ -37,6 +38,8 @@ class FindRow:
     source: str | None = None
     matched: str = "id"
     description: str | None = None
+    matched_attribute: str | None = None
+    attribute_value: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +70,15 @@ def _rank(node_id: str, text: str) -> int | None:
     if text in name:
         return 3
     return 4 if text in whole else None
+
+
+def _attribute(attributes: Mapping[str, Any], text: str) -> tuple[str, str] | None:
+    """The first attribute, by name, whose string value or string list item holds ``text``."""
+    for name, value in sorted(attributes.items()):
+        for item in value if isinstance(value, list) else [value]:
+            if isinstance(item, str) and text in item.casefold():
+                return name, item
+    return None
 
 
 def _with_subtypes(index: MapIndex, type_name: str) -> set[str]:
@@ -118,7 +130,8 @@ def run(
     map_path: Path | None,
     paths: Collection[str] = (),
 ) -> FindReport:
-    """Find the nodes whose id or description holds ``text``; a load failure is a problem.
+    """Find the nodes whose id, attributes or description hold ``text``; a load failure is a
+    problem.
 
     ``types`` keeps a node of any of them or their subtypes, and ``paths`` a node with a location
     whose file starts with any of them; empty keeps every node.
@@ -169,10 +182,13 @@ def _find(
         if prefixes and not any(file.startswith(p) for file in held for p in prefixes):
             continue
         rank = _rank(as_text(node_id), needle)
-        if rank is None and needle in described.get(node_id, "").casefold():
+        attribute = None if rank is not None else _attribute(node.get("attributes", {}), needle)
+        if attribute is not None:
             rank = 5
+        elif rank is None and needle in described.get(node_id, "").casefold():
+            rank = 6
         if rank is not None:
-            ranked.append((rank, node_id, node))
+            ranked.append((rank, node_id, node, attribute))
     ranked.sort(key=lambda row: (row[0], row[1]))
     rows = [
         FindRow(
@@ -180,10 +196,12 @@ def _find(
             as_text(n["type"]),
             as_text(n["state"]),
             _location(n),
-            matched="description" if rank == 5 else "id",
+            matched={5: "attribute", 6: "description"}.get(rank, "id"),
             description=described.get(i),
+            matched_attribute=attribute[0] if attribute else None,
+            attribute_value=attribute[1] if attribute else None,
         )
-        for rank, i, n in ranked
+        for rank, i, n, attribute in ranked
     ]
     by_type = dict(sorted(Counter(row.type for row in rows).items()))
     return FindReport(cut(rows, limit), by_type, tuple(warnings))
@@ -203,12 +221,18 @@ def render_text(report: FindReport) -> str:
     lines = ["periplus find", ""]
     for row in report.matches.items:
         where = row.location or "no location"
-        marked = "  [description]" if row.matched == "description" else ""
+        marked = {
+            "attribute": f"  [attribute {_escape(row.matched_attribute or '')}]",
+            "description": "  [description]",
+        }.get(row.matched, "")
         lines.append(
             f"{_escape(row.id)}  {_escape(row.type)}  {_escape(row.state)}  {_escape(where)}"
             + marked
         )
         lines += source_line(row.source)
+        if row.attribute_value is not None:
+            value = row.attribute_value.strip().partition("\n")[0].strip()[:SOURCE_WIDTH]
+            lines.append(f"      @ {_escape(row.matched_attribute or '')}: {_escape(value)}")
         lines += description_line(row.description)
     if not report.matches.items:
         lines.append("no matches")
@@ -227,6 +251,7 @@ def _json_row(row: FindRow) -> dict[str, Any]:
         "location": row.location,
         "source": row.source,
         "matched": row.matched,
+        "matched_attribute": row.matched_attribute,
         "description": row.description,
     }
 

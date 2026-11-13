@@ -7,7 +7,7 @@ starts a server. The question commands read a source file only to print one line
 | Command | Question it answers |
 |---|---|
 | `periplus types` | Which node types and edge kinds does the map hold, and how many of each? |
-| `periplus find TEXT` | Which nodes hold this text in their id or description? |
+| `periplus find TEXT` | Which nodes hold this text in their id, attributes or description? |
 | `periplus show ID` | What is this node, and which edges leave and arrive at it? |
 | `periplus neighbors ID` | Which items do this item's edges lead to? |
 | `periplus affected ID` | Which items have edges that lead to this item? |
@@ -73,16 +73,21 @@ Counts the node types, each with its parent type, and the edge kinds.
 periplus find TEXT [--type T]... [--path P]... [--limit N] [--map PATH] [--format text|json]
 ```
 
-Lists the nodes whose id holds `TEXT`, closest match first, then the nodes whose description alone
-holds it. Each row is the id, the type, the state and the first location, then the source line and
-the description. A row matched by its description ends with `[description]`. `--type T` keeps type
+Lists the nodes whose id holds `TEXT`, closest match first, then the nodes whose string attribute
+values hold it, then the nodes whose description alone holds it. Matching ignores case. A string
+item of a list attribute counts; numbers, booleans and nested objects do not. Each row is the id,
+the type, the state and the first location, then the source line and the description. A row matched
+by its description ends with `[description]`. A row matched by an attribute ends with
+`[attribute NAME]`, the first matching name in sorted order, and prints `@ NAME: value` under the
+source line. `--type T` keeps type
 `T` and its subtypes. `--path P` keeps the nodes with a file that starts with `P`. Repeat either to
 keep several types or paths. Given both, a node must fit a type and a path. A type the map does not hold prints a warning,
 with up to five node types it may mean (`did you mean: ...`). A `--path` that no file in the map
 starts with prints a warning.
 
 The JSON report adds `by_type`, every match counted by type, also when the list is cut. Each item
-has `location`, `source`, `matched` (`id` or `description`) and `description`.
+has `location`, `source`, `matched` (`id`, `attribute` or `description`), `matched_attribute` (the
+attribute's name, or null) and `description`.
 
 ### show
 

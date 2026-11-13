@@ -148,6 +148,16 @@ def test_main_exits_node_not_found_and_prints_the_message(
     assert "nope::x" in capsys.readouterr().out
 
 
+def test_an_attribute_value_is_escaped_once_as_json(tmp_path: Path) -> None:
+    document = json.loads(json.dumps(DOCUMENT))
+    document["nodes"][0]["attributes"] = {"class": "A\\B\nC\x1b"}
+    (tmp_path / "map.json").write_text(json.dumps(document), encoding="utf-8")
+
+    text = show.render_text(show.run(tmp_path, {}, "php.method::A::go", 50, tmp_path / "map.json"))
+
+    assert 'attribute class: "A\\\\B\\nC\\u001b"\n' in text
+
+
 def test_a_map_state_with_a_newline_cannot_forge_a_line_in_the_text_report(tmp_path: Path) -> None:
     document = json.loads(json.dumps(DOCUMENT))
     document["nodes"][0]["state"] = "mapped\nFAKE LINE"
