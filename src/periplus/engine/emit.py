@@ -193,6 +193,7 @@ def build_document(
     ordered = [node for node in ordered if node["id"] not in hidden]
     written = kept
     grouping = sorted({str(edge["kind"]) for edge in written if edge_kinds[edge["kind"]].groups})
+    realizing = sorted({str(edge["kind"]) for edge in written if edge_kinds[edge["kind"]].realizes})
     document = {
         "periplus_map_version": 0,
         "generated_by": f"periplus {tool_version}",
@@ -211,6 +212,8 @@ def build_document(
     }
     if grouping:
         document["grouping_kinds"] = grouping
+    if realizing:
+        document["realizing_kinds"] = realizing
     return document, left_out
 
 

@@ -30,6 +30,11 @@
       "description": "The edge kinds of this map whose packs declare them grouping (groups: true), sorted: the edge's from end belongs to the container at its to end. Written only when the map holds an edge of such a kind, so a map without one is unchanged."
     },
 
+    "realizing_kinds": {
+      "type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
+      "description": "The edge kinds of this map whose packs declare them realizing (realizes: true), sorted: the edge's from end is a concrete form of its to end. Written only when the map holds an edge of such a kind, so a map without one is unchanged."
+    },
+
     "type_hierarchy": {
       "type": "array",
       "items": {
