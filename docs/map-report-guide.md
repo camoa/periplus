@@ -299,8 +299,10 @@ Outgoing (0):
 Incoming (2):
   provides_setting:
     php.function::greet_preprocess_page  php.function  mapped  web/modules/custom/greet/greet.module:11  x1  inferred  drupal_js_basic:setting_attached_in_array_in_function
+      | 'greetBanner' => [
   reads_setting:
     drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  web/modules/custom/greet/js/banner.js:4  x1  declared  drupal_js_basic:setting_read_in_behavior
+      | const banner = drupalSettings.greetBanner;
 ```
 
 The script reaches the behavior it declares and the path it fetches whole. The function `attach`
@@ -312,8 +314,10 @@ browser global, so its calls make no node.
 $ periplus neighbors js.file::web/modules/custom/greet/js/banner.js
 periplus neighbors js.file::web/modules/custom/greet/js/banner.js
 2 items
-  1  drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  via script_declares_behavior from js.file::web/modules/custom/greet/js/banner.js
-  1  drupal.url_path::/greet/hello  drupal.url_path  referenced  via script_links_to_path from js.file::web/modules/custom/greet/js/banner.js
+  1  drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  via script_declares_behavior from js.file::web/modules/custom/greet/js/banner.js  web/modules/custom/greet/js/banner.js:2
+      | Drupal.behaviors.greetBanner = {
+  1  drupal.url_path::/greet/hello  drupal.url_path  referenced  via script_links_to_path from js.file::web/modules/custom/greet/js/banner.js  web/modules/custom/greet/js/banner.js:5
+      | fetch('/greet/hello');
 ```
 
 ## A shape the map lacks
@@ -516,8 +520,10 @@ Outgoing (0):
 Incoming (2):
   provides_setting:
     php.function::greet_preprocess_page  php.function  mapped  web/modules/custom/greet/greet.module:11  x1  inferred  drupal_js_basic:setting_attached_in_array_in_function
+      | 'greetBanner' => [
   reads_setting:
     drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  web/modules/custom/greet/js/banner.js:4  x1  declared  drupal_js_basic:setting_read_in_behavior
+      | const banner = drupalSettings.greetBanner;
 ```
 
 <!-- nav-run -->

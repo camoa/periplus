@@ -490,10 +490,10 @@ Then it runs the loop. The map's `referenced` and `unresolved` nodes say which r
 ## Read the map
 
 Six commands answer a question about a written map, and stop: `periplus types` counts the node
-types and edge kinds, `periplus find TEXT` searches node ids, `periplus show ID` prints a node
+types and edge kinds, `periplus find TEXT` searches node ids and descriptions, `periplus show ID` prints a node
 and its edges, `periplus neighbors ID` and `periplus affected ID` follow edges out of and into a
-node, and `periplus path FROM TO` prints the shortest chains between two. They read the ids the
-map holds and nothing more. `periplus check-map` runs the full schema check that these commands
+node, and `periplus path FROM TO` prints the shortest chains between two. They read the map, the
+descriptions file and the source line under each row, and nothing more. `periplus check-map` runs the full schema check that these commands
 skip. The [navigation guide](docs/navigation.md) gives each command's options, output and exit
 codes, with an example you can run.
 
@@ -543,7 +543,7 @@ periplus update                    # move each pin to the installed version of t
 periplus map --output map.json     # map this project and write the map, with a run report
 periplus types                     # count the node types and edge kinds in the written map
 periplus check-map                 # check every node and edge of the map against the map schema
-periplus find TEXT                 # find the nodes whose id holds a text
+periplus find TEXT                 # find the nodes whose id or description holds a text
 periplus show ID                   # show one node and the edges at it
 periplus neighbors ID              # list the items an item's edges lead to
 periplus affected ID               # list the items whose edges lead to an item

@@ -20,10 +20,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - `getForm(Foo::class)` as a `builds_form` edge from the method or function around it;
   - a `'#theme'` in a function of a module, theme, install, inc or profile file, and a `hook_theme` `template` value that names a folder;
   - an `on403`-style handler of a class that descends from `HttpExceptionSubscriberBase`, as a subscriber of the kernel exception event.
-- The map skill has one recipe per kind of question, and tells the reader to answer from the map first and then read the code the map points at.
+- The map skill has one recipe per kind of question, and tells the reader to answer from the map first and then read the code the map points at. The skill is rewritten around a short loop that starts from the map.
+- A node argument of `show`, `neighbors`, `affected`, `path` and `slice` may be a short name, such as `helper`. One name that fits several nodes exits 31 and lists them as a pick-list; in JSON the problem holds `candidates` (`id`, `type`, `location`) and `total`. A name that fits none adds a hint.
+- Rows of `find`, `show`, `neighbors`, `affected` and `path` print `file:line`, the source line under it, and the node's description line when the descriptions file has one. A source line is read only from a regular file inside the project, up to 5 MB.
+- `find` matches description text too, and marks those rows `[description]`. JSON adds `matched`, `by_type` and `description`.
+- `find --type` and `--path` may repeat. A wrong type name gets suggestions. A cut list prints counts by type and a line on how to narrow.
 
 ### Changed
 
+- `affected` prints its own header when it stops on a problem.
 - A theme hook link (`renders_theme_hook`) and a library attachment in PHP (`attaches_library`) start at the method or function around them, no longer at the class. One written outside any named function, such as a property default, gives no edge and one skipped row.
 - A runtime `$this->redirect($route)` call site has an id that ends in `(runtime)`, apart from the plain call site at the same line.
 - Node and edge ids move and the map grows, so a committed map differs after the upgrade. Map again and review the difference.

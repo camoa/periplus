@@ -1,8 +1,8 @@
 # Navigating the map
 
 `periplus map` writes the map. Nine commands read it. Six answer a question about it; `slice` and `export` cut it down
-and print it in another format. Each one loads the map, prints its output and stops. None of them reads the source, changes the map or
-starts a server.
+and print it in another format. Each one loads the map, prints its output and stops. None of them changes the map or
+starts a server. The question commands read a source file only to print one line of it under a row.
 
 | Command | Question it answers |
 |---|---|
@@ -31,7 +31,9 @@ A ninth command, `periplus check-map`, checks the whole map against the map sche
   a letter, digit or underscore, compared without case. So `helper` and `tools.helper` both name
   `python.function::shop.tools.helper`. A short name that fits one node is used, with the warning
   `resolved 'helper' to python.function::shop.tools.helper`. One that fits several nodes exits 31
-  and lists up to 20 of them, each with its type and location. One that fits none exits 31 with
+  and lists up to 20 of them, each with its type and location. In JSON the problem's `detail` holds
+  `id` (the text given), `total` (how many nodes fit) and `candidates`, up to 20 objects with `id`,
+  `type` and `location` (`null` when the node has none). One that fits none exits 31 with
   `hint: run periplus find TEXT`.
 - `--limit N` caps the rows shown (`find`, `show`, `neighbors`, `affected`: default 50; `path`:
   default 10). `--limit 0` shows all. A cut list ends with `showing N of TOTAL` in text, and has
@@ -44,7 +46,8 @@ The six question commands report ids, locations and source lines. A row of `find
 `affected` or `path`, and an edge row of `show`, carries a location as `file:line`: where the edge
 is written, else the node's first location. Under the row, marked `|`, comes the source line at
 that place, stripped and cut to 160 characters. It is left out when the file or the line cannot be
-read, as when the map is older than the tree. Files are read under the project root above the map
+read, as when the map is older than the tree, or when the file is not a regular file, lies outside
+the project, or is over 5 MB. Files are read under the project root above the map
 file, or beside the map file when no project is found. A row of `find`, `neighbors`, `affected` or `path` then prints the first line of its node's
 entry in `.periplus/descriptions.yaml`, marked `#`, when it has one. The first line of each text
 report names its command, also when the command stops before its answer. The commands have no
