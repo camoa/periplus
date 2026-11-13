@@ -21,6 +21,9 @@ edge_kinds:
 - kind: implements_method
   from: php.method
   to: php.method
+  # realizes: the from end is a concrete form of the to end; a walk that reaches the to end
+  # adds the from ends at the same hop.
+  realizes: true
 
 rules:
 

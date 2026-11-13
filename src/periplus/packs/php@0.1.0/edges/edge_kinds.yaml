@@ -22,6 +22,9 @@ edge_kinds:
   - kind: implements
     from: [php.class, php.enum]
     to:   php.interface
+    # realizes: the from end is a concrete form of the to end; a walk that reaches the to end
+    # adds the from ends at the same hop.
+    realizes: true
 
   - kind: mixes_in
     from: php.class_like
