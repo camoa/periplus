@@ -246,7 +246,7 @@
     "slice_piece": {
       "description": "What slice prints without --out: the start nodes, then the rows reached from them breadth-first.",
       "type": "object", "additionalProperties": false,
-      "required": ["starts", "rows", "left_out", "deeper", "folded", "notes", "depth", "direction", "warnings", "problems"],
+      "required": ["starts", "rows", "left_out", "deeper", "folded", "notes", "members", "depth", "direction", "warnings", "problems"],
       "properties": {
         "starts": {
           "type": "array",
@@ -285,7 +285,7 @@
               "type": "array",
               "items": {
                 "type": "object", "additionalProperties": false,
-                "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "again", "location", "source", "description"],
+                "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "again", "location", "source", "description", "container"],
                 "properties": {
                   "start": {"description": "The start node this row hangs under.", "type": "string"},
                   "hop": {"type": "integer", "minimum": 1},
@@ -296,6 +296,7 @@
                   "type": {"type": "string"},
                   "state": {"type": "string"},
                   "again": {"description": "true when id is printed in full on another row of this piece.", "type": "boolean"},
+                  "container": {"description": "true when id is the container end of a grouping edge; the walk does not go on from it.", "type": "boolean"},
                   "location": {"$ref": "#/$defs/place"},
                   "source": {"$ref": "#/$defs/source"},
                   "description": {"$ref": "#/$defs/node_text"}
@@ -314,6 +315,19 @@
         },
         "deeper": {"description": "true when an edge leads on past the last hop.", "type": "boolean"},
         "folded": {"description": "Nodes left out of the rows because all their edges, two or more, join them to the node above, counted by type.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+        "members": {
+          "description": "For each start that is a container: its members by grouping edges, counted by type, rarest type first, and the rows shown.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["container", "total", "by_type", "rows"],
+            "properties": {
+              "container": {"type": "string"},
+              "total": {"type": "integer", "minimum": 0},
+              "by_type": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+              "rows": {"type": "array", "items": {"$ref": "#/$defs/slice_piece/properties/rows/properties/items/items"}}
+            }
+          }
+        },
         "notes": {"description": "How the words were read, such as a text that matched nothing as a whole.", "type": "array", "items": {"type": "string"}},
         "depth": {"type": "integer", "minimum": 1},
         "direction": {"enum": ["out", "in", "both"]},

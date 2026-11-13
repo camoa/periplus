@@ -89,7 +89,8 @@ class PieceRow:
     """One row of a printed piece: the edge from the node above, ``parent``, to the node ``id``.
 
     ``outward`` is true when the edge runs from ``parent`` to ``id``. ``again`` marks a node
-    printed in full elsewhere in the piece; its row is a back-reference.
+    printed in full elsewhere in the piece; its row is a back-reference. ``container`` marks the
+    container end of a grouping edge, which the walk does not go on from.
     """
 
     start: str
@@ -104,6 +105,18 @@ class PieceRow:
     location: str | None = None
     source: str | None = None
     description: str | None = None
+    container: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Members:
+    """The members of a start that is a container: how many, how many of each type, rarest type
+    first, and the rows shown."""
+
+    container: str
+    total: int
+    by_type: Mapping[str, int]
+    rows: tuple[PieceRow, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +145,7 @@ class SliceReport:
     searched: bool = False
     folded: Mapping[str, int] | None = None
     notes: tuple[str, ...] = ()
+    members: tuple[Members, ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -333,8 +347,22 @@ def _piece(
                 message = "give some words, an id or a path prefix"
                 return SliceReport(printed=True, problems=(Problem(ExitCode.USAGE, message, {}),))
             order = list(picked)
-            rows, deeper, folded = _grow(index, order, direction, depth, set(kinds))
-            kept = _keep(rows, picked, matched, limit, standing)
+            grouping = {as_text(k) for k in document.get("grouping_kinds", ())} - set(kinds)
+            alone = bool(types) and not queries
+            only = find.narrowing(index, types, ())[0] if alone else None
+            share = max(1, limit // len(order)) if limit and order else 0
+            found_members = (_members(index, s, grouping, only, share, standing) for s in order)
+            members = [m for m in found_members if m is not None]
+            rows: list[PieceRow] = []
+            deeper, folded = False, Counter[str]()
+            if not (alone and members):
+                rows, deeper, folded = _grow(index, order, direction, depth, set(kinds), grouping)
+            left_over = limit - sum(len(m.rows) for m in members) if limit else 0
+            kept = (
+                []
+                if limit and left_over <= 0
+                else _keep(rows, picked, matched, left_over, standing)
+            )
             held = {edge["kind"] for edge in index.edges}
     except HarnessError as error:
         return SliceReport(printed=True, problems=(error.problem(),))
@@ -347,6 +375,16 @@ def _piece(
         for i in kept
     )
     left = [row for i, row in enumerate(rows) if i not in set(kept)]
+    members = [
+        replace(
+            m,
+            rows=tuple(
+                replace(r, source=lines.at(r.location), description=described.get(r.id))
+                for r in m.rows
+            ),
+        )
+        for m in members
+    ]
     return SliceReport(
         nodes=len({r.id for r in rows} | set(order)),
         edges=len(rows),
@@ -364,7 +402,58 @@ def _piece(
         searched=bool(queries),
         folded=dict(sorted(folded.items())),
         notes=tuple(notes),
+        members=tuple(members),
     )
+
+
+def _members(
+    index: MapIndex,
+    container: str,
+    grouping: Collection[str],
+    only: set[str] | None,
+    most: int,
+    standing: _Standing,
+) -> Members | None:
+    """The members of ``container`` by its incoming grouping edges, or ``None`` when it has none.
+
+    Types go rarest first; inside a type, the member more other files depend on comes first,
+    then the id. Rows are taken one type at a time in turn, up to ``most`` (0 takes them all).
+    ``only`` keeps the members of those types.
+    """
+    if not any(edge["kind"] in grouping for edge in index.incoming(container)):
+        return None
+    by_type: dict[str, list[tuple[Mapping[str, Any], str]]] = {}
+    for edge in index.incoming(container):
+        member = as_text(edge["from"])
+        kind = as_text(index.nodes[member]["type"])
+        if edge["kind"] in grouping and (only is None or kind in only):
+            by_type.setdefault(kind, []).append((edge, member))
+    ordered = sorted(by_type, key=lambda t: (standing.rarity(by_type[t][0][1]), t))
+    for kind in ordered:
+        by_type[kind].sort(key=lambda pair: (-standing.depended(pair[1]), pair[1]))
+    rows: list[PieceRow] = []
+    depth = max((len(v) for v in by_type.values()), default=0)
+    for turn in range(depth):
+        for kind in ordered:
+            if turn < len(by_type[kind]) and (not most or len(rows) < most):
+                link, member = by_type[kind][turn]
+                node = index.nodes[member]
+                rows.append(
+                    PieceRow(
+                        container,
+                        1,
+                        container,
+                        as_text(link["kind"]),
+                        False,
+                        member,
+                        kind,
+                        as_text(node["state"]),
+                        False,
+                        where(link, node),
+                    )
+                )
+    counted = {kind: len(by_type[kind]) for kind in ordered}
+    return Members(container, sum(counted.values()), counted, tuple(rows))
 
 
 def _row(index: MapIndex, node_id: str, described: Mapping[str, str]) -> find.FindRow:
@@ -565,7 +654,12 @@ def _queries(start: Start) -> set[str]:
 
 
 def _grow(
-    index: MapIndex, starts: list[str], direction: str, depth: int, kinds: Collection[str]
+    index: MapIndex,
+    starts: list[str],
+    direction: str,
+    depth: int,
+    kinds: Collection[str],
+    grouping: Collection[str] = (),
 ) -> tuple[list[PieceRow], bool, Counter[str]]:
     """Every row breadth-first, hop by hop across all starts, whether an edge leads on, and the
     nodes folded into the node above, counted by type.
@@ -573,7 +667,9 @@ def _grow(
     Each edge is one row at most. A node first reached is a full row and is followed at the next
     hop; one reached again is a back-reference. A node all of whose edges join it to the node
     above, two edges or more, is folded: it makes no row and costs no hop. Edges go in (kind,
-    other end, end) order, so the rows are the same on every run.
+    other end, end) order, so the rows are the same on every run. An edge of a ``grouping``
+    kind is followed only from its member to its container: the container is a row once per
+    start, marked, and the walk does not go on from it.
     """
     ways = {"out": (("to", index.outgoing),), "in": (("from", index.incoming),)}.get(
         direction, (("to", index.outgoing), ("from", index.incoming))
@@ -583,13 +679,16 @@ def _grow(
     frontiers = {s: [s] for s in starts}
     rows: list[PieceRow] = []
     folded: Counter[str] = Counter()
+    boxed: set[tuple[str, str]] = set()
 
     def edges(item: str) -> list[tuple[Mapping[str, Any], str]]:
         found = [
             (e, end)
             for end, follow in ways
             for e in follow(item)
-            if (not kinds or e["kind"] in kinds) and (e["from"], e["kind"], e["to"]) not in used
+            if (not kinds or e["kind"] in kinds)
+            and (e["from"], e["kind"], e["to"]) not in used
+            and not (end == "from" and e["kind"] in grouping)
         ]
         return sorted(found, key=lambda p: (p[0]["kind"], p[0][p[1]], p[1]))
 
@@ -612,6 +711,11 @@ def _grow(
                         )
                         continue
                     used.add(key)
+                    container = edge["kind"] in grouping
+                    if container and (begun, target) in boxed:
+                        continue
+                    if container:
+                        boxed.add((begun, target))
                     again = target in seen
                     rows.append(
                         PieceRow(
@@ -625,11 +729,13 @@ def _grow(
                             as_text(node["state"]),
                             again,
                             where(edge, node),
+                            container=container,
                         )
                     )
                     if not again:
                         seen.add(target)
-                        reached.append(target)
+                        if not container:
+                            reached.append(target)
             frontiers[begun] = reached
     deeper = any(edges(item) for items in frontiers.values() for item in items)
     return rows, deeper, folded
@@ -669,9 +775,12 @@ def _tree(report: SliceReport) -> list[str]:
                 )
                 continue
             files[row.id] = _file(row.location)
+            marker = (
+                "  (container; list its members with periplus slice ID)" if row.container else ""
+            )
             lines.append(
                 f"{pad}{row.hop} {arrow} {_escape(row.id)}  {_escape(row.type)}"
-                f"  {_escape(row.state)}  {_escape(at(row))}"
+                f"  {_escape(row.state)}  {_escape(at(row))}{marker}"
             )
             lines.extend(pad + line for line in source_line(row.source))
             lines.extend(pad + line for line in description_line(row.description))
@@ -687,6 +796,22 @@ def _tree(report: SliceReport) -> list[str]:
 def _file(location: str | None) -> str | None:
     """The file of a ``file:line`` location, or ``None`` when there is none."""
     return None if location is None else location.rpartition(":")[0]
+
+
+def _member_lines(members: Members) -> list[str]:
+    """A container's members under its type, each type with its count, then how to list one."""
+    lines = ["", f"members of {_escape(members.container)}: {members.total}"]
+    for kind, count in members.by_type.items():
+        lines.append(f"  {_escape(kind)} {count}")
+        for row in (r for r in members.rows if r.type == kind):
+            lines.append(
+                f"    <--{_escape(row.kind)}-- {_escape(row.id)}  {_escape(row.type)}"
+                f"  {_escape(row.state)}  {_escape(located(row.location))}"
+            )
+            lines.extend("  " + line for line in source_line(row.source))
+            lines.extend("  " + line for line in description_line(row.description))
+    command = f"periplus slice {_escape(members.container)} --type T --limit 0"
+    return [*lines, f"list one type in full: {command}"]
 
 
 def _left_out(report: SliceReport) -> list[str]:
@@ -729,6 +854,8 @@ def render_text(report: SliceReport) -> str:
         for number, start in enumerate(report.starts, 1):
             lines.append(f"start {number} ({_escape(_why(start))})")
             lines += find.row_lines(start.row)
+        for members in report.members:
+            lines += _member_lines(members)
         lines += _tree(report)
         lines += _left_out(report)
     if report.out is not None:
@@ -757,6 +884,16 @@ def _json_row(row: PieceRow) -> dict[str, Any]:
         "location": row.location,
         "source": row.source,
         "description": row.description,
+        "container": row.container,
+    }
+
+
+def _json_members(members: Members) -> dict[str, Any]:
+    return {
+        "container": members.container,
+        "total": members.total,
+        "by_type": dict(members.by_type),
+        "rows": [_json_row(row) for row in members.rows],
     }
 
 
@@ -774,6 +911,7 @@ def render_json(report: SliceReport) -> str:
                 "deeper": report.deeper,
                 "folded": dict(report.folded or {}),
                 "notes": list(report.notes),
+                "members": [_json_members(m) for m in report.members],
                 "depth": report.depth,
                 "direction": report.direction,
                 "warnings": list(report.warnings),
