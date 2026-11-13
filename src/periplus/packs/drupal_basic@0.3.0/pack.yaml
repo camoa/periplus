@@ -496,6 +496,9 @@ folders:
 files:
   # The Drupal endings that hold PHP, added to php_basic's list.
   extends: php_basic
+  # A module's or theme's tests folder holds its tests, test modules and fixtures: mapped, and
+  # printed after the rest.
+  supporting: ['**/tests/**']
   add_extensions: [module, install, inc, theme, profile, engine]
   # The Group module's group.permissions files hold Group permissions, not Drupal permissions, and
   # their stem also ends in .permissions.
