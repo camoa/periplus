@@ -393,9 +393,9 @@ def _keep(
 ) -> list[int]:
     """The indexes of the rows the cap keeps, in walk order; a limit of 0 keeps them all.
 
-    Rows are taken best first: a node more starts reach, then one reached from starts of more
-    words, then one whose own id, attributes or description more words match, then the nearer
-    hop, a full row before a back-reference, then the id. Each row brings the rows above it, and
+    Rows are taken best first: full rows before back-references, then a node more starts reach,
+    then one reached from starts of more words, then one whose own id, attributes or description
+    more words match, then the nearer hop, then the id. Each row brings the rows above it, and
     a back-reference the full row it points to; a row whose rows do not fit is passed over.
     """
     if not limit or len(rows) <= limit:
@@ -421,10 +421,10 @@ def _keep(
             todo += [full[n] for n in (row.parent, row.id if row.again else None) if n in full]
         return chain
 
-    def rank(i: int) -> tuple[int, int, int, int, bool, str, int]:
+    def rank(i: int) -> tuple[bool, int, int, int, int, str, int]:
         row = rows[i]
         own = len(matched.get(row.id, ()))
-        return (-len(reach[row.id]), -len(groups[row.id]), -own, row.hop, row.again, row.id, i)
+        return (row.again, -len(reach[row.id]), -len(groups[row.id]), -own, row.hop, row.id, i)
 
     kept: set[int] = set()
     for i in sorted(range(len(rows)), key=rank):

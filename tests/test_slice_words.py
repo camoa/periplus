@@ -277,3 +277,13 @@ def test_a_source_line_with_under_two_word_characters_is_not_printed() -> None:
         [],
         ["      | x = 1"],
     )
+
+
+def test_the_cut_takes_full_rows_before_back_references(tmp_path: Path) -> None:
+    report = _piece(tmp_path, "mail charge", starts=1, limit=3)
+
+    assert [(row.id, row.again) for row in report.rows.items] == [
+        (BANK, False),
+        (CHECKOUT, False),
+        (SITE, False),
+    ]
