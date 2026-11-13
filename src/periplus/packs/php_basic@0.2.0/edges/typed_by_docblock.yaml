@@ -31,9 +31,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # another type for $x, a local with two different values in the method, or one whose value already
 # types it, new Bar() or a $this->m() with a declared return type. A @var, and a parameter's
 # signature type, inside a closure or arrow function make nothing here.
-#
-# This file sits in types/, after find_declarations.yaml: an enclosing_method end takes the first
-# node rule that fires on the method, which must be find_method, not these.
 node_types:
 - name: php.doc_param_type
   id_namespace: php.doc_param_type
