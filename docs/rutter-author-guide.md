@@ -212,8 +212,10 @@ that types a class as a form refines what the class rule found. Types on differe
 ancestor, such as two kinds of form, give the node the nearest type they share. Its
 `type_conflict` attribute names each candidate as `<type> by <pack>/<rule>`. An edge only a
 candidate type could carry is not written, and the map report's Type conflicts section lists the
-node and counts those edges. Types that share no ancestor are two things under one id, and
-refuse the map with exit 21.
+node and counts those edges. A boundary classification that reaches such a node changes no type,
+and adds its type to the list as `<type> by <pack>/boundary.<group>`. Only the engine writes
+`type_conflict`: a rule that names it refuses the map with exit 19. Types that share no ancestor
+are two things under one id, and refuse the map with exit 21.
 
 Sections are spans of a file type's text that a text rule does not read. A match that starts
 inside one gives nothing, unless the rule lists its name, as `match: {reads_sections: [string]}`. Python's sections are its strings and its comments, the first being:
