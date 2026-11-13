@@ -7,6 +7,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # #[CLI\Command(name: '...')], and from the @command tag in a method's docblock, both from the
 # tree. A method that carries both is one node with two locations. Each alias in a docblock's
 # @aliases tag is a drush.command_alias node with an alias_of_command edge to its command.
+# Each command and alias has an inferred command_in_module or command_alias_in_module edge to the
+# module drupal_basic's class_in_module gives the command's class (command/command_in_module.yaml).
 #
 # Not mapped yet:
 # - An attribute whose name is not the named argument name:, such as #[CLI\Command('x')], or is

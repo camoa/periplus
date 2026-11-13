@@ -1,0 +1,185 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The module or theme a file belongs to: the nearest folder above it that holds an info file. Each
+# info file gives a drupal.extension_folder node, named by the folder's path from the project
+# folder, with an edge to its module or theme. A rule that wants a thing's owner writes a
+# drupal.member_claim node, named <folder of the file>|<kind>|<the thing's id>, and the map rules below
+# join the claim to the extension folder: the file's own folder when it holds an info file, else
+# the folder above it, and so on up to eight levels. A nearer extension folder blocks a farther one,
+# so a file below a submodule, or below a test module with its own info file, belongs to that
+# submodule or test module, and a file in a tests folder with no info file to the module above it.
+# The rules that read the claims, one per kind of thing, sit beside the rules for that thing. All
+# of these types and kinds are internal and stay out of the written map.
+
+node_types:
+- name: drupal.extension_folder
+  id_namespace: drupal.extension_folder
+  internal: true
+- name: drupal.member_claim
+  id_namespace: drupal.member_claim
+  internal: true
+
+edge_kinds:
+- kind: folder_of_module
+  from: drupal.extension_folder
+  to: drupal.module
+- kind: folder_of_theme
+  from: drupal.extension_folder
+  to: drupal.theme
+- kind: claim_in_folder
+  from: drupal.member_claim
+  to: drupal.extension_folder
+
+rules:
+- rule: module_folder
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.info'
+    filetype: yml
+    where: [{key: {name: type, equals: module}}]
+  id: {template: '{file_dir}'}
+  emits: [{node: {type: drupal.extension_folder}}]
+  confidence: declared
+
+- rule: module_folder_of_module
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.info'
+    filetype: yml
+    where: [{key: {name: type, equals: module}}]
+  id: {template: '{file_dir}'}
+  emits: [{edge: {kind: folder_of_module, from: this_node, to: {from: [], template: '{info_name}'}}}]
+  confidence: declared
+
+- rule: theme_folder
+  reads: file
+  in: [theme_root]
+  match:
+    file: '*.info'
+    filetype: yml
+    where: [{key: {name: type, equals: theme}}]
+  id: {template: '{file_dir}'}
+  emits: [{node: {type: drupal.extension_folder}}]
+  confidence: declared
+
+- rule: theme_folder_of_theme
+  reads: file
+  in: [theme_root]
+  match:
+    file: '*.info'
+    filetype: yml
+    where: [{key: {name: type, equals: theme}}]
+  id: {template: '{file_dir}'}
+  emits: [{edge: {kind: folder_of_theme, from: this_node, to: {from: [], template: '{info_name}'}}}]
+  confidence: declared
+
+# One rule per level: claim_folder_<n> tries the folder n levels above the file's folder, unless a
+# nearer one holds an info file.
+- rule: claim_folder_0
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::(?<d0>[^|]+)\|'}]
+    follow: [{node: 'drupal.extension_folder::{d0}'}]
+  emits: [{edge: {kind: claim_in_folder, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: claim_folder_1
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::(?<d0>(?<d1>[^|]+)/[^/|]+)\|'}]
+    follow: [{node: 'drupal.extension_folder::{d1}'}]
+    unless:
+    - [{node: 'drupal.extension_folder::{d0}'}]
+  emits: [{edge: {kind: claim_in_folder, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: claim_folder_2
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::(?<d0>(?<d1>(?<d2>[^|]+)/[^/|]+)/[^/|]+)\|'}]
+    follow: [{node: 'drupal.extension_folder::{d2}'}]
+    unless:
+    - [{node: 'drupal.extension_folder::{d0}'}]
+    - [{node: 'drupal.extension_folder::{d1}'}]
+  emits: [{edge: {kind: claim_in_folder, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: claim_folder_3
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::(?<d0>(?<d1>(?<d2>(?<d3>[^|]+)/[^/|]+)/[^/|]+)/[^/|]+)\|'}]
+    follow: [{node: 'drupal.extension_folder::{d3}'}]
+    unless:
+    - [{node: 'drupal.extension_folder::{d0}'}]
+    - [{node: 'drupal.extension_folder::{d1}'}]
+    - [{node: 'drupal.extension_folder::{d2}'}]
+  emits: [{edge: {kind: claim_in_folder, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: claim_folder_4
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::(?<d0>(?<d1>(?<d2>(?<d3>(?<d4>[^|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)\|'}]
+    follow: [{node: 'drupal.extension_folder::{d4}'}]
+    unless:
+    - [{node: 'drupal.extension_folder::{d0}'}]
+    - [{node: 'drupal.extension_folder::{d1}'}]
+    - [{node: 'drupal.extension_folder::{d2}'}]
+    - [{node: 'drupal.extension_folder::{d3}'}]
+  emits: [{edge: {kind: claim_in_folder, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: claim_folder_5
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::(?<d0>(?<d1>(?<d2>(?<d3>(?<d4>(?<d5>[^|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)\|'}]
+    follow: [{node: 'drupal.extension_folder::{d5}'}]
+    unless:
+    - [{node: 'drupal.extension_folder::{d0}'}]
+    - [{node: 'drupal.extension_folder::{d1}'}]
+    - [{node: 'drupal.extension_folder::{d2}'}]
+    - [{node: 'drupal.extension_folder::{d3}'}]
+    - [{node: 'drupal.extension_folder::{d4}'}]
+  emits: [{edge: {kind: claim_in_folder, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: claim_folder_6
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::(?<d0>(?<d1>(?<d2>(?<d3>(?<d4>(?<d5>(?<d6>[^|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)\|'}]
+    follow: [{node: 'drupal.extension_folder::{d6}'}]
+    unless:
+    - [{node: 'drupal.extension_folder::{d0}'}]
+    - [{node: 'drupal.extension_folder::{d1}'}]
+    - [{node: 'drupal.extension_folder::{d2}'}]
+    - [{node: 'drupal.extension_folder::{d3}'}]
+    - [{node: 'drupal.extension_folder::{d4}'}]
+    - [{node: 'drupal.extension_folder::{d5}'}]
+  emits: [{edge: {kind: claim_in_folder, from: this_node, to: matched_node}}]
+  confidence: declared
+
+- rule: claim_folder_7
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::(?<d0>(?<d1>(?<d2>(?<d3>(?<d4>(?<d5>(?<d6>(?<d7>[^|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)/[^/|]+)\|'}]
+    follow: [{node: 'drupal.extension_folder::{d7}'}]
+    unless:
+    - [{node: 'drupal.extension_folder::{d0}'}]
+    - [{node: 'drupal.extension_folder::{d1}'}]
+    - [{node: 'drupal.extension_folder::{d2}'}]
+    - [{node: 'drupal.extension_folder::{d3}'}]
+    - [{node: 'drupal.extension_folder::{d4}'}]
+    - [{node: 'drupal.extension_folder::{d5}'}]
+    - [{node: 'drupal.extension_folder::{d6}'}]
+  emits: [{edge: {kind: claim_in_folder, from: this_node, to: matched_node}}]
+  confidence: declared

@@ -1,0 +1,31 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each Drush command, as command_in_module to the module drupal_basic's class_in_module gives its
+# command_class, and each alias, as command_alias_in_module to its command's module, joined in the
+# map. Inferred, as class_in_module is. A command whose class the map holds under no module gives
+# no edge.
+
+edge_kinds:
+- kind: command_in_module
+  from: drush.command
+  to: drupal.module
+- kind: command_alias_in_module
+  from: drush.command_alias
+  to: drupal.module
+
+rules:
+- rule: command_in_module
+  reads: map
+  match:
+    node_type: drush.command
+    follow: [{edge: command_class}, {edge: class_in_module}]
+  emits: [{edge: {kind: command_in_module, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: command_alias_in_module
+  reads: map
+  match:
+    node_type: drush.command_alias
+    follow: [{edge: alias_of_command}, {edge: command_class}, {edge: class_in_module}]
+  emits: [{edge: {kind: command_alias_in_module, from: this_node, to: matched_node}}]
+  confidence: inferred

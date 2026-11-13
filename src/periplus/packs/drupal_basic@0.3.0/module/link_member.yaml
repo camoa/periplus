@@ -1,0 +1,126 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each menu link, local task, local action, contextual link and permission a module's links or
+# permissions file declares, as <thing>_in_module to the module of the nearest folder above the
+# file that holds an info file, found by module/member_folder.yaml. Each top-level key is read,
+# as the rule that makes the node reads it; a permissions file's permission_callbacks key has no
+# title and gives nothing.
+
+edge_kinds:
+- kind: menu_link_in_module
+  from: drupal.menu_link
+  to: drupal.module
+- kind: local_task_in_module
+  from: drupal.local_task
+  to: drupal.module
+- kind: local_action_in_module
+  from: drupal.local_action
+  to: drupal.module
+- kind: contextual_link_in_module
+  from: drupal.contextual_link
+  to: drupal.module
+- kind: permission_in_module
+  from: drupal.permission
+  to: drupal.module
+
+rules:
+- rule: menu_link_claim
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.links.menu'
+    filetype: yml
+    each: '*'
+  id: {from: key, template: '{file_dir}|menu_link|{key}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: menu_link_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|menu_link\|(?<id>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: menu_link_in_module, from: {template: '{id}', type: drupal.menu_link}, to: matched_node}}]
+  confidence: declared
+
+- rule: local_task_claim
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.links.task'
+    filetype: yml
+    each: '*'
+  id: {from: key, template: '{file_dir}|local_task|{key}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: local_task_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|local_task\|(?<id>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: local_task_in_module, from: {template: '{id}', type: drupal.local_task}, to: matched_node}}]
+  confidence: declared
+
+- rule: local_action_claim
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.links.action'
+    filetype: yml
+    each: '*'
+  id: {from: key, template: '{file_dir}|local_action|{key}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: local_action_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|local_action\|(?<id>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: local_action_in_module, from: {template: '{id}', type: drupal.local_action}, to: matched_node}}]
+  confidence: declared
+
+- rule: contextual_link_claim
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.links.contextual'
+    filetype: yml
+    each: '*'
+  id: {from: key, template: '{file_dir}|contextual_link|{key}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: contextual_link_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|contextual_link\|(?<id>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: contextual_link_in_module, from: {template: '{id}', type: drupal.contextual_link}, to: matched_node}}]
+  confidence: declared
+
+- rule: permission_claim
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.permissions'
+    filetype: yml
+    each: '*'
+    where: [{has_key: {path: title}}]
+  id: {from: key, template: '{file_dir}|permission|{key}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: permission_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|permission\|(?<id>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: permission_in_module, from: {template: '{id}', type: drupal.permission}, to: matched_node}}]
+  confidence: declared
