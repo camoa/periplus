@@ -1,15 +1,18 @@
 $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
-# The basic PHP pack: every class, interface, trait, enum, function and method becomes a node
-# under its full name, and a class-like gets its inherits, implements, mixes_in and contains edges.
-# A function or method also gets a calls edge for each $this->m() it holds, inferred, an
-# instantiates edge for each new of a written class, self or static, and a references_class edge
-# for each Foo::class, \A\B\Foo::class or Lib\Foo::class. A call on a variable, $x->m(), in a
-# method or a function keeps a call site, with an inferred calls edge when the variable is a typed
-# parameter, a local assigned new Foo() or $this->m() of a declared return type, or a property
-# assigned new Foo(). A $this->m() inside a trait also joins the m() of each class that uses it, and
-# a method that replaces an inherited one gets an overrides edge to it. It sits beside the
-# reference pack php and does not replace it.
+# The basic PHP pack: every class, interface, trait, enum, function and method becomes a node under
+# its full name, and a class-like gets its inherits, implements, mixes_in and contains edges. A
+# function or method also gets a calls edge for each $this->m() it holds, inferred, an instantiates
+# edge for each new of a written class, self or static, and a references_class edge for each
+# Foo::class, \A\B\Foo::class or Lib\Foo::class. A call on a variable, $x->m(), in a method or a
+# function keeps a call site, with an inferred calls edge when the variable is a typed parameter, a
+# parameter a @param types, a local assigned new Foo(), $this->m() or another typed call's result, a
+# local a @var types, a catch variable, or a property assigned new Foo() or $this->m() of a declared
+# return type. A chain of up to three calls from $this, or two from a typed property, through
+# declared return types, static among them, joins its last call. A $this->m() inside a trait also
+# joins the m() of each class that uses it, a method that replaces an inherited one or one of its
+# own class's traits gets an overrides edge to it, and a method that implements an interface method
+# gets an implements_method edge. It sits beside the reference pack php and does not replace it.
 #
 # Known gaps. A call to a function PHP itself defines, such as strlen() or json_decode(), makes
 # nothing: the rule calls_function lists the 2150 names get_defined_functions()['internal']
@@ -40,20 +43,15 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   method; the overrides edge joins the child's method to it. A method no mapped class or
 #   ancestor declares lands unresolved under the calling class. new static() is read as the
 #   enclosing class.
-# - A closure or arrow function shares its local variables' ids with the method or function around
-#   it. A plain function's parameter reassigned in its body still joins its declared type.
 #
 # Missing results:
 # - A call on a variable gets no calls edge, and keeps its php.call_site node, when no rule knows
-#   the variable's class: a foreach or catch variable, an untyped parameter, a local assigned
-#   another call's result, a local with two different values in its method, and a plain
-#   function's local. A union parameter or return type, a property typed by a union of two or more
-#   class names, Helper|Other, and a return type of static give no edge, nor does a call in a
-#   parent class through a property only a child assigns. A call at file level makes nothing. The
-#   rule files' headers name the rest.
-# - An interface method, a method of the class's own trait, and an ancestor outside the map give
-#   no overrides edge. A private promoted constructor parameter marks its constructor private, so
-#   a constructor below it gets none.
+#   the variable's class: a foreach variable no @var types, an untyped parameter no @param types, a
+#   local assigned a call no rule types, and a local with two different values in its method or
+#   function. No rule reads a union parameter or return type, or a property typed by a union of
+#   two or more class names, Helper|Other, nor a call in a parent class through a property only a
+#   child assigns, nor a call at file level. The rule files' headers name the rest.
+# - No rule gives an overrides edge to a method of an ancestor outside the map.
 # - A trait's $this->m() joins a subclass's own m() only one or two levels below the using class,
 #   and an m() of another trait the class uses not at all.
 # - A call whose method name or callee is a variable, $x->$name(), $x?->$name(), self::$name() or

@@ -163,6 +163,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   its routing and services files, library_in_module or library_in_theme from a library's first
 #   name part, class_in_module from a class named Drupal\<module>\..., inferred, and
 #   template_in_module or template_in_theme from a template's folder, inferred;
+# - the same entity type manager, service container, config factory and queue factory calls on an
+#   object known by its declared type, not its name: a parameter of the method or function around
+#   the call, or a property of $this typed on the property, on a promoted constructor parameter, in
+#   a @var docblock, or by the typed parameter it is assigned from, as inferred edges
+#   (call/typed_receivers.yaml);
 # - each ->getForm(X::class), as an inferred builds_form edge from the method around it, or the
 #   function around it in a module, install, inc, theme or profile file, to the form class X;
 # - a method called on a service, as \Drupal::service('x')->m() or $container->get('x')->m(), or on
@@ -215,7 +220,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A filter called with a space after the pipe and an argument list, as | money(2), also reads as
 #   a call of the function money, which links when an extension provides a function of that name.
 # - The object of hasRole, addRole and removeRole is not read, so such a method of any class gives
-#   a role edge. A config factory and a queue factory are known by the object's name, and
+#   a role edge. A config factory and a queue factory are known by the object's name or its
+#   declared type, and
 #   $this->config('x') is taken to be core's. A config form's $this->config('x') returns an
 #   editable object for a name its getEditableConfigNames() lists, and still reads as
 #   reads_config_object.
@@ -278,10 +284,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A service or entity type named by a variable, a concatenation, or a class constant that no
 #   mapped file declares as text, gives no edge and goes under skipped. So does parent::X, even
 #   when a mapped file declares it: only self and static read as the enclosing class.
-#   getStorage('x') on an object with another name, as $etm, get('x') on a container with another
-#   name, a receiver
-#   written with a space or a line break inside get('entity_type.manager'), and other entity type
-#   manager methods such as getHandler('x') give no edge.
+#   No rule gives an edge for getStorage('x') or get('x') on an object with another name whose type
+#   no rule knows, such as an untyped parameter $etm or a local variable, for a receiver written
+#   with a space or a line break inside get('entity_type.manager'), or for getHandler('x') and
+#   getDefinition('x') on an object known only by its name.
 # - A \Drupal:: shortcut gives a uses_service edge only when the table shortcut_services below
 #   lists its method, or it is cache() with no argument or a quoted bin; \Drupal::cache($bin) is
 #   kept as a call site marked resolution runtime. A static load, loadMultiple or create

@@ -14,9 +14,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # php.call_site <function>::closure()::$x->m, or ?->m, joined to and from the function, with no
 # calls edge from this file.
 #
-# Limits: a call at file level, outside any function, makes nothing. A parameter assigned anywhere
-# in the function body gets no edge here. A union type gives no edge. A
-# variable method name, $x->$name(), is types/find_runtime_calls.yaml's.
+# A parameter assigned anywhere in the function body gets no edge here, as the map does not know
+# which value holds at the call. No rule here reads a call at file level, outside any function, or
+# a union type. A variable method name, $x->$name(), is types/find_runtime_calls.yaml's.
 
 rules:
 

@@ -9,10 +9,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # an internal slot node, one per method; method_overrides_ancestor, a pass later, emits the edge
 # unless the declaration is private, which PHP does not treat as replaced.
 #
-# Limits: a method that implements an interface method gets no edge, and neither does one that
-# replaces a method of a trait its own class uses. An ancestor that declares the method and also
-# uses a trait that declares it gives the trait's method, though PHP keeps the class's own. A
-# parent outside the map gives no edge and no mark.
+# A method that implements an interface method, or replaces a method of a trait its own class
+# uses, gets its edge from edges/implements_method.yaml. An ancestor that declares the method and
+# also uses a trait that declares it gives the trait's method, though PHP keeps the class's own: a
+# rule that reads the ancestor's own method before its traits would give the right one. No rule
+# here gives an edge or a mark for a parent outside the map.
 node_types:
 
 - name: php.private_method

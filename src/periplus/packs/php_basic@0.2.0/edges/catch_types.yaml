@@ -17,9 +17,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # method or function. A call gets no edge from these rules, and keeps its call site, when the
 # variable may hold something else there: a catch of two classes, catch (A | B $e); two catch
 # clauses of different classes; any other assignment to $e; or a parameter $e, typed or not. Two
-# catch clauses of one class, written alike, are one value and give the edge. In a method, the
-# catch variable also stops calls_through_typed_parameter from joining a call on a parameter of the
-# same name; calls_through_function_parameter reads no variable and still joins one in a function.
+# catch clauses of one class, written alike, are one value and give the edge. The catch variable
+# also stops calls_through_typed_parameter, in a method, and calls_through_function_parameter, in a
+# function, from joining a call on a parameter of the same name.
 #
 # A catch inside a closure or arrow function makes nothing here, and a call in one keeps a call
 # site of its own, closure() in its id, that these rules do not join. A catch in a function
