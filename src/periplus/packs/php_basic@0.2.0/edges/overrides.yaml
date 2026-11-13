@@ -12,8 +12,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # Limits: a method that implements an interface method gets no edge, and neither does one that
 # replaces a method of a trait its own class uses. An ancestor that declares the method and also
 # uses a trait that declares it gives the trait's method, though PHP keeps the class's own. A
-# private promoted constructor parameter marks its constructor private, so a constructor below
-# that one gets no edge. A parent outside the map gives no edge and no mark.
+# parent outside the map gives no edge and no mark.
 node_types:
 
 - name: php.private_method
@@ -36,10 +35,14 @@ edge_kinds:
 
 rules:
 
+# The private of a promoted constructor parameter, private X $x, belongs to the property.
 - rule: find_private_method
   reads: file
   in: [source]
-  match: {declaration: visibility_modifier, filetype: php, where: [{has_child: private}]}
+  match:
+    declaration: visibility_modifier
+    filetype: php
+    where: [{has_child: private}, {not_within: [property_promotion_parameter]}]
   id: &slot_id
     from: [enclosing_type, enclosing_method]
     template: "{enclosing_type}::{enclosing_method}"
