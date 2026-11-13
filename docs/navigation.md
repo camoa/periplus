@@ -1,7 +1,8 @@
 # Navigating the map
 
-`periplus map` writes the map. Nine commands read it. Six answer a question about it; `slice` and `export` cut it down
-and print it in another format. Each one loads the map, prints its output and stops. None of them changes the map or
+`periplus map` writes the map. Nine commands read it. Six answer a question about it. `slice` prints the
+piece of the map around some words or items, or cuts it into a map file of its own; `export` prints the map in
+another format. Each one loads the map, prints its output and stops. None of them changes the map or
 starts a server. The question commands read a source file only to print one line of it under a row.
 
 | Command | Question it answers |
@@ -12,7 +13,7 @@ starts a server. The question commands read a source file only to print one line
 | `periplus neighbors ID` | Which items do this item's edges lead to? |
 | `periplus affected ID` | Which items have edges that lead to this item? |
 | `periplus path FROM TO` | What is the shortest chain of edges from one item to another? |
-| `periplus slice [ID ...] --out FILE` | Write the items around some items, or whose file starts with a prefix, to a map file of their own. |
+| `periplus slice WORDS` | What lies around the nodes these words or ids name, hop by hop? With `--out FILE`, write that piece to a map file of its own. |
 | `periplus export --format F` | Print the map as GraphML, DOT or Mermaid. |
 
 A ninth command, `periplus check-map`, checks the whole map against the map schema. See
@@ -26,7 +27,7 @@ A ninth command, `periplus check-map`, checks the whole map against the map sche
   `text`). The JSON report has sorted keys and is described by the shipped
   `navigation.schema.json`, which `periplus spec` also emits. `export` prints the graph itself and
   takes `--report text|json` for the warnings and problems it writes to standard error.
-- An `ID` argument (`show`, `neighbors`, `affected`, `path`, `slice`) is a node id or a short name: the
+- An `ID` argument (`show`, `neighbors`, `affected`, `path`, and each argument of `slice`) is a node id or a short name: the
   id's name after its first `::`, or a tail of that name that starts after a character other than
   a letter, digit or underscore, compared without case. So `helper` and `tools.helper` both name
   `python.function::shop.tools.helper`. A short name that fits one node is used, with the warning
@@ -34,12 +35,12 @@ A ninth command, `periplus check-map`, checks the whole map against the map sche
   and lists up to 20 of them, each with its type and location. In JSON the problem's `detail` holds
   `id` (the text given), `total` (how many nodes fit) and `candidates`, up to 20 objects with `id`,
   `type` and `location` (`null` when the node has none). One that fits none exits 31 with
-  `hint: run periplus find TEXT`.
+  `hint: run periplus find TEXT`. Printed `slice` searches such an argument as words instead.
 - `--limit N` caps the rows shown (`find`, `show`, `neighbors`, `affected`: default 50; `path`:
   default 10). `--limit 0` shows all. A cut list ends with `showing N of TOTAL` in text, and has
   `"truncated": true` in JSON. A cut `find` list adds two lines: `by type:` with the match count of
-  each type, and `narrow with --type T or --path P`. For `slice`, the limit (default 500) is the most items the slice
-  may hold. Over it, the command writes nothing and exits 32.
+  each type, and `narrow with --type T or --path P`. Printed `slice` shows 50 rows by default. For `slice --out`,
+  the limit (default 500) is the most items the slice may hold. Over it, the command writes nothing and exits 32.
 - Output is the same on every run for the same map.
 
 The six question commands report ids, locations and source lines. A row of `find`, `neighbors`,
@@ -145,18 +146,55 @@ several kinds.
 ### slice
 
 ```
+periplus slice [WORDS ...] [--path PREFIX]... [--type T]... [--starts N] [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH] [--format text|json]
 periplus slice [ID ...] [--path PREFIX]... --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH] [--format text|json]
 ```
 
-Writes the items around some start items to a map file of their own. Name the start items as
-`ID`s, with `--path PREFIX` (every node whose first file starts with `PREFIX`), or both; one of
-the two is required. Repeat `--path` for several prefixes; each one must match a node. `--out FILE` is required, and exits 27 when it is the map being read.
-`--direction out` and `in` follow edges one way; `both` follows an edge either way at every hop
-(default `both`). `--depth N`
-sets how many edges to follow (default 1). `--kind K` keeps only edges of kind `K`; repeat it for
-several kinds. `--limit N` is the most items the slice may hold (default 500, `0` for no limit).
-It prints `wrote FILE: N nodes, M edges`. `--format json` prints one JSON document to standard output instead:
-`out` (the file written, or null), `nodes`, `edges`, `warnings` and `problems`. Problems stay in that
+Without `--out`, `slice` prints the piece of the map around some start nodes, in one call. An
+argument that names a node, by id or short name, starts there. Any other text is searched the
+way `find` searches: as a whole, and word by word. A word is a run of letters, digits and
+underscores, at least 3 long, so `sign-up` searches `sign`. Each word, and the whole text, picks
+its best few starts from each place it matches: the id, an attribute, a description. So a word
+that matches only an attribute is not pushed behind every id match. `--starts N` sets how many
+each picks per place (default 3). Within a place, a node more words match comes first, then a
+mapped node, then one that is not a satellite (see below), then `find`'s order. `--type T` and
+`--path P` keep only the starts the words find of type `T` or under `P`, as they narrow `find`.
+Without words, `--path PREFIX` starts from every node whose first file starts with `PREFIX`.
+When the whole text matches nothing and its words do, the piece says so on its second line.
+Words that match nothing print `no matches`, and exit 0.
+
+The output lists each start first, with why it was picked (`given as 'helper'`, or each word and
+where it matched), as a `find` row. Then, under `around START`, it prints the rows reached from
+each start, breadth-first. Each row sits under the node it was reached from, indented one step
+per hop, and names the hop, the edge kind and its direction: `--calls-->` when the node above
+has the edge, `<--calls--` when the row's node has it. Then come the node's id, type, state and
+`file:line`, with the source line and the description under it. A node reached by a second
+route prints once in full and then as `(again)`. A source line with fewer than two letters,
+digits or underscores, such as `{#`, is not printed.
+
+A node whose edges, two or more, all join it to the node above is a satellite of that node. It
+gets no row and costs no hop. The piece ends with how many were folded, by type.
+
+`--depth N` sets how many edges to follow (default 2). `--direction` defaults to `both`, since a
+chain often goes up one kind and down another. `--limit N` caps the rows (default 50, `0` for
+all). The cap keeps full rows before back-references. Among them it keeps first the nodes more
+starts reach, then those reached from the starts of more words, then those whose own id,
+attributes or description more of the words match, then the nearer hop, then by id. A kept row
+brings the rows above it. A cut piece ends with what it left out, counted by hop and by edge
+kind, and the flags that narrow it (`--kind`, `--direction`, `--depth`, and `--type`, `--path`
+or `--starts` when words picked the starts). A piece that was not cut and has edges past its
+last hop ends with `go deeper with --depth N`. `--format json` prints the same piece: `starts`,
+`rows` (each with `start`, `hop`, `from`, `kind`, `direction`, `again`, `location`, `source` and
+`description`), `left_out`, `deeper`, `folded`, `notes`, `depth` and `direction`.
+
+With `--out FILE`, `slice` writes the items around the start items to a map file of their own
+instead, and takes ids, not words. Name the start items as `ID`s, with `--path PREFIX` (every
+node whose first file starts with `PREFIX`), or both; one of the two is required. Repeat
+`--path` for several prefixes; each one must match a node. `--out` exits 27 when it is the map
+being read, and `--type` or `--starts` with it exits 2. `--depth N` defaults to 1 here. `--limit
+N` is the most items the slice may hold (default 500, `0` for no limit). It prints `wrote FILE: N
+nodes, M edges`. `--format json` prints one JSON document to standard output instead: `out` (the
+file written, or null), `nodes`, `edges`, `warnings` and `problems`. Problems stay in that
 document, with the report.
 
 A kind is the type of an edge: it says how two items relate. A slice that follows edges either
@@ -190,7 +228,7 @@ periplus export --format dot --map foo.map.json > foo.dot
 | Code | Meaning |
 |---|---|
 | 0 | The report printed. An empty result is still 0. |
-| 2 | A bad option, such as `--depth 0`. |
+| 2 | A bad option, such as `--depth 0`, or `slice --out` with `--type` or `--starts`. |
 | 17 | The slice does not pass the map schema, because the map it was cut from does not. Run `periplus check-map` on that map. |
 | 27 | `slice --out` names the map being read, or the file cannot be written. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
@@ -361,6 +399,74 @@ periplus path python.module::shop.cli python.function::shop.tools.helper
 $ periplus path python.function::shop.tools.helper python.module::shop.cli
 periplus path python.function::shop.tools.helper python.module::shop.cli
 no path
+```
+
+Print what lies around the helper, two hops out, in one call:
+
+<!-- nav-run -->
+```console
+$ periplus slice helper
+periplus slice
+start 1 (given as 'helper')
+python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
+      | def helper():
+
+around python.function::shop.tools.helper
+  1 <--calls-- python.module::shop.cli  python.module  mapped  shop/cli.py:9
+        | helper()
+    2 --calls--> python.function::typer.Typer  python.function  unresolved  shop/cli.py:4
+          | app = typer.Typer()
+    2 --contains--> python.function::shop.cli.greet  python.function  mapped  shop/cli.py:8
+          | def greet():
+    2 --imports--> python.module::shop.tools  (again)  shop/cli.py:2
+    2 --imports--> python.module::typer  python.module  referenced  shop/cli.py:1
+          | import typer
+  1 <--contains-- python.module::shop.tools  python.module  mapped  shop/tools.py:1
+        | def helper():
+warning: resolved 'helper' to python.function::shop.tools.helper
+```
+
+The same piece, cut to two rows, says what it left out:
+
+<!-- nav-run -->
+```console
+$ periplus slice helper --limit 2
+periplus slice
+start 1 (given as 'helper')
+python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
+      | def helper():
+
+around python.function::shop.tools.helper
+  1 <--calls-- python.module::shop.cli  python.module  mapped  shop/cli.py:9
+        | helper()
+  1 <--contains-- python.module::shop.tools  python.module  mapped  shop/tools.py:1
+        | def helper():
+showing 2 of 6 rows
+left out by hop: 2: 4
+left out by kind: calls 1, contains 1, imports 2
+narrow with --kind K (kinds here: calls, contains, imports), --direction out, --direction in or --depth 1
+show all with --limit 0
+warning: resolved 'helper' to python.function::shop.tools.helper
+```
+
+Start from plain words. Neither names a node, and the two together match nothing, so each word
+is searched alone. Both find the helper:
+
+<!-- nav-run -->
+```console
+$ periplus slice tool help --starts 1 --depth 1
+periplus slice
+no node matches 'tool help' as a whole; started from its words
+start 1 (words: 'tool' in id, 'help' in id)
+python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
+      | def helper():
+
+around python.function::shop.tools.helper
+  1 <--calls-- python.module::shop.cli  python.module  mapped  shop/cli.py:9
+        | helper()
+  1 <--contains-- python.module::shop.tools  python.module  mapped  shop/tools.py:1
+        | def helper():
+go deeper with --depth 2
 ```
 
 An id that is not in the map exits 31:

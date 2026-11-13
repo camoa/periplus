@@ -282,11 +282,11 @@ def _piece(
                     matched.setdefault(match[1], set()).add(word)
             notes: list[str] = []
             if queries:
-                wanted, narrowed, said = find.narrowing(index, types, prefixes)
-                warnings += said
+                wanted, narrowed, noted = find.narrowing(index, types, prefixes)
+                warnings += noted
                 found = _starts(index, queries, wanted, narrowed, described, matched, most)
-                for node_id, begun in found.items():
-                    picked.setdefault(node_id, begun)
+                for node_id, chosen in found.items():
+                    picked.setdefault(node_id, chosen)
                 lone = found and queries[0] == whole and len(queries) > 1
                 if lone and not find.search(index, whole, wanted, narrowed, described):
                     notes.append(f"no node matches {whole!r} as a whole; started from its words")

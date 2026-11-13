@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A declaration rule's attribute template may name its id's sources, such as a docblock group, cut at 300 characters; `php_basic` sets `summary` on classes, interfaces, traits, enums, functions and methods from the docblock's first line, and `js_basic` on function declarations, so `find` reaches a node by a word of its summary.
 - `drush_basic` reads a command from the code structure: the command node links to the method and class that `php_basic` found and to the service that registers the class, and each alias is its own node. The text rules it replaces are removed.
 - `find --type` and `--path` may repeat. A wrong type name gets suggestions. A cut list prints counts by type and a line on how to narrow.
+- `slice` without `--out` prints the piece of the map around some words or ids, in one call. An argument that names a node starts there; other text is searched as `find` searches, as a whole and word by word, and each word picks its best starts from each place it matches (id, attribute, description); `--starts`, `--type` and `--path` narrow them. Rows follow edges both ways for 2 hops by default, each under the node it was reached from, with the edge kind, its direction, `file:line`, the source line and the description. A node reached twice prints once in full, then as `(again)`. A node whose edges all join it to the node above is folded into it and counted. The 50-row cap keeps first the nodes several starts reach, then those the words match, then near hops, and ends with what it left out and the flags that narrow it. `--format json` prints the same piece. `slice --out` works as before.
 - `php_basic` joins more method calls, each with an inferred `calls` edge:
   - a call on a `catch` variable, to the method on the caught class or its nearest ancestor;
   - a call on a local variable inside a plain function;
@@ -52,6 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - `affected` prints its own header when it stops on a problem.
+- A row's source line is left out when it holds fewer than two letters, digits or underscores, such as `{#`.
 - Every PHP function is now a holder in `php_basic`, as a class is: the enclosing type of a call or a parameter in a function's body is the function.
 - A theme hook link (`renders_theme_hook`) and a library attachment in PHP (`attaches_library`) start at the method or function around them, no longer at the class. One written outside any named function, such as a property default, gives no edge and one skipped row.
 - A runtime `$this->redirect($route)` call site has an id that ends in `(runtime)`, apart from the plain call site at the same line.
