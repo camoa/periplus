@@ -16,8 +16,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # A parameter with a type in its signature, of any kind, keeps an internal php.signature_typed node,
 # and the @param adds nothing for it. A @param for a name the signature lacks, a second @param for
 # the same name, a variadic ...$x, a scalar, mixed, Foo[], array<Foo>, a generic, Foo|Bar, and a
-# name with a backslash inside and none in front, Lib\Foo, give no edge. In a method, a parameter
-# assigned anywhere in its body gives none either, as in variable_calls.yaml.
+# name with a backslash inside and none in front, Lib\Foo, give no edge. A parameter assigned
+# anywhere in the method's or function's body gives none either, as in variable_calls.yaml.
 #
 # A @var line in the docblock just before an assignment in a method, /** @var Foo $x */ $x = ...; or
 # /** @var Foo */ $x = ...;, or before a foreach, /** @var Foo $x */ foreach (...): the variable
@@ -657,6 +657,7 @@ rules:
     - edge: call_site_in
     unless: &function_param_unless
     - [{node: 'php.signature_typed::{function}::${var}'}]
+    - [{node: 'php.local_variable::{function}::${var}'}]
     unless_matched: &function_named_twice
     - - node: 'php.function::{function}'
       - edge: function_doc_param_name
