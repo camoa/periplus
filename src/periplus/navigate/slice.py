@@ -286,6 +286,18 @@ def run(
                 "edges": edges,
                 "type_hierarchy": hierarchy({str(node["type"]) for node in nodes}, index.parent),
             }
+            texts = piece.pop("legend", {})
+            held_names = {
+                "edge_kinds": {edge["kind"] for edge in edges},
+                "node_types": {node["type"] for node in nodes},
+            }
+            legend = {
+                section: given
+                for section, names in held_names.items()
+                if (given := {k: v for k, v in texts.get(section, {}).items() if k in names})
+            }
+            if legend:
+                piece["legend"] = legend
     except HarnessError as error:
         return SliceReport(problems=(error.problem(),))
     problems = write_document(piece, target)

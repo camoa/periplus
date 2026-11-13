@@ -99,3 +99,29 @@ def test_a_map_without_texts_prints_no_legend(tmp_path: Path) -> None:
     text = slicing.render_text(_piece(tmp_path, X, texts={}))
 
     assert "legend" not in text
+
+
+def test_a_written_slice_keeps_the_texts_of_its_own_kinds_and_types(tmp_path: Path) -> None:
+    types = {"t.method": "a method", "t.class": "a class", "t.service": "a service"}
+    (tmp_path / ".periplus").mkdir(parents=True)
+    document = {
+        "periplus_map_version": 0,
+        "packs": [{"pack": "own", "version": "0.1.0"}],
+        "roots": ["."],
+        "legend": {"edge_kinds": TEXTS, "node_types": types},
+        "nodes": sorted(NODES, key=lambda n: n["id"]),
+        "edges": EDGES,
+    }
+    (tmp_path / ".periplus" / "map.json").write_text(json.dumps(document), encoding="utf-8")
+    common = {"prefixes": (), "kinds": (), "limit": None, "map_path": None, "depth": None}
+    slicing.run(tmp_path, {}, [X], direction="out", out=Path("piece.json"), **common)
+    piece = json.loads((tmp_path / "piece.json").read_text())
+
+    assert piece["legend"] == {
+        "edge_kinds": {"uses": "the method uses that class"},
+        "node_types": {"t.class": "a class", "t.method": "a method"},
+    }
+    slicing.run(tmp_path, {}, [S], direction="out", out=Path("lone.json"), **common)
+    assert json.loads((tmp_path / "lone.json").read_text())["legend"] == {
+        "node_types": {"t.service": "a service"}
+    }
