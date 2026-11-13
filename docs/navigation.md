@@ -183,6 +183,22 @@ node above was printed with, the row shows only `:line`; JSON keeps the full loc
 route prints once in full and then as `(again)`. A source line with fewer than two letters,
 digits or underscores, such as `{#`, is not printed.
 
+An edge of a grouping kind, one the map lists under `grouping_kinds`, says its `from` end belongs
+to the container at its `to` end, as a class belongs to its module. The walk follows such an
+edge only from the member to the container. The container prints once per start, marked
+`(container; list its members with periplus slice ID)`, and the walk goes no further from it,
+so one module does not pull every class, service and route it holds into the piece. `--kind K`
+naming a grouping kind walks it as any other kind.
+
+A start that is a container lists its members first, under `members of ID: N`. Each member
+type follows with its count, rarest type first, and under it the member rows: the edge kind,
+the member's id, type, state and `file:line`, with the source line and the description. Rows are
+taken one type at a time in turn, the member more other files depend on first, up to the start's
+share of `--limit`. The list ends with `list one type in full: periplus slice ID --type T
+--limit 0`. With `--type T` and no words, a container start lists only its members of type `T`
+and its subtypes, and nothing else. In JSON, `members` holds, per container start, `container`,
+`total`, `by_type` and `rows`; a walk row has `container: true` at a container.
+
 A node whose edges, two or more, all join it to the node above is a satellite of that node. It
 gets no row and costs no hop. The piece ends with how many were folded, by type.
 

@@ -12,30 +12,38 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # gives a wrong owner, so the edge is inferred. A theme template belongs to the folder below
 # custom_theme. Libraries and classes are joined in the map: a library my_module/x goes to the
 # module or theme my_module, a class Drupal\my_module\X to the module my_module. A name with no
-# module or theme in the map gives no edge.
+# module or theme in the map gives no edge. Each kind groups: the part belongs to its module or
+# theme, so a printed slice stops there and lists a module's parts when it starts at one.
 
 edge_kinds:
 - kind: route_in_module
   from: drupal.route
   to: drupal.module
+  groups: true
 - kind: service_in_module
   from: drupal.service
   to: drupal.module
+  groups: true
 - kind: library_in_module
   from: drupal.library
   to: drupal.module
+  groups: true
 - kind: library_in_theme
   from: drupal.library
   to: drupal.theme
+  groups: true
 - kind: class_in_module
   from: php.class_like
   to: drupal.module
+  groups: true
 - kind: template_in_module
   from: drupal.template
   to: drupal.module
+  groups: true
 - kind: template_in_theme
   from: drupal.template
   to: drupal.theme
+  groups: true
 
 rules:
 - rule: route_in_module

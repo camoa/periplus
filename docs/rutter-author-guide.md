@@ -269,10 +269,27 @@ name. After `from shop.cli import Config`, `Config()` lands on the class. After 
 `<package>.cli.app.command` name beside the command's `registered_on` edge.
 
 An edge kind is one name in every rutter a project loads. Two rutters giving one kind different ends
-refuse the map with exit 19, naming the kind and both files: `python_text` and `php_basic` each
+or a different `groups` refuse the map with exit 19, naming the kind and both files: `python_text` and `php_basic` each
 declare `calls` and `contains`, so one project cannot load both. Give the types at each end of a
 kind one id namespace, or a rule building that end from the kind's types is not executed. An end
 filled only by whole ids, such as `{declared: <type>}`, may list types of different id namespaces.
+
+An edge kind may set `groups: true` when its edge says the `from` end belongs to the container at
+its `to` end, as a class belongs to its module, not that one uses or reaches the other:
+
+```yaml
+- kind: class_in_module
+  from: php.class_like
+  to: drupal.module
+  groups: true
+```
+
+The map then lists the kind under `grouping_kinds`. A printed `periplus slice` stops at the
+container: it shows the container once per start and does not walk on to its other members, and a
+slice that starts at a container lists its members by type. Leave `groups` out, or set it `false`,
+for a kind that relates two things as peers or as user and used. Two rutters that declare one kind
+must agree on `groups` as on its ends. `periplus validate` refuses a value other than `true` or
+`false`.
 
 ## What the format cannot say today
 
