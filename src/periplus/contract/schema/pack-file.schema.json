@@ -461,6 +461,12 @@
           "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/followStep"}},
           "description": "Only with reads: map. Chains of follow steps, each run from the matched node with the captures of where; when any chain reaches a node, the rule makes nothing for that node. A chain reads the map as it stood when the pass began."
         },
+        "unless_matched": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/followStep"}},
+          "description": "Only with reads: map and follow. Chains of follow steps, each run from the node follow reached with the captures follow made; when any chain reaches a node, the rule makes nothing for that one result. A chain reads the map as it stood when the pass began."
+        },
         "grammar": {
           "type": "string",
           "description": "A second grammar nested inside the file's own. Needed for docblock annotations, which are not the file's language."

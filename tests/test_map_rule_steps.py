@@ -261,3 +261,77 @@ def test_a_quantifier_in_an_id_matches_step_stays_a_quantifier(tmp_path: Path) -
 
 def test_a_filled_id_matches_step_gives_a_byte_identical_map_on_two_runs(tmp_path: Path) -> None:
     _twice(tmp_path, OTHERS, "class Engine\nvar c Engine\nvar a.b Engine\nvar aXb Engine\n")
+
+# 1. unless_matched: chains from the node follow reached, with follow's captures, that block that
+# one result; unless keeps blocking the whole matched node.
+
+JOIN = (
+    "    node_type: own.use\n    where: [{id_matches: '^own\\.use::(?<name>\\w+)$'}]\n"
+    "    follow: [{node: 'own.var::{name}'}, {edge: assigned}, "
+    "{id_matches: '^own\\.class::(?<cls>\\w+)$'}]\n"
+)
+STOP_CLASS = JOIN + "    unless_matched: [[{node: 'own.stop::{cls}'}]]"
+TWO = "class Engine\nclass Wheel\nvar a Engine\nvar a Wheel\nuse a\n"
+
+
+def test_unless_matched_blocks_one_result(tmp_path: Path) -> None:
+    report, doc = _map(tmp_path, STOP_CLASS, TWO + "stop Engine\n")
+    assert report.problems == () and report.not_executed == (), report
+    assert _reaches(doc) == [("own.use::a", "own.class::Wheel")]
+
+
+def test_unless_matched_blocks_nothing_when_no_chain_reaches_a_node(tmp_path: Path) -> None:
+    report, doc = _map(tmp_path, STOP_CLASS, TWO + "stop Other\n")
+    assert report.problems == (), report
+    assert _reaches(doc) == [
+        ("own.use::a", "own.class::Engine"),
+        ("own.use::a", "own.class::Wheel"),
+    ]
+
+
+def test_unless_matched_runs_from_the_node_follow_reached(tmp_path: Path) -> None:
+    match = JOIN + "    unless_matched: [[{incoming_edge: guarded}]]"
+    report, doc = _map(tmp_path, match, TWO + "use u\nguard u Wheel\n")
+    assert report.problems == () and report.not_executed == (), report
+    assert _reaches(doc) == [("own.use::a", "own.class::Engine")]
+
+
+def test_a_where_only_unless_still_blocks_the_whole_node(tmp_path: Path) -> None:
+    match = JOIN + "    unless: [[{node: 'own.stop::{name}'}]]"
+    report, doc = _map(tmp_path, match, TWO + "stop a\n")
+    assert report.problems == () and report.not_executed == (), report
+    assert _reaches(doc) == []
+
+
+def test_unless_naming_a_follow_capture_points_to_unless_matched(tmp_path: Path) -> None:
+    report, _ = _map(tmp_path, JOIN + "    unless: [[{node: 'own.stop::{cls}'}]]", TWO)
+    assert "joined" not in [rule for _, rule, _ in report.executed]
+    messages = [p.message for p in report.problems if "joined" in p.message]
+    assert messages and messages[0].endswith(
+        "the follow step node own.stop::{cls} inside unless names cls, which no id_matches "
+        "captures before it; a chain that names a capture of follow goes in unless_matched"
+    ), messages
+
+
+def test_unless_matched_naming_no_capture_is_not_executed(tmp_path: Path) -> None:
+    report, _ = _map(tmp_path, JOIN + "    unless_matched: [[{node: 'own.stop::{nobody}'}]]", TWO)
+    assert "joined" not in [rule for _, rule, _ in report.executed]
+    messages = [p.message for p in report.problems if "joined" in p.message]
+    assert messages and "inside unless_matched names nobody, which no id_matches" in messages[0]
+
+
+def test_unless_matched_without_follow_is_refused(tmp_path: Path) -> None:
+    match = "    node_type: own.use\n    unless_matched: [[{edge: guarded}]]"
+    report, _ = _map(tmp_path, match, TWO)
+    assert "joined" not in [rule for _, rule, _ in report.executed]
+    messages = [p.message for p in report.problems if "joined" in p.message]
+    assert messages and messages[0].endswith("match.unless_matched needs match.follow"), messages
+
+
+def test_an_undeclared_kind_inside_unless_matched_is_refused(tmp_path: Path) -> None:
+    report, _ = _map(tmp_path, JOIN + "    unless_matched: [[{try: [{edge: nowhere}]}]]", TWO)
+    assert _undeclared(report, "nowhere"), report.problems
+
+
+def test_unless_matched_gives_a_byte_identical_map_on_two_runs(tmp_path: Path) -> None:
+    _twice(tmp_path, STOP_CLASS, TWO + "class Axle\nvar a Axle\nstop Wheel\n")

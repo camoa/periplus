@@ -331,8 +331,8 @@ def _undeclared(
             for name in _strings(match.get("node_type"))
             if name not in types
         )
-        unless = match.get("unless")
-        chains = [match.get("follow"), *(unless if isinstance(unless, list) else [])]
+        blocks = [match.get(key) for key in ("unless", "unless_matched")]
+        chains = [match.get("follow"), *(c for b in blocks if isinstance(b, list) for c in b)]
         steps = [step for chain in chains for step in _steps(chain)]
         problems.extend(
             Problem(

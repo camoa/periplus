@@ -298,6 +298,8 @@ def run_map_rules(
     reaches a node, with one node its ``follow`` reaches, that makes a node or edge record no pass
     made before. A fire makes one record at each location of the matched node. An ``unless`` chain
     reads the pass's map too, so an edge a later pass makes does not take back an earlier fire.
+    An ``unless_matched`` chain runs from the node ``follow`` reached, with its captures, and when
+    it reaches a node that one result makes nothing.
     """
     rules = [rule for rule in rule_set.rules if rule.supported and rule.matches_type]
     if not rules:
@@ -338,6 +340,11 @@ def run_map_rules(
                 ):
                     continue
                 for reached, captured in _follow(rule.follow, node_id, values, known, out):
+                    if any(
+                        _follow(chain, reached, dict(captured), known, out)
+                        for chain in rule.unless_matched
+                    ):
+                        continue
                     made = [
                         record
                         for place in sorted(places[node_id])
