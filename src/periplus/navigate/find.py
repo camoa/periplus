@@ -15,7 +15,20 @@ from periplus.navigate.show import node_descriptions
 from periplus.navigate.source import SOURCE_WIDTH, SourceLines, description_line, source_line
 from periplus.report import _escape, _json_problem
 
-__all__ = ["RENDERERS", "FindReport", "FindRow", "render_json", "render_text", "run"]
+__all__ = [
+    "RENDERERS",
+    "FindReport",
+    "FindRow",
+    "Match",
+    "found_row",
+    "json_row",
+    "narrowing",
+    "render_json",
+    "render_text",
+    "row_lines",
+    "run",
+    "search",
+]
 
 #: The most types a cut list's footer counts by name.
 _FOOTER_TYPES = 8
@@ -157,6 +170,18 @@ def _find(
     limit: int,
 ) -> FindReport:
     """``run``'s report, read from the map's node fields and the node descriptions."""
+    wanted, prefixes, warnings = narrowing(index, types, paths)
+    matches = search(index, text, wanted, prefixes, described)
+    rows = [found_row(match, described) for match in matches]
+    by_type = dict(sorted(Counter(row.type for row in rows).items()))
+    return FindReport(cut(rows, limit), by_type, tuple(warnings))
+
+
+def narrowing(
+    index: MapIndex, types: Collection[str], paths: Collection[str]
+) -> tuple[set[str] | None, list[str], list[str]]:
+    """The node types ``types`` keeps (``None`` keeps all), the path prefixes, and the warnings
+    for a type or a path the map does not hold."""
     warnings: list[str] = []
     wanted: set[str] | None = None
     if types:
@@ -173,8 +198,24 @@ def _find(
     for prefix in prefixes:
         if not any(file.startswith(prefix) for file in files):
             warnings.append(f"no file in the map starts with {prefix!r}")
+    return wanted, prefixes, warnings
+
+
+#: One match: its rank (0 to 4 by id, 5 attribute, 6 description), id, node, and the attribute
+#: name and value that matched.
+Match = tuple[int, str, Mapping[str, Any], tuple[str, str] | None]
+
+
+def search(
+    index: MapIndex,
+    text: str,
+    wanted: set[str] | None,
+    prefixes: Collection[str],
+    described: Mapping[str, str],
+) -> list[Match]:
+    """The nodes whose id, attributes or description hold ``text``, by rank and then id."""
     needle = text.casefold()
-    ranked = []
+    ranked: list[Match] = []
     for node_id, node in index.nodes.items():
         if wanted is not None and node["type"] not in wanted:
             continue
@@ -190,21 +231,22 @@ def _find(
         if rank is not None:
             ranked.append((rank, node_id, node, attribute))
     ranked.sort(key=lambda row: (row[0], row[1]))
-    rows = [
-        FindRow(
-            i,
-            as_text(n["type"]),
-            as_text(n["state"]),
-            _location(n),
-            matched={5: "attribute", 6: "description"}.get(rank, "id"),
-            description=described.get(i),
-            matched_attribute=attribute[0] if attribute else None,
-            attribute_value=attribute[1] if attribute else None,
-        )
-        for rank, i, n, attribute in ranked
-    ]
-    by_type = dict(sorted(Counter(row.type for row in rows).items()))
-    return FindReport(cut(rows, limit), by_type, tuple(warnings))
+    return ranked
+
+
+def found_row(match: Match, described: Mapping[str, str]) -> FindRow:
+    """One match as a row, its source line not yet read."""
+    rank, node_id, node, attribute = match
+    return FindRow(
+        node_id,
+        as_text(node["type"]),
+        as_text(node["state"]),
+        _location(node),
+        matched={5: "attribute", 6: "description"}.get(rank, "id"),
+        description=described.get(node_id),
+        matched_attribute=attribute[0] if attribute else None,
+        attribute_value=attribute[1] if attribute else None,
+    )
 
 
 def _narrow(report: FindReport) -> list[str]:
@@ -216,24 +258,29 @@ def _narrow(report: FindReport) -> list[str]:
     return [f"by type: {named}", "narrow with --type T or --path P"]
 
 
+def row_lines(row: FindRow) -> list[str]:
+    """One row as text: the node, its place and what matched, then its source, attribute and
+    description lines."""
+    where = row.location or "no location"
+    marked = {
+        "attribute": f"  [attribute {_escape(row.matched_attribute or '')}]",
+        "description": "  [description]",
+    }.get(row.matched, "")
+    lines = [
+        f"{_escape(row.id)}  {_escape(row.type)}  {_escape(row.state)}  {_escape(where)}" + marked
+    ]
+    lines += source_line(row.source)
+    if row.attribute_value is not None:
+        value = row.attribute_value.strip().partition("\n")[0].strip()[:SOURCE_WIDTH]
+        lines.append(f"      @ {_escape(row.matched_attribute or '')}: {_escape(value)}")
+    return lines + description_line(row.description)
+
+
 def render_text(report: FindReport) -> str:
     """The report as lines a person reads. Every outside string goes through ``_escape``."""
     lines = ["periplus find", ""]
     for row in report.matches.items:
-        where = row.location or "no location"
-        marked = {
-            "attribute": f"  [attribute {_escape(row.matched_attribute or '')}]",
-            "description": "  [description]",
-        }.get(row.matched, "")
-        lines.append(
-            f"{_escape(row.id)}  {_escape(row.type)}  {_escape(row.state)}  {_escape(where)}"
-            + marked
-        )
-        lines += source_line(row.source)
-        if row.attribute_value is not None:
-            value = row.attribute_value.strip().partition("\n")[0].strip()[:SOURCE_WIDTH]
-            lines.append(f"      @ {_escape(row.matched_attribute or '')}: {_escape(value)}")
-        lines += description_line(row.description)
+        lines += row_lines(row)
     if not report.matches.items:
         lines.append("no matches")
     note = footer(report.matches)
@@ -243,7 +290,7 @@ def render_text(report: FindReport) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _json_row(row: FindRow) -> dict[str, Any]:
+def json_row(row: FindRow) -> dict[str, Any]:
     return {
         "id": row.id,
         "type": row.type,
@@ -259,7 +306,7 @@ def _json_row(row: FindRow) -> dict[str, Any]:
 def render_json(report: FindReport) -> str:
     """The report as one JSON document, keys sorted, ``ensure_ascii=True``."""
     document = {
-        **payload(report.matches, _json_row),
+        **payload(report.matches, json_row),
         "by_type": dict(report.by_type or {}),
         "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
