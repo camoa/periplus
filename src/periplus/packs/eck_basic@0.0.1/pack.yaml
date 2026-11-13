@@ -8,7 +8,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # entity_class_static_call gives a static load, loadMultiple or create call on it an inferred
 # uses_entity_type edge to its entity type.
 #
-# Known gaps: an ECK entity type's base field switches (uid, created, changed, title) and
+# Not mapped yet: an ECK entity type's base field switches (uid, created, changed, title) and
 # standalone_url give nothing, and it has no entity_class edge, because ECK defines no class per
 # type. The bundle_of edge reads the entity type from the file name, not from a key, so a file
 # renamed by hand gives a wrong edge. A bundle's description gives nothing. Only EckEntityType

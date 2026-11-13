@@ -14,7 +14,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # own class's traits gets an overrides edge to it, and a method that implements an interface method
 # gets an implements_method edge. It sits beside the reference pack php and does not replace it.
 #
-# Known gaps. A call to a function PHP itself defines, such as strlen() or json_decode(), makes
+# Not mapped yet. A call to a function PHP itself defines, such as strlen() or json_decode(), makes
 # nothing: the rule calls_function lists the 2150 names get_defined_functions()['internal']
 # returned in one run of PHP 8.5.11 (cli, NTS), beside PHP's language constructs; exit and die are
 # in both and listed once. That run loaded

@@ -3,7 +3,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # The walking-skeleton Drupal pack: every exported or installed configuration file becomes one
 # node. It is renamed to drupal when the reference packs retire.
 #
-# Known gaps. The basic Drupal pack maps, beside php_basic's classes, functions and methods:
+# What it maps, and what it does not map yet.
+# The basic Drupal pack maps, beside php_basic's classes, functions and methods:
 # - configuration, modules, themes, services with their tags and classes, routes, permissions,
 #   libraries, templates, entity types, bundles, fields, displays, menu links, local tasks, local
 #   actions, contextual links, block placements and the plugin kinds whose folders are named under folders below. A service's

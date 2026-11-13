@@ -1,12 +1,13 @@
 $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
-# Known gaps. The basic Go pack maps every package-level function, every method under its
+# What it maps, and what it does not map yet.
+# The basic Go pack maps every package-level function, every method under its
 # receiver type, and every struct and interface, each under its package's import path. It maps a
 # call written f(x) to the function, struct or interface of that name in the caller's package,
 # and pkg.F(x) to F under the import path pkg binds. A call into a package outside the project,
 # fmt.Println() or cobra.Execute() after "github.com/spf13/cobra/v2", is an unresolved function
 # named by the import path and the function: fmt.Println, github.com/spf13/cobra/v2.Execute.
-# What it does not map, today:
+# Not mapped yet:
 # - A method call on a value, s.Serve(), makes no edge: s is bound by no import, so no step holds
 #   and the call is listed under skipped. A chained call, s.Self().Serve(), is skipped as not a
 #   written name; its inner call is a call of its own.

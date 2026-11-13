@@ -23,7 +23,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # plugins joined to their class by plugin_class. A model's event plugin id written
 # <base>:<derivative> also links to the mapped plugin <base> (event/eca_event_derivative.yaml).
 #
-# Known gaps:
+# Not mapped yet:
 # - A model's modeller data, eca.model.<id>, stays a plain config object.
 # - A successor's condition gives no edge, nor does a gateway's type. An entry does not link to
 #   its plugin; the plugin edges start at the model.

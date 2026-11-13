@@ -1,6 +1,7 @@
 $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
-# Known gaps. The basic JavaScript pack maps each function that has a name of its own, as a
+# What it maps, and what it does not map yet.
+# The basic JavaScript pack maps each function that has a name of its own, as a
 # node named <script path>:<name>: function name() {}, async function name() {}, and a const,
 # let or var whose value is an arrow function or a function expression. A function assigned to a
 # dotted name, A.b.c = function () {} or A.b.c = () => {}, is a js.member_function node (member/):
@@ -16,7 +17,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # nothing. A dotted name split over lines, a\n  .b(), is read as a.b, up to three parts. Each edge
 # starts at the nearest named or member function that holds the call, else at the script; a rutter
 # that depends on this one may name a node of its own that holds the call (encloses_for).
-# What it does not map, today:
+# Not mapped yet:
 # - A call to a JavaScript or browser global the table globals holds, such as parseInt(),
 #   setTimeout() or fetch(): no edge and no node, unless the script declares a function of that
 #   name, which the call reaches. import(): nothing. A call to a name the table library_globals

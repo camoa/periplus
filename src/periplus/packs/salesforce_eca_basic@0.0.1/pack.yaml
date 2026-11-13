@@ -6,7 +6,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # eca_reacts_to_event to the event a custom subscriber's subscribed_by edge starts at. It holds no
 # rule of its own.
 #
-# Known gaps: the table holds salesforce_eca 1.0's event plugins; a later one gives no event edge
+# Not mapped yet: the table holds salesforce_eca 1.0's event plugins; a later one gives no event edge
 # and lists eca_basic's skipped row.
 pack: salesforce_eca_basic
 version: 0.0.1

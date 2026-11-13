@@ -6,7 +6,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # and from the @command tag in a method's docblock. A method that carries both is one node with
 # two locations, and its edges are found twice.
 #
-# Known gaps:
+# Not mapped yet:
 # - The @command tag is read as text. The engine allows one file type read as text per ending, so
 #   the tag is read through drupal_basic's drupal_php_text, inside its block_comment section. Its
 #   class is named from the file's path by Drupal's PSR-4 layout:

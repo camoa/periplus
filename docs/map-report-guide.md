@@ -323,18 +323,18 @@ periplus neighbors js.file::web/modules/custom/greet/js/banner.js
 ## A shape the map lacks
 
 The map lacks a node or an edge the code holds. Before you write a rule for it, look for it in two
-places: [docs/known-limitations.md](known-limitations.md), and the Known gaps comment at the top of
-the `pack.yaml` of the rutter that maps that part of the stack. A shape listed there is a stated
-limitation: the rutter's authors saw it and left it out, so it needs a new rule, not a fix.
+places: [docs/known-limitations.md](known-limitations.md), and the Not mapped yet comment at the top
+of the `pack.yaml` of the rutter that maps that part of the stack. A shape listed there is a rule not
+written yet: the rutter's authors saw it and left it out, so it needs a new rule, not a fix.
 
 Do not wait for the report to point at it. A rutter refuses a shape by not matching it, so a
 refused shape beside shapes the rule accepts leaves no report row at all: the rule fires on the
-accepted ones and is listed under `executed` with its count. The report shows a limitation only
-in two cases: a rule that matched nothing in the whole project, under `zero_fires`, and a match the
+accepted ones and is listed under `executed` with its count. The report shows a shape not mapped
+yet only in two cases: a rule that matched nothing in the whole project, under `zero_fires`, and a match the
 rule found and could not finish, under `skipped`. The three examples below show both rows, and a
 shape that leaves none.
 
-A path joined with `+` is a stated limitation of `drupal_js_basic`. In the planted project its
+A path joined with `+` is a shape `drupal_js_basic` does not map yet. In the planted project its
 rule `path_in_script_string` fires once, on the whole path, and the joined path leaves no row. A
 second project, `joined-only`, beside the planted one, holds one script with only a joined path.
 
@@ -424,7 +424,7 @@ Problems:
 
 </details>
 
-A library that lists only a URL is a stated limitation too: the URL names no file to map. The rule
+A library that lists only a URL is a shape not mapped yet too: the URL names no file to map. The rule
 `library_script` matches the entry of the library `cdn` in the planted libraries file and cannot
 build an edge from it, so the report of the planted project lists it under `skipped`, in the text
 heading Matches skipped, at its libraries file.
@@ -556,7 +556,8 @@ node type `myproject.event` and holds the rule.
 
 <!-- nav-file: .periplus/packs/myproject@0.0.1/pack.yaml -->
 ```yaml
-# Known gaps. This project's own rutter: its templates mark an element to track with a data-track
+# What it maps, and what it does not map yet.
+# This project's own rutter: its templates mark an element to track with a data-track
 # attribute, a convention no other project shares. event.yaml declares the node type
 # myproject.event and reads drupal_basic's type drupal_template_text for the attribute.
 # - A value written by Twig, data-track="{{ name }}", makes no node.

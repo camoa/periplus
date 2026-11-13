@@ -308,7 +308,7 @@ reports for a project that pins them, such as the rules in them the engine does 
 The bundled rutters are in `src/periplus/packs`. The examples are in
 `examples/second-stack/packs`. The manifest of every rutter in the tables above, except
 `yaml_basic`, `twig_basic`, `typescript`, `react`, `nextjs`, `drupal_more`, `drupal_next`, the
-examples and the reference packs, opens with a list of its known gaps.
+examples and the reference packs, opens with a list of what it does not map yet.
 
 To map a Go module, run Periplus at the module's root. Give the module
 path in the settings, because Periplus does not read `go.mod`:

@@ -13,7 +13,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # entity_class_static_call gives a static load, loadMultiple or create call on either an inferred
 # uses_entity_type edge to its entity type.
 #
-# Known gaps: an id that is not text in double quotes makes no plugin and is listed under skipped. A
+# Not mapped yet: an id that is not text in double quotes makes no plugin and is listed under skipped. A
 # handler declared by an attribute gives nothing: this pack reads the annotation only, and the
 # attribute class was not checked against a Webform release. Webform's other plugin types, such as
 # element plugins and exporters, give nothing. An element's type, title and other properties give

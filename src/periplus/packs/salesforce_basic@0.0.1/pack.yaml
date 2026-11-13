@@ -20,7 +20,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # this is why the pack depends on webform_basic, which a project without webforms loads and which
 # then makes nothing.
 #
-# Known gaps:
+# Not mapped yet:
 # - The mapping field manager reads the generic Plugin annotation, so any class in the folder
 #   below that carries a Plugin annotation is read as a mapping field. An id that is not text in
 #   double quotes makes no plugin and is listed under skipped. The other Salesforce plugin types,

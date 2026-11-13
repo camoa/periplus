@@ -1,6 +1,7 @@
 $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
-# Known gaps. This pack maps the Twig functions of the contributed module Twig Tweak that name a
+# What it maps, and what it does not map yet.
+# This pack maps the Twig functions of the contributed module Twig Tweak that name a
 # Drupal thing by a quoted first argument, each as an edge from the template that calls it:
 # drupal_block('plugin_id') to the block plugin, drupal_menu('name') to the config object
 # system.menu.<name>, drupal_entity('type', ...) and drupal_entity_form('type', ...) to the entity

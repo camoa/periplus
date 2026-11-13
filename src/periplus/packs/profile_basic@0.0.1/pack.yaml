@@ -7,7 +7,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # entity_class_static_call gives a static load, loadMultiple or create call on either an inferred
 # uses_entity_type edge to its entity type.
 #
-# Known gaps: the roles a profile type is limited to, and its registration and multiple settings,
+# Not mapped yet: the roles a profile type is limited to, and its registration and multiple settings,
 # give nothing. The entity type profile is declared by the module's PHP, which is not mapped, so it
 # stays referenced.
 pack: profile_basic

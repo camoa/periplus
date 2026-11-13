@@ -1,6 +1,7 @@
 $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
-# Known gaps. The basic Laravel pack maps, beside php_basic's classes and methods:
+# What it maps, and what it does not map yet.
+# The basic Laravel pack maps, beside php_basic's classes and methods:
 # - each route in a file named web.php, api.php, channels.php or console.php in the routes folder,
 #   named by file, method and URI, such as web:GET /books. Route::redirect and
 #   Route::permanentRedirect give web:REDIRECT /here and web:PERMANENTREDIRECT /a. Inside

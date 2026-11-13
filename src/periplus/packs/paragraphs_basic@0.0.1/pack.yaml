@@ -9,7 +9,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # join drupal_basic's tables twig_entity_variables and template_entity_hooks, so paragraph.field_x
 # in any template, and content.field_x in paragraph--<bundle>.html.twig, read a paragraph field.
 #
-# Known gaps: a paragraph type's behavior plugins, icon and description give nothing. The entity
+# Not mapped yet: a paragraph type's behavior plugins, icon and description give nothing. The entity
 # type paragraph is declared by the module's PHP, which is not mapped, so it stays referenced. A
 # field's allowed paragraph types give no edge.
 pack: paragraphs_basic

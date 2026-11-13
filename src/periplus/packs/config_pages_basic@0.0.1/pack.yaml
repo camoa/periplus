@@ -4,7 +4,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # config_pages.<id> with its label, a configured_by edge to that file and a bundle_of edge to the
 # entity type config_pages.
 #
-# Known gaps: a type's context, menu and token settings give nothing. The entity type config_pages
+# Not mapped yet: a type's context, menu and token settings give nothing. The entity type config_pages
 # is declared by the module's PHP, which is not mapped, so it stays referenced.
 pack: config_pages_basic
 version: 0.0.1
