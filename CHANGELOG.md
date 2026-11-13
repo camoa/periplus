@@ -36,6 +36,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Rows of `find`, `show`, `neighbors`, `affected` and `path` print `file:line`, the source line under it, and the node's description line when the descriptions file has one. A source line is read only from a regular file inside the project, up to 5 MB.
 - `find` matches description text and string attribute values too, and marks those rows `[description]` or `[attribute NAME]`. JSON adds `matched`, `matched_attribute`, `by_type` and `description`.
 - `find --type` and `--path` may repeat. A wrong type name gets suggestions. A cut list prints counts by type and a line on how to narrow.
+- `php_basic` joins more method calls, each with an inferred `calls` edge:
+  - a call on a `catch` variable, to the method on the caught class or its nearest ancestor;
+  - a call on a local variable inside a plain function;
+  - a call through a chain of returns, such as `$this->a()->b()->c()`, and through a method that returns `static`, with the new edge kind `returns_static`;
+  - a call through the method result of a property, such as `$this->p->m()->n()`;
+  - a call on a parameter typed by `@param`, or on a local typed by an inline `@var` comment;
+  - a call on a local assigned the result of a typed call or a static call.
+- `php_basic` adds the edge kind `implements_method`, from a class method to the interface method it implements.
+- `drupal_basic` maps entity type manager, container, config factory and queue factory calls on a parameter or property whose declared type is the core, Symfony or PSR interface.
+- A tree declaration rule's `where` list takes `within` and `not_within`, each a list of tree node types between the match and its nearest holder. Two rules can so tell a call in a method's own body from one in a closure inside it.
 
 ### Changed
 
@@ -44,6 +54,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A theme hook link (`renders_theme_hook`) and a library attachment in PHP (`attaches_library`) start at the method or function around them, no longer at the class. One written outside any named function, such as a property default, gives no edge and one skipped row.
 - A runtime `$this->redirect($route)` call site has an id that ends in `(runtime)`, apart from the plain call site at the same line.
 - Node and edge ids move and the map grows, so a committed map differs after the upgrade. Map again and review the difference.
+- The known limitations page is removed. A shape no rule maps is listed as not mapped yet in its rutter's `pack.yaml` header.
+
+### Fixed
+
+- `enclosing_method` stops at the nearest holder, so a function declared inside a method no longer takes the method's name. An `enclosing_method` or `enclosing_class` end takes the first node whose type the edge kind allows there.
 
 ## [0.7.0] - 2026-11-11
 
