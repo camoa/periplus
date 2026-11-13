@@ -9,9 +9,11 @@ edge_kinds:
 - kind: command_in_module
   from: drush.command
   to: drupal.module
+  groups: true
 - kind: command_alias_in_module
   from: drush.command_alias
   to: drupal.module
+  groups: true
 
 rules:
 - rule: command_in_module

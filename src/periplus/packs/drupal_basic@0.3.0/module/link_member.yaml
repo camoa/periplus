@@ -10,18 +10,23 @@ edge_kinds:
 - kind: menu_link_in_module
   from: drupal.menu_link
   to: drupal.module
+  groups: true
 - kind: local_task_in_module
   from: drupal.local_task
   to: drupal.module
+  groups: true
 - kind: local_action_in_module
   from: drupal.local_action
   to: drupal.module
+  groups: true
 - kind: contextual_link_in_module
   from: drupal.contextual_link
   to: drupal.module
+  groups: true
 - kind: permission_in_module
   from: drupal.permission
   to: drupal.module
+  groups: true
 
 rules:
 - rule: menu_link_claim

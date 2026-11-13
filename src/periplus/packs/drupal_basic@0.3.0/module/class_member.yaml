@@ -16,30 +16,39 @@ edge_kinds:
 - kind: plugin_in_module
   from: drupal.plugin
   to: drupal.module
+  groups: true
 - kind: form_id_in_module
   from: drupal.form_id
   to: drupal.module
+  groups: true
 - kind: entity_type_in_module
   from: drupal.entity_type
   to: drupal.module
+  groups: true
 - kind: plugin_type_in_module
   from: drupal.plugin_type
   to: drupal.module
+  groups: true
 - kind: twig_filter_in_module
   from: twig.filter
   to: drupal.module
+  groups: true
 - kind: twig_function_in_module
   from: twig.function
   to: drupal.module
+  groups: true
 - kind: route_alter_in_module
   from: drupal.route_alter
   to: drupal.module
+  groups: true
 - kind: event_constant_in_module
   from: drupal.event_constant
   to: drupal.module
+  groups: true
 - kind: event_in_module
   from: drupal.event
   to: drupal.module
+  groups: true
 
 rules:
 - rule: test_class_in_module

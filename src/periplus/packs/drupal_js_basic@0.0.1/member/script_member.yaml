@@ -12,15 +12,19 @@ edge_kinds:
 - kind: js_function_in_module
   from: js.function
   to: drupal.module
+  groups: true
 - kind: js_function_in_theme
   from: js.function
   to: drupal.theme
+  groups: true
 - kind: behavior_in_module
   from: drupal.js_behavior
   to: drupal.module
+  groups: true
 - kind: behavior_in_theme
   from: drupal.js_behavior
   to: drupal.theme
+  groups: true
 
 rules:
 - rule: js_function_declaration_claim

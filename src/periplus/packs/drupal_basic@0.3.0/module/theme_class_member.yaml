@@ -8,6 +8,7 @@ edge_kinds:
 - kind: class_in_theme
   from: php.class_like
   to: drupal.theme
+  groups: true
 
 rules:
 - rule: theme_class_claim

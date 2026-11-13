@@ -12,15 +12,19 @@ edge_kinds:
 - kind: script_in_module
   from: js.file
   to: drupal.module
+  groups: true
 - kind: script_in_theme
   from: js.file
   to: drupal.theme
+  groups: true
 - kind: stylesheet_in_module
   from: css.file
   to: drupal.module
+  groups: true
 - kind: stylesheet_in_theme
   from: css.file
   to: drupal.theme
+  groups: true
 
 rules:
 - rule: script_claim

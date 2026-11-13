@@ -12,15 +12,19 @@ edge_kinds:
 - kind: config_in_module
   from: drupal.config_object
   to: drupal.module
+  groups: true
 - kind: config_in_theme
   from: drupal.config_object
   to: drupal.theme
+  groups: true
 - kind: component_in_module
   from: drupal.component
   to: drupal.module
+  groups: true
 - kind: component_in_theme
   from: drupal.component
   to: drupal.theme
+  groups: true
 
 rules:
 - rule: config_claim
