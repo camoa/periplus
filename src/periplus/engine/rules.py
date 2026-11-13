@@ -294,9 +294,10 @@ def run_map_rules(
     a map rule composed that is no such id. So the records the passes can make are finite and the
     last pass adds none.
 
-    A fire is one matched node that each ``where`` pattern fits, with one node its ``follow``
-    reaches, that makes a node or edge record no pass made before. A fire makes one record at each
-    location of the matched node.
+    A fire is one matched node that each ``where`` pattern fits and from which no ``unless`` chain
+    reaches a node, with one node its ``follow`` reaches, that makes a node or edge record no pass
+    made before. A fire makes one record at each location of the matched node. An ``unless`` chain
+    reads the pass's map too, so an edge a later pass makes does not take back an earlier fire.
     """
     rules = [rule for rule in rule_set.rules if rule.supported and rule.matches_type]
     if not rules:
@@ -331,7 +332,9 @@ def run_map_rules(
                 ):
                     continue
                 values = _captured(rule.where, node_id, dict(rule_set.values))
-                if values is None:
+                if values is None or any(
+                    _follow(chain, node_id, dict(values), known, out) for chain in rule.unless
+                ):
                     continue
                 for reached, captured in _follow(rule.follow, node_id, values, known, out):
                     made = [

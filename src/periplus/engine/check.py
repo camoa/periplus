@@ -323,8 +323,9 @@ def _undeclared(
             for name in _strings(match.get("node_type"))
             if name not in types
         )
-        follow = match.get("follow")
-        steps = follow if isinstance(follow, list) else []
+        unless = match.get("unless")
+        chains = [match.get("follow"), *(unless if isinstance(unless, list) else [])]
+        steps = [step for chain in chains if isinstance(chain, list) for step in chain]
         problems.extend(
             Problem(
                 ExitCode.UNDECLARED_EDGE_KIND,
