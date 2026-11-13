@@ -357,7 +357,10 @@ def test_an_unknown_on_miss_value_is_refused(
     rules.write_text(rules.read_text().replace("on_miss: unresolved", "on_miss: outside"))
     problems = _refused(tmp_path)
     assert [code for code, _ in problems] == [ExitCode.SCHEMA_INVALID], problems
-    assert "$.rules[0].emits[0].edge.to" in problems[0][1], problems
+    assert problems[0][1].endswith(
+        "; $.rules[0].emits[0].edge.to.on_miss: 'outside' is not one of "
+        "['unresolved', 'unknown_boundary']"
+    ), problems
     capsys.readouterr()
     assert main(["validate", "spec@0.0.1"]) == ExitCode.SCHEMA_INVALID
     printed = capsys.readouterr().out

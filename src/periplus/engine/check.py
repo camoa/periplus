@@ -86,6 +86,7 @@ def _schema_problems(packs: Sequence[LoadedPack]) -> tuple[list[Problem], set[st
             Problem(
                 ExitCode.SCHEMA_INVALID,
                 f"{pack.name.pack}/{error.file} {error.pointer}: {error.message}"
+                + (f"; {error.best}" if error.best else "")
                 + (f"; write {_BOUNDARY_SHAPE}" if error.pointer.startswith("$.boundary") else ""),
                 {"pack": pack.name.pack, "file": error.file, "pointer": error.pointer},
             )
