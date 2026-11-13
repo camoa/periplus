@@ -8,6 +8,7 @@ from bisect import bisect_right
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from fnmatch import fnmatchcase
+from functools import partial
 from itertools import chain, islice, product
 from pathlib import Path
 from typing import Any
@@ -1095,7 +1096,7 @@ def _attributes(
                             within,
                             grammar,
                             parsed,
-                            keep=lambda t, allowed=allowed: _allows(rule_set, t, allowed),
+                            keep=partial(_allows, rule_set, allowed=allowed),
                         )
                         if owner.type not in holders and holder is not None
                         else None
