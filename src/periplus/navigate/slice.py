@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter
 from collections.abc import Collection, Mapping
@@ -54,9 +55,8 @@ __all__ = [
 START_LIMIT = 8
 #: The most start nodes the words pick of any one node type.
 TYPE_STARTS = 2
-#: A word that matches more than this share of the map's nodes picks no start, unless every word
-#: does; it still counts when starts and rows are ranked.
-COMMON_SHARE = Fraction(1, 10)
+#: The decimal places a word's weight keeps, so equal scores are equal on every machine.
+WEIGHT_PLACES = 6
 #: The fewest characters a word needs to be searched; a shorter one matches too much.
 MIN_WORD = 3
 #: The most rows a printed piece shows, unless ``limit`` says otherwise.
@@ -269,6 +269,7 @@ def _piece(
             picked: dict[str, Start] = {}
             warnings: list[str] = []
             rest: list[str] = []
+            several = len(_WORD.findall(" ".join(given))) > 1
             for text in given:
                 try:
                     node_id, said = resolve(index, text)
@@ -277,32 +278,30 @@ def _piece(
                     continue
                 warnings += said
                 picked.setdefault(node_id, Start(_row(index, node_id, described), given=text))
+                if several and _WORD.fullmatch(text):
+                    rest.append(text)
             words = list(dict.fromkeys(_WORD.findall(" ".join(rest).casefold())))
             words = [word for word in words if len(word) >= MIN_WORD]
             whole = " ".join(rest).casefold().strip()
             queries = list(dict.fromkeys(([whole] if whole and whole not in words else []) + words))
             matched: dict[str, set[str]] = {}
+            weights: dict[str, float] = {}
             notes: list[str] = []
-            common: dict[str, int] = {}
             for word in words:
                 hits = find.search(index, word, None, (), described)
                 for match in hits:
                     matched.setdefault(match[1], set()).add(word)
-                if len(hits) > COMMON_SHARE * len(index.nodes):
-                    common[word] = len(hits)
-            if len(common) < len(words):
-                for word, count in common.items():
-                    queries.remove(word)
-                    notes.append(
-                        f"{word!r} matches {count} of {len(index.nodes)} nodes; it picks no start"
-                    )
+                if hits:
+                    weights[word] = round(math.log(len(index.nodes) / len(hits)), WEIGHT_PLACES)
             standing = _Standing(index)
             if queries:
                 wanted, narrowed, noted = find.narrowing(index, types, prefixes)
                 warnings += noted
-                found = _starts(
-                    index, queries, wanted, narrowed, described, matched, most, standing
-                )
+                scores = {
+                    node_id: round(sum(weights[w] for w in found_), WEIGHT_PLACES)
+                    for node_id, found_ in matched.items()
+                }
+                found = _starts(index, queries, wanted, narrowed, described, scores, most, standing)
                 for node_id, chosen in found.items():
                     picked.setdefault(node_id, chosen)
                 lone = found and queries[0] == whole and len(queries) > 1
@@ -394,16 +393,19 @@ def _starts(
     wanted: set[str] | None,
     prefixes: Collection[str],
     described: Mapping[str, str],
-    matched: Mapping[str, set[str]],
+    scores: Mapping[str, float],
     most: int,
     standing: _Standing,
 ) -> dict[str, Start]:
-    """Up to ``most`` start nodes that the queries find, at most ``TYPE_STARTS`` of one type.
+    """Up to ``most`` start nodes that the queries find, the highest word score first.
 
-    A query is the whole text or one word. Rarer types come first. Inside a type, a mapped node
-    comes before one that is not, then the node more other files depend on, then the one more
-    words match, then the one whose id the matched words cover most, then ``find``'s rank, then
-    the id.
+    A query is the whole text or one word. A node's score is the sum of the weights of the words
+    it matches, a word weighing the log of the map's node count over the nodes it matches, so a
+    rare word outweighs a common one. A start of a lower score never comes before one of a
+    higher score. Among equal scores, rarer types come first, and at most ``TYPE_STARTS`` of a
+    type, counted over all the starts, are taken before the rest of that score; inside a type, a
+    mapped node comes first, then the node more other files depend on, then the one whose id the
+    words cover most, then ``find``'s rank, then the id.
     """
     said: dict[str, list[tuple[str, str, str | None]]] = {}
     nearest: dict[str, find.Match] = {}
@@ -414,35 +416,38 @@ def _starts(
             if match[1] not in nearest or match[0] < nearest[match[1]][0]:
                 nearest[match[1]] = match
 
-    def key(node_id: str) -> tuple[int, str, bool, int, int, Fraction, int, str]:
+    def key(node_id: str) -> tuple[float, int, str, bool, int, Fraction, int, str]:
         node = index.nodes[node_id]
-        words = matched.get(node_id, set())
+        words = {q for q, _, _ in said[node_id]}
         folded = node_id.casefold()
         share = Fraction(sum(len(w) for w in words if w in folded), len(node_id) or 1)
         return (
+            -scores.get(node_id, 0.0),
             standing.rarity(node_id),
             as_text(node["type"]),
             node["state"] != "mapped",
             -standing.depended(node_id),
-            -len(words),
             -share,
             nearest[node_id][0],
             node_id,
         )
 
     taken: Counter[str] = Counter()
-    chosen: dict[str, Start] = {}
-    for node_id in sorted(nearest, key=key):
-        kind = as_text(index.nodes[node_id]["type"])
-        if len(chosen) == most:
-            break
-        if taken[kind] == TYPE_STARTS:
-            continue
-        taken[kind] += 1
-        chosen[node_id] = Start(
-            find.found_row(nearest[node_id], described), words=tuple(said[node_id])
-        )
-    return chosen
+    order: list[str] = []
+    ranked = sorted(nearest, key=key)
+    for score in dict.fromkeys(-key(node_id)[0] for node_id in ranked):
+        level = [node_id for node_id in ranked if scores.get(node_id, 0.0) == score]
+        spread: list[str] = []
+        rest: list[str] = []
+        for node_id in level:
+            kind = as_text(index.nodes[node_id]["type"])
+            (spread if taken[kind] < TYPE_STARTS else rest).append(node_id)
+            taken[kind] += 1
+        order += spread + rest
+    return {
+        node_id: Start(find.found_row(nearest[node_id], described), words=tuple(said[node_id]))
+        for node_id in order[:most]
+    }
 
 
 def _keep(
@@ -608,6 +613,13 @@ def _tree(report: SliceReport) -> list[str]:
     for row in report.rows.items:
         below.setdefault(row.parent, []).append(row)
     lines: list[str] = []
+    files = {start.row.id: _file(start.row.location) for start in report.starts}
+
+    def at(row: PieceRow) -> str:
+        """The row's ``file:line``, or ``:line`` when the file is that of the node above."""
+        place = located(row.location)
+        file = _file(row.location)
+        return place[len(file) :] if file is not None and file == files.get(row.parent) else place
 
     def grow(node_id: str) -> None:
         for row in below.get(node_id, ()):
@@ -615,13 +627,13 @@ def _tree(report: SliceReport) -> list[str]:
             arrow = f"--{_escape(row.kind)}-->" if row.outward else f"<--{_escape(row.kind)}--"
             if row.again:
                 lines.append(
-                    f"{pad}{row.hop} {arrow} {_escape(row.id)}  (again)"
-                    f"  {_escape(located(row.location))}"
+                    f"{pad}{row.hop} {arrow} {_escape(row.id)}  (again)  {_escape(at(row))}"
                 )
                 continue
+            files[row.id] = _file(row.location)
             lines.append(
                 f"{pad}{row.hop} {arrow} {_escape(row.id)}  {_escape(row.type)}"
-                f"  {_escape(row.state)}  {_escape(located(row.location))}"
+                f"  {_escape(row.state)}  {_escape(at(row))}"
             )
             lines.extend(pad + line for line in source_line(row.source))
             lines.extend(pad + line for line in description_line(row.description))
@@ -632,6 +644,11 @@ def _tree(report: SliceReport) -> list[str]:
             lines += ["", f"around {_escape(start.row.id)}"]
             grow(start.row.id)
     return lines
+
+
+def _file(location: str | None) -> str | None:
+    """The file of a ``file:line`` location, or ``None`` when there is none."""
+    return None if location is None else location.rpartition(":")[0]
 
 
 def _left_out(report: SliceReport) -> list[str]:

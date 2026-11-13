@@ -106,13 +106,13 @@ def test_rarer_types_start_first(tmp_path: Path) -> None:
 
 
 def test_one_type_gives_at_most_its_share_of_starts(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "claim", starts=20)
+    report = _piece(tmp_path, "claim", starts=6)
 
     assert [i for i in _ids(report) if i.startswith("t.method::")] == [CLAIM, ALL]
 
 
 def test_inside_a_type_the_node_more_other_files_depend_on_comes_first(tmp_path: Path) -> None:
-    methods = [i for i in _ids(_piece(tmp_path, "claim", starts=20)) if i.startswith("t.method")]
+    methods = [i for i in _ids(_piece(tmp_path, "claim", starts=6)) if i.startswith("t.method")]
 
     assert methods[0] == CLAIM
     assert HELPER not in methods
@@ -124,11 +124,11 @@ def test_a_node_not_mapped_never_beats_a_mapped_one_of_its_type(tmp_path: Path) 
     assert routes[0] != MISSING
 
 
-def test_inside_a_type_more_words_then_a_larger_share_of_the_id_win(tmp_path: Path) -> None:
+def test_more_words_then_a_larger_share_of_the_id_win(tmp_path: Path) -> None:
     far = "t.route::claim.some.long.path.to.wishes"
     nodes = [*NODES, _node(far, "t.route", line=7, file="app.routing.yml")]
     routes = _ids(_piece(tmp_path / "a", "claim", "wish", starts=20, nodes=nodes))
-    assert [i for i in routes if "route" in i] == [WISH, far]
+    assert [i for i in routes if "route" in i][:3] == [WISH, far, PAGE]
 
     long = "t.route::claim.aaaa.longer"
     nodes = [*NODES, _node(long, "t.route", line=9, file="app.routing.yml")]
@@ -136,11 +136,26 @@ def test_inside_a_type_more_words_then_a_larger_share_of_the_id_win(tmp_path: Pa
     assert one[0] == PAGE
 
 
-def test_a_word_that_matches_too_much_of_the_map_is_skipped_and_said(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "app", "wish", starts=20)
+def test_a_common_word_never_puts_its_starts_before_a_rare_words(tmp_path: Path) -> None:
+    report = _piece(tmp_path, "app", "wish", starts=1)
 
     assert _ids(report) == [WISH]
-    assert any("'app'" in note for note in report.notes)
+
+
+def test_a_node_that_matches_a_rare_and_a_common_word_beats_one_with_the_rare_alone(
+    tmp_path: Path,
+) -> None:
+    nodes = [n for n in NODES if n["id"] != CLASS]
+
+    assert _ids(_piece(tmp_path, "claim", "app", starts=1, nodes=nodes)) == [CLAIM]
+
+
+def test_a_unique_name_among_several_words_is_also_searched_as_a_word(tmp_path: Path) -> None:
+    later = "t.method::app.Other::makeClaimLater"
+    nodes = [*NODES, _node(later, "t.method", line=8, file="src/Other.php")]
+
+    assert _ids(_piece(tmp_path / "a", "makeClaim", nodes=nodes)) == [CLAIM]
+    assert later in _ids(_piece(tmp_path / "b", "makeClaim", "wishlist", nodes=nodes))
 
 
 def test_rows_are_budgeted_per_start(tmp_path: Path) -> None:
@@ -156,10 +171,3 @@ def test_inside_a_start_a_rarer_type_ranks_before_a_common_one(tmp_path: Path) -
     report = _piece(tmp_path, "Store::run", limit=1, edges=[*EDGES, *callers])
 
     assert [row.id for row in report.rows.items] == [SERVICE]
-
-
-def test_a_common_word_still_picks_starts_when_it_is_the_only_word(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "app")
-
-    assert _ids(report) != []
-    assert report.notes == ()

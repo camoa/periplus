@@ -128,15 +128,15 @@ def test_an_id_starts_the_piece_and_prints_the_chain_by_hop(tmp_path: Path) -> N
         "      # Charges the card and mails a receipt",
         "",
         f"around {PAY}",
-        f"  1 --calls--> {BANK}  t.method  unresolved  {CO}:7",
+        f"  1 --calls--> {BANK}  t.method  unresolved  :7",
         "        | $this->gateway->charge();",
-        f"  1 <--defines-- {CHECKOUT}  t.class  mapped  {CO}:5",
+        f"  1 <--defines-- {CHECKOUT}  t.class  mapped  :5",
         "        | public function pay() {",
-        f"  1 --holds--> {SITE}  t.site  mapped  {CO}:9",
+        f"  1 --holds--> {SITE}  t.site  mapped  :9",
         "        | $m->send();",
-        f"    2 --calls--> {SEND}  t.method  mapped  {CO}:9",
+        f"    2 --calls--> {SEND}  t.method  mapped  :9",
         "          | $m->send();",
-        f"  1 --instantiates--> {MAILER}  t.class  mapped  {CO}:8",
+        f"  1 --instantiates--> {MAILER}  t.class  mapped  :8",
         "        | $m = new Mailer();",
         f"    2 --defines--> {SEND}  (again)  {MA}:3",
         "folded into the node above, all their edges joining it: t.site 1",
@@ -167,13 +167,13 @@ def test_a_text_that_fails_whole_falls_back_to_its_words_and_says_so(tmp_path: P
 
 
 def test_the_cut_keeps_a_node_several_starts_reach_first(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "Mailer", "pay", limit=1)
+    report = _piece(tmp_path, MAILER, PAY, limit=1)
 
     assert [(row.id, row.again) for row in report.rows.items] == [(SITE, False)]
 
 
 def test_the_cut_then_keeps_a_node_the_words_match(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "pay", "charge", limit=1)
+    report = _piece(tmp_path, PAY, "charge", starts=1, limit=1)
 
     assert [(row.id, row.again) for row in report.rows.items] == [(BANK, False)]
 
@@ -181,7 +181,7 @@ def test_the_cut_then_keeps_a_node_the_words_match(tmp_path: Path) -> None:
 def test_starts_type_and_path_narrow_the_word_matches(tmp_path: Path) -> None:
     assert [s.row.id for s in _piece(tmp_path / "a", "shop", starts=2).starts] == [MAILER, CHECKOUT]
     typed = _piece(tmp_path / "b", "shop", types=("t.method",))
-    assert [s.row.id for s in typed.starts] == [SEND, CARD]
+    assert [s.row.id for s in typed.starts] == [SEND, CARD, PAY, BANK]
     placed = _piece(tmp_path / "c", "shop", prefixes=(MA,))
     assert [s.row.id for s in placed.starts] == [MAILER, SEND]
 
@@ -263,7 +263,7 @@ def test_a_source_line_with_under_two_word_characters_is_not_printed() -> None:
 
 
 def test_the_cut_takes_full_rows_before_back_references(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "Mailer", "pay", limit=3)
+    report = _piece(tmp_path, MAILER, PAY, limit=3)
 
     assert [(row.id, row.again) for row in report.rows.items] == [
         (SEND, False),
