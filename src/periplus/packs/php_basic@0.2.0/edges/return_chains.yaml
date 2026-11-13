@@ -23,9 +23,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # class in the map declares, a middle type outside the map, or a scalar middle return gives the
 # last call no edge, and its call site stays. A last method no class in the map declares lands
 # unresolved under its type.
-#
-# Every rule here on a method_declaration emits only edges: an enclosing_method end takes the first
-# node rule that fires on the method, which must be find_method.
 edge_kinds:
 - kind: returns_static
   from: php.method

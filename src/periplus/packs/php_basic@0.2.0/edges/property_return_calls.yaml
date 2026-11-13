@@ -27,9 +27,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # value may hold. A return type outside the map, or a method n no class in the map declares, lands
 # unresolved under the return type. A method m with no return type, or one of static, a union or a
 # scalar, gives no edge, and the call site stays.
-#
-# This file sits in edges/, after types/: an enclosing_method end takes the first node rule that
-# fires on the method, which must be find_method.
 rules:
 
 # The property's call with its arguments at most one parenthesis deep, so that
