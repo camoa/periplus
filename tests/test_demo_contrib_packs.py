@@ -14,6 +14,7 @@ import pytest
 from test_demo_a_support import edges, map_project, nodes, pin, plant
 
 MODULE_DIR = "web/modules/custom/mymodule"
+OWN_MODULE = "drupal.module::mymodule"
 MODULE_INFO = {
     f"{MODULE_DIR}/mymodule.info.yml": (
         "name: My module\ntype: module\ncore_version_requirement: ^10\n"
@@ -86,6 +87,7 @@ def test_config_type_file_makes_a_bundle_and_a_settings_file_does_not(
         ),
         ("config_provided_by", f"drupal.config::{owner}.settings", f"drupal.module::{owner}"),
         ("config_provided_by", f"drupal.config::{stem}.my_type", f"drupal.module::{owner}"),
+        ("config_in_module", f"drupal.config::{stem}.my_other_type", "drupal.module::mymodule"),
     }
 
 
@@ -228,6 +230,11 @@ def test_eck_entity_type_and_bundle_files_make_a_content_entity_type_and_bundles
             "drupal.config::eck.eck_type.my_entity.my_type",
             "drupal.module::eck",
         ),
+        (
+            "config_in_module",
+            "drupal.config::eck.eck_type.my_entity.my_other_type",
+            "drupal.module::mymodule",
+        ),
     }
 
 
@@ -296,6 +303,8 @@ def test_advancedqueue_job_type_from_attribute_and_annotation_but_not_a_constant
         ("class_in_module", cls + "MyJob", "drupal.module::mymodule"),
         ("class_in_module", cls + "OldJob", "drupal.module::mymodule"),
         ("class_in_module", cls + "ComputedJob", "drupal.module::mymodule"),
+        ("plugin_in_module", "drupal.plugin.advancedqueue_job_type::my_job", OWN_MODULE),
+        ("plugin_in_module", "drupal.plugin.advancedqueue_job_type::my_old_job", OWN_MODULE),
     }
     assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
         (
@@ -398,6 +407,9 @@ def test_ai_agent_and_function_call_plugins_from_attributes_including_a_constant
         ("class_in_module", cls + "AiAgent\\MyAgent", "drupal.module::mymodule"),
         ("class_in_module", cls + "AiFunctionCall\\MyFunction", "drupal.module::mymodule"),
         ("class_in_module", cls + "AiFunctionCall\\ComputedFunction", "drupal.module::mymodule"),
+        ("plugin_in_module", "drupal.plugin.ai_agent::my_agent", OWN_MODULE),
+        ("plugin_in_module", "drupal.plugin.ai_function_call::mymodule:my_function", OWN_MODULE),
+        ("plugin_in_module", "drupal.plugin.ai_function_call::computed", OWN_MODULE),
     }
 
 
@@ -469,6 +481,9 @@ def test_drush_command_from_attribute_and_docblock_tag_but_not_a_positional_name
         ("has_attribute", other_method, annotated_command),
         ("class_in_module", mine, "drupal.module::mymodule"),
         ("class_in_module", other, "drupal.module::mymodule"),
+        ("command_in_module", "drush.command::mymodule:sync", OWN_MODULE),
+        ("command_in_module", "drush.command::mymodule:other", OWN_MODULE),
+        ("command_in_module", "drush.command::mymodule:old", OWN_MODULE),
     }
     assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
         (f"{folder}/MyCommands.php", "command_from_attribute", "argument name is missing")
@@ -576,6 +591,7 @@ def test_salesforce_mapping_config_field_plugin_and_event_subscriber(tmp_path: P
         ("implements", sub_class, interface),
         ("class_in_module", field_class, "drupal.module::mymodule"),
         ("class_in_module", sub_class, "drupal.module::mymodule"),
+        ("plugin_in_module", "drupal.plugin.salesforce_mapping_field::my_field", OWN_MODULE),
     }
 
 

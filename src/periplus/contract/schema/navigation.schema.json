@@ -283,25 +283,7 @@
           "properties": {
             "items": {
               "type": "array",
-              "items": {
-                "type": "object", "additionalProperties": false,
-                "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "again", "location", "source", "description", "container"],
-                "properties": {
-                  "start": {"description": "The start node this row hangs under.", "type": "string"},
-                  "hop": {"type": "integer", "minimum": 1},
-                  "from": {"description": "The node the row was reached from.", "type": "string"},
-                  "kind": {"type": "string"},
-                  "direction": {"description": "out when the edge runs from the from node to id, in when it runs from id to the from node.", "enum": ["out", "in"]},
-                  "id": {"type": "string"},
-                  "type": {"type": "string"},
-                  "state": {"type": "string"},
-                  "again": {"description": "true when id is printed in full on another row of this piece.", "type": "boolean"},
-                  "container": {"description": "true when id is the container end of a grouping edge; the walk does not go on from it.", "type": "boolean"},
-                  "location": {"$ref": "#/$defs/place"},
-                  "source": {"$ref": "#/$defs/source"},
-                  "description": {"$ref": "#/$defs/node_text"}
-                }
-              }
+              "items": {"$ref": "#/$defs/slice_row"}
             }
           }
         },
@@ -324,7 +306,7 @@
               "container": {"type": "string"},
               "total": {"type": "integer", "minimum": 0},
               "by_type": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
-              "rows": {"type": "array", "items": {"$ref": "#/$defs/slice_piece/properties/rows/properties/items/items"}}
+              "rows": {"type": "array", "items": {"$ref": "#/$defs/slice_row"}}
             }
           }
         },
@@ -333,6 +315,27 @@
         "direction": {"enum": ["out", "in", "both"]},
         "warnings": {"$ref": "#/$defs/warnings"},
         "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "slice_row": {
+      "description": "One walk row of a slice piece, and one member row of a container start.",
+      "type": "object", "additionalProperties": false,
+      "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "again", "location", "source", "description", "container"],
+      "properties": {
+        "start": {"description": "The start node this row hangs under.", "type": "string"},
+        "hop": {"type": "integer", "minimum": 1},
+        "from": {"description": "The node the row was reached from.", "type": "string"},
+        "kind": {"type": "string"},
+        "direction": {"description": "out when the edge runs from the from node to id, in when it runs from id to the from node.", "enum": ["out", "in"]},
+        "id": {"type": "string"},
+        "type": {"type": "string"},
+        "state": {"type": "string"},
+        "again": {"description": "true when id is printed in full on another row of this piece.", "type": "boolean"},
+        "container": {"description": "true when id is the container end of a grouping edge; the walk does not go on from it.", "type": "boolean"},
+        "location": {"$ref": "#/$defs/place"},
+        "source": {"$ref": "#/$defs/source"},
+        "description": {"$ref": "#/$defs/node_text"}
       }
     },
 

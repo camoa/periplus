@@ -236,9 +236,14 @@ def test_a_project_local_pack_writes_the_same_file_links_as_the_bundled_rutters(
     )
     _, local = _map(tmp_path, "local.json")
 
+    # drupal_js_basic's membership rules, which the local pack does not copy.
+    members = {"script_in_module", "js_function_in_module", "behavior_in_module"}
+
     def shape(document: dict[str, list[dict[str, str]]]) -> tuple[list[Any], list[Any]]:
         nodes = sorted((n["id"], n["state"]) for n in document["nodes"])
-        edges = sorted((e["kind"], e["from"], e["to"]) for e in document["edges"])
+        edges = sorted(
+            (e["kind"], e["from"], e["to"]) for e in document["edges"] if e["kind"] not in members
+        )
         return nodes, edges
 
     assert shape(local) == shape(bundled)

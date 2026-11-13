@@ -38,6 +38,7 @@ def test_a_script_links_to_every_function_and_behavior_it_declares(tmp_path: Pat
     assert found == sorted(
         [("script_declares_function", f, "declared") for f in functions]
         + [("script_declares_behavior", "drupal.js_behavior::mymoduleAll", "declared")]
+        + [("script_in_module", "drupal.module::mymodule", "declared")]
     )
 
 

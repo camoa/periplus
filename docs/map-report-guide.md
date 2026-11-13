@@ -103,8 +103,8 @@ periplus map
 Map:
   path    /path/to/project/.periplus/map.json
   nodes   12
-  edges   10
-  internal: 4 nodes and 2 edges left out
+  edges   13
+  internal: 8 nodes and 6 edges left out
 
 Boundaries:
   total 0
@@ -155,8 +155,9 @@ Rules that fired zero times:
 ...
 
 Map rule passes:
-  pass 1: drupal_basic library_in_module fired 2
-  pass 2: none
+  pass 1: drupal_basic claim_folder_0 fired 1, drupal_basic claim_folder_1 fired 1, drupal_basic claim_folder_2 fired 1, drupal_basic library_in_module fired 2
+  pass 2: drupal_basic function_in_module fired 1, drupal_basic template_member_of_module fired 1, drupal_js_basic script_in_module fired 1, drupal_js_basic behavior_in_module fired 1
+  pass 3: none
 
 Rules not executed:
   none
@@ -341,17 +342,19 @@ Incoming (2):
       | const banner = drupalSettings.greetBanner;
 ```
 
-The script reaches the behavior it declares and the path it fetches whole. The function `attach`
-written in the behavior's object is the behavior's, so it is no node of its own. `fetch` is a
-browser global, so its calls make no node.
+The script reaches the behavior it declares, the path it fetches whole and the module whose
+folder holds it. The function `attach` written in the behavior's object is the behavior's, so it
+is no node of its own. `fetch` is a browser global, so its calls make no node.
 
 <!-- nav-run -->
 ```
 $ periplus neighbors js.file::web/modules/custom/greet/js/banner.js
 periplus neighbors js.file::web/modules/custom/greet/js/banner.js
-2 items
+3 items
   1  drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  via script_declares_behavior from js.file::web/modules/custom/greet/js/banner.js  web/modules/custom/greet/js/banner.js:2
       | Drupal.behaviors.greetBanner = {
+  1  drupal.module::greet  drupal.module  mapped  via script_in_module from js.file::web/modules/custom/greet/js/banner.js  web/modules/custom/greet/js/banner.js:1
+      | (function (Drupal, drupalSettings) {
   1  drupal.url_path::/greet/hello  drupal.url_path  referenced  via script_links_to_path from js.file::web/modules/custom/greet/js/banner.js  web/modules/custom/greet/js/banner.js:5
       | fetch('/greet/hello');
 ```
@@ -403,7 +406,7 @@ Map:
   path    /path/to/project/.periplus/map.json
   nodes   1
   edges   0
-  internal: 2 nodes and 2 edges left out
+  internal: 3 nodes and 2 edges left out
 
 Boundaries:
   total 0
@@ -485,8 +488,8 @@ periplus map
 Map:
   path    /path/to/project/.periplus/map.json
   nodes   12
-  edges   10
-  internal: 4 nodes and 2 edges left out
+  edges   13
+  internal: 8 nodes and 6 edges left out
 
 Boundaries:
   total 0
@@ -537,8 +540,9 @@ Rules that fired zero times:
 ...
 
 Map rule passes:
-  pass 1: drupal_basic library_in_module fired 2
-  pass 2: none
+  pass 1: drupal_basic claim_folder_0 fired 1, drupal_basic claim_folder_1 fired 1, drupal_basic claim_folder_2 fired 1, drupal_basic library_in_module fired 2
+  pass 2: drupal_basic function_in_module fired 1, drupal_basic template_member_of_module fired 1, drupal_js_basic script_in_module fired 1, drupal_js_basic behavior_in_module fired 1
+  pass 3: none
 
 Rules not executed:
   none

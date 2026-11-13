@@ -154,9 +154,22 @@ def test_a_procedural_hook_is_mapped_by_its_function_name_and_implements_it(
         (edge["kind"], edge["from"], edge["to"], [p["confidence"] for p in edge["provenance"]])
         for edge in document["edges"]
     )
+    # The theme has an info file, so each function in its folder belongs to it; the module has none.
+    members = [
+        ("function_in_theme", f"php.function::{function}", "drupal.theme::my_theme", ["declared"])
+        for function in (
+            "my_theme_preprocess_html",
+            "my_theme_preprocess_node",
+            "my_theme_preprocess_page",
+            "other_helper",
+        )
+    ]
     assert edges == sorted(
-        ("implements_hook", f"php.function::{function}", f"drupal.hook::{hook}", ["inferred"])
-        for hook, (_, function) in wanted.items()
+        [
+            ("implements_hook", f"php.function::{function}", f"drupal.hook::{hook}", ["inferred"])
+            for hook, (_, function) in wanted.items()
+        ]
+        + members
     )
     ids = {n["id"] for n in document["nodes"] if n["type"] == "drupal.hook"}
     assert "drupal.hook::" not in ids and not [i for i in ids if "helper" in i], ids
@@ -1466,6 +1479,22 @@ def test_a_twig_extension_provides_its_filters_and_functions_and_templates_use_t
         ),
         ("template_uses_twig_filter", template, "twig.filter::long", "inferred"),
         ("template_uses_twig_function", template, "twig.function::cart_count", "inferred"),
+        # Each filter and function belongs to the module of the class that provides it.
+        ("twig_filter_in_module", "twig.filter::long", "drupal.module::my_module", "inferred"),
+        ("twig_filter_in_module", "twig.filter::money", "drupal.module::my_module", "inferred"),
+        ("twig_filter_in_module", "twig.filter::short", "drupal.module::my_module", "inferred"),
+        (
+            "twig_function_in_module",
+            "twig.function::cart_count",
+            "drupal.module::my_module",
+            "inferred",
+        ),
+        (
+            "twig_function_in_module",
+            "twig.function::cart_total",
+            "drupal.module::my_module",
+            "inferred",
+        ),
     }
 
 

@@ -168,6 +168,15 @@ assert edges == sorted([
      [(f"{folder}/mymodule.libraries.yml", 1)]),
     ("template_in_module", "drupal.template::mymodule-widget", "drupal.module::mymodule",
      [(template, 1)]),
+    ("script_in_module", f"js.file::{script}", "drupal.module::mymodule", [(script, 1)]),
+    ("behavior_in_module", widget, "drupal.module::mymodule",
+     [(script, line(script, "Drupal.behaviors.mymoduleWidget = {"))]),
+    ("behavior_in_module", other, "drupal.module::mymodule",
+     [(script, line(script, "Drupal.behaviors.mymoduleOther = {"))]),
+    ("behavior_in_module", arrow, "drupal.module::mymodule",
+     [(script, line(script, "Drupal.behaviors.mymoduleArrow = (context) => {"))]),
+    ("behavior_in_module", func, "drupal.module::mymodule",
+     [(script, line(script, "Drupal.behaviors.mymoduleFunc = function (context) {};"))]),
 ]), edges
 PY
 echo "js packs ok"
