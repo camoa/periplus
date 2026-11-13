@@ -61,7 +61,7 @@ _NO_TABLES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
 _TABLE_CONDITIONS = ("in_table", "not_in_table")
 
 #: The steps of a map rule's follow.
-_FOLLOW_STEPS = ("edge", "ancestors", "node", "id_matches", "try")
+_FOLLOW_STEPS = ("edge", "incoming_edge", "ancestors", "node", "id_matches", "try")
 
 #: Every key path of the two pack schemas that the engine or the pack check executes. ``*`` is one
 #: key or item. A path starts with the document it sits in: ``manifest.`` or ``file.``.
@@ -128,11 +128,15 @@ EXECUTED_KEYS = frozenset(
                 *("reference", "skip_names", "whole_written"),
                 *("body_child", "holder", "attribute", "annotation", "text", "reads_sections"),
                 "encloses_for",
-                *("node_type", "follow", "unless"),
+                *("node_type", "follow", "unless", "unless_matched"),
             )
         ),
         *(f"{_RULE}match.follow.*.{k}" for k in _FOLLOW_STEPS),
-        *(f"{_RULE}match.unless.*.*.{k}" for k in _FOLLOW_STEPS),
+        *(
+            f"{_RULE}match.{key}.*.*.{k}"
+            for key in ("unless", "unless_matched")
+            for k in _FOLLOW_STEPS
+        ),
         f"{_RULE}match.skip_names.*.table",
         *(
             f"{_RULE}match.where.*.{k}"
@@ -485,11 +489,13 @@ class Rule:
     #: it reads; empty for any.
     endings: tuple[str, ...] = ()
     #: A map rule: the node type it matches, ``""`` on a file rule, and its follow steps, each a
-    #: step name and its value: a kind, a tuple of kinds, a template or a compiled pattern; and its
-    #: unless chains, steps of the same kinds.
+    #: step name and its value: a kind, a tuple of kinds, a template, a pattern's expression and its
+    #: unfilled compiled form, or a try's steps; and its unless and unless_matched chains, steps of
+    #: the same kinds.
     matches_type: str = ""
     follow: tuple[tuple[str, Any], ...] = ()
     unless: tuple[tuple[tuple[str, Any], ...], ...] = ()
+    unless_matched: tuple[tuple[tuple[str, Any], ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1093,17 +1099,24 @@ def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
     """The map rule, marked not executed when a follow or unless step's node template names a name
     that no id_matches before it captures and no settings value gives, or its id or an edge
     template names one that no id_matches of the rule captures and no settings value gives. An
-    unless chain knows only the captures of ``where`` and its own."""
+    unless chain knows only the captures of ``where`` and its own; an unless_matched chain knows
+    those of ``follow`` too."""
     known = set(values)
     for condition in rule.where:
         known |= set(condition.pattern.groupindex) if isinstance(condition, IdMatches) else set()
 
     def walk(steps: Sequence[tuple[str, Any]], inside: str, known: set[str]) -> str | None:
-        """The reason the first node step names a capture nothing before it made, or None; a
-        ``try`` is walked in place, its captures known to the steps after it."""
+        """The reason the first node or id_matches step names a capture nothing before it made, or
+        None; a ``try`` is walked in place, its captures known to the steps after it."""
         for name, value in steps:
+            if name == "id_matches" and set(value_names(value[0])) - known:
+                lacking = ", ".join(sorted(set(value_names(value[0])) - known))
+                return (
+                    f"the follow step id_matches {value[0]}{inside} names {lacking}, "
+                    "which no id_matches captures before it"
+                )
             if name == "id_matches":
-                known.update(value.groupindex)
+                known.update(value[1].groupindex)
             elif name == "try":
                 reason = walk(value, " inside try", known)
                 if reason:
@@ -1116,8 +1129,17 @@ def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
                 )
         return None
 
-    reasons = [walk(chain, " inside unless", set(known)) for chain in rule.unless]
-    reason = next(filter(None, reasons), None) or walk(rule.follow, "", known)
+    unless = [(chain, walk(chain, " inside unless", set(known))) for chain in rule.unless]
+    followed = walk(rule.follow, "", known)
+    hint = "; a chain that names a capture of follow goes in unless_matched"
+    reasons = [
+        reason + (hint if walk(chain, "", set(known)) is None else "")
+        for chain, reason in unless
+        if reason
+    ]
+    reasons.append(followed)
+    reasons += [walk(chain, " inside unless_matched", set(known)) for chain in rule.unless_matched]
+    reason = next(filter(None, reasons), None)
     if reason:
         return replace(rule, supported=False, reason=reason)
     templates = [rule.id_template, *(edge.template or "" for edge in rule.edges)]
@@ -2063,17 +2085,19 @@ def _build_map(
 ) -> Rule:
     """A rule that reads the map: it fires on each node of ``match.node_type`` or a type below it
     that its ``where`` holds for and no ``unless`` chain reaches a node from, once for each node
-    its ``follow`` steps reach."""
+    its ``follow`` steps reach that no ``unless_matched`` chain reaches a node from."""
     match, emits = item["match"], item["emits"]
     if (
         "in" in item
-        or not set(match) <= {"node_type", "where", "follow", "unless"}
+        or not set(match) <= {"node_type", "where", "follow", "unless", "unless_matched"}
         or "node_type" not in match
     ):
         raise _Unsupported(
-            "a map rule is not a rule with match.node_type, optional where, follow and unless, "
-            "and no in"
+            "a map rule is not a rule with match.node_type, optional where, follow, unless and "
+            "unless_matched, and no in"
         )
+    if "unless_matched" in match and "follow" not in match:
+        raise _Unsupported("match.unless_matched needs match.follow")
     where = _read_where(match.get("where", []), tables)
     if not all(isinstance(condition, IdMatches | InTable) for condition in where):
         raise _Unsupported(
@@ -2109,16 +2133,20 @@ def _build_map(
         matches_type=str(match["node_type"]),
         follow=tuple(follow),
         unless=tuple(tuple(_read_follow(chain)) for chain in match.get("unless", [])),
+        unless_matched=tuple(
+            tuple(_read_follow(chain)) for chain in match.get("unless_matched", [])
+        ),
     )
 
 
 def _read_follow(steps: list[Mapping[str, Any]]) -> list[tuple[str, Any]]:
-    """A map rule's follow steps, each as its name and value; a ``try`` holds its own steps."""
+    """A map rule's follow steps, each as its name and value; a ``try`` holds its own steps, and an
+    ``id_matches`` its expression and that expression compiled before its values are known."""
     follow: list[tuple[str, Any]] = []
     for step in steps:
         ((name, value),) = step.items()
         if name == "id_matches":
-            value = _regex(value)
+            value = (value, _regex(value, compile_unfilled))
         elif name == "ancestors":
             value = tuple(value)
         elif name == "try":

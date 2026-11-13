@@ -298,6 +298,8 @@ def run_map_rules(
     reaches a node, with one node its ``follow`` reaches, that makes a node or edge record no pass
     made before. A fire makes one record at each location of the matched node. An ``unless`` chain
     reads the pass's map too, so an edge a later pass makes does not take back an earlier fire.
+    An ``unless_matched`` chain runs from the node ``follow`` reached, with its captures, and when
+    it reaches a node that one result makes nothing.
     """
     rules = [rule for rule in rule_set.rules if rule.supported and rule.matches_type]
     if not rules:
@@ -318,10 +320,11 @@ def run_map_rules(
                 typed.setdefault(node.id, set()).add(node.type)
                 places.setdefault(node.id, set()).add((node.file, node.line))
         found = set(typed)
-        out: dict[tuple[str, str], set[str]] = {}
+        out: dict[tuple[str, str, str], set[str]] = {}
         for edge in (*ends, *(_landed_end(edge, found) for edge in made_edges)):
             if edge.source in known and edge.target in known:
-                out.setdefault((edge.kind, edge.source), set()).add(edge.target)
+                out.setdefault(("edge", edge.kind, edge.source), set()).add(edge.target)
+                out.setdefault(("incoming_edge", edge.kind, edge.target), set()).add(edge.source)
         added: list[FoundNode | FoundEdge] = []
         fired: list[tuple[str, str, int]] = []
         for rule in rules:
@@ -337,6 +340,11 @@ def run_map_rules(
                 ):
                     continue
                 for reached, captured in _follow(rule.follow, node_id, values, known, out):
+                    if any(
+                        _follow(chain, reached, dict(captured), known, out)
+                        for chain in rule.unless_matched
+                    ):
+                        continue
                     made = [
                         record
                         for place in sorted(places[node_id])
@@ -416,36 +424,42 @@ def _follow(
     at: str,
     values: dict[str, str],
     known: set[str],
-    out: Mapping[tuple[str, str], set[str]],
+    out: Mapping[tuple[str, str, str], set[str]],
 ) -> list[tuple[str, dict[str, str]]]:
     """Each id the steps reach from the id ``at``, in order, with the values its ``id_matches``
-    steps captured. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
+    steps captured. ``out`` holds the ids an ``edge`` or ``incoming_edge`` step of a kind reaches
+    from an id. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
     ids its kinds reach, breadth first, that give any. A ``try`` step runs its steps and the steps
-    after it from ``at``, else the steps after it from ``at`` with the values it had."""
+    after it from ``at``, else the steps after it from ``at`` with the values it had. An
+    ``id_matches`` step fills each ``{name}`` with that value as literal text."""
     if not steps:
         return [(at, values)]
     (name, value), rest = steps[0], steps[1:]
     if name == "try":
         tried = _follow((*value, *rest), at, values, known, out)
         return tried or _follow(rest, at, values, known, out)
-    if name == "edge":
+    if name in ("edge", "incoming_edge"):
         return [
             r
-            for to in sorted(out.get((value, at), ()))
+            for to in sorted(out.get((name, value, at), ()))
             for r in _follow(rest, to, values, known, out)
         ]
     if name == "node":
         to = _fill(value, values)
         return _follow(rest, to, values, known, out) if to is not None and to in known else []
     if name == "id_matches":
-        captured = _captured((IdMatches(value),), at, dict(values))
+        expression, pattern = value
+        filled = filled_pattern(expression, values) if value_names(expression) else pattern
+        captured = None if filled is None else _captured((IdMatches(filled),), at, dict(values))
         return _follow(rest, at, captured, known, out) if captured is not None else []
     level, seen = [at], {at}
     while level:
         reached = [r for here in level for r in _follow(rest, here, values, known, out)]
         if reached:
             return reached
-        level = sorted({t for h in level for k in value for t in out.get((k, h), ())} - seen)
+        level = sorted(
+            {t for h in level for k in value for t in out.get(("edge", k, h), ())} - seen
+        )
         seen.update(level)
     return []
 

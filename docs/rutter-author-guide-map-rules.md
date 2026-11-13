@@ -15,10 +15,17 @@ with `in_table` or `not_in_table` conditions on that id or on one of their captu
 and an optional `follow`, a list of steps from that node:
 
 - `edge: <kind>` moves to each node an edge of that kind runs to.
+- `incoming_edge: <kind>` walks the other way: it moves to each node an edge of that kind runs
+  from, in id order. From a class, `[{incoming_edge: assigned}]` reaches each variable
+  assigned from it.
 - `ancestors: [<kind>]` runs the steps after it from the current node, else from the nearest
   node those kinds reach that gives a result: a member found on a class or its nearest ancestor.
 - `node: <template>` moves to the node whose whole id the template gives from the captures.
 - `id_matches: <pattern>` keeps a node whose whole id the pattern fits, and adds its captures.
+  Each `{name}` in it is first filled with that capture, as literal text, so
+  `'^my_module\.var::(?!{name}$)'` keeps a variable other than the one the rule came through. A
+  name starts with a letter, so a quantifier such as `\w{2}` stays one; a name no step before it
+  captures leaves the rule not executed.
 - `try: [<steps>]` holds steps of these kinds. The steps inside and after it run from the current
   node, and if they reach nothing the later steps run with the captures it had, so a lookup that
   may fail (a method on an ancestor the map does not hold) leaves the end to `on_miss`. When
@@ -39,8 +46,24 @@ match:
   - [{edge: guarded}]
 ```
 
-An `unless` chain reads the map as it stood when the pass began, so an edge a later pass makes
-does not take back what the rule already made.
+An optional `unless_matched`, with `follow` only, holds chains of the same steps, each run from
+the node `follow` reached with the captures `follow` made. When any chain reaches a node, the rule
+makes nothing for that one result, and the other results of the same node still fire. The key
+decides the scope: `unless` blocks the matched node and knows only the captures of `where`;
+`unless_matched` blocks one result. A chain under `unless` that names a capture of `follow` leaves
+the rule not executed, with a message that points to `unless_matched`. This rule skips each class
+that a stop node names:
+
+```yaml
+match:
+  node_type: my_module.use
+  where: [{id_matches: '^my_module\.use::(?<name>\w+)$'}]
+  follow: [{node: 'my_module.var::{name}'}, {edge: assigned}, {id_matches: '::(?<class>\w+)$'}]
+  unless_matched: [[{node: 'my_module.stop::{class}'}]]
+```
+
+An `unless` or `unless_matched` chain reads the map as it stood when the pass began, so an edge a
+later pass makes does not take back what the rule already made.
 
 It emits edges whose ends are `this_node`, the node it matched, `matched_node`, the node its
 `follow` reached, or one template end filled from the captures, with `type` or `types` and

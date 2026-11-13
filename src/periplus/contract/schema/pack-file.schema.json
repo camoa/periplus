@@ -93,10 +93,11 @@
       "maxProperties": 1,
       "properties": {
         "edge": {"type": "string", "description": "Move to each node an edge of this declared kind runs to from the current node."},
+        "incoming_edge": {"type": "string", "description": "Move to each node an edge of this declared kind runs from to the current node, in id order."},
         "ancestors": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "Run the steps after this one from the current node, else from the nearest node reached by edges of these declared kinds, breadth first, that gives a result: a member found on a class or else on its nearest ancestor."},
         "try": {"items": {"type": "object", "minProperties": 1, "maxProperties": 1}, "description": "A list of follow steps of the kinds above, try included. The steps inside and after it run from the current node, and if they reach nothing the later steps run with the captures it had, so a lookup that may fail (a method on an ancestor the map does not hold) leaves the end to on_miss. An id_matches inside a try that reaches a node rebinds its captures. The engine, not this schema, refuses a value that is not a list or an empty list."},
         "node": {"type": "string", "description": "Move to the node whose whole id this template gives, filled from the captures before it; nothing when no rule found such a node or an edge end."},
-        "id_matches": {"type": "string", "description": "RE2 searched in the current node's whole id; a node it does not fit gives nothing, and its named captures join the values."}
+        "id_matches": {"type": "string", "description": "RE2 searched in the current node's whole id; a node it does not fit gives nothing, and its named captures join the values. Each {name}, a name starting with a letter, is filled first with that capture as literal text; a capture no step before it makes leaves the rule not executed, and a quantifier such as {2} stays one."}
       }
     },
     "typeName": {
@@ -459,6 +460,12 @@
           "minItems": 1,
           "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/followStep"}},
           "description": "Only with reads: map. Chains of follow steps, each run from the matched node with the captures of where; when any chain reaches a node, the rule makes nothing for that node. A chain reads the map as it stood when the pass began."
+        },
+        "unless_matched": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/followStep"}},
+          "description": "Only with reads: map and follow. Chains of follow steps, each run from the node follow reached with the captures follow made; when any chain reaches a node, the rule makes nothing for that one result. A chain reads the map as it stood when the pass began."
         },
         "grammar": {
           "type": "string",
