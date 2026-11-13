@@ -409,3 +409,25 @@ def test_an_into_edge_its_kind_or_type_cannot_carry_is_refused(
     _project(tmp_path, {"spec.yaml": SPECIFIC_TYPES.replace(*change) + _rules("boundary")})
     problems = _refused(tmp_path)
     assert problems == [(ExitCode.EDGE_ILLEGAL, f"spec/rules/spec.yaml: {words}")], problems
+
+
+
+def test_two_rules_entering_one_api_node_as_different_types_are_refused(tmp_path: Path) -> None:
+    """Which into type the node took would depend on which rule file loaded first."""
+    types = (
+        "node_types:\n"
+        "- {name: spec.api, id_namespace: spec.api, boundary: true}\n"
+        "- {name: spec.api3, id_namespace: spec.api, boundary: true}\n"
+        "edge_kinds:\n"
+        "- {kind: enters, from: gen.function, to: [spec.api, spec.api3]}\n"
+    )
+    other = _rules("boundary").replace("mark_0", "mark_y").replace("spec.api}", "spec.api3}")
+    _project(tmp_path, {"types.yaml": types, "a.yaml": _rules("boundary"), "b.yaml": other})
+    assert _refused(tmp_path) == [
+        (
+            ExitCode.TYPE_COLLISION,
+            "spec/rules/a.yaml: the rule mark_0 enters spec.api::config as a spec.api, and the "
+            "rule spec/mark_y in spec/rules/b.yaml enters it as a spec.api3; one into node takes "
+            "one type",
+        )
+    ]

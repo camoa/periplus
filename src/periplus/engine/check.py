@@ -16,6 +16,7 @@ from periplus.engine.packload import (
     RuleSet,
     declared_values,
     load_rules,
+    namespace_of,
     node_types,
     twin_type,
     unexecuted,
@@ -104,7 +105,8 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
     execute, no folder name has two values across the packs that neither pack's dependency settles,
     a ``files.extends`` beside ``add_extensions`` names one pack, no ending or whole file name is
     claimed for two file types read the same way, a type read as a tree belongs to a pack that
-    pins a grammar, and every grammar pin is met.
+    pins a grammar, every grammar pin is met, and no two rules enter one into node as different
+    types.
     """
     documents = {pack.name.pack: _documents(pack) for pack in packs}
     reach = {pack.name.pack: reachable(pack, packs) for pack in packs}
@@ -193,6 +195,7 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
         and rule.node_type in rule_set.types
         and _boundary_type(rule_set.types, rule.node_type)
     )
+    problems.extend(_into_collisions(rule_set, rule_files))
     problems.extend(_folder_conflicts(packs))
     problems.extend(_extends_ambiguous(packs))
     problems.extend(_type_conflicts(packs))
@@ -478,6 +481,37 @@ def _illegal_into(
                 {"pack": pack, "file": file, "rule": str(rule.get("rule"))},
             )
             for reason in reasons
+        )
+    return problems
+
+
+def _into_collisions(
+    rule_set: RuleSet, rule_files: Mapping[tuple[str, str], str]
+) -> list[Problem]:
+    """Each into node two rules enter as different types, named by the first two by pack and
+    rule."""
+    entered: dict[str, set[tuple[str, str, str]]] = {}
+    for rule in rule_set.rules:
+        for spec in rule.edges if rule.supported else ():
+            if spec.into is not None:
+                name, kind, _ = spec.into
+                into = f"{namespace_of(rule_set.types, kind)}::{name}"
+                entered.setdefault(into, set()).add((rule.pack, rule.name, kind))
+    problems: list[Problem] = []
+    for into, rows in sorted(entered.items()):
+        if len({kind for _, _, kind in rows}) < 2:
+            continue
+        first = min(rows)
+        second = min(row for row in rows if row[2] != first[2])
+        files = [f"{p}/{rule_files.get((p, r), r)}" for p, r, _ in (first, second)]
+        problems.append(
+            Problem(
+                ExitCode.TYPE_COLLISION,
+                f"{files[0]}: the rule {first[1]} enters {into} as a {first[2]}, and the rule "
+                f"{second[0]}/{second[1]} in {files[1]} enters it as a {second[2]}; one into "
+                "node takes one type",
+                {"pack": first[0], "rule": first[1], "node": into},
+            )
         )
     return problems
 
