@@ -22,6 +22,10 @@ and an optional `follow`, a list of steps from that node:
   node those kinds reach that gives a result: a member found on a class or its nearest ancestor.
 - `node: <template>` moves to the node whose whole id the template gives from the captures.
 - `id_matches: <pattern>` keeps a node whose whole id the pattern fits, and adds its captures.
+  Each `{name}` in it is first filled with that capture, as literal text, so
+  `'^my_module\.var::(?!{name}$)'` keeps a variable other than the one the rule came through. A
+  name starts with a letter, so a quantifier such as `\w{2}` stays one; a name no step before it
+  captures leaves the rule not executed.
 - `try: [<steps>]` holds steps of these kinds. The steps inside and after it run from the current
   node, and if they reach nothing the later steps run with the captures it had, so a lookup that
   may fail (a method on an ancestor the map does not hold) leaves the end to `on_miss`. When

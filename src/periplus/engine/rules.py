@@ -423,7 +423,8 @@ def _follow(
     steps captured. ``out`` holds the ids an ``edge`` or ``incoming_edge`` step of a kind reaches
     from an id. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
     ids its kinds reach, breadth first, that give any. A ``try`` step runs its steps and the steps
-    after it from ``at``, else the steps after it from ``at`` with the values it had."""
+    after it from ``at``, else the steps after it from ``at`` with the values it had. An
+    ``id_matches`` step fills each ``{name}`` with that value as literal text."""
     if not steps:
         return [(at, values)]
     (name, value), rest = steps[0], steps[1:]
@@ -440,7 +441,9 @@ def _follow(
         to = _fill(value, values)
         return _follow(rest, to, values, known, out) if to is not None and to in known else []
     if name == "id_matches":
-        captured = _captured((IdMatches(value),), at, dict(values))
+        expression, pattern = value
+        filled = filled_pattern(expression, values) if value_names(expression) else pattern
+        captured = None if filled is None else _captured((IdMatches(filled),), at, dict(values))
         return _follow(rest, at, captured, known, out) if captured is not None else []
     level, seen = [at], {at}
     while level:

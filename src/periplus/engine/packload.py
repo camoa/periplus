@@ -485,8 +485,8 @@ class Rule:
     #: it reads; empty for any.
     endings: tuple[str, ...] = ()
     #: A map rule: the node type it matches, ``""`` on a file rule, and its follow steps, each a
-    #: step name and its value: a kind, a tuple of kinds, a template or a compiled pattern; and its
-    #: unless chains, steps of the same kinds.
+    #: step name and its value: a kind, a tuple of kinds, a template, a pattern's expression and its
+    #: unfilled compiled form, or a try's steps; and its unless chains, steps of the same kinds.
     matches_type: str = ""
     follow: tuple[tuple[str, Any], ...] = ()
     unless: tuple[tuple[tuple[str, Any], ...], ...] = ()
@@ -1099,11 +1099,17 @@ def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
         known |= set(condition.pattern.groupindex) if isinstance(condition, IdMatches) else set()
 
     def walk(steps: Sequence[tuple[str, Any]], inside: str, known: set[str]) -> str | None:
-        """The reason the first node step names a capture nothing before it made, or None; a
-        ``try`` is walked in place, its captures known to the steps after it."""
+        """The reason the first node or id_matches step names a capture nothing before it made, or
+        None; a ``try`` is walked in place, its captures known to the steps after it."""
         for name, value in steps:
+            if name == "id_matches" and set(value_names(value[0])) - known:
+                lacking = ", ".join(sorted(set(value_names(value[0])) - known))
+                return (
+                    f"the follow step id_matches {value[0]}{inside} names {lacking}, "
+                    "which no id_matches captures before it"
+                )
             if name == "id_matches":
-                known.update(value.groupindex)
+                known.update(value[1].groupindex)
             elif name == "try":
                 reason = walk(value, " inside try", known)
                 if reason:
@@ -2113,12 +2119,13 @@ def _build_map(
 
 
 def _read_follow(steps: list[Mapping[str, Any]]) -> list[tuple[str, Any]]:
-    """A map rule's follow steps, each as its name and value; a ``try`` holds its own steps."""
+    """A map rule's follow steps, each as its name and value; a ``try`` holds its own steps, and an
+    ``id_matches`` its expression and that expression compiled before its values are known."""
     follow: list[tuple[str, Any]] = []
     for step in steps:
         ((name, value),) = step.items()
         if name == "id_matches":
-            value = _regex(value)
+            value = (value, _regex(value, compile_unfilled))
         elif name == "ancestors":
             value = tuple(value)
         elif name == "try":

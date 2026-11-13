@@ -215,3 +215,49 @@ def test_an_undeclared_incoming_edge_kind_is_refused(tmp_path: Path) -> None:
 def test_incoming_edge_gives_a_byte_identical_map_on_two_runs(tmp_path: Path) -> None:
     yard = "class Engine\nvar d Engine\nvar b Engine\nvar a Engine\nvar c Engine\n"
     _twice(tmp_path, BACK, yard)
+
+# 2. A {name} in an id_matches step is filled from the captures known there, as literal text.
+
+OTHERS = (
+    "    node_type: own.var\n    where: [{id_matches: '^own\\.var::(?<name>[\\w.]+)$'}]\n"
+    "    follow: [{edge: assigned}, {incoming_edge: assigned}, "
+    "{id_matches: '^own\\.var::(?!{name}$)'}]"
+)
+
+
+def test_an_id_matches_step_fills_a_capture_as_literal_text(tmp_path: Path) -> None:
+    report, doc = _map(tmp_path, OTHERS, "class Engine\nvar a.b Engine\nvar aXb Engine\n")
+    assert report.problems == () and report.not_executed == (), report
+    assert _reaches(doc) == [("own.var::a.b", "own.var::aXb"), ("own.var::aXb", "own.var::a.b")]
+
+
+def test_an_id_matches_step_with_a_capture_keeps_nothing_it_does_not_fit(tmp_path: Path) -> None:
+    report, doc = _map(tmp_path, OTHERS, "class Engine\nclass Wheel\nvar a Engine\nvar b Wheel\n")
+    assert report.problems == (), report
+    assert _reaches(doc) == []
+
+
+def test_an_id_matches_step_naming_no_capture_is_not_executed(tmp_path: Path) -> None:
+    match = "    node_type: own.var\n    follow: [{edge: assigned}, {id_matches: '{nobody}'}]"
+    report, _ = _map(tmp_path, match, YARD)
+    assert "joined" not in [rule for _, rule, _ in report.executed]
+    messages = [p.message for p in report.problems if "joined" in p.message]
+    assert messages and (
+        "the follow step id_matches {nobody} names nobody, which no id_matches captures before it"
+        in messages[0]
+    ), messages
+
+
+def test_a_quantifier_in_an_id_matches_step_stays_a_quantifier(tmp_path: Path) -> None:
+    match = (
+        "    node_type: own.var\n"
+        "    follow: [{edge: assigned}, {id_matches: '^own\\.class::\\w{2}$|::\\w{4,5}$'}]"
+    )
+    yard = "class Ab\nclass Abc\nclass Abcd\nvar a Ab\nvar b Abc\nvar c Abcd\n"
+    report, doc = _map(tmp_path, match, yard)
+    assert report.problems == () and report.not_executed == (), report
+    assert _reaches(doc) == [("own.var::a", "own.class::Ab"), ("own.var::c", "own.class::Abcd")]
+
+
+def test_a_filled_id_matches_step_gives_a_byte_identical_map_on_two_runs(tmp_path: Path) -> None:
+    _twice(tmp_path, OTHERS, "class Engine\nvar c Engine\nvar a.b Engine\nvar aXb Engine\n")
