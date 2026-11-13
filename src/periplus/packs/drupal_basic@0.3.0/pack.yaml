@@ -164,6 +164,21 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   its routing and services files, library_in_module or library_in_theme from a library's first
 #   name part, class_in_module from a class named Drupal\<module>\..., inferred, and
 #   template_in_module or template_in_theme from a template's folder, inferred;
+# - the rest of what a module or theme holds, to the extension whose info file sits in the nearest
+#   folder above the file, so a submodule or a test module keeps its own (module/member_folder.yaml):
+#   each function of a module, install, inc, theme, profile or plain PHP file, hook or helper, as
+#   function_in_module or function_in_theme; each theme hook a hook_theme declares, as
+#   theme_hook_in_module or theme_hook_in_theme; each template, one that opens with a comment and
+#   a macro file too, as template_in_module or template_in_theme; each menu link, local task,
+#   local action, contextual link and permission, as <thing>_in_module; each file a module or
+#   theme ships in config/install or config/optional, as config_in_module or config_in_theme; and
+#   each component, as component_in_module or component_in_theme. Through the module class_in_module
+#   gives a class, also inferred: each plugin by its class, form id, entity type, plugin type,
+#   route alteration, Twig filter and function, event constant and the event its text names, and a
+#   route entity.<type>.<name> no routing file gives a module, by its entity type's class, as
+#   plugin_in_module, form_id_in_module and the like. A test class Drupal\Tests\<module>\... is a
+#   class_in_module of that module, and each class, trait, interface or enum in a theme's folder a
+#   class_in_theme of that theme;
 # - the same entity type manager, service container, config factory and queue factory calls on an
 #   object known by its declared type, not its name: a parameter of the method or function around
 #   the call, or a property of $this typed on the property, on a promoted constructor parameter, in
@@ -233,6 +248,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A template's owner is read from its folder: the folder right before templates for a module,
 #   the folder below custom_theme for a theme. A folder named other than its machine name gives a
 #   wrong owner. A drush.services.yml's services belong to the folder that holds it, by its name.
+#   module/template_member.yaml also reads a template's owner from the nearest info file, so such a
+#   template gets the right owner beside the wrong one.
 # - Two routes whose paths have one shape, as /my/item/{id} and /my/item/{name}, both get a
 #   template_links_route edge from each template path of that shape.
 # - The subscribed_by edge of an HttpExceptionSubscriberBase descendant reads the method's name
@@ -395,6 +412,12 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A routing file's route_callbacks key names no route, and a service alias written on one line,
 #   name: '@other', gives no service_in_module edge. A library, class or template whose module or
 #   theme the map does not hold gives no ownership edge.
+# - A file more than eight folders below its extension's folder gives no membership edge. A
+#   method, property or call site, a script's settings and URL calls, a script function inside a
+#   block, and a hook name get no membership edge of their own: they reach the module through their
+#   class, script or function, and a hook name is shared by every module that implements it. A
+#   plugin, form id, Twig callable or event of a class the map holds
+#   under no module gives none, and an event a constant names only by its own name gives none.
 #
 # Settings to know:
 # - Only the custom modules and themes are read as PHP. Move them with custom_module and
@@ -496,6 +519,10 @@ files:
           pattern: '^(?<name>[^/]+)/(?!(?P=name)\.theme$)(?:[^/]+/)*[^/]+\.(?:inc|theme)$'
           template: '{name}'
           relative_to: custom_theme
+        # The folder that holds the file, read by module/member_folder.yaml.
+        file_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
 
     # yaml_basic's type yml, read as data, given the path value config_owner: the first
     # dot-separated part of a configuration file's name, the module that provides the file when
@@ -508,6 +535,15 @@ files:
         config_owner:
           pattern: '^(?:.*/)?(?!core\.)(?<owner>[^/.]+)\.[^/]+\.[^/.]+$'
           template: '{owner}'
+        # The folder that holds the file, from the project folder, which module/member_folder.yaml
+        # walks up to the nearest folder holding an info file.
+        file_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
+        # The machine name an info file gives its module or theme: my_module for my_module.info.yml.
+        info_name:
+          pattern: '^(?:.*/)?(?<name>[^/]+)\.info\.yml$'
+          template: '{name}'
 
     # Three text readings, beside the tree and data readings twig_basic, php_basic and yaml_basic
     # give the same files, for what those cannot reach: a call inside a template, the array form
@@ -523,6 +559,10 @@ files:
       endings: [twig]
       reader: text
       path_values:
+        # The folder that holds the file, read by module/member_folder.yaml.
+        file_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
         template_name:
           pattern: '^(?:.*/)?(?<name>[^/]+)\.html\.twig$'
           template: '{name}'
@@ -606,6 +646,10 @@ files:
       endings: [php, module, theme, inc, install, profile]
       reader: text
       path_values:
+        # The folder that holds the file, read by module/member_folder.yaml.
+        file_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
         # The class a file under src holds, by Drupal's PSR-4 layout: <module>/src/A/B.php is
         # Drupal\<module>\A\B, and <module>/tests/src/A/B.php is Drupal\Tests\<module>\A\B. The
         # prefix is matched lazily, so the module is the folder right before src or tests/src.

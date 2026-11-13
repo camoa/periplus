@@ -1,0 +1,79 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each class, trait, interface and enum a theme's PHP files declare, in its src folder or in a
+# theme, inc or plain PHP file, with a namespace or without, as class_in_theme to the theme of the
+# nearest folder above the file that holds an info file, found by module/member_folder.yaml.
+
+edge_kinds:
+- kind: class_in_theme
+  from: php.class_like
+  to: drupal.theme
+
+rules:
+- rule: theme_class_claim
+  reads: file
+  in: [theme_root]
+  match: {declaration: class_declaration, name_child: name, filetype: php}
+  id: {from: [file_dir, qualified_name], template: '{file_dir}|theme_class|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: theme_class_in_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|theme_class\|(?<type>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: class_in_theme, from: {template: '{type}', type: php.class}, to: matched_node}}]
+  confidence: declared
+
+- rule: theme_trait_claim
+  reads: file
+  in: [theme_root]
+  match: {declaration: trait_declaration, name_child: name, filetype: php}
+  id: {from: [file_dir, qualified_name], template: '{file_dir}|theme_trait|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: theme_trait_in_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|theme_trait\|(?<type>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: class_in_theme, from: {template: '{type}', type: php.trait}, to: matched_node}}]
+  confidence: declared
+
+- rule: theme_interface_claim
+  reads: file
+  in: [theme_root]
+  match: {declaration: interface_declaration, name_child: name, filetype: php}
+  id: {from: [file_dir, qualified_name], template: '{file_dir}|theme_interface|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: theme_interface_in_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|theme_interface\|(?<type>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: class_in_theme, from: {template: '{type}', type: php.interface}, to: matched_node}}]
+  confidence: declared
+
+- rule: theme_enum_claim
+  reads: file
+  in: [theme_root]
+  match: {declaration: enum_declaration, name_child: name, filetype: php}
+  id: {from: [file_dir, qualified_name], template: '{file_dir}|theme_enum|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: theme_enum_in_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|theme_enum\|(?<type>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: class_in_theme, from: {template: '{type}', type: php.enum}, to: matched_node}}]
+  confidence: declared

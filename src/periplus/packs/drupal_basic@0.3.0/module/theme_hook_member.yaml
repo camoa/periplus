@@ -1,0 +1,50 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each theme hook a hook_theme function declares, as theme_hook_in_module or theme_hook_in_theme to
+# the module or theme of the nearest folder above the declaring file that holds an info file, found
+# by module/member_folder.yaml. The entry is read as theme_hook/theme_hook.yaml reads it. A hook two
+# extensions declare gets an edge to each.
+
+edge_kinds:
+- kind: theme_hook_in_module
+  from: drupal.theme_hook
+  to: drupal.module
+- kind: theme_hook_in_theme
+  from: drupal.theme_hook
+  to: drupal.theme
+
+rules:
+- rule: theme_hook_claim
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<hook>(?!variables[''"])[A-Za-z][A-Za-z0-9_]*)[''"]\s*=>\s*(?=\[\s*[''"](?:variables|render element|template|base hook|initial preprocess|preprocess functions|theme path)[''"]\s*=>|\[\s*[''"](?:file|path)[''"]\s*=>(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*\])*\])*?[''"](?:variables|render element|template|base hook|initial preprocess|preprocess functions|theme path)[''"]\s*=>)'
+  values:
+    in_theme: {from: {enclosing: hook_theme_body, capture: mark}}
+  id:
+    template: '{file_dir}|{in_theme}|{hook}'
+    normalize:
+    - {replace: '\|function\|', with: '|theme_hook|'}
+  line: {capture: hook}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: theme_hook_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|theme_hook\|(?<hook>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: theme_hook_in_module, from: {template: '{hook}', type: drupal.theme_hook}, to: matched_node}}]
+  confidence: declared
+
+- rule: theme_hook_in_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|theme_hook\|(?<hook>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: theme_hook_in_theme, from: {template: '{hook}', type: drupal.theme_hook}, to: matched_node}}]
+  confidence: declared

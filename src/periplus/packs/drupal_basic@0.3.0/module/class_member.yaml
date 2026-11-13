@@ -1,0 +1,183 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# What a module holds through one of its classes, joined in the map to the module that
+# module_parts.yaml's class_in_module gives the class: a plugin by its plugin_class, a form id by
+# the class that returns it, an entity type by its entity_class, a plugin type by its attribute
+# or annotation class, read as plugin_type/plugin_type_attribute.yaml and
+# plugin_type/plugin_type_annotation.yaml read it, a route alteration by its subscriber class, a
+# Twig filter or function by the extension class that provides it, read from the callable as
+# twig_extension/twig_callable.yaml reads it, and an event constant and the event its text names
+# by the class that declares the constant, read from the class constant as event/event_name.yaml
+# reads it. Each is inferred, as class_in_module is. A thing whose class the map holds under no
+# module, such as a core class, gives no edge. A test class, Drupal\Tests\<module>\..., is the
+# module's class too.
+
+edge_kinds:
+- kind: plugin_in_module
+  from: drupal.plugin
+  to: drupal.module
+- kind: form_id_in_module
+  from: drupal.form_id
+  to: drupal.module
+- kind: entity_type_in_module
+  from: drupal.entity_type
+  to: drupal.module
+- kind: plugin_type_in_module
+  from: drupal.plugin_type
+  to: drupal.module
+- kind: twig_filter_in_module
+  from: twig.filter
+  to: drupal.module
+- kind: twig_function_in_module
+  from: twig.function
+  to: drupal.module
+- kind: route_alter_in_module
+  from: drupal.route_alter
+  to: drupal.module
+- kind: event_constant_in_module
+  from: drupal.event_constant
+  to: drupal.module
+- kind: event_in_module
+  from: drupal.event
+  to: drupal.module
+
+rules:
+- rule: test_class_in_module
+  reads: map
+  match:
+    node_type: php.class_like
+    where: [{id_matches: '^php\.type::Drupal\\Tests\\(?<module>[a-z0-9_]+)\\'}]
+    follow: [{node: 'drupal.module::{module}'}]
+  emits: [{edge: {kind: class_in_module, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: plugin_in_module
+  reads: map
+  match:
+    node_type: drupal.plugin
+    follow: [{edge: plugin_class}, {edge: class_in_module}]
+  emits: [{edge: {kind: plugin_in_module, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: form_id_in_module
+  reads: map
+  match:
+    node_type: drupal.form_id
+    follow: [{incoming_edge: form_has_id}, {edge: class_in_module}]
+  emits: [{edge: {kind: form_id_in_module, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: entity_type_in_module
+  reads: map
+  match:
+    node_type: drupal.entity_type
+    follow: [{edge: entity_class}, {edge: class_in_module}]
+  emits: [{edge: {kind: entity_type_in_module, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: plugin_type_in_module
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<class>.+)$'}]
+    follow:
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Component\\Plugin\\Attribute\\Plugin$'
+    - node: 'php.type::{class}'
+    - edge: class_in_module
+  emits: [{edge: {kind: plugin_type_in_module, from: {template: '{class}', type: drupal.plugin_type}, to: matched_node}}]
+  confidence: inferred
+
+- rule: annotation_plugin_type_in_module
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<class>.+)$'}]
+    follow:
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Component\\Annotation\\Plugin$'
+    - node: 'php.type::{class}'
+    - edge: class_in_module
+  emits: [{edge: {kind: plugin_type_in_module, from: {template: '{class}', type: drupal.plugin_type}, to: matched_node}}]
+  confidence: inferred
+
+- rule: route_alter_in_module
+  reads: map
+  match:
+    node_type: drupal.route_alter
+    follow: [{incoming_edge: alters_routes}, {edge: class_in_module}]
+  emits: [{edge: {kind: route_alter_in_module, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: twig_filter_in_module
+  reads: map
+  match:
+    node_type: drupal.twig_callable
+    where: [{id_matches: '^drupal\.twig_callable::filter\|(?<callable>.+)$'}]
+    follow:
+    - edge: twig_callable_in_class
+    - id_matches: '^php\.type::(?<class>.+)$'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Twig\\Extension\\AbstractExtension$'
+    - node: 'php.type::{class}'
+    - edge: class_in_module
+  emits: [{edge: {kind: twig_filter_in_module, from: {template: '{callable}', type: twig.filter}, to: matched_node}}]
+  confidence: inferred
+
+- rule: twig_function_in_module
+  reads: map
+  match:
+    node_type: drupal.twig_callable
+    where: [{id_matches: '^drupal\.twig_callable::function\|(?<callable>.+)$'}]
+    follow:
+    - edge: twig_callable_in_class
+    - id_matches: '^php\.type::(?<class>.+)$'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Twig\\Extension\\AbstractExtension$'
+    - node: 'php.type::{class}'
+    - edge: class_in_module
+  emits: [{edge: {kind: twig_function_in_module, from: {template: '{callable}', type: twig.function}, to: matched_node}}]
+  confidence: inferred
+
+- rule: event_constant_in_module
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow:
+    - edge: is_event_constant
+    - edge: has_constant_text
+    - node: 'php.type::{class}'
+    - edge: class_in_module
+  emits: [{edge: {kind: event_constant_in_module, from: {template: '{class}::{constant}', type: drupal.event_constant}, to: matched_node}}]
+  confidence: inferred
+
+- rule: event_in_module
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow:
+    - edge: is_event_constant
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - node: 'drupal.event::{text}'
+    - node: 'php.type::{class}'
+    - edge: class_in_module
+  emits: [{edge: {kind: event_in_module, from: {template: '{text}', type: drupal.event}, to: matched_node}}]
+  confidence: inferred
+
+# A route named entity.<entity type>.<name> that no routing file gives a module, such as one a
+# dependent rutter reads from an entity type's links, goes to the module of that entity type's
+# class, as route_in_module.
+- rule: entity_route_in_module
+  reads: map
+  match:
+    node_type: drupal.route
+    where: [{id_matches: '^drupal\.route::entity\.(?<type>[a-z0-9_]+)\.'}]
+    follow: [{node: 'drupal.entity_type::{type}'}, {edge: entity_class}, {edge: class_in_module}]
+    unless: [[{edge: route_in_module}]]
+  emits: [{edge: {kind: route_in_module, from: this_node, to: matched_node}}]
+  confidence: inferred

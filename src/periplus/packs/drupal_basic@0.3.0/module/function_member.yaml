@@ -1,0 +1,41 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each function a module, install, inc, theme, profile or plain PHP file declares, hook or helper,
+# as a function_in_module or function_in_theme edge to the module or theme whose folder holds the
+# file, found by module/member_folder.yaml. A named function nested inside another function or a
+# method counts too; a closure, an arrow function and a method do not.
+
+edge_kinds:
+- kind: function_in_module
+  from: php.function
+  to: drupal.module
+- kind: function_in_theme
+  from: php.function
+  to: drupal.theme
+
+rules:
+- rule: function_claim
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php}
+  id: {from: [file_dir, qualified_name], template: '{file_dir}|function|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: function_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|function\|(?<function>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: function_in_module, from: {template: '{function}', type: php.function}, to: matched_node}}]
+  confidence: declared
+
+- rule: function_in_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|function\|(?<function>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: function_in_theme, from: {template: '{function}', type: php.function}, to: matched_node}}]
+  confidence: declared

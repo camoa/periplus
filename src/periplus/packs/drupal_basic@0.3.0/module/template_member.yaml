@@ -1,0 +1,44 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each template a module's or theme's folder holds, as template_in_module or template_in_theme to
+# the module or theme of the nearest folder above it that holds an info file, found by
+# module/member_folder.yaml. The file is read whole, so a template that opens with a Twig comment
+# counts, as does a macro file that defines a macro outside a comment. module_parts.yaml reads the
+# owner from the folder's name instead; where both give the same owner the edge is one.
+
+rules:
+- rule: template_claim
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*.html', filetype: drupal_template_text}
+  id: {template: '{file_dir}|template|{template_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: macro_template_claim
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*', filetype: drupal_template_text, text: '\{%-?\s*macro\s+\w+'}
+  values:
+    stem: {template: '{file_stem}', normalize: [{replace: '^.*\..*$', with: ''}]}
+  id: {template: '{file_dir}|template|{stem}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: template_member_of_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|template\|(?<template>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: template_in_module, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: declared
+
+- rule: template_member_of_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^|]+\|template\|(?<template>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: template_in_theme, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: declared
