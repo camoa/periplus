@@ -153,12 +153,15 @@ periplus slice [ID ...] [--path PREFIX]... --out FILE [--direction out|in|both] 
 Without `--out`, `slice` prints the piece of the map around some start nodes, in one call. An
 argument that names a node, by id or short name, starts there. Any other text is searched the
 way `find` searches: as a whole, and word by word. A word is a run of letters, digits and
-underscores, at least 3 long, so `sign-up` searches `sign`. Each word, and the whole text, picks
-its best few starts from each place it matches: the id, an attribute, a description. So a word
-that matches only an attribute is not pushed behind every id match. `--starts N` sets how many
-each picks per place (default 3). Within a place, a node more words match comes first, then a
-mapped node, then one that is not a satellite (see below), then `find`'s order. `--type T` and
-`--path P` keep only the starts the words find of type `T` or under `P`, as they narrow `find`.
+underscores, at least 3 long, so `sign-up` searches `sign`. A word that matches more than a
+tenth of the map's nodes picks no start, unless every word does, and the piece says so; it still
+counts when starts and rows are ranked. The starts come from all the matches, spread over node
+types: rarer types first, counted over the whole map, and at most two starts of one type.
+Inside a type, a mapped node comes first, then the node that nodes in more other files have
+edges into, then the node more words match, then the one whose id the words cover most, then
+`find`'s order. `--starts N` sets how many starts the words pick in all (default 8). `--type T`
+and `--path P` keep only the starts the words find of type `T` or under `P`, as they narrow
+`find`.
 Without words, `--path PREFIX` starts from every node whose first file starts with `PREFIX`.
 When the whole text matches nothing and its words do, the piece says so on its second line.
 Words that match nothing print `no matches`, and exit 0.
@@ -179,8 +182,9 @@ gets no row and costs no hop. The piece ends with how many were folded, by type.
 chain often goes up one kind and down another. `--limit N` caps the rows (default 50, `0` for
 all). The cap keeps full rows before back-references. Among them it keeps first the nodes more
 starts reach, then those reached from the starts of more words, then those whose own id,
-attributes or description more of the words match, then the nearer hop, then by id. A kept row
-brings the rows above it. A cut piece ends with what it left out, counted by hop and by edge
+attributes or description more of the words match, then rarer types, then nodes more other
+files have edges into, then the nearer hop, then by id. It first gives each start an even share
+of the cap, then fills the rest with the best rows left. A kept row brings the rows above it. A cut piece ends with what it left out, counted by hop and by edge
 kind, and the flags that narrow it (`--kind`, `--direction`, `--depth`, and `--type`, `--path`
 or `--starts` when words picked the starts). A piece that was not cut and has edges past its
 last hop ends with `go deeper with --depth N`. `--format json` prints the same piece: `starts`,

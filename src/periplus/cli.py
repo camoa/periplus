@@ -371,7 +371,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="most start nodes the words pick (default: 3)",
+        help="most start nodes the words pick, at most two of one type (default: 8)",
     )
     cut.add_argument(
         "--out",
