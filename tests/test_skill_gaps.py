@@ -115,7 +115,10 @@ def _state_lines(resolution: list[str]) -> dict[str, int]:
     counted: dict[str, int] = {}
     for line in resolution:
         word = line.split()[0].lower() if line.split() else ""
-        if word in ("referenced", "unresolved", "inferred", "mentioned") and _count(line) is not None:
+        if (
+            word in ("referenced", "unresolved", "inferred", "mentioned")
+            and _count(line) is not None
+        ):
             counted[word] = _count(line) or 0
     return counted
 

@@ -94,8 +94,14 @@ def test_two_rules_on_one_edge_keep_both_values_whatever_the_file_order(
     unchanged, and the declared row is never dropped for the mentioned one."""
     second = "mentioned" if first == "declared" else "declared"
     names = {"declared": "runs", "mentioned": "named"}
-    _map(tmp_path / "a", {"a.yaml": _rule(names[first], first), "b.yaml": _rule(names[second], second)})
-    _map(tmp_path / "b", {"b.yaml": _rule(names[first], first), "a.yaml": _rule(names[second], second)})
+    _map(
+        tmp_path / "a",
+        {"a.yaml": _rule(names[first], first), "b.yaml": _rule(names[second], second)},
+    )
+    _map(
+        tmp_path / "b",
+        {"b.yaml": _rule(names[first], first), "a.yaml": _rule(names[second], second)},
+    )
     one = (tmp_path / "a" / "map.json").read_bytes()
     assert one == (tmp_path / "b" / "map.json").read_bytes()
     assert [e["provenance"] for e in json.loads(one)["edges"]] == [
@@ -129,4 +135,6 @@ def test_an_unknown_value_is_refused_naming_the_three_values(
     monkeypatch.chdir(tmp_path)
     capsys.readouterr()
     assert main(["validate", "tagger@0.0.1"]) == ExitCode.SCHEMA_INVALID
-    assert "'compared' is not one of ['declared', 'inferred', 'mentioned']" in capsys.readouterr().out
+    assert (
+        "'compared' is not one of ['declared', 'inferred', 'mentioned']" in capsys.readouterr().out
+    )
