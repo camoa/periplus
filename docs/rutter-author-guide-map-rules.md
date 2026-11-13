@@ -24,6 +24,24 @@ and an optional `follow`, a list of steps from that node:
   may fail (a method on an ancestor the map does not hold) leaves the end to `on_miss`. When
   they reach a node, an `id_matches` inside rebinds the captures it names.
 
+An optional `unless` holds one or more chains of the same steps, each run from the matched node
+with the captures of `where`. When any chain reaches a node, the rule makes nothing for that node,
+which counts as no fire and no skip. A join on a variable assigned twice is a guess, so this rule
+stops when a second assignment node exists:
+
+```yaml
+match:
+  node_type: my_module.use
+  where: [{id_matches: '^my_module\.use::(?<name>\w+)$'}]
+  follow: [{node: 'my_module.var::{name}'}, {edge: assigned}]
+  unless:
+  - [{node: 'my_module.again::{name}'}]
+  - [{edge: guarded}]
+```
+
+An `unless` chain reads the map as it stood when the pass began, so an edge a later pass makes
+does not take back what the rule already made.
+
 It emits edges whose ends are `this_node`, the node it matched, `matched_node`, the node its
 `follow` reached, or one template end filled from the captures, with `type` or `types` and
 `on_miss` as on any end; or one node, whose `id` is a template. A template end of one type mints
