@@ -1,0 +1,79 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route Drupal makes for each page display of a view: view.<view id>.<display id>, read from the
+# view's config file views.view.<view id>, one per key under display whose display_plugin is page
+# and which has a display_options.path. The route holds that path as written, which Drupal serves
+# with a slash in front. It serves the path, a route_serves_path edge to the drupal.url_path node
+# url/url.yaml joins links to, and comes from the view, a route_from_view edge to the view's config
+# node. Its shape, each % or %name argument written as *, gives a shape_of_route edge that
+# url/path_route.yaml joins a template's path to, as a routing file's {name} placeholder does. A
+# block, attachment or other display makes no route.
+#
+# Limits:
+# - A link to /my-view/5 does not meet the path /my-view/%; only the shape join reaches the route.
+# - A page display with no path, a route a module alters, and a route of another display plugin,
+#   such as a feed display's, give nothing.
+# - The edges to the view and to the shape are read as text, as Drupal exports a view: a display
+#   two spaces in, its display_plugin four and its display_options.path six. A view file written
+#   with other indentation gets the route and its path, not those two edges.
+
+edge_kinds:
+- kind: route_from_view
+  from: drupal.route
+  to: drupal.config_object
+
+rules:
+- rule: route_from_view_page_display
+  reads: file
+  in: [config, module_config]
+  match:
+    file: 'views.view.*'
+    filetype: yaml
+    each: display.*
+    where:
+    - key: {name: display_plugin, equals: page}
+    - has_key: {path: display_options.path}
+  id:
+    from: [file_stem, key]
+    template: '{file_stem}.{key}'
+    normalize: [{replace: '^views\.view\.', with: 'view.'}]
+  emits:
+  - node: {type: drupal.route}
+  - attribute: {name: path, from: {key: display_options.path}}
+  confidence: declared
+
+- rule: route_from_view_page_display_path
+  reads: file
+  in: [config, module_config]
+  match:
+    file: 'views.view.*'
+    filetype: yaml
+    each: display.*
+    where:
+    - key: {name: display_plugin, equals: page}
+    - has_key: {path: display_options.path}
+  id:
+    from: [file_stem, key]
+    template: '{file_stem}.{key}'
+    normalize: [{replace: '^views\.view\.', with: 'view.'}]
+  emits:
+  - edge: {kind: route_serves_path, from: this_node, to: {from: {key: display_options.path}, pattern: '^/?(?<path>.*)$', template: '/{path}'}}
+  confidence: declared
+
+# Read as text, because a data rule's edge end cannot name the file it walks, and its id cannot
+# be a value below the key it walks with the arguments rewritten.
+- rule: route_from_view_page_display_text
+  reads: file
+  in: [config, module_config]
+  match:
+    file: 'views.view.*'
+    filetype: drupal_yml_text
+    text: '(?m)^  (?<display>[\w-]+):[ \t]*\n(?:(?:    .*)?\n)*?    display_plugin:[ \t]*[''"]?page[''"]?[ \t]*\n(?:(?:    .*)?\n)*?      path:[ \t]*[''"]?/?(?<path>[^''"\s]+)'
+  values:
+    shape: {template: '/{path}', normalize: [{replace: '%[^/]*', with: '*'}]}
+  id: {template: '{file_stem}.{display}', normalize: [{replace: '^views\.view\.', with: 'view.'}]}
+  line: {capture: display}
+  emits:
+  - edge: {kind: route_from_view, from: this_node, to: {template: '{file_stem}', types: [drupal.config_object]}}
+  - edge: {kind: shape_of_route, from: {template: '{shape}', types: [drupal.path_shape]}, to: this_node}
+  confidence: declared
