@@ -21,7 +21,7 @@ rules:
   reads: map
   match:
     node_type: php.class
-    where: [{id_matches: '^php\.type::(?<user>.+)$'}]
+    where: [{id_matches: '^php\.type::(?=(?<own>.+)$)(?<user>.+)$'}]
     follow:
     - ancestors: [inherits]
     - edge: mixes_in
@@ -30,10 +30,14 @@ rules:
     - id_matches: '^php\.method::[^:]+::(?<tmethod>\w+)$'
     - edge: has_call_site
     - id_matches: '^php\.call_site::[^:]+::[^:]+::\$this->(?<method>\w+)$'
-    # PHP prefers a trait's own m() to one the using class inherits, so when the trait declares
-    # m() the try rebinds user to the trait and the walk below ends on the trait's m().
+    # PHP runs the class's own m() first, then the trait's, then an inherited one. The first try
+    # rebinds user to the trait when the trait declares m(); the second rebinds it back to the
+    # class when the class declares m() itself. The walk below then ends on the m() PHP runs.
     - try:
       - node: 'php.method::{trait}::{method}'
+      - id_matches: '^php\.method::(?<user>[^:]+)::'
+    - try:
+      - node: 'php.method::{own}::{method}'
       - id_matches: '^php\.method::(?<user>[^:]+)::'
     - node: 'php.type::{user}'
     - ancestors: [inherits]
