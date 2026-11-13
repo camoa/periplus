@@ -76,14 +76,17 @@ def add_limit(parser: argparse.ArgumentParser, default: int, noun: str) -> None:
     )
 
 
-def add_walk(parser: argparse.ArgumentParser) -> None:
-    """Add ``--depth`` and ``--kind``, the options of a command that follows edges."""
+def add_walk(parser: argparse.ArgumentParser, default: int | None = 1, said: str = "1") -> None:
+    """Add ``--depth`` and ``--kind``, the options of a command that follows edges.
+
+    ``said`` is the default as the help text states it.
+    """
     parser.add_argument(
         "--depth",
         type=int,
-        default=1,
+        default=default,
         metavar="N",
-        help="edges to follow, 1 or more (default: 1)",
+        help=f"edges to follow, 1 or more (default: {said})",
     )
     parser.add_argument(
         "--kind",
@@ -337,18 +340,46 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cut = subcommands.add_parser(
         "slice",
-        help="write the items around some items or a path into a map file of their own",
-        description="Write a piece of the map to a map file, and stop.",
+        help="print the piece of the map around some words, ids or a path, or write it to a file",
+        description="Start from the nodes that IDs name or that WORDS find, as find finds them, "
+        "and print the items reached from them along edges, hop by hop, each under the node it "
+        "was reached from. With --out, write the piece to a map file instead. Then stop.",
     )
-    cut.add_argument("id", metavar="ID", nargs="*", help="a node id to start from")
+    cut.add_argument(
+        "id",
+        metavar="WORDS",
+        nargs="*",
+        help="a node id or short name to start from; any other text is searched as find does",
+    )
     cut.add_argument(
         "--path",
         action="append",
         default=[],
         metavar="PREFIX",
-        help="also start from nodes whose first file starts with PREFIX; repeat for several",
+        help="with words, keep starts with a file starting with PREFIX; without, also start "
+        "from nodes whose first file starts with PREFIX; repeat for several",
     )
-    cut.add_argument("--out", type=Path, required=True, metavar="FILE", help="the file to write")
+    cut.add_argument(
+        "--type",
+        action="append",
+        default=[],
+        metavar="T",
+        help="keep starts the words find of type T and its subtypes; repeat for several",
+    )
+    cut.add_argument(
+        "--starts",
+        type=int,
+        default=None,
+        metavar="N",
+        help="most start nodes the words pick (default: 3)",
+    )
+    cut.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="write the piece to FILE as a map instead of printing it",
+    )
     cut.add_argument(
         "--direction",
         choices=("out", "in", "both"),
@@ -358,13 +389,14 @@ def build_parser() -> argparse.ArgumentParser:
             "(default: both)"
         ),
     )
-    add_walk(cut)
+    add_walk(cut, None, "2, or 1 with --out")
     cut.add_argument(
         "--limit",
         type=int,
-        default=500,
+        default=None,
         metavar="N",
-        help="most items the slice may hold; 0 for no limit (default: 500)",
+        help="most rows to print (default: 50), or with --out the most items the slice may "
+        "hold (default: 500); 0 for no limit",
     )
     add_map(cut, "the map file to read")
     cut.add_argument(
@@ -605,10 +637,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.write(MAP_RENDERERS[args.format](written))
         return written.exit_code
 
-    if getattr(args, "limit", 0) < 0:
+    if (getattr(args, "limit", 0) or 0) < 0:
         parser.error("--limit must be 0 or more")
-    if getattr(args, "depth", 1) < 1:
+    # None is slice's own default, which depends on --out.
+    if (depth := getattr(args, "depth", 1)) is not None and depth < 1:
         parser.error("--depth must be 1 or more")
+    if (starts := getattr(args, "starts", 1)) is not None and starts < 1:
+        parser.error("--starts must be 1 or more")
 
     # Imported here for the reason `map` is: `periplus.navigate` imports `jsonschema`.
     if args.command == "types":
@@ -689,6 +724,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             limit=args.limit,
             out=args.out,
             map_path=args.map,
+            types=args.type,
+            starts=args.starts,
         )
         sys.stdout.write(SLICE_RENDERERS[args.format](sliced))
         return sliced.exit_code
