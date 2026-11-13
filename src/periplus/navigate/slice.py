@@ -77,6 +77,8 @@ OUTSIDE_NAMES = 3
 FOOTER_KINDS = 6
 #: Far ends of one clause that share an owner, at least this many, print as the owner and a count.
 OWNER_FOLD = 3
+#: The bytes the legend at the end of a printed piece may take; past them it counts the rest.
+LEGEND_BYTES = 640
 #: The depth and the item limit of a slice written to a file, as before the printed piece.
 FILE_DEPTH = 1
 FILE_LIMIT = 500
@@ -203,6 +205,7 @@ class SliceReport:
     inventory: tuple[tuple[str, tuple[str, ...]], ...] = ()
     shorts: Mapping[str, str] | None = None
     cuts: tuple[str, ...] = ()
+    legend: tuple[tuple[str, str], ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -432,8 +435,10 @@ def _piece(
                 if edge["kind"] in grouping and (loc := first_location(index.nodes[edge["from"]])):
                     homes.setdefault(as_text(loc["file"]), set()).add(as_text(edge["to"]))
 
+            texts = document.get("legend", {}).get("edge_kinds", {})
+
             def assemble(
-                chosen: Sequence[int], cap: int, more: bool, cuts: tuple[str, ...]
+                chosen: Sequence[int], cap: int, more: bool, cuts: tuple[str, ...], told: bool
             ) -> SliceReport:
                 shown = [rows[i] for i in chosen]
                 files, inventory = _layout(
@@ -445,6 +450,8 @@ def _piece(
                     (cap, more),
                 )
                 shorts = {i: names.short(i) for i in [*picked, *(m.container for m in members)]}
+                shown_kinds = {k.kind for g in files for s in g.subjects for k in s.links}
+                legend = tuple((k, as_text(texts[k])) for k in sorted(shown_kinds) if k in texts)
                 left = [row for i, row in enumerate(rows) if i not in set(chosen)]
                 return SliceReport(
                     nodes=len({r.id for r in rows} | set(order)),
@@ -476,6 +483,7 @@ def _piece(
                     inventory=inventory,
                     shorts=shorts,
                     cuts=cuts,
+                    legend=legend if told else (),
                 )
 
             begun = tuple(
@@ -492,12 +500,14 @@ def _piece(
                 )
                 for m in members
             ]
-            taking, cap, more, dropped = list(kept), LINK_NAMES, True, 0
-            report = assemble(taking, cap, more, ())
+            taking, cap, more, dropped, told = list(kept), LINK_NAMES, True, 0, True
+            report = assemble(taking, cap, more, (), told)
             budget = BYTE_LIMIT if budgeted else 0
             while budget and len(render_text(report).encode()) > budget:
                 far = [i for i in taking if rows[i].hop > 1]
-                if far:
+                if told and report.legend:
+                    told = False
+                elif far:
                     taking.remove(max(far, key=lambda i: (rows[i].hop, i)))
                     dropped += 1
                 elif more:
@@ -510,9 +520,11 @@ def _piece(
                 else:
                     break
                 cut_note = f"cut to fit {budget} bytes: {dropped} rows left out"
+                cut_note += "" if told else ", legend left out"
                 cut_note += "" if more else ", unwalked counts dropped"
                 cut_note += f", at most {cap} names per link" if cap < LINK_NAMES else ""
-                report = assemble(taking, cap, more, (f"{cut_note}; --limit N prints N rows",))
+                cuts = (f"{cut_note}; --limit N prints N rows",)
+                report = assemble(taking, cap, more, cuts, told)
     except HarnessError as error:
         return SliceReport(printed=True, problems=(error.problem(),))
     return report
@@ -1119,6 +1131,21 @@ def _left_out(report: SliceReport) -> list[str]:
     return [*lines, "show all with --limit 0"]
 
 
+def _legend_lines(legend: Sequence[tuple[str, str]]) -> list[str]:
+    """The description of each kind the piece's links show, within ``LEGEND_BYTES``, then a
+    count of the rest."""
+    if not legend:
+        return []
+    lines, size = ["", "legend:"], 0
+    for at, (kind, text) in enumerate(legend):
+        line = f"  {_escape(kind)}: {_escape(text)}"
+        size += len(line.encode()) + 1
+        if size > LEGEND_BYTES:
+            return [*lines, f"  +{len(legend) - at} more: periplus legend --kind K"]
+        lines.append(line)
+    return lines
+
+
 def render_text(report: SliceReport) -> str:
     """The report as lines a person reads. Every outside string goes through ``_escape``."""
     lines = ["periplus slice"]
@@ -1142,6 +1169,7 @@ def render_text(report: SliceReport) -> str:
             ]
         lines += _left_out(report)
         lines += [_escape(cut) for cut in report.cuts]
+        lines += _legend_lines(report.legend)
     if report.out is not None:
         lines.append(f"wrote {_escape(report.out)}: {report.nodes} nodes, {report.edges} edges")
     lines += [f"warning: {_escape(w)}" for w in report.warnings]
