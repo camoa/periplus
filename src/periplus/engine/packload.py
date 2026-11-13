@@ -108,6 +108,7 @@ EXECUTED_KEYS = frozenset(
             f"file.node_types{k}"
             for k in ("", ".*.name", ".*.parent", ".*.abstract", ".*.id_namespace", ".*.internal")
         ),
+        "file.node_types.*.boundary",
         *(f"file.imports{k}" for k in ("", ".*.ast", ".*.group_ast", ".*.clause", ".*.facts")),
         *(f"file.imports.*.bind{k}" for k in ("", ".name", ".prefix_from_group", ".strip_prefix")),
         "file.imports.*.bind.skip_when_field_set",
@@ -174,6 +175,8 @@ EXECUTED_KEYS = frozenset(
                 *("", ".from", ".template", ".type", ".each", ".pattern", ".where", ".on_miss"),
                 *(".where.*.matches", ".where.*.listed_at", ".from.key", ".from.capture"),
                 ".on_miss_name",
+                *(".boundary", ".boundary.kind", ".boundary.into"),
+                *(".boundary.into.template", ".boundary.into.type"),
                 ".where.*.not_matches",
                 *(".from.*.key", ".from.*.each", ".types", ".declared", *_RESOLVE),
                 *_TABLE_STEPS,
@@ -295,13 +298,14 @@ class PackRulesUnreadable(HarnessError):
 @dataclass(frozen=True, slots=True)
 class TypeInfo:
     """One node type: its id namespace, its parent type, the pack that declared it, and whether
-    it is marked internal."""
+    it is marked internal or boundary."""
 
     name: str
     id_namespace: str | None
     parent: str | None
     pack: str
     internal: bool = False
+    boundary: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -540,8 +544,11 @@ class EdgeSpec:
     #: The type the composed end has when no rule finds it; ``""`` for the kind's types there.
     #: A data or text rule's composed end is the from end when ``start`` is ``""``.
     to_type: str = ""
-    #: The composed end becomes an unresolved node when no rule maps its id.
-    on_miss: bool = False
+    #: The state the composed end takes when no rule maps its id, ``unresolved`` or
+    #: ``unknown_boundary``; ``""`` for none.
+    on_miss: str = ""
+    #: ``boundary``: the into node's name and type, and the edge kind from the end to it.
+    into: tuple[str, str, str] | None = None
     #: A text rule's end: its resolution steps and their separator.
     resolve: tuple[Step, ...] = ()
     separator: str = ""
@@ -587,7 +594,8 @@ class RuleSet:
     ``grammars`` holds, for each file type a supported tree rule reads, the grammar of its pack.
     ``values`` holds the project's settings values, which every template may name.
     ``tables`` holds, for each pack, the tables its table steps may name.
-    ``boundary`` holds, by node id, each name a boundary group of a loaded pack lists.
+    ``boundary`` holds, by node id, each listing of a name by a boundary group of a loaded pack,
+    sorted by pack and group.
     """
 
     rules: tuple[Rule, ...]
@@ -598,7 +606,7 @@ class RuleSet:
     files: Mapping[str, FileInfo] = field(default_factory=dict)
     values: Mapping[str, str] = field(default_factory=dict)
     tables: Mapping[str, Mapping[str, Mapping[str, str]]] = field(default_factory=dict)
-    boundary: Mapping[str, BoundaryEntry] = field(default_factory=dict)
+    boundary: Mapping[str, tuple[BoundaryEntry, ...]] = field(default_factory=dict)
 
 
 def load_rules(
@@ -855,16 +863,16 @@ def _boundary_entries(
     types: Mapping[str, TypeInfo],
     kinds: Mapping[str, EdgeKind],
     conflicts: list[Problem],
-) -> dict[str, BoundaryEntry]:
-    """Each name of every group a loaded pack declares, by node id.
+) -> dict[str, tuple[BoundaryEntry, ...]]:
+    """Each listing of a name by a group a loaded pack declares, by node id, sorted by pack and
+    group; an id several groups list keeps each listing.
 
     A group whose type no pack the declaring pack sees declares with an id namespace, whose names
     value no such pack declares, or whose ancestry names a kind no pack declares is left out, with
-    a problem in ``conflicts``. An id two packs list adds a problem too: which pack draws it is
-    precedence, not decided here.
+    a problem in ``conflicts``.
     """
     declared = _boundary(packs)
-    found: dict[str, BoundaryEntry] = {}
+    found: dict[str, list[BoundaryEntry]] = {}
     for pack, walk in _visible_packs(packs).items():
         for group, spec in declared[pack].items():
             kind = str(spec["type"])
@@ -899,21 +907,13 @@ def _boundary_entries(
             if reasons:
                 continue
             for name, value in spec["names"].items():
-                node = f"{namespace}::{name}"
-                first = found.setdefault(
-                    node, BoundaryEntry(pack, str(group), kind, value, tuple(spec["ancestry"]))
+                found.setdefault(f"{namespace}::{name}", []).append(
+                    BoundaryEntry(pack, str(group), kind, value, tuple(spec["ancestry"]))
                 )
-                if first.pack != pack:
-                    conflicts.append(
-                        Problem(
-                            ExitCode.RULE_NOT_EXECUTABLE,
-                            f"{pack}/{MANIFEST_FILENAME}: the boundary group {group} names {node}, "
-                            f"which the pack {first.pack} lists too in its group {first.group}; "
-                            f"list it in one pack and write {_BOUNDARY_SHAPE}",
-                            {"pack": pack, "file": MANIFEST_FILENAME, "group": str(group)},
-                        )
-                    )
-    return found
+    return {
+        node: tuple(sorted(entries, key=lambda e: (e.pack, e.group)))
+        for node, entries in found.items()
+    }
 
 
 def _file_info(packs: Sequence[LoadedPack]) -> dict[str, FileInfo]:
@@ -1617,6 +1617,7 @@ def _read_types(pack: str, declared: object, types: dict[str, TypeInfo]) -> None
             parent=entry.get("parent"),
             pack=pack,
             internal=entry.get("internal") is True,
+            boundary=entry.get("boundary") is True,
         )
 
 
@@ -1815,7 +1816,7 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
             or not set(end)
             <= {
                 *("from", "template", "type", "types", "on_miss", "on_miss_name", "resolve"),
-                *("fallback", "separator"),
+                *("fallback", "separator", "boundary"),
             }
             or not {"from", "template"} & set(end)
             or not isinstance(end.get("template", ""), str)
@@ -1838,7 +1839,8 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
                 start="" if flipped else "this_node",
                 finish="this_node" if flipped else "",
                 to_type=end.get("type", next(iter(end.get("types", [])), "")),
-                on_miss="on_miss" in end,
+                on_miss=end.get("on_miss", ""),
+                into=_read_into(end),
                 resolve=_read_steps(end.get("resolve", []), tables),
                 separator=str(end.get("separator", "")),
                 fallback=_read_fallback(end, tables),
@@ -1924,6 +1926,17 @@ def _read_miss_name(end: Mapping[str, Any]) -> bool:
     if end["on_miss_name"] != "fallback" or not {"on_miss", "fallback"} <= set(end):
         raise _Unsupported("on_miss_name is fallback, in an end that has on_miss and fallback")
     return True
+
+
+def _read_into(end: Mapping[str, Any]) -> tuple[str, str, str] | None:
+    """An end's ``boundary``: the into node's name and type, and the edge kind to it; ``None``
+    without the key. The schema has checked its shape."""
+    if "boundary" not in end:
+        return None
+    mark = end["boundary"]
+    if PLACEHOLDER.search(mark["into"]["template"]):
+        raise _Unsupported("boundary.into.template names a placeholder; write the name itself")
+    return mark["into"]["template"], mark["into"]["type"], mark["kind"]
 
 
 def _read_value(name: str, spec: object, path: bool = False) -> Value:
@@ -2202,7 +2215,7 @@ def _read_map_edge(edge: Mapping[str, Any], followed: bool) -> EdgeSpec:
         or len(composed) > 1
         or ("matched_node" in named and not followed)
         or any(
-            not {"template"} <= set(c) <= {"template", "type", "types", "on_miss"}
+            not {"template"} <= set(c) <= {"template", "type", "types", "on_miss", "boundary"}
             or not isinstance(c["template"], str)
             or not _types_ok(c)
             for c in composed
@@ -2210,7 +2223,8 @@ def _read_map_edge(edge: Mapping[str, Any], followed: bool) -> EdgeSpec:
     ):
         raise _Unsupported(
             "an edge of a map rule does not run between this_node or matched_node and one of them "
-            "or a template with type or types and on_miss; matched_node needs match.follow"
+            "or a template with type or types, on_miss and boundary; matched_node needs "
+            "match.follow"
         )
     if not composed:
         return EdgeSpec(edge["kind"], "", False, None, None, None, (), str(start), str(end))
@@ -2226,7 +2240,8 @@ def _read_map_edge(edge: Mapping[str, Any], followed: bool) -> EdgeSpec:
         start="" if flipped else str(start),
         finish=str(end) if flipped else "",
         to_type=part.get("type", next(iter(part.get("types", [])), "")),
-        on_miss="on_miss" in part,
+        on_miss=part.get("on_miss", ""),
+        into=_read_into(part),
         types=tuple(part.get("types", ())),
     )
 
@@ -2303,14 +2318,15 @@ def _build_reference(
             or not set(end)
             <= {
                 *("type", "types", "on_miss", "on_miss_name", "resolve", "fallback", "separator"),
-                *("from", "template"),
+                *("from", "template", "boundary"),
             }
             or ("from" in end and argument is None)
             or not _types_ok(end)
         ):
             raise _Unsupported(
                 "an edge of a reference rule does not run from enclosing_declaration or a template "
-                "to an end of type or types, resolve, separator and on_miss, and from a call's "
+                "to an end of type or types, resolve, separator, on_miss and boundary, and from a "
+                "call's "
                 "argument or a template"
             )
         to_template = end.get("template")
@@ -2337,7 +2353,8 @@ def _build_reference(
                 (),
                 start="enclosing_declaration" if from_template is None else "template",
                 to_type=end.get("type", next(iter(end.get("types", [])), "")),
-                on_miss="on_miss" in end,
+                on_miss=end.get("on_miss", ""),
+                into=_read_into(end),
                 resolve=_read_steps(end.get("resolve", []), frozenset(tables)),
                 separator=str(end.get("separator", "")),
                 fallback=_read_fallback(end, frozenset(tables)),
@@ -2781,14 +2798,14 @@ def _read_edge(edge: object) -> EdgeSpec:
     """An edge of a data rule: between this_node and a composed end, in either direction."""
     flipped = isinstance(edge, dict) and edge.get("to") == "this_node" != edge.get("from")
     end = (edge.get("from") if flipped else edge.get("to")) if isinstance(edge, dict) else None
-    on_miss = isinstance(end, dict) and "on_miss" in end
+    marks = end if isinstance(end, dict) else {}
     if isinstance(edge, dict) and isinstance(end, dict):
-        end = {key: value for key, value in end.items() if key != "on_miss"}
+        end = {key: value for key, value in end.items() if key not in ("on_miss", "boundary")}
         edge = {**edge, "from": "this_node", "to": end}
     spec = _read_forward(edge)
     if flipped:
         spec = replace(spec, start="", finish="this_node")
-    return replace(spec, on_miss=on_miss)
+    return replace(spec, on_miss=marks.get("on_miss", ""), into=_read_into(marks))
 
 
 def _read_forward(edge: object) -> EdgeSpec:

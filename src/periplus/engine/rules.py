@@ -112,10 +112,14 @@ class FoundEdge:
     target_type: str = ""
     #: The type the source has when no rule finds it; ``""`` for the kind's from types.
     source_type: str = ""
-    #: The end declared ``on_miss: unresolved``, ``source`` or ``target``, and the name it
+    #: The end that takes a mark when no rule maps it, ``source`` or ``target``, and the name it
     #: searched for, without its namespace.
     on_miss: str = ""
     searched_for: str = ""
+    #: The mark: the end's ``on_miss`` value, ``unresolved`` or ``unknown_boundary``, or ``""``.
+    miss: str = ""
+    #: The end's ``boundary``: the into node's id and type, and the edge kind to it.
+    into: tuple[str, str, str] | None = None
     #: The ids the composed end may take, one per candidate type in order; the first a rule maps
     #: wins, else the one at ``miss_at``. Empty for an end of one type.
     candidates: tuple[str, ...] = ()
@@ -1821,8 +1825,10 @@ def _edges(
                 confidence=rule.confidence,
                 target_type="" if flipped else spec.to_type,
                 source_type=spec.to_type if flipped else "",
-                on_miss=("source" if flipped else "target") if spec.on_miss else "",
+                on_miss=("source" if flipped else "target") if spec.on_miss or spec.into else "",
                 searched_for=end.partition("::")[2] if spec.full_id else searched,
+                miss=spec.on_miss,
+                into=_into(spec, types),
                 candidates=candidates,
                 miss_at=miss_at,
                 types_tried=spec.types,
@@ -1847,6 +1853,14 @@ def _candidates(
     if not spaces:
         spaces = [namespace_of(types, spec.to_type)] if spec.to_type else [far] if far else []
     return tuple(f"{space}::{name}" for name in (end, fallback) for space in spaces)
+
+
+def _into(spec: EdgeSpec, types: Mapping[str, Any]) -> tuple[str, str, str] | None:
+    """The spec's ``boundary`` with the into node's whole id in place of its name."""
+    if spec.into is None:
+        return None
+    name, kind, edge = spec.into
+    return f"{namespace_of(types, kind)}::{name}", kind, edge
 
 
 def _missed(
@@ -2026,8 +2040,10 @@ def _references(
                     rule=rule.name,
                     confidence=rule.confidence,
                     target_type=spec.to_type,
-                    on_miss="target" if spec.on_miss else "",
+                    on_miss="target" if spec.on_miss or spec.into else "",
                     searched_for=searched,
+                    miss=spec.on_miss,
+                    into=_into(spec, rule_set.types),
                     candidates=candidates,
                     miss_at=miss_at,
                     types_tried=spec.types,
