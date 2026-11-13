@@ -59,6 +59,8 @@ _NO_TABLES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
 
 #: The ``where`` conditions that test a name, or a capture of it, against a table's keys.
 _TABLE_CONDITIONS = ("in_table", "not_in_table")
+#: The conditions of a declaration rule on the tree nodes between its match and its holder.
+_ANCESTRY = frozenset({"within", "not_within"})
 
 #: The steps of a map rule's follow.
 _FOLLOW_STEPS = ("edge", "incoming_edge", "ancestors", "node", "id_matches", "try")
@@ -142,6 +144,7 @@ EXECUTED_KEYS = frozenset(
             f"{_RULE}match.where.*.{k}"
             for k in ("key", "has_key", "id_matches", "is_mapping", "applies_to", "has_child")
         ),
+        *(f"{_RULE}match.where.*.{k}" for k in ("within", "not_within")),
         *(f"{_RULE}match.where.*.name_matches{k}" for k in ("", ".child", ".nth", ".pattern")),
         *(
             f"{_RULE}match.where.*.{c}{k}"
@@ -450,6 +453,11 @@ class Rule:
     #: fields of the matched node its id names.
     has_child: tuple[str, ...] = ()
     fields: tuple[str, ...] = ()
+    #: A declaration rule: for each ``within`` condition, the tree node types one of which must
+    #: lie between the match and its nearest holder, that holder included; and the types of its
+    #: ``not_within`` conditions, none of which may.
+    within: tuple[frozenset[str], ...] = ()
+    not_within: frozenset[str] = frozenset()
     #: A declaration rule: the fields its id reads resolved through the file's imports.
     qualified: tuple[str, ...] = ()
     #: A declaration or reference rule: each child, by field or node type, the pattern its whole
@@ -1988,13 +1996,18 @@ def _build_declaration(
     if not isinstance(where, list) or not all(
         isinstance(c, Mapping)
         and len(c) == 1
-        and set(c) <= {"has_child", "name_matches", *_TABLE_CONDITIONS}
+        and set(c) <= {"has_child", "name_matches", *_ANCESTRY, *_TABLE_CONDITIONS}
         and (isinstance(next(iter(c.values())), str) or "has_child" not in c)
+        and all(
+            isinstance(c[k], list) and c[k] and all(isinstance(t, str) and t for t in c[k])
+            for k in _ANCESTRY & set(c)
+        )
         for c in where
     ):
         raise _Unsupported(
-            "the match.where of a declaration rule holds only has_child, name_matches, in_table "
-            "and not_in_table conditions"
+            "the match.where of a declaration rule holds only has_child, name_matches, within, "
+            "not_within, in_table and not_in_table conditions, within and not_within each a list "
+            "of tree node types"
         )
     nodes = node_types(item)
     edges = [_read_tree_edge(emit["edge"]) for emit in emits if "edge" in emit]
@@ -2072,6 +2085,8 @@ def _build_declaration(
         holder=match.get("holder", ""),
         encloses_for=tuple(match.get("encloses_for", ())),
         has_child=tuple(c["has_child"] for c in where if "has_child" in c),
+        within=tuple(frozenset(c["within"]) for c in where if "within" in c),
+        not_within=frozenset(t for c in where for t in c.get("not_within", ())),
         id_argument=argument or "",
         name_matches=name_matches,
         where=_table_conditions(

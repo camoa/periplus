@@ -8,7 +8,7 @@ from bisect import bisect_right
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from fnmatch import fnmatchcase
-from itertools import islice, product
+from itertools import chain, islice, product
 from pathlib import Path
 from typing import Any
 
@@ -1282,10 +1282,11 @@ def _fires(
     parsed: ParsedFile,
 ) -> bool:
     """Whether the tree node has a direct child of each of the rule's ``has_child`` types, has
-    each ``name_matches`` child, whose whole text matches that condition's pattern, and passes each
-    ``in_table`` and ``not_in_table`` condition on the text of its name child, on a capture of
-    those patterns, or on ``enclosing_type``, the full name ``_holder`` gives the node's nearest
-    enclosing type among ``holders``."""
+    each ``name_matches`` child, whose whole text matches that condition's pattern, has among the
+    tree nodes ``_holder_walk`` passes one of each ``within`` condition's types and none of the
+    ``not_within`` types, and passes each ``in_table`` and ``not_in_table`` condition on the text
+    of its name child, on a capture of those patterns, or on ``enclosing_type``, the full name
+    ``_holder`` gives the node's nearest enclosing type among ``holders``."""
     if not (
         all(any(c.type == kind for c in node.children) for kind in rule.has_child)
         and all(
@@ -1294,6 +1295,10 @@ def _fires(
         )
     ):
         return False
+    if rule.within or rule.not_within:
+        passed = {n.type for n in _holder_walk(node, holders, rule_set, grammar, parsed)[0]}
+        if passed & rule.not_within or not all(passed & kinds for kinds in rule.within):
+            return False
     if not rule.where:
         return True
     named = _child(node, rule.name_child)
@@ -1481,17 +1486,20 @@ def _method(
     allowed: Sequence[str] = (),
 ) -> tuple[str, str | None] | None:
     """The id and the declared name ``_minted`` gives the member of the enclosing type ``holder``
-    that holds the match, as for an attribute's ``enclosing_method``; ``None`` outside a type.
+    that holds the match, as for an attribute's ``enclosing_method``; ``None`` outside a type, and
+    when the match's nearest holder is no type with such a member, as a function in a method.
 
     With ``allowed``, the edge end's types, the node is of one of them or below one. Without, it
     is the first node of a type that is not internal, else the first node: an internal node is a
     rule's helper and does not name the member."""
     bodies = {other.body_child for rules in holders.values() for other in rules}
-    member = match.parent
-    while holder is not None and member is not None and member.parent is not None:
-        if member.parent.type in bodies:
+    passed, firing = _holder_walk(match, holders, rule_set, grammar, parsed)
+    if holder is None or next(firing, None) is None:
+        return None
+    # The member sits in a body of the nearest holder, the last node passed.
+    for member, parent in zip(passed, passed[1:-1]):
+        if parent.type in bodies:
             return _member_node(member, holder, rule, rule_set, within, grammar, parsed, allowed)
-        member = member.parent
     return None
 
 
@@ -1619,30 +1627,52 @@ def _holder(
     class, ends the walk with ``None``. With ``allowed``, an edge end's types, the id is the first
     such rule's of one of them or below one, and ``None`` when no rule of them fires there.
     """
+    passed, firing = _holder_walk(node, holders, rule_set, grammar, parsed)
+    rule = next(firing, None)
+    if rule is not None and allowed and not _allows(rule_set, rule.node_type, allowed):
+        rule = next((r for r in firing if _allows(rule_set, r.node_type, allowed)), None)
+    if rule is None:
+        return None
+    parent = passed[-1]
+    values = _names(parent, rule, grammar, parsed)
+    node_id = _node_id(rule, values, empty_ok=True) if values is not None else None
+    if values is None or node_id is None or "qualified_name" not in values:
+        return None
+    namespace = namespace_of(rule_set.types, rule.node_type)
+    return values["qualified_name"], f"{namespace}::{node_id}", parent.type
+
+
+def _holder_walk(
+    node: Node,
+    holders: Mapping[str, tuple[Rule, ...]],
+    rule_set: RuleSet,
+    grammar: Grammar,
+    parsed: ParsedFile,
+) -> tuple[list[Node], Iterator[Rule]]:
+    """The tree nodes from the node's parent up to its nearest holder, that holder last, and the
+    holder rules that fire on it, in order.
+
+    A holder is a tree node a rule among ``holders`` fires on. A nearer node that holds such a
+    rule's body but no rule fires on, an anonymous class, ends the walk, last, with no rules; so
+    does the root.
+    """
     bodies = {rule.body_child for rules in holders.values() for rule in rules}
+    passed: list[Node] = []
     parent = node.parent
     while parent is not None:
+        passed.append(parent)
         firing = (
             r
             for r in holders.get(parent.type, ())
             if _fires(r, parent, holders, rule_set, grammar, parsed)
         )
-        rule = next(firing, None)
-        if rule is not None and allowed and not _allows(rule_set, rule.node_type, allowed):
-            rule = next((r for r in firing if _allows(rule_set, r.node_type, allowed)), None)
-            if rule is None:
-                return None
-        if rule is not None:
-            values = _names(parent, rule, grammar, parsed)
-            node_id = _node_id(rule, values, empty_ok=True) if values is not None else None
-            if values is None or node_id is None or "qualified_name" not in values:
-                return None
-            namespace = namespace_of(rule_set.types, rule.node_type)
-            return values["qualified_name"], f"{namespace}::{node_id}", parent.type
+        first = next(firing, None)
+        if first is not None:
+            return passed, chain((first,), firing)
         if any(child.type in bodies for child in parent.children):
-            return None
+            break
         parent = parent.parent
-    return None
+    return passed, iter(())
 
 
 def _entries(each: str | None, data: dict[str, Entry]) -> list[tuple[str | None, int, Any, bool]]:

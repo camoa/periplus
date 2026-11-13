@@ -122,6 +122,11 @@ Each key below has its detail in the guide section linked:
   type, counted from 1, where a plain `child` reads the first. Use it when two children share a
   type and have no field name
   ([Tree references](https://github.com/camoa/periplus/blob/v0.8.0/docs/rutter-author-guide-references.md)).
+- The `where` conditions `within: [<node type>, ...]` and `not_within: [<node type>, ...]` on a
+  declaration rule pass a match only when one, or none, of the tree nodes from it up to its
+  nearest holder, that holder included, has one of the types. Two rules then split a call in a
+  method's body from one in a closure inside it
+  ([The method around a match](https://github.com/camoa/periplus/blob/v0.8.0/docs/rutter-author-guide-abilities.md#a-field-resolved-through-the-imports-and-the-method-around-a-match)).
 - `match.encloses_for: [<pack>]` on a declaration rule makes its node the start of that pack's reference-rule edges written inside it, in place of copying those rules ([Tree references](https://github.com/camoa/periplus/blob/v0.8.0/docs/rutter-author-guide-references.md#a-dependents-node-as-the-start-of-another-rutters-edges)).
 - `on_miss_name: fallback`, on an end that holds `on_miss` and `fallback`, puts the miss mark
   under the fallback name ([Tree references](https://github.com/camoa/periplus/blob/v0.8.0/docs/rutter-author-guide-references.md#a-second-name-fallback-and-on_miss_name)).

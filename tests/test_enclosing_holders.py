@@ -1,12 +1,14 @@
-"""Tests for the ends that read what encloses a match: ``enclosing_method`` and
-``enclosing_class`` take a node of a type the edge allows."""
+"""Tests for the ends and conditions that read what encloses a match: ``enclosing_method`` and
+``enclosing_class`` take a node of a type the edge allows, ``enclosing_method`` is a member of the
+nearest holder, and the ``within`` and ``not_within`` conditions test the tree nodes between a
+match and its nearest holder."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from test_demo_b_support import clean_map, edge_set, plant, settings
+from test_demo_b_support import clean_map, edge_set, map_site, plant, settings
 
 PACK = """\
 pack: probe
@@ -164,3 +166,206 @@ def test_enclosing_class_takes_the_holder_node_of_an_allowed_type(tmp_path: Path
             "probe.class::App\\Thing",
         )
     }
+
+
+SHAPES = """\
+<?php
+
+namespace App;
+
+class Helper
+{
+    public function ping() {}
+}
+
+class Other
+{
+    public function ping() {}
+}
+
+class Shapes
+{
+    public function run(Helper $h)
+    {
+        $f = function (Other $h) {
+            $h->ping();
+        };
+        $g = fn(Other $o) => $o?->ping();
+        function nested_helper(Helper $n)
+        {
+            $n->ping();
+            $k = function (Other $n) {
+                $n->ping();
+            };
+        }
+        $h->ping();
+    }
+}
+"""
+
+
+def _shapes(root: Path) -> Any:
+    plant(root, {**settings("php_basic@0.2.0"), "src/Shapes.php": SHAPES})
+    _, document = clean_map(root)
+    return document
+
+
+def test_a_named_function_inside_a_method_gets_no_method_rules(tmp_path: Path) -> None:
+    """nested_helper sits in run. Its call $n->ping() is the function's call site, joined to the
+    function, with the function's calls edge to Helper::ping; no rule mints a method
+    nested_helper::run or its parameter."""
+    document = _shapes(tmp_path)
+    ids = {n["id"] for n in document["nodes"]}
+    assert not [i for i in ids if "nested_helper::run" in i]
+    assert "php.call_site::App\\nested_helper::$n->ping" in ids
+    assert {
+        ("call_site_in", "php.call_site::App\\nested_helper::$n->ping", "php.function::App\\nested_helper"),
+        ("calls", "php.function::App\\nested_helper", "php.method::App\\Helper::ping"),
+    } <= edge_set(document)
+    assert edge_set(document, "parameter_typed_as") >= {
+        (
+            "parameter_typed_as",
+            "php.parameter::App\\nested_helper::$n",
+            "php.parameter_type::App\\nested_helper::$n::App\\Helper",
+        )
+    }
+
+
+THIRD = """\
+node_types:
+- {name: own.unit, id_namespace: own.unit}
+- {name: own.site, id_namespace: own.site}
+rules:
+- rule: unit_class
+  reads: file
+  in: [source]
+  match: {declaration: class_declaration, name_child: name, body_child: declaration_list,
+    filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: own.unit}}]
+  confidence: declared
+- rule: unit_function
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, body_child: body, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: own.unit}}]
+  confidence: declared
+- rule: plain_site
+  reads: file
+  in: [source]
+  match: {declaration: function_call_expression, name_child: function, filetype: php,
+    where: [{not_within: [anonymous_function, arrow_function]}]}
+  id: {from: [enclosing_type, declared_name], template: '{enclosing_type}::{declared_name}'}
+  emits: [{node: {type: own.site}}]
+  confidence: declared
+- rule: closure_site
+  reads: file
+  in: [source]
+  match: {declaration: function_call_expression, name_child: function, filetype: php,
+    where: [{within: [anonymous_function, arrow_function]}]}
+  id: {from: [enclosing_type, declared_name], template: '{enclosing_type}::closure::{declared_name}'}
+  emits: [{node: {type: own.site}}]
+  confidence: declared
+- rule: in_function_only
+  reads: file
+  in: [source]
+  match: {declaration: function_call_expression, name_child: function, filetype: php,
+    where: [{within: [function_definition]}, {not_within: [anonymous_function]}]}
+  id: {from: [enclosing_type, declared_name], template: 'fn:{enclosing_type}::{declared_name}'}
+  emits: [{node: {type: own.site}}]
+  confidence: declared
+"""
+
+THIRD_SOURCE = """\
+<?php
+class Box
+{
+    public function run()
+    {
+        direct();
+        $f = function () {
+            in_closure();
+            function inner()
+            {
+                in_inner();
+            }
+        };
+        $g = fn() => in_arrow();
+    }
+}
+function outer()
+{
+    in_outer();
+}
+"""
+
+
+def test_a_third_party_rutter_tests_what_lies_between_a_match_and_its_holder(
+    tmp_path: Path,
+) -> None:
+    """within and not_within read the tree nodes from the match up to its nearest holder, that
+    holder included. inner sits in a closure, but it is in_inner's nearest holder, so the closure
+    above it is not read: in_inner is a plain site, and in_function_only takes it with in_outer."""
+    plant(
+        tmp_path,
+        {
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [own@0.0.1]\n",
+            ".periplus/packs/own@0.0.1/pack.yaml": PACK.replace("pack: probe", "pack: own"),
+            ".periplus/packs/own@0.0.1/rules/own.yaml": THIRD,
+            "src/Box.php": THIRD_SOURCE,
+        },
+    )
+    report, document = clean_map(tmp_path)
+    assert _ids(document, "own.site") == [
+        "own.site::Box::closure::in_arrow",
+        "own.site::Box::closure::in_closure",
+        "own.site::Box::direct",
+        "own.site::fn:inner::in_inner",
+        "own.site::fn:outer::in_outer",
+        "own.site::inner::in_inner",
+        "own.site::outer::in_outer",
+    ]
+    assert report.skipped == ()
+
+
+def test_a_condition_in_a_reference_rule_is_refused(tmp_path: Path) -> None:
+    """within and not_within are conditions of a tree declaration rule only."""
+    rules = """\
+edge_kinds:
+- {kind: own_calls, from: [own.unit], to: [own.unit]}
+node_types:
+- {name: own.unit, id_namespace: own.unit}
+rules:
+- rule: ref_within
+  reads: file
+  in: [source]
+  match: {reference: function_call_expression, name_child: function, filetype: php,
+    where: [{within: [anonymous_function]}]}
+  emits: [{edge: {kind: own_calls, from: enclosing_class, to: enclosing_class}}]
+  confidence: declared
+"""
+    plant(
+        tmp_path,
+        {
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [own@0.0.1]\n",
+            ".periplus/packs/own@0.0.1/pack.yaml": PACK.replace("pack: probe", "pack: own"),
+            ".periplus/packs/own@0.0.1/rules/own.yaml": rules,
+            "src/Box.php": THIRD_SOURCE,
+        },
+    )
+    report, _ = map_site(tmp_path)
+    assert "ref_within" not in [rule for _, rule, _ in report.executed]
+
+
+def test_the_map_is_the_same_bytes_from_two_folders(tmp_path: Path) -> None:
+    """The fixtures of this file mapped in two folders give byte-identical maps."""
+    first, second = tmp_path / "one", tmp_path / "two"
+    for root in (first, second):
+        _shapes(root)
+        _probe(root / "probe", {"a_return.yaml": FIRST, "b_main.yaml": MAIN, "c_shell.yaml": SHELL}, THING)
+        clean_map(root / "probe")
+    assert (first / "map.json").read_bytes() == (second / "map.json").read_bytes()
+    assert (first / "probe" / "map.json").read_bytes() == (
+        second / "probe" / "map.json"
+    ).read_bytes()

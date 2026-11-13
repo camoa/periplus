@@ -700,6 +700,18 @@
           "type": "string",
           "description": "A required direct child of the matched node, by tree node type. Executed on a declaration rule: a match without such a child is passed. Go tells a struct from an interface this way: both are type_spec, and only the child differs."
         },
+        "within": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "description": "Tree node types, one of which must lie between the matched node and its nearest holder, that holder included; a match with none of them there is passed. Executed on a declaration rule. A tree node a closure makes, inside a method, is told apart this way."
+        },
+        "not_within": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "description": "Tree node types none of which may lie between the matched node and its nearest holder, that holder included; a match with one of them there is passed. Executed on a declaration rule."
+        },
         "has_incoming_edge": {
           "type": "string",
           "description": "FORCES reads: map. An edge pointing at this node, of a declared kind."

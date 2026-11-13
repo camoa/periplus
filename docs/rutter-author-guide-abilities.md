@@ -315,6 +315,30 @@ A match outside any type, or in no member a rule mints, has no enclosing method.
 it makes nothing, and an edge that names it is not made. No row under `skipped` reports either, as
 for an id that names `enclosing_type` outside any type.
 
+The member sits in a body of the match's nearest holder, the nearest tree node a rule with a
+`body_child` fires on. A function declared inside a method, which such a rule maps, is the nearest
+holder of what it holds, so a match there has no enclosing method. As an edge end, the node is the
+first that a rule mints at the member of a type the edge kind allows there, or a type below one;
+as an id source, the name is the one the first rule minting a type not marked `internal` reads.
+`enclosing_class` takes, among the holder rules that fire on the nearest holder, the first of a
+type the edge kind allows.
+
+Two `where` conditions of a tree declaration rule read the tree nodes from the match up to its
+nearest holder, that holder included. `within: [<node type>, ...]` passes a match only when one of
+those nodes has one of the types; `not_within: [<node type>, ...]` passes it only when none has.
+With no holder, the nodes run up to the file's root, or to a node that holds a body no rule fires
+on. A holder above the nearest one is never read. Two rules then split one shape, a call in a
+method's own body and a call in a closure inside it:
+
+```yaml
+match: {declaration: member_call_expression, name_child: object, filetype: php,
+  where: [{not_within: [anonymous_function, arrow_function]}]}
+```
+
+The twin rule has `within: [anonymous_function, arrow_function]` and its own id. Each `within`
+condition must hold. A function declared inside that closure is the nearest holder of its own
+calls, so neither rule sees the closure above it.
+
 ## A name below the match, and a value from the docblock
 
 These blocks are not worked examples; `tests/test_property_type_sources.py` runs the same shapes.
