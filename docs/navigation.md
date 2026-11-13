@@ -27,8 +27,8 @@ A ninth command, `periplus check-map`, checks the whole map against the map sche
   `navigation.schema.json`, which `periplus spec` also emits. `export` prints the graph itself and
   takes `--report text|json` for the warnings and problems it writes to standard error.
 - An `ID` argument (`show`, `neighbors`, `affected`, `path`, `slice`) is a node id or a short name: the
-  id's name after its first `::`, or a tail of that name starting after `::`, `\`, `/` or `.`,
-  compared without case. So `helper` and `tools.helper` both name
+  id's name after its first `::`, or a tail of that name that starts after a character other than
+  a letter, digit or underscore, compared without case. So `helper` and `tools.helper` both name
   `python.function::shop.tools.helper`. A short name that fits one node is used, with the warning
   `resolved 'helper' to python.function::shop.tools.helper`. One that fits several nodes exits 31
   and lists up to 20 of them, each with its type and location. One that fits none exits 31 with
