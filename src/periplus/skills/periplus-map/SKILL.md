@@ -5,17 +5,7 @@ description: Answers code questions from a Periplus map by following its edges, 
 
 # Navigate a Periplus map
 
-## Standing rules
-
-1. Rules are small and add to each other: one rule solves one case, and several cases are several rules. Split by rule file inside one rutter, never by adding rutters; a new rutter repeats the file types and folders the covering one already holds, and a small rule can be read, tested and removed alone.
-2. A rutter reads its stack in passes by depth: structure first, then one layer inside each class, then joins in the map. Each pass reads what the one before it found, so no rule has to look a thing up itself.
-3. There is no stack knowledge in the engine; a stack's shape is a rule in a rutter. The engine then stays the same for every stack, and a third-party rutter can do all a built-in one does.
-4. Write the rule and run it: probe before saying a rutter cannot, and quote the engine's message. A guess about the format's limits has been wrong before; the message is the evidence.
-5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose. The name leaks the project and ties the rule to one site.
-
 ## The loop
-
-The rules above are for writing rutters. To answer a question, start here.
 
 1. `periplus find WORDS`. Each row is an id, its type, its state and `file:line`. The source line
    at that place follows, marked `|`. A description follows when there is one, marked `#`.

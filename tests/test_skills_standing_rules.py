@@ -1,4 +1,4 @@
-"""Every skill opens with the standing rules, each carrying its key phrase."""
+"""The rutter skill opens with the standing rules; the other skills carry none."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 SKILLS_SRC = Path(__file__).resolve().parent.parent / "src" / "periplus" / "skills"
-SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps", "periplus-describe")
+OTHER_SKILLS = ("periplus-map", "periplus-gaps", "periplus-describe")
 PHRASES = (
     "split by rule file inside one rutter, never by adding rutters",
     "passes by depth",
@@ -24,8 +24,8 @@ def _sections(text: str) -> list[tuple[str, str]]:
 
 
 @pytest.mark.criterion(id="c6")
-@pytest.mark.parametrize("skill", SKILLS)
-def test_each_skill_opens_with_standing_rules_carrying_the_five_phrases_c6(skill: str) -> None:
+def test_rutter_skill_opens_with_standing_rules_carrying_the_five_phrases_c6() -> None:
+    skill = "periplus-rutter"
     text = (SKILLS_SRC / skill / "SKILL.md").read_text(encoding="utf-8")
     sections = _sections(text)
     assert sections, f"{skill} has no ## section"
@@ -34,3 +34,10 @@ def test_each_skill_opens_with_standing_rules_carrying_the_five_phrases_c6(skill
     flat = " ".join(body.lower().split())
     missing = [phrase for phrase in PHRASES if phrase not in flat]
     assert missing == [], f"{skill}: Standing rules lacks {missing}"
+
+
+@pytest.mark.parametrize("skill", OTHER_SKILLS)
+def test_other_skills_carry_no_standing_rules_heading(skill: str) -> None:
+    text = (SKILLS_SRC / skill / "SKILL.md").read_text(encoding="utf-8")
+    headings = [h.strip() for h, _ in _sections(text)]
+    assert "Standing rules" not in headings, f"{skill} still has a Standing rules heading"

@@ -5,16 +5,6 @@ description: Writes what the main items of a Periplus slice do into .periplus/de
 
 # Describe the items of a slice
 
-## Standing rules
-
-These five rules are for rutter work. Describing changes no rutter, so they shape nothing below.
-
-1. Rules are small and add to each other: one rule solves one case, and several cases are several rules. Split by rule file inside one rutter, never by adding rutters; a new rutter repeats the file types and folders the covering one already holds, and a small rule can be read, tested and removed alone.
-2. A rutter reads its stack in passes by depth: structure first, then one layer inside each class, then joins in the map. Each pass reads what the one before it found, so no rule has to look a thing up itself.
-3. There is no stack knowledge in the engine; a stack's shape is a rule in a rutter. The engine then stays the same for every stack, and a third-party rutter can do all a built-in one does.
-4. Write the rule and run it: probe before saying a rutter cannot, and quote the engine's message. A guess about the format's limits has been wrong before; the message is the evidence.
-5. A rutter meant for others never names the project it was built on, in its code, rules, examples or prose. The name leaks the project and ties the rule to one site.
-
 ## Where the detail lives
 
 - [The map skill, under its heading Read and write the descriptions file](https://github.com/camoa/periplus/blob/v0.8.0/src/periplus/skills/periplus-map/SKILL.md#read-and-write-the-descriptions-file), holds the file's two keys, the entry fields and a worked example of the file.
