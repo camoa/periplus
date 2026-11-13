@@ -182,7 +182,8 @@ The output lists each start first, on one line: its short name, its type, and wh
 grouped by file. Each file prints once, as a header, with `in X` naming the containers its nodes
 belong to by grouping edges. Under it, in line order, each node prints `:LINE  name  type`, its
 source line and its description, then one line per edge kind and direction to other nodes of
-the piece: `calls -> a, b` for edges the node has, `calls <- c` for edges to it. Far ends a rule
+the piece: `calls -> a, b` for edges the node has, `calls <- c` for edges to it. An edge between two nodes of one
+file prints only under the node it starts from. Far ends a rule
 did not map fold to `(+N outside the project: x, y)`, naming the first 3. Three or more far ends
 that share an owner, the part of their ids before the last `::`, fold to the owner and a count,
 `Mailer (3)`. A clause names at most 5 far ends and counts the rest, `(+N more)`. A node with
@@ -220,7 +221,7 @@ starts reach, then those reached from the starts of more words, then those whose
 attributes or description more of the words match, then rarer types, then nodes more other
 files have edges into, then the nearer hop, then by id. It first gives each start an even share
 of the cap, then fills the rest with the best rows left. A kept row brings the rows above it. A cut piece ends with what it left out, counted by hop and by edge
-kind, and the flags that narrow it (`--kind`, `--direction`, `--depth`, and `--type`, `--path`
+kind (at most 6 kinds, most left out first), and the flags that narrow it (`--kind`, `--direction`, `--depth`, and `--type`, `--path`
 or `--starts` when words picked the starts). A piece that was not cut and has edges past its
 last hop ends with `go deeper with --depth N`. `--format json` prints the same piece with full ids: `starts`,
 `rows` (each with `start`, `hop`, `from`, `kind`, `direction`, `again`, `location`, `source` and
@@ -453,7 +454,6 @@ shop/tools.py
   :1  helper  python.function
       | def helper():
       calls <- cli
-      contains <- tools
   :1  tools  python.module
       | def helper():
       contains -> helper
@@ -467,7 +467,6 @@ shop/cli.py
       imports -> tools (+1 outside the project: python.module::typer)
   :8  greet  python.function
       | def greet():
-      contains <- cli
 
 inventory: 6 nodes
   python.function 3: greet, helper, typer.Typer
@@ -488,7 +487,6 @@ shop/tools.py
   :1  helper  python.function
       | def helper():
       calls <- cli
-      contains <- tools
   :1  tools  python.module
       | def helper():
       contains -> helper
@@ -506,8 +504,8 @@ inventory: 3 nodes
   python.module 2: cli, tools
 showing 2 of 6 rows
 left out by hop: 2: 4
-left out by kind: calls 1, contains 1, imports 2
-narrow with --kind K (kinds here: calls, contains, imports), --direction out, --direction in or --depth 1
+left out by kind: imports 2, calls 1, contains 1
+narrow with --kind K (kinds here: imports, calls, contains), --direction out, --direction in or --depth 1
 show all with --limit 0
 warning: resolved 'helper' to python.function::shop.tools.helper
 ```
@@ -526,7 +524,6 @@ shop/tools.py
   :1  helper  python.function
       | def helper():
       calls <- cli
-      contains <- tools
   :1  tools  python.module
       | def helper():
       contains -> helper

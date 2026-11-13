@@ -73,6 +73,8 @@ BYTE_LIMIT = 8 * 1024
 LINK_NAMES = 5
 #: The most names of nodes outside the project one link clause prints.
 OUTSIDE_NAMES = 3
+#: The most edge kinds a footer line names, those with the most rows left out first.
+FOOTER_KINDS = 6
 #: Far ends of one clause that share an owner, at least this many, print as the owner and a count.
 OWNER_FOLD = 3
 #: The depth and the item limit of a slice written to a file, as before the printed piece.
@@ -500,7 +502,7 @@ def _piece(
                     dropped += 1
                 elif more:
                     more = False
-                elif cap:
+                elif cap > 1:
                     cap //= 2
                 elif taking:
                     taking.pop()
@@ -566,7 +568,8 @@ def _layout(
     Files go in the order the starts, the rows and the members first reach them; nodes inside a
     file by line. A file's header names the containers its nodes belong to by grouping edges,
     ``homes``. A node's links are its edges to other nodes of the piece, by kind and direction,
-    a grouping edge from the node to its container left to the header.
+    a grouping edge from the node to its container left to the header. An edge between two nodes
+    of one file prints only at its ``from`` end.
     ``folding`` gives the most names per link and whether to count the edges the piece leaves
     out.
     """
@@ -634,7 +637,10 @@ def _layout(
                 if outward and kind in grouping:
                     continue
                 if far in inside:
-                    ends.setdefault((kind, outward), []).append(far)
+                    there = first_location(index.nodes[far])
+                    same = there is not None and loc is not None and there["file"] == loc["file"]
+                    if not (same and not outward and index.nodes[far]["state"] == "mapped"):
+                        ends.setdefault((kind, outward), []).append(far)
                 else:
                     unwalked[(kind, outward)] += 1
         groups.setdefault(loc["file"] if loc else None, []).append(
@@ -1088,8 +1094,14 @@ def _left_out(report: SliceReport) -> list[str]:
     if note is None:
         return lines + ([f"go deeper with --depth {report.depth + 1}"] if report.deeper else [])
     hops = ", ".join(f"{hop}: {n}" for hop, n in (report.left_by_hop or {}).items())
-    kinds = ", ".join(f"{_escape(k)} {n}" for k, n in (report.left_by_kind or {}).items())
-    ways = [f"--kind K (kinds here: {', '.join(_escape(k) for k in report.kinds)})"]
+    left = report.left_by_kind or {}
+    first = sorted(left, key=lambda k: (-left[k], k))[:FOOTER_KINDS]
+    kinds = ", ".join(f"{_escape(k)} {left[k]}" for k in first)
+    kinds += f", and {len(left) - len(first)} more kinds" if len(left) > len(first) else ""
+    here = sorted(report.kinds, key=lambda k: (-left.get(k, 0), k))
+    named = ", ".join(_escape(k) for k in here[:FOOTER_KINDS])
+    named += f", and {len(here) - FOOTER_KINDS} more" if len(here) > FOOTER_KINDS else ""
+    ways = [f"--kind K (kinds here: {named})"]
     if report.direction == "both":
         ways += ["--direction out", "--direction in"]
     if report.depth > 1:

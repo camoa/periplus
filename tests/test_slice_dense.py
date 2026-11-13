@@ -170,7 +170,15 @@ def test_links_fold_outside_ends_and_members_of_one_owner(tmp_path: Path) -> Non
     lines = _text(_piece(tmp_path, ADD))
 
     assert "      calls -> Mailer (3), total (+2 outside the project: dump, write)" in lines
-    assert "      contains <- Cart" in lines
+
+
+def test_an_edge_inside_one_file_prints_once_at_its_from_end(tmp_path: Path) -> None:
+    lines = _text(_piece(tmp_path, ADD))
+    cart = lines[lines.index("src/Cart.php  in shop") : lines.index("src/Mailer.php  in shop")]
+
+    assert "      contains -> add, total" in cart
+    assert "      contains <- Cart" not in cart and "      calls <- add" not in cart
+    assert "      calls <- add" in lines
 
 
 def test_a_node_with_links_the_piece_does_not_show_says_how_many(tmp_path: Path) -> None:
@@ -201,4 +209,33 @@ def test_the_default_piece_fits_the_byte_budget_and_says_what_it_cut(tmp_path: P
 
     assert len(text.encode()) <= 700 < len(given.encode())
     assert "inventory:" in text
+    assert not any(" -> (+" in line or " <- (+" in line for line in text.splitlines())
     assert any(line.startswith("cut to fit 700 bytes:") for line in text.splitlines())
+
+
+def test_the_footer_names_the_kinds_with_most_rows_left_out_and_counts_the_rest(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".periplus").mkdir()
+    ends = [f"t.method::far{k}" for k in range(8)]
+    document = {
+        "periplus_map_version": 0,
+        "packs": [{"pack": "own", "version": "0.1.0"}],
+        "roots": ["."],
+        "nodes": [
+            _node(i, "t.method", line=1, file="f.php")
+            for i in ["t.method::hub", "t.method::far8", *ends]
+        ],
+        "edges": [
+            *(_edge(f"kind{k}", "t.method::hub", e, 1, file="f.php") for k, e in enumerate(ends)),
+            _edge("kind7", "t.method::hub", "t.method::far8", 2, file="f.php"),
+        ],
+    }
+    (tmp_path / ".periplus" / "map.json").write_text(json.dumps(document), encoding="utf-8")
+    report = slicing.run(tmp_path, {}, ["hub"], (), "both", 1, (), 1, None, None)
+    lines = _text(report)
+
+    assert (
+        "left out by kind: kind7 2, kind1 1, kind2 1, kind3 1, kind4 1, kind5 1, and 1 more kinds"
+        in lines
+    )
