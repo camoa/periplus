@@ -5,20 +5,26 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drush.command
+  description: "A Drush command, named by its name, from a Command attribute or an @command docblock tag on a method"
   id_namespace: drush.command
 - name: drush.command_alias
+  description: "An alias of a Drush command, from the @aliases docblock tag of a method that carries @command"
   id_namespace: drush.command_alias
 
 edge_kinds:
 - kind: command_method
+  description: "The Drush command runs that method"
   from: drush.command
   to: php.method
 - kind: command_class
+  description: "The Drush command is defined in that class"
   from: drush.command
   to: php.class
 - kind: alias_of_command
+  description: "The alias is another name for that Drush command"
   from: drush.command_alias
   to: drush.command
 - kind: command_service
+  description: "Inferred: the Drush command's class, or a class that directly inherits it, is registered as that service in a services file"
   from: drush.command
   to: drupal.service

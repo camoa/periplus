@@ -16,17 +16,21 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.form_display
+    description: "A form display, core.entity_form_display.<entity type>.<bundle>.<mode>, from its config file or a getFormDisplay() call"
     parent: drupal.config_object
 
   - name: drupal.view_display
+    description: "A view display, core.entity_view_display.<entity type>.<bundle>.<mode>, from its config file"
     parent: drupal.config_object
 
 edge_kinds:
 
   - kind: displays
+    description: "the form or view display sets how that bundle is edited or rendered, by its entity type and bundle keys"
     from: [drupal.form_display, drupal.view_display]
     to:   drupal.block_type
 
   - kind: shows_field
+    description: "the form or view display shows that field, a key under its content section"
     from: [drupal.form_display, drupal.view_display]
     to:   drupal.field_instance

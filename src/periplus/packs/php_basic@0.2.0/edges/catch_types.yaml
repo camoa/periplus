@@ -27,11 +27,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # full name; the variable ids stay apart.
 node_types:
 - name: php.catch_type
+  description: "the class a catch clause catches, for the variable it binds"
   id_namespace: php.catch_type
   internal: true
 
 edge_kinds:
 - kind: catch_typed_as
+  description: "the value a catch clause binds, catch (Foo $e), is of that class"
   from: php.local_value
   to: php.catch_type
 

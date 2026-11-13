@@ -16,10 +16,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.class_ref
+  description: "a class named in code, as Name::class or a full class name in a string, by a return statement or an entity type's handlers"
   id_namespace: drupal.class_ref
   internal: true
 # A class that writes validatedBy(), by the class its file's path names.
 - name: drupal.validated_by_written
+  description: "a class whose file writes a validatedBy() method, found by text and named by the file's path"
   id_namespace: drupal.validated_by_written
   internal: true
 
@@ -27,9 +29,11 @@ edge_kinds:
 # The internal end takes the inferred edge of a constraint class that writes validatedBy(), so
 # the written map leaves that edge out.
 - kind: validated_by
+  description: "the constraint is checked by that validator class: the class its validatedBy() returns, or by naming convention its own class name plus Validator"
   from: drupal.constraint_plugin
   to: [php.class, drupal.validated_by_written]
 - kind: returns_class
+  description: "the function or method returns that class name, as Name::class or a full class name in a string"
   from: [php.function, php.method]
   to: drupal.class_ref
 

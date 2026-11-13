@@ -5,11 +5,14 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.views_field_plugin
+  description: "a Views field plugin, named by its plugin id; one in mapped code is found by the ViewsField attribute on its class"
   parent: drupal.plugin
   id_namespace: drupal.plugin.views_field
 - name: drupal.views_filter_plugin
+  description: "a Views filter plugin, named by its plugin id; one in mapped code is found by the ViewsFilter attribute on its class"
   parent: drupal.plugin
   id_namespace: drupal.plugin.views_filter
 - name: drupal.views_style_plugin
+  description: "a Views style plugin, named by its plugin id; one in mapped code is found by the ViewsStyle attribute on its class"
   parent: drupal.plugin
   id_namespace: drupal.plugin.views_style

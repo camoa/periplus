@@ -5,5 +5,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.queue_worker_plugin
+  description: "A queue worker plugin, named by the plugin id in its QueueWorker attribute or annotation, which is also the name of the queue it runs"
   parent: drupal.plugin
   id_namespace: drupal.plugin.queue_worker

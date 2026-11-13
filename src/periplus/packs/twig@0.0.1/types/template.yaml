@@ -16,10 +16,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: twig.template
+  description: "a Twig template file"
   id_namespace: twig.template
 - name: twig.reference
+  description: "a name a template writes right after {{, a variable, function or object the pattern cannot tell apart"
 edge_kinds:
 - kind: references
+  description: "the template names that word right after {{, read by a text pattern rather than a grammar"
   from: twig.template
   to: twig.reference
 rules:

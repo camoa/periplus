@@ -4,8 +4,10 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: nextjs.route_method
+  description: "One HTTP method a route file exports, such as GET or POST, named by the route's URL and the method"
   id_namespace: nextjs.route_method
 edge_kinds:
 - kind: handles_method
+  description: "the route handler exports that HTTP method as a function, a const or a destructured name"
   from: nextjs.route_handler
   to: nextjs.route_method

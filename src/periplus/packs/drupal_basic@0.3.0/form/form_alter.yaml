@@ -10,6 +10,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: alters_form
+  description: "The hook implementation alters that form id, by naming convention from a hook named form_<id>_alter; the id may be a base form id"
   from: [php.method, php.function]
   to: drupal.form_id
 

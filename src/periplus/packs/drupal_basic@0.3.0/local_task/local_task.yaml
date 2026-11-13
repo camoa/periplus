@@ -7,18 +7,23 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.local_task
+  description: "A local task (a tab), one top-level key of a module's links.task.yml file"
   id_namespace: drupal.local_task
 
 edge_kinds:
 - kind: task_base_route
+  description: "The local task is a tab in the group of that route, named by its base_route key"
   from: drupal.local_task
   to: drupal.route
 - kind: child_of_task
+  description: "The local task is a child tab of that local task, named by its parent_id key"
   from: drupal.local_task
   to: drupal.local_task
 - kind: link_class
+  description: "The local task, local action or contextual link uses that class, named by its class key"
   from: [drupal.local_task, drupal.local_action, drupal.contextual_link]
   to: php.class
 - kind: link_deriver
+  description: "The local task, local action or contextual link has its entries made at run time by that deriver class, named by its deriver key"
   from: [drupal.local_task, drupal.local_action, drupal.contextual_link]
   to: php.class

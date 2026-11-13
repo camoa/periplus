@@ -6,4 +6,5 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.contextual_link
+  description: "a contextual link, named by its key in a module's links.contextual.yml file"
   id_namespace: drupal.contextual_link

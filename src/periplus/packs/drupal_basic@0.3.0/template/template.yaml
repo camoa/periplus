@@ -6,22 +6,28 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.template
+  description: "a Twig template, named by its file: node--article.html.twig is node--article; a Twig file of macros is named by its stem"
   id_namespace: drupal.template
 
 edge_kinds:
 - kind: template_links_route
+  description: "the template calls path() or url() with that route's name, or writes a path whose shape matches that route's path"
   from: drupal.template
   to: drupal.route
 - kind: template_includes
+  description: "the template includes, extends, embeds or imports that template, named in a string by its file name"
   from: drupal.template
   to: drupal.template
 - kind: template_includes_component
+  description: "the template includes or embeds that component, named in a string as <theme>:<name>"
   from: drupal.template
   to: drupal.component
 - kind: component_includes_template
+  description: "the component includes, extends, embeds or imports that template, named in a string by its file name"
   from: drupal.component
   to: drupal.template
 - kind: component_includes_component
+  description: "the component includes or embeds that component, named in a string as <theme>:<name>"
   from: drupal.component
   to: drupal.component
 

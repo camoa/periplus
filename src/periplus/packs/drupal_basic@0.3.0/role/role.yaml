@@ -6,9 +6,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.role
+  description: "a user role, read from its user.role.<name> config file"
   parent: drupal.config_object
 
 edge_kinds:
 - kind: grants_permission
+  description: "the role's config file lists that permission under permissions"
   from: drupal.role
   to: drupal.permission

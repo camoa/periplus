@@ -4,5 +4,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: declares_component
+  description: "the module declares that component, at the top level or nested in another function"
   from: typescript.module
   to: react.component

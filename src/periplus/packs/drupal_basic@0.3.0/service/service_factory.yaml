@@ -10,20 +10,25 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.factory_method
+  description: "internal: a method name a service's factory key names, before the map joins it to the method"
   id_namespace: drupal.factory_method
   internal: true
 
 edge_kinds:
 - kind: built_by_service
+  description: "the service's factory key names that other service as the one that builds it"
   from: drupal.service
   to: drupal.service
 - kind: built_by_class
+  description: "the service's factory key names that class, whose static method builds the service"
   from: drupal.service
   to: [php.class, php.interface]
 - kind: names_factory_method
+  description: "step to built_by_method: the service's factory key names that method name"
   from: drupal.service
   to: drupal.factory_method
 - kind: built_by_method
+  description: "the service is built by that factory method, on the class the factory key names or on the factory service's class"
   from: drupal.service
   to: php.method
 

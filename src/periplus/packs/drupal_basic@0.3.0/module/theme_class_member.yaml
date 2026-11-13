@@ -6,6 +6,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: class_in_theme
+  description: "The class, interface, trait or enum is declared in a PHP file in that theme, the nearest folder above the file with an info.yml file"
   from: php.class_like
   to: drupal.theme
   groups: true

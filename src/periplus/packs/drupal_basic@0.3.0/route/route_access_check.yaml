@@ -10,14 +10,17 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.route_requirement
+  description: "internal: a custom route requirement key, as a routing file's requirements and a service tag's applies_to name it"
   id_namespace: drupal.route_requirement
   internal: true
 
 edge_kinds:
 - kind: route_names_requirement
+  description: "step to access_checked_by_service: the route's requirements hold that key"
   from: drupal.route
   to: drupal.route_requirement
 - kind: requirement_checked_by
+  description: "step to access_checked_by_service: a tag of the service, of any tag name, has applies_to set to that requirement key"
   from: drupal.route_requirement
   to: drupal.service
 

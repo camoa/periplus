@@ -10,18 +10,22 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: js_function_in_module
+  description: "the function, declared at the top level of a script, belongs to the module whose folder holds that script"
   from: js.function
   to: drupal.module
   groups: true
 - kind: js_function_in_theme
+  description: "the function, declared at the top level of a script, belongs to the theme whose folder holds that script"
   from: js.function
   to: drupal.theme
   groups: true
 - kind: behavior_in_module
+  description: "the behavior belongs to that module, whose folder holds a script that declares it"
   from: drupal.js_behavior
   to: drupal.module
   groups: true
 - kind: behavior_in_theme
+  description: "the behavior belongs to that theme, whose folder holds a script that declares it"
   from: drupal.js_behavior
   to: drupal.theme
   groups: true

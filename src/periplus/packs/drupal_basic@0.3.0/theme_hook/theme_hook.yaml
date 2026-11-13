@@ -15,13 +15,16 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.theme_hook
+  description: "a theme hook a hook_theme function declares, as my_card"
   id_namespace: drupal.theme_hook
 
 edge_kinds:
 - kind: theme_hook_template
+  description: "the theme hook renders with that template: the one its 'template' key names, or with no template or function key, the hook name with dashes by naming convention"
   from: drupal.theme_hook
   to: drupal.template
 - kind: renders_theme_hook
+  description: "the method or function holds a render array whose '#theme' key names that theme hook, read as text"
   from: [php.class, php.trait, php.method, php.function]
   to: drupal.theme_hook
 

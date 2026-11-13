@@ -21,15 +21,18 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 # A route path's shape. Its id is the shape, and a shape_of_route edge runs to each route with it.
 - name: drupal.path_shape
+  description: "internal: a route path's shape, each placeholder written as *"
   id_namespace: drupal.path_shape
   internal: true
 # One shape one template writes, its id <template>|<shape>.
 - name: drupal.path_use
+  description: "internal: one path shape that one template writes in an attribute value"
   id_namespace: drupal.path_use
   internal: true
 
 edge_kinds:
 - kind: shape_of_route
+  description: "step to template_links_route: the route's path has this shape, its placeholders written as *"
   from: drupal.path_shape
   to: drupal.route
 

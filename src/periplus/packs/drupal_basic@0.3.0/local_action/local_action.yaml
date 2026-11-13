@@ -4,9 +4,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.local_action
+  description: "A local action, one top-level key of a module's links.action.yml file"
   id_namespace: drupal.local_action
 
 edge_kinds:
 - kind: appears_on_route
+  description: "The local action shows on that route, named in its appears_on list"
   from: drupal.local_action
   to: drupal.route

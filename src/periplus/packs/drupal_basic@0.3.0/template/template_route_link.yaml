@@ -10,6 +10,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: component_links_route
+  description: "the component's Twig file calls path() or url() with that route's name in a string"
   from: drupal.component
   to: drupal.route
 

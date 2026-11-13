@@ -10,6 +10,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: names_queue_constant
+  description: "The method or function names a queue by self::X or static::X in \\Drupal::queue() or a queue factory's get(); the link ends at that class constant"
   from: [php.method, php.function]
   to: drupal.class_constant
 

@@ -23,24 +23,30 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 # <mapping>|<text before the field><field>, as salesforce_mapping.salesforce_mapping.m|node:field_x.
 - name: salesforce.token_field
+  description: "Internal: a token in a Salesforce mapping that names a field_ segment, <mapping>|<token text>"
   id_namespace: salesforce.token_field
   internal: true
 # The entity type a token type names, from the table, else as written.
 - name: salesforce.token_entity
+  description: "Internal: the entity type a token type names, from the table token_entity_types or as written"
   id_namespace: salesforce.token_entity
   internal: true
 
 edge_kinds:
 - kind: token_names_field
+  description: "The token names that field by its machine name"
   from: salesforce.token_field
   to: drupal.field_name
 - kind: token_on_entity
+  description: "The token's type names that entity type"
   from: salesforce.token_field
   to: salesforce.token_entity
 - kind: maps_token_field
+  description: "Inferred: the Salesforce mapping maps that field storage through a token such as [node:field_x]; it may end at an unresolved storage"
   from: salesforce.mapping
   to: drupal.field_storage
 - kind: maps_token_shared_field_name
+  description: "Inferred: the Salesforce mapping names that field in a token of unknown entity type, and storages on two or more entity types share the name"
   from: salesforce.mapping
   to: drupal.shared_field_name
 

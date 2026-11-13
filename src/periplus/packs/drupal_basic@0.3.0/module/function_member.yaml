@@ -7,10 +7,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: function_in_module
+  description: "The function is declared in a PHP file in that module, the nearest folder above the file with an info.yml file"
   from: php.function
   to: drupal.module
   groups: true
 - kind: function_in_theme
+  description: "The function is declared in a PHP file in that theme, the nearest folder above the file with an info.yml file"
   from: php.function
   to: drupal.theme
   groups: true

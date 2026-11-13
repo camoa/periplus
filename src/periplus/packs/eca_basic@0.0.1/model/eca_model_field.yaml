@@ -16,12 +16,15 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: eca_names_field
+  description: "A condition or action of the ECA model names that field by machine name, under field_name or field_name_entity_ref"
   from: eca.model
   to: drupal.field_name
 - kind: eca_uses_field
+  description: "Inferred: the ECA model names that field storage, matched by field name and the entity types the model names; it may end at an unresolved storage"
   from: eca.model
   to: drupal.field_storage
 - kind: eca_uses_shared_field_name
+  description: "Inferred: the ECA model names that field, and storages on two or more entity types share the name"
   from: eca.model
   to: drupal.shared_field_name
 

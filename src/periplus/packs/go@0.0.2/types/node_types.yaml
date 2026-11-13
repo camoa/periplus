@@ -10,25 +10,32 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: go.package
+    description: "a Go package, from its package clause"
     container: true
 
   - name: go.callable
+    description: "any Go function or method; abstract, so no node has this type itself"
     abstract: true
 
   - name: go.func
+    description: "a Go function declared at package level, without a receiver"
     parent: go.callable
 
   - name: go.method
+    description: "a Go method, a function declared with a receiver, named by its package and receiver type"
     parent: go.callable
 
   - name: go.type
+    description: "any Go struct or interface type; abstract, so no node has this type itself"
     abstract: true
 
   - name: go.struct
+    description: "a Go struct type, declared as type T struct"
     parent: go.type
     container: true
 
   - name: go.interface
+    description: "a Go interface type, declared as type T interface"
     parent: go.type
 
 roles:

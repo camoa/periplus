@@ -4,9 +4,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.library
+  description: "An asset library, one top-level key of a libraries.yml file, named <extension>/<key>"
   id_namespace: drupal.library
 
 edge_kinds:
 - kind: depends_on_library
+  description: "The library lists that library under its dependencies key in a libraries.yml file"
   from: drupal.library
   to: drupal.library

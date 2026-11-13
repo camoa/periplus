@@ -5,9 +5,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: renders_menu
+  description: "The template calls drupal_menu() for that menu's config object, system.menu.<name>, named as quoted text"
   from: drupal.template
   to: drupal.config_object
 - kind: component_renders_menu
+  description: "The component's Twig file calls drupal_menu() for that menu's config object, system.menu.<name>, named as quoted text"
   from: drupal.component
   to: drupal.config_object
 

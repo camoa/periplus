@@ -5,10 +5,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.block_plugin
+  description: "a block plugin, named by the id in the Block attribute or annotation on its class"
   parent: drupal.plugin
   id_namespace: drupal.plugin.block
 
 edge_kinds:
 - kind: plugin_class
+  description: "the plugin is implemented by that PHP class"
   from: drupal.plugin
   to: php.class

@@ -4,8 +4,10 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: nextjs.layout
+  description: "A layout file under app, named by its module; a layout in a route group serves the same URL as its parent"
   id_namespace: nextjs.layout
 edge_kinds:
 - kind: layout_in_module
+  description: "the layout's code is in that module"
   from: nextjs.layout
   to: typescript.module

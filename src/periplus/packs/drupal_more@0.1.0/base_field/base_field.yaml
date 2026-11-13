@@ -4,7 +4,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # is the class and the name, so two classes with one field name make two nodes.
 
 node_types:
-- {name: drupal_more.base_field, id_namespace: drupal_more.base_field}
+- {name: drupal_more.base_field, id_namespace: drupal_more.base_field, description: "One base field an entity class defines with BaseFieldDefinition::create(), named <class>|<field>, read from the PHP as text"}
 
 rules:
 - rule: base_field

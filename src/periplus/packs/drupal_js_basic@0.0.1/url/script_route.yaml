@@ -18,11 +18,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 # One shape one script writes, its id <script>|<shape>.
 - name: js.path_use
+  description: "Internal: one path shape a script writes in a template literal, each ${...} as *, used to join the script to a route of that shape"
   id_namespace: js.path_use
   internal: true
 
 edge_kinds:
 - kind: script_links_to_route
+  description: "the script requests a template-literal path whose shape, placeholders as *, matches that route's path; inferred from the shape"
   from: js.file
   to: drupal.route
 

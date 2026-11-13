@@ -4,4 +4,5 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: drupal_next.entity_type_config
+  description: "A next_entity_type_config config entity: how one bundle reaches its Next.js sites"
   id_namespace: drupal_next.entity_type_config

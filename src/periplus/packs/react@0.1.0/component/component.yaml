@@ -4,5 +4,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: react.component
+  description: "A function or const whose name starts with a capital letter, taken as a React component by naming convention"
   parent: typescript.callable
   id_namespace: typescript.callable

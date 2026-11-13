@@ -5,4 +5,5 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.module
+    description: "A custom module, from its .info.yml file with type: module"
     id_namespace: drupal.module

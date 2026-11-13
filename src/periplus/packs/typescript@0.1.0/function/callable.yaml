@@ -5,4 +5,5 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: typescript.callable
+  description: "A function, component or hook in a TypeScript file: the shared kind that calls and renders start from"
   id_namespace: typescript.callable

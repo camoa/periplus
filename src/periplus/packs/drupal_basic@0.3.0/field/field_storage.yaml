@@ -5,17 +5,22 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.field_storage
+  description: "A field storage: one field on one entity type, named field.storage.<entity type>.<field> as its config file is"
   parent: drupal.config_object
 - name: drupal.field_instance
+  description: "A field instance: one field on one bundle, named field.field.<entity type>.<bundle>.<field> as its config file is"
   parent: drupal.config_object
 
 edge_kinds:
 - kind: stored_by
+  description: "the field instance uses that field storage, the one of its entity type and field name"
   from: drupal.field_instance
   to: drupal.field_storage
 - kind: field_of
+  description: "the field instance is attached to that bundle, named by its entity_type and bundle keys"
   from: drupal.field_instance
   to: drupal.bundle
 - kind: storage_of
+  description: "The field storage belongs to that entity type, named by the entity_type key of its config file"
   from: drupal.field_storage
   to: drupal.entity_type

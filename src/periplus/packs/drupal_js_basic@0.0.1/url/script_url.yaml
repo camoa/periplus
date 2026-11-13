@@ -8,10 +8,12 @@ node_types:
 # A request whose URL the script builds at run time: one node for each script and callee, marked
 # resolution runtime. No path is read from it.
 - name: js.url_call
+  description: "A request whose URL a script builds at run time, such as fetch(url), one node for each script and callee; no path is read from it"
   id_namespace: js.url_call
 
 edge_kinds:
 - kind: script_requests_url
+  description: "the script makes that request, whose URL it builds at run time, through fetch, $.ajax, $.get, $.getJSON, $.post or Drupal.url"
   from: js.file
   to: js.url_call
 

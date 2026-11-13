@@ -16,6 +16,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: uses_queue
+  description: "The method or function gets the queue of that name with \\Drupal::queue() or get() on a queue factory; the queue worker plugin of that name runs it"
   from: [php.method, php.function]
   to: drupal.queue_worker_plugin
 

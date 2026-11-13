@@ -4,5 +4,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.rest_resource
+  description: "a REST resource plugin, named by the id in the RestResource annotation or attribute on its class"
   parent: drupal.plugin
   id_namespace: drupal.plugin.rest_resource

@@ -11,11 +11,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.constant_text
+  description: "the text a class constant is declared with, as 'x' in const X = 'x'"
   id_namespace: drupal.constant_text
   internal: true
 
 edge_kinds:
 - kind: has_constant_text
+  description: "the class constant is declared with that text"
   from: drupal.class_constant
   to: drupal.constant_text
 

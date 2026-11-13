@@ -9,9 +9,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: php.file
+    description: "a PHP source file"
     container: true
 
   - name: php.file_entry
+    description: "the top-level code of a PHP file, outside any function or class, so a call made there has a caller"
     container: true
     parent: php.file
     synthetic: true
@@ -20,36 +22,47 @@ node_types:
     #      sites. A declared synthetic entry container gives that code somewhere to live.
 
   - name: php.class_like
+    description: "any PHP class, interface, trait or enum; abstract, so no node has this type itself"
     abstract: true
     container: true
 
   - name: php.class
+    description: "a PHP class"
     parent: php.class_like
 
   - name: php.interface
+    description: "a PHP interface"
     parent: php.class_like
 
   - name: php.trait
+    description: "a PHP trait"
     parent: php.class_like
 
   - name: php.enum
+    description: "a PHP enum"
     parent: php.class_like
 
   - name: php.callable
+    description: "any PHP function or method; abstract, so no node has this type itself"
     abstract: true
     container: true
 
   - name: php.function
+    description: "a PHP function declared outside any class"
     parent: php.callable
 
   - name: php.method
+    description: "a method declared in a PHP class, interface, trait or enum, named by the type it sits in"
     parent: php.callable
 
   # Members get their own types so an edge can terminate on one.
   # why: no language emitted an edge pointing at a member. `Foo::$prop` pointed at the
   #      class, so "what writes this field" had no answer anywhere in the graph.
   - name: php.property
+    description: "a property declared in a PHP class or trait"
 
   - name: php.class_constant
+    description: "a constant declared with const inside a PHP class, interface, trait or enum"
 
   - name: php.enum_case
+    description: "a case of a PHP enum"

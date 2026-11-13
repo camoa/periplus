@@ -14,27 +14,34 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.field_name
+  description: "Internal: a field machine name as a hub that joins code and template reads by name to each field storage of that name"
   id_namespace: drupal.field_name
   internal: true
 # <entity type>.<entity type>.<field>, one per storage: the id a map rule builds from two storages'
 # entity types exists only when the two are the same.
 - name: drupal.field_storage_same
+  description: "Internal: one per field storage, there only so a map rule can test whether two storages of one field name sit on the same entity type"
   id_namespace: drupal.field_storage_same
   internal: true
 - name: drupal.shared_field_name
+  description: "A field machine name whose storages sit on two or more entity types, so a read by that name alone does not say which storage it means"
   id_namespace: drupal.shared_field_name
 
 edge_kinds:
 - kind: field_name_of
+  description: "Internal: the field machine name hub has that field storage, one link per entity type that has a storage of the name"
   from: drupal.field_name
   to: drupal.field_storage
 - kind: shared_field_name_of
+  description: "The shared field name is the machine name of that field storage, one link per storage of the name"
   from: drupal.shared_field_name
   to: drupal.field_storage
 - kind: field_name_ready
+  description: "Internal: a self-link on a field name hub that has a storage, so rules that need to know a name is not shared run after that is settled"
   from: drupal.field_name
   to: drupal.field_name
 - kind: field_name_shared
+  description: "Internal: the field name hub has storages on more than one entity type; the link ends at a storage of the name"
   from: drupal.field_name
   to: drupal.field_storage
 

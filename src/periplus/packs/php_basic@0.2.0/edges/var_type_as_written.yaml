@@ -24,20 +24,24 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
 - name: php.property_written_type
+  description: "a @var property type with a backslash inside and none in front, kept as written"
   id_namespace: php.property_written_type
   internal: true
 
 - name: php.property_resolved_type
+  description: "a @var property type with a backslash inside, resolved through the file's imports and namespace"
   id_namespace: php.property_resolved_type
   internal: true
 
 edge_kinds:
 
 - kind: property_written_as
+  description: "the property's @var names that type, as written"
   from: php.property
   to: php.property_written_type
 
 - kind: property_resolved_as
+  description: "the property's @var names that type, resolved through the file's imports and namespace"
   from: php.property
   to: php.property_resolved_type
 

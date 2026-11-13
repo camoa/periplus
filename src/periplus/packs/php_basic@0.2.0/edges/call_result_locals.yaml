@@ -31,11 +31,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # $x has two different values: the map does not know which one holds at the call.
 node_types:
 - name: php.local_static_class
+  description: "the class named before :: in a static call assigned to a local, $y = Foo::create()"
   id_namespace: php.local_static_class
   internal: true
 
 edge_kinds:
 - kind: local_value_static_call
+  description: "the value assigned to a local variable is a static call on that class, $y = Foo::create()"
   from: php.local_value
   to: php.local_static_class
 

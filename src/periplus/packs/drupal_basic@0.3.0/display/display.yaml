@@ -7,24 +7,32 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.form_display
+  description: "a form display: a core.entity_form_display.* config file that sets how one bundle's edit form shows its fields in one form mode"
   parent: drupal.config_object
 - name: drupal.view_display
+  description: "a view display: a core.entity_view_display.* config file that sets how one bundle's fields are rendered in one view mode"
   parent: drupal.config_object
 - name: drupal.form_mode
+  description: "a form mode, read from a core.entity_form_mode.* config file"
   parent: drupal.config_object
 - name: drupal.view_mode
+  description: "a view mode, read from a core.entity_view_mode.* config file"
   parent: drupal.config_object
 
 edge_kinds:
 - kind: displays
+  description: "the form or view display sets how that bundle is edited or rendered, by its entity type and bundle keys"
   from: [drupal.form_display, drupal.view_display]
   to: drupal.bundle
 - kind: shows_field
+  description: "the form or view display shows that field, a key under its content section"
   from: [drupal.form_display, drupal.view_display]
   to: drupal.field_instance
 - kind: in_mode
+  description: "the display belongs to that form mode or view mode; a display in the default mode has none"
   from: [drupal.form_display, drupal.view_display]
   to: [drupal.form_mode, drupal.view_mode]
 - kind: mode_of
+  description: "the form mode or view mode belongs to that entity type"
   from: [drupal.form_mode, drupal.view_mode]
   to: drupal.entity_type

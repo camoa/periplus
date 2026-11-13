@@ -18,29 +18,37 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.form
+    description: "A PHP class whose parents or interfaces reach Drupal's FormInterface"
     parent: php.class
 
   - name: drupal.entity_form
+    description: "A form class whose parents or interfaces reach EntityFormInterface"
     parent: drupal.form
 
   - name: drupal.content_entity_form
+    description: "A form class whose parents or interfaces reach ContentEntityFormInterface"
     parent: drupal.entity_form
 
   - name: drupal.form_save
+    description: "A method named save in an entity form class"
     parent: php.method
 
   - name: drupal.form_build
+    description: "A method named buildForm in a form class"
     parent: php.method
 
   - name: drupal.form_validate
+    description: "A method named validateForm in a form class"
     parent: php.method
 
   - name: drupal.form_submit
+    description: "A method named submitForm in a form class"
     parent: php.method
 
 edge_kinds:
 
   - kind: edits_entity
+    description: "The entity form edits entities of that entity type; no rule in this pack emits this edge yet"
     from: drupal.entity_form
     to:   drupal.entity_type
     # The endpoint is the entity TYPE, not the entity CLASS: an entity form

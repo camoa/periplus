@@ -8,9 +8,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: eca_names_role
+  description: "An action or condition of the ECA model names that role, by an action's rid or a condition's role"
   from: eca.model
   to: drupal.role_name
 - kind: eca_uses_role
+  description: "The ECA model uses that role's configuration, user.role.<role>; it ends at an unresolved role when no mapped file declares it"
   from: eca.model
   to: drupal.role
 

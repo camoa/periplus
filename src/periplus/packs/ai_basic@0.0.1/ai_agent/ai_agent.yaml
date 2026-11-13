@@ -4,5 +4,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.ai_agent
+  description: "An AI agent plugin, named by its id, from the AiAgent attribute on its class"
   parent: drupal.plugin
   id_namespace: drupal.plugin.ai_agent

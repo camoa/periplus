@@ -18,30 +18,37 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: route_in_module
+  description: "The route belongs to that module: the module's routing.yml file declares it, or it is an entity.<type> route whose entity class sits in the module's namespace"
   from: drupal.route
   to: drupal.module
   groups: true
 - kind: service_in_module
+  description: "The service belongs to that module: the module's services.yml file declares it, or a drush.services.yml file in the module's folder does"
   from: drupal.service
   to: drupal.module
   groups: true
 - kind: library_in_module
+  description: "The library belongs to that module: the library name starts with the module's name, as my_module/x"
   from: drupal.library
   to: drupal.module
   groups: true
 - kind: library_in_theme
+  description: "The library belongs to that theme: the library name starts with the theme's name, as my_theme/x"
   from: drupal.library
   to: drupal.theme
   groups: true
 - kind: class_in_module
+  description: "The class, interface, trait or enum sits in that module's namespace, Drupal\\<module> or Drupal\\Tests\\<module>, by naming convention"
   from: php.class_like
   to: drupal.module
   groups: true
 - kind: template_in_module
+  description: "The template file sits in that module, by the nearest folder above it with an info.yml file or the folder before its templates folder"
   from: drupal.template
   to: drupal.module
   groups: true
 - kind: template_in_theme
+  description: "The template file sits in that theme, by the nearest folder above it with an info.yml file or the theme folder that holds it"
   from: drupal.template
   to: drupal.theme
   groups: true

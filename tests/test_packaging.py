@@ -119,6 +119,7 @@ EXPECTED_MODULE_FILES = {
     "periplus/navigate/export.py",
     "periplus/navigate/find.py",
     "periplus/navigate/ids.py",
+    "periplus/navigate/legend.py",
     "periplus/navigate/listing.py",
     "periplus/navigate/mapfile.py",
     "periplus/navigate/path.py",

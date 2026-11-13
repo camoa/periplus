@@ -9,6 +9,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 edge_kinds:
 
 - kind: references_class
+  description: "the function or method names that class, interface, trait or enum as Foo::class"
   from: [php.function, php.method]
   to: php.class_like
 

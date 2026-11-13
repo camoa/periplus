@@ -7,10 +7,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: command_in_module
+  description: "Inferred: the Drush command's class belongs to that module"
   from: drush.command
   to: drupal.module
   groups: true
 - kind: command_alias_in_module
+  description: "Inferred: the class of the alias's command belongs to that module"
   from: drush.command_alias
   to: drupal.module
   groups: true

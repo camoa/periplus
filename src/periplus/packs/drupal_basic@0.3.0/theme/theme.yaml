@@ -4,12 +4,15 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.theme
+  description: "a theme, named by its .info.yml file with type: theme"
   id_namespace: drupal.theme
 
 edge_kinds:
 - kind: based_on_theme
+  description: "the theme's info file names that theme as its base theme"
   from: drupal.theme
   to: drupal.theme
 - kind: uses_library
+  description: "the theme's info file lists that asset library under libraries"
   from: drupal.theme
   to: drupal.library

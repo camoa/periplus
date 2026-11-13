@@ -5,6 +5,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: next_site_previews_at
+  description: "the Next.js site's preview URL, with its origin removed, is served by that route handler"
   from: drupal_next.site
   to: nextjs.route_handler
 rules:

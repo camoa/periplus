@@ -11,6 +11,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.cache_backend
+    description: "A PHP class whose parents or interfaces reach CacheBackendInterface"
     parent: php.class
 
 roles:

@@ -4,5 +4,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.salesforce_mapping_field
+  description: "A Salesforce mapping field plugin, named by its id, from a Plugin annotation on a class in the mapping field plugin folder"
   parent: drupal.plugin
   id_namespace: drupal.plugin.salesforce_mapping_field

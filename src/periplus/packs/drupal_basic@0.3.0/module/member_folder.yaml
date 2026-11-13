@@ -13,20 +13,25 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.extension_folder
+  description: "Internal: a folder that holds a module's or theme's info.yml file, named by its path, used to find which extension owns a file"
   id_namespace: drupal.extension_folder
   internal: true
 - name: drupal.member_claim
+  description: "Internal: a record that a thing found in a file sits in that file's folder, joined in the map to the nearest extension folder above it"
   id_namespace: drupal.member_claim
   internal: true
 
 edge_kinds:
 - kind: folder_of_module
+  description: "Internal: the extension folder holds that module's info.yml file"
   from: drupal.extension_folder
   to: drupal.module
 - kind: folder_of_theme
+  description: "Internal: the extension folder holds that theme's info.yml file"
   from: drupal.extension_folder
   to: drupal.theme
 - kind: claim_in_folder
+  description: "Internal: the claimed thing's file sits under that extension folder, the nearest one above it that holds an info.yml file"
   from: drupal.member_claim
   to: drupal.extension_folder
 

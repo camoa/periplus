@@ -6,14 +6,18 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.controller_class
+  description: "a project class that descends from core's ControllerBase"
   parent: php.class
   id_namespace: php.type
 - name: drupal.form_class
+  description: "a project class that descends from a core form base class, such as FormBase, ConfirmFormBase or EntityForm"
   parent: php.class
   id_namespace: php.type
 - name: drupal.config_form_class
+  description: "a project class that descends from core's ConfigFormBase"
   parent: drupal.form_class
   id_namespace: php.type
 - name: drupal.event_subscriber_class
+  description: "a project class that implements EventSubscriberInterface or descends from a core subscriber base such as RouteSubscriberBase"
   parent: php.class
   id_namespace: php.type

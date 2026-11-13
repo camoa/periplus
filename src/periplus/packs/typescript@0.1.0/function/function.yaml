@@ -4,5 +4,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: typescript.function
+  description: "A TypeScript function, top-level or nested, declared or held in a const, whose name does not mark it as a component or hook"
   parent: typescript.callable
   id_namespace: typescript.callable

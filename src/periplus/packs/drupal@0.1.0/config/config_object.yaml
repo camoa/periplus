@@ -13,12 +13,15 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.config_object
+  description: "A YAML file in a configuration folder, named by its file name; a rule that understands the file gives it a more specific type"
   id_namespace: drupal.config
 edge_kinds:
 - kind: config_depends
+  description: "the config file lists that configuration object under its dependencies key"
   from: drupal.config_object
   to: drupal.config_object
 - kind: depends_on_module
+  description: "the module or config file lists that module as a dependency, in its info.yml file or its dependencies key"
   from:
   - drupal.module
   - drupal.config_object

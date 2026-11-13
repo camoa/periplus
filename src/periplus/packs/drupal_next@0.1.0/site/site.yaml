@@ -4,4 +4,5 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: drupal_next.site
+  description: "A next_site config entity, which names one Next.js application; its secrets are not read"
   id_namespace: drupal_next.site

@@ -5,4 +5,5 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.block_type
+  description: "a custom block type read from a block_content.type.* config file; a bundle of block_content, as block_content.basic"
   parent: drupal.bundle

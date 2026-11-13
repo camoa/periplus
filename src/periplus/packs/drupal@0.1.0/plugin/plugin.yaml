@@ -5,13 +5,16 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.field_type
+    description: "A field type plugin, named by its id, from a FieldType annotation on a class in a custom module"
     parent: drupal.plugin
     id_namespace: drupal.plugin.field_type
 
   - name: drupal.field_widget
+    description: "A field widget plugin, named by its id, from a FieldWidget annotation on a class in a custom module"
     parent: drupal.plugin
     id_namespace: drupal.plugin.field_widget
 
   - name: drupal.field_formatter
+    description: "A field formatter plugin, named by its id, from a FieldFormatter annotation on a class in a custom module"
     parent: drupal.plugin
     id_namespace: drupal.plugin.field_formatter

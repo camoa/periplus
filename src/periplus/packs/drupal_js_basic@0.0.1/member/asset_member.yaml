@@ -10,18 +10,22 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: script_in_module
+  description: "the script sits in that module's folder, the nearest folder above it with an info file"
   from: js.file
   to: drupal.module
   groups: true
 - kind: script_in_theme
+  description: "the script sits in that theme's folder, the nearest folder above it with an info file"
   from: js.file
   to: drupal.theme
   groups: true
 - kind: stylesheet_in_module
+  description: "the stylesheet sits in that module's folder, the nearest folder above it with an info file"
   from: css.file
   to: drupal.module
   groups: true
 - kind: stylesheet_in_theme
+  description: "the stylesheet sits in that theme's folder, the nearest folder above it with an info file"
   from: css.file
   to: drupal.theme
   groups: true

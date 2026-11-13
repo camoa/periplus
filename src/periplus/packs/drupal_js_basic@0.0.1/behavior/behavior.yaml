@@ -4,26 +4,33 @@ node_types:
 # Below js_basic's js.function, so js_basic's call edges, and the map rules that read them, may
 # start at a behavior.
 - name: drupal.js_behavior
+  description: "A Drupal behavior: an object or function assigned to Drupal.behaviors.name in a script, named by that name; two scripts that declare one name share one node"
   parent: js.function
   id_namespace: drupal.js_behavior
 - name: css.file
+  description: "A stylesheet named by its path from the project folder: a .css file in a module or theme, or a file a library lists under css:"
   id_namespace: css.file
 
 edge_kinds:
 - kind: attaches_behavior
+  description: "the behavior runs that other behavior by calling Drupal.behaviors.other.attach(), in its own code or in a class it holds"
   from: [drupal.js_behavior, drupal.js_class]
   to: drupal.js_behavior
 - kind: library_includes_script
+  description: "the library lists that script under js: in its libraries file"
   from: drupal.library
   to: js.file
 - kind: library_includes_stylesheet
+  description: "the library lists that stylesheet under css:, in any group"
   from: drupal.library
   to: css.file
 - kind: script_declares_behavior
+  description: "the script assigns that behavior to Drupal.behaviors"
   from: js.file
   to: drupal.js_behavior
 # drupal_basic's links_to_path cannot start at a script: drupal_basic does not depend on js_basic.
 - kind: script_links_to_path
+  description: "the script requests or names that Drupal path, written whole in a string, in a Drupal.url() call or in a template literal"
   from: js.file
   to: drupal.url_path
 

@@ -19,6 +19,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: route_from_view
+  description: "the route is made by a page display with a path in that view's config file"
   from: drupal.route
   to: drupal.config_object
 

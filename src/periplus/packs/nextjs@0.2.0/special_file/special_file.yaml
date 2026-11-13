@@ -5,4 +5,5 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: nextjs.special_file
+  description: "A loading, error, not-found, template, default or global-error file under app, named by its module"
   id_namespace: nextjs.special_file

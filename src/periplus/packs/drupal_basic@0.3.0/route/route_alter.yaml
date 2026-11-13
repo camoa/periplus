@@ -11,10 +11,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.route_alter
+  description: "a mark that a route subscriber alters routes it picks at run time; which routes is not written as a name"
   id_namespace: drupal.route_alter
 
 edge_kinds:
 - kind: alters_routes
+  description: "the class extends RouteSubscriberBase, read as written after extends, so it alters routes picked at run time"
   from: php.class
   to: drupal.route_alter
 

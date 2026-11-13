@@ -4,5 +4,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.webform_handler
+  description: "A Webform handler plugin, named by its id, from the WebformHandler annotation on its class"
   parent: drupal.plugin
   id_namespace: drupal.plugin.webform_handler
