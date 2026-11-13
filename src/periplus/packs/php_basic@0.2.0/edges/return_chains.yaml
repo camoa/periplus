@@ -1,0 +1,368 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Calls on what a method of $this returns, beyond types/return_types.yaml: a return type of static,
+# a nullsafe call, and a chain of three calls, inside a class method.
+#
+# A method whose declared return type is static or ?static gets a returns_static edge, declared, to
+# the class-like that declares it. static names the class the call runs on, so a call through such
+# a method takes the class the call starts from, never the declaring class: $this->make()->run() in
+# Child, with make() declared static in Base, looks run up on Child and then its ancestors through
+# extends and used traits, as $this->run() does. In the middle of a chain, static keeps the type
+# the call before it had.
+#
+# The file rules keep a php.call_site at its line for $this->m(...)?->n, $this->a(...)->b(...)->c
+# and $this->a(...)->b(...)?->c, with either join of the last two also written ?->. The id drops
+# the arguments and the spaces, and the site is joined to and from the method around it. An
+# argument list may hold one level of parentheses, f(x), as find_this_chain_call reads it.
+#
+# The map rules give a calls edge, inferred, to those call sites, to find_this_chain_call's
+# $this->m()->n, and to a call site $x->n or $x?->n whose $x local_types.yaml saw assigned
+# $this->m(...) and nothing else. They look the first method up on the enclosing class and then
+# its ancestors through extends and used traits. They take its returns_type or returns_static, and
+# look the next method up on that type and then its ancestors through extends. A middle method no
+# class in the map declares, a middle type outside the map, or a scalar middle return gives the
+# last call no edge, and its call site stays. A last method no class in the map declares lands
+# unresolved under its type.
+#
+# Every rule here on a method_declaration emits only edges: an enclosing_method end takes the first
+# node rule that fires on the method, which must be find_method.
+edge_kinds:
+- kind: returns_static
+  from: php.method
+  to: php.class_like
+
+rules:
+
+- rule: method_returns_static
+  reads: file
+  in: [source]
+  match:
+    declaration: method_declaration
+    name_child: name
+    filetype: php
+    where:
+    - has_child: named_type
+    - name_matches: {child: return_type, pattern: '(?i:static)'}
+  id: &method_id
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: &returns_static_edge [{edge: {kind: returns_static, from: this_node, to: enclosing_class}}]
+  confidence: declared
+
+- rule: method_returns_nullable_static
+  reads: file
+  in: [source]
+  match:
+    declaration: method_declaration
+    name_child: name
+    filetype: php
+    where:
+    - has_child: optional_type
+    - name_matches: {child: return_type, pattern: '\?\s*(?i:static)'}
+  id: *method_id
+  emits: *returns_static_edge
+  confidence: declared
+
+# Written ?->, so this call site and find_this_chain_call's $this->m()->n stay apart.
+- rule: find_this_nullsafe_chain_call
+  reads: file
+  in: [source]
+  match: &nullsafe_chain_match
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: &one_call '\$this->\w+\s*\([^()]*(?:\([^()]*\)[^()]*)*\)'}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &nullsafe_chain_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}?->{name}"
+    normalize: [{replace: '(?s)\s*\(.*\)(?=\?->\w+$)', with: '()'}]
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: this_nullsafe_chain_call_method
+  reads: file
+  in: [source]
+  match: *nullsafe_chain_match
+  id: *nullsafe_chain_id
+  emits: &site_edges
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+# Two calls as the object. The first normalize step empties the innermost parentheses and the
+# second the ones around them, so $this->a(f(1))->b(2)->c becomes $this->a()->b()->c.
+- rule: find_this_chain3_call
+  reads: file
+  in: [source]
+  match: &chain3_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: &two_calls '\$this->\w+\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*\??->\s*\w+\s*\([^()]*(?:\([^()]*\)[^()]*)*\)'}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &chain3_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+    normalize: &chain3_normalize
+    - {replace: '\([^()]*\)', with: '()'}
+    - {replace: '\((?:[^()]|\(\))*\)', with: '()'}
+    - {replace: '\s+', with: ''}
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: this_chain3_call_method
+  reads: file
+  in: [source]
+  match: *chain3_match
+  id: *chain3_id
+  emits: *site_edges
+  confidence: declared
+
+- rule: find_this_nullsafe_chain3_call
+  reads: file
+  in: [source]
+  match: &nullsafe_chain3_match
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *two_calls}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &nullsafe_chain3_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}?->{name}"
+    normalize: *chain3_normalize
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: this_nullsafe_chain3_call_method
+  reads: file
+  in: [source]
+  match: *nullsafe_chain3_match
+  id: *nullsafe_chain3_id
+  emits: *site_edges
+  confidence: declared
+
+# $this->m()?->n through m's class or self return type; calls_through_this_return_type reads ->.
+- rule: calls_through_this_return_type_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<inner>\w+)\(\)\?->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, mixes_in]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.method::{owner}::{inner}'
+    - edge: returns_type
+    - &typed_end
+      id_matches: '^php\.return_type::[^:]+::\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: &on_type
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - &at_site
+      node: 'php.call_site::{site}'
+    - &method_around
+      edge: call_site_in
+  emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+# $this->m()->n and $this->m()?->n where m returns static: n on the calling class.
+- rule: calls_through_this_static_return
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<inner>\w+)\(\)\??->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, mixes_in]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.method::{owner}::{inner}'
+    - edge: returns_static
+    - &calling_class
+      node: 'php.type::{class}'
+    - &calling_class_default
+      id_matches: '^php\.type::(?<declarer>.+)$'
+    - try: &on_calling_class
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - *at_site
+    - *method_around
+  emits: *calls_edge
+  confidence: inferred
+
+# $this->a()->b()->c, either join also ?->: a and b each return a class or self.
+- rule: calls_through_two_return_types
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: &chain3_site '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<first>\w+)\(\)\??->(?<second>\w+)\(\)\??->(?<method>\w+))$'}]
+    follow:
+    - &first_on_class
+      node: 'php.type::{class}'
+    - &first_ancestors
+      ancestors: [inherits, mixes_in]
+    - &first_owner
+      id_matches: '^php\.type::(?<owner>.+)$'
+    - &first_method
+      node: 'php.method::{owner}::{first}'
+    - edge: returns_type
+    - &middle_type
+      id_matches: '^php\.return_type::[^:]+::\w+::(?<middle>\\?[A-Za-z_][\w\\]*)$'
+    - &second_on_middle
+      node: 'php.type::{middle}'
+    - &middle_ancestors
+      ancestors: [inherits]
+    - &second_owner
+      id_matches: '^php\.type::(?<holder>.+)$'
+    - &second_method
+      node: 'php.method::{holder}::{second}'
+    - edge: returns_type
+    - *typed_end
+    - try: *on_type
+    - *at_site
+    - *method_around
+  emits: *calls_edge
+  confidence: inferred
+
+# a returns static, so b is looked up on the calling class; b returns a class or self.
+- rule: calls_through_static_then_return_type
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *chain3_site}]
+    follow:
+    - *first_on_class
+    - *first_ancestors
+    - *first_owner
+    - *first_method
+    - edge: returns_static
+    - *calling_class
+    - ancestors: [inherits, mixes_in]
+    - *second_owner
+    - *second_method
+    - edge: returns_type
+    - *typed_end
+    - try: *on_type
+    - *at_site
+    - *method_around
+  emits: *calls_edge
+  confidence: inferred
+
+# a returns a class or self, and b returns static, so c is looked up on a's type.
+- rule: calls_through_return_type_then_static
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *chain3_site}]
+    follow:
+    - *first_on_class
+    - *first_ancestors
+    - *first_owner
+    - *first_method
+    - edge: returns_type
+    - *middle_type
+    - *second_on_middle
+    - *middle_ancestors
+    - *second_owner
+    - *second_method
+    - edge: returns_static
+    - node: 'php.type::{middle}'
+    - id_matches: '^php\.type::(?<type>(?<declarer>.+))$'
+    - try: *on_type
+    - *at_site
+    - *method_around
+  emits: *calls_edge
+  confidence: inferred
+
+# a and b both return static: b and c are looked up on the calling class.
+- rule: calls_through_two_static_returns
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *chain3_site}]
+    follow:
+    - *first_on_class
+    - *first_ancestors
+    - *first_owner
+    - *first_method
+    - edge: returns_static
+    - *calling_class
+    - ancestors: [inherits, mixes_in]
+    - *second_owner
+    - *second_method
+    - edge: returns_static
+    - *calling_class
+    - *calling_class_default
+    - try: *on_calling_class
+    - *at_site
+    - *method_around
+  emits: *calls_edge
+  confidence: inferred
+
+# The nullsafe twin of calls_through_local_this_call: $x?->n, $x assigned $this->m(...) alone. A
+# variable that is also a parameter makes nothing: a closure's or an arrow function's parameter
+# shares the id of the method's variable of the same name, and may hold another type.
+- rule: calls_through_local_this_call_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
+    follow:
+    - &local_value
+      node: 'php.local_variable::{class}::{meth}::${var}'
+    - &local_assigned
+      edge: local_assigned
+    - &value_text
+      id_matches: '(?s)^php\.local_value::(?<value>.+)$'
+    - &this_call_value
+      id_matches: '^php\.local_value::[^:]+::\$\w+=\$this->(?<inner>\w+)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, mixes_in]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.method::{owner}::{inner}'
+    - edge: returns_type
+    - *typed_end
+    - try: *on_type
+    - *at_site
+    - *method_around
+    unless: &also_a_parameter
+    - [{node: 'php.parameter::{class}::{meth}::${var}'}]
+    unless_matched: &assigned_another_value
+    - - node: 'php.local_variable::{class}::{meth}::${var}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::(?!{value}$)'
+  emits: *calls_edge
+  confidence: inferred
+
+# $x->n and $x?->n, $x assigned $this->m(...) alone, where m returns static: n on the calling class.
+- rule: calls_through_local_static_return
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this\??->)\w+)\??->(?<method>\w+))$'}]
+    follow:
+    - *local_value
+    - *local_assigned
+    - *value_text
+    - *this_call_value
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, mixes_in]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.method::{owner}::{inner}'
+    - edge: returns_static
+    - *calling_class
+    - *calling_class_default
+    - try: *on_calling_class
+    - *at_site
+    - *method_around
+    unless: *also_a_parameter
+    unless_matched: *assigned_another_value
+  emits: *calls_edge
+  confidence: inferred
