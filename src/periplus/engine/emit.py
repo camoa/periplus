@@ -14,6 +14,7 @@ from periplus.errors import ExitCode, HarnessError
 from periplus.manifest import LoadedPack
 
 __all__ = [
+    "TYPE_CONFLICT",
     "EdgeIllegal",
     "LeftOut",
     "TypeCollision",
@@ -23,6 +24,10 @@ __all__ = [
     "render",
     "type_chain",
 ]
+
+
+#: The attribute the engine, and no rule, writes on a node that rules type as conflicting types.
+TYPE_CONFLICT = "type_conflict"
 
 
 class TypeCollision(HarnessError):
@@ -366,7 +371,20 @@ def _classify(
         target = str(deepest[1].classifies)
         chain = type_chain(types, target)
         off = [s for s in starts if s[1].classifies not in chain]
-        if off or node["type"] not in chain and target not in type_chain(types, node["type"]):
+        conflict = node.get("attributes", {}).get(TYPE_CONFLICT)
+        if conflict is not None:
+            held = type_chain(types, node["type"])
+            node["attributes"][TYPE_CONFLICT] = sorted(
+                {
+                    *conflict,
+                    *(
+                        f"{e.classifies} by {e.pack}/boundary.{e.group}"
+                        for _, e in starts
+                        if e.classifies not in held
+                    ),
+                }
+            )
+        elif off or node["type"] not in chain and target not in type_chain(types, node["type"]):
             start, entry = off[0] if off else deepest
             reason = (
                 f"{node_id}: classification {entry.classifies} from {start} "
@@ -375,7 +393,7 @@ def _classify(
             place = node["locations"][0]
             rows.append((place["file"], place["line"], f"boundary.{entry.group}", reason))
             continue
-        if node["type"] in chain:
+        elif node["type"] in chain:
             node["type"] = target
         node["provenance"] += [
             {"pack": pack, "rule": f"boundary.{group}", "confidence": "inferred", "sets": ["type"]}
@@ -430,7 +448,7 @@ def _carried(
     return all(
         set(kinds) & set(type_chain(types, merged[end]["type"]))
         for end, kinds in ((edge.source, allowed.from_types), (edge.target, allowed.to_types))
-        if "type_conflict" in merged.get(end, {}).get("attributes", {})
+        if TYPE_CONFLICT in merged.get(end, {}).get("attributes", {})
     )
 
 
@@ -451,16 +469,13 @@ def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> di
                 {"id": group[0].id, "types": ", ".join(found)},
             )
         deepest = shared[0]
-        conflict = [
-            f"{t} by {p}/{r}"
-            for t, p, r in sorted(
-                {
-                    (n.type, n.pack, n.rule)
-                    for n in group
-                    if n.type not in type_chain(types, deepest)
-                }
-            )
-        ]
+        conflict = sorted(
+            {
+                f"{n.type} by {n.pack}/{n.rule}"
+                for n in group
+                if n.type not in type_chain(types, deepest)
+            }
+        )
     values: dict[str, dict[tuple[str, int], Any]] = {}
     named: dict[tuple[str, str, str], set[str]] = {}
     for node in group:
@@ -482,7 +497,7 @@ def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> di
     }
     attributes = {name: _attribute(contributions) for name, contributions in values.items()}
     if conflict:
-        attributes["type_conflict"] = conflict
+        attributes[TYPE_CONFLICT] = conflict
     if attributes:
         result["attributes"] = dict(sorted(attributes.items()))
     return result

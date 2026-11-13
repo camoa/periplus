@@ -89,7 +89,7 @@
             },
             "type_conflict": {
               "type": "array", "minItems": 2, "items": {"type": "string"},
-              "description": "Written by the engine, never by a rule: rules typed this node as types on different branches of one ancestor, and the node's type is the nearest type they share. One entry per type, pack and rule, sorted, as '<type> by <pack>/<rule>'. An edge only a candidate type could carry is not written."
+              "description": "Written by the engine, never by a rule: rules typed this node as types on different branches of one ancestor, and the node's type is the nearest type they share. One entry per type, pack and rule, sorted, as '<type> by <pack>/<rule>'; a boundary classification adds its type as '<type> by <pack>/boundary.<group>' and changes no type. An edge only a candidate type could carry is not written."
             }
           }
         },

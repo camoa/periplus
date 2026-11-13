@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from periplus.engine.emit import _boundary_type, type_chain
+from periplus.engine.emit import TYPE_CONFLICT, _boundary_type, type_chain
 from periplus.engine.packload import (
     _BOUNDARY_SHAPE,
     RuleSet,
@@ -195,6 +195,18 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
         if rule.supported
         and rule.node_type in rule_set.types
         and _boundary_type(rule_set.types, rule.node_type)
+    )
+    problems.extend(
+        Problem(
+            ExitCode.PACK_RULES_UNREADABLE,
+            f"{rule.pack}/{rule_files.get((rule.pack, rule.name), rule.name)}: the rule "
+            f"{rule.name} writes the attribute {TYPE_CONFLICT}, which only the engine writes, on "
+            "a node rules type as conflicting types",
+            {"pack": rule.pack, "rule": rule.name, "attribute": TYPE_CONFLICT},
+        )
+        for rule in rule_set.rules
+        if rule.supported
+        and TYPE_CONFLICT in {name for name, _ in (*rule.attributes, *rule.templates)}
     )
     problems.extend(_into_collisions(rule_set, rule_files))
     problems.extend(_folder_conflicts(packs))

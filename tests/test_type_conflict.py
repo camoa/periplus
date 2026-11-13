@@ -38,9 +38,11 @@ node_types:
 - {name: own.edit_form, parent: own.form}
 - {name: own.list_form, parent: own.form}
 - {name: own.stray, id_namespace: own.thing}
+- {name: own.view_form, parent: own.form}
 edge_kinds:
 - {kind: uses, from: own.thing, to: own.thing}
 - {kind: saves, from: own.edit_form, to: own.thing}
+- {kind: extends, from: own.thing, to: own.thing}
 rules:
 - rule: thing_line
   reads: file
@@ -63,6 +65,23 @@ rules:
   id: {from: {capture: name}}
   emits: [{edge: {kind: saves, from: this_node, to: {from: {capture: to}}}}]
   confidence: declared
+- rule: extends_line
+  reads: file
+  in: [src]
+  match: {file: '*', filetype: code, text: '(?m)^(?<name>\\w+) extends (?<to>\\w+)'}
+  id: {from: {capture: name}}
+  emits: [{edge: {kind: extends, from: this_node, to: {from: {capture: to}}}}]
+  confidence: declared
+"""
+
+#: A boundary group whose listed base classifies what extends it as a third kind of form.
+BOUNDARY = """\
+boundary:
+  framework:
+    type: own.thing
+    ancestry: [extends]
+    names:
+      Base: own.view_form
 """
 
 #: One rule that types a node; ``{word}`` starts its line and ``{type}`` is the type it gives.
@@ -84,8 +103,10 @@ STRAY = TYPING.format(word="stray", type="own.stray")
 SOURCE = "thing gamma\nedit gamma\nlist gamma\nthing delta\ngamma uses delta\ngamma saves delta\n"
 
 
-def _project(root: Path, first: str, second: str, source: str = SOURCE) -> None:
-    rutter(root, "own", MANIFEST, {"types.yaml": TYPES, "a.yaml": first, "b.yaml": second})
+def _project(
+    root: Path, first: str, second: str, source: str = SOURCE, manifest: str = MANIFEST
+) -> None:
+    rutter(root, "own", manifest, {"types.yaml": TYPES, "a.yaml": first, "b.yaml": second})
     pin(root, "own@0.0.1")
     plant(root, {"src/one.sx": source})
 
@@ -175,3 +196,42 @@ def test_the_report_lists_each_conflict_with_its_candidates(tmp_path: Path) -> N
             }
         ],
     }
+
+
+def test_a_boundary_classification_adds_a_candidate_and_keeps_the_ancestor(tmp_path: Path) -> None:
+    maps = []
+    for order, root in ((0, tmp_path / "ab"), (1, tmp_path / "ba")):
+        _project(
+            root,
+            *((EDIT, LIST) if order == 0 else (LIST, EDIT)),
+            source=SOURCE + "gamma extends Base\n",
+            manifest=MANIFEST + BOUNDARY,
+        )
+        report, document = map_project(root)
+        assert report.problems == (), report.problems
+        node = nodes(document)["own.thing::gamma"]
+        assert node["type"] == "own.form", node
+        assert node["attributes"]["type_conflict"] == [
+            "own.edit_form by own/edit_line",
+            "own.list_form by own/list_line",
+            "own.view_form by own/boundary.framework",
+        ], node
+        maps.append((root / "map.json").read_bytes())
+    assert maps[0] == maps[1]
+
+
+def test_a_rule_that_writes_the_type_conflict_attribute_is_refused(tmp_path: Path) -> None:
+    writes = EDIT.replace(
+        "emits: [{node: {type: own.edit_form}}]",
+        "emits: [{node: {type: own.edit_form}}, {attribute: {name: type_conflict, template: x}}]",
+    )
+    _project(tmp_path, writes, LIST)
+    report, document = map_project(tmp_path)
+    assert document == {}
+    assert [(p.code, p.message) for p in report.problems] == [
+        (
+            ExitCode.PACK_RULES_UNREADABLE,
+            "own/rules/a.yaml: the rule edit_line writes the attribute type_conflict, which "
+            "only the engine writes, on a node rules type as conflicting types",
+        )
+    ]
