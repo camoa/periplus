@@ -1,0 +1,222 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The variable a catch clause binds, catch (FooError $e), and a call made on it, $e->m() or
+# $e?->m(), in a class method or a plain function. The catch is read as one more assignment to the
+# variable, through the internal nodes of local_types.yaml: the variable, <class>::<method>::$e in a
+# method or <function>::$e in a function, and the value <holder>::$e=catch (<types as written>),
+# joined by local_assigned. A catch of one class adds the internal php.catch_type
+# <holder>::$e::<FooError resolved through the imports and namespace>, joined from the value by
+# catch_typed_as, which the rules of local_types.yaml and return_types.yaml do not read.
+#
+# The map rules give a call site of variable_calls.yaml or variable_calls_in_function.yaml its
+# calls edge, inferred, when the variable's only value is a catch of one class: they look the method
+# up on that class and then its ancestors through extends. A method no class in the map declares,
+# or a class outside the map, such as \RuntimeException, lands unresolved under the class.
+#
+# The map does not follow statement order, so one call site stands for every call on $e in its
+# method or function. A call gets no edge from these rules, and keeps its call site, when the
+# variable may hold something else there: a catch of two classes, catch (A | B $e); two catch
+# clauses of different classes; any other assignment to $e; or a parameter $e, typed or not. Two
+# catch clauses of one class, written alike, are one value and give the edge. In a method, the
+# catch variable also stops calls_through_typed_parameter from joining a call on a parameter of the
+# same name; calls_through_function_parameter reads no variable and still joins one in a function.
+#
+# A closure or arrow function shares the variable's id with the method or function around it, so
+# its parameter $e is a parameter of that holder here and blocks the edge. A catch in a function
+# shares the value and type ids with a method's catch only when a class and a function have one
+# full name; the variable ids stay apart.
+node_types:
+- name: php.catch_type
+  id_namespace: php.catch_type
+  internal: true
+
+edge_kinds:
+- kind: catch_typed_as
+  from: php.local_value
+  to: php.catch_type
+
+rules:
+
+# A catch with no variable, catch (FooError), binds nothing.
+- rule: find_catch_variable
+  reads: file
+  in: [source]
+  match: &catch_match
+    declaration: catch_clause
+    name_child: name
+    filetype: php
+    where: [{has_child: variable_name}]
+  id: &method_variable_id
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
+  emits: [{node: {type: php.local_variable}}]
+  confidence: declared
+
+# No assignment writes =catch, so the value never shares an id with one an = makes.
+- rule: find_catch_value
+  reads: file
+  in: [source]
+  match: *catch_match
+  id: &value_id
+    from: [enclosing_type, declared_name, type]
+    template: "{enclosing_type}::{declared_name}=catch ({type})"
+  emits: [{node: {type: php.local_value}}]
+  confidence: declared
+
+- rule: catch_assigned_value
+  reads: file
+  in: [source]
+  match: *catch_match
+  id: *method_variable_id
+  emits: &assigned [{edge: {kind: local_assigned, from: this_node, to: {declared: php.local_value}}}]
+  confidence: declared
+
+# One class name and no |, so a union catch keeps a value and gets no type.
+- rule: find_catch_type
+  reads: file
+  in: [source]
+  match: &single_match
+    declaration: catch_clause
+    name_child: name
+    filetype: php
+    where:
+    - has_child: variable_name
+    - name_matches: {child: type, pattern: '\\?[A-Za-z_][\w\\]*'}
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.catch_type}}]
+  confidence: declared
+
+- rule: catch_value_typed_as
+  reads: file
+  in: [source]
+  match: *single_match
+  id: *value_id
+  emits: [{edge: {kind: catch_typed_as, from: this_node, to: {declared: php.catch_type}}}]
+  confidence: declared
+
+# The function twins of the variable and its edge. find_catch_value, find_catch_type and
+# catch_value_typed_as name no method, so they already fire in a function.
+- rule: find_catch_variable_in_function
+  reads: file
+  in: [source]
+  match: &function_catch_match
+    declaration: catch_clause
+    name_child: name
+    filetype: php
+    holder: function_definition
+    where: [{has_child: variable_name}]
+  id: &function_variable_id
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{node: {type: php.local_variable}}]
+  confidence: declared
+
+- rule: catch_assigned_value_in_function
+  reads: file
+  in: [source]
+  match: *function_catch_match
+  id: *function_variable_id
+  emits: *assigned
+  confidence: declared
+
+# local_types.yaml joins a variable to its values in a method only; these two do it in a function,
+# so a catch variable assigned again there has a second value. find_local_value already mints the
+# value, its id naming no method.
+- rule: find_local_variable_in_function
+  reads: file
+  in: [source]
+  match: &function_assignment_match
+    declaration: assignment_expression
+    name_child: left
+    filetype: php
+    holder: function_definition
+    where: [{name_matches: {child: left, pattern: '\$(?!this$)\w+'}}]
+  id: *function_variable_id
+  emits: [{node: {type: php.local_variable}}]
+  confidence: declared
+
+- rule: local_assigned_value_in_function
+  reads: file
+  in: [source]
+  match: *function_assignment_match
+  id: *function_variable_id
+  emits: *assigned
+  confidence: declared
+
+- rule: calls_through_catch_variable
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)->(?<method>\w+))$'}]
+    follow: &method_walk
+    - node: 'php.local_variable::{class}::{meth}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>[^:]+::\$\w+=catch \(.*\))$'
+    - edge: catch_typed_as
+    - id_matches: &type_pattern '^php\.catch_type::[^:]+::\$\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: &on_type
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    # The second chain: a function declared inside a method holds its own catch, which the
+    # function rules below join; the method-shaped twin of its call site has no real method.
+    unless: &method_parameter
+    - [{node: 'php.parameter::{class}::{meth}::${var}'}]
+    - [{node: 'php.function::{class}'}]
+    unless_matched: &method_other_value
+    - - node: 'php.local_variable::{class}::{meth}::${var}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::(?!{value}$)'
+  emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: calls_through_catch_variable_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
+    follow: *method_walk
+    unless: *method_parameter
+    unless_matched: *method_other_value
+  emits: *calls_edge
+  confidence: inferred
+
+# One :: before the variable, so a method's call site never matches.
+- rule: calls_through_catch_variable_in_function
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<function>[^:]+)::\$(?<var>(?!this->)\w+)->(?<method>\w+))$'}]
+    follow: &function_walk
+    - node: 'php.local_variable::{function}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>[^:]+::\$\w+=catch \(.*\))$'
+    - edge: catch_typed_as
+    - id_matches: *type_pattern
+    - try: *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless: &function_parameter
+    - [{node: 'php.parameter::{function}::${var}'}]
+    unless_matched: &function_other_value
+    - - node: 'php.local_variable::{function}::${var}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::(?!{value}$)'
+  emits: *calls_edge
+  confidence: inferred
+
+- rule: calls_through_catch_variable_in_function_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<function>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
+    follow: *function_walk
+    unless: *function_parameter
+    unless_matched: *function_other_value
+  emits: *calls_edge
+  confidence: inferred
