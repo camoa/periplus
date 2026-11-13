@@ -183,6 +183,30 @@ emits:
     to: {from: {capture: parent}, resolve: [bound_first_segment, {prefix_with: module}], separator: '.', on_miss: unresolved}
 ```
 
+An end that leaves the mapped code takes `on_miss: unknown_boundary` instead: no rule maps it, and
+no rule has said yet what it reaches. A rule that knows what it reaches writes
+`boundary: {into: {template: <name>, type: <type>}, kind: <edge kind>}` on the end. The end then
+reads `boundary` and gets an edge of that kind to the into node. The into type is declared
+`boundary: true`: a node of it, or of a type below it, reads `boundary` whenever an edge reaches it,
+and a rule that emits one as a node is refused. A mapped end gets no mark and no into edge.
+
+A general rutter marks, and a specific rutter that depends on it identifies. Both rules emit the
+same edge, so the map keeps one end node and one edge, with both rules in the provenance. The
+general rutter names nothing of the specific one:
+
+```yaml
+# general@0.0.1, map rule: a call to a function no file declares
+to: {template: 'gen.function::{callee}', on_miss: unknown_boundary}
+# specific@0.0.1, which depends on general: the call to config enters its API
+node_types: [{name: spec.api, id_namespace: spec.api, boundary: true}]
+edge_kinds: [{kind: enters, from: gen.function, to: spec.api}]
+to: {template: 'gen.function::config', boundary: {into: {template: config, type: spec.api}, kind: enters}}
+```
+
+`periplus affected spec.api::config` then lists the config end and each function that calls it.
+When rules mark one end differently, mapped beats boundary, boundary beats unresolved, unresolved
+beats unknown boundary, and any mark beats referenced, whatever the rule and file order.
+
 Sections are spans of a file type's text that a text rule does not read. A match that starts
 inside one gives nothing, unless the rule lists its name, as `match: {reads_sections: [string]}`. Python's sections are its strings and its comments, the first being:
 

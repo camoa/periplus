@@ -318,20 +318,21 @@ boundary:
 
 A name lives in the id namespace of the group's `type`, so `ControllerBase` is the node
 `php.type::Drupal\Core\Controller\ControllerBase`. When an edge ends on a listed name and no rule
-found that node, the node has state `declared`, the group's type, no location, and one provenance
-row: the pack, rule `boundary.<group>`, confidence `declared`. A name no edge reaches makes
-nothing. An end not listed stays `referenced`.
+found that node, the node has state `boundary`, the group's type, no location, and a provenance
+row per listing group: the pack, rule `boundary.<group>`, confidence `declared`. Two packs may
+list one name; the node keeps both rows. A name no edge reaches makes nothing. An end not listed
+keeps the mark its edges give, or stays `referenced`.
 
 A name's value is a node type, or `~` for none. A mapped class whose `ancestry` edges reach the
-name, directly or through other mapped classes, is classified by that type. A referenced or
-declared class in between stops the walk. A class whose type is an ancestor of the value takes
+name, directly or through other mapped classes, is classified by that type. A class in between
+that is not mapped stops the walk. A class whose type is an ancestor of the value takes
 the value; one already of the value's type or below it keeps its type. Both gain a provenance row,
 rule `boundary.<group>`, confidence `inferred`. Any other class keeps its type, and `skipped`
 gets one row: `<id>: classification <value> from <boundary id> does not descend from <type>`.
 
 `periplus map` refuses with exit 26 a group `type` or a names value that no pack visible to the
-declaring pack declares, an `ancestry` kind that no loaded pack declares, and one id that two
-packs list. Each problem names the shape to write. The
+declaring pack declares, and an `ancestry` kind that no loaded pack declares. Each problem names
+the shape to write. The
 path-based keys of earlier releases, `applies_to_paths`, `emit_boundary_nodes` and
 `type_hierarchy`, fail the manifest schema with exit 16.
 
@@ -421,8 +422,9 @@ characters; a value that comes out empty sets nothing. The node gets the value u
 and its provenance row lists the name in `sets`. A template that names anything else refuses the
 map with exit 26: a declaration rule's attribute template names only the sources of its id.
 
-The map schema declares one such mark, `resolution: runtime`, the unknown boundary: a rule read
-this call site, but its target or argument is built at run time, and no rule will draw the edge.
+The map schema declares one such mark, `resolution: runtime`: an unknown boundary, reason
+run-time. A rule read this call site, but its target or argument is built at run time, and no rule
+will draw the edge. The node's state is `unknown_boundary`.
 
 ```yaml
   emits:

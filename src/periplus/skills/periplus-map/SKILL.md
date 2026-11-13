@@ -58,7 +58,11 @@ in docs, tests and comments that are not part of the answer.
 Each row carries a state:
 
 - `mapped`: found in the project's files, with a location.
-- `referenced` or `declared`: named by an edge, defined outside the mapped files.
+- `boundary`: outside the mapped files, and a rule identified what it is. An API node of this
+  state lists, under `affected`, what in the project touches that API.
+- `unknown_boundary`: the map could not make it known, a call built at run time or an end that
+  leaves the mapped files with no rule identifying it. Read the code at the caller's line.
+- `referenced` or `declared`: named by an edge, defined outside the mapped files, no rule marked it.
 - `unresolved`: a rule looked for the target by name and found none. The edge and its source
   line are real; the target is not in the map.
 

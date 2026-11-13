@@ -90,7 +90,9 @@ Most gaps close with two rules. A file rule writes an internal node where the co
 a call site, a hub for a name, or a name guessed from how it is written. A map rule joins that
 node to the real target, and only when the map holds the target. A target the map lacks leaves a
 mark, an end with `on_miss: unresolved` or a referenced node: never silence, and never an invented
-target. Mark the node's type `internal: true`, so the written map leaves it out; the detail is in
+target. An end that leaves the mapped code takes `on_miss: unknown_boundary`; a rule that knows what
+it reaches writes `boundary: {into: {template, type}, kind}` on the same end, into a type declared
+`boundary: true`. Mark the node's type `internal: true`, so the written map leaves it out; the detail is in
 [Internal node types](https://github.com/camoa/periplus/blob/v0.8.0/docs/rutter-author-guide-map-rules.md#internal-node-types), and the pattern in
 [Join an internal node to its real target](https://github.com/camoa/periplus/blob/v0.8.0/docs/rutter-author-guide-map-rules.md#join-an-internal-node-to-its-real-target).
 

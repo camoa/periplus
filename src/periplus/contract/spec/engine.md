@@ -87,8 +87,12 @@ Nodes merge on their id. Edges merge on `(kind, from, to)`; their locations accu
 `occurrences` is the count. Deduplicating per pair and discarding the rest was measured at
 186 caller functions against 303 call sites, and one pair in a real map had 58.
 
-An endpoint naming no node becomes one — `declared` when a pack's `boundary` lists it,
-`referenced` when nothing does. Doing this took dangling edges in one real map from 792 of 884 to
+An endpoint naming no node becomes one: `boundary` when a pack's `boundary` lists it, when its
+type is declared `boundary: true`, or when an edge's end has `boundary`; `unresolved` or
+`unknown_boundary` when an edge's end has that `on_miss`; `referenced` when nothing marks it. When
+marks differ, mapped beats boundary, boundary beats unresolved, and unresolved beats
+unknown_boundary, whatever the rule and file order. A node a rule found whose `resolution`
+attribute is `runtime` reads `unknown_boundary`. Doing this took dangling edges in one real map from 792 of 884 to
 zero. A boundary group gives a `type`, the `ancestry` edge kinds and its `names`; a listed node
 takes the group's type, no location, and the drawing pack's provenance. A name's value is a node
 type: a mapped class whose ancestry edges reach the name through mapped classes is classified by

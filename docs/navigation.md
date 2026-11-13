@@ -76,7 +76,9 @@ periplus find TEXT [--type T]... [--path P]... [--limit N] [--map PATH] [--forma
 Lists the nodes whose id holds `TEXT`, closest match first, then the nodes whose string attribute
 values hold it, then the nodes whose description alone holds it. Matching ignores case. A string
 item of a list attribute counts; numbers, booleans and nested objects do not. Each row is the id,
-the type, the state and the first location, then the source line and the description. A row matched
+the type, the state and the first location, then the source line and the description. The state is
+`mapped`, `boundary`, `unknown_boundary`, `unresolved` or `referenced`; the map schema defines each,
+and every command below prints it the same way. A row matched
 by its description ends with `[description]`. A row matched by an attribute ends with
 `[attribute NAME]`, the first matching name in sorted order, and prints `@ NAME: value` under the
 source line. `--type T` keeps type
