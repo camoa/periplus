@@ -41,7 +41,7 @@
       "properties": {
         "pack": {"type": "string"},
         "rule": {"type": "string"},
-        "confidence": {"enum": ["declared", "inferred"]},
+        "confidence": {"enum": ["declared", "inferred", "mentioned"]},
         "sets": {"type": "array", "items": {"type": "string"}}
       }
     },
@@ -134,7 +134,7 @@
         "other_state": {"type": "string"},
         "locations": {"type": "array", "items": {"$ref": "#/$defs/location"}},
         "occurrences": {"type": ["integer", "null"]},
-        "confidences": {"type": "array", "items": {"enum": ["declared", "inferred"]}},
+        "confidences": {"type": "array", "items": {"enum": ["declared", "inferred", "mentioned"]}},
         "rules": {"type": "array", "items": {"type": "string"}},
         "description": {"$ref": "#/$defs/description"},
         "location": {"$ref": "#/$defs/place"},

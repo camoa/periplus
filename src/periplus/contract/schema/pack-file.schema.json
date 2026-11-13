@@ -414,9 +414,10 @@
     "confidence": {
       "enum": [
         "declared",
-        "inferred"
+        "inferred",
+        "mentioned"
       ],
-      "description": "Declared on the rule, never computed at runtime. The same regex on the same character is declared in Go, where capitalisation is visibility the compiler enforces, and inferred in React, where it is a convention people can ignore. Only the author knows which."
+      "description": "Declared on the rule, never computed at runtime. The same regex on the same character is declared in Go, where capitalisation is visibility the compiler enforces, and inferred in React, where it is a convention people can ignore. Only the author knows which. mentioned is weaker than inferred: the link rests only on a name written as text, such as a string literal equal to a known id, a name compared in a condition, a selector in a script, or a name inside another name."
     },
     "match": {
       "type": "object",

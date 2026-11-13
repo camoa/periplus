@@ -332,16 +332,19 @@ class GapReport:
         lists = {
             "referenced": [n for n in self.gaps if n["state"] == "referenced"],
             "unresolved": [n for n in self.gaps if n["state"] == "unresolved"],
-            "inferred": [
-                self.nodes[e["from"]]
-                for e in self.edges
-                if any(p.get("confidence") == "inferred" for p in e["provenance"])
-            ],
+            **{
+                word: [
+                    self.nodes[e["from"]]
+                    for e in self.edges
+                    if any(p.get("confidence") == word for p in e["provenance"])
+                ]
+                for word in ("inferred", "mentioned")
+            },
         }
         for word, found in lists.items():
             print(f"{word}  {len(found)}")
             print(split(found))
-            if word != "inferred":
+            if word in ("referenced", "unresolved"):
                 print(f"reached from first-party {sum(n['id'] in reached for n in found)}")
 
     def print_detail(self) -> None:

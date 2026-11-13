@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A rule may declare the confidence `mentioned`, weaker than `inferred`, for a link drawn only because a name is written as text: a string equal to a known id, a name compared in a condition, a selector in a script, or a name inside another name. The pack, map and navigation schemas accept it, and maps written before still match the map schema. Rules that draw one edge at different confidences each keep their provenance row, in any rule or file order. `show` prints it, and the gaps skill counts `mentioned` edges on their own line.
 - A `name_matches` condition with `child` may take `nth`, a number from 1, and then tests that child among the children of the node type, where a condition without it reads the first. A rule can so tell apart two children that share a type and have no field name.
 - `php_basic` maps three more shapes:
   - a `$this->method()` call is a call site joined to its method, with a `calls` edge to the method found on the class, its parents or its traits. A method no mapped class declares stays unresolved under the calling class;

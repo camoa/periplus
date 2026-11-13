@@ -227,7 +227,17 @@ sections:
   close: '{mark}'
 ```
 
-Confidence is declared per rule: `declared` where the file states it, `inferred` for a convention.
+Confidence is declared per rule. It takes one of three values, strongest first:
+
+- `declared`: the file states the thing. A `use Acme\Widget;` line declares the import.
+- `inferred`: a convention or a resolved reference gives it. A class named `WidgetTest` is a test by
+  naming convention.
+- `mentioned`: the link rests only on a name written as text. A string `'widget.settings'` that
+  equals a known id, a route name compared in a condition, a selector such as `'.widget-form'` in
+  a script, or `widget` inside the name `widget_form_alter`.
+
+When rules at different confidences draw the same node or edge, the map keeps one provenance row
+per rule, so a `declared` row is never replaced by a `mentioned` one.
 
 ## How to check a rutter
 

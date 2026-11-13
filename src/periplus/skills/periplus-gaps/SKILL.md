@@ -16,7 +16,7 @@ description: Reads a Periplus map and the code behind it, lists what the map lac
 ## Find the gaps
 
 The gaps are read from the map's own marks: `referenced` and `unresolved` nodes, the report's
-`skipped` rows, `inferred` edges, `runtime` marks, the Detail gaps lines and the site faults. Code
+`skipped` rows, `inferred` and `mentioned` edges, `runtime` marks, the Detail gaps lines and the site faults. Code
 is opened only at the file and line a mark points to. This skill does not survey the code for
 things the map lacks. A silent gap, code no rule looks at, leaves no mark: it shows as a wrong or
 missing answer when the map is used. Survey the code wider only when the user asks for it.
@@ -36,7 +36,8 @@ classes.
 4. Print the report from the map file. The program ships with this skill and needs only the
    standard library. Run it from the project root:
    `python3 ${CLAUDE_SKILL_DIR}/scripts/gap_read.py .periplus/map.json`. Under Resolution gaps it prints the count of `referenced` nodes,
-   of `unresolved` nodes and of edges whose confidence is `inferred`, each followed by a
+   of `unresolved` nodes, of edges whose confidence is `inferred` and of edges whose confidence is
+   `mentioned`, each followed by a
    `first-party` split. A node is first-party when it has a location: it is `mapped`, or a
    run-time call site in state `unknown_boundary`. A `referenced` or `unresolved` node is always
    outside; for those two lists a

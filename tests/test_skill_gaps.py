@@ -115,7 +115,7 @@ def _state_lines(resolution: list[str]) -> dict[str, int]:
     counted: dict[str, int] = {}
     for line in resolution:
         word = line.split()[0].lower() if line.split() else ""
-        if word in ("referenced", "unresolved", "inferred") and _count(line) is not None:
+        if word in ("referenced", "unresolved", "inferred", "mentioned") and _count(line) is not None:
             counted[word] = _count(line) or 0
     return counted
 
@@ -154,13 +154,15 @@ def test_gap_read_runs_on_the_example_map_and_print_counted_lists_wo1(
     assert [h for h in HEADINGS if h not in out] == [], f"printed {out!r}"
     real = json.loads(map_file.read_text())
     states = [n["state"] for n in real["nodes"]]
-    inferred = sum(
-        any(p["confidence"] == "inferred" for p in e["provenance"]) for e in real["edges"]
+    inferred, mentioned = (
+        sum(any(p["confidence"] == word for p in e["provenance"]) for e in real["edges"])
+        for word in ("inferred", "mentioned")
     )
     assert _state_lines(_section(out, "Resolution gaps")) == {
         "referenced": states.count("referenced"),
         "unresolved": states.count("unresolved"),
         "inferred": inferred,
+        "mentioned": mentioned,
     }, out
 
 
@@ -185,17 +187,24 @@ def test_resolution_gaps_count_each_state_with_a_first_party_split_c2(
         _edge("python.module::m1", "python.module::ref0", "imports", "inferred"),
         _edge("python.module::m2", "python.function::un1", "calls", "inferred"),
         _edge("python.module::m0", "python.module::m1", "imports", "declared"),
+        _edge("python.module::m1", "python.module::m0", "imports", "mentioned"),
     ]
     map_file = _write_map(tmp_path / "map.json", nodes, edges)
     out = _run_gap_read(map_file, capsys)
     resolution = _section(out, "Resolution gaps")
-    assert _state_lines(resolution) == {"referenced": 3, "unresolved": 2, "inferred": 5}, out
+    assert _state_lines(resolution) == {
+        "referenced": 3,
+        "unresolved": 2,
+        "inferred": 5,
+        "mentioned": 1,
+    }, out
     splits = _first_party_lines(resolution)
-    assert len(splits) == 3, resolution
+    assert len(splits) == 4, resolution
     by_state = dict(zip(_state_lines(resolution), splits, strict=True))
     assert by_state["referenced"] == (0, 3), resolution
     assert by_state["unresolved"] == (0, 2), resolution
     assert by_state["inferred"] == (4, 1), resolution
+    assert by_state["mentioned"] == (1, 0), resolution
 
 
 @pytest.mark.criterion(id="c2")
@@ -364,7 +373,9 @@ def test_unknown_boundaries_heading_prints_after_site_faults_on_the_example_map_
     unknown = _section(out, "Unknown boundaries")
     others = "\n".join(x for h in HEADINGS[:3] for x in _section(out, h))
     assert unknown, f"nothing under the heading: {out!r}"
-    assert not set(unknown) & set(others.splitlines()), unknown
+    # A first-party split line is a count format every list prints, not a row.
+    rows = {x for x in unknown if not _first_party_lines([x])}
+    assert not rows & set(others.splitlines()), unknown
     assert 0 in {_count(x) for x in unknown}, f"no count line of 0: {unknown}"
 
 

@@ -100,8 +100,8 @@ periplus show ID [--limit N] [--map PATH] [--format text|json]
 
 Prints the node's type, state, location and provenance, then its outgoing and incoming edges
 grouped by kind. Each edge row names the other end, the first location, the occurrence count, the
-confidence and the rule, with the source line under it. `--limit` applies to each of the two edge
-lists. Take `ID` from `find`. In JSON each edge row adds `location` and `source`, and the report
+confidences (`declared`, `inferred` or `mentioned`, each once) and the rules, with the source line
+under it. `--limit` applies to each of the two edge lists. Take `ID` from `find`. In JSON each edge row adds `location` and `source`, and the report
 adds `warnings`.
 
 `show` also reads the project's `.periplus/descriptions.yaml`, when it exists. It finds the project
