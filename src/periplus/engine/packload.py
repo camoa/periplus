@@ -1132,7 +1132,7 @@ def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
     unless = [(chain, walk(chain, " inside unless", set(known))) for chain in rule.unless]
     followed = walk(rule.follow, "", known)
     hint = "; a chain that names a capture of follow goes in unless_matched"
-    reasons = [
+    reasons: list[str | None] = [
         reason + (hint if walk(chain, "", set(known)) is None else "")
         for chain, reason in unless
         if reason
