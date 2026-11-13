@@ -244,17 +244,18 @@
     },
 
     "slice_piece": {
-      "description": "What slice prints without --out: the start nodes, then the rows reached from them breadth-first.",
+      "description": "What slice prints without --out: the start nodes, the pieces they fall into, then the rows reached from them breadth-first.",
       "type": "object", "additionalProperties": false,
-      "required": ["starts", "rows", "left_out", "deeper", "folded", "notes", "members", "depth", "direction", "warnings", "problems"],
+      "required": ["starts", "pieces", "rows", "left_out", "deeper", "folded", "notes", "members", "depth", "direction", "warnings", "problems"],
       "properties": {
         "starts": {
           "type": "array",
           "items": {
             "type": "object", "additionalProperties": false,
-            "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description", "given", "words"],
+            "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description", "given", "words", "piece"],
             "properties": {
               "id": {"type": "string"},
+              "piece": {"$ref": "#/$defs/piece_number"},
               "type": {"type": "string"},
               "state": {"type": "string"},
               "location": {"type": ["string", "null"]},
@@ -275,6 +276,18 @@
                   }
                 }
               }
+            }
+          }
+        },
+        "pieces": {
+          "description": "The pieces, in printed order: sets of reached nodes that edges other than grouping edges join. The map holds no edge between two of them.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["piece", "starts", "things"],
+            "properties": {
+              "piece": {"$ref": "#/$defs/piece_number"},
+              "starts": {"description": "The start ids in the piece, in pick order.", "type": "array", "items": {"type": "string"}},
+              "things": {"description": "How many nodes the printed piece names in it.", "type": "integer", "minimum": 0}
             }
           }
         },
@@ -318,11 +331,14 @@
       }
     },
 
+    "piece_number": {"description": "The number of the piece the node is in, from 1, as printed.", "type": "integer", "minimum": 1},
+
     "slice_row": {
       "description": "One walk row of a slice piece, and one member row of a container start.",
       "type": "object", "additionalProperties": false,
-      "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "again", "location", "source", "description", "container"],
+      "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "again", "location", "source", "description", "container", "piece"],
       "properties": {
+        "piece": {"$ref": "#/$defs/piece_number"},
         "start": {"description": "The start node this row hangs under.", "type": "string"},
         "hop": {"type": "integer", "minimum": 1},
         "from": {"description": "The node the row was reached from.", "type": "string"},
