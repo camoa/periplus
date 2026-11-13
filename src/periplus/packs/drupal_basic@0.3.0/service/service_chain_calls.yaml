@@ -1,0 +1,145 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method called on a service in one expression: \Drupal::service('my_module.mailer')->send(),
+# its ?-> form, and the same on the container, $container->get('x')->send() or
+# $this->container->get('x')->send(). The file rules keep each such call as a php.call_site at its
+# line, <class>::<method>::<object as written>->send, joined to and from the method around it. In a
+# function of a module-family file the id has no method part and the edges join the function, as
+# in call/runtime_argument_in_function.yaml. The map rule then gives the call a calls edge, from
+# the method or function around it, to the method on the class the services file gives that
+# service, or on its nearest ancestor that declares it. Inferred: the services file, not the call,
+# names the class, and the container is known by its name, as in call/call.yaml.
+#
+# Limits:
+# - The service id is read only as a quoted literal with no concatenation. A variable or a
+#   constant, \Drupal::service($id)->send(), gives no call site here; the uses_service edge and the
+#   runtime mark of call/call.yaml and call/runtime_argument.yaml stay as they are.
+# - A service no mapped services file declares, such as one from core, keeps its call site and
+#   gets no calls edge: nothing names its class.
+# - A method that neither the service's class nor an ancestor in the map declares lands unresolved
+#   under the service's class.
+# - A chain longer than one call, \Drupal::service('x')->get('y')->send(), gives an edge for the
+#   first call only; the call after it gets no call site here.
+# - A $container or $this->container that is not Drupal's service container gives a false edge.
+# - In a plain .php file, a call in a function outside any class gives no call site.
+
+rules:
+- rule: find_service_chain_call
+  reads: file
+  in: [source]
+  match: &chain_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &chain_where
+    - name_matches: {child: object, pattern: '(?:\\?Drupal::service|\$container->get|\$this->container->get)\(\s*[''"][\w.-]+[''"]\s*\)'}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &chain_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: service_chain_call_method
+  reads: file
+  in: [source]
+  match: *chain_match
+  id: *chain_id
+  emits: &method_edges
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+- rule: find_service_chain_nullsafe_call
+  reads: file
+  in: [source]
+  match: &chain_nullsafe_match
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where: *chain_where
+  id: &chain_nullsafe_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}?->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: service_chain_nullsafe_call_method
+  reads: file
+  in: [source]
+  match: *chain_nullsafe_match
+  id: *chain_nullsafe_id
+  emits: *method_edges
+  confidence: declared
+
+# The twins for a function of a module-family file, such as a hook in a .module file.
+- rule: find_service_chain_call_in_function
+  reads: file
+  in: [source]
+  match: &chain_function_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: &module_endings [module, install, theme, inc, profile]
+    holder: function_definition
+    where: *chain_where
+  id: &chain_function_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::{declared_name}->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: service_chain_call_in_function
+  reads: file
+  in: [source]
+  match: *chain_function_match
+  id: *chain_function_id
+  emits: &function_edges
+  - edge: {kind: has_call_site, from: enclosing_class, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_class}
+  confidence: declared
+
+- rule: find_service_chain_nullsafe_call_in_function
+  reads: file
+  in: [source]
+  match: &chain_function_nullsafe_match
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *chain_where
+  id: &chain_function_nullsafe_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::{declared_name}?->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: service_chain_nullsafe_call_in_function
+  reads: file
+  in: [source]
+  match: *chain_function_nullsafe_match
+  id: *chain_function_nullsafe_id
+  emits: *function_edges
+  confidence: declared
+
+# The join, for every call site above: the service id and the method from the site's id, the
+# service's class, then the method on that class or its nearest ancestor that declares it.
+- rule: calls_through_service_chain
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>.+::(?:\\?Drupal::service|\$container->get|\$this->container->get)\(\s*[''"](?<service>[\w.-]+)[''"]\s*\)\??->(?<method>\w+))$'}]
+    follow:
+    - node: 'drupal.service::{service}'
+    - edge: service_class
+    - id_matches: '^php\.type::(?<type>(?<declarer>.+))$'
+    - try:
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
