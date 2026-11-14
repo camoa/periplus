@@ -155,8 +155,10 @@ def test_edge_kind_from_types_in_two_id_namespaces_give_the_map_problem_c1(
     _edit(
         pack,
         Path("command") / "command.yaml",
-        "- kind: command_method\n  from: drush.command",
-        "- kind: command_method\n  from: [drush.command, php.class]",
+        '- kind: command_method\n  description: "The Drush command runs that method"\n'
+        "  from: drush.command",
+        '- kind: command_method\n  description: "The Drush command runs that method"\n'
+        "  from: [drush.command, php.class]",
     )
     _pin(project, "endfix")
 

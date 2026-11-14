@@ -1711,6 +1711,37 @@ def test_a_suggestion_template_links_to_the_block_hook_or_field_its_name_suggest
             "inferred",
         ),
         ("suggests_theme_hook", "my-card--wide", "drupal.theme_hook::my_card", "inferred"),
+        # A theme template named <core hook>--<anything> suggests the core hook, as a node.
+        ("suggests_theme_hook", "block--my-cart-block", "drupal.theme_hook::block", "inferred"),
+        ("suggests_theme_hook", "block--my-theme-branding", "drupal.theme_hook::block", "inferred"),
+        ("suggests_theme_hook", "block--system", "drupal.theme_hook::block", "inferred"),
+        (
+            "suggests_theme_hook",
+            "block--system-menu-block--main",
+            "drupal.theme_hook::block",
+            "inferred",
+        ),
+        (
+            "suggests_theme_hook",
+            "block--views-block--recent-list",
+            "drupal.theme_hook::block",
+            "inferred",
+        ),
+        ("suggests_theme_hook", "field--entity-reference", "drupal.theme_hook::field", "inferred"),
+        ("suggests_theme_hook", "field--field-color", "drupal.theme_hook::field", "inferred"),
+        ("suggests_theme_hook", "field--node--article", "drupal.theme_hook::field", "inferred"),
+        (
+            "suggests_theme_hook",
+            "field--node--field-color--article",
+            "drupal.theme_hook::field",
+            "inferred",
+        ),
+        (
+            "suggests_theme_hook",
+            "field--taxonomy-term--field-tags",
+            "drupal.theme_hook::field",
+            "inferred",
+        ),
         ("suggests_field", "field--field-color", storage + "node.field_color", "inferred"),
         ("suggests_field", "field--field-color", storage + "user.field_color", "inferred"),
         (

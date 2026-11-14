@@ -926,6 +926,7 @@ def test_twig_tweak_calls_in_a_module_and_a_theme_but_not_a_variable_or_a_commen
         template: ("drupal.template", "mapped"),
         "drupal.template::page": ("drupal.template", "mapped"),
         "drupal.theme::mytheme": ("drupal.theme", "mapped"),
+        "drupal.theme_hook::page": ("drupal.theme_hook", "mapped"),
     }
     assert edges(document) == {
         ("renders_block", template, "drupal.plugin.block::my_block"),
@@ -935,4 +936,5 @@ def test_twig_tweak_calls_in_a_module_and_a_theme_but_not_a_variable_or_a_commen
         ("renders_menu", "drupal.template::page", "drupal.config::system.menu.main"),
         ("template_in_module", template, "drupal.module::mymodule"),
         ("template_in_theme", "drupal.template::page", "drupal.theme::mytheme"),
+        ("theme_hook_template", "drupal.theme_hook::page", "drupal.template::page"),
     }

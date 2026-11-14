@@ -327,4 +327,16 @@ def test_the_map_file_is_unchanged_by_the_shared_counts_and_write_functions_wo1(
                 "to": "php.method::App\\Greeter::hi",
             }
         ],
+        "legend": {
+            "edge_kinds": {
+                "contains": "the file, type, function or YAML entry holds that declaration or"
+                " nested YAML entry directly inside it"
+            },
+            "node_types": {
+                "php.class": "a PHP class",
+                "php.method": "a method declared in a PHP class, interface, trait or enum, named"
+                " by the type it sits in",
+            },
+        },
+        "supporting_paths": ["**/tests/**"],
     }

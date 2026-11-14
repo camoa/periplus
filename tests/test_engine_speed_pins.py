@@ -181,7 +181,7 @@ def _run(root: Path, monkeypatch: pytest.MonkeyPatch):
 def test_a_rule_on_a_parent_type_visits_child_types_in_id_order(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _, (_, made_edges, _, _), _ = _run(tmp_path, monkeypatch)
+    _, (_, made_edges, _, _, _), _ = _run(tmp_path, monkeypatch)
     sources = [edge.source for edge in made_edges if edge.rule == "seen_base"]
     assert sources == ["own.alpha::q", "own.base::m", "own.kid::a", "own.kid::z"]
 
@@ -189,7 +189,7 @@ def test_a_rule_on_a_parent_type_visits_child_types_in_id_order(
 def test_a_node_a_map_rule_made_is_read_only_in_a_later_pass_and_only_when_known(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    report, (made_nodes, made_edges, fires, passes), _ = _run(tmp_path, monkeypatch)
+    report, (made_nodes, made_edges, fires, passes, _), _ = _run(tmp_path, monkeypatch)
     assert [node.id for node in made_nodes] == ["own.tag::a", "own.tag::z"]
     assert [(e.rule, e.source) for e in made_edges] == [
         ("seen_base", "own.alpha::q"),

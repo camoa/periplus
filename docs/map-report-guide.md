@@ -104,7 +104,7 @@ Map:
   path    /path/to/project/.periplus/map.json
   nodes   12
   edges   13
-  internal: 8 nodes and 6 edges left out
+  internal: 12 nodes and 10 edges left out
 
 Boundaries:
   total 0
@@ -493,7 +493,7 @@ Map:
   path    /path/to/project/.periplus/map.json
   nodes   12
   edges   13
-  internal: 8 nodes and 6 edges left out
+  internal: 12 nodes and 10 edges left out
 
 Boundaries:
   total 0
