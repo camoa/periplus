@@ -2,7 +2,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # <base>--<anything>.html.twig suggests the theme hook <base>, its dashes read as underscores:
 # my-card--wide suggests my_card. A core hook such as node or block is a referenced node only
-# where theme_hook/core_theme_hook.yaml makes it; that file also links its suggestions.
+# where theme_hook/core_theme_hook.yaml makes it; that file also links its suggestions. A template
+# the map holds as a module's gives no edge: Drupal finds suggestion templates by name only in
+# themes, so a module's block--my-thing.html.twig is the template of a hook the module registers.
 
 rules:
 - rule: hook_suggestion
@@ -19,5 +21,6 @@ rules:
     node_type: drupal.suggestion
     where: [{id_matches: '^drupal\.suggestion::hook\|(?<template>[^|]+)\|(?<hook>.+)$'}]
     follow: [{node: 'drupal.theme_hook::{hook}'}]
+    unless_matched: [[{node: 'drupal.template::{template}'}, {edge: template_in_module}]]
   emits: [{edge: {kind: suggests_theme_hook, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
   confidence: inferred

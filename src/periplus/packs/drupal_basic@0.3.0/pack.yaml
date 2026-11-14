@@ -193,9 +193,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   path, a route_from_view edge to the view's config object and a shape_of_route edge.
 # - each function or method that implements preprocess_<hook> or preprocess_<hook>__<suggestion>,
 #   as an inferred preprocesses_theme_hook edge to the theme hook <hook> when the map holds it; a
-#   template named exactly for a core theme hook, as node.html.twig, as an inferred
+#   theme's template named exactly for a core theme hook, as node.html.twig, as an inferred
 #   theme_hook_template edge from that hook, and <core hook>--<anything>.html.twig as a
-#   suggests_theme_hook edge to it, the core hook a referenced node;
+#   suggests_theme_hook edge to it, the core hook a referenced node. A module's suggestion
+#   template gives no suggests_theme_hook edge;
 # - each menu--<name>.html.twig, as an inferred suggests_menu edge to system.menu.<name> when the
 #   map holds it; each menu link's menu_name, as a link_in_menu edge to system.menu.<name>; and
 #   each comparison of a menu_name key to a text, or case of a switch on one, as a mentioned

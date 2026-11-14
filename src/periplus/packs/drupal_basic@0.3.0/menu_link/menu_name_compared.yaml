@@ -1,8 +1,9 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # Code that compares a menu name to a text acts on that menu: $variables['menu_name'] == 'main', the
-# same with ===, != or !==, on any array's menu_name key, and each case 'main': whose nearest switch
-# switches on such a key, give checks_menu from the function or method around the comparison to the
+# same with ===, != or !==, on any array's menu_name key, also written
+# ($variables['menu_name'] ?? NULL), and each case 'main': whose nearest switch switches on such a
+# key, give checks_menu from the function or method around the comparison to the
 # menu's configuration system.menu.<name>, a referenced node when the mapped configuration holds no
 # such menu. A test that excludes a menu, as !== 'footer' before a return, still names the one menu
 # the code is about, so both senses give the edge. Mentioned, because the menu is linked only by a
@@ -34,7 +35,7 @@ rules:
     file: '**'
     filetype: drupal_php_text
     ending: [module, install, inc, theme, profile]
-    text: '\$\w+\[\s*''menu_name''\s*\]\s*(?:===?|!==?)\s*''(?<menu>[A-Za-z0-9_-]+)'''
+    text: '\$\w+\[\s*''menu_name''\s*\](?:\s*\?\?\s*[^()=!]*\))?\s*(?:===?|!==?)\s*''(?<menu>[A-Za-z0-9_-]+)'''
   values:
     function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
   id: {template: 'function|{function}|{menu}'}
@@ -49,7 +50,7 @@ rules:
     file: '**'
     filetype: drupal_php_text
     ending: [php]
-    text: '\$\w+\[\s*''menu_name''\s*\]\s*(?:===?|!==?)\s*''(?<menu>[A-Za-z0-9_-]+)'''
+    text: '\$\w+\[\s*''menu_name''\s*\](?:\s*\?\?\s*[^()=!]*\))?\s*(?:===?|!==?)\s*''(?<menu>[A-Za-z0-9_-]+)'''
   values:
     method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
   id: {template: 'method|{psr4_class}::{method}|{menu}'}
