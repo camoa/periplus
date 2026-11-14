@@ -1,0 +1,136 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method or function that reads a class constant whose text is a theme hook's name, as
+# $template = Names::CARD; with const CARD = 'my_card';, renders that hook: such code passes the
+# name on to a render array's '#theme'. The link is drawn only because the text equals the name,
+# so it is mentioned. Read as text: each X::NAME, self::NAME or static::NAME outside a comment or
+# a string, given whole as a value, assigned with =, returned, as a call's argument, after => or in
+# a list, is an internal drupal.constant_read node; one compared with ==, ===, != or !==, or joined
+# into a longer expression, gives none. The node is <class>::<NAME>|<reader>, where <reader> is
+# the node id of the method around it, in the class the file's path names by Drupal's PSR-4
+# layout, or of the function around it in a module, theme, install, inc or profile file. X is read
+# through the file's use statements (event/use_binding.yaml), else in the file's own namespace.
+# The map rules walk from the class to its parents and interfaces, take the text of the nearest
+# one that declares NAME (constant/constant_text.yaml), and give renders_theme_hook at the read's
+# line:
+# - to a theme hook the map holds, declared by hook_theme or named by a '#theme';
+# - to the hook of a module template, on the conditions theme_hook_from_module_template.yaml
+#   states.
+# A text that names a hook but serves as another thing's id and is passed as a value still links.
+# The reader must be a method or function the map holds, so a read in a function declared inside
+# a method, or in a method of an anonymous class, gives nothing.
+
+node_types:
+- name: drupal.constant_read
+  id_namespace: drupal.constant_read
+  internal: true
+
+rules:
+- rule: constant_read_bound_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: &bound_read '(?:[(,\[]|=>|(?<![=!<>])=|\breturn\b)\s*(?<key>(?!(?:self|static|parent)::)[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*(?=[),;\]])'
+  values:
+    method: &method {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id:
+    template: '{key}|php.method::{psr4_class}::{method}'
+    resolve: [bound_first_segment]
+    separator: '::'
+  line: {capture: key}
+  emits: [{node: {type: drupal.constant_read}}]
+  confidence: inferred
+
+- rule: constant_read_in_namespace_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?:[(,\[]|=>|(?<![=!<>])=|\breturn\b)\s*(?!(?:self|static|parent)::)(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?=[),;\]])'
+  values:
+    method: *method
+  id: {template: '{psr4_namespace}{class}::{constant}|php.method::{psr4_class}::{method}'}
+  line: {capture: class}
+  emits: [{node: {type: drupal.constant_read}}]
+  confidence: inferred
+
+- rule: constant_read_own_class_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?:[(,\[]|=>|(?<![=!<>])=|\breturn\b)\s*(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?=[),;\]])'
+  values:
+    method: *method
+  id: {template: '{psr4_class}::{constant}|php.method::{psr4_class}::{method}'}
+  line: {capture: constant}
+  emits: [{node: {type: drupal.constant_read}}]
+  confidence: inferred
+
+- rule: constant_read_bound_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: *bound_read
+  values:
+    function: *method
+  id:
+    template: '{key}|php.function::{function}'
+    resolve: [bound_first_segment]
+    separator: '::'
+  line: {capture: key}
+  emits: [{node: {type: drupal.constant_read}}]
+  confidence: inferred
+
+- rule: constant_read_names_theme_hook
+  reads: map
+  match:
+    node_type: drupal.constant_read
+    where: [&read {id_matches: '^drupal\.constant_read::(?<class>[^:|]+)::(?<constant>[A-Z][A-Z0-9_]*)\|(?<reader>php\.(?:method|function)::.+)$'}]
+    follow:
+    - &class_type {node: 'php.type::{class}'}
+    - &up {ancestors: [inherits, implements]}
+    - &owner {id_matches: '^php\.type::(?<owner>.+)$'}
+    - &constant {node: 'drupal.class_constant::{owner}::{constant}'}
+    - &text {edge: has_constant_text}
+    - {id_matches: '^drupal\.constant_text::(?<hook>[A-Za-z][A-Za-z0-9_]*)$'}
+    - node: 'drupal.theme_hook::{hook}'
+    - &reader {node: '{reader}'}
+  emits: [{edge: {kind: renders_theme_hook, from: matched_node, to: {template: '{hook}', type: drupal.theme_hook}}}]
+  confidence: mentioned
+
+- rule: constant_read_names_module_template_hook
+  reads: map
+  match:
+    node_type: drupal.constant_read
+    where: [*read]
+    follow:
+    - *class_type
+    - *up
+    - *owner
+    - *constant
+    - *text
+    - {id_matches: '^drupal\.constant_text::(?<hook>(?!\w*__)[a-z][a-z0-9_]*)$'}
+    - node: 'drupal.module_template_name::{hook}'
+    - edge: module_template_name_of
+    - id_matches: '^drupal\.template::(?<template>.+)$'
+    - edge: template_in_module
+    - id_matches: '^drupal\.module::(?<module>\w+)$'
+    - node: 'php.function::{module}_theme'
+    - edge: function_in_module
+    - id_matches: '^drupal\.module::{module}$'
+    - *reader
+    unless_matched:
+    - [{node: 'drupal.module::{module}'}, {incoming_edge: theme_hook_in_module}]
+    - [{node: 'drupal.theme_hook::{hook}'}, {edge: theme_hook_template}]
+    - [{node: 'drupal.template::{template}'}, {incoming_edge: theme_hook_template}]
+    - [{node: 'drupal.template::{template}'}, {incoming_edge: template_includes}]
+  emits: [{edge: {kind: renders_theme_hook, from: matched_node, to: {template: '{hook}', type: drupal.theme_hook}}}]
+  confidence: mentioned
