@@ -187,7 +187,9 @@ The map is one JSON file. It holds the nodes, the edges, counts by type and by k
 loaded and the settings file used. When it holds an edge of a kind its rutter declares grouping
 (`groups: true`: the edge's `from` end belongs to the container at its `to` end), it lists those
 kinds, sorted, under `grouping_kinds`. Each node has an `id`, a `type`, a `state` and its `locations`
-(file and line). Its `provenance` names the pack, the rule and the rule's declared confidence.
+(file and line). Its `provenance` names the pack, the rule and the rule's declared confidence: `declared`,
+`inferred` or `mentioned`, strongest first. Rules that reach one node or edge at different
+confidences each keep their own row.
 
 The engine writes three states today:
 

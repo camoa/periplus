@@ -68,7 +68,8 @@ Periplus runs with no AI. An AI can help a person write a rutter. After that, th
 decides what the map holds, so a result can be repeated and checked.
 
 Each rule states its own confidence. A rule that reads an explicit declaration says `declared`.
-A rule that relies on a naming convention says `inferred`. The rule declares the value. The
+A rule that relies on a naming convention says `inferred`. A rule that links two things only because a
+name is written as text, such as a string equal to a known id, says `mentioned`. The rule declares the value. The
 engine does not decide it at run time.
 
 Each node states how it was found. `mapped` means a rule found its definition. `boundary` means

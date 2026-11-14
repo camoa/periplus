@@ -158,7 +158,7 @@
       "properties": {
         "pack":       {"type": "string"},
         "rule":       {"type": "string", "description": "The rule's `rule:` key. This is why a rule needs a name at all, and why the name must not be lost."},
-        "confidence": {"enum": ["declared", "inferred"]},
+        "confidence": {"enum": ["declared", "inferred", "mentioned"], "description": "The confidence the rule declares, strongest first: declared, inferred, mentioned. Rules that reach one node or edge at different confidences each keep their row."},
         "sets":       {"type": "array", "items": {"type": "string"}, "description": "Which values this contribution set. Two contributions setting the same value differently is a conflict; two setting different values is a merge. A module's config/install and the site's export legitimately hold the same id with different contents, and recording who set what keeps that drift answerable instead of one side silently winning."}
       }
     }

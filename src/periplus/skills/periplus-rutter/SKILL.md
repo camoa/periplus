@@ -46,7 +46,8 @@ project's own `.periplus/packs` first, and map that project until the map holds 
    or a map rule.
 5. Set the confidence. Confidence is declared on the rule, not decided at runtime. A rule firing on
    an explicit declaration and a rule firing on a naming convention cannot emit the same
-   confidence: the first is `declared`, the second `inferred`.
+   confidence: the first is `declared`, the second `inferred`. A rule that links two things only
+   because a name is written as text, such as a string equal to a known id, is `mentioned`.
 
 Language-level knowledge lives in the language rutter, framework-level knowledge in the framework
 rutter, and the framework rutter shares into the language rutter's lists through tables. Each

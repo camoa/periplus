@@ -289,9 +289,13 @@ def run_file_rules(
 
 def run_map_rules(
     rule_set: RuleSet, nodes: Sequence[FoundNode], edges: Sequence[FoundEdge]
-) -> tuple[list[FoundNode], list[FoundEdge], dict[tuple[str, str], int], list[MapPass]]:
+) -> tuple[
+    list[FoundNode], list[FoundEdge], dict[tuple[str, str], int], list[MapPass], list[Skipped]
+]:
     """Run every supported map rule over what the file rules found, in passes, until a pass adds
-    nothing; return the nodes and edges the map rules made, each map rule's fires, and the passes.
+    nothing; return the nodes and edges the map rules made, each map rule's fires, the passes,
+    and a skipped row for each rule that would start from, or follow a ``node`` step to, a node a
+    map rule made with an id no file rule found.
 
     A pass reads the map as it stood when the pass began, rules in load order and nodes in id
     order, so a rule reads what another made only in a later pass. The ids a map rule reads are
@@ -310,7 +314,7 @@ def run_map_rules(
     """
     rules = [rule for rule in rule_set.rules if rule.supported and rule.matches_type]
     if not rules:
-        return [], [], {}, []
+        return [], [], {}, [], []
     found = {node.id for node in nodes}
     ends = [_landed_end(edge, found) for edge in edges]
     known = found | {end for edge in ends for end in (edge.source, edge.target)}
@@ -319,6 +323,7 @@ def run_map_rules(
     seen: set[FoundNode | FoundEdge] = set()
     fires = {(rule.pack, rule.name): 0 for rule in rules}
     passes: list[MapPass] = []
+    missed: set[tuple[str, str, str]] = set()
     while True:
         typed: dict[str, set[str]] = {}
         places: dict[str, set[tuple[str, int]]] = {}
@@ -352,7 +357,10 @@ def run_map_rules(
                     _follow(chain, node_id, dict(values), known, out) for chain in rule.unless
                 ):
                     continue
-                for reached, captured in _follow(rule.follow, node_id, values, known, out):
+                misses: set[str] = set()
+                followed = _follow(rule.follow, node_id, values, known, out, misses)
+                missed.update((rule.name, node_id, miss) for miss in misses)
+                for reached, captured in followed:
                     if any(
                         _follow(chain, reached, dict(captured), known, out)
                         for chain in rule.unless_matched
@@ -372,9 +380,56 @@ def run_map_rules(
                 fires[(rule.pack, rule.name)] += count
         passes.append((len(passes) + 1, tuple(fired)))
         if not added:
-            return made_nodes, made_edges, fires, passes
+            return (
+                made_nodes,
+                made_edges,
+                fires,
+                passes,
+                _unread(rules, rule_set, made_nodes, known, missed, places),
+            )
         made_nodes.extend(record for record in added if isinstance(record, FoundNode))
         made_edges.extend(record for record in added if isinstance(record, FoundEdge))
+
+
+_READ_ONLY = "a map rule reads only nodes whose ids the file rules found"
+
+
+def _unread(
+    rules: Sequence[Rule],
+    rule_set: RuleSet,
+    made: Sequence[FoundNode],
+    known: set[str],
+    missed: set[tuple[str, str, str]],
+    places: Mapping[str, set[tuple[str, int]]],
+) -> list[Skipped]:
+    """A row for each rule whose ``node_type`` and ``where`` fit a node a map rule made with an id
+    no file rule found, at that node's place, and for each ``node`` step that named such a node,
+    at the place of the node the rule matched."""
+    unread = {node.id: node for node in made if node.id not in known}
+    why = "{} {}, which map rule {}/{} made; " + _READ_ONLY
+    rows: set[Skipped] = set()
+    for rule in rules:
+        for node in unread.values():
+            if (
+                _allows(rule_set, node.type, (rule.matches_type,))
+                and _captured(rule.where, node.id, dict(rule_set.values)) is not None
+            ):
+                rows.add(
+                    (
+                        node.file,
+                        node.line,
+                        rule.name,
+                        why.format("starts from", node.id, node.pack, node.rule),
+                    )
+                )
+    for name, start, miss in missed:
+        if miss in unread:
+            maker = unread[miss]
+            rows.update(
+                (file, line, name, why.format("follows to", miss, maker.pack, maker.rule))
+                for file, line in places[start]
+            )
+    return sorted(rows)
 
 
 def _landed_end(edge: FoundEdge, found: set[str]) -> FoundEdge:
@@ -438,36 +493,42 @@ def _follow(
     values: dict[str, str],
     known: set[str],
     out: Mapping[tuple[str, str, str], set[str]],
+    misses: set[str] | None = None,
 ) -> list[tuple[str, dict[str, str]]]:
     """Each id the steps reach from the id ``at``, in order, with the values its ``id_matches``
     steps captured. ``out`` holds the ids an ``edge`` or ``incoming_edge`` step of a kind reaches
     from an id. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
     ids its kinds reach, breadth first, that give any. A ``try`` step runs its steps and the steps
     after it from ``at``, else the steps after it from ``at`` with the values it had. An
-    ``id_matches`` step fills each ``{name}`` with that value as literal text."""
+    ``id_matches`` step fills each ``{name}`` with that value as literal text. ``misses`` collects
+    each id a ``node`` step names that is not known."""
     if not steps:
         return [(at, values)]
     (name, value), rest = steps[0], steps[1:]
     if name == "try":
-        tried = _follow((*value, *rest), at, values, known, out)
-        return tried or _follow(rest, at, values, known, out)
+        tried = _follow((*value, *rest), at, values, known, out, misses)
+        return tried or _follow(rest, at, values, known, out, misses)
     if name in ("edge", "incoming_edge"):
         return [
             r
             for to in sorted(out.get((name, value, at), ()))
-            for r in _follow(rest, to, values, known, out)
+            for r in _follow(rest, to, values, known, out, misses)
         ]
     if name == "node":
         to = _fill(value, values)
-        return _follow(rest, to, values, known, out) if to is not None and to in known else []
+        if to is not None and to not in known and misses is not None:
+            misses.add(to)
+        return (
+            _follow(rest, to, values, known, out, misses) if to is not None and to in known else []
+        )
     if name == "id_matches":
         expression, pattern = value
         filled = filled_pattern(expression, values) if value_names(expression) else pattern
         captured = None if filled is None else _captured((IdMatches(filled),), at, dict(values))
-        return _follow(rest, at, captured, known, out) if captured is not None else []
+        return _follow(rest, at, captured, known, out, misses) if captured is not None else []
     level, seen = [at], {at}
     while level:
-        reached = [r for here in level for r in _follow(rest, here, values, known, out)]
+        reached = [r for here in level for r in _follow(rest, here, values, known, out, misses)]
         if reached:
             return reached
         level = sorted(

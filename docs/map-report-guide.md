@@ -219,6 +219,10 @@ Text heading: Matches skipped. Each row is a file, a line, a rule and the reason
 there but could not build the node or edge it emits, so nothing was made for that match. When it
 is not empty, open the file at the line. The shape there is one the rule does not cover.
 
+A map rule also has a row when it would start from, or follow a `node` step to, a node another map
+rule made with an id no file rule found. The reason names that node and the map rule that made
+it. Such a node is never read, so start the rule from a node a file rule finds.
+
 ### `zero_fires`
 
 Text heading: Rules that fired zero times. Each row is a pack and a rule that ran over the project
