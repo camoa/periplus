@@ -219,7 +219,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   each region--<region>.html.twig in a theme, as an inferred suggests_region edge to the region
 #   when the map holds it;
 # - each module core.extension lists, as an installs_module edge, and each mapped module or theme
-#   it does not list, as an inferred not_installed_by edge to core.extension.
+#   it does not list, as an inferred not_installed_by edge to core.extension;
+# - each string literal in a PHP method or function, and each quoted text in a template, whose whole
+#   text equals the id of a route, a service, a configuration object or a queue worker, as a
+#   mentions_route, mentions_service, mentions_config or mentions_queue edge with confidence
+#   mentioned (mention/). The text must hold a separator and 8 characters or more, a service id a
+#   dot; a text that is the id of two of a route, a service and a configuration object mentions
+#   neither, and a method, function or template that already links that thing by another rule
+#   gets no mention.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
@@ -285,6 +292,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   only, not getHandledFormats(), so a method for a format the class does not handle still links.
 #
 # Missing results:
+# - A literal mentions a thing only by its whole id: a name inside another id, such as a view id
+#   inside views.view.<id>, a field name inside field.storage.<type>.<field>, or a mapping id
+#   inside salesforce_mapping.salesforce_mapping.<id>, joins nothing. A literal equal to a form id,
+#   a theme hook, an event, a permission, a bundle or a plugin other than a queue worker joins
+#   nothing either, and one in a class constant or a property default joins nothing.
 # - A '#theme' outside any named function, such as a property default, gives no edge and one
 #   skipped row. A method of a class kept in a module file reads as a function of the method's
 #   name. A render array in a closure counts the named function around it. A theme hook declared

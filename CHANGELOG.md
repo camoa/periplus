@@ -93,6 +93,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - `display/form_display_form.yaml`: the new edge kinds `form_uses_display` and `form_of_entity_type`, from an entity form id to its form display and its entity type;
   - `hook/entity_hook_type_test.yaml`: the new edge kind `acts_on_entity_type`, `mentioned`, from a generic entity hook to the entity type its `if` tests.
 
+- `drupal_basic` `mention/php_literal.yaml`: a PHP string literal shaped like a Drupal id is an internal `drupal.literal` node, linked from the method, function or class around it.
+- `drupal_basic` `mention/mention_php.yaml`: a method or function holding a literal equal to a route, service, configuration or queue worker id gets a `mentions_route`, `mentions_service`, `mentions_config` or `mentions_queue` edge, confidence `mentioned`.
+- `drupal_basic` `mention/twig_literal.yaml`: a template's quoted text shaped like a Drupal id is the same internal node, by `template_names_literal`.
+- `drupal_basic` `mention/mention_twig.yaml`: a template holding a route or configuration id as quoted text gets a `mentions_route` or `mentions_config` edge.
+- `drupal_js_basic` `mention/mention_library.yaml`: a literal or quoted text equal to a library id gets a `mentions_library` edge.
+- `php_basic` `edges/globals.yaml`: `$GLOBALS['name']` written or read gives a `php.global` node with `writes_global` and `reads_global` edges.
+
 ### Changed
 
 - `affected` prints its own header when it stops on a problem.

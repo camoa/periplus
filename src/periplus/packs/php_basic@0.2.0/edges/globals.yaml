@@ -1,0 +1,113 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A global variable written or read through $GLOBALS['name'], as a php.global node named name: a
+# writes_global edge from the function or method that assigns it, $GLOBALS['mode'] = 'x' or
+# $GLOBALS['mode'] .= 'x', and a reads_global edge from one that uses it as a value: the right
+# side of an assignment, a call's argument, either side of a comparison or another binary
+# operator, a returned value, or a condition in parentheses. A key below the name,
+# $GLOBALS['mode']['sub'], counts as the name. Two functions that share a global so meet at its
+# node. The name is a quoted text; $GLOBALS[$name] makes nothing.
+
+node_types:
+- name: php.global
+  id_namespace: php.global
+
+edge_kinds:
+- kind: writes_global
+  from: [php.function, php.method]
+  to: php.global
+- kind: reads_global
+  from: [php.function, php.method]
+  to: php.global
+
+rules:
+- rule: global_written
+  reads: file
+  in: [source]
+  match:
+    reference: assignment_expression
+    name_child: left
+    filetype: php
+    where: &global_left
+    - name_matches:
+        child: left
+        pattern: &global '\$GLOBALS\[\s*[''"](?<global>\w+)[''"]\s*\](?:\[[^\]]*\])*'
+  emits: &writes [{edge: {kind: writes_global, from: enclosing_declaration, to: {template: '{global}'}}}]
+  confidence: declared
+
+- rule: global_written_by_operator
+  reads: file
+  in: [source]
+  match:
+    reference: augmented_assignment_expression
+    name_child: left
+    filetype: php
+    where: *global_left
+  emits: *writes
+  confidence: declared
+
+- rule: global_read_in_assignment
+  reads: file
+  in: [source]
+  match:
+    reference: assignment_expression
+    name_child: right
+    filetype: php
+    where: [{name_matches: {child: right, pattern: *global}}]
+  emits: &reads [{edge: {kind: reads_global, from: enclosing_declaration, to: {template: '{global}'}}}]
+  confidence: declared
+
+- rule: global_read_in_argument
+  reads: file
+  in: [source]
+  match:
+    reference: argument
+    name_child: subscript_expression
+    filetype: php
+    where: [{name_matches: {child: subscript_expression, pattern: *global}}]
+  emits: *reads
+  confidence: declared
+
+- rule: global_read_left_of_operator
+  reads: file
+  in: [source]
+  match:
+    reference: binary_expression
+    name_child: left
+    filetype: php
+    where: [{name_matches: {child: left, pattern: *global}}]
+  emits: *reads
+  confidence: declared
+
+- rule: global_read_right_of_operator
+  reads: file
+  in: [source]
+  match:
+    reference: binary_expression
+    name_child: right
+    filetype: php
+    where: [{name_matches: {child: right, pattern: *global}}]
+  emits: *reads
+  confidence: declared
+
+- rule: global_read_in_return
+  reads: file
+  in: [source]
+  match:
+    reference: return_statement
+    name_child: subscript_expression
+    filetype: php
+    where: [{name_matches: {child: subscript_expression, pattern: *global}}]
+  emits: *reads
+  confidence: declared
+
+- rule: global_read_in_condition
+  reads: file
+  in: [source]
+  match:
+    reference: parenthesized_expression
+    name_child: subscript_expression
+    filetype: php
+    where: [{name_matches: {child: subscript_expression, pattern: *global}}]
+  emits: *reads
+  confidence: declared
