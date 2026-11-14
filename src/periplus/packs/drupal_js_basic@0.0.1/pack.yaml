@@ -58,6 +58,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - $.ajax({url: x}) with a variable, window.fetch(x), and fetch(`/a/${id}` + x): no node.
 # - Each edge starts at the script, not at the function that holds the call.
 #
+# Mentions. A PHP string literal or a template's quoted text equal to a library's id is a
+# mentions_library edge, confidence mentioned, from the method, function or template, unless it
+# already attaches that library (mention/mention_library.yaml).
+#
 # The two text file types this pack reads, drupal_template_text and drupal_php_text, are declared
 # by drupal_basic, so every Drupal pack reads them the same way. This pack declares them again to
 # add a path value and the spans its rules read.

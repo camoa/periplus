@@ -56,6 +56,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The node states `boundary` and `unknown_boundary`. A rule end takes `on_miss: unknown_boundary`, or `boundary: {into: {template, type}, kind}` to name the API node it enters, and a node type takes `boundary: true`. When rules mark one end differently, mapped beats boundary, boundary beats unresolved, and unresolved beats unknown boundary. The map report counts boundaries by node and unknown boundaries by pack and reason.
 - Rules that type one node as types on different branches of one ancestor no longer stop the map. The node keeps the nearest type they share, and its `type_conflict` attribute names each candidate as `<type> by <pack>/<rule>`. An edge only a candidate type could carry is not written. A boundary classification adds its type to the list and changes no type, and a rule that writes `type_conflict` refuses the map with exit 19. The map report's Type conflicts section, `type_conflicts` in JSON, lists each node with its candidates and counts those edges. Types that share no ancestor still refuse the map with exit 21.
 
+- `drupal_basic` `mention/php_literal.yaml`: a PHP string literal shaped like a Drupal id is an internal `drupal.literal` node, linked from the method, function or class around it.
+- `drupal_basic` `mention/mention_php.yaml`: a method or function holding a literal equal to a route, service, configuration or queue worker id gets a `mentions_route`, `mentions_service`, `mentions_config` or `mentions_queue` edge, confidence `mentioned`.
+- `drupal_basic` `mention/twig_literal.yaml`: a template's quoted text shaped like a Drupal id is the same internal node, by `template_names_literal`.
+- `drupal_basic` `mention/mention_twig.yaml`: a template holding a route or configuration id as quoted text gets a `mentions_route` or `mentions_config` edge.
+- `drupal_js_basic` `mention/mention_library.yaml`: a literal or quoted text equal to a library id gets a `mentions_library` edge.
+- `php_basic` `edges/globals.yaml`: `$GLOBALS['name']` written or read gives a `php.global` node with `writes_global` and `reads_global` edges.
+
 ### Changed
 
 - `affected` prints its own header when it stops on a problem.

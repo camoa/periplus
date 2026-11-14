@@ -1,0 +1,30 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A quoted text in a <name>.html.twig file shaped like a Drupal id, as a template_names_literal
+# edge from the template to the internal drupal.literal node of mention/php_literal.yaml, under the
+# same test of the text: a lowercase letter first, only lowercase letters, digits and . : / _ -, a
+# letter or a digit last, a separator inside and 8 characters or more. Read as text, so a quoted
+# text in an HTML attribute counts as one in a Twig expression does; a text inside a Twig comment
+# makes nothing. The map rules of mention/mention_twig.yaml join the node to the thing it names.
+
+# A text rule's from end is one id namespace, so the template has its own kind.
+edge_kinds:
+- kind: template_names_literal
+  from: drupal.template
+  to: drupal.literal
+
+rules:
+- rule: twig_literal
+  reads: file
+  in:
+  - module_root
+  - theme_root
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '[''"](?<text>(?=[a-z0-9_.:/-]{8})[a-z][a-z0-9]*(?:[._:/-][a-z0-9]+)+)[''"]'
+  id:
+    template: '{template_name}'
+  emits:
+  - edge: {kind: template_names_literal, from: this_node, to: {from: {capture: text}}}
+  confidence: mentioned

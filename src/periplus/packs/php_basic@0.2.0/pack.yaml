@@ -12,7 +12,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # declared return types, static among them, joins its last call. A $this->m() inside a trait also
 # joins the m() of each class that uses it, a method that replaces an inherited one or one of its
 # own class's traits gets an overrides edge to it, and a method that implements an interface method
-# gets an implements_method edge. It sits beside the reference pack php and does not replace it.
+# gets an implements_method edge. A global written or read through $GLOBALS['name'] is a php.global
+# node, with a writes_global or reads_global edge from the function or method that uses it. It sits
+# beside the reference pack php and does not replace it.
 #
 # Not mapped yet. A call to a function PHP itself defines, such as strlen() or json_decode(), makes
 # nothing: the rule calls_function lists the 2150 names get_defined_functions()['internal']
@@ -45,6 +47,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   enclosing class.
 #
 # Missing results:
+# - A global named by the global statement, global $name, gets no writes_global or reads_global
+#   edge, nor does $GLOBALS['name'] read as an array element, a foreach subject or a part of a
+#   double-quoted string, nor $GLOBALS[$name].
 # - A call on a variable gets no calls edge, and keeps its php.call_site node, when no rule knows
 #   the variable's class: a foreach variable no @var types, an untyped parameter no @param types, a
 #   local assigned a call no rule types, and a local with two different values in its method or
