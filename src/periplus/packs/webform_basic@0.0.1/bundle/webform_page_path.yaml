@@ -1,0 +1,45 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each webform's own page, /webform/<id>, which Webform's route entity.webform.canonical serves:
+# a drupal.url_path node of that path with a path_shows_webform edge to the webform's config
+# object. A script, a template or code that links the path meets this node, as drupal_basic's
+# url/url.yaml joins every link to a path. Inferred: the path comes from Webform's route, not from
+# the file. A page path the webform's settings set, page_submit_path, gets no node, and nor does
+# a path with a query string.
+
+edge_kinds:
+- kind: path_shows_webform
+  from: drupal.url_path
+  to: drupal.config_object
+
+rules:
+- rule: webform_page_path
+  reads: file
+  in: [config, module_config]
+  match:
+    file: webform.webform.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^webform\.webform\.', with: '/webform/'}
+  emits:
+  - node: {type: drupal.url_path}
+  confidence: inferred
+
+- rule: webform_page_path_edge
+  reads: file
+  in: [config, module_config]
+  match:
+    file: webform.webform.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^webform\.webform\.', with: '/webform/'}
+  emits:
+  - edge:
+      kind: path_shows_webform
+      from: this_node
+      to: {from: {key: id}, template: 'webform.webform.{id}', type: drupal.config_object}
+  confidence: inferred

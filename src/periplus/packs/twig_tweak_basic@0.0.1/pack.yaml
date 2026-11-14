@@ -6,6 +6,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # drupal_block('plugin_id') to the block plugin, drupal_menu('name') to the config object
 # system.menu.<name>, drupal_entity('type', ...) and drupal_entity_form('type', ...) to the entity
 # type, and drupal_field('field', 'type', ...) to the config object field.storage.<type>.<field>.
+# - drupal_entity_form('type', id, 'mode') also gives renders_form_mode to the form mode
+#   core.entity_form_mode.<type>.<mode> (rules/entity_form_mode.yaml). The mode default, and a
+#   mode held in a variable, give none.
 # - drupal_view, drupal_region, drupal_config, drupal_image, drupal_token, drupal_contextual_links
 #   and drupal_breadcrumb: no rule.
 # - drupal_messages() and drupal_url() name nothing a node stands for: no edge.

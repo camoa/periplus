@@ -9,6 +9,13 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # Each element of a webform, at any depth, is a webform.element node,
 # webform_submission.<webform>:<element key>, read from the elements text of its config file
 # (webform_element/webform_element.yaml).
+# Each webform also gives the form id of its submission form, webform_submission_<id>_add_form,
+# with submission_form_of_webform to its bundle (webform_element/webform_form_selector.yaml); its
+# page path /webform/<id>, with path_shows_webform to its config object
+# (bundle/webform_page_path.yaml); and instance_of_entity_type from its config object to the
+# entity type webform. A function or method that reads the route parameter webform and tests it
+# against WebformInterface has reads_route_entity to that entity type
+# (bundle/webform_route_parameter.yaml).
 # Webform and WebformSubmission join drupal_basic's table entity_classes, so drupal_basic's
 # entity_class_static_call gives a static load, loadMultiple or create call on either an inferred
 # uses_entity_type edge to its entity type.
@@ -20,8 +27,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # nothing; an element key with a capital letter or a leading digit is not read, and a composite
 # element's sub-elements read as elements of the webform. A webform's settings, category and
 # status give nothing. A disabled handler gives the same webform_uses_handler
-# edge as an enabled one. The entity type webform_submission is declared by the module's PHP, which
-# is not mapped, so it stays referenced.
+# edge as an enabled one. A webform's edit form and its page_submit_path setting give no node. A
+# route parameter read and tested in two functions gives no edge. The entity type
+# webform_submission is declared by the module's PHP, which is not mapped, so it stays
+# referenced.
 pack: webform_basic
 version: 0.0.1
 depends: [drupal_basic, php_basic]

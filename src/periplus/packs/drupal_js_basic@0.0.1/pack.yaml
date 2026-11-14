@@ -69,8 +69,18 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # holds it. A file more than seven folders below its extension's folder gets no edge. Each
 # function a script declares outside any block, and each behavior, has a js_function_in_module,
 # js_function_in_theme, behavior_in_module or behavior_in_theme edge to its script's extension
-# (member/script_member.yaml); a function inside the (function ($) {...})(jQuery) wrapper or
-# another function's body is reached through its script.
+# (member/script_member.yaml), and so does each function declared inside a block, such as the
+# (function ($) {...})(jQuery) wrapper or another function's body
+# (member/script_member_in_block.yaml).
+#
+# Selectors. A behavior that binds [data-x="y"] through once() inside its body has a mentioned
+# behavior_binds_template edge to each template that writes data-x="y"
+# (behavior/behavior_selector.yaml), and one that binds form.my-form-id a mentioned
+# behavior_binds_form edge to the form id my_form_id when a rule maps that form id
+# (behavior/behavior_form_selector.yaml).
+# - A selector in $() or jQuery(), in a jQuery .once(), in a template literal, or outside a
+#   behavior's body, and [data-x] with no value: no edge. A template that writes the attribute
+#   through attributes.setAttribute() or with a value holding {{ }}: no edge.
 #
 # Library attachments. In PHP, $build['#attached']['library'][] = 'module/library' is an edge
 # from the method or the function around it. The array form,
@@ -239,3 +249,14 @@ files:
       - name: template_string
         open: '`'
         close: '(?:[^`\\]|\\(?s:.))*`'
+      spans:
+      # The body of Drupal.behaviors.name = {...}, = (context) => {...} or = function () {...};
+      # behavior is its name. Read by behavior/behavior_selector.yaml and
+      # behavior/behavior_form_selector.yaml.
+      - name: behavior_body
+        open: 'Drupal\.behaviors\.(?<behavior>[A-Za-z_$][\w$]*)\s*=(?!=)[^{;]*(?=\{)'
+        balance: ['{', '}']
+      # The arguments of a call to once(), whose second is the selector a behavior binds.
+      - name: once_call
+        open: '(?<![\w$.])(?<mark>once)\s*(?=\()'
+        balance: ['(', ')']

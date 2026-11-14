@@ -1,0 +1,38 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# {{ drupal_entity_form('entity_type', id, 'mode') }} renders the form of that entity in form mode
+# mode: a renders_form_mode edge from the template, or from a component's <name>.twig, to the form
+# mode core.entity_form_mode.<entity type>.<mode>, a referenced node when no config file declares
+# it. The mode default has no config object, so 'default' gives no edge, and nor does a mode or an
+# entity type held in a variable. The id may be any expression without a comma or a quote, as
+# user.uid.0.value or 5.
+
+edge_kinds:
+- kind: renders_form_mode
+  from: drupal.template
+  to: drupal.form_mode
+- kind: component_renders_form_mode
+  from: drupal.component
+  to: drupal.form_mode
+
+rules:
+- rule: entity_form_mode_in_template
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: &call 'drupal_entity_form\(\s*[''"](?<entity_type>[a-z0-9_]+)[''"]\s*,[^,''"()]*(?:\([^()]*\)[^,''"()]*)*,\s*[''"](?!default[''"])(?<mode>[a-z0-9_]+)[''"]'
+  id: {template: '{template_name}'}
+  emits: [{edge: {kind: renders_form_mode, from: this_node, to: {template: 'core.entity_form_mode.{entity_type}.{mode}', type: drupal.form_mode}}}]
+  confidence: declared
+- rule: entity_form_mode_in_component
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*'
+    filetype: drupal_template_text
+    text: *call
+  id: {template: '{component_name}'}
+  emits: [{edge: {kind: component_renders_form_mode, from: this_node, to: {template: 'core.entity_form_mode.{entity_type}.{mode}', type: drupal.form_mode}}}]
+  confidence: declared

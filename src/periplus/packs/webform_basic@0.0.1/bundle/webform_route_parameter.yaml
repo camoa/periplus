@@ -1,0 +1,113 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A function or method that reads the route parameter webform, $w = ...->getParameter('webform'),
+# and tests that variable with $w instanceof WebformInterface acts on the page of every webform: a
+# reads_route_entity edge to the entity type webform. And each webform's config object is a webform
+# entity: an instance_of_entity_type edge to that entity type, so a walk from one webform reaches
+# the code that acts on every webform's page.
+# The read and the test are internal nodes named by the function or method around them and the
+# variable, read as text as drupal_basic reads '#theme'; the join makes the edge only when one
+# mapped function or method holds both on one variable, a negated test, !$w instanceof ..., included.
+# The method is named by the class the file's path gives by Drupal's PSR-4 layout, so the method
+# rules are inferred. A read whose variable no test in the same function checks, a test on
+# another variable, and a read in a closure's own variable scope read as the named function
+# around it.
+
+node_types:
+- name: webform.route_parameter_read
+  id_namespace: webform.route_parameter_read
+  internal: true
+- name: webform.route_parameter_test
+  id_namespace: webform.route_parameter_test
+  internal: true
+
+edge_kinds:
+- kind: reads_route_entity
+  from: [php.function, php.method]
+  to: drupal.entity_type
+- kind: instance_of_entity_type
+  from: drupal.config_object
+  to: drupal.entity_type
+
+rules:
+- rule: webform_parameter_read_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: &read '\$(?<var>\w+)\s*=\s*[^;]*?->getParameter\(\s*[''"]webform[''"]\s*\)'
+  values:
+    function: &function {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: 'function|{function}|{var}'}
+  emits: [{node: {type: webform.route_parameter_read}}]
+  confidence: declared
+
+- rule: webform_parameter_test_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: &test '\$(?<var>\w+)\s+instanceof\s+\\?(?:Drupal\\webform\\)?WebformInterface\b'
+  values:
+    function: *function
+  id: {template: 'function|{function}|{var}'}
+  emits: [{node: {type: webform.route_parameter_test}}]
+  confidence: declared
+
+- rule: webform_parameter_read_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: *read
+  values:
+    method: *function
+  id: {template: 'method|{psr4_class}::{method}|{var}'}
+  emits: [{node: {type: webform.route_parameter_read}}]
+  confidence: inferred
+
+- rule: webform_parameter_test_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: *test
+  values:
+    method: *function
+  id: {template: 'method|{psr4_class}::{method}|{var}'}
+  emits: [{node: {type: webform.route_parameter_test}}]
+  confidence: inferred
+
+- rule: function_reads_webform_route
+  reads: map
+  match:
+    node_type: webform.route_parameter_read
+    where: [{id_matches: '^webform\.route_parameter_read::function\|(?<function>[^|]+)\|(?<var>\w+)$'}]
+    follow: [{node: 'webform.route_parameter_test::function|{function}|{var}'}, {node: 'php.function::{function}'}]
+  emits: [{edge: {kind: reads_route_entity, from: matched_node, to: {template: 'webform', type: drupal.entity_type}}}]
+  confidence: inferred
+
+- rule: method_reads_webform_route
+  reads: map
+  match:
+    node_type: webform.route_parameter_read
+    where: [{id_matches: '^webform\.route_parameter_read::method\|(?<method>[^|]+)\|(?<var>\w+)$'}]
+    follow: [{node: 'webform.route_parameter_test::method|{method}|{var}'}, {node: 'php.method::{method}'}]
+  emits: [{edge: {kind: reads_route_entity, from: matched_node, to: {template: 'webform', type: drupal.entity_type}}}]
+  confidence: inferred
+
+- rule: webform_instance_of_entity_type
+  reads: file
+  in: [config, module_config]
+  match:
+    file: webform.webform.*
+    filetype: yaml
+  id: {from: file_stem}
+  emits: [{edge: {kind: instance_of_entity_type, from: this_node, to: {from: {key: id}, template: 'webform', type: drupal.entity_type}}}]
+  confidence: declared

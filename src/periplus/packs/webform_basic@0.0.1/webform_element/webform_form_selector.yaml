@@ -1,0 +1,48 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each webform's submission form, the form id webform_submission_<id>_add_form that Drupal's entity
+# form gives a new submission of the bundle webform_submission.<id>, read from the webform's config
+# file: a drupal.form_id node with a submission_form_of_webform edge to that bundle. Inferred: the
+# id comes from Webform's form naming, not from the file. drupal_js_basic's
+# behavior/behavior_form_selector.yaml joins a behavior that binds
+# form.webform-submission-<id with dashes>-add-form to this node. The edit and other operations'
+# forms get no node.
+
+edge_kinds:
+- kind: submission_form_of_webform
+  from: drupal.form_id
+  to: drupal.bundle
+
+rules:
+- rule: webform_submission_add_form
+  reads: file
+  in: [config, module_config]
+  match:
+    file: webform.webform.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^webform\.webform\.', with: 'webform_submission_'}
+    - {replace: '\Z', with: '_add_form'}
+  emits:
+  - node: {type: drupal.form_id}
+  confidence: inferred
+
+- rule: webform_submission_add_form_edge
+  reads: file
+  in: [config, module_config]
+  match:
+    file: webform.webform.*
+    filetype: yaml
+  id:
+    from: file_stem
+    normalize:
+    - {replace: '^webform\.webform\.', with: 'webform_submission_'}
+    - {replace: '\Z', with: '_add_form'}
+  emits:
+  - edge:
+      kind: submission_form_of_webform
+      from: this_node
+      to: {from: {key: id}, template: 'webform_submission.{id}', type: drupal.bundle}
+  confidence: inferred
