@@ -1,0 +1,45 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# $build['#theme'] = 'my_card';, the assignment form of '#theme' => 'my_card' that
+# theme_hook_render.yaml reads: the method around it renders the theme hook, of the class the
+# file's path names by Drupal's PSR-4 layout, or in a module, install, inc, theme or profile file
+# the function around it, so a preprocess function that sets a hook is read too. Inferred, as
+# there. A value that is not a text literal gives nothing.
+
+rules:
+- rule: theme_hook_assigned_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: &assigned '\[\s*[''"]#theme[''"]\s*\]\s*=\s*[''"](?<hook>[A-Za-z][A-Za-z0-9_]*)[''"]'
+  values:
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{hook}'}
+  line: {capture: hook}
+  emits:
+  - edge:
+      kind: renders_theme_hook
+      from: {template: '{psr4_class}::{method}', types: [php.method]}
+      to: this_node
+  confidence: inferred
+
+- rule: theme_hook_assigned_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: *assigned
+  values:
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{hook}'}
+  line: {capture: hook}
+  emits:
+  - edge:
+      kind: renders_theme_hook
+      from: {template: '{function}', types: [php.function]}
+      to: this_node
+  confidence: inferred

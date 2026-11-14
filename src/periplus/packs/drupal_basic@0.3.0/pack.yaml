@@ -65,7 +65,15 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   for a hook with no template and no function key its name with underscores written as dashes,
 #   as inferred. A template named <entity>--<bundle>--<view mode> of node, taxonomy-term,
 #   block-content, paragraph, media or comment gives a suggests_bundle edge to the bundle
-#   <entity>.<bundle>, as inferred.
+#   <entity>.<bundle>, as inferred. $build['#theme'] = 'name' gives the same renders_theme_hook
+#   edge as the array form. A module template my-card.html.twig, in a module with a hook_theme
+#   function none of whose entries is read as text, as one that registers its hooks in a loop, is
+#   the template of the hook my_card when a class constant's text or a '#theme' names that hook
+#   and no hook_theme entry, other hook or include already accounts for the template, as an
+#   inferred theme_hook_template edge. A method or function that passes a class constant on as a
+#   value, X::NAME, self::NAME or static::NAME assigned, returned or given as an argument, whose
+#   text is such a hook's name or a hook the map holds gives a renders_theme_hook edge, as
+#   mentioned; a constant compared with ==, ===, != or !== gives none.
 # - each simple configuration file, with no top-level uuid, as a config_provided_by_theme edge to
 #   the theme its name starts with when the map holds that theme, else a config_provided_by edge
 #   to the module of that name, inferred when the map does not hold it; each theme core.extension
@@ -122,6 +130,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   type, to that entity type's storage of x; from any other reader to the one storage named x
 #   when every storage of x has one entity type, else an accesses_shared_field_name edge to the
 #   drupal.shared_field_name x, which has a shared_field_name_of edge to each of those storages.
+#   Each storage a method of a module's class or a module's function accesses gets an inferred
+#   module_accesses_field edge from that module, a use and not a membership.
 #   A name that starts with field_ and that no mapped storage has ends at the unresolved
 #   field.storage.<name>; any other name with no storage gives nothing. A call on a config factory
 #   or a config object, a variable or property ending in config, \Drupal::config(),
@@ -261,6 +271,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   name. A render array in a closure counts the named function around it. A theme hook declared
 #   by a method of a class,
 #   or by a hook_theme function that is not named theme or ending in _theme, is not found. A
+#   hook a hook_theme registers in a loop is found only through its module template, as above, so
+#   a hook whose name holds a dash, or a template included by path, gives no
+#   hook. A constant read as \A\B::NAME, with its namespace written, or in a function declared
+#   inside a method or in a method of an anonymous class, gives no renders_theme_hook edge. A
 #   template named <entity>--<name>.html.twig gives no suggests_bundle edge, because the file
 #   cannot tell a bundle from a view mode or a node id.
 # - A form id is read only from a getFormId() whose body returns a literal text, which gives a

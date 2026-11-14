@@ -22,7 +22,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - a template path or script path with placeholders, joined to the route whose path has the same shape, as `template_links_route` and the new `script_links_to_route` in `drupal_js_basic`;
   - `getForm(Foo::class)` as a `builds_form` edge from the method or function around it;
   - a `'#theme'` in a function of a module, theme, install, inc or profile file, and a `hook_theme` `template` value that names a folder;
-  - an `on403`-style handler of a class that descends from `HttpExceptionSubscriberBase`, as a subscriber of the kernel exception event.
+  - an `on403`-style handler of a class that descends from `HttpExceptionSubscriberBase`, as a subscriber of the kernel exception event;
+  - `theme_hook/theme_hook_from_module_template.yaml`: a module template `my-card.html.twig` as the template of the hook `my_card` that a loop in `hook_theme` registers, when a class constant or a `'#theme'` names the hook;
+  - `theme_hook/theme_hook_constant.yaml`: a method or function that reads a class constant whose text is a theme hook's name, as a `renders_theme_hook` edge at confidence `mentioned`;
+  - `theme_hook/theme_hook_render_assigned.yaml`: `$build['#theme'] = 'my_card';` as a `renders_theme_hook` edge, as the array form gives;
+  - `field/module_accesses_field.yaml`: the new edge kind `module_accesses_field`, from a module to each field storage its classes' methods or its functions read or write.
 - `php_basic` joins a method call on a variable, `$x->m()` or `$x?->m()`, in a method or a plain function, so the map shows what a method calls through its parameters, locals and return values. Each call keeps a call site; its `calls` edge is inferred:
   - through a parameter typed `Foo $x` or `?Foo $x`, in a method or a function;
   - through a local variable assigned `new Foo()`;

@@ -1,0 +1,92 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A module template my-card.html.twig is the default template of the theme hook my_card, Drupal's
+# rule for a hook with no template key: the hook name with its underscores written as dashes. This
+# reads it from the template's side, for a hook that hook_theme registers in a way no text rule
+# reads, such as a loop over a list of names. A file rule writes each template of a custom module
+# as an internal drupal.module_template_name node, its dashes read as underscores, with an edge to
+# the template. A map rule gives theme_hook_template from the hook to the template, inferred, only
+# when all of these hold:
+# - the template belongs to a module (template_in_module) that has a hook_theme function,
+#   <module>_theme (function_in_module), and none of that module's hook_theme entries is read as
+#   text (theme_hook_in_module): a module whose entries are read registers what they list;
+# - something names the hook: a class constant holds its name as text, or a '#theme' names it;
+# - no hook_theme entry gives the hook a template, no other hook claims the template, and
+#   no template includes it by path, as a partial.
+# A name holding -- is a suggestion (suggestion_hook.yaml) and gives nothing here. A theme's
+# template gives nothing: a theme overrides a hook and registers none.
+
+node_types:
+- name: drupal.module_template_name
+  id_namespace: drupal.module_template_name
+  internal: true
+
+edge_kinds:
+- kind: module_template_name_of
+  from: drupal.module_template_name
+  to: drupal.template
+
+rules:
+- rule: module_template_name
+  reads: file
+  in: [module_root]
+  match: &module_template {file: '*.html', filetype: drupal_template_text, text: '\Z'}
+  id: &hook_name {template: '{template_name}', normalize: [{replace: '-', with: '_'}]}
+  emits: [{node: {type: drupal.module_template_name}}]
+  confidence: inferred
+
+- rule: module_template_name_of_template
+  reads: file
+  in: [module_root]
+  match: *module_template
+  id: *hook_name
+  emits:
+  - edge:
+      kind: module_template_name_of
+      from: this_node
+      to: {template: '{template_name}', types: [drupal.template]}
+  confidence: inferred
+
+- rule: module_template_is_hook_named_by_constant
+  reads: map
+  match:
+    node_type: drupal.module_template_name
+    where: [{id_matches: '^drupal\.module_template_name::(?<hook>(?!\w*__)[a-z][a-z0-9_]*)$'}]
+    follow: &hook_theme_module
+    - edge: module_template_name_of
+    - id_matches: '^drupal\.template::(?<template>.+)$'
+    - edge: template_in_module
+    - id_matches: '^drupal\.module::(?<module>\w+)$'
+    - node: 'php.function::{module}_theme'
+    - edge: function_in_module
+    - id_matches: '^drupal\.module::{module}$'
+    - node: 'drupal.constant_text::{hook}'
+    - node: 'drupal.template::{template}'
+    unless: &hook_has_template [[{node: 'drupal.theme_hook::{hook}'}, {edge: theme_hook_template}]]
+    unless_matched: &template_claimed
+    - [{incoming_edge: theme_hook_template}]
+    - [{incoming_edge: template_includes}]
+    - [{node: 'drupal.module::{module}'}, {incoming_edge: theme_hook_in_module}]
+  emits: [{edge: {kind: theme_hook_template, from: {template: '{hook}', type: drupal.theme_hook}, to: matched_node}}]
+  confidence: inferred
+
+- rule: module_template_is_hook_named_by_render_array
+  reads: map
+  match:
+    node_type: drupal.module_template_name
+    where: [{id_matches: '^drupal\.module_template_name::(?<hook>(?!\w*__)[a-z][a-z0-9_]*)$'}]
+    follow:
+    - edge: module_template_name_of
+    - id_matches: '^drupal\.template::(?<template>.+)$'
+    - edge: template_in_module
+    - id_matches: '^drupal\.module::(?<module>\w+)$'
+    - node: 'php.function::{module}_theme'
+    - edge: function_in_module
+    - id_matches: '^drupal\.module::{module}$'
+    - node: 'drupal.theme_hook::{hook}'
+    - incoming_edge: renders_theme_hook
+    - node: 'drupal.template::{template}'
+    unless: *hook_has_template
+    unless_matched: *template_claimed
+  emits: [{edge: {kind: theme_hook_template, from: {template: '{hook}', type: drupal.theme_hook}, to: matched_node}}]
+  confidence: inferred
