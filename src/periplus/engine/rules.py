@@ -180,6 +180,8 @@ def run_file_rules(
     skipped: list[Skipped] = []
     selected: dict[tuple[str, str], set[str]] = {}
     file_types = FileTypes.build(packs, selection.extensions)
+    picked: dict[_PickKey, _Picked] = {}
+    picking = (file_types, folders, selection, read, removed, picked)
     constants: dict[tuple[str, str], str] = {}
     # Every file a tree rule reads is parsed and its constants collected before any rule runs, so
     # a constant declared in a file read after its use is found.
@@ -192,7 +194,7 @@ def run_file_rules(
             continue
         info = rule_set.files.get(rule.filetype, FileInfo())
         holders = _holder_rules(rule_set, rule.filetype, frozenset(p.name.pack for p in packs))
-        for file, _, _ in _matches(root, rule, packs, folders, selection, read, removed):
+        for file, _, _ in _matches(root, rule, *picking):
             own = (file, rule.filetype)
             if own not in paths:
                 paths[own] = {**rule_set.values, **_path_values(file, info, rule_set, folders)}
@@ -206,7 +208,7 @@ def run_file_rules(
         info = rule_set.files.get(rule.filetype, FileInfo())
         # Each file's patterns that do not compile once filled, and the fires before the file.
         unfilled: list[tuple[str, list[str], int]] = []
-        for file, stem, _ in _matches(root, rule, packs, folders, selection, read, removed):
+        for file, stem, _ in _matches(root, rule, *picking):
             own = (file, rule.filetype)
             if own not in paths:
                 paths[own] = {**rule_set.values, **_path_values(file, info, rule_set, folders)}
@@ -232,7 +234,7 @@ def run_file_rules(
                     for other in rule_set.rules:
                         owner = (other.pack, other.name)
                         if other.supported and other.declaration and owner not in selected:
-                            hits = _matches(root, other, packs, folders, selection, read, removed)
+                            hits = _matches(root, other, *picking)
                             selected[owner] = {found[0] for found in hits}
                     fired += _references(
                         rule, rule_set, grammar, file, trees[file], packs, selected, edges, skipped
@@ -330,15 +332,21 @@ def run_map_rules(
             if edge.source in known and edge.target in known:
                 out.setdefault(("edge", edge.kind, edge.source), set()).add(edge.target)
                 out.setdefault(("incoming_edge", edge.kind, edge.target), set()).add(edge.source)
+        by_type: dict[str, set[str]] = {}
+        for node_id, names in typed.items():
+            for name in names:
+                by_type.setdefault(name, set()).add(node_id)
+        # The ids of each matched type and the types below it, in id order, as of the pass start.
+        candidates: dict[str, list[str]] = {}
         added: list[FoundNode | FoundEdge] = []
         fired: list[tuple[str, str, int]] = []
         for rule in rules:
             count = 0
-            for node_id in sorted(typed):
-                if not any(
-                    _allows(rule_set, name, (rule.matches_type,)) for name in typed[node_id]
-                ):
-                    continue
+            if rule.matches_type not in candidates:
+                allowed = (t for t in by_type if _allows(rule_set, t, (rule.matches_type,)))
+                ids = set[str]().union(*(by_type[t] for t in allowed))
+                candidates[rule.matches_type] = sorted(ids)
+            for node_id in candidates[rule.matches_type]:
                 values = _captured(rule.where, node_id, dict(rule_set.values))
                 if values is None or any(
                     _follow(chain, node_id, dict(values), known, out) for chain in rule.unless
@@ -1420,6 +1428,13 @@ def _holder_rules(
     first, so for one declaration type the rules are listed last loaded first: of the rules that
     fire on a node, the rule's own pack wins, else the dependency loaded last.
     """
+    global _holders_of
+    rules, known = _holders_of
+    if rules is not rule_set.rules:
+        rules, known = rule_set.rules, {}
+        _holders_of = (rules, known)
+    if (filetype, within) in known:
+        return known[(filetype, within)]
     found: dict[str, tuple[Rule, ...]] = {}
     for other in rule_set.rules:
         if (
@@ -1430,7 +1445,15 @@ def _holder_rules(
             and other.pack in within
         ):
             found[other.declaration] = (other, *found.get(other.declaration, ()))
+    known[(filetype, within)] = found
     return found
+
+
+#: The rules ``_holder_rules`` last read, held so their identity stays theirs, and its answers
+#: for them by file type and packs.
+_holders_of: tuple[
+    tuple[Rule, ...], dict[tuple[str, frozenset[str]], dict[str, tuple[Rule, ...]]]
+] = ((), {})
 
 
 def _minted(
@@ -2341,25 +2364,40 @@ def _id_pattern(rule: Rule, values: Mapping[str, str]) -> re.Pattern[str] | None
     return filled_pattern(rule.id_pattern, values)
 
 
+_PickKey = tuple[tuple[str, ...], str]
+#: The files read, the files removed, and each file read with its stem, its types and ending.
+_Picked = tuple[list[str], list[str], list[tuple[str, str, frozenset[str], str]]]
+
+
 def _matches(
     root: Path,
     rule: Rule,
-    packs: Sequence[LoadedPack],
+    types: FileTypes,
     folders: Mapping[str, tuple[str, ...]],
     selection: Selection,
     read: set[str],
     removed: set[str],
+    picked: dict[_PickKey, _Picked],
 ) -> list[tuple[str, str, frozenset[str]]]:
-    types = FileTypes.build(packs, selection.extensions)
-    directories = sorted({path for name in rule.folders for path in folders[name]})
-    kept, dropped = select_files(root, directories, rule.filetype, types, selection)
+    """The files the rule reads, each with its stem and the names of the types claiming it.
+
+    ``picked`` holds, for the run, each directory list and file type already selected, so the
+    folders are listed and the files claimed once.
+    """
+    directories = tuple(sorted({path for name in rule.folders for path in folders[name]}))
+    if (directories, rule.filetype) not in picked:
+        kept, dropped = select_files(root, directories, rule.filetype, types, selection)
+        claims = []
+        for file in kept:
+            claimed = types.claim(posixpath.basename(file))
+            names, stem = claimed if claimed is not None else (frozenset(), "")
+            claims.append((file, stem, names, posixpath.basename(file)[len(stem) + 1 :]))
+        picked[(directories, rule.filetype)] = (kept, dropped, claims)
+    kept, dropped, claims = picked[(directories, rule.filetype)]
     read.update(kept)
     removed.update(dropped)
-    matched = []
-    for file in kept:
-        claimed = types.claim(posixpath.basename(file))
-        names, stem = claimed if claimed is not None else (frozenset(), "")
-        ending = posixpath.basename(file)[len(stem) + 1 :]
-        if fnmatchcase(stem, rule.glob) and (not rule.endings or ending in rule.endings):
-            matched.append((file, stem, names))
-    return matched
+    return [
+        (file, stem, names)
+        for file, stem, names, ending in claims
+        if fnmatchcase(stem, rule.glob) and (not rule.endings or ending in rule.endings)
+    ]

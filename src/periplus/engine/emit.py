@@ -174,7 +174,8 @@ def build_document(
             end = edge.source if edge.on_miss == "source" else edge.target
             mark = "boundary" if edge.into else edge.miss
             marks.setdefault(end, []).append((mark, edge.pack, edge.rule, edge.searched_for, edge))
-    _enter(marks, merged, merged_edges, set(groups))
+    found_ids = set(groups)
+    _enter(marks, merged, merged_edges, found_ids)
     for end, node in merged.items():
         if node["state"] == "referenced":
             _mark(node, marks.get(end, []), types, edge_kinds)
@@ -182,7 +183,7 @@ def build_document(
             node["state"] = "unknown_boundary"
     ordered = [merged[node_id] for node_id in sorted(merged)]
     written = [
-        _edge(key, group, merged, edge_kinds, types, set(groups))
+        _edge(key, group, merged, edge_kinds, types, found_ids)
         for key, group in sorted(merged_edges.items())
     ]
     hidden = {node["id"] for node in ordered if _internal(types, node["type"])}
