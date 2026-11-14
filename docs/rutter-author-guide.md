@@ -341,12 +341,21 @@ implements an interface.
   realizes: true
 ```
 
-The map then lists the kind under `realizing_kinds`. A walk in `slice`, `neighbors` and `affected`
-that reaches the `to` end adds the `from` ends at the same hop, so the code behind a declaration
-costs no extra hop, and `show` lists them under `Realized by`. Set it only when the `to` end is
-the declaration and the `from` end the code: on `service_class`, from a service to its class, the
-concrete end is the `to` end, so it stays unset. Leave it unset too on a kind where one `to` end
-gathers many `from` ends that are peers more than forms, such as a parent class and its children.
+When the `to` end is the code that carries out the `from` end, as a route's controller method or
+a service's class, set `realizes: to`:
+
+```yaml
+- kind: handled_by
+  from: drupal.route
+  to: php.method
+  realizes: to
+```
+
+The map lists the kind under `realizing_kinds`, or under `realizing_to_kinds` for `realizes: to`.
+A walk in `slice`, `neighbors` and `affected` that reaches the declared end adds the concrete ends
+at the same hop, so the code behind a declaration costs no extra hop, and `show` lists them under
+`Realized by`. Leave it unset on a kind where one declared end gathers many concrete ends that are
+peers more than forms, such as a parent class and its children.
 Two rutters that declare one kind must agree on `realizes`. `periplus validate` refuses a value
 other than `true` or `false`.
 

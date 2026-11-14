@@ -110,7 +110,8 @@ each list, under `in supporting code:`. In JSON each edge row adds `location`, `
 `supporting`, and the report adds `warnings`.
 
 An edge kind the map lists under `realizing_kinds` says its `from` end is a concrete form of its
-`to` end, as a method implements an interface method. When nodes stand for the shown node this
+`to` end, as a method implements an interface method; one under `realizing_to_kinds` says the
+same of its `to` end, as a route's controller method. When nodes stand for the shown node this
 way, a last section lists them, at most 8, the forms of those forms too:
 
 ```
