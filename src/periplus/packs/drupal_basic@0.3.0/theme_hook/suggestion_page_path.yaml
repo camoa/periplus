@@ -1,0 +1,33 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# page--<a>--<b>.html.twig is the page template Drupal picks for the internal path /a/b: each --
+# in the name is a slash of the path. A file rule writes the path as an internal suggestion,
+# path|<template>|/a/b, from the path value page_path_suggestion in pack.yaml; a map rule joins it
+# to the drupal.url_path node of that exact path, as a suggests_path edge, only when a route, a
+# link or core_user_routes.yaml already put that path in the map. A name that is a partial, such as
+# page--a--content--b, or one for a path nothing serves or links, such as page--front, gives
+# nothing. The name is a naming convention, so the edge is inferred; it sits at the template's
+# last line, where the name is read.
+
+edge_kinds:
+- kind: suggests_path
+  from: drupal.template
+  to: drupal.url_path
+
+rules:
+- rule: page_path_suggestion
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: 'page--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'path|{template_name}|{page_path_suggestion}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: suggests_path
+  reads: map
+  match:
+    node_type: drupal.suggestion
+    where: [{id_matches: '^drupal\.suggestion::path\|(?<template>[^|]+)\|(?<path>/.+)$'}]
+    follow: [{node: 'drupal.url_path::{path}'}]
+  emits: [{edge: {kind: suggests_path, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred

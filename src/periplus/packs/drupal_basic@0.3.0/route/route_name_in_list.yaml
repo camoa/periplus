@@ -1,0 +1,154 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A function or method that tests a variable assigned from getRouteName() with in_array against a
+# list of quoted route names checks each route listed: a checks_route edge to it, as
+# route/route_name_compared.yaml gives for ==. Two forms, each with a form for functions and one
+# for methods, the owner named as in that file:
+# - in_array($route_name, ['a.b', 'c.d']): each quoted name with a dot inside the list, read in
+#   the span in_array_list of drupal_php_text, is a drupal.route_name_test, which
+#   route_name_compared.yaml joins to the variable;
+# - $list = ['a.b', 'c.d']; ... in_array($route_name, $list): each quoted name with a dot that is an
+#   element of an array literal assigned to a variable, read in the span array_assigned, is an
+#   internal drupal.route_list_item with a listed_in edge to the internal list
+#   drupal.route_list <owner>|<list>; the in_array call gives a tests_route_list edge from the
+#   variable to that list. A map rule starts from each variable a file rule found assigned from
+#   getRouteName(), walks to each list it is tested against and to each item of it, and makes the
+#   edge from the mapped function or method.
+#
+# The link stands only on a name written as text, so it is mentioned. A variable the owner also
+# binds another way gives nothing, as in route_name_compared.yaml. !in_array(...), a list held in a
+# property or a constant, a list built with [] = or array_merge, and a list in another function
+# give no edge. A route no mapped routing file declares ends at a referenced node.
+
+node_types:
+- name: drupal.route_list
+  id_namespace: drupal.route_list
+  internal: true
+- name: drupal.route_list_item
+  id_namespace: drupal.route_list_item
+  internal: true
+
+edge_kinds:
+- kind: listed_in
+  from: drupal.route_list_item
+  to: drupal.route_list
+- kind: tests_route_list
+  from: drupal.route_name_var
+  to: drupal.route_list
+
+rules:
+- rule: route_in_inline_list_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    reads_sections: [string]
+    text: '(?<=[\[,\s])''(?<route>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)''(?=\s*[,\]])'
+  values: &function_inline
+    owner: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    var: {from: {enclosing: in_array_list, capture: var}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{owner}|{var}|{route}'}
+  line: {capture: route}
+  emits: [{node: {type: drupal.route_name_test}}]
+  confidence: mentioned
+
+- rule: route_in_inline_list_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [string]
+    text: '(?<=[\[,\s])''(?<route>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)''(?=\s*[,\]])'
+  values: &method_inline
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    owner: {template: '{psr4_class}::{function}'}
+    var: {from: {enclosing: in_array_list, capture: var}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{owner}|{var}|{route}'}
+  line: {capture: route}
+  emits: [{node: {type: drupal.route_name_test}}]
+  confidence: mentioned
+
+- rule: route_list_item_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    reads_sections: [string]
+    text: '(?<=[\[,\s])''(?<route>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)''(?=\s*[,\]])'
+  values: &function_list
+    owner: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    list: {from: {enclosing: array_assigned, capture: list}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{owner}|{list}|{route}'}
+  line: {capture: route}
+  emits: [{edge: {kind: listed_in, from: this_node, to: {template: '{owner}|{list}', type: drupal.route_list}}}]
+  confidence: mentioned
+
+- rule: route_list_item_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [string]
+    text: '(?<=[\[,\s])''(?<route>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)''(?=\s*[,\]])'
+  values: &method_list
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    owner: {template: '{psr4_class}::{function}'}
+    list: {from: {enclosing: array_assigned, capture: list}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{owner}|{list}|{route}'}
+  line: {capture: route}
+  emits: [{edge: {kind: listed_in, from: this_node, to: {template: '{owner}|{list}', type: drupal.route_list}}}]
+  confidence: mentioned
+
+- rule: route_list_tested_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '(?<![!\w])in_array\(\s*\$(?<var>\w+)\s*,\s*\$(?<list>\w+)\s*[,)]'
+  values: &function_owner
+    owner: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{owner}|{var}'}
+  emits: [{edge: {kind: tests_route_list, from: this_node, to: {template: '{owner}|{list}', type: drupal.route_list}}}]
+  confidence: mentioned
+
+- rule: route_list_tested_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?<![!\w])in_array\(\s*\$(?<var>\w+)\s*,\s*\$(?<list>\w+)\s*[,)]'
+  values: &method_owner
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    owner: {template: '{psr4_class}::{function}'}
+  id: {template: '{owner}|{var}'}
+  emits: [{edge: {kind: tests_route_list, from: this_node, to: {template: '{owner}|{list}', type: drupal.route_list}}}]
+  confidence: mentioned
+
+- rule: function_checks_listed_route
+  reads: map
+  match:
+    node_type: drupal.route_name_var
+    where: [{id_matches: '^drupal\.route_name_var::(?<owner>\w+)\|(?<var>\w+)$'}]
+    follow: [{edge: tests_route_list}, {incoming_edge: listed_in}, {id_matches: '\|(?<route>[^|]+)$'}, {node: 'php.function::{owner}'}]
+    unless: [[{node: 'drupal.route_name_rebound::{owner}|{var}'}]]
+  emits: [{edge: {kind: checks_route, from: matched_node, to: {template: '{route}', type: drupal.route}}}]
+  confidence: mentioned
+
+- rule: method_checks_listed_route
+  reads: map
+  match:
+    node_type: drupal.route_name_var
+    where: [{id_matches: '^drupal\.route_name_var::(?<owner>[^|]+::\w+)\|(?<var>\w+)$'}]
+    follow: [{edge: tests_route_list}, {incoming_edge: listed_in}, {id_matches: '\|(?<route>[^|]+)$'}, {node: 'php.method::{owner}'}]
+    unless: [[{node: 'drupal.route_name_rebound::{owner}|{var}'}]]
+  emits: [{edge: {kind: checks_route, from: matched_node, to: {template: '{route}', type: drupal.route}}}]
+  confidence: mentioned
