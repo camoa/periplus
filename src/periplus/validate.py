@@ -183,11 +183,11 @@ def validate(
     pins = (
         resolution.settings.packs.value if resolution.settings and resolution.settings.packs else ()
     )
-    directory, path, version, order = _locate(requested, resolution.candidates, pins, problems)
-    if directory is None:
+    pack, path, version, order = _locate(requested, resolution.candidates, pins, problems)
+    if pack is None:
         return _report(requested, None, (), (), problems)
     unreadable: list[Problem] = []
-    checked, errors = _check_directory(directory, unreadable)
+    checked, errors = _check_directory(pack, unreadable)
     problems.extend(unreadable)
     if not errors and not unreadable:
         # Imported here: `periplus.engine.check` imports this module.
@@ -200,6 +200,9 @@ def validate(
         )
         values, origins = settings_values(resolution.settings)
         pinned, unresolved = resolve_pack_order(resolution.packs, resolution.candidates)
+        # One directory, one parse: a pinned pack `order` already loaded is that object.
+        loaded = {pack.path: pack for pack in order}
+        pinned = tuple(loaded.get(pack.path, pack) for pack in pinned)
         named = any(pack.path == path for pack in pinned)
         rule_set, refused = engine_checked(
             order, values, origins, require_values=in_project and named
@@ -250,7 +253,7 @@ def _locate(
     candidates: Sequence[PackCandidate],
     pins: Sequence[str],
     problems: list[Problem],
-) -> tuple[Traversable | None, str | None, str | None, tuple[LoadedPack, ...]]:
+) -> tuple[LoadedPack | None, str | None, str | None, tuple[LoadedPack, ...]]:
     """One pack name, or ``name@version``, resolved to the directory that carries it, or to nothing,
     and the pack with every pack it depends on, dependencies first.
 
@@ -312,7 +315,7 @@ def _locate(
     loaded = next((pack for pack in order if pack.name.pack == name), None)
     if loaded is None:
         return None, None, None, ()
-    return loaded.directory, loaded.path, loaded.name.version, order
+    return loaded, loaded.path, loaded.name.version, order
 
 
 def _ambiguous(name: str, copies: Sequence[PackCandidate]) -> Problem:
@@ -335,7 +338,7 @@ def _ambiguous(name: str, copies: Sequence[PackCandidate]) -> Problem:
 
 
 def _check_directory(
-    directory: Traversable,
+    pack: LoadedPack,
     problems: list[Problem],
 ) -> tuple[tuple[str, ...], tuple[SchemaError, ...]]:
     """Every YAML file under one pack directory, checked, with one sort over the whole result.
@@ -348,27 +351,30 @@ def _check_directory(
 
     Each validator is built once and used for every file it applies to. That is not a saving: a
     validator built per file would re-resolve the same ``$ref`` graph forty-eight times for
-    ``drupal``, and the reason to say so here is that a reader should not move it back.
+    ``drupal``, and the reason to say so here is that a reader should not move it back. The result
+    is kept in ``pack.checked``, so a second check of one ``LoadedPack`` in a run validates nothing
+    again; the read problems go to ``problems`` on every call.
     """
-    manifest = Draft202012Validator(_schema(MANIFEST_SCHEMA))
-    pack_file = Draft202012Validator(_schema(PACK_FILE_SCHEMA))
-
-    checked: list[str] = []
-    errors: list[SchemaError] = []
-    for relative, node in _yaml_files(directory):
-        # `readable`, and never `document is None`. A file that would not parse and a file that
-        # parsed and holds `null` both give a document of `None`, and reading the second as the
-        # first is how an empty file, a comment-only file and one holding `--- null` were dropped
-        # from a run with no record: unchecked, unreported, and the command exiting 0. A null
-        # document is a schema error the shipped schema already expresses, so it goes to the
-        # validator like any other and comes back as `None is not of type 'object'`.
-        document, readable = _load(node, problems)
-        if not readable:
-            continue
-        checked.append(relative)
-        validator = manifest if relative.rsplit("/", 1)[-1] == MANIFEST_FILENAME else pack_file
-        errors.extend(_error(relative, found) for found in validator.iter_errors(document))
-    return tuple(sorted(checked)), tuple(sorted(errors, key=_sort_key))
+    if not pack.checked:
+        manifest = Draft202012Validator(_schema(MANIFEST_SCHEMA))
+        pack_file = Draft202012Validator(_schema(PACK_FILE_SCHEMA))
+        checked: list[str] = []
+        errors: list[SchemaError] = []
+        for relative, document, readable, _ in pack_files(pack):
+            # `readable`, and never `document is None`. A file that would not parse and a file that
+            # parsed and holds `null` both give a document of `None`, and reading the second as the
+            # first is how an empty file, a comment-only file and one holding `--- null` were
+            # dropped from a run with no record: unchecked, unreported, and the command exiting 0.
+            # A null document is a schema error the shipped schema already expresses, so it goes to
+            # the validator like any other and comes back as `None is not of type 'object'`.
+            if not readable:
+                continue
+            checked.append(relative)
+            validator = manifest if relative.rsplit("/", 1)[-1] == MANIFEST_FILENAME else pack_file
+            errors.extend(_error(relative, found) for found in validator.iter_errors(document))
+        pack.checked.append((tuple(sorted(checked)), tuple(sorted(errors, key=_sort_key))))
+    problems.extend(problem for *_, unread in pack_files(pack) for problem in unread)
+    return pack.checked[0]
 
 
 def _schema(name: str) -> Mapping[str, object]:
@@ -391,6 +397,19 @@ def _schema(name: str) -> Mapping[str, object]:
     # `tests/test_contract.py` is what holds that claim rather than a runtime branch here.
     document: Mapping[str, object] = json.loads(node.read_text(encoding="utf-8"))
     return document
+
+
+def pack_files(pack: LoadedPack) -> list[tuple[str, object, bool, tuple[Problem, ...]]]:
+    """Each YAML file of the pack as its relative path, its document, whether it could be read,
+    and the problems reading it gave, in ``_yaml_files`` order; parsed on the first call for this
+    ``LoadedPack`` and read from ``pack.files`` after. A pack always holds its manifest, so an
+    empty ``pack.files`` means unparsed."""
+    if not pack.files:
+        for relative, node in _yaml_files(pack.directory):
+            problems: list[Problem] = []
+            document, readable = _load(node, problems)
+            pack.files.append((relative, document, readable, tuple(problems)))
+    return pack.files
 
 
 def _yaml_files(directory: Traversable) -> list[tuple[str, Traversable]]:

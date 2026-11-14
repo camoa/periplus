@@ -50,15 +50,19 @@ instead of a function of how somebody typed a list.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.resources.abc import Traversable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.packs import MatchedPack, PackCandidate, PackName
+
+if TYPE_CHECKING:
+    from periplus.validate import SchemaError
 
 __all__ = [
     "MANIFEST_FILENAME",
@@ -119,12 +123,24 @@ class LoadedPack:
     ``path`` is the printable form, joined lexically from the root's own display exactly as
     ``MatchedPack.path`` is, so a pack named in this module's output and in a resolution report
     reads the same in both.
+
+    ``files`` holds each YAML file of the directory as ``validate.pack_files`` parsed it: empty
+    until the first reader asks, then filled once, so the schema check, the pack checks and the
+    rule load read one parse. A ``LoadedPack`` is built per run, so the parse lives as long as
+    the run's view of the manifest does. ``checked`` holds, the same way, the one result of
+    ``validate._check_directory`` for the pack.
     """
 
     name: PackName
     directory: Traversable
     path: str
     manifest: PackManifest
+    files: list[tuple[str, object, bool, tuple[Problem, ...]]] = field(
+        default_factory=list, compare=False, repr=False
+    )
+    checked: list[tuple[tuple[str, ...], tuple[SchemaError, ...]]] = field(
+        default_factory=list, compare=False, repr=False
+    )
 
 
 class ManifestUnreadable(HarnessError):

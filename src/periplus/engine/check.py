@@ -17,6 +17,7 @@ from periplus.engine.packload import (
     declared_values,
     load_rules,
     namespace_of,
+    node_rules,
     node_types,
     twin_type,
     unexecuted,
@@ -26,7 +27,7 @@ from periplus.engine.source import DATA_READERS
 from periplus.engine.tree import grammar_problems
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.manifest import MANIFEST_FILENAME, LoadedPack
-from periplus.validate import _check_directory, _load, _yaml_files
+from periplus.validate import _check_directory, pack_files
 
 __all__ = ["check_packs", "checked", "reachable"]
 
@@ -80,7 +81,7 @@ def _schema_problems(packs: Sequence[LoadedPack]) -> tuple[list[Problem], set[st
     failed: set[str] = set()
     for pack in packs:
         found: list[Problem] = []
-        _, errors = _check_directory(pack.directory, found)
+        _, errors = _check_directory(pack, found)
         problems.extend(found)
         problems.extend(
             Problem(
@@ -135,12 +136,13 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
         types = set().union(*(declared_types[p] for p in visible))
         known_kinds = set().union(*(kinds[p] for p in visible))
         files_of: dict[str, list[str]] = {}
+        twins = node_rules(rule for _, document in documents[name] for rule in _rules(document))
         for file, document in documents[name]:
             for rule in _rules(document):
                 files_of.setdefault(str(rule.get("rule")), []).append(file)
             problems.extend(_undeclared(name, file, document, types, known_kinds))
             problems.extend(_unexecuted_keys(name, file, document, "file."))
-            problems.extend(_illegal_ends(name, file, document, documents[name], rule_set))
+            problems.extend(_illegal_ends(name, file, document, twins, rule_set))
         problems.extend(
             _unexecuted_keys(name, MANIFEST_FILENAME, pack.manifest.document, "manifest.")
         )
@@ -219,8 +221,7 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
 def _documents(pack: LoadedPack) -> list[tuple[str, Mapping[str, Any]]]:
     """Each rule file of the pack, as its relative path and its parsed mapping."""
     found: list[tuple[str, Mapping[str, Any]]] = []
-    for relative, node in _yaml_files(pack.directory):
-        document, _ = _load(node, [])
+    for relative, document, _, _ in pack_files(pack):
         if relative != MANIFEST_FILENAME and isinstance(document, Mapping):
             found.append((relative, document))
     return found
@@ -385,12 +386,12 @@ def _illegal_ends(
     pack: str,
     file: str,
     document: Mapping[str, Any],
-    siblings: Sequence[tuple[str, Mapping[str, Any]]],
+    twins: Sequence[tuple[Mapping[str, Any], str]],
     rule_set: RuleSet,
 ) -> list[Problem]:
     """The edge rules whose ``this_node`` end has a twin of a type the kind does not allow there,
     or whose to end, or ``declared`` end at either side, names a type the kind does not allow
-    there."""
+    there. ``twins`` is ``node_rules`` of every rule entry of the pack."""
     problems: list[Problem] = []
     for rule in _rules(document):
         for edge in _emits(rule, "edge"):
@@ -427,7 +428,7 @@ def _illegal_ends(
                     )
                 )
             problems.extend(_illegal_into(pack, file, rule, edge, rule_set))
-            twin = twin_type(rule, [other for _, d in siblings for other in _rules(d)])
+            twin = twin_type(rule, twins)
             if kind is None or twin is None:
                 continue
             allowed_by_end = (("from", kind.from_types), ("to", kind.to_types))

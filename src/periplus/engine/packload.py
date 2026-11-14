@@ -13,7 +13,7 @@ from periplus.engine.select import FileTypes, FolderUnresolved, holds_double_sta
 from periplus.engine.tree import STEPS, Grammar, ImportRule, Step, _parser
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.manifest import MANIFEST_FILENAME, LoadedPack
-from periplus.validate import MANIFEST_SCHEMA, PACK_FILE_SCHEMA, _load, _schema, _yaml_files
+from periplus.validate import MANIFEST_SCHEMA, PACK_FILE_SCHEMA, _schema, pack_files
 
 __all__ = [
     "PLACEHOLDER",
@@ -649,10 +649,9 @@ def load_rules(
     imports: dict[str, list[tuple[str, Mapping[str, Any]]]] = {}
     tables = _tables(packs, conflicts)
     for pack in packs:
-        for relative, node in _yaml_files(pack.directory):
+        for relative, document, readable, _ in pack_files(pack):
             if relative == MANIFEST_FILENAME:
                 continue
-            document, readable = _load(node, [])
             if not readable or not isinstance(document, Mapping):
                 raise PackRulesUnreadable(
                     f"{pack.name.pack}/{relative} cannot be read as a rule file",
@@ -671,8 +670,9 @@ def load_rules(
                 sources.append(relative)
                 siblings.setdefault(pack.name.pack, []).append(item)
     prefixes = tuple(f"{t.id_namespace}::" for t in types.values() if t.id_namespace)
+    twins = {pack: node_rules(entries) for pack, entries in siblings.items()}
     rules = [
-        _check_edges(_full_ids(_with_twin(rule, item, siblings[rule.pack]), prefixes), types, kinds)
+        _check_edges(_full_ids(_with_twin(rule, item, twins[rule.pack]), prefixes), types, kinds)
         for rule, item in zip(rules, items, strict=True)
     ]
     file_types = FileTypes.build(packs, {})
@@ -1471,28 +1471,35 @@ def node_types(rule: Mapping[str, Any]) -> list[str]:
     return [str(emit["node"]["type"]) for emit in rule.get("emits", []) if "node" in emit]
 
 
-def twin_type(rule: Mapping[str, Any], siblings: Sequence[Mapping[str, Any]]) -> str | None:
+def node_rules(entries: Iterable[Mapping[str, Any]]) -> list[tuple[Mapping[str, Any], str]]:
+    """Each rule entry that emits a node, in order, with the type of its first node."""
+    return [(entry, nodes[0]) for entry in entries if (nodes := node_types(entry))]
+
+
+def twin_type(
+    rule: Mapping[str, Any], nodes: Sequence[tuple[Mapping[str, Any], str]]
+) -> str | None:
     """The node type of the edge rule's twin, or ``None`` when it has none.
 
     The twin is the first other rule of the same pack that emits a node and whose ``match``, ``id``
-    and ``in`` equal the edge rule's as documents. ``siblings`` is every rule entry of that pack.
+    and ``in`` equal the edge rule's as documents. ``nodes`` is ``node_rules`` of every rule entry
+    of that pack.
     """
-    for other in siblings:
-        nodes = node_types(other)
-        if (
-            other is not rule
-            and nodes
-            and all(other.get(key) == rule.get(key) for key in ("match", "id", "in"))
+    for other, first in nodes:
+        if other is not rule and all(
+            other.get(key) == rule.get(key) for key in ("match", "id", "in")
         ):
-            return nodes[0]
+            return first
     return None
 
 
-def _with_twin(rule: Rule, item: Mapping[str, Any], siblings: Sequence[Mapping[str, Any]]) -> Rule:
+def _with_twin(
+    rule: Rule, item: Mapping[str, Any], nodes: Sequence[tuple[Mapping[str, Any], str]]
+) -> Rule:
     """An edge rule, given the type of its twin node rule."""
     if not (rule.supported and rule.edges):
         return rule
-    found = twin_type(item, siblings)
+    found = twin_type(item, nodes)
     return replace(rule, twin_type=found) if found else rule
 
 
