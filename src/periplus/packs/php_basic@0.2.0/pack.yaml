@@ -8,7 +8,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # function keeps a call site, with an inferred calls edge when the variable is a typed parameter, a
 # parameter a @param types, a local assigned new Foo(), $this->m() or another typed call's result, a
 # local a @var types, a catch variable, or a property assigned new Foo() or $this->m() of a declared
-# return type. A chain of up to three calls from $this, or two from a typed property, through
+# return type, and a variable or property an instanceof test settles, in the block an if guards or
+# after an early return or assert. A $this->p->m() in a trait joins m on the type of p in each
+# class that uses the trait and declares p. A chain of up to three calls from $this, or two from a typed property, through
 # declared return types, static among them, joins its last call. A $this->m() inside a trait also
 # joins the m() of each class that uses it, a method that replaces an inherited one or one of its
 # own class's traits gets an overrides edge to it, and a method that implements an interface method
@@ -50,7 +52,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   local assigned a call no rule types, and a local with two different values in its method or
 #   function. No rule reads a union parameter or return type, or a property typed by a union of
 #   two or more class names, Helper|Other, nor a call in a parent class through a property only a
-#   child assigns, nor a call at file level. The rule files' headers name the rest.
+#   child assigns, nor a call at file level. An instanceof test joined by && or ||, in a ternary or
+#   an arrow function, or followed by continue or break, settles nothing. The rule files' headers
+#   name the rest.
 # - No rule gives an overrides edge to a method of an ancestor outside the map.
 # - A trait's $this->m() joins a subclass's own m() only one or two levels below the using class,
 #   and an m() of another trait the class uses not at all.

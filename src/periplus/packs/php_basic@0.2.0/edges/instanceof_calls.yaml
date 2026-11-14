@@ -1,0 +1,351 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A call on a variable or a property whose class an instanceof test settles, in a class method or a
+# plain function: $x->m(), $x?->m() or $this->p->m(), after one of
+#   if ($x instanceof Foo) { ... $x->m() ... }
+#   if (!$x instanceof Foo) { return; }  ... $x->m()     (or !($x instanceof Foo), or throw)
+#   assert($x instanceof Foo);           ... $x->m()
+# The map rules give the call site of variable_calls.yaml, variable_calls_in_function.yaml or
+# find_call_site its calls edge, inferred, to m on Foo or its nearest ancestor through extends;
+# a Foo outside the map, or an m no mapped class declares, lands unresolved under Foo.
+#
+# The file rules keep four internal nodes. An instanceof test, <type>::<$x as written> instanceof
+# <Foo as written>, joined by instanceof_typed_as to <type>::<$x>::<Foo resolved through the
+# imports and namespace>, where <type> is the class or function around it. A guard at each if or
+# assert that tests one variable or property against one class, keyed by the method and holding
+# the text it guards: block::<condition>::<body> for the first form, after::<condition> or
+# after::<assert's arguments> for the others, joined from the method or function by narrowed_by.
+# An early return or assert counts only at the top of the method's or function's body, not inside a
+# loop, an if, a try, a switch or a closure. And the body text of each method or function that
+# holds instanceof, joined to it by body_text_of.
+#
+# A call site stands for every call of m on $x in its method, so the map rules read the body text:
+# a block guard joins the call when every such call sits inside the guarded block; an early return
+# or assert, when none comes before it. Each needs the test's text once in the body, no assignment
+# to $x in the guarded text (=, a compound =, foreach as, list or [] on the left, a reference, unset,
+# global or static) and no closure or arrow function with a parameter of the same name there. A
+# second guard on the same $x naming another class, an early return or assert or a block around the
+# call, leaves the call with no edge, so a call never gets two narrowed types. The texts are
+# compared as written: a call or assignment inside a string or comment counts.
+#
+# A condition other than the one test, such as $x instanceof A || $x instanceof B, or a test joined
+# by &&, makes no guard. A negated test whose body does not end in return or throw makes none, nor
+# does an else branch, a ternary or an arrow function. A method of an anonymous class has no
+# enclosing type and makes nothing.
+node_types:
+- name: php.instanceof_test
+  id_namespace: php.instanceof_test
+  internal: true
+
+- name: php.instanceof_type
+  id_namespace: php.instanceof_type
+  internal: true
+
+- name: php.instanceof_guard
+  id_namespace: php.instanceof_guard
+  internal: true
+
+- name: php.body_text
+  id_namespace: php.body_text
+  internal: true
+
+edge_kinds:
+- kind: instanceof_typed_as
+  from: php.instanceof_test
+  to: php.instanceof_type
+
+- kind: narrowed_by
+  from: [php.method, php.function]
+  to: php.instanceof_guard
+
+- kind: body_text_of
+  from: php.body_text
+  to: [php.method, php.function]
+
+rules:
+
+# The test, $x instanceof Foo or $this->p instanceof Foo, anywhere in a class or function.
+- rule: find_instanceof_test
+  reads: file
+  in: [source]
+  match: &test_match
+    declaration: binary_expression
+    name_child: left
+    filetype: php
+    where:
+    - name_matches: {child: operator, pattern: instanceof}
+    - name_matches: {child: left, pattern: &tested '\$(?:this->)?\w+'}
+    - name_matches: {child: right, pattern: &written '\\?[A-Za-z_][\w\\]*'}
+  id: &test_id
+    from: [enclosing_type, declared_name, right]
+    template: "{enclosing_type}::{declared_name} instanceof {right}"
+  emits: [{node: {type: php.instanceof_test}}]
+  confidence: declared
+
+- rule: find_instanceof_type
+  reads: file
+  in: [source]
+  match: *test_match
+  id:
+    from: [enclosing_type, declared_name, {qualified: right}]
+    template: "{enclosing_type}::{declared_name}::{right}"
+  emits: [{node: {type: php.instanceof_type}}]
+  confidence: declared
+
+- rule: instanceof_typed_as
+  reads: file
+  in: [source]
+  match: *test_match
+  id: *test_id
+  emits: [{edge: {kind: instanceof_typed_as, from: this_node, to: {declared: php.instanceof_type}}}]
+  confidence: declared
+
+# The body text of a method or function that tests instanceof.
+- rule: find_method_body_text
+  reads: file
+  in: [source]
+  match: &method_text_match
+    declaration: method_declaration
+    name_child: name
+    filetype: php
+    where: [{name_matches: {child: body, pattern: &holds_test '(?s).*\binstanceof\b.*'}}]
+  id: &method_text_id
+    from: [enclosing_type, declared_name, body]
+    template: "{enclosing_type}::{declared_name}::{body}"
+  emits: [{node: {type: php.body_text}}]
+  confidence: declared
+
+- rule: body_text_of_method
+  reads: file
+  in: [source]
+  match: *method_text_match
+  id: *method_text_id
+  emits: [{edge: {kind: body_text_of, from: this_node, to: {declared: php.method}}}]
+  confidence: declared
+
+- rule: find_function_body_text
+  reads: file
+  in: [source]
+  match: &function_text_match
+    declaration: function_definition
+    name_child: name
+    filetype: php
+    where: [{name_matches: {child: body, pattern: *holds_test}}]
+  id: &function_text_id
+    from: [qualified_name, body]
+    template: "{qualified_name}::{body}"
+  emits: [{node: {type: php.body_text}}]
+  confidence: declared
+
+- rule: body_text_of_function
+  reads: file
+  in: [source]
+  match: *function_text_match
+  id: *function_text_id
+  emits: [{edge: {kind: body_text_of, from: this_node, to: {declared: php.function}}}]
+  confidence: declared
+
+# if ($x instanceof Foo) <body>, in a method and in a function.
+- rule: find_block_guard
+  reads: file
+  in: [source]
+  match: &block_match
+    declaration: if_statement
+    name_child: condition
+    filetype: php
+  id: &block_id
+    from: condition
+    pattern: &single_test '^\(\s*(?<var>\$(?:this->)?\w+)\s+instanceof\s+(?<written>\\?[A-Za-z_][\w\\]*)\s*\)$'
+    template: "{enclosing_type}::{enclosing_method}::{var}::{written}::block::{condition}::{body}"
+  emits: [{node: {type: php.instanceof_guard}}]
+  confidence: declared
+
+- rule: block_guard_in_method
+  reads: file
+  in: [source]
+  match: *block_match
+  id: *block_id
+  emits: [{edge: {kind: narrowed_by, from: enclosing_method, to: this_node}}]
+  confidence: declared
+
+- rule: find_block_guard_in_function
+  reads: file
+  in: [source]
+  match: &function_block_match
+    declaration: if_statement
+    name_child: condition
+    filetype: php
+    holder: function_definition
+  id: &function_block_id
+    from: condition
+    pattern: *single_test
+    template: "{enclosing_type}::{var}::{written}::block::{condition}::{body}"
+  emits: [{node: {type: php.instanceof_guard}}]
+  confidence: declared
+
+- rule: block_guard_in_function
+  reads: file
+  in: [source]
+  match: *function_block_match
+  id: *function_block_id
+  emits: [{edge: {kind: narrowed_by, from: enclosing_class, to: this_node}}]
+  confidence: declared
+
+# if (!$x instanceof Foo) { ...; return; } or throw, at the top of the body.
+- rule: find_early_exit_guard
+  reads: file
+  in: [source]
+  match: &exit_match
+    declaration: if_statement
+    name_child: condition
+    filetype: php
+    where:
+    - name_matches: {child: body, pattern: &exits '(?s)\{(?:.*[;{}])?\s*(?:return|throw)\b[^;{}]*;\s*\}|(?:return|throw)\b[^;{}]*;'}
+    - not_within: &nested [if_statement, else_clause, else_if_clause, foreach_statement, for_statement, while_statement, do_statement, switch_statement, try_statement, catch_clause, finally_clause, anonymous_function, arrow_function, match_expression]
+  id: &exit_id
+    from: condition
+    pattern: &negated_test '^\(\s*!\s*\(?\s*(?<var>\$(?:this->)?\w+)\s+instanceof\s+(?<written>\\?[A-Za-z_][\w\\]*)\s*\)?\s*\)$'
+    template: "{enclosing_type}::{enclosing_method}::{var}::{written}::after::{condition}"
+  emits: [{node: {type: php.instanceof_guard}}]
+  confidence: declared
+
+- rule: early_exit_guard_in_method
+  reads: file
+  in: [source]
+  match: *exit_match
+  id: *exit_id
+  emits: [{edge: {kind: narrowed_by, from: enclosing_method, to: this_node}}]
+  confidence: declared
+
+- rule: find_early_exit_guard_in_function
+  reads: file
+  in: [source]
+  match: &function_exit_match
+    declaration: if_statement
+    name_child: condition
+    filetype: php
+    holder: function_definition
+    where:
+    - name_matches: {child: body, pattern: *exits}
+    - not_within: *nested
+  id: &function_exit_id
+    from: condition
+    pattern: *negated_test
+    template: "{enclosing_type}::{var}::{written}::after::{condition}"
+  emits: [{node: {type: php.instanceof_guard}}]
+  confidence: declared
+
+- rule: early_exit_guard_in_function
+  reads: file
+  in: [source]
+  match: *function_exit_match
+  id: *function_exit_id
+  emits: [{edge: {kind: narrowed_by, from: enclosing_class, to: this_node}}]
+  confidence: declared
+
+# assert($x instanceof Foo); at the top of the body.
+- rule: find_assert_guard
+  reads: file
+  in: [source]
+  match: &assert_match
+    declaration: function_call_expression
+    name_child: function
+    filetype: php
+    where:
+    - name_matches: {child: function, pattern: &assert '\\?assert'}
+    - not_within: *nested
+  id: &assert_id
+    from: arguments
+    pattern: *single_test
+    template: "{enclosing_type}::{enclosing_method}::{var}::{written}::after::{arguments}"
+  emits: [{node: {type: php.instanceof_guard}}]
+  confidence: declared
+
+- rule: assert_guard_in_method
+  reads: file
+  in: [source]
+  match: *assert_match
+  id: *assert_id
+  emits: [{edge: {kind: narrowed_by, from: enclosing_method, to: this_node}}]
+  confidence: declared
+
+- rule: find_assert_guard_in_function
+  reads: file
+  in: [source]
+  match: &function_assert_match
+    declaration: function_call_expression
+    name_child: function
+    filetype: php
+    holder: function_definition
+    where:
+    - name_matches: {child: function, pattern: *assert}
+    - not_within: *nested
+  id: &function_assert_id
+    from: arguments
+    pattern: *single_test
+    template: "{enclosing_type}::{var}::{written}::after::{arguments}"
+  emits: [{node: {type: php.instanceof_guard}}]
+  confidence: declared
+
+- rule: assert_guard_in_function
+  reads: file
+  in: [source]
+  match: *function_assert_match
+  id: *function_assert_id
+  emits: [{edge: {kind: narrowed_by, from: enclosing_class, to: this_node}}]
+  confidence: declared
+
+# A call inside the guarded block. The site is any call site on a plain variable or a property,
+# in the method, a closure of it, or a function; call_site_in leads to the method or function.
+- rule: calls_through_instanceof_block
+  reads: map
+  match:
+    node_type: php.call_site
+    where: &narrowed_site [{id_matches: '^php\.call_site::(?<site>[^$]*\$(?<var>this->\w+|(?!this\b)\w+)(?<arrow>\??->)(?<method>\w+))$'}]
+    follow:
+    - edge: call_site_in
+    - id_matches: '^(?<owner>php\.(?:method|function)::.+)$'
+    - edge: narrowed_by
+    - id_matches: '(?s)^php\.instanceof_guard::(?<holder>[^:]+)::[^$]*\${var}::(?<written>\\?[A-Za-z_][\w\\]*)::block::(?<cond>[^:]*)::(?<body>(?=[\s\S]*\${var}\s*{arrow}\s*{method}\s*\()(?![\s\S]*(?:\${var}\s*(?:[-+*/.%&|^]|\*\*|\?\?|<<|>>)?=(?![=>])|&\s*\${var}\b|\bas\s+(?:[^;)]*?=>\s*)?&?\${var}\b|(?:\blist\s*\(|\[)[^;]*?\${var}\b[^;]*?=(?![=>])|\b(?:function|fn)\s*&?\s*\([^)]*\${var}\b|\bunset\s*\([^)]*\${var}\b|\b(?:global|static)\s+[^;]*\${var}\b))[\s\S]*)$'
+    - node: '{owner}'
+    - incoming_edge: body_text_of
+    - id_matches: '(?s)^php\.body_text::[^{]*?::(?![\s\S]*{cond}[\s\S]*{cond})(?:(?!\${var}\s*{arrow}\s*{method}\s*\()[\s\S])*?{cond}\s*{body}(?:(?!\${var}\s*{arrow}\s*{method}\s*\()[\s\S])*$'
+    - node: 'php.instanceof_test::{holder}::${var} instanceof {written}'
+    - edge: instanceof_typed_as
+    - id_matches: '^php\.instanceof_type::[^:]+::\$[^:]+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: &method_on_type
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: &another_type
+    - - edge: narrowed_by
+      - id_matches: '(?s)^php\.instanceof_guard::[^$]*\${var}::(?!{written}::)[^:]+::(?:after::|block::[^:]*::(?=[\s\S]*\${var}\s*{arrow}\s*{method}\s*\())'
+  emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+# A call after an early return or an assert: no such call before the test, and no assignment after.
+- rule: calls_through_instanceof_exit
+  reads: map
+  match:
+    node_type: php.call_site
+    where: *narrowed_site
+    follow:
+    - edge: call_site_in
+    - id_matches: '^(?<owner>php\.(?:method|function)::.+)$'
+    - edge: narrowed_by
+    - id_matches: '(?s)^php\.instanceof_guard::(?<holder>[^:]+)::[^$]*\${var}::(?<written>\\?[A-Za-z_][\w\\]*)::after::(?<cond>.*)$'
+    - node: '{owner}'
+    - incoming_edge: body_text_of
+    - id_matches: '(?s)^php\.body_text::[^{]*?::(?:(?!\${var}\s*{arrow}\s*{method}\s*\(|{cond})[\s\S])*{cond}(?![\s\S]*{cond})(?![\s\S]*(?:\${var}\s*(?:[-+*/.%&|^]|\*\*|\?\?|<<|>>)?=(?![=>])|&\s*\${var}\b|\bas\s+(?:[^;)]*?=>\s*)?&?\${var}\b|(?:\blist\s*\(|\[)[^;]*?\${var}\b[^;]*?=(?![=>])|\b(?:function|fn)\s*&?\s*\([^)]*\${var}\b|\bunset\s*\([^)]*\${var}\b|\b(?:global|static)\s+[^;]*\${var}\b))'
+    - node: 'php.instanceof_test::{holder}::${var} instanceof {written}'
+    - edge: instanceof_typed_as
+    - id_matches: '^php\.instanceof_type::[^:]+::\$[^:]+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: *method_on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: *another_type
+  emits: *calls_edge
+  confidence: inferred
