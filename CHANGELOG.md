@@ -54,7 +54,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - a call through a chain of returns, such as `$this->a()->b()->c()`, and through a method that returns `static`, with the new edge kind `returns_static`;
   - a call through the method result of a property, such as `$this->p->m()->n()`;
   - a call on a parameter typed by `@param`, or on a local typed by an inline `@var` comment;
-  - a call on a local assigned the result of a typed call or a static call.
+  - a call on a local assigned the result of a typed call or a static call;
+  - a call on a variable or property whose class an `instanceof` test settles: inside the block of `if ($x instanceof Foo)`, or after `if (!$x instanceof Foo) { return; }` or `assert($x instanceof Foo)`;
+  - a call `$this->p->m()` inside a trait, on the type each class that uses the trait declares for `p`.
 - `php_basic` adds the edge kind `implements_method`, from a class method to the interface method it implements.
 - `drupal_basic` maps entity type manager, container, config factory and queue factory calls on a parameter or property whose declared type is the core, Symfony or PSR interface.
 - A tree declaration rule's `where` list takes `within` and `not_within`, each a list of tree node types between the match and its nearest holder. Two rules can so tell a call in a method's own body from one in a closure inside it.
