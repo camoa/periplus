@@ -1,0 +1,41 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A URL a template builds in a {% set %} by joining pieces with ~, joined to the route whose path
+# has the same shape. {% set url = 'my/item/' ~ item_id ~ '?full=1' %} in a <name>.html.twig file
+# gives the drupal.path_use node <name>|/my/item/*, and url/path_route.yaml's
+# template_links_to_route_by_shape map rule joins it to the route whose path is /my/item/{id}, a
+# template_links_route edge.
+#
+# The shape is made from the expression: each quoted piece is kept as written, each other piece,
+# such as a variable, a filter or a ?? default, becomes *, the query string and the fragment are
+# cut, and a leading / is added when the first piece has none. Two pieces that are not quoted and
+# stand side by side give **, which no route's shape holds, since what they join may hold a /.
+#
+# The first piece is quoted text that starts with a lower-case path segment and holds a /, and at
+# least one ~ follows it, so {% set label = 'Read more' %}, {% set tpl = '@my_theme/x.html.twig' %}
+# and {% set u = '/my/item' %} make nothing here. A set written as a block, {% set x %}...{% endset %},
+# makes nothing.
+#
+# Inferred, as the attribute form is: the shape, not a declaration, says which route the URL is.
+
+rules:
+- rule: template_set_path_concat
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\{%-?\s*set\s+\w+\s*=\s*(?<expr>''/?[a-z][\w.-]*/[^''\s]*''(?:\s*~\s*[^~%]+?)+)\s*-?%\}'
+  values:
+    shape:
+      template: '{expr}'
+      normalize:
+      - {replace: '\s*~\s*', with: '~'}
+      - {replace: '(?:^|(?<=~))(?!''[^'']*''(?:~|$))[^~]+', with: '*'}
+      - {replace: '[~'']', with: ''}
+      - {replace: '[?#].*$', with: ''}
+      - {replace: '^/?', with: '/'}
+  id: {template: '{template_name}|{shape}'}
+  line: {capture: expr}
+  emits: [{node: {type: drupal.path_use}}]
+  confidence: inferred

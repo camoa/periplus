@@ -72,6 +72,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The node states `boundary` and `unknown_boundary`. A rule end takes `on_miss: unknown_boundary`, or `boundary: {into: {template, type}, kind}` to name the API node it enters, and a node type takes `boundary: true`. When rules mark one end differently, mapped beats boundary, boundary beats unresolved, and unresolved beats unknown boundary. The map report counts boundaries by node and unknown boundaries by pack and reason.
 - Rules that type one node as types on different branches of one ancestor no longer stop the map. The node keeps the nearest type they share, and its `type_conflict` attribute names each candidate as `<type> by <pack>/<rule>`. An edge only a candidate type could carry is not written. A boundary classification adds its type to the list and changes no type, and a rule that writes `type_conflict` refuses the map with exit 19. The map report's Type conflicts section, `type_conflicts` in JSON, lists each node with its candidates and counts those edges. Types that share no ancestor still refuse the map with exit 21.
 
+- `drupal_basic` maps what acts on a page from outside it:
+  - `url/template_path_concat.yaml`: a URL a template builds in a `{% set %}` joined with `~`, as `template_links_route` to the route of the same path shape;
+  - `hook/hook_on_form.yaml`: the new edge kind `hook_runs_on_form`, from `hook_user_login` to core's `user_login_form`;
+  - `form/login_destination_trigger.yaml`: the new edge kind `redirects_after_form`, from a Login Destination rule to the login or registration form its trigger names;
+  - `display/form_display_form.yaml`: the new edge kinds `form_uses_display` and `form_of_entity_type`, from an entity form id to its form display and its entity type;
+  - `hook/entity_hook_type_test.yaml`: the new edge kind `acts_on_entity_type`, `mentioned`, from a generic entity hook to the entity type its `if` tests.
+
 ### Changed
 
 - `affected` prints its own header when it stops on a problem.

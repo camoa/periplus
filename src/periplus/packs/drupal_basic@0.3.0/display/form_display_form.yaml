@@ -1,0 +1,35 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The entity form that uses a form display. Core builds an entity form's id from its entity type,
+# its bundle when the type has bundles, and its operation, as <type>_<operation>_form, and loads the
+# form display of the mode named as the operation. A type with no bundles, such as user, writes its
+# bundle as the type again in the display's name, so core.entity_form_display.user.user.register is
+# the display of the form user_register_form. The rule gives two edges from that form id:
+# form_uses_display to the display, and form_of_entity_type to the entity type.
+#
+# The rule reads only a display whose bundle part equals its entity type part, and the mode default
+# is left out, since its form drops the operation from the id. It links only to a form id the map
+# already holds, found by a class's getFormId or named in configuration, so a display whose form no
+# file names gives nothing.
+#
+# Inferred: core's naming of entity forms, which the rutter encodes, says which form it is.
+
+edge_kinds:
+- kind: form_uses_display
+  from: drupal.form_id
+  to: drupal.form_display
+- kind: form_of_entity_type
+  from: drupal.form_id
+  to: drupal.entity_type
+
+rules:
+- rule: entity_form_uses_display
+  reads: map
+  match:
+    node_type: drupal.form_display
+    where: [{id_matches: '^drupal\.config::core\.entity_form_display\.(?<et>[a-z0-9_]+)\.(?P=et)\.(?<mode>(?!default$)[a-z0-9_]+)$'}]
+    follow: [{node: 'drupal.form_id::{et}_{mode}_form'}]
+  emits:
+  - edge: {kind: form_uses_display, from: matched_node, to: this_node}
+  - edge: {kind: form_of_entity_type, from: matched_node, to: {template: '{et}', types: [drupal.entity_type]}}
+  confidence: inferred

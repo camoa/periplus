@@ -1,0 +1,30 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A hook that core runs when a form is submitted, linked to that form's id: a hook_runs_on_form
+# edge from the drupal.hook node to the drupal.form_id. Core's user login form calls
+# user_login_finalize() from its submit handler, and that function invokes hook_user_login, so
+# drupal.hook::user_login runs on drupal.form_id::user_login_form. A module function that
+# implements the hook reaches the form in two hops: implements_hook, then hook_runs_on_form.
+#
+# The edge is true and not the only way the hook runs: a one-time login link and a login by
+# another module that calls user_login_finalize() run it too, and those have no form.
+#
+# The rule fires only on a hook a mapped function implements, since a map rule starts from a node
+# a file rule found. The form id is core's, so it ends at a referenced node unless a class of the
+# map returns it.
+#
+# Inferred: core's call chain, which the rutter encodes, says which form runs the hook.
+
+edge_kinds:
+- kind: hook_runs_on_form
+  from: drupal.hook
+  to: drupal.form_id
+
+rules:
+- rule: user_login_hook_runs_on_login_form
+  reads: map
+  match:
+    node_type: drupal.hook
+    where: [{id_matches: '^drupal\.hook::user_login$'}]
+  emits: [{edge: {kind: hook_runs_on_form, from: this_node, to: {template: 'user_login_form', types: [drupal.form_id]}}}]
+  confidence: inferred
