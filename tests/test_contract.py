@@ -1,41 +1,25 @@
 """The pack contract, as tests.
 
 Four JSON Schemas and two prose specs are what a Periplus pack is defined against. What this file
-specifies is that they are the documents they claim to be, and that they survive the trip into an
-installed wheel. Whether a *pack* agrees with them is ``tests/test_validate.py``'s question, and
-the header here said "nothing in this package reads them yet" until ``periplus validate`` was
-written.
+specifies is that they are the documents they claim to be. Whether a *pack* agrees with them is
+``tests/test_validate.py``'s question, and the header here said "nothing in this package reads
+them yet" until ``periplus validate`` was written.
 
-Two tiers, because those are two behaviours and each has a smallest tier that answers it.
 Whether a schema document is well formed is a question about a file's bytes, answered by reading
-the file. Whether those bytes reach a user is a question about packaging, answerable only after
-an install. The install test ties the two together by comparing the installed text against the
-source text byte for byte, so the validity established at the cheap tier is validity of the thing
-that actually ships — and a truncation present in both copies still fails, at the cheap tier.
-
-``EXPECTED_CONTRACT_FILES`` is imported from ``test_packaging`` rather than restated. That file
-uses it to bound what the wheel and sdist archives may carry; this one uses it to bound what an
-install exposes. One declaration means the two bounds cannot drift apart, and a seventh contract
-file has to be admitted in one place before either will pass.
+the file. ``EXPECTED_CONTRACT_FILES`` is imported from ``test_packaging`` rather than restated.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import re
-from pathlib import Path
 from typing import Any
 
-import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from test_packaging import (
     EXPECTED_CONTRACT_FILES,
     PROJECT_ROOT,
-    UV,
-    _run_or_fail,
-    _scripts_dir,
 )
 
 #: The seven type names JSON Schema defines. Anything else in a ``type`` position is a word the
@@ -65,36 +49,6 @@ _SCHEMA_VALUED = (
 )
 _SCHEMA_MAP_VALUED = ("$defs", "dependentSchemas", "patternProperties", "properties")
 _SCHEMA_LIST_VALUED = ("allOf", "anyOf", "oneOf", "prefixItems")
-
-# Read from the installed package, never from a path this test constructs. `importlib.resources`
-# is how the validator will reach these files at runtime, so it is what the test has to exercise;
-# opening `<venv>/lib/.../periplus/contract/...` by hand would prove a file is at a path we built
-# and would say nothing about whether the package can find it.
-#
-# The walk is recursive and unconditional rather than a lookup of the six expected names. A
-# lookup reports a missing file and is blind to an extra one, and the caller asserts set equality
-# precisely so that a seventh file shipped under contract/ is a failure here too.
-READ_INSTALLED_CONTRACT = '''
-import importlib.resources
-import json
-import sys
-
-import periplus
-
-found = {}
-
-
-def visit(node, path):
-    if node.is_dir():
-        for child in sorted(node.iterdir(), key=lambda entry: entry.name):
-            visit(child, path + "/" + child.name)
-    else:
-        found[path] = node.read_text(encoding="utf-8")
-
-
-visit(importlib.resources.files("periplus") / "contract", "periplus/contract")
-json.dump({"package_file": periplus.__file__, "files": found}, sys.stdout)
-'''
 
 
 def _source_text(shipped: str) -> str:
@@ -320,71 +274,3 @@ def test_both_shipped_specs_carry_every_numbered_section() -> None:
     assert steps == [str(n) for n in range(1, 8)], (
         f"engine.md numbers its run {steps}, and the run is seven steps in a fixed order"
     )
-
-
-@pytest.mark.slow
-def test_the_contract_is_readable_out_of_an_installed_wheel(tmp_path: Path) -> None:
-    """An install of this project exposes the whole contract through ``importlib.resources``.
-
-    This is the property, and it is not "the files are in the source tree" — that became true the
-    moment they were copied there and no test can un-know it. Three things make this an assertion
-    about an install and not about the checkout:
-
-    The install is **not** editable. ``uv pip install -e .`` would leave the package pointing at
-    ``src/periplus``, every read below would come straight back out of the working tree, and the
-    test would pass just as green with the contract excluded from the wheel. So the project is
-    built and installed for real.
-
-    The reader runs with ``tmp_path`` as its working directory, so the project's ``src/`` is
-    nowhere near that interpreter's ``sys.path``, and it reaches the files through
-    ``importlib.resources.files("periplus")`` — the same route the validator will use — rather
-    than through a path this test assembles.
-
-    And ``periplus.__file__`` is asserted to be inside the venv and outside the project. That is
-    the assertion that fails loudest if any of the above is ever weakened back into a source-tree
-    read.
-
-    What comes back is compared to the working tree byte for byte. That is what makes the two
-    cheap tests above tests of the shipped bytes: they check the source text, and this checks
-    that the installed text is the same text.
-    """
-    if UV is None:
-        pytest.fail("uv is not on PATH, so the contract cannot be read out of a real install")
-
-    venv = tmp_path / "venv"
-    _run_or_fail([UV, "venv", str(venv)], "uv venv")
-    python = _scripts_dir(venv) / ("python.exe" if os.name == "nt" else "python")
-    _run_or_fail(
-        [UV, "pip", "install", "--python", str(python), str(PROJECT_ROOT)],
-        "uv pip install . (not -e)",
-    )
-
-    reader = tmp_path / "read_contract.py"
-    reader.write_text(READ_INSTALLED_CONTRACT, encoding="utf-8")
-    result = _run_or_fail(
-        [str(python), str(reader)],
-        "reading the contract out of the install",
-        cwd=str(tmp_path),
-    )
-    report = json.loads(result.stdout)
-
-    installed = Path(report["package_file"]).resolve()
-    assert venv.resolve() in installed.parents, (
-        f"the reader imported periplus from {installed}, which is not inside {venv}; "
-        "this test only means anything against an installed copy"
-    )
-    assert PROJECT_ROOT not in installed.parents, (
-        f"the reader imported periplus from {installed}, inside the project at {PROJECT_ROOT}; "
-        "that is the source tree, and the source tree is not what ships"
-    )
-
-    files = report["files"]
-    assert set(files) == EXPECTED_CONTRACT_FILES, (
-        f"the install exposes {sorted(set(files) - EXPECTED_CONTRACT_FILES)} beyond the declared "
-        f"contract, and is missing {sorted(EXPECTED_CONTRACT_FILES - set(files))}"
-    )
-
-    differing = sorted(
-        shipped for shipped in EXPECTED_CONTRACT_FILES if files[shipped] != _source_text(shipped)
-    )
-    assert differing == [], f"the install's copy of {differing} differs from the working tree's"

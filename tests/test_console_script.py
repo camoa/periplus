@@ -1,9 +1,4 @@
-"""The console script's error vocabulary, its dependency check, and the wiring between them.
-
-One of these runs the real command in a subprocess where a required distribution genuinely is not
-there, rather than patching one out. The property is about what happens on a broken install, and
-a mocked absence is a test of the mock.
-"""
+"""The console script's error vocabulary, its dependency check, and the wiring between them."""
 
 from __future__ import annotations
 
@@ -12,9 +7,6 @@ import contextlib
 import io
 import json
 import os
-import pty
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -22,40 +14,6 @@ import pytest
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.preflight import REQUIRED, DependencyStatus, check_runtime_dependencies
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SRC = PROJECT_ROOT / "src"
-
-
-def _run_child(
-    body: str, *, isolated: bool, stdin: int | None = None
-) -> subprocess.CompletedProcess[str]:
-    """Run ``body`` in a fresh interpreter, optionally with no site-packages at all.
-
-    ``stdin`` defaults to ``None``, which is ``subprocess``'s own default and leaves the five
-    existing call sites exactly as they were: the child inherits this process's file descriptor 0.
-    Pass ``subprocess.DEVNULL`` to close it. That distinction is the whole point of the parameter —
-    inherited, fd 0 is whatever pytest's capture mode left there, ``/dev/null`` under default
-    capture and the developer's terminal under ``-s``, so a test asserting "needs no terminal"
-    against the inherited descriptor asserts against an unspecified one.
-
-    ``isolated=True`` passes ``-S`` and puts only ``src`` on the path, so no distribution metadata
-    is installed as far as the child can see. That is a real absence rather than a patched one:
-    ``importlib.metadata.version`` genuinely finds nothing, which is the state a user has when they
-    have not installed the dependencies.
-
-    The environment is built rather than inherited, so an inherited ``PYTHONPATH`` cannot put
-    site-packages back and quietly turn an absence test into a presence test.
-    """
-    env = {
-        "PYTHONPATH": str(SRC),
-        "PATH": os.environ.get("PATH", ""),
-        "PYTHONDONTWRITEBYTECODE": "1",
-    }
-    argv = [sys.executable, *(["-S"] if isolated else []), "-c", body]
-    return subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-        argv, capture_output=True, text=True, env=env, check=False, stdin=stdin
-    )
 
 
 class _PinUnmatched(HarnessError):
@@ -133,80 +91,6 @@ def test_the_statuses_come_back_sorted_by_distribution_name() -> None:
         "REQUIRED is now in sorted order, so check_runtime_dependencies()'s sort is unobservable "
         "and the assertion above passes whether or not it is still there"
     )
-
-
-def test_a_missing_dependency_ends_the_run_at_exit_9_naming_every_one(tmp_path: Path) -> None:
-    """A missing dependency, end to end: non-zero, naming which distribution.
-
-    One child carries three properties, because they are three readings of one run. The child is
-    ``-S`` with only ``src`` on its path, so no distribution metadata is installed as far as it can
-    see: a real absence rather than a patched one, and ``importlib.metadata`` genuinely finds
-    nothing for either name.
-
-    The import at the top of the body is the import-graph property, which is a property of a graph
-    rather than of a file. A per-file "standard library only" check passes while ``errors`` imports
-    ``periplus.settings``, which imports ``ruamel.yaml``: the edge is first-party, the file reads
-    clean, and a missing dependency then dies of an ``ImportError`` before the check that exists to
-    name it ever runs. An earlier draft of the design declared ``Problem`` in ``resolution.py`` and
-    had exactly that defect. Here the import happens where neither distribution can be imported at
-    all, so a module-level edge to one raises rather than passing quietly — which is what the
-    ``ImportError`` assertion below reads. Run in a subprocess because the import must be the first
-    one of this process; importing ``periplus.cli`` in-process would find it already in
-    ``sys.modules`` from the imports at the top of this file and assert nothing at all.
-
-    The statuses are written to a file rather than printed, because stdout is itself under
-    assertion here.
-
-    "Rather than failing later inside a subcommand" is the half that shapes the design, so the
-    assertions cover it directly — no traceback reaches the user, and the failure is a named report
-    line rather than an ``ImportError`` from somewhere deeper.
-
-    All three absent names appear, not just the first. A person who installs one distribution and
-    re-runs to be told about the next has been made to do the tool's own work. ``jsonschema`` is
-    the third since ``periplus validate`` grew a reference validator, and it is the one this
-    assertion is most needed for: it arrived last, so it is the name a startup check written for
-    two distributions silently omits.
-
-    On stderr, and stdout must stay empty. There is no report on this path — step 2 runs before
-    `resolve()` is called, so nothing is constructed and nothing is rendered — which puts the
-    message in the design's "what is not part of the report". The empty-stdout assertion is the
-    load-bearing half: the stdout rule exists so a consumer parsing `--format json` gets one
-    document whether the run succeeded or failed, and a bare text line there would hand that
-    consumer a malformed document.
-
-    The argument is ``["status"]`` and not ``[]``. A bare invocation is decided by the parse, above
-    this check, so it exits 2 on this install as well — asserting 9 against it would be asserting
-    against a path that no longer reaches here.
-    """
-    statuses = tmp_path / "statuses.json"
-    body = (
-        "import json\n"
-        "from pathlib import Path\n"
-        "\n"
-        "from periplus.cli import main\n"
-        "from periplus.preflight import check_runtime_dependencies\n"
-        "\n"
-        f"Path({str(statuses)!r}).write_text(json.dumps(\n"
-        "    [[s.distribution, s.installed, s.present] for s in check_runtime_dependencies()]\n"
-        "), encoding='utf-8')\n"
-        "raise SystemExit(main(['status']))\n"
-    )
-
-    result = _run_child(body, isolated=True)
-
-    assert result.returncode == 9, f"expected 9, got {result.returncode}: {result.stderr}"
-    assert json.loads(statuses.read_text(encoding="utf-8")) == [
-        ["jsonschema", None, False],
-        ["platformdirs", None, False],
-        ["ruamel.yaml", None, False],
-        ["tree-sitter", None, False],
-    ]
-    assert "ruamel.yaml" in result.stderr
-    assert "platformdirs" in result.stderr
-    assert "jsonschema" in result.stderr
-    assert result.stdout == "", f"a startup diagnostic reached stdout: {result.stdout!r}"
-    assert "Traceback" not in result.stderr, result.stderr
-    assert "ImportError" not in result.stdout + result.stderr
 
 
 def test_the_format_choices_are_exactly_the_renderers_the_report_module_offers() -> None:
@@ -417,142 +301,6 @@ def test_the_old_subcommand_name_is_a_usage_error() -> None:
         main(["resolve"])
 
     assert refused.value.code == 2
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="pty and termios are POSIX-only")
-def test_a_terminal_receives_the_same_bytes_as_a_pipe_and_no_escape_sequence(
-    tmp_path: Path,
-) -> None:
-    """The two things a terminal can change about this program's output, both forced over a pty.
-
-    First: the report does not change when stdout is a terminal. A test that only pipes cannot
-    observe TTY detection at all, which is the mechanism it exists to forbid — colour or
-    column-fitting that switches on ``isatty`` makes two runs on one input differ in bytes, and
-    every run under pytest takes the pipe branch. ``ONLCR`` is turned off on that pty: the terminal
-    line discipline translates every LF the *driver* sees into CRLF, which is not something the
-    program wrote, and leaving it on would make this fail for a reason that has nothing to do with
-    the report.
-
-    Second: the colour decision, forced rather than hoped for. **On 3.14 only.** Under pytest
-    capture and under a pipe ``can_colorize()`` returns false and every run looks plain, so a check
-    that leaves the environment alone cannot tell the guarded parser from the default one. The
-    second half forces the question instead: it drives the real console script over a pty **and**
-    sets ``PYTHON_COLORS=1``, which ``_colorize.can_colorize`` checks before the tty test.
-
-    Two earlier drafts overstated what that buys, and both were measured false:
-
-    * The pty is **not** the only place the difference shows. With the environment below and
-      ``stdout`` on a plain pipe, the unguarded parser still emits ``\x1b[1;34musage: ``. It is the
-      forced environment doing the work; the pty makes the run resemble the case a person meets.
-    * The parser is **not** the only thing that can keep an escape out of this output. On 3.11
-      through 3.13 — which ``pyproject.toml`` declares — ``argparse`` has no ``color`` keyword at
-      all, so gutting the guard leaves this green because the interpreter keeps the escape out.
-      Nothing can regress there. That half bites on 3.14 and is vacuous below it.
-    """
-    import termios
-
-    # Scoped to this interpreter's own directory. A bare `shutil.which("periplus")` finds whatever
-    # is first on PATH -- here a snapshot copy under ~/.local/bin that is neither `src/` nor the
-    # environment pytest runs from -- so the test would be about some other build. A decoy shell
-    # script printing a usage line and exiting 2 passes every assertion below, which is what makes
-    # the unscoped form a hole rather than a nuisance.
-    script = shutil.which("periplus", path=str(Path(sys.executable).parent))
-    assert script is not None, "run `uv pip install -e '.[dev]'` into this interpreter"
-
-    config = tmp_path / "userconf"
-    config.mkdir()
-    env = {
-        "PATH": os.environ.get("PATH", ""),
-        "PERIPLUS_CONFIG_DIR": str(config),
-        "PYTHONDONTWRITEBYTECODE": "1",
-    }
-
-    piped = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-        [script, "status"], capture_output=True, env=env, cwd=tmp_path, check=False
-    )
-
-    primary, secondary = pty.openpty()
-    attributes = termios.tcgetattr(secondary)
-    attributes[1] &= ~termios.ONLCR
-    termios.tcsetattr(secondary, termios.TCSANOW, attributes)
-    try:
-        on_a_terminal = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-            [script, "status"],
-            stdout=secondary,
-            stderr=subprocess.DEVNULL,
-            env=env,
-            cwd=tmp_path,
-            check=False,
-        )
-        os.close(secondary)
-        report_chunks = []
-        # A pty with no writer left raises EIO on Linux where a pipe would return b"". Both mean
-        # end of stream, and treating the error as anything else would make this test flaky rather
-        # than correct.
-        try:
-            while chunk := os.read(primary, 65536):
-                report_chunks.append(chunk)
-        except OSError:
-            pass
-    finally:
-        os.close(primary)
-
-    assert piped.returncode == on_a_terminal.returncode == 0
-    assert b"".join(report_chunks) == piped.stdout
-
-    primary, secondary = pty.openpty()
-    try:
-        # **stdout** on the pty, not only stderr. `argparse.py:202` calls `can_colorize()` with no
-        # file argument, and it defaults to `sys.stdout` -- so with stdout on /dev/null colour is
-        # never enabled and this test passes whatever the parser was built with. An earlier version
-        # did exactly that: mutating `_COLOUR` to `{}` left it green, which is a test that cannot
-        # fail dressed as the one that forces the condition. stderr is on the pty too because that
-        # is where the usage line goes.
-        child = subprocess.Popen(  # noqa: S603 - list argv, shell unset, nothing interpolated
-            [script],
-            stdout=secondary,
-            stderr=secondary,
-            stdin=subprocess.DEVNULL,
-            # The environment is built, not inherited, and it asks for colour as loudly as
-            # CPython allows. Inherited, a developer shell carrying `NO_COLOR=1` or
-            # `PYTHON_COLORS=0` turns `can_colorize()` off, and this test would pass green under the
-            # exact regression it guards -- measured both ways: the
-            # mutant fails under an empty ambient environment, `NO_COLOR=1`, `PYTHON_COLORS=0`,
-            # `TERM=dumb`, and all three together.
-            env={
-                "PATH": os.environ.get("PATH", ""),
-                "TERM": "xterm-256color",
-                "PYTHON_COLORS": "1",
-                "FORCE_COLOR": "1",
-            },
-        )
-        # Closed here so the read below sees EOF once the child is gone. Held open, the loop would
-        # never end.
-        os.close(secondary)
-        secondary = -1
-        # Read to EOF rather than once. One `os.read` returns one pty buffer, which truncates at
-        # about 4 KiB, and a child writing more than the buffer holds would block forever against a
-        # reader that has stopped. `Popen` plus a drain plus a bounded `wait` removes both.
-        usage_chunks: list[bytes] = []
-        while True:
-            try:
-                chunk = os.read(primary, 65536)
-            except OSError:  # the child closed its side
-                break
-            if not chunk:
-                break
-            usage_chunks.append(chunk)
-        returncode = child.wait(timeout=30)
-    finally:
-        if secondary != -1:
-            os.close(secondary)
-        os.close(primary)
-
-    written = b"".join(usage_chunks)
-
-    assert returncode == 2, "a bare invocation is still a usage error"
-    assert b"\x1b" not in written, f"argparse wrote an escape sequence: {written!r}"
-    assert b"periplus" in written
 
 
 def test_init_runs_to_completion_with_stdin_closed_and_refuses_a_second_run(

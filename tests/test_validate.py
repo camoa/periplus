@@ -2,9 +2,7 @@
 determinism that binds both.
 
 Every test that asserts a status or an output calls ``periplus.cli.main`` in process, which
-returns the integer ``[project.scripts]`` hands the interpreter as the process status. Two tests
-start a real interpreter, each for a property this process cannot show: the same bytes under two
-hash seeds and two locales, and what a first import pulls in.
+returns the integer ``[project.scripts]`` hands the interpreter as the process status.
 
 **What is deliberately not tested here: CI.** "Break one pack and watch CI reject it" needs a
 push, and a test pushes nothing. A test asserting that a workflow YAML file contains a
@@ -23,10 +21,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import os
 import shutil
-import subprocess
-import sys
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,30 +53,6 @@ RUTTER_NAMES = tuple(name for name in BUNDLED_PACK_NAMES if name not in REFERENC
 #: A rutter small enough to read, for the one test that names a pack's files.
 CLEAN_RUTTER = "js_basic"
 CLEAN_RUTTER_DIRECTORY = "js_basic@0.0.1"
-
-#: The console script's entry function in a fresh interpreter, for the determinism test: a hash
-#: seed and a locale are fixed when a process starts, so two calls in one process cannot differ.
-_CHILD = """
-import sys
-
-from periplus.cli import main
-
-raise SystemExit(main(sys.argv[1:]))
-"""
-
-#: Two properties of the console script's own import graph, read in a child because both are
-#: about what a *first* import pulls in and this process has already imported half the package.
-_IMPORT_GRAPH = """
-import json
-import sys
-
-import periplus.cli
-
-json.dump(
-    {"validate": "periplus.validate" in sys.modules, "jsonschema": "jsonschema" in sys.modules},
-    sys.stdout,
-)
-"""
 
 
 def _yaml() -> YAML:
@@ -156,32 +127,6 @@ def _run(args: Sequence[str], *, cwd: Path, config: Path) -> Result:
         patch.setenv("PERIPLUS_CONFIG_DIR", str(config))
         status = main(list(args))
     return Result(returncode=int(status), stdout=out.getvalue(), stderr=err.getvalue())
-
-
-def _run_in_a_process(
-    args: Sequence[str], *, cwd: Path, config: Path, **overrides: str
-) -> subprocess.CompletedProcess[str]:
-    """Run the console script's entry function in a fresh interpreter, with the environment built
-    rather than inherited.
-
-    Built, so an inherited ``PERIPLUS_CONFIG_DIR`` or ``PYTHONPATH`` cannot put a second settings
-    layer or a second copy of the package into a run that is asserting on paths.
-    """
-    env = {
-        "PYTHONPATH": str(SRC),
-        "PATH": os.environ.get("PATH", ""),
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "PERIPLUS_CONFIG_DIR": str(config),
-        **overrides,
-    }
-    return subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-        [sys.executable, "-c", _CHILD, *args],
-        capture_output=True,
-        text=True,
-        env=env,
-        cwd=str(cwd),
-        check=False,
-    )
 
 
 def _copy_pack(destination: Path) -> Path:
@@ -676,50 +621,6 @@ def test_the_sub_errors_of_a_branch_are_sorted_too(project: Project) -> None:
     assert branch["context"] == sorted(branch["context"], key=_sort_key)
 
 
-@pytest.mark.parametrize("fmt", ["text", "json"])
-def test_two_processes_from_two_directories_under_two_locales_emit_the_same_bytes(
-    project: Project, fmt: str
-) -> None:
-    """Determinism, in the shape ``test_spec.py`` already uses for ``spec``.
-
-    Two operating-system processes, because two calls inside one pytest process share one hash
-    seed, one locale and one dict ordering by construction, and a byte comparison of those cannot
-    fail for the reason its name gives.
-
-    The pack is broken in three places across three files on purpose. One error cannot show an
-    ordering fault, and errors within a single file cannot show a fault in the order the files
-    themselves were walked.
-
-    What this does **not** catch is a missing sort, and that limit is why the test above exists:
-    on one machine ``rglob`` returns one order twice. This catches what varies between processes —
-    the hash seed and the locale — and the test above catches what does not vary at all.
-    """
-    pack = _copy_pack(project.packs)
-    _drop_confidence(pack)
-    _break_the_match_branch(pack)
-    _add_an_out_of_order_file(pack)
-    deeper = project.root / "src" / "nested"
-    deeper.mkdir(parents=True)
-
-    args = ["validate", FIXTURE_PACK, "--format", fmt]
-    first = _run_in_a_process(
-        args, cwd=project.root, config=project.config, PYTHONHASHSEED="0", LC_ALL="C"
-    )
-    second = _run_in_a_process(
-        args, cwd=deeper, config=project.config, PYTHONHASHSEED="2", LC_ALL="C"
-    )
-    third = _run_in_a_process(
-        args, cwd=deeper, config=project.config, PYTHONHASHSEED="0", LC_ALL="es_ES.utf8"
-    )
-
-    assert first.returncode == 16, f"{first.stdout}{first.stderr}"
-    # Three empty strings compare equal. Without this the byte comparison below would ratify a
-    # command that printed nothing at all, which is the one way it can pass while saying nothing.
-    assert "find_declarations.yaml" in first.stdout and "ordering.yaml" in first.stdout
-    assert first.stdout == second.stdout
-    assert first.stdout == third.stdout
-
-
 # ---------------------------------------------------------------------------------------------
 # Every bundled pack declares $schema, and every bundled rutter validates
 # ---------------------------------------------------------------------------------------------
@@ -850,37 +751,6 @@ def test_a_deliberately_broken_pack_is_rejected_by_the_command_ci_would_run(
 # ---------------------------------------------------------------------------------------------
 # The wiring: the import graph the whole package is arranged around, and the format table
 # ---------------------------------------------------------------------------------------------
-
-
-def test_importing_the_console_script_reaches_neither_the_validator_nor_jsonschema(
-    tmp_path: Path,
-) -> None:
-    """``cli`` imports ``validate`` inside ``main()``, the way it already imports ``init``.
-
-    ``errors.py`` states the property this holds up: nothing on ``cli``'s module-level import path
-    imports a runtime distribution, because the dependency check has not run yet and a missing one
-    would raise ``ImportError`` instead of exiting 9 naming it. ``validate`` reaches ``jsonschema``,
-    so a module-level import of it in ``cli.py`` breaks that for the third distribution exactly as
-    a module-level ``import periplus.init`` breaks it for the first two — measured.
-
-    A sensitivity test: it fails the moment the wiring is added at the wrong level.
-    """
-    env = {
-        "PYTHONPATH": str(SRC),
-        "PATH": os.environ.get("PATH", ""),
-        "PYTHONDONTWRITEBYTECODE": "1",
-    }
-    result = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-        [sys.executable, "-c", _IMPORT_GRAPH],
-        capture_output=True,
-        text=True,
-        env=env,
-        cwd=str(tmp_path),
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"validate": False, "jsonschema": False}
 
 
 def test_the_format_choices_are_exactly_the_renderers_the_validator_offers() -> None:

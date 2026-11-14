@@ -53,8 +53,7 @@ Run the pytest suite:
 .venv/bin/python -m pytest -o addopts="" -q
 ```
 
-Some tests build a virtual environment or a wheel with `uv`. They fail when `uv` is not on the
-path. To run the suite as the CI workflow runs it, omit `-o addopts=""`. The options in
+To run the suite as the CI workflow runs it, omit `-o addopts=""`. The options in
 `pyproject.toml` then add `--strict-markers --strict-config`.
 
 Run the static checks that the CI workflow runs:

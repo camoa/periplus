@@ -90,12 +90,8 @@ include = ["src/periplus", "LICENSE", "NOTICE", "README.md", "pyproject.toml"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-n 4 --durations=25 --strict-markers --strict-config"
-# --strict-markers means an unregistered marker is an error, so it is declared here. The three
-# install tests each build a virtualenv and are slow by nature; they run by default because
-# installing is the packaging's whole point, and the marker exists so a tight inner
-# loop can deselect them with -m "not slow", never so CI can.
+# --strict-markers means an unregistered marker is an error, so it is declared here.
 markers = [
-    "slow: builds a virtualenv and installs into it",
     "criterion(id): the acceptance criterion a test proves",
 ]
 

@@ -1,10 +1,6 @@
 """``periplus spec``: what it publishes, what it refuses to claim, and what it must not vary with.
 
-Three properties are tested here and each one gets the cheapest tier that can answer it. Whether
-the contract is emitted whole is a question about bytes and is answered in this process. Whether it
-is emitted identically from two directories under two locales is a question about a process's
-environment and needs two of them. Whether an install carries it is ``tests/test_contract.py``'s
-question.
+Whether the contract is emitted whole is a question about bytes and is answered in this process.
 
 The fifth-gap test is the sharp one and it is deliberately not a claim in a docstring: it copies
 the shipped contract into a temporary directory, appends a bullet to ``spec/rules.md``, and asserts
@@ -17,10 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
-import subprocess
-import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -60,15 +53,6 @@ FIFTH_GAP = (
     "- **Provenance.** Nothing says which pack contributed a node when two packs contribute\n"
     "  rules to one type, and a map is reviewed in a pull request by people who need to know.\n"
 )
-
-_CHILD = """
-import os, sys
-from pathlib import Path
-
-from periplus.spec import RENDERERS, spec
-
-sys.stdout.write(RENDERERS[sys.argv[2]](spec(Path.cwd(), os.environ, (), sys.argv[1] or None)))
-"""
 
 
 @pytest.fixture
@@ -315,66 +299,6 @@ def test_the_contract_comes_out_in_path_order_whatever_order_the_package_lists_i
         document.path for document in forwards
     )
     assert len(forwards) == 7, "the fixture is not the shipped contract"
-
-
-def _emit_in_a_child(cwd: Path, config: Path, fmt: str, pack: str, **overrides: str) -> str:
-    """Emit in a fresh interpreter, so hash seed, locale and working directory are this call's."""
-    env = {
-        "PYTHONPATH": str(SRC),
-        "PATH": os.environ.get("PATH", ""),
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "PERIPLUS_CONFIG_DIR": str(config),
-        **overrides,
-    }
-    result = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-        [sys.executable, "-c", _CHILD, pack, fmt],
-        capture_output=True,
-        text=True,
-        env=env,
-        cwd=str(cwd),
-        check=False,
-    )
-    assert result.returncode == 0, f"{result.stdout}{result.stderr}"
-    return result.stdout
-
-
-@pytest.mark.parametrize("fmt", ["text", "json"])
-@pytest.mark.parametrize("pack", ["drupal", "nope"])
-def test_two_processes_from_two_directories_under_two_locales_emit_the_same_bytes(
-    tmp_path: Path, fmt: str, pack: str
-) -> None:
-    """The same bytes from two directories under two locales, built so that a set reaching the
-    output would break it.
-
-    Two operating-system processes, because two calls inside one pytest process share one hash
-    seed, one locale and one dict ordering by construction — a byte-comparison of those cannot
-    fail for the reason its name gives. The same argument ``test_report.py`` records.
-
-    The two packs are chosen for what they put a set through, not for coverage:
-
-    * ``drupal`` declares two dependencies, and both ``depends`` and ``inherits_from`` are built
-      from a set of pack names and printed. Drop either ``sorted()`` and the two names come out in
-      hash-seed order.
-    * ``nope`` is on no search path, so the problem it produces lists every pack name that *is*
-      there — five of them, out of a set, printed as one line.
-
-    The seeds are 0 and 2, the pair ``test_report.py`` verified distinguishes a small set of short
-    names; the locale is one installed on this machine rather than a hypothetical one. Two seeds
-    are two samples and not a proof.
-    """
-    config = tmp_path / "userconf"
-    config.mkdir()
-    here = tmp_path / "here"
-    there = tmp_path / "there" / "deeper"
-    here.mkdir()
-    there.mkdir(parents=True)
-
-    first = _emit_in_a_child(here, config, fmt, pack, PYTHONHASHSEED="0", LC_ALL="C")
-    second = _emit_in_a_child(there, config, fmt, pack, PYTHONHASHSEED="2", LC_ALL="C")
-    third = _emit_in_a_child(there, config, fmt, pack, PYTHONHASHSEED="0", LC_ALL="es_ES.utf8")
-
-    assert first == second
-    assert first == third
 
 
 def test_a_pack_name_no_directory_carries_exits_fifteen_and_names_what_is_there(

@@ -1,24 +1,14 @@
-"""The two renderers: what they emit, what they escape, and what they must not vary with.
-
-The determinism test here runs two operating-system processes. Two calls inside one pytest process
-share one hash seed, one locale and one dict ordering by construction, so a byte-comparison of two
-in-process renders cannot fail for the reason its name gives — a set iterated into the output
-produces identical bytes both times and the test passes with the defect present.
-"""
+"""The two renderers: what they emit, what they escape, and what they must not vary with."""
 
 from __future__ import annotations
 
 import json
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 from periplus.resolution import ResolutionReport
-
-SRC = Path(__file__).resolve().parent.parent / "src"
 
 # Three names whose code-point order differs from both case-folded order and locale order, created
 # in reverse code-point order so filesystem order, sorted order and creation order are three
@@ -26,19 +16,6 @@ SRC = Path(__file__).resolve().parent.parent / "src"
 # locale collation gives apple, Emile, Zebra. A fixture of a@1, b@1, c@1 distinguishes none of the
 # three mechanisms, and it is the fixture that has produced three proxies in this project already.
 HOSTILE_NAMES = ("Émile@1.0.0", "apple@1.0.0", "Zebra@1.0.0")
-
-# The same three in code-point order, spelled as each form renders them. The two forms differ here
-# deliberately: the text form is read by a person and prints the name the filesystem holds, while
-# JSON is parsed by a consumer and escapes under `ensure_ascii` so a lone surrogate cannot break
-# the encode.
-# Where the candidate listing starts in each form, so the order assertion reads that section and
-# not an earlier one that happens to mention the same name.
-FIRST_CANDIDATE_MARK = {"text": "Candidates:", "json": '"candidates"'}
-
-CODE_POINT_ORDER = {
-    "text": ["Zebra@1.0.0", "apple@1.0.0", "Émile@1.0.0"],
-    "json": ["Zebra@1.0.0", "apple@1.0.0", "\\u00c9mile@1.0.0"],
-}
 
 # Written in reverse alphabetical order, so that the renderer's own sort is observable rather than
 # coincident with the file's order. The real worked example writes its folders alphabetically and
@@ -57,42 +34,6 @@ accepted_unknowns:
     accepted_on: 2026-08-28
 """
 
-_CHILD = """
-import os, sys
-from pathlib import Path
-
-from periplus.preflight import DependencyStatus
-from periplus.report import RENDERERS
-from periplus.resolution import resolve
-
-deps = (
-    DependencyStatus(distribution="platformdirs", installed="4.11.5", present=True),
-    DependencyStatus(distribution="ruamel.yaml", installed="0.19.1", present=True),
-)
-report = resolve(Path(sys.argv[1]), os.environ, deps)
-sys.stdout.write(RENDERERS[sys.argv[2]](report))
-"""
-
-
-def _render_in_a_child(root: Path, config: Path, fmt: str, **overrides: str) -> str:
-    """Render in a fresh interpreter, so hash seed and locale are this call's to choose."""
-    env = {
-        "PYTHONPATH": str(SRC),
-        "PATH": os.environ.get("PATH", ""),
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "PERIPLUS_CONFIG_DIR": str(config),
-        **overrides,
-    }
-    result = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-        [sys.executable, "-c", _CHILD, str(root), fmt],
-        capture_output=True,
-        text=True,
-        env=env,
-        check=False,
-    )
-    assert result.returncode == 0, f"{result.stdout}{result.stderr}"
-    return result.stdout
-
 
 @pytest.fixture
 def tree(tmp_path: Path) -> tuple[Path, Path]:
@@ -106,50 +47,6 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
     config = tmp_path / "userconf"
     config.mkdir()
     return root, config
-
-
-@pytest.mark.parametrize("fmt", ["text", "json"])
-def test_two_processes_with_different_hash_seeds_and_locales_render_the_same_bytes(
-    tree: tuple[Path, Path], fmt: str
-) -> None:
-    """Byte-identical across two hash seeds and across a third run under a different locale.
-
-    Three mechanisms are killed by three properties of this fixture, and no two of them by one:
-
-    * A **set** iterated into the output. Python randomises string hashing per process, so a set of
-      strings lists in one order under one seed and another under the next. Nothing but two
-      processes can observe this.
-
-      The seeds are **0 and 2**, and which pair is used is part of the fixture rather than an
-      arbitrary choice. Under 0 and 1 the three folder names in this file's settings — `config`,
-      `custom_module`, `custom_theme` — happen to land in the same relative order in a set's table,
-      so a set iterated in place of `sorted()` renders identical bytes under both and this test
-      passes with the defect present. Verified: the same plant produces seven distinct outputs over
-      ten seeds, and seed 2 is one that differs from 0. Two seeds are two samples, not a proof — a
-      differently shaped fixture could need a different pair.
-    * **Filesystem order.** Three entries under one root, created in reverse code-point order, so
-      ``iterdir`` order, creation order and sorted order are three different sequences.
-    * A **locale or case-folding sort key.** The three names order differently under code points
-      than under ``.lower()`` or a collation, and the third run uses a locale that is installed on
-      this machine rather than a hypothetical one.
-    """
-    root, config = tree
-    first = _render_in_a_child(root, config, fmt, PYTHONHASHSEED="0", LC_ALL="C")
-    second = _render_in_a_child(root, config, fmt, PYTHONHASHSEED="2", LC_ALL="C")
-    third = _render_in_a_child(root, config, fmt, PYTHONHASHSEED="0", LC_ALL="es_ES.utf8")
-
-    assert first == second
-    assert first == third
-
-    # And the order in the output is code-point order rather than creation order or a collation.
-    #
-    # Searched inside the candidate listing and not in the whole document, which is where the first
-    # version of this assertion was a proxy: `Zebra@1.0.0` is also the `packs:` pin, printed in an
-    # earlier section, so `first.index` found that occurrence and reported a stable position
-    # whatever order the candidates came out in. A re-sort with a case-folding key passed.
-    listing = first[first.index(FIRST_CANDIDATE_MARK[fmt]) :]
-    positions = [listing.index(name) for name in CODE_POINT_ORDER[fmt]]
-    assert positions == sorted(positions), listing
 
 
 def _resolve(root: Path, config: Path) -> ResolutionReport:

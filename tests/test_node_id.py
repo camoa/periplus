@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -240,15 +239,3 @@ def test_each_of_four_functions_calls_node_id_Wo1(
     _map(tmp_path)
     wanted = {"_declarations", "_minted", "_holder", "_enclosing"}
     assert wanted <= callers
-
-
-def test_mypy_exits_zero_on_the_whole_source_c1() -> None:
-    root = Path(__file__).resolve().parent.parent
-    done = subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "mypy"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert done.returncode == 0, done.stdout

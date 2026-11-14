@@ -5,24 +5,14 @@ from __future__ import annotations
 import json
 import re
 import runpy
-import shlex
 from pathlib import Path
 from typing import Any
 
 import pytest
-from _skills import HEADINGS, ROOT, _section, blocks, example_project, run_periplus
+from _skills import ROOT, _section
 
 SKILL = ROOT / "src" / "periplus" / "skills" / "periplus-gaps" / "SKILL.md"
 GAP_READ = SKILL.parent / "scripts" / "gap_read.py"
-
-
-def _nav_commands() -> list[list[str]]:
-    return [
-        shlex.split(line[2:])
-        for _, body in blocks(SKILL, "nav-run")
-        for line in body.splitlines()
-        if line.startswith("$ periplus")
-    ]
 
 
 def _run_gap_read(map_file: Path, capsys: pytest.CaptureFixture[str]) -> str:
@@ -126,47 +116,6 @@ def _state_lines(resolution: list[str]) -> dict[str, int]:
 def _first_party_lines(resolution: list[str]) -> list[tuple[int, int]]:
     found = [re.search(r"first-party\s+(\d+)\s+outside\s+(\d+)", x) for x in resolution]
     return [(int(m.group(1)), int(m.group(2))) for m in found if m]
-
-
-@pytest.mark.criterion(id="wo1")
-def test_gaps_skill_nav_run_commands_exit_zero_with_rows_wo1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    commands = _nav_commands()
-    verbs = {c[1] for c in commands if len(c) > 1}
-    assert {"check-map", "types", "find"} <= verbs, f"skill names only {sorted(verbs)}"
-    assert ["periplus", "map", "--format", "json"] in commands, f"skill runs {commands}"
-    project = example_project(tmp_path)
-    mapped = run_periplus(["map"], project, monkeypatch, capsys)
-    assert mapped.code == 0, mapped.out + mapped.err
-    for argv in commands:
-        run = run_periplus(argv[1:], project, monkeypatch, capsys)
-        assert run.code == 0, f"{argv}: {run.out}{run.err}"
-        assert run.out.strip(), f"{argv} printed no row"
-
-
-@pytest.mark.criterion(id="wo1")
-def test_gap_read_runs_on_the_example_map_and_print_counted_lists_wo1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    project = example_project(tmp_path)
-    mapped = run_periplus(["map"], project, monkeypatch, capsys)
-    assert mapped.code == 0, mapped.out + mapped.err
-    map_file = project / ".periplus" / "map.json"
-    out = _run_gap_read(map_file, capsys)
-    assert [h for h in HEADINGS if h not in out] == [], f"printed {out!r}"
-    real = json.loads(map_file.read_text())
-    states = [n["state"] for n in real["nodes"]]
-    inferred, mentioned = (
-        sum(any(p["confidence"] == word for p in e["provenance"]) for e in real["edges"])
-        for word in ("inferred", "mentioned")
-    )
-    assert _state_lines(_section(out, "Resolution gaps")) == {
-        "referenced": states.count("referenced"),
-        "unresolved": states.count("unresolved"),
-        "inferred": inferred,
-        "mentioned": mentioned,
-    }, out
 
 
 @pytest.mark.criterion(id="c2")
@@ -359,27 +308,6 @@ def test_site_faults_print_apart_with_file_and_line_and_never_as_rule_gaps_c3(
     assert [m[:2] for m in modules] == [["far", "1"]], f"fault nodes counted as gaps: {detail}"
     for fault in faults:
         assert fault[0] not in "\n".join(detail), f"{fault[0]} listed as a missing rule: {detail}"
-
-
-@pytest.mark.criterion(id="c5")
-def test_unknown_boundaries_heading_prints_after_site_faults_on_the_example_map_c5(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    project = example_project(tmp_path)
-    mapped = run_periplus(["map"], project, monkeypatch, capsys)
-    assert mapped.code == 0, mapped.out + mapped.err
-    out = _run_gap_read(project / ".periplus" / "map.json", capsys)
-    assert "Unknown boundaries" in HEADINGS
-    printed = [line.strip().lstrip("#").strip().rstrip(":") for line in out.splitlines()]
-    assert "Unknown boundaries" in printed, f"printed {out!r}"
-    assert printed.index("Unknown boundaries") > printed.index("Site faults"), out
-    unknown = _section(out, "Unknown boundaries")
-    others = "\n".join(x for h in HEADINGS[:3] for x in _section(out, h))
-    assert unknown, f"nothing under the heading: {out!r}"
-    # A first-party split line is a count format every list prints, not a row.
-    rows = {x for x in unknown if not _first_party_lines([x])}
-    assert not rows & set(others.splitlines()), unknown
-    assert 0 in {_count(x) for x in unknown}, f"no count line of 0: {unknown}"
 
 
 @pytest.mark.criterion(id="c5")

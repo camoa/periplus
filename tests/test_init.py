@@ -1,8 +1,7 @@
 """Creating a project: the three paths, the record, and the refusal.
 
 Every test here runs `initialise_project` against a temporary tree and never through the console
-script. The entry point is what a second consumer imports and what these assertions exercise; the
-one place the wiring is tested end to end is `test_console_script.py`.
+script. The entry point is what a second consumer imports and what these assertions exercise.
 
 The module under test is the first thing in this package that writes. One of its properties is
 therefore not shared with anything already shipped and is asserted here rather than assumed: that

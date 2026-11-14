@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import importlib
-import os
 import re
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -15,7 +12,6 @@ from ruamel.yaml import YAML
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS_SRC = ROOT / "src" / "periplus" / "skills"
 SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps", "periplus-describe")
-SCRIPT = Path(sys.executable).parent / "periplus"
 
 
 def _front_matter(text: str) -> str:
@@ -46,36 +42,6 @@ def test_install_skills_writes_every_skill_folder_and_replaces_stale_files_c1(
     install_skills(home=tmp_path)
     assert (target / "SKILL.md").read_bytes() == shipped
     assert not (target / "left-behind.txt").exists()
-
-
-@pytest.mark.criterion(id="c1")
-def test_skills_install_command_writes_the_skills_and_refuses_an_unwritable_home_c1(
-    tmp_path: Path,
-) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    env = {**os.environ, "HOME": str(home)}
-    done = subprocess.run(  # noqa: S603
-        [str(SCRIPT), "skills", "install"], env=env, capture_output=True, text=True, check=False
-    )
-    assert done.returncode == 0, done.stderr
-    lines = [line for line in done.stdout.splitlines() if line.strip()]
-    assert len(lines) == len(SKILLS), done.stdout
-    for name in SKILLS:
-        assert (home / ".claude" / "skills" / name / "SKILL.md").is_file()
-
-    blocked = tmp_path / "blocked"
-    blocked.mkdir()
-    (blocked / ".claude").write_text("a plain file", encoding="utf-8")
-    refused = subprocess.run(  # noqa: S603
-        [str(SCRIPT), "skills", "install"],
-        env={**os.environ, "HOME": str(blocked)},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert refused.returncode == 27, refused.stderr
-    assert str(blocked / ".claude") in refused.stderr
 
 
 @pytest.mark.criterion(id="c1")

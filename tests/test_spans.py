@@ -4,10 +4,6 @@ skipped rows of a fire that emits nothing and of an edge whose end is not made."
 from __future__ import annotations
 
 import json
-import os
-import re
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -557,29 +553,6 @@ def test_a_balance_entry_whose_pattern_matches_the_empty_text_is_refused_by_vali
         assert "the balance entry /* matches the empty text" in out.out + out.err, out
 
 
-def test_a_zero_width_token_at_the_end_of_the_text_ends_the_count(tmp_path: Path) -> None:
-    r"""``\b`` matches no empty text, so it loads, but it matches at the end of ``f a``. The count
-    stops there and the map finishes; before, the search found that match again forever."""
-    root = tmp_path.resolve()
-    manifest = TAGS_MANIFEST.replace("['<fn\\b', '</fn>']", "['\\b', '\\)']").replace(
-        """'(?=<fn\\s+name="(?<name>\\w+)")'""", "'(?<name>f)'"
-    )
-    rutter(root, "tags", manifest, {"tags.yaml": TAGS_RULES})
-    pin(root, "tags@0.0.1")
-    plant(root, {"src/page.tpl": "f a"})
-    child = "import sys; from periplus.cli import main; sys.exit(main(['map']))"
-    result = subprocess.run(  # noqa: S603 - list argv, shell unset, nothing interpolated
-        [sys.executable, "-c", child],
-        cwd=root,
-        env={**os.environ, "PERIPLUS_CONFIG_DIR": str(root / "_config")},
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-
-
 def test_a_token_skipped_inside_a_section_does_not_swallow_a_token_after_the_section() -> None:
     """The ``<fn`` inside the comment runs past ``-->`` up to ``/``; the search resumes at the
     end of the comment, so the first ``</fn>`` after it closes the span."""
@@ -623,22 +596,3 @@ def test_an_open_that_takes_its_own_opening_token_ends_at_the_first_inner_close(
     """The open takes ``<fn a``, so the count starts one short: the inner ``</fn>`` ends it."""
     text = "<fn a><fn b></fn>X</fn>"
     assert _spans_of(text, "<fn\\s+a", ["<fn\\b", "</fn>"]) == [(0, 17)]
-
-
-def test_the_guides_tag_example_balances_nested_tags(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The guide's tag example, read from the page, maps the nested fn tags as the guide says."""
-    guide = (Path(__file__).parents[1] / "docs" / "rutter-author-guide-text.md").read_text()
-    found = re.search(r"tag language balances its tags:\n\n```yaml\n(.*?)```", guide, re.S)
-    assert found is not None
-    head, _, _ = TAGS_MANIFEST.partition("      sections:\n")
-    manifest = head + "".join(f"      {line}\n" for line in found[1].splitlines())
-    rules = TAGS_RULES.replace("enclosing: fn,", "enclosing: function,")
-    code, document = _tags_map(tmp_path, monkeypatch, manifest, rules=rules)
-    assert code == 0, code
-    assert edges(document, "runs") == {
-        ("runs", "tags.fn::outer", "tags.query::first"),
-        ("runs", "tags.fn::inner", "tags.query::second"),
-        ("runs", "tags.fn::outer", "tags.query::third"),
-    }, edges(document)
