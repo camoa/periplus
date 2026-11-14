@@ -98,6 +98,8 @@ folders:
 
 files:
   extensions: [php]
+  # A tests folder holds tests and fixtures: mapped, and printed after the rest.
+  supporting: ['**/tests/**']
   exclude:
   - '**/vendor/**'
   - '**/node_modules/**'
