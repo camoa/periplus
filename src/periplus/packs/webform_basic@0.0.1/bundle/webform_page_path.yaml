@@ -11,6 +11,7 @@ edge_kinds:
 - kind: path_shows_webform
   from: drupal.url_path
   to: drupal.config_object
+  description: "the path /webform/<id> shows that webform's page, through Webform's canonical route"
 
 rules:
 - rule: webform_page_path

@@ -19,6 +19,7 @@ edge_kinds:
 - kind: redirects_after_form
   from: drupal.config_object
   to: drupal.form_id
+  description: "the Login Destination rule redirects the person after that form is submitted, by its login or registration trigger"
 
 rules:
 - rule: login_destination_after_login_form

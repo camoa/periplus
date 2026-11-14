@@ -17,17 +17,21 @@ node_types:
 - name: webform.route_parameter_read
   id_namespace: webform.route_parameter_read
   internal: true
+  description: "internal: a variable assigned the route parameter webform"
 - name: webform.route_parameter_test
   id_namespace: webform.route_parameter_test
   internal: true
+  description: "internal: an instanceof WebformInterface test of a variable"
 
 edge_kinds:
 - kind: reads_route_entity
   from: [php.function, php.method]
   to: drupal.entity_type
+  description: "the function or method reads the route parameter of that entity type and tests it with instanceof, so it acts on every page of that type"
 - kind: instance_of_entity_type
   from: drupal.config_object
   to: drupal.entity_type
+  description: "the webform's config object is an entity of that entity type"
 
 rules:
 - rule: webform_parameter_read_in_function

@@ -21,11 +21,13 @@ node_types:
 - name: drupal.menu_check
   id_namespace: drupal.menu_check
   internal: true
+  description: "internal: a comparison of a menu_name with a text in a function or method"
 
 edge_kinds:
 - kind: checks_menu
   from: [php.method, php.function]
   to: drupal.config_object
+  description: "the method or function compares a menu_name with that menu's name, or switches on one with a case of it; a name written as text"
 
 rules:
 - rule: menu_name_compared_in_function

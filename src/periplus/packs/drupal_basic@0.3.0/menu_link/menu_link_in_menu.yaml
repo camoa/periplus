@@ -8,6 +8,8 @@ edge_kinds:
 - kind: link_in_menu
   from: drupal.menu_link
   to: drupal.config_object
+  groups: true
+  description: "the menu link sits in that menu, by its menu_name"
 
 rules:
 - rule: menu_link_in_menu

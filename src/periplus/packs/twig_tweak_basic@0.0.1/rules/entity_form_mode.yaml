@@ -11,9 +11,11 @@ edge_kinds:
 - kind: renders_form_mode
   from: drupal.template
   to: drupal.form_mode
+  description: "the template renders an entity form in that form mode with Twig Tweak's drupal_entity_form()"
 - kind: component_renders_form_mode
   from: drupal.component
   to: drupal.form_mode
+  description: "the component renders an entity form in that form mode with Twig Tweak's drupal_entity_form()"
 
 rules:
 - rule: entity_form_mode_in_template

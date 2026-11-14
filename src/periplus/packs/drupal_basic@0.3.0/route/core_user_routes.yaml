@@ -13,6 +13,7 @@ edge_kinds:
 - kind: route_uses_form_id
   from: drupal.route
   to: drupal.form_id
+  description: "the core route builds that form, as user.login builds user_login_form"
 
 rules:
 - rule: core_user_login_route

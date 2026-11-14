@@ -22,15 +22,19 @@ edge_kinds:
 - kind: mentions_route
   from: [php.method, php.function, drupal.template]
   to: drupal.route
+  description: "the code or template holds a text equal to that route's name; it names the route as text, and what it does with it is not known"
 - kind: mentions_service
   from: [php.method, php.function]
   to: drupal.service
+  description: "the code holds a text equal to that service's id; it names the service as text, and what it does with it is not known"
 - kind: mentions_config
   from: [php.method, php.function, drupal.template]
   to: drupal.config_object
+  description: "the code or template holds a text equal to that configuration object's name; it names the config as text, and what it does with it is not known"
 - kind: mentions_queue
   from: [php.method, php.function]
   to: drupal.queue_worker_plugin
+  description: "the code holds a text equal to that queue's name; it names the queue as text, and what it does with it is not known"
 
 rules:
 - rule: code_mentions_route

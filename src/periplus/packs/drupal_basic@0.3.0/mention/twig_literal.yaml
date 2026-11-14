@@ -12,6 +12,7 @@ edge_kinds:
 - kind: template_names_literal
   from: drupal.template
   to: drupal.literal
+  description: "internal: the template holds a quoted text shaped like a Drupal id, with that text"
 
 rules:
 - rule: twig_literal

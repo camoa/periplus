@@ -24,17 +24,21 @@ node_types:
 - name: drupal.route_list
   id_namespace: drupal.route_list
   internal: true
+  description: "internal: an array literal of quoted route names assigned to a variable in a function or method"
 - name: drupal.route_list_item
   id_namespace: drupal.route_list_item
   internal: true
+  description: "internal: one quoted route name in such an array literal"
 
 edge_kinds:
 - kind: listed_in
   from: drupal.route_list_item
   to: drupal.route_list
+  description: "internal: the quoted route name is an item of that array literal in the same function or method"
 - kind: tests_route_list
   from: drupal.route_name_var
   to: drupal.route_list
+  description: "internal: the getRouteName() variable is tested with in_array against that array"
 
 rules:
 - rule: route_in_inline_list_in_function

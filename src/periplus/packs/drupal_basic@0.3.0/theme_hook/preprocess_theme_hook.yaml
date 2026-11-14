@@ -13,6 +13,7 @@ edge_kinds:
 - kind: preprocesses_theme_hook
   from: [php.method, php.function]
   to: drupal.theme_hook
+  description: "the function or method implements preprocess_<hook> for that theme hook or a suggestion of it; matched by the name"
 
 rules:
 - rule: preprocess_hook_preprocesses_theme_hook

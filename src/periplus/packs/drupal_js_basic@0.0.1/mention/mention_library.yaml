@@ -10,6 +10,7 @@ edge_kinds:
 - kind: mentions_library
   from: [php.method, php.function, drupal.template]
   to: drupal.library
+  description: "the code or template holds a text equal to that library's id outside an attachment; it names the library as text, and what it does with it is not known"
 
 rules:
 - rule: code_mentions_library

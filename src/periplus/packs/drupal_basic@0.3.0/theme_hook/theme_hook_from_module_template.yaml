@@ -20,11 +20,13 @@ node_types:
 - name: drupal.module_template_name
   id_namespace: drupal.module_template_name
   internal: true
+  description: "internal: a module template's name read as a theme hook name"
 
 edge_kinds:
 - kind: module_template_name_of
   from: drupal.module_template_name
   to: drupal.template
+  description: "internal: a module template's name read as a theme hook name, its dashes as underscores"
 
 rules:
 - rule: module_template_name

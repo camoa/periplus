@@ -11,6 +11,7 @@ edge_kinds:
 - kind: suggests_menu
   from: drupal.template
   to: drupal.config_object
+  description: "the template menu--<name> is a suggestion for that menu; matched by the file name"
 
 rules:
 - rule: menu_suggestion

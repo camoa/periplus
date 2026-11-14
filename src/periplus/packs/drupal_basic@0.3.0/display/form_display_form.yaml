@@ -18,9 +18,11 @@ edge_kinds:
 - kind: form_uses_display
   from: drupal.form_id
   to: drupal.form_display
+  description: "the entity form is built with that form display, by core's naming of entity form ids and form modes"
 - kind: form_of_entity_type
   from: drupal.form_id
   to: drupal.entity_type
+  description: "the entity form belongs to that entity type, by core's naming of entity form ids"
 
 rules:
 - rule: entity_form_uses_display

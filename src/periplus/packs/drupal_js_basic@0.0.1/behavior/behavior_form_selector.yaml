@@ -15,11 +15,13 @@ node_types:
 - name: drupal.js_form_selector_use
   id_namespace: drupal.js_form_selector_use
   internal: true
+  description: "internal: a form.<id>-form selector a behavior passes to once(), with its script and behavior"
 
 edge_kinds:
 - kind: behavior_binds_form
   from: drupal.js_behavior
   to: drupal.form_id
+  description: "the behavior binds that form through once() on a form.<id>-form selector, the class read as the form id; a name written as text"
 
 rules:
 - rule: form_selector_in_behavior

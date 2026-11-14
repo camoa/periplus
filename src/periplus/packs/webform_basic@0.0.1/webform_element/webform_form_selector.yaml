@@ -12,6 +12,7 @@ edge_kinds:
 - kind: submission_form_of_webform
   from: drupal.form_id
   to: drupal.bundle
+  description: "the form id is the add form of a submission of that webform's bundle, by Webform's form naming"
 
 rules:
 - rule: webform_submission_add_form

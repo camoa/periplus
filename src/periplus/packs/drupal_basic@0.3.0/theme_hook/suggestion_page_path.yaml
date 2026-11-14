@@ -13,6 +13,7 @@ edge_kinds:
 - kind: suggests_path
   from: drupal.template
   to: drupal.url_path
+  description: "the page template page--a--b is the one Drupal picks for that path /a/b; matched by the file name"
 
 rules:
 - rule: page_path_suggestion

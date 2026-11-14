@@ -14,6 +14,7 @@ edge_kinds:
 - kind: route_renders_theme_hook
   from: drupal.route
   to: drupal.theme_hook
+  description: "the entity's canonical route renders that theme hook, named as the entity type, by core's entity view builder"
 
 rules:
 - rule: entity_canonical_route_renders_theme_hook

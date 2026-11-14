@@ -29,11 +29,13 @@ node_types:
 - name: drupal.entity_type_test
   id_namespace: drupal.entity_type_test
   internal: true
+  description: "internal: a function's test of $entity->getEntityTypeId() against a quoted entity type name"
 
 edge_kinds:
 - kind: acts_on_entity_type
   from: php.function
   to: drupal.entity_type
+  description: "the generic entity hook acts on that entity type only, as it tests $entity->getEntityTypeId() against its name; a name written as text"
 
 rules:
 - rule: entity_type_tested_in_function

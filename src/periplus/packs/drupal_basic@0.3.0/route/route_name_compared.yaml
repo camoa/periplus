@@ -24,17 +24,21 @@ node_types:
 - name: drupal.route_name_var
   id_namespace: drupal.route_name_var
   internal: true
+  description: "internal: a variable a function or method assigns from getRouteName()"
 - name: drupal.route_name_rebound
   id_namespace: drupal.route_name_rebound
   internal: true
+  description: "internal: a getRouteName() variable that its function or method also binds another way; it stops the route check"
 - name: drupal.route_name_test
   id_namespace: drupal.route_name_test
   internal: true
+  description: "internal: a comparison of a variable with a quoted route name, or a route name in an in_array list, in a function or method"
 
 edge_kinds:
 - kind: checks_route
   from: [php.function, php.method]
   to: drupal.route
+  description: "the function or method tests the current route name against that route, with == or === or in_array on a getRouteName() variable; a name written as text"
 
 rules:
 - rule: route_name_assigned_in_function

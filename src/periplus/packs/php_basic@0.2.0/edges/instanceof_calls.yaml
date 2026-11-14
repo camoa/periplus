@@ -36,31 +36,38 @@ node_types:
 - name: php.instanceof_test
   id_namespace: php.instanceof_test
   internal: true
+  description: "internal: an instanceof test of a variable or property against a class, as written"
 
 - name: php.instanceof_type
   id_namespace: php.instanceof_type
   internal: true
+  description: "internal: the class an instanceof test names, resolved through the imports and namespace"
 
 - name: php.instanceof_guard
   id_namespace: php.instanceof_guard
   internal: true
+  description: "internal: an if block, or an early return or assert, that settles a variable's class with instanceof"
 
 - name: php.body_text
   id_namespace: php.body_text
   internal: true
+  description: "internal: the body text of a method or function that holds instanceof"
 
 edge_kinds:
 - kind: instanceof_typed_as
   from: php.instanceof_test
   to: php.instanceof_type
+  description: "internal: the instanceof test names that class, read through the file's imports and namespace"
 
 - kind: narrowed_by
   from: [php.method, php.function]
   to: php.instanceof_guard
+  description: "internal: the method or function holds that instanceof guard, an if block or an early return or assert"
 
 - kind: body_text_of
   from: php.body_text
   to: [php.method, php.function]
+  description: "internal: the body text of that method or function, kept so map rules can read an instanceof guard"
 
 rules:
 

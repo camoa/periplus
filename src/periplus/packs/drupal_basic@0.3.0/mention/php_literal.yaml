@@ -18,11 +18,13 @@ node_types:
 - name: drupal.literal
   id_namespace: drupal.literal
   internal: true
+  description: "internal: a quoted text shaped like a Drupal id, which map rules join to the thing of that id"
 
 edge_kinds:
 - kind: names_literal
   from: [php.method, php.function, php.class_like]
   to: drupal.literal
+  description: "internal: the method, function or class holds a string literal shaped like a Drupal id, with that text"
 
 rules:
 - rule: php_literal

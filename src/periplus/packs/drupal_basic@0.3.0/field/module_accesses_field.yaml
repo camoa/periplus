@@ -12,6 +12,7 @@ edge_kinds:
 - kind: module_accesses_field
   from: drupal.module
   to: drupal.field_storage
+  description: "code of the module, a function or a method of a class it holds, reads or writes that field; use, not ownership"
 
 rules:
 - rule: module_method_accesses_field

@@ -14,9 +14,11 @@ edge_kinds:
 - kind: installs_module
   from: drupal.config_object
   to: drupal.module
+  description: "core.extension lists that module as installed"
 - kind: not_installed_by
   from: [drupal.module, drupal.theme]
   to: drupal.config_object
+  description: "the module or theme is in the codebase, but core.extension does not list it, so it is not installed"
 
 rules:
 - rule: core_extension_installs_module

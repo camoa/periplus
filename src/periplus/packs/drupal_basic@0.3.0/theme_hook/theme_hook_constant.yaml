@@ -24,6 +24,7 @@ node_types:
 - name: drupal.constant_read
   id_namespace: drupal.constant_read
   internal: true
+  description: "internal: a class constant a method or function reads as a value, kept so map rules can find the theme hook its text names"
 
 rules:
 - rule: constant_read_bound_in_method

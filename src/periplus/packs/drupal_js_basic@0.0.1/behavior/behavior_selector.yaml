@@ -20,17 +20,21 @@ node_types:
 - name: drupal.js_selector_use
   id_namespace: drupal.js_selector_use
   internal: true
+  description: "internal: a [data-x=y] selector a behavior passes to once(), with its script and behavior"
 - name: drupal.data_attribute
   id_namespace: drupal.data_attribute
   internal: true
+  description: "internal: a data attribute with a plain value that a template writes, as data-x=y"
 
 edge_kinds:
 - kind: data_attribute_in_template
   from: drupal.data_attribute
   to: drupal.template
+  description: "internal: the template writes that data attribute with that value on an element"
 - kind: behavior_binds_template
   from: drupal.js_behavior
   to: drupal.template
+  description: "the behavior binds elements through once() on a [data-x=y] selector that the template writes on an element; matched by the attribute's text"
 
 rules:
 - rule: selector_in_behavior
