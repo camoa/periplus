@@ -19,9 +19,15 @@ edge_kinds:
 - kind: handled_by
   from: drupal.route
   to: php.method
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 - kind: uses_form
   from: drupal.route
   to: php.class
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 - kind: titled_by
   from: drupal.route
   to: php.method

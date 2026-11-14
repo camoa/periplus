@@ -12,3 +12,6 @@ edge_kinds:
 - kind: plugin_class
   from: drupal.plugin
   to: php.class
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to

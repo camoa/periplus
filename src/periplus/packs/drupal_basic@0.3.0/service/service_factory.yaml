@@ -17,15 +17,24 @@ edge_kinds:
 - kind: built_by_service
   from: drupal.service
   to: drupal.service
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 - kind: built_by_class
   from: drupal.service
   to: [php.class, php.interface]
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 - kind: names_factory_method
   from: drupal.service
   to: drupal.factory_method
 - kind: built_by_method
   from: drupal.service
   to: php.method
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 
 rules:
 # Both forms in one rule: each item of the list, or the text, is tested by each end's pattern. A

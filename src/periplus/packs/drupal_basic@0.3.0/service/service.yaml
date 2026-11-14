@@ -26,6 +26,9 @@ edge_kinds:
 - kind: service_class
   from: drupal.service
   to: [php.class, php.interface]
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 
 # A call site $this->helper->run() to Helper::run, when the call's class or its nearest ancestor
 # that declares the property assigns it $this->helper = \Drupal::service('my_module.helper') and

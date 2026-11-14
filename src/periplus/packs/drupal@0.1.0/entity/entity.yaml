@@ -31,3 +31,6 @@ edge_kinds:
 - kind: entity_class
   from: drupal.entity_type
   to: php.class
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
