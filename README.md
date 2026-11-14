@@ -221,7 +221,7 @@ Each edge has `from`, `to`, `kind`, its locations, an `occurrences` count and it
   both kinds descend from. Its `attributes` hold `type_conflict`, each candidate type with the
   pack and rule that gave it, and the map report lists it under Type conflicts.
 
-**Determinism.** `tests/test_demo_b_map_determinism.py` maps one project in separate processes
+**Determinism.** `scripts/demo.d/99s-map-determinism.sh` maps one project in separate processes
 under different hash seeds and locales, and the maps are byte-identical. This ran on one Linux
 machine. The design aims for identical maps across machines, but no test has
 compared two machines or two operating systems yet.
