@@ -11,4 +11,5 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.block_type
+    description: "A custom block type, block_content.type.<id>, from its config file or a BlockContentType::create() call"
     id_namespace: drupal.block_type

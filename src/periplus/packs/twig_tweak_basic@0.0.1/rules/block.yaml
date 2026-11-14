@@ -4,9 +4,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: renders_block
+  description: "The template calls drupal_block() with that block plugin id as quoted text"
   from: drupal.template
   to: drupal.block_plugin
 - kind: component_renders_block
+  description: "The component's Twig file calls drupal_block() with that block plugin id as quoted text"
   from: drupal.component
   to: drupal.block_plugin
 

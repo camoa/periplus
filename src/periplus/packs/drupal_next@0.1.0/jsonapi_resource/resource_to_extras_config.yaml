@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: resource_configured_by
+  description: "the JSON:API resource is configured by that jsonapi_extras resource config"
   from: drupal_next.jsonapi_resource
   to: drupal.config_object
 rules:

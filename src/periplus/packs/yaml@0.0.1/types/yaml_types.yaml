@@ -15,15 +15,18 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: yaml.file
+    description: "a YAML file"
     container: true
 
   - name: yaml.mapping_entry
+    description: "a key and its value in a YAML file"
     parent: yaml.file
     container: true
 
 edge_kinds:
 
   - kind: contains
+    description: "the file, type, function or YAML entry holds that declaration or nested YAML entry directly inside it"
     from: [yaml.file, yaml.mapping_entry]
     to:   yaml.mapping_entry
     source: nearest_enclosing_container

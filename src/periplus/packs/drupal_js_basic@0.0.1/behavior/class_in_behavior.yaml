@@ -8,11 +8,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 # Internal: it carries the edges of its methods to the behavior around it.
 - name: drupal.js_class
+  description: "Internal: a named class written in a behavior's function, which passes its methods' settings reads and behavior calls to that behavior"
   id_namespace: drupal.js_class
   internal: true
 
 edge_kinds:
 - kind: behavior_holds_class
+  description: "the behavior's function holds that named class, so the class's settings reads and behavior calls count as the behavior's"
   from: drupal.js_behavior
   to: drupal.js_class
 

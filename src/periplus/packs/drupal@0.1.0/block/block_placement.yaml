@@ -16,10 +16,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.block_placement
+    description: "A block placed in a theme region, block.block.<id>, from its config file or a Block::create() call in a custom module"
     parent: drupal.config_object
 
 edge_kinds:
 
   - kind: places_plugin
+    description: "the block placement places that block plugin, by the plugin id it names"
     from: drupal.block_placement
     to:   drupal.block_plugin

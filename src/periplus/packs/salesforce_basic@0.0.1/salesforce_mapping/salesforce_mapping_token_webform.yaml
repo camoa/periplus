@@ -12,14 +12,17 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: salesforce.token_element
+  description: "Internal: an element key a Salesforce mapping names in a webform submission token or a WebformElements row"
   id_namespace: salesforce.token_element
   internal: true
 
 edge_kinds:
 - kind: token_names_element
+  description: "The Salesforce mapping names that element key in a [webform_submission:values:<key>] token or a WebformElements row"
   from: salesforce.mapping
   to: salesforce.token_element
 - kind: maps_webform_element
+  description: "Inferred: the Salesforce mapping of a webform's submissions maps that element of the webform"
   from: salesforce.mapping
   to: webform.element
 

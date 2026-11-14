@@ -4,4 +4,5 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.permission
+  description: "A permission, one top-level key with a title in a module's permissions.yml file"
   id_namespace: drupal.permission

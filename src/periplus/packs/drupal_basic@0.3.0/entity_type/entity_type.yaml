@@ -4,13 +4,17 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.entity_type
+  description: "an entity type, named by its id, as node; declared by an entity class in the mapped code, or named by code and config that use it"
   id_namespace: drupal.entity_type
 - name: drupal.content_entity_type
+  description: "a content entity type, declared by the ContentEntityType attribute or annotation on its class"
   parent: drupal.entity_type
 - name: drupal.config_entity_type
+  description: "a config entity type, declared by the ConfigEntityType attribute or annotation on its class"
   parent: drupal.entity_type
 
 edge_kinds:
 - kind: entity_class
+  description: "the entity type is defined by that PHP class, the class its attribute or annotation sits on"
   from: drupal.entity_type
   to: php.class

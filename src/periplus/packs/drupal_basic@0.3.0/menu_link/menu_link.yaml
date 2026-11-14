@@ -6,10 +6,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.menu_link
+  description: "A menu link, one top-level key of a module's links.menu.yml file"
   id_namespace: drupal.menu_link
 
 edge_kinds:
 - kind: links_to_route
+  description: "The menu link, local task, local action or contextual link goes to that route by route_name, or the method or function names it in Url::fromRoute, Link::createFromRoute or $this->redirect"
   from:
   - drupal.menu_link
   - drupal.local_action
@@ -20,5 +22,6 @@ edge_kinds:
   - php.method
   to: drupal.route
 - kind: child_of_link
+  description: "The menu link sits under that menu link, named by its parent key"
   from: drupal.menu_link
   to: drupal.menu_link

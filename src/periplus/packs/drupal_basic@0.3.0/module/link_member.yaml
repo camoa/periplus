@@ -8,22 +8,27 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: menu_link_in_module
+  description: "The menu link is declared in a links.menu.yml file in that module, the nearest folder above the file with an info.yml file"
   from: drupal.menu_link
   to: drupal.module
   groups: true
 - kind: local_task_in_module
+  description: "The local task is declared in a links.task.yml file in that module, the nearest folder above the file with an info.yml file"
   from: drupal.local_task
   to: drupal.module
   groups: true
 - kind: local_action_in_module
+  description: "The local action is declared in a links.action.yml file in that module, the nearest folder above the file with an info.yml file"
   from: drupal.local_action
   to: drupal.module
   groups: true
 - kind: contextual_link_in_module
+  description: "The contextual link is declared in a links.contextual.yml file in that module, the nearest folder above the file with an info.yml file"
   from: drupal.contextual_link
   to: drupal.module
   groups: true
 - kind: permission_in_module
+  description: "The permission is declared in a permissions.yml file in that module, the nearest folder above the file with an info.yml file"
   from: drupal.permission
   to: drupal.module
   groups: true

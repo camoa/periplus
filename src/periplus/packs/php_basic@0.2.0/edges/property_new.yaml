@@ -20,12 +20,14 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
 - name: php.member_new_type
+  description: "the class created by $this->name = new Foo(), named through the file's imports and namespace"
   id_namespace: php.member_new_type
   internal: true
 
 edge_kinds:
 
 - kind: member_new_typed_as
+  description: "the assignment $this->name = new Foo() creates that class"
   from: php.member_assignment
   to: php.member_new_type
 

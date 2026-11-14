@@ -103,12 +103,15 @@ EXECUTED_KEYS = frozenset(
         ),
         *(f"file.needs{k}" for k in ("", ".types", ".roles")),
         *("file.roles", "file.roles.*.name"),
-        *(f"file.edge_kinds{k}" for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups")),
+        *(
+            f"file.edge_kinds{k}"
+            for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups", ".*.description")
+        ),
         *(
             f"file.node_types{k}"
             for k in ("", ".*.name", ".*.parent", ".*.abstract", ".*.id_namespace", ".*.internal")
         ),
-        "file.node_types.*.boundary",
+        *("file.node_types.*.boundary", "file.node_types.*.description"),
         *(f"file.imports{k}" for k in ("", ".*.ast", ".*.group_ast", ".*.clause", ".*.facts")),
         *(f"file.imports.*.bind{k}" for k in ("", ".name", ".prefix_from_group", ".strip_prefix")),
         "file.imports.*.bind.skip_when_field_set",
@@ -306,6 +309,8 @@ class TypeInfo:
     pack: str
     internal: bool = False
     boundary: bool = False
+    #: The pack's one-line text of what a node of this type is; ``""`` for none.
+    description: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -567,13 +572,14 @@ class EdgeSpec:
 
 @dataclass(frozen=True, slots=True)
 class EdgeKind:
-    """One edge kind: the types allowed at each end, and whether its from end belongs to the
-    container at its to end."""
+    """One edge kind: the types allowed at each end, whether its from end belongs to the
+    container at its to end, and the one-line text of what it says, ``""`` for none."""
 
     name: str
     from_types: tuple[str, ...]
     to_types: tuple[str, ...]
     groups: bool = False
+    description: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1587,12 +1593,18 @@ def _read_kinds(
                 f"an edge_kinds entry of {pack} is not a mapping with a string kind and its ends",
                 {"pack": pack},
             )
-        kind = EdgeKind(name, ends[0], ends[1], entry.get("groups") is True)
+        text = entry.get("description")
+        said = text if isinstance(text, str) else ""
+        kind = EdgeKind(name, ends[0], ends[1], entry.get("groups") is True, said)
         first_pack, first_file = declared_at.setdefault(name, (pack, file))
-        if kinds.setdefault(name, kind) != kind:
+        known = kinds.setdefault(name, kind)
+        # A declaration without a text agrees with one that has it; the text is kept.
+        if not known.description:
+            known = kinds[name] = replace(known, description=kind.description)
+        if known != replace(kind, description=kind.description or known.description):
             message = (
-                f"the edge kind {name} is declared with different ends or groups in {pack}/{file}, "
-                f"after {first_pack}/{first_file}"
+                f"the edge kind {name} is declared with different ends, groups or description in "
+                f"{pack}/{file}, after {first_pack}/{first_file}"
             )
             detail = {"kind": name, "pack": pack, "file": file}
             conflicts.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
@@ -1618,6 +1630,7 @@ def _read_types(pack: str, declared: object, types: dict[str, TypeInfo]) -> None
             pack=pack,
             internal=entry.get("internal") is True,
             boundary=entry.get("boundary") is True,
+            description=text if isinstance(text := entry.get("description"), str) else "",
         )
 
 

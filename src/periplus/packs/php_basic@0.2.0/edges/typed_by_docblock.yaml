@@ -33,43 +33,53 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # signature type, inside a closure or arrow function make nothing here.
 node_types:
 - name: php.doc_param_type
+  description: "the class a docblock @param line names, kept by the line's position in the docblock"
   id_namespace: php.doc_param_type
   internal: true
 
 - name: php.doc_param_name
+  description: "the parameter a docblock @param line names, kept by the line's position in the docblock"
   id_namespace: php.doc_param_name
   internal: true
 
 - name: php.signature_typed
+  description: "a parameter whose signature gives a type, so its docblock @param line is not read"
   id_namespace: php.signature_typed
   internal: true
 
 - name: php.doc_var_type
+  description: "the class a @var comment gives a local variable"
   id_namespace: php.doc_var_type
   internal: true
 
 - name: php.doc_var_name
+  description: "a local variable a @var comment names just before an assignment or a foreach"
   id_namespace: php.doc_var_name
   internal: true
 
 edge_kinds:
 - kind: method_doc_param_type
+  description: "the method's docblock @param line at that position names that class"
   from: php.method
   to: php.doc_param_type
 
 - kind: method_doc_param_name
+  description: "the method's docblock @param line at that position names that parameter"
   from: php.method
   to: php.doc_param_name
 
 - kind: function_doc_param_type
+  description: "the function's docblock @param line at that position names that class"
   from: php.function
   to: php.doc_param_type
 
 - kind: function_doc_param_name
+  description: "the function's docblock @param line at that position names that parameter"
   from: php.function
   to: php.doc_param_name
 
 - kind: doc_var_typed_as
+  description: "the local variable is typed as that class by a @var comment just before its assignment or foreach"
   from: php.doc_var_name
   to: php.doc_var_type
 

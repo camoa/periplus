@@ -5,11 +5,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.sdc_component
+    description: "A Single Directory Component, <module>:<folder>, from its .component.yml file in a custom module or theme"
     id_namespace: drupal.sdc
 
 edge_kinds:
 
   - kind: renders_component
+    description: "the function renders that component: a JSX tag in TypeScript, or a single-directory component named by #component in a PHP render array"
     from: php.callable
     to:   drupal.sdc_component
 

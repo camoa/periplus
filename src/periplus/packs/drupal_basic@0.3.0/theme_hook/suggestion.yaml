@@ -9,19 +9,24 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.suggestion
+  description: "internal: a theme suggestion read from a template's file name, before the map joins it to what it suggests"
   id_namespace: drupal.suggestion
   internal: true
 
 edge_kinds:
 - kind: suggests_block_plugin
+  description: "the template's file name, block--<id>, suggests it for that block plugin, by naming convention"
   from: drupal.template
   to: drupal.block_plugin
 - kind: suggests_block_placement
+  description: "the template's file name, block--<id>, suggests it for that placed block, by naming convention"
   from: drupal.template
   to: drupal.block_placement
 - kind: suggests_theme_hook
+  description: "the template's file name, <hook>--<anything>, suggests it for that theme hook, by naming convention"
   from: drupal.template
   to: drupal.theme_hook
 - kind: suggests_field
+  description: "the template's file name, field--...field-<name>, suggests it for that field storage, by naming convention"
   from: drupal.template
   to: drupal.field_storage

@@ -18,25 +18,30 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.plugin
+    description: "A Drupal plugin, named by its plugin id; a more specific type says which kind"
     abstract: true
     id_namespace: drupal.plugin
 
   - name: drupal.block_plugin
+    description: "A block plugin, named by its plugin id, from a Block attribute or annotation, a block_alter hook, a Block::create() call, or a views or menu block"
     parent: drupal.plugin
     id_namespace: drupal.plugin.block
 
   - name: drupal.plugin_deriver
+    description: "A PHP class that derives plugins; no rule in this pack gives a class this type yet"
     parent: php.class
 
 edge_kinds:
 
   - kind: plugin_class
+    description: "the plugin is implemented by that PHP class"
     from: drupal.plugin
     to:   php.class
     # What code runs for this plugin. Absent where the class is behind the boundary and
     # nothing first-party names it, and that absence is accurate rather than a gap.
 
   - kind: declares
+    description: "The code or config writes that thing into being: a plugin's class or alter hook, a view or menu, or the function that calls ::create() or getFormDisplay() for it"
     from: [php.class, php.callable, drupal.config_object]
     to:   drupal.plugin
     # Where the declaration is written, which is a different question from which class runs
@@ -44,9 +49,11 @@ edge_kinds:
     # opposite directions; for block_ways_altered they do not.
 
   - kind: deriver_class
+    description: "The block plugin's Block attribute names that class as its deriver"
     from: drupal.plugin
     to:   php.class
 
   - kind: derived_from
+    description: "The derived block plugin comes from that base plugin, by its <base>:<derivative> id or as a views or menu block"
     from: drupal.plugin
     to:   drupal.plugin

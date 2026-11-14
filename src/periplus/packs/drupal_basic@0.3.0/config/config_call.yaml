@@ -17,9 +17,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: reads_config_object
+  description: "the function or method reads that configuration object by name, as Drupal::config('x.y'), $this->config('x.y') or a config factory's get('x.y')"
   from: [php.method, php.function]
   to: drupal.config_object
 - kind: edits_config_object
+  description: "the function or method loads that configuration object for editing, by getEditable('x.y') on a config factory"
   from: [php.method, php.function]
   to: drupal.config_object
 

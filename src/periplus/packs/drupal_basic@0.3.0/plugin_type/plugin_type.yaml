@@ -6,15 +6,19 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.plugin_type
+  description: "A plugin type, named by the full class name of its attribute or annotation class, which extends core's Plugin attribute or annotation"
   id_namespace: drupal.plugin_type
 
 edge_kinds:
 - kind: plugin_type_attribute
+  description: "The plugin type is defined by that attribute class, which extends core's Plugin attribute"
   from: drupal.plugin_type
   to: php.class
 - kind: plugin_of_type
+  description: "The class is a plugin of that plugin type: it carries the type's attribute, or the first annotation of its docblock is the type's annotation class"
   from: php.class
   to: drupal.plugin_type
 - kind: manages_plugin_type
+  description: "The constructor of a plugin manager names that plugin type's attribute class as the fifth argument of parent::__construct"
   from: php.method
   to: drupal.plugin_type

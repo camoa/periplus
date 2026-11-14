@@ -6,15 +6,19 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: renders_entity_type
+  description: "The template calls drupal_entity() for an entity of that type, named as quoted text; the entity itself is not named"
   from: drupal.template
   to: drupal.entity_type
 - kind: renders_entity_form
+  description: "The template calls drupal_entity_form() for an entity of that type, named as quoted text"
   from: drupal.template
   to: drupal.entity_type
 - kind: component_renders_entity_type
+  description: "The component's Twig file calls drupal_entity() for an entity of that type, named as quoted text"
   from: drupal.component
   to: drupal.entity_type
 - kind: component_renders_entity_form
+  description: "The component's Twig file calls drupal_entity_form() for an entity of that type, named as quoted text"
   from: drupal.component
   to: drupal.entity_type
 

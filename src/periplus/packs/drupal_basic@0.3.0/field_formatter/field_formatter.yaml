@@ -4,5 +4,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.field_formatter
+  description: "A field formatter plugin, named by the plugin id in the FieldFormatter attribute or annotation on its class"
   parent: drupal.plugin
   id_namespace: drupal.plugin.field_formatter

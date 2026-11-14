@@ -15,37 +15,46 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # installs_theme to each theme it names. The two owner kinds group: the file belongs to its owner.
 node_types:
 - name: drupal.config_object
+  description: "a configuration file in a config folder, named by its file name, as node.type.article"
   id_namespace: drupal.config
 # The owner a simple configuration file's name gives, before the map says whether it is a module
 # or a theme.
 - name: drupal.config_owner
+  description: "the module or theme name a simple configuration file's name starts with, before the map says which of the two it is"
   id_namespace: drupal.config_owner
   internal: true
 
 edge_kinds:
 - kind: config_depends
+  description: "the config file lists that configuration object under its dependencies key"
   from: drupal.config_object
   to: drupal.config_object
 - kind: depends_on_module
+  description: "the module or config file lists that module as a dependency, in its info.yml file or its dependencies key"
   from:
   - drupal.module
   - drupal.config_object
   to: drupal.module
 - kind: depends_on_theme
+  description: "the config file lists that theme under its dependencies, enforced or not"
   from: drupal.config_object
   to: drupal.theme
 - kind: config_provided_by
+  description: "the simple configuration file belongs to that module, by naming convention: its file name starts with the module name"
   from: drupal.config_object
   to: drupal.module
   groups: true
 - kind: config_provided_by_theme
+  description: "the simple configuration file belongs to that theme, by naming convention: its file name starts with the theme name, as mytheme.settings"
   from: drupal.config_object
   to: drupal.theme
   groups: true
 - kind: config_owner_named
+  description: "the simple configuration file's name starts with that owner name, before the map says whether it is a module or a theme"
   from: drupal.config_object
   to: drupal.config_owner
 - kind: installs_theme
+  description: "core.extension lists that theme as installed"
   from: drupal.config_object
   to: drupal.theme
 

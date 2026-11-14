@@ -4,5 +4,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: uses_hook
+  description: "the function, component or hook calls that hook, found by the name the file binds"
   from: typescript.callable
   to: react.hook

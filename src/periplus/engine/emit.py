@@ -212,6 +212,17 @@ def build_document(
     }
     if grouping:
         document["grouping_kinds"] = grouping
+    texts = {
+        "edge_kinds": {str(e["kind"]): edge_kinds[e["kind"]].description for e in written},
+        "node_types": {str(n["type"]): types[n["type"]].description for n in ordered},
+    }
+    legend = {
+        section: dict(sorted(given.items()))
+        for section, named in texts.items()
+        if (given := {name: text for name, text in named.items() if text})
+    }
+    if legend:
+        document["legend"] = legend
     return document, left_out
 
 

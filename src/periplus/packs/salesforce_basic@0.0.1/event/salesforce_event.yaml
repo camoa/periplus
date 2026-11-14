@@ -12,10 +12,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: salesforce.event
+  description: "A Salesforce event, named by its SalesforceEvents constant as written in a subscriber's PHP"
   id_namespace: salesforce.event
 
 edge_kinds:
 - kind: subscribes_to_salesforce_event
+  description: "Inferred: the class keys that SalesforceEvents constant in getSubscribedEvents, read as text; the class comes from the file's path"
   from: php.class
   to: salesforce.event
 

@@ -5,5 +5,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: imports
+  description: "the file or module imports that thing: a PHP use statement names a class, function or constant, a TypeScript import names a module"
   from: typescript.module
   to: typescript.module

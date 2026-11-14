@@ -2,23 +2,29 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: js.function
+  description: "A JavaScript function with a name of its own, named <script path>:<name>: a function declaration, or a const, let or var that holds a function"
   id_namespace: js.function
 - name: js.file
+  description: "A JavaScript file ending .js, named by its path from the project folder"
   id_namespace: js.file
 # A call named as function_call names one, and a global's call named by the global alone.
 # Internal: the map rules join a global's call to the script's function of that name.
 - name: js.global_name_call
+  description: "Internal: a call to a name a global function also has, such as fetch(), used to join it to the script's own function of that name"
   id_namespace: js.global_name_call
   internal: true
 
 edge_kinds:
 - kind: script_declares_function
+  description: "the script declares that function or member function"
   from: js.file
   to: js.function
 - kind: js_calls
+  description: "the function or script calls that function by its name or dotted name; the edge starts at the script when no named function holds the call"
   from: [js.function, js.file]
   to: js.function
 - kind: calls_global_name
+  description: "internal step: the function or script calls a name a global function also has; map rules give js_calls when the script declares that name"
   from: [js.function, js.file]
   to: js.global_name_call
 

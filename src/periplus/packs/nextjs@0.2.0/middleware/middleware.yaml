@@ -4,8 +4,10 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: nextjs.middleware
+  description: "The middleware.ts or proxy.ts file in the project or src folder, which Next.js runs before a request"
   id_namespace: nextjs.middleware
 edge_kinds:
 - kind: middleware_in_module
+  description: "the middleware's code is in that module"
   from: nextjs.middleware
   to: typescript.module

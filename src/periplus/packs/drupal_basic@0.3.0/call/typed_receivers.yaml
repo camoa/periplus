@@ -42,14 +42,17 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.typed_call
+  description: "a call on a parameter or a property of $this to an entity type manager, container, config factory or queue factory method, kept so map rules can read its type"
   id_namespace: drupal.typed_call
   internal: true
 - name: drupal.closure_parameter
+  description: "a parameter name a closure or arrow function declares; it stops typed-call edges for that name in the method or function around it"
   id_namespace: drupal.closure_parameter
   internal: true
 
 edge_kinds:
 - kind: typed_call_in
+  description: "the typed call sits in that method or function"
   from: drupal.typed_call
   to: [php.method, php.function]
 

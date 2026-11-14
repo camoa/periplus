@@ -31,25 +31,31 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 # One read of a field in a template: <template>:<variable>.<field>, at each line it is written.
 - name: drupal.template_field_read
+  description: "Internal: one read of a field written as variable.field_x in a Twig template, at its line, joined in the map to the field it names"
   id_namespace: drupal.template_field_read
   internal: true
 # What a read's variable or its template's hook names: entity.<entity type> from a table, else
 # the name as written.
 - name: drupal.field_entity_hint
+  description: "Internal: what a template field read's variable or template name points at, entity.<type> from a lookup table, else the name as written"
   id_namespace: drupal.field_entity_hint
   internal: true
 
 edge_kinds:
 - kind: names_field
+  description: "The method, function or template read names that field machine name: a literal or constant in ->get(), ->set() or ->hasField() on any object, or x.field_y in Twig"
   from: [php.method, php.function, drupal.template_field_read]
   to: drupal.field_name
 - kind: read_on_entity
+  description: "The template field read's variable or template name points at that entity hint, an entity type from a lookup table or the name as written"
   from: drupal.template_field_read
   to: drupal.field_entity_hint
 - kind: accesses_field
+  description: "The method, function or template names that field storage's machine name in ->get(), ->set(), ->hasField() or Twig; a field_ name no storage has ends unresolved"
   from: [php.method, php.function, drupal.template]
   to: drupal.field_storage
 - kind: accesses_shared_field_name
+  description: "The method, function or template names that field machine name, which storages on two or more entity types share, so the storage it means is not known"
   from: [php.method, php.function, drupal.template]
   to: drupal.shared_field_name
 

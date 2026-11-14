@@ -17,20 +17,24 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
 - name: php.private_method
+  description: "a private PHP method, kept so an ancestor's private method does not count as overridden"
   id_namespace: php.private_method
   internal: true
 
 - name: php.method_slot
+  description: "a method name on a class or trait, the step the overrides rule walks to find the nearest declaration"
   id_namespace: php.method_slot
   internal: true
 
 edge_kinds:
 
 - kind: overrides
+  description: "the method replaces that same-named method of the nearest ancestor class, or of a trait its class uses"
   from: php.method
   to: php.method
 
 - kind: nearest_declaration
+  description: "the method joins the slot of the nearest ancestor that declares the same name, a step the overrides rule reads"
   from: php.method
   to: php.method_slot
 

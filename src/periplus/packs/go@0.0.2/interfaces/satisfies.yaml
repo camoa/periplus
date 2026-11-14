@@ -12,11 +12,13 @@ needs:
   - go.interface
 edge_kinds:
 - kind: has_receiver
+  description: "the method is declared with that type as its receiver; the edge carries the method's signature"
   from: go.method
   to:
   - go.struct
   - go.interface
 - kind: satisfies
+  description: "the struct's methods cover the methods the interface lists, matched by signature, so it satisfies the interface without saying so"
   from: go.struct
   to: go.interface
 rules:

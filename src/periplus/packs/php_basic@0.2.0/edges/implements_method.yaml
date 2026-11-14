@@ -19,6 +19,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 edge_kinds:
 
 - kind: implements_method
+  description: "the class method implements that same-named method of an interface the class or an ancestor implements"
   from: php.method
   to: php.method
 

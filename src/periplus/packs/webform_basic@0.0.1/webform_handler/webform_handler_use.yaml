@@ -10,6 +10,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: webform_uses_handler
+  description: "The webform's bundle runs that handler plugin, named under handlers in its config file; a disabled handler gives the edge too"
   from: drupal.bundle
   to: drupal.webform_handler
 

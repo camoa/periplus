@@ -10,9 +10,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: names_read_config_constant
+  description: "the function or method reads configuration named by that class constant, self::X or static::X; a map rule turns it into reads_config_object"
   from: [php.method, php.function]
   to: drupal.class_constant
 - kind: names_edited_config_constant
+  description: "the function or method edits configuration named by that class constant, self::X or static::X; a map rule turns it into edits_config_object"
   from: [php.method, php.function]
   to: drupal.class_constant
 

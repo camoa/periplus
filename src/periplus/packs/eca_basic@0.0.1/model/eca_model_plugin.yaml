@@ -7,12 +7,15 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: eca_reacts_to
+  description: "The ECA model has an event of that event plugin; for a <base>:<derivative> id, also an inferred edge to the mapped base plugin"
   from: eca.model
   to: drupal.eca_event
 - kind: eca_checks
+  description: "The ECA model has a condition of that condition plugin, named by its plugin key"
   from: eca.model
   to: drupal.eca_condition
 - kind: eca_runs
+  description: "The ECA model has an action of that action plugin, named by its plugin key"
   from: eca.model
   to: drupal.action_plugin
 

@@ -6,13 +6,16 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: eca.model_entry
+  description: "An event, gateway or action of an ECA model, <model config>:<entry id>"
   id_namespace: eca.model_entry
 
 edge_kinds:
 - kind: eca_entry_of
+  description: "The entry belongs to that ECA model"
   from: eca.model_entry
   to: eca.model
 - kind: eca_next
+  description: "The entry lists that entry among its successors"
   from: eca.model_entry
   to: eca.model_entry
 

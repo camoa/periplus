@@ -3,7 +3,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # The class that defines a base field.
 
 edge_kinds:
-- {kind: base_field_of, from: drupal_more.base_field, to: php.class}
+- {kind: base_field_of, from: drupal_more.base_field, to: php.class, description: "The base field is defined in that entity class"}
 
 rules:
 - rule: base_field_of

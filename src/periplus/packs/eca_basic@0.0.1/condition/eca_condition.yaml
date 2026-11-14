@@ -4,5 +4,6 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.eca_condition
+  description: "An ECA condition plugin, named by its id; a custom one comes from the EcaCondition attribute or annotation on its class"
   parent: drupal.plugin
   id_namespace: drupal.plugin.eca_condition

@@ -4,13 +4,16 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.hook
+  description: "A hook, named without its hook_ prefix, taken from a Hook attribute or from a function name by naming convention"
   id_namespace: drupal.hook
 
 edge_kinds:
 - kind: implements_hook
+  description: "The function or method implements that hook, by a Hook attribute or by naming convention (extension or theme name, an underscore, the hook name)"
   from: [php.method, php.function]
   to: drupal.hook
 - kind: hook_acts_on_entity_type
+  description: "The hook, named <entity type>_<operation> such as node_presave, acts on that entity type, by naming convention, so a helper of that shape can give a false link"
   from: drupal.hook
   to: drupal.entity_type
 

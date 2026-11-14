@@ -6,8 +6,10 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: drupal_next.endpoint
+  description: "One path on the Drupal server, from a routing file or a REST resource annotation, each parameter written {}, named drupal<path>"
   id_namespace: drupal_next.endpoint
 edge_kinds:
 - kind: endpoint_served_by
+  description: "the endpoint is served by that Drupal route, whose routing file declares the path"
   from: drupal_next.endpoint
   to: drupal.route

@@ -4,5 +4,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: function_calls_function
+  description: "the function calls that function, found by the name the file binds through a declaration or an import"
   from: typescript.callable
   to: typescript.callable

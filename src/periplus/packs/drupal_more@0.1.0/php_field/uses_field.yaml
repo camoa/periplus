@@ -4,4 +4,4 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # convention, so both rules are inferred.
 
 edge_kinds:
-- {kind: uses_field, from: [php.class, php.trait], to: drupal_more.field_name}
+- {kind: uses_field, from: [php.class, php.trait], to: drupal_more.field_name, description: "Inferred: the class reads or writes that field by name, through get(), set(), hasField() or ->field_x->; found by the field_ naming convention"}

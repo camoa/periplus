@@ -14,20 +14,28 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.entity_type
+  description: "An entity type, named by its machine name"
   id_namespace: drupal.entity_type
 - name: drupal.content_entity_type
+  description: "A content entity type, from the ContentEntityType attribute or annotation on its class"
   parent: drupal.entity_type
 - name: drupal.config_entity_type
+  description: "A config entity type, from the ConfigEntityType attribute or annotation on its class"
   parent: drupal.entity_type
 - name: drupal.entity_class
+  description: "A PHP class that defines an entity; a more specific type says content or config"
   parent: php.class
 - name: drupal.content_entity_class
+  description: "A PHP class whose parents or interfaces reach ContentEntityInterface"
   parent: drupal.entity_class
 - name: drupal.config_entity_class
+  description: "A PHP class whose parents or interfaces reach ConfigEntityInterface"
   parent: drupal.entity_class
 - name: drupal.entity_save
+  description: "A method named save in an entity class"
   parent: php.method
 edge_kinds:
 - kind: entity_class
+  description: "the entity type is defined by that PHP class, the class its attribute or annotation sits on"
   from: drupal.entity_type
   to: php.class

@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: uses_oauth_scope
+  description: "the Next.js module uses that OAuth scope: a word in a string assigned to a name ending in scope, inferred from that name"
   from: typescript.module
   to: drupal.config_object
 rules:

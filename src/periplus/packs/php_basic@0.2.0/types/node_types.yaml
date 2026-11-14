@@ -7,29 +7,37 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
 - name: php.class_like
+  description: "any PHP class, interface, trait or enum; abstract, so no node has this type itself"
   abstract: true
   id_namespace: php.type
 
 - name: php.class
+  description: "a PHP class"
   parent: php.class_like
 
 - name: php.interface
+  description: "a PHP interface"
   parent: php.class_like
 
 - name: php.trait
+  description: "a PHP trait"
   parent: php.class_like
 
 - name: php.enum
+  description: "a PHP enum"
   parent: php.class_like
 
 - name: php.callable
+  description: "any PHP function or method; abstract, so no node has this type itself"
   abstract: true
 
 - name: php.function
+  description: "a PHP function declared outside any class"
   parent: php.callable
   id_namespace: php.function
 
 - name: php.method
+  description: "a method declared in a PHP class, interface, trait or enum, named by the type it sits in"
   parent: php.callable
   id_namespace: php.method
 
@@ -38,19 +46,25 @@ node_types:
 # its own line by a rule in types/find_declarations.yaml; its id is shaped there.
 # The node type php.property_type is declared in types/find_declarations.yaml.
 - name: php.property
+  description: "a property declared in a PHP class or trait"
   id_namespace: php.property
 
 - name: php.parameter
+  description: "a parameter of a PHP method or function, outside closures"
   id_namespace: php.parameter
 
 - name: php.parameter_type
+  description: "the class a PHP parameter's signature names as its type, Foo $x or ?Foo $x"
   id_namespace: php.parameter_type
 
 - name: php.member_assignment
+  description: "an assignment to a property of the object, $this->name = ..., one node per class and property"
   id_namespace: php.member_assignment
 
 - name: php.member_assignment_value
+  description: "the text assigned to $this->name in one method, one node per distinct text"
   id_namespace: php.member_assignment_value
 
 - name: php.call_site
+  description: "a call kept at its line inside a method or function, for a rule to join to its target or mark as built at run time"
   id_namespace: php.call_site

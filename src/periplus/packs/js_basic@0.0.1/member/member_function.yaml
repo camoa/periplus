@@ -13,11 +13,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: js.member_function
+  description: "A function assigned to a dotted name, A.b = function () {}, or written in an object literal assigned to one; named without its script when A is a shared object"
   parent: js.function
   id_namespace: js.member_function
 # A.b = {...}: the object, so the functions written in it have an enclosing type. Internal: it
 # names those functions only.
 - name: js.namespace_object
+  description: "Internal: an object literal assigned to a dotted name, A.b = {...}, which names the functions written in it"
   id_namespace: js.namespace_object
   internal: true
 

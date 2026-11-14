@@ -4,5 +4,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: renders_component
+  description: "the function renders that component: a JSX tag in TypeScript, or a single-directory component named by #component in a PHP render array"
   from: typescript.callable
   to: react.component

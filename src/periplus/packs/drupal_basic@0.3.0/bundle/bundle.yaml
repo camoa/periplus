@@ -9,12 +9,15 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.bundle
+  description: "a bundle, as node.article: a content type, vocabulary, media type or the like, read from its config file or named by a field or display"
   id_namespace: drupal.bundle
 
 edge_kinds:
 - kind: configured_by
+  description: "the bundle is declared by that config file, as node.article by node.type.article"
   from: drupal.bundle
   to: drupal.config_object
 - kind: bundle_of
+  description: "the bundle belongs to that entity type; read from the bundle's config file, or inferred from a field or display that names the bundle"
   from: drupal.bundle
   to: drupal.entity_type

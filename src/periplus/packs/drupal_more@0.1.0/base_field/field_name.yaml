@@ -3,7 +3,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # A field known by its name alone, the end that a base field and a PHP read of a field meet on.
 
 node_types:
-- {name: drupal_more.field_name, id_namespace: drupal_more.field_name}
+- {name: drupal_more.field_name, id_namespace: drupal_more.field_name, description: "A field known by its machine name alone, where a base field and a PHP read of a field meet"}
 
 rules:
 - rule: base_field_name

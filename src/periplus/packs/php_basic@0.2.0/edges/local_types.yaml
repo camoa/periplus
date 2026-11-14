@@ -22,23 +22,28 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # or new $class(), or reads a value set by foreach, list(), static or global.
 node_types:
 - name: php.local_variable
+  description: "a local variable in a PHP method or function, one node for its assignments there"
   id_namespace: php.local_variable
   internal: true
 
 - name: php.local_value
+  description: "a value assigned to a local variable, as written, one node per distinct text"
   id_namespace: php.local_value
   internal: true
 
 - name: php.local_type
+  description: "the class a local variable gets from $x = new Foo()"
   id_namespace: php.local_type
   internal: true
 
 edge_kinds:
 - kind: local_assigned
+  description: "the local variable is assigned that value somewhere in its method or function, one edge per distinct value"
   from: php.local_variable
   to: php.local_value
 
 - kind: local_value_typed_as
+  description: "the value assigned to a local variable is new of that class, $x = new Foo()"
   from: php.local_value
   to: php.local_type
 

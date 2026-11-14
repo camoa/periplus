@@ -4,8 +4,10 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: typescript.package
+  description: "An npm package a module imports, named as the import writes it"
   id_namespace: typescript.package
 edge_kinds:
 - kind: uses_package
+  description: "the module imports from that npm package"
   from: typescript.module
   to: typescript.package

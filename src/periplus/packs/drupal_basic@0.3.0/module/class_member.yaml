@@ -14,38 +14,47 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: plugin_in_module
+  description: "The plugin belongs to that module: its plugin class sits in the module's namespace"
   from: drupal.plugin
   to: drupal.module
   groups: true
 - kind: form_id_in_module
+  description: "The form id belongs to that module: the class that returns it sits in the module's namespace"
   from: drupal.form_id
   to: drupal.module
   groups: true
 - kind: entity_type_in_module
+  description: "The entity type belongs to that module: its entity class sits in the module's namespace"
   from: drupal.entity_type
   to: drupal.module
   groups: true
 - kind: plugin_type_in_module
+  description: "The plugin type belongs to that module: its attribute or annotation class sits in the module's namespace"
   from: drupal.plugin_type
   to: drupal.module
   groups: true
 - kind: twig_filter_in_module
+  description: "The Twig filter belongs to that module: the Twig extension class that provides it sits in the module's namespace"
   from: twig.filter
   to: drupal.module
   groups: true
 - kind: twig_function_in_module
+  description: "The Twig function belongs to that module: the Twig extension class that provides it sits in the module's namespace"
   from: twig.function
   to: drupal.module
   groups: true
 - kind: route_alter_in_module
+  description: "The route alteration belongs to that module: its route subscriber class sits in the module's namespace"
   from: drupal.route_alter
   to: drupal.module
   groups: true
 - kind: event_constant_in_module
+  description: "The event constant belongs to that module: the class that declares it sits in the module's namespace"
   from: drupal.event_constant
   to: drupal.module
   groups: true
 - kind: event_in_module
+  description: "The event, named by an event constant's text, belongs to that module: the class that declares the constant sits in the module's namespace"
   from: drupal.event
   to: drupal.module
   groups: true

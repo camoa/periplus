@@ -4,5 +4,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: declares_hook
+  description: "the module declares that hook, at the top level or nested in another function"
   from: typescript.module
   to: react.hook

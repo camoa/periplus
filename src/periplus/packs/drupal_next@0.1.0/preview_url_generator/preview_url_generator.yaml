@@ -5,5 +5,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: drupal_next.preview_url_generator
+  description: "A PreviewUrlGenerator plugin of the next module, found by its annotation"
   parent: drupal.plugin
   id_namespace: drupal.plugin.next_preview_url_generator

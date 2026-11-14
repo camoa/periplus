@@ -10,18 +10,22 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: config_in_module
+  description: "The config object ships in config/install or config/optional of that module, the nearest folder above the file with an info.yml file"
   from: drupal.config_object
   to: drupal.module
   groups: true
 - kind: config_in_theme
+  description: "The config object ships in config/install or config/optional of that theme, the nearest folder above the file with an info.yml file"
   from: drupal.config_object
   to: drupal.theme
   groups: true
 - kind: component_in_module
+  description: "The single-directory component's component.yml file sits in that module, the nearest folder above it with an info.yml file"
   from: drupal.component
   to: drupal.module
   groups: true
 - kind: component_in_theme
+  description: "The single-directory component's component.yml file sits in that theme, the nearest folder above it with an info.yml file"
   from: drupal.component
   to: drupal.theme
   groups: true

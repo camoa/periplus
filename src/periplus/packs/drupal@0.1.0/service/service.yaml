@@ -5,11 +5,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 node_types:
 
   - name: drupal.service
+    description: "A service, named by its id, from a custom module's or theme's services file"
     id_namespace: drupal.service
 
 edge_kinds:
 
   - kind: resolves_service
+    description: "The code gets that service: a Drupal::service() call, an Autowire attribute on a property, or a promoted constructor parameter's type (inferred)"
     from: [php.callable, drupal.config_object]
     to:   drupal.service
     # The config_object endpoint was added after a real refusal. A block placement

@@ -30,6 +30,15 @@
       "description": "The edge kinds of this map whose packs declare them grouping (groups: true), sorted: the edge's from end belongs to the container at its to end. Written only when the map holds an edge of such a kind, so a map without one is unchanged."
     },
 
+    "legend": {
+      "type": "object", "additionalProperties": false, "minProperties": 1,
+      "properties": {
+        "edge_kinds": {"$ref": "#/$defs/legendTexts"},
+        "node_types": {"$ref": "#/$defs/legendTexts"}
+      },
+      "description": "The one-line description each pack gives of the edge kinds and node types this map holds, by kind and by type, keys sorted: what an edge says read from its from end to its to end, and what a node is. A kind or type without one is left out, a section without any is left out, and a map whose packs give none has no legend, so it is unchanged."
+    },
+
     "type_hierarchy": {
       "type": "array",
       "items": {
@@ -46,6 +55,11 @@
   },
 
   "$defs": {
+
+    "legendTexts": {
+      "type": "object", "minProperties": 1,
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
 
     "node": {
       "type": "object",

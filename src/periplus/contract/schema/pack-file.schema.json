@@ -100,6 +100,13 @@
         "id_matches": {"type": "string", "description": "RE2 searched in the current node's whole id; a node it does not fit gives nothing, and its named captures join the values. Each {name}, a name starting with a letter, is filled first with that capture as literal text; a capture no step before it makes leaves the rule not executed, and a quantifier such as {2} stays one."}
       }
     },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\n\\r]*(?![\\s\\S])",
+      "description": "One line of at most 200 characters, in a developer's words: what the node is, or what the edge says read from its from end to its to end. The map carries the texts of the types and kinds it holds under legend, and periplus legend prints them. Two declarations of one edge kind with different texts are refused, as different ends or groups are; a declaration without one takes the other's. why: an agent reading the map did not know what a kind meant or that the map held a fact, and went to the source files for it."
+    },
     "typeName": {
       "description": "Namespaced by the pack that declares it. A pack may only name a type it declares or that a pack in its dependency graph declares.",
       "type": "string",
@@ -114,6 +121,9 @@
       "properties": {
         "name": {
           "$ref": "#/$defs/typeName"
+        },
+        "description": {
+          "$ref": "#/$defs/description"
         },
         "parent": {
           "$ref": "#/$defs/typeName"
@@ -173,6 +183,9 @@
             "nearest_enclosing_container"
           ],
           "description": "Which end the from side attaches to. why: the containment source was hardcoded to the file node across 15 language configs, so a method's container was the file rather than its class."
+        },
+        "description": {
+          "$ref": "#/$defs/description"
         },
         "groups": {
           "type": "boolean",

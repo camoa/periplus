@@ -4,8 +4,10 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: drupal_next.jsonapi_resource
+  description: "A JSON:API resource as a Next.js caller names it, entity--bundle, from a string or a /jsonapi/<entity>/<bundle> path"
   id_namespace: drupal_next.jsonapi_resource
 edge_kinds:
 - kind: uses_jsonapi_resource
+  description: "the Next.js module uses that JSON:API resource, named in a next-drupal resource call, a constant or a /jsonapi/ path"
   from: typescript.module
   to: drupal_next.jsonapi_resource

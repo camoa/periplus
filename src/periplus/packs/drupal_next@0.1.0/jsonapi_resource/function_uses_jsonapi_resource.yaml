@@ -4,5 +4,6 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: function_uses_jsonapi_resource
+  description: "the function, component or hook uses that JSON:API resource, named in a next-drupal resource call or a /jsonapi/ path"
   from: [react.component, react.hook, typescript.function]
   to: drupal_next.jsonapi_resource

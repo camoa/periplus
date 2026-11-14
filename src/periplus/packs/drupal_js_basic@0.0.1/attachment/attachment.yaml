@@ -2,11 +2,14 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: attaches_library
+  description: "the PHP method, function or class attaches that library through #attached library in a render array"
   from: [php.class, php.method, php.function]
   to: drupal.library
 - kind: template_attaches_library
+  description: "the template attaches that library with attach_library() in Twig"
   from: drupal.template
   to: drupal.library
 - kind: component_attaches_library
+  description: "the single-directory component's Twig file attaches that library with attach_library()"
   from: drupal.component
   to: drupal.library

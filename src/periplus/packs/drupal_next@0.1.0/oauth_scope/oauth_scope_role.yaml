@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: oauth_scope_grants_role
+  description: "the OAuth scope config grants that user role, by its granularity_configuration role"
   from: drupal.config_object
   to: drupal.config_object
 rules:

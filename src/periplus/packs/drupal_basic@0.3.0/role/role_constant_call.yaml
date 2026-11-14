@@ -10,9 +10,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: names_checked_role_constant
+  description: "step to checks_role: the method or function calls hasRole() with self::X or static::X, the class constant that holds the role name"
   from: [php.method, php.function]
   to: drupal.class_constant
 - kind: names_changed_role_constant
+  description: "step to changes_role: the method or function calls addRole() or removeRole() with self::X or static::X, the constant that holds the role name"
   from: [php.method, php.function]
   to: drupal.class_constant
 

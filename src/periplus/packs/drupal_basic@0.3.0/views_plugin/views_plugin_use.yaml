@@ -11,12 +11,15 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: view_uses_field_plugin
+  description: "the view's config file names that field plugin as a field's plugin_id in a display"
   from: drupal.config_object
   to: drupal.views_field_plugin
 - kind: view_uses_filter_plugin
+  description: "the view's config file names that filter plugin as a filter's plugin_id in a display"
   from: drupal.config_object
   to: drupal.views_filter_plugin
 - kind: view_uses_style_plugin
+  description: "the view's config file names that style plugin as a display's style type"
   from: drupal.config_object
   to: drupal.views_style_plugin
 

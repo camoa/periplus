@@ -20,11 +20,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # gets no edge here: the map does not know which one holds at the call.
 node_types:
 - name: php.return_type
+  description: "the class a PHP method declares as its return type; self gives the declaring class"
   id_namespace: php.return_type
   internal: true
 
 edge_kinds:
 - kind: returns_type
+  description: "the method declares that class as its return type; self gives the declaring class"
   from: php.method
   to: php.return_type
 

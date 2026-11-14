@@ -7,10 +7,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: theme_hook_in_module
+  description: "The theme hook is declared in a hook_theme array in a file in that module, the nearest folder above the file with an info.yml file"
   from: drupal.theme_hook
   to: drupal.module
   groups: true
 - kind: theme_hook_in_theme
+  description: "The theme hook is declared in a hook_theme array in a file in that theme, the nearest folder above the file with an info.yml file"
   from: drupal.theme_hook
   to: drupal.theme
   groups: true

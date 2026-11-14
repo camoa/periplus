@@ -6,24 +6,31 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 node_types:
 - name: drupal.service
+  description: "a service declared in a module's services.yml, named by its key"
   id_namespace: drupal.service
 - name: drupal.service_tag
+  description: "a tag name a service carries under tags in a services.yml file"
   id_namespace: drupal.service_tag
 
 edge_kinds:
 - kind: injects_service
+  description: "the service's arguments in services.yml name that service, written @name or @?name"
   from: drupal.service
   to: drupal.service
 - kind: extends_service
+  description: "the service's parent key names that service, so it takes that service's definition as its base"
   from: drupal.service
   to: drupal.service
 - kind: alias_of_service
+  description: "the service is an alias of that service, by its alias key or a value written @name"
   from: drupal.service
   to: drupal.service
 - kind: tagged_as
+  description: "the service carries that tag in its services.yml entry"
   from: drupal.service
   to: drupal.service_tag
 - kind: service_class
+  description: "the service is built from that class or interface: its class key names it, or with no class key the service key is a class name"
   from: drupal.service
   to: [php.class, php.interface]
 

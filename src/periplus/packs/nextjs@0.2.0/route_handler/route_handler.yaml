@@ -4,8 +4,10 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: nextjs.route_handler
+  description: "A route handler, named by the URL its route file serves, with route groups removed and each dynamic segment written []"
   id_namespace: nextjs.route_handler
 edge_kinds:
 - kind: handler_in_module
+  description: "the route handler's code is in that module"
   from: nextjs.route_handler
   to: typescript.module

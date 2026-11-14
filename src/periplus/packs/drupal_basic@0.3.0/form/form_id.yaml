@@ -8,13 +8,16 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # ends at a referenced node. A getFormId that returns a constant or a concatenation gives nothing.
 node_types:
 - name: drupal.form_id
+  description: "A form id: the literal a form class's getFormId returns, or a form name that a form alter hook or a config file gives, which may be a base form id"
   id_namespace: drupal.form_id
 
 edge_kinds:
 - kind: form_has_id
+  description: "The form class returns that form id as a quoted literal from getFormId()"
   from: php.class
   to: drupal.form_id
 - kind: config_names_form
+  description: "The config object names that form id in a key, such as a captcha point's formId or the honeypot settings' form lists"
   from: drupal.config_object
   to: drupal.form_id
 

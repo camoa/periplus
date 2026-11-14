@@ -5,8 +5,10 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 node_types:
 - name: typescript.url_name
+  description: "A name that holds a URL: a variable in one module, <module>|<name>, or a prop, prop|<name>"
   id_namespace: typescript.url_name
 edge_kinds:
 - kind: fetches_name
+  description: "the module calls fetch() with that variable or prop as the URL"
   from: typescript.module
   to: typescript.url_name
