@@ -1,0 +1,257 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A function or method that assigns a variable from getRouteName() and compares that variable to
+# a quoted route name with == or ===, as $route_name == 'user.login', checks that route: a
+# checks_route edge to it. Read as text in three steps. A file rule writes each variable assigned
+# from getRouteName() in a named function or method as an internal drupal.route_name_var
+# <owner>|<var>, another writes each comparison as an internal drupal.route_name_test
+# <owner>|<var>|<route>, and a map rule joins the two when both sit in one owner, from the mapped
+# function or method. The owner is the function's name in a module, install, inc, theme or profile
+# file, and <class>::<method> in a class under src, by Drupal's PSR-4 layout, so each file rule
+# has a form for functions and a form for methods. A route is a quoted
+# name with a dot in it; one no mapped routing file declares, as core's user.login, ends at a
+# referenced node.
+#
+# The link stands only on a name written as text, so it is mentioned. No edge comes from a
+# variable the owner also binds another way, as $route_name = 'x', foreach (... as $route_name),
+# or a closure or arrow function parameter of that name: each writes an internal
+# drupal.route_name_rebound that blocks the join, since the map cannot tell which value the
+# comparison reads. A negated test, != or !==, a comparison to another variable, and a comparison
+# in a comment give no edge. A closure opens no owner, so its body reads as the named function
+# around it.
+
+node_types:
+- name: drupal.route_name_var
+  id_namespace: drupal.route_name_var
+  internal: true
+- name: drupal.route_name_rebound
+  id_namespace: drupal.route_name_rebound
+  internal: true
+- name: drupal.route_name_test
+  id_namespace: drupal.route_name_test
+  internal: true
+
+edge_kinds:
+- kind: checks_route
+  from: [php.function, php.method]
+  to: drupal.route
+
+rules:
+- rule: route_name_assigned_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '\$(?<var>\w+)\s*=(?![=>])[^;]*?->getRouteName\(\)\s*;'
+  values: &function_owner
+    owner: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_var}}]
+  confidence: mentioned
+
+
+- rule: route_name_assigned_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\$(?<var>\w+)\s*=(?![=>])[^;]*?->getRouteName\(\)\s*;'
+  values: &method_owner
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    owner: {template: '{psr4_class}::{function}'}
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_var}}]
+  confidence: mentioned
+
+
+- rule: route_name_rebound_by_assignment_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '\$(?<var>\w+)\s*=(?![=>])(?![^;]*?->getRouteName\(\)\s*;)'
+  values: *function_owner
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_rebound}}]
+  confidence: mentioned
+
+
+- rule: route_name_rebound_by_assignment_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\$(?<var>\w+)\s*=(?![=>])(?![^;]*?->getRouteName\(\)\s*;)'
+  values: *method_owner
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_rebound}}]
+  confidence: mentioned
+
+
+- rule: route_name_rebound_by_foreach_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '\bas\s+(?:&?\$\w+\s*=>\s*)?&?\$(?<var>\w+)'
+  values: *function_owner
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_rebound}}]
+  confidence: mentioned
+
+
+- rule: route_name_rebound_by_foreach_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bas\s+(?:&?\$\w+\s*=>\s*)?&?\$(?<var>\w+)'
+  values: *method_owner
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_rebound}}]
+  confidence: mentioned
+
+
+- rule: route_name_rebound_by_first_parameter_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '\b(?:function|fn)\s*\(\s*(?:[\w\\?|]+\s+)?&?(?:\.\.\.)?\$(?<var>\w+)'
+  values: *function_owner
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_rebound}}]
+  confidence: mentioned
+
+
+- rule: route_name_rebound_by_first_parameter_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\b(?:function|fn)\s*\(\s*(?:[\w\\?|]+\s+)?&?(?:\.\.\.)?\$(?<var>\w+)'
+  values: *method_owner
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_rebound}}]
+  confidence: mentioned
+
+
+- rule: route_name_rebound_by_last_parameter_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '\b(?:function|fn)\s*\([^)]*,\s*(?:[\w\\?|]+\s+)?&?(?:\.\.\.)?\$(?<var>\w+)'
+  values: *function_owner
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_rebound}}]
+  confidence: mentioned
+
+
+- rule: route_name_rebound_by_last_parameter_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\b(?:function|fn)\s*\([^)]*,\s*(?:[\w\\?|]+\s+)?&?(?:\.\.\.)?\$(?<var>\w+)'
+  values: *method_owner
+  id: {template: '{owner}|{var}'}
+  emits: [{node: {type: drupal.route_name_rebound}}]
+  confidence: mentioned
+
+
+- rule: route_name_compared_variable_first_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '\$(?<var>\w+)\s*===?\s*''(?<route>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)'''
+  values: *function_owner
+  id: {template: '{owner}|{var}|{route}'}
+  line: {capture: route}
+  emits: [{node: {type: drupal.route_name_test}}]
+  confidence: mentioned
+
+
+- rule: route_name_compared_variable_first_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\$(?<var>\w+)\s*===?\s*''(?<route>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)'''
+  values: *method_owner
+  id: {template: '{owner}|{var}|{route}'}
+  line: {capture: route}
+  emits: [{node: {type: drupal.route_name_test}}]
+  confidence: mentioned
+
+
+- rule: route_name_compared_literal_first_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    reads_sections: [string]
+    text: '(?<![\w''])''(?<route>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)''\s*===?\s*\$(?<var>\w+)'
+  values: *function_owner
+  id: {template: '{owner}|{var}|{route}'}
+  line: {capture: route}
+  emits: [{node: {type: drupal.route_name_test}}]
+  confidence: mentioned
+
+
+- rule: route_name_compared_literal_first_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [string]
+    text: '(?<![\w''])''(?<route>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)''\s*===?\s*\$(?<var>\w+)'
+  values: *method_owner
+  id: {template: '{owner}|{var}|{route}'}
+  line: {capture: route}
+  emits: [{node: {type: drupal.route_name_test}}]
+  confidence: mentioned
+
+
+- rule: function_checks_route
+  reads: map
+  match:
+    node_type: drupal.route_name_test
+    where: [{id_matches: '^drupal\.route_name_test::(?<owner>\w+)\|(?<var>\w+)\|(?<route>[^|]+)$'}]
+    follow: [{node: 'drupal.route_name_var::{owner}|{var}'}, {node: 'php.function::{owner}'}]
+    unless: [[{node: 'drupal.route_name_rebound::{owner}|{var}'}]]
+  emits: [{edge: {kind: checks_route, from: matched_node, to: {template: '{route}', type: drupal.route}}}]
+  confidence: mentioned
+
+
+- rule: method_checks_route
+  reads: map
+  match:
+    node_type: drupal.route_name_test
+    where: [{id_matches: '^drupal\.route_name_test::(?<owner>[^|]+::\w+)\|(?<var>\w+)\|(?<route>[^|]+)$'}]
+    follow: [{node: 'drupal.route_name_var::{owner}|{var}'}, {node: 'php.method::{owner}'}]
+    unless: [[{node: 'drupal.route_name_rebound::{owner}|{var}'}]]
+  emits: [{edge: {kind: checks_route, from: matched_node, to: {template: '{route}', type: drupal.route}}}]
+  confidence: mentioned

@@ -190,7 +190,16 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   a method's local variable assigned such a service, as an inferred calls edge to the method on
 #   the class the services file gives that service;
 # - each page display of a view that has a path, as the route view.<view>.<display>, with its
-#   path, a route_from_view edge to the view's config object and a shape_of_route edge.
+#   path, a route_from_view edge to the view's config object and a shape_of_route edge;
+# - a _custom_access written service:method as an access_checked_by edge to the method on the
+#   service's class or its nearest ancestor (route/route_custom_access_method.yaml);
+# - core's user.login and user.register, when core.extension lists the user module, as the routes
+#   of /user/login and /user/register with route_uses_form_id edges to user_login_form and
+#   user_register_form; and a page--a--b template as a suggests_path edge to /a/b when the map
+#   holds that path;
+# - a variable assigned from getRouteName() and compared with == or === to a quoted route name,
+#   or tested with in_array against a literal list in the same function, as a checks_route edge
+#   from the function or method to each route, confidence mentioned.
 #
 # False results:
 # - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
@@ -330,8 +339,15 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A top-level function in a plain .php file in the custom folders, other than a post_update.php
 #   or deploy.php file, makes no hook. Each such file leaves two skipped rows in the report, one
 #   per hook rule, at its first function.
-# - A _custom_access written service:method gives an edge to the service only. The method stays in
-#   the custom_access attribute and gives no edge to a PHP method.
+# - A _custom_access method that neither the service's class nor a mapped ancestor declares ends at
+#   an unresolved method of the service's class.
+# - A route name compared with !=, !==, switch or a variable, a route list in a property, a
+#   constant or another function, a route name held in a parameter such as hook_help's
+#   $route_name, and a variable bound twice in one function give no checks_route edge. A file
+#   that holds two classes with a method of one name reads both as the class its path names.
+# - Only the core routes user.login and user.register get a path and a form id, and only from an
+#   exported core.extension. A page--a--b template whose path parts hold underscores, or name an
+#   argument as %, links to no path.
 # - The applies_to key of a service's access_check tag is kept as the service's applies_to
 #   attribute, not on the tagged_as edge, because an attribute on an edge is accepted and not
 #   executed. applies_to is read on any tag of a service, and a comma-separated list of keys
@@ -606,6 +622,13 @@ files:
           template: '{base}:{derivative}'
           normalize:
           - {replace: '-', with: '_'}
+        # page--<a>--<b>: the internal path /a/b whose page the template themes, each -- read as
+        # a slash and the other dashes kept, as written in a URL.
+        page_path_suggestion:
+          pattern: '^(?:.*/)?page--(?<path>[a-z0-9_]+(?:-[a-z0-9_]+)*(?:--[a-z0-9_]+(?:-[a-z0-9_]+)*)*)\.html\.twig$'
+          template: '/{path}'
+          normalize:
+          - {replace: '--', with: '/'}
         # field--field-<name>: a field whose name starts with field_, on any entity type.
         field_suggestion:
           pattern: '^(?:.*/)?field--(?<field>field(?:-[a-z0-9_]+)+)\.html\.twig$'
@@ -644,7 +667,7 @@ files:
     # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
     # attachment. The sections are the comments and the strings. The spans kept here are attached,
     # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
-    # subscribed_events and named_function.
+    # subscribed_events, named_function, array_assigned and in_array_list.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
       reader: text
@@ -710,6 +733,15 @@ files:
       - name: named_function
         open: '\bfunction\s+(?<function>\w+)\s*\([^)]*\)[^{;]*'
         balance: ['{', '}']
+      # An array literal assigned to a variable, $list = [...]; list is the variable's name.
+      - name: array_assigned
+        open: '\$(?<list>\w+)\s*=\s*(?=\[)'
+        balance: ['[', ']']
+      # The array literal in_array tests a variable against, in_array($v, [...]); var is the
+      # variable's name.
+      - name: in_array_list
+        open: '(?<![!\w])in_array\(\s*\$(?<var>\w+)\s*,\s*(?=\[)'
+        balance: ['[', ']']
     # Configuration and the other YAML files read as text, beside the data reading yaml_basic
     # gives them.
     drupal_yml_text:

@@ -1,0 +1,48 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Two routes of core's user module, which no mapped routing file declares: user.login serves
+# /user/login and builds the form user_login_form, and user.register serves /user/register and
+# builds the form user_register_form, the user entity's register form. Read from core.extension,
+# where the module user is listed when it is installed, so a site with exported configuration gets
+# them whether or not its code links them. The route, the path and the form id end at referenced
+# nodes unless a mapped file declares them, and meet the nodes that links, templates and form
+# alters already reach. The fact is core's, written in this rutter, so each edge is inferred. The
+# edges sit at core.extension's line for the module.
+
+edge_kinds:
+- kind: route_uses_form_id
+  from: drupal.route
+  to: drupal.form_id
+
+rules:
+- rule: core_user_login_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.login'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: this_node
+      to: {from: {key: module.user}, template: '/user/login', type: drupal.url_path}
+  - edge:
+      kind: route_uses_form_id
+      from: this_node
+      to: {from: {key: module.user}, template: 'user_login_form', type: drupal.form_id}
+  confidence: inferred
+
+- rule: core_user_register_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.register'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: this_node
+      to: {from: {key: module.user}, template: '/user/register', type: drupal.url_path}
+  - edge:
+      kind: route_uses_form_id
+      from: this_node
+      to: {from: {key: module.user}, template: 'user_register_form', type: drupal.form_id}
+  confidence: inferred
