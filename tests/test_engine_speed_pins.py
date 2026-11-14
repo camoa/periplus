@@ -107,6 +107,13 @@ rules:
   id: {from: {capture: name}}
   emits: [{node: {type: own.alpha}}]
   confidence: declared
+- rule: yard_note
+  reads: file
+  in: [yard]
+  match: {file: '*', filetype: note, text: '(?m)^note (?<name>\w+)'}
+  id: {from: {capture: name}}
+  emits: [{node: {type: own.note}}]
+  confidence: declared
 - rule: note
   reads: file
   in: [yard, other]
@@ -207,6 +214,10 @@ def test_each_rule_picks_its_own_files_by_folder_type_and_glob(
     notes = sorted(
         (n["id"], n["locations"][0]["file"]) for n in document["nodes"] if n["type"] == "own.note"
     )
-    assert notes == [("own.note::one", "yard/n1.note"), ("own.note::two", "other/n2.note")]
-    assert report.opened == ("other/n2.note", "yard/a.yard", "yard/n1.note")
+    assert notes == [
+        ("own.note::one", "yard/n1.note"),
+        ("own.note::skipped", "yard/x.note"),
+        ("own.note::two", "other/n2.note"),
+    ]
+    assert report.opened == ("other/n2.note", "yard/a.yard", "yard/n1.note", "yard/x.note")
     assert report.selected == 4
