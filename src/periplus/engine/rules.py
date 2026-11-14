@@ -330,15 +330,21 @@ def run_map_rules(
             if edge.source in known and edge.target in known:
                 out.setdefault(("edge", edge.kind, edge.source), set()).add(edge.target)
                 out.setdefault(("incoming_edge", edge.kind, edge.target), set()).add(edge.source)
+        by_type: dict[str, set[str]] = {}
+        for node_id, names in typed.items():
+            for name in names:
+                by_type.setdefault(name, set()).add(node_id)
+        # The ids of each matched type and the types below it, in id order, as of the pass start.
+        candidates: dict[str, list[str]] = {}
         added: list[FoundNode | FoundEdge] = []
         fired: list[tuple[str, str, int]] = []
         for rule in rules:
             count = 0
-            for node_id in sorted(typed):
-                if not any(
-                    _allows(rule_set, name, (rule.matches_type,)) for name in typed[node_id]
-                ):
-                    continue
+            if rule.matches_type not in candidates:
+                allowed = (t for t in by_type if _allows(rule_set, t, (rule.matches_type,)))
+                ids = set[str]().union(*(by_type[t] for t in allowed))
+                candidates[rule.matches_type] = sorted(ids)
+            for node_id in candidates[rule.matches_type]:
                 values = _captured(rule.where, node_id, dict(rule_set.values))
                 if values is None or any(
                     _follow(chain, node_id, dict(values), known, out) for chain in rule.unless
