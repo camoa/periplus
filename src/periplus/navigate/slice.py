@@ -142,7 +142,7 @@ class Link:
 
     ``owners`` are far ends folded into their owner, with a count; ``more`` counts the mapped far
     ends past the names shown; ``outside`` names the first far ends not mapped, of
-    ``outside_count``. ``realized`` marks the far ends of a realizing kind at its to end: the
+    ``outside_count``. ``realized`` marks far ends at the concrete end of a realizing kind: the
     forms of this node.
     """
 
@@ -720,7 +720,7 @@ def _layout(
             tuple(sorted((names.short(h), n) for h, n in folded.items())),
             tuple(names.short(e) for e in outside[:OUTSIDE_NAMES]),
             len(outside),
-            kind in index.realizing and not outward,
+            index.realized(kind, outward),
         )
 
     found: list[tuple[str | None, Subject]] = []

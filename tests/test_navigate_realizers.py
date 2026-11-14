@@ -8,6 +8,8 @@ concrete form of the to end.
     ONE, TWO -overrides-> HOOK
     WIDE: twelve methods W00..W11 -implements_method-> WIDE
     LOOSE (outside the project) <-implements_method- ONE;  USER -calls-> LOOSE
+    `handled_by` realizes the other way: its to end is the concrete one.
+    PAGE -handled_by-> SHOW;  LINK -links_to-> PAGE
 """
 
 from __future__ import annotations
@@ -37,6 +39,9 @@ WIDE = "t.method::app.Wide::go"
 WIDES = [f"t.method::app.W{n:02}::go" for n in range(12)]
 LOOSE = "t.method::lib.Loose::deliver"
 USER = "t.method::app.User::go"
+PAGE = "t.route::app.page"
+SHOW = "t.method::app.PageController::show"
+LINK = "t.link::app.menu"
 
 NODES = [
     _node(RUN, "t.method", line=3, file="src/Runner.php"),
@@ -50,6 +55,9 @@ NODES = [
     *(_node(w, "t.method", line=2, file=f"src/W{n:02}.php") for n, w in enumerate(WIDES)),
     _node(LOOSE, "t.method", "referenced"),
     _node(USER, "t.method", line=2, file="src/User.php"),
+    _node(PAGE, "t.route", line=1, file="app.routing.yml"),
+    _node(SHOW, "t.method", line=8, file="src/PageController.php"),
+    _node(LINK, "t.link", line=1, file="app.links.yml"),
 ]
 EDGES = [
     _edge("calls", RUN, PORT, 4, file="src/Runner.php"),
@@ -62,6 +70,8 @@ EDGES = [
     *(_edge("implements_method", w, WIDE, 2, file=f"src/W{n:02}.php") for n, w in enumerate(WIDES)),
     _edge("implements_method", ONE, LOOSE, 4, file="src/One.php"),
     _edge("calls", USER, LOOSE, 3, file="src/User.php"),
+    _edge("handled_by", PAGE, SHOW, 2, file="app.routing.yml"),
+    _edge("links_to", LINK, PAGE, 2, file="app.links.yml"),
 ]
 
 
@@ -75,6 +85,7 @@ def _map(root: Path, realizing: bool = True) -> Path:
     }
     if realizing:
         document["realizing_kinds"] = ["implements_method", "overrides"]
+        document["realizing_to_kinds"] = ["handled_by"]
     (root / ".periplus").mkdir(parents=True, exist_ok=True)
     path = root / ".periplus" / "map.json"
     path.write_text(json.dumps(document), encoding="utf-8")
@@ -222,3 +233,30 @@ def test_a_written_slice_holds_the_forms(tmp_path: Path) -> None:
 
     assert report.problems == ()
     assert {BASE, OTHER} <= {node["id"] for node in written["nodes"]}
+
+
+def test_a_kind_whose_to_end_is_concrete_adds_the_to_end_at_the_same_hop(
+    tmp_path: Path,
+) -> None:
+    report = _walk(tmp_path, LINK)
+
+    assert (PAGE, 1) in _rows(report) and (SHOW, 1) in _rows(report)
+    assert any(row.stands_for and row.id == SHOW for row in report.rows.items)
+
+
+def test_affected_adds_what_a_concrete_to_end_carries_out(tmp_path: Path) -> None:
+    report = _walk(tmp_path, SHOW, direction="in")
+
+    assert (PAGE, 0) in _rows(report) and (LINK, 1) in _rows(report)
+
+
+def test_show_lists_a_concrete_to_end(tmp_path: Path) -> None:
+    lines = show.render_text(show.run(tmp_path, {}, PAGE, 50, _map(tmp_path))).splitlines()
+
+    assert lines[lines.index("Realized by (1):") + 1] == f"  {SHOW}  t.method  by handled_by"
+
+
+def test_a_printed_slice_says_realized_by_for_a_concrete_to_end(tmp_path: Path) -> None:
+    lines = slicing.render_text(_piece(tmp_path, LINK)).splitlines()
+
+    assert "      realized by (handled_by) -> show" in lines

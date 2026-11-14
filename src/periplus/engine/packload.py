@@ -572,13 +572,14 @@ class EdgeSpec:
 @dataclass(frozen=True, slots=True)
 class EdgeKind:
     """One edge kind: the types allowed at each end, whether its from end belongs to the
-    container at its to end, and whether its from end is a concrete form of its to end."""
+    container at its to end, and which end is a concrete form of the other: ``from``, ``to``,
+    or ``""`` for neither."""
 
     name: str
     from_types: tuple[str, ...]
     to_types: tuple[str, ...]
     groups: bool = False
-    realizes: bool = False
+    realizes: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1592,9 +1593,8 @@ def _read_kinds(
                 f"an edge_kinds entry of {pack} is not a mapping with a string kind and its ends",
                 {"pack": pack},
             )
-        kind = EdgeKind(
-            name, ends[0], ends[1], entry.get("groups") is True, entry.get("realizes") is True
-        )
+        realizes = {True: "from", "to": "to"}.get(entry.get("realizes"), "")
+        kind = EdgeKind(name, ends[0], ends[1], entry.get("groups") is True, realizes)
         first_pack, first_file = declared_at.setdefault(name, (pack, file))
         if kinds.setdefault(name, kind) != kind:
             message = (

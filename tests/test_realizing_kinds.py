@@ -89,3 +89,19 @@ def test_validate_refuses_a_realizes_value_that_is_not_true_or_false(tmp_path: P
 
     assert code != 0
     assert "realizes" in printed.getvalue()
+
+
+def test_a_kind_whose_to_end_is_concrete_is_listed_apart(tmp_path: Path) -> None:
+    document, _ = _map(tmp_path, ", realizes: to")
+
+    assert document["realizing_to_kinds"] == ["fn_of_box"]
+    assert "realizing_kinds" not in document
+
+
+def test_validate_refuses_realizes_from_as_a_word(tmp_path: Path) -> None:
+    plant(tmp_path, RULES % ", realizes: from", SOURCE)
+    printed = io.StringIO()
+    with contextlib.chdir(tmp_path), contextlib.redirect_stdout(printed):
+        code = main(["validate", "own"])
+
+    assert code != 0

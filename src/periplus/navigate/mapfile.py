@@ -78,7 +78,10 @@ class MapIndex:
             if parent is not None:
                 self._subtypes[parent].append(row["type"])
         self.edges: list[dict[str, Any]] = list(document["edges"])
-        self.realizing = frozenset(as_text(k) for k in document.get("realizing_kinds", ()))
+        # The realizing kinds whose from end is the concrete one, those whose to end is, and all.
+        self._concrete_from = frozenset(as_text(k) for k in document.get("realizing_kinds", ()))
+        self._concrete_to = frozenset(as_text(k) for k in document.get("realizing_to_kinds", ()))
+        self.realizing = self._concrete_from | self._concrete_to
         self._supporting = [
             (as_text(p), _glob(as_text(p))) for p in document.get("supporting_paths", ())
         ]
@@ -112,6 +115,11 @@ class MapIndex:
             )
         return self._support[id]
 
+    def realized(self, kind: str, outward: bool) -> bool:
+        """Whether an edge of ``kind``, seen from its from end (``outward``) or its to end, leads to
+        the concrete end of a realizing edge."""
+        return kind in (self._concrete_to if outward else self._concrete_from)
+
     def stand_ins(
         self, id: str, inward: bool = False
     ) -> tuple[list[tuple[str, dict[str, Any], str]], int]:
@@ -119,30 +127,41 @@ class MapIndex:
         it stands for), breadth first and by (kind, id) at each step, at most ``STAND_INS``; and
         how many more there are.
 
-        A from end stands for the to end: the forms of a declaration. ``inward`` turns it around:
-        the declarations a form stands for. A node outside the project stands for nothing, and
-        nothing stands for it: every class built on a framework would stand for its interface.
+        The concrete end of a realizing edge stands for the other: the forms of a declaration.
+        ``inward`` turns it around: the declarations a form stands for. A node outside the project
+        stands for nothing, and nothing stands for it: every class built on a framework would
+        stand for its interface.
         """
         found: list[tuple[str, dict[str, Any], str]] = []
         if self.nodes[id]["state"] != "mapped":
             return found, 0
-        near, far = ("to", "from") if inward else ("from", "to")
         seen = {id}
         step = [id]
         while step:
             following: list[str] = []
             for at in step:
-                edges = self.outgoing(at) if inward else self.incoming(at)
                 held = sorted(
-                    (e for e in edges if e["kind"] in self.realizing),
-                    key=lambda e: (e["kind"], e[near]),
+                    [
+                        *(
+                            (e, "from")
+                            for e in self.incoming(at)
+                            if self.realized(e["kind"], False)
+                        ),
+                        *((e, "to") for e in self.outgoing(at) if self.realized(e["kind"], True)),
+                    ]
+                    if not inward
+                    else [
+                        *((e, "to") for e in self.outgoing(at) if self.realized(e["kind"], False)),
+                        *((e, "from") for e in self.incoming(at) if self.realized(e["kind"], True)),
+                    ],
+                    key=lambda pair: (pair[0]["kind"], pair[0][pair[1]]),
                 )
-                for edge in held:
-                    other = as_text(edge[near])
+                for edge, end in held:
+                    other = as_text(edge[end])
                     if other in seen or self.nodes[other]["state"] != "mapped":
                         continue
                     seen.add(other)
-                    found.append((other, edge, as_text(edge[far])))
+                    found.append((other, edge, at))
                     following.append(other)
             step = following
         return found[:STAND_INS], max(0, len(found) - STAND_INS)
