@@ -221,3 +221,141 @@ def test_each_rule_picks_its_own_files_by_folder_type_and_glob(
     ]
     assert report.opened == ("other/n2.note", "yard/a.yard", "yard/n1.note", "yard/x.note")
     assert report.selected == 4
+
+
+PROBE = """\
+pack: probe
+version: 0.0.1
+depends: []
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.0"
+  language: php
+  grammar_version: "0.24.1"
+folders:
+  source: ./**
+files:
+  extensions: [php]
+identity:
+  qualified_name: {parts: [namespace, declared_name], separator: "\\\\"}
+  namespace: {declaration: namespace_definition, name_child: name}
+  written_names: [name, qualified_name, namespace_name]
+"""
+
+PROBE_RULES = """\
+node_types:
+- {name: probe.class, id_namespace: probe.class}
+- {name: probe.method, id_namespace: probe.method}
+- {name: probe.variable, id_namespace: probe.variable}
+edge_kinds:
+- {kind: probe_in_class, from: probe.variable, to: probe.class}
+rules:
+- rule: find_class
+  reads: file
+  in: [source]
+  match: {declaration: class_declaration, name_child: name, body_child: declaration_list,
+    filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: probe.class}}]
+  confidence: declared
+- rule: find_method
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id: {from: [enclosing_type, declared_name], template: '{enclosing_type}::{declared_name}'}
+  emits: [{node: {type: probe.method}}]
+  confidence: declared
+- rule: variable
+  reads: file
+  in: [source]
+  match: {declaration: simple_parameter, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: '{enclosing_type}::{enclosing_method}::{declared_name}'
+  emits: [{node: {type: probe.variable}}]
+  confidence: declared
+- rule: tie
+  reads: file
+  in: [source]
+  match: {declaration: simple_parameter, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: '{enclosing_type}::{enclosing_method}::{declared_name}'
+  emits:
+  - edge: {kind: probe_in_class, from: this_node, to: enclosing_class}
+  confidence: declared
+"""
+
+THING = """\
+<?php
+
+namespace App;
+
+class Thing
+{
+    public function run(Box $box)
+    {
+    }
+}
+"""
+
+
+SIDE = """\
+pack: side
+version: 0.0.1
+depends: [probe]
+"""
+
+#: A holder rule of its own on the class, and an edge from probe's parameter node to it.
+SIDE_RULES = """\
+node_types:
+- {name: side.shell, id_namespace: side.shell}
+edge_kinds:
+- {kind: side_in_shell, from: probe.variable, to: side.shell}
+rules:
+- rule: shell
+  reads: file
+  in: [source]
+  match: {declaration: class_declaration, name_child: name, body_child: declaration_list,
+    filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: side.shell}}]
+  confidence: declared
+- rule: side_tie
+  reads: file
+  in: [source]
+  match: {declaration: simple_parameter, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: '{enclosing_type}::{enclosing_method}::{declared_name}'
+  emits:
+  - edge: {kind: side_in_shell, from: this_node, to: enclosing_class}
+  confidence: declared
+"""
+
+
+def test_each_pack_reads_the_holder_rules_of_its_own_packs(tmp_path: Path) -> None:
+    """side's holder rule is not probe's to read, and side reads both."""
+    plant(
+        tmp_path,
+        {
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [probe@0.0.1, side@0.0.1]\n",
+            ".periplus/packs/probe@0.0.1/pack.yaml": PROBE,
+            ".periplus/packs/probe@0.0.1/rules/main.yaml": PROBE_RULES,
+            ".periplus/packs/side@0.0.1/pack.yaml": SIDE,
+            ".periplus/packs/side@0.0.1/rules/side.yaml": SIDE_RULES,
+            "Thing.php": THING,
+        },
+    )
+    report = run(
+        start=tmp_path,
+        env={"PERIPLUS_CONFIG_DIR": str(tmp_path / "config-dir")},
+        dependencies=check_runtime_dependencies(),
+        output=Path("map.json"),
+    )
+    assert report.problems == (), report.problems
+    edges = json.loads((tmp_path / "map.json").read_text())["edges"]
+    assert sorted((e["kind"], e["to"]) for e in edges) == [
+        ("probe_in_class", "probe.class::App\\Thing"),
+        ("side_in_shell", "side.shell::App\\Thing"),
+    ]

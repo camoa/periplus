@@ -1428,6 +1428,13 @@ def _holder_rules(
     first, so for one declaration type the rules are listed last loaded first: of the rules that
     fire on a node, the rule's own pack wins, else the dependency loaded last.
     """
+    global _holders_of
+    rules, known = _holders_of
+    if rules is not rule_set.rules:
+        rules, known = rule_set.rules, {}
+        _holders_of = (rules, known)
+    if (filetype, within) in known:
+        return known[(filetype, within)]
     found: dict[str, tuple[Rule, ...]] = {}
     for other in rule_set.rules:
         if (
@@ -1438,7 +1445,15 @@ def _holder_rules(
             and other.pack in within
         ):
             found[other.declaration] = (other, *found.get(other.declaration, ()))
+    known[(filetype, within)] = found
     return found
+
+
+#: The rules ``_holder_rules`` last read, held so their identity stays theirs, and its answers
+#: for them by file type and packs.
+_holders_of: tuple[
+    tuple[Rule, ...], dict[tuple[str, frozenset[str]], dict[str, tuple[Rule, ...]]]
+] = ((), {})
 
 
 def _minted(
