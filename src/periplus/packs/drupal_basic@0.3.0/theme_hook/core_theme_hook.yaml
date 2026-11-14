@@ -1,0 +1,63 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A core theme hook, such as user, node or page, which no hook_theme of the mapped code declares,
+# and the functions that preprocess a theme hook.
+#
+# A template in a theme named exactly a core hook, as user.html.twig, overrides that hook's
+# template: it gives the node drupal.theme_hook::user and a theme_hook_template edge to the
+# template. A suggestion of a core hook in a theme or a module, as node--article.html.twig, gives
+# the same node, which suggestion.yaml's suggests_theme_hook then joins. The core hooks are the
+# path values core_hook_template and core_hook_suggestion of drupal_template_text in pack.yaml. A
+# module template named like a core hook gives nothing, since a module does not override a core
+# hook's template by its file name. Inferred: the file name is the convention.
+#
+# A function or a method that implements the hook preprocess_<hook> (hook/hook.yaml,
+# hook/hook_attribute.yaml, hook/hook_theme_include.yaml) preprocesses the theme hook <hook>, a
+# preprocesses_theme_hook edge, only when the map holds that theme hook: one a hook_theme declares
+# or one a core hook template above gives. preprocess_node__article preprocesses a suggestion of
+# node and links to node. Inferred, because the hook's name is a convention.
+
+edge_kinds:
+- kind: preprocesses_theme_hook
+  from: [php.method, php.function]
+  to: drupal.theme_hook
+
+rules:
+- rule: core_theme_hook_template
+  reads: file
+  in: [theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: '{core_hook_template}'}
+  emits: [{node: {type: drupal.theme_hook}}]
+  confidence: inferred
+
+- rule: core_theme_hook_template_edge
+  reads: file
+  in: [theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: '{core_hook_template}'}
+  emits:
+  - edge:
+      kind: theme_hook_template
+      from: this_node
+      to: {template: '{template_name}', types: [drupal.template]}
+  confidence: inferred
+
+- rule: core_theme_hook_suggestion
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: '{core_hook_suggestion}'}
+  emits: [{node: {type: drupal.theme_hook}}]
+  confidence: inferred
+
+- rule: preprocess_hook_preprocesses_theme_hook
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - edge: implements_hook
+    - id_matches: '^drupal\.hook::preprocess_(?<hook>[a-z0-9_]+?)(?:__\w+)?$'
+    - node: 'drupal.theme_hook::{hook}'
+  emits: [{edge: {kind: preprocesses_theme_hook, from: this_node, to: matched_node}}]
+  confidence: inferred

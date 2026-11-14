@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A template path held as a value, then included through a variable: {% set tabs = [{component:
+# '@my_theme/tabs/a.html.twig'}] %} followed by {% include tab.component %}. The quoted text
+# '@<namespace>/.../<name>.html.twig' after a hash key's colon, an assignment's single =, a comma,
+# an opening bracket or a ternary's ? gives a template_includes edge from the template to the one the name
+# gives, by its file stem as template/template.yaml names it. A path after include, embed,
+# extends, import or from, which template.yaml reads, gives nothing here, nor does one compared
+# with == or != , one without an @namespace, or one inside a Twig comment. Inferred: the value
+# names a template, and the include of the variable is not followed. A name no mapped template
+# has ends at a referenced node.
+
+rules:
+- rule: template_path_string_in_template
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '(?:(?<![=!<>~])=(?!=)|[:,?\[])\s*[''"]@[\w-]+/(?:[\w.-]+/)*(?<name>[\w.-]+)\.html\.twig[''"]'
+  id: {template: '{template_name}'}
+  line: {capture: name}
+  emits:
+  - edge:
+      kind: template_includes
+      from: this_node
+      to: {from: {capture: name}}
+  confidence: inferred
