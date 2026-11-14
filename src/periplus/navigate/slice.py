@@ -339,6 +339,8 @@ def _under(document: Mapping[str, Any], prefixes: Collection[str]) -> set[str]:
 
 #: A word: a run of letters, digits and underscores.
 _WORD = re.compile(r"\w+")
+#: A character other than a letter, digit or underscore, before one: a short name starts after it.
+_CUT = re.compile(r"\W(?=\w)")
 #: ``find``'s rank for a word found in the id but not in its last ``::`` segment.
 _OUTSIDE_NAME = 4
 #: Where a match was found, by ``find``'s rank: 0 to 4 the id, 5 an attribute, 6 a description.
@@ -408,8 +410,9 @@ def _piece(
             weights: dict[str, float] = {}
             scores: dict[str, float] = {}
             notes: list[str] = []
+            search = _Search(index, described)
             for word in words:
-                hits = find.search(index, word, None, (), described)
+                hits = search(word, None, ())
                 for match in hits:
                     matched.setdefault(match[1], set()).add(word)
                     if match[0] != _OUTSIDE_NAME:
@@ -433,12 +436,13 @@ def _piece(
                     (scores, owned, rarest),
                     most,
                     standing,
+                    search,
                     support,
                 )
                 for node_id, chosen in found.items():
                     picked.setdefault(node_id, chosen)
                 lone = found and queries[0] == whole and len(queries) > 1
-                if lone and not find.search(index, whole, wanted, narrowed, described):
+                if lone and not search(whole, wanted, narrowed):
                     notes.append(f"no node matches {whole!r} as a whole; started from its words")
             elif prefixes:
                 under = sorted(_under(document, prefixes))
@@ -473,7 +477,13 @@ def _piece(
             deeper, folded, more_forms = False, Counter[str](), dict[str, int]()
             if not (alone and members):
                 rows, deeper, folded, more_forms = _grow(
-                    index, depths, direction, set(kinds), grouping, None if support else hidden
+                    index,
+                    depths,
+                    direction,
+                    set(kinds),
+                    standing,
+                    grouping,
+                    None if support else hidden,
                 )
             left_over = limit - sum(len(m.rows) for m in members) if limit else 0
             kept = (
@@ -593,27 +603,48 @@ def _piece(
 class _Names:
     """The shortest name ``resolve`` takes back to each node: the tail of its id after its first
     ``::``, starting after a character other than a letter, digit or underscore, that no other
-    node's id ends with in the same way; the full id when none is unique."""
+    node's id ends with in the same way; the full id when none is unique. Also each node's owner.
+    Each table is built once a run, on first use."""
 
     def __init__(self, index: MapIndex) -> None:
         self.index = index
         self._count: Counter[str] | None = None
         self._short: dict[str, str] = {}
+        self._owners: dict[str, str] | None = None
+
+    def owner(self, node_id: str) -> str | None:
+        """The node whose id, after its first ``::``, is ``node_id``'s name before its last
+        ``::``, a mapped one first, then the smallest id; ``None`` when there is none."""
+        name = node_id.split("::", 1)[-1]
+        if "::" not in name:
+            return None
+        if self._owners is None:
+            best: dict[str, tuple[bool, str]] = {}
+            for i, node in self.index.nodes.items():
+                key = (node["state"] != "mapped", i)
+                bare = as_text(i).split("::", 1)[-1]
+                if bare not in best or key < best[bare]:
+                    best[bare] = key
+            self._owners = {bare: key[1] for bare, key in best.items()}
+        return self._owners.get(name.rsplit("::", 1)[0])
 
     @staticmethod
-    def _tails(node_id: str) -> list[str]:
-        """Each tail of the id's name that a short name may be, shortest first."""
+    def _tail_set(node_id: str) -> set[str]:
+        """Each tail of the id's name that a short name may be."""
         name = node_id.split("::", 1)[-1]
-        cuts = [i + 1 for i, c in enumerate(name) if not (c.isalnum() or c == "_")]
-        tails = [name[i:] for i in cuts if i < len(name) and (name[i].isalnum() or name[i] == "_")]
-        return sorted({*tails, name}, key=lambda t: (len(t), t))
+        return {name, *(name[cut.end() :] for cut in _CUT.finditer(name))}
+
+    @classmethod
+    def _tails(cls, node_id: str) -> list[str]:
+        """Each tail of the id's name that a short name may be, shortest first."""
+        return sorted(cls._tail_set(node_id), key=lambda t: (len(t), t))
 
     def short(self, node_id: str) -> str:
         """The shortest unique tail of ``node_id``, or ``node_id`` itself."""
         if node_id not in self._short:
             if self._count is None:
                 self._count = Counter(
-                    t.casefold() for i in self.index.nodes for t in self._tails(as_text(i))
+                    t.casefold() for i in self.index.nodes for t in self._tail_set(as_text(i))
                 )
             self._short[node_id] = next(
                 (
@@ -664,20 +695,7 @@ def _layout(
     inside = set(held)
     # Each node the output names, and the node it is printed under.
     named: dict[str, str] = {}
-    owners: dict[str, str | None] = {}
-
-    def owner(node_id: str) -> str | None:
-        name = node_id.split("::", 1)[-1]
-        if "::" not in name:
-            return None
-        text = name.rsplit("::", 1)[0]
-        if text not in owners:
-            found = sorted(
-                (i for i in index.nodes if as_text(i).split("::", 1)[-1] == text),
-                key=lambda i: (index.nodes[i]["state"] != "mapped", i),
-            )
-            owners[text] = found[0] if found else None
-        return owners[text]
+    owner = names.owner
 
     def link(kind: str, outward: bool, ends: list[str], here: str) -> Link:
         mapped = [e for e in ends if index.nodes[e]["state"] == "mapped"]
@@ -718,7 +736,7 @@ def _layout(
             for edge in edges:
                 far = as_text(edge["to" if outward else "from"])
                 kind = as_text(edge["kind"])
-                if far == node_id or _satellite(index, far) == node_id:
+                if far == node_id or standing.satellite(far) == node_id:
                     continue
                 if outward and kind in grouping:
                     continue
@@ -943,14 +961,39 @@ def _satellite(index: MapIndex, node_id: str) -> str | None:
     return others.pop() if len(edges) > 1 and len(others) == 1 and node_id not in others else None
 
 
+class _Search:
+    """``find.search`` over one map, each text, type set and prefix list searched once a run."""
+
+    def __init__(self, index: MapIndex, described: Mapping[str, str]) -> None:
+        self._index = index
+        self._described = described
+        self._found: dict[tuple[str, frozenset[str] | None, tuple[str, ...]], list[find.Match]] = {}
+
+    def __call__(
+        self, text: str, wanted: set[str] | None, prefixes: Collection[str]
+    ) -> list[find.Match]:
+        key = (text, None if wanted is None else frozenset(wanted), tuple(prefixes))
+        if key not in self._found:
+            self._found[key] = find.search(self._index, text, wanted, prefixes, self._described)
+        return self._found[key]
+
+
 class _Standing:
-    """What the map alone says about a node: how many nodes share its type, and how many other
-    files hold nodes with an edge into it. Each is counted once per run."""
+    """What the map alone says about a node: how many nodes share its type, how many other
+    files hold nodes with an edge into it, and the node it is a satellite of. Each is counted
+    once per run."""
 
     def __init__(self, index: MapIndex) -> None:
         self._index = index
         self._types = Counter(as_text(node["type"]) for node in index.nodes.values())
         self._files: dict[str, int] = {}
+        self._satellites: dict[str, str | None] = {}
+
+    def satellite(self, node_id: str) -> str | None:
+        """``_satellite`` of the node."""
+        if node_id not in self._satellites:
+            self._satellites[node_id] = _satellite(self._index, node_id)
+        return self._satellites[node_id]
 
     def rarity(self, node_id: str) -> int:
         """How many nodes of the map share ``node_id``'s type; fewer is rarer."""
@@ -982,6 +1025,7 @@ def _starts(
     weighed: tuple[Mapping[str, float], Mapping[str, set[str]], list[str]],
     most: int,
     standing: _Standing,
+    search: _Search,
     support: bool = False,
 ) -> dict[str, Start]:
     """Up to ``most`` start nodes that the queries find, in two passes.
@@ -1004,7 +1048,7 @@ def _starts(
     said: dict[str, list[tuple[str, str, str | None]]] = {}
     nearest: dict[str, find.Match] = {}
     for query in queries:
-        for match in find.search(index, query, wanted, prefixes, described):
+        for match in search(query, wanted, prefixes):
             place = _place(match[0])
             said.setdefault(match[1], []).append((query, place, match[3][0] if match[3] else None))
             if match[1] not in nearest or match[0] < nearest[match[1]][0]:
@@ -1140,6 +1184,7 @@ def _grow(
     depths: Mapping[str, int],
     direction: str,
     kinds: Collection[str],
+    standing: _Standing,
     grouping: Collection[str] = (),
     hidden: list[tuple[str, str, str]] | None = None,
 ) -> tuple[list[PieceRow], bool, Counter[str], dict[str, int]]:
@@ -1230,7 +1275,7 @@ def _grow(
                     node = index.nodes[target]
                     if target not in seen and hide(begun, target):
                         continue
-                    if target not in seen and _satellite(index, target) == item:
+                    if target not in seen and standing.satellite(target) == item:
                         seen.add(target)
                         folded[as_text(node["type"])] += 1
                         used.update(
