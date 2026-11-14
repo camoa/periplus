@@ -1,0 +1,39 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# menu--<name>.html.twig, and menu--<name>--<anything>.html.twig, is a template of the menu <name>:
+# suggests_menu to its configuration system.menu.<name>. Drupal writes a menu's dashes as
+# underscores in the suggestion, so both readings of the name are tried: menu--main-nav reaches
+# system.menu.main_nav or system.menu.main-nav. A file rule writes the internal suggestion node
+# menu|<template>|<name>; a map rule joins it only to a menu configuration the map holds, so a name
+# no menu has gives nothing. Inferred, because the file name is a convention.
+
+edge_kinds:
+- kind: suggests_menu
+  from: drupal.template
+  to: drupal.config_object
+
+rules:
+- rule: menu_suggestion
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: 'menu--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'menu|{template_name}|{menu_suggestion}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: menu_suggestion_as_written
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: 'menu--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'menu|{template_name}|{menu_suggestion_as_written}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: suggests_menu
+  reads: map
+  match:
+    node_type: drupal.suggestion
+    where: [{id_matches: '^drupal\.suggestion::menu\|(?<template>[^|]+)\|(?<menu>.+)$'}]
+    follow: [{node: 'drupal.config::system.menu.{menu}'}]
+  emits: [{edge: {kind: suggests_menu, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred

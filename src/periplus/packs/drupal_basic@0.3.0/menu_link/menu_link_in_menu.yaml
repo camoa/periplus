@@ -1,0 +1,26 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A menu link's menu_name puts it in that menu: link_in_menu from the link to the menu's
+# configuration system.menu.<menu_name>, a referenced node when the mapped configuration holds no
+# such menu. A link with no menu_name, which Drupal places in the menu tools, gives nothing.
+
+edge_kinds:
+- kind: link_in_menu
+  from: drupal.menu_link
+  to: drupal.config_object
+
+rules:
+- rule: menu_link_in_menu
+  reads: file
+  in: [module_root]
+  match:
+    file: '*.links.menu'
+    filetype: yaml
+    each: '*'
+  id: {from: key}
+  emits:
+  - edge:
+      kind: link_in_menu
+      from: this_node
+      to: {from: [{key: menu_name}], template: 'system.menu.{menu_name}', type: drupal.config_object}
+  confidence: declared

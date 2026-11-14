@@ -1,0 +1,46 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Whether a module or theme is installed, read from the exported core.extension. Each module that
+# core.extension lists gives installs_module from drupal.config::core.extension to it, a referenced
+# node for a core or contributed module, as core_extension_installs_theme does for themes
+# (config/config_object.yaml). A mapped module or theme that core.extension does not list gives
+# not_installed_by to core.extension: its code is in the codebase and switched off. A walk shows it
+# on the module or theme itself, so check that edge on the module of any code before naming it as
+# an influence; a function or class reaches its module by function_in_module or class_in_module.
+# A project with no exported core.extension gets neither edge. installs_module is declared by the
+# file; not_installed_by is inferred, because it is drawn from a name the list does not hold.
+
+edge_kinds:
+- kind: installs_module
+  from: drupal.config_object
+  to: drupal.module
+- kind: not_installed_by
+  from: [drupal.module, drupal.theme]
+  to: drupal.config_object
+
+rules:
+- rule: core_extension_installs_module
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem}
+  emits: [{edge: {kind: installs_module, from: this_node, to: {from: [{each: module.*}], template: '{key}', type: drupal.module}}}]
+  confidence: declared
+
+- rule: module_not_installed
+  reads: map
+  match:
+    node_type: drupal.module
+    follow: [{node: 'drupal.config::core.extension'}]
+    unless: [[{incoming_edge: installs_module}]]
+  emits: [{edge: {kind: not_installed_by, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: theme_not_installed
+  reads: map
+  match:
+    node_type: drupal.theme
+    follow: [{node: 'drupal.config::core.extension'}]
+    unless: [[{incoming_edge: installs_theme}]]
+  emits: [{edge: {kind: not_installed_by, from: this_node, to: matched_node}}]
+  confidence: inferred

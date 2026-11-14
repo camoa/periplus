@@ -1,0 +1,82 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A theme's regions, the block placed in each, and the templates of each region. Each key under
+# regions in a theme's info file is a drupal.theme_region node <theme>.<region>, with
+# a region_of_theme edge to the theme. A block placement's theme and region keys give placed_in_region
+# to <theme>.<region>, a referenced node when no mapped info file declares it, as for a core theme.
+# A template region--<region>.html.twig, or region--<region>--<anything>.html.twig, in a theme's
+# folder suggests the region <theme>.<region>, the theme read from the folder below custom_theme:
+# a file rule writes the internal suggestion region|<template>|<theme>.<region> and a map rule joins
+# it only to a region the map holds, so a template of a region no info file declares gives
+# nothing. The info file and the placement state their facts; the template's name is a convention,
+# so its edge is inferred.
+
+node_types:
+- name: drupal.theme_region
+  id_namespace: drupal.theme_region
+
+edge_kinds:
+- kind: region_of_theme
+  from: drupal.theme_region
+  to: drupal.theme
+  groups: true
+- kind: placed_in_region
+  from: drupal.block_placement
+  to: drupal.theme_region
+- kind: suggests_region
+  from: drupal.template
+  to: drupal.theme_region
+
+rules:
+- rule: theme_region_from_info_file
+  reads: file
+  in: [theme_root]
+  match:
+    file: '*.info'
+    filetype: yml
+    each: 'regions.*'
+  id: {template: '{info_name}.{key}'}
+  emits:
+  - node: {type: drupal.theme_region}
+  confidence: declared
+
+- rule: theme_region_of_theme
+  reads: file
+  in: [theme_root]
+  match:
+    file: '*.info'
+    filetype: yml
+    each: 'regions.*'
+  id: {template: '{info_name}.{key}'}
+  emits:
+  - edge: {kind: region_of_theme, from: this_node, to: {from: [], template: '{info_name}', type: drupal.theme}}
+  confidence: declared
+
+- rule: block_placed_in_region
+  reads: file
+  in: [config, module_config]
+  match: {file: block.block.*, filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - edge:
+      kind: placed_in_region
+      from: this_node
+      to: {from: [{key: theme}, {key: region}], template: '{theme}.{region}', type: drupal.theme_region}
+  confidence: declared
+
+- rule: region_suggestion
+  reads: file
+  in: [theme_root]
+  match: {file: 'region--*.html', filetype: drupal_template_text, text: '\Z'}
+  id: {template: 'region|{template_name}|{region_suggestion}'}
+  emits: [{node: {type: drupal.suggestion}}]
+  confidence: inferred
+
+- rule: suggests_region
+  reads: map
+  match:
+    node_type: drupal.suggestion
+    where: [{id_matches: '^drupal\.suggestion::region\|(?<template>[^|]+)\|(?<region>.+)$'}]
+    follow: [{node: 'drupal.theme_region::{region}'}]
+  emits: [{edge: {kind: suggests_region, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred
