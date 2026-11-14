@@ -18,12 +18,27 @@ from periplus.navigate.listing import (
     payload,
     problem_lines,
 )
-from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
+from periplus.navigate.mapfile import (
+    STAND_INS,
+    MapIndex,
+    as_json,
+    as_text,
+    load_map,
+    reading_fields,
+)
 from periplus.navigate.show import node_descriptions
 from periplus.navigate.source import SourceLines, description_line, located, source_line, where
 from periplus.report import _escape, _json_problem
 
-__all__ = ["RENDERERS", "WalkReport", "WalkRow", "render_json", "render_text", "run"]
+__all__ = [
+    "RENDERERS",
+    "WalkReport",
+    "WalkRow",
+    "render_json",
+    "render_text",
+    "run",
+    "stand_in_line",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +47,9 @@ class WalkRow:
 
     ``location`` is where that edge is written, or the item's own place when the edge has none,
     and ``source`` the line of code there. ``description`` is the item's descriptions entry.
+    ``stands_for`` marks an item added because it stands for ``via`` across a realizing edge,
+    at ``via``'s depth: a form of a declaration, or with ``in`` the declaration of a form.
+    ``supporting`` marks an item in supporting code.
     """
 
     id: str
@@ -43,17 +61,22 @@ class WalkRow:
     location: str | None = None
     source: str | None = None
     description: str | None = None
+    stands_for: bool = False
+    supporting: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class WalkReport:
-    """The items reached from ``start``, as a ``Listing`` of rows, with warnings and problems."""
+    """The items reached from ``start``, as a ``Listing`` of rows, with warnings and problems.
+
+    ``more`` counts, for each node, the nodes that stand for it past ``STAND_INS``."""
 
     start: str = ""
     direction: str = "out"
     rows: Listing[WalkRow] = NONE
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
+    more: tuple[tuple[str, int], ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -62,19 +85,54 @@ class WalkReport:
 
 
 def walk(
-    index: MapIndex, start: str, direction: str, depth: int, kinds: Collection[str]
+    index: MapIndex,
+    start: str,
+    direction: str,
+    depth: int,
+    kinds: Collection[str],
+    more: dict[str, int] | None = None,
 ) -> list[WalkRow]:
     """Breadth-first rows, each item once at its nearest depth with the first edge that reached it.
 
     A layer's items are expanded in id order and each item's edges in (kind, other end) order, so
-    the edge that wins a tie is the same on every run.
+    the edge that wins a tie is the same on every run. The start and each item reached are
+    followed by the nodes that stand for them (``MapIndex.stand_ins``) at their own depth, whatever
+    ``kinds`` says, but for an item reached along a realizing edge: the other forms of a
+    declaration reached from one of them are siblings, not the code behind it. ``more`` gathers
+    the count past the cap by node.
     """
     ways = {"out": (("to", index.outgoing),), "in": (("from", index.incoming),)}.get(
         direction, (("to", index.outgoing), ("from", index.incoming))
     )
     seen = {start}
-    frontier = [start]
     rows: list[WalkRow] = []
+
+    def stand(item: str, level: int) -> list[str]:
+        found, left = index.stand_ins(item, direction == "in")
+        if left and more is not None:
+            more[item] = left
+        added = []
+        for other, edge, via in found:
+            if other in seen:
+                continue
+            seen.add(other)
+            added.append(other)
+            node = index.nodes[other]
+            rows.append(
+                WalkRow(
+                    other,
+                    as_text(node["type"]),
+                    as_text(node["state"]),
+                    level,
+                    as_text(edge["kind"]),
+                    via,
+                    where(edge, node),
+                    stands_for=True,
+                )
+            )
+        return added
+
+    frontier = [start, *stand(start, 0)]
     for level in range(1, depth + 1):
         reached: list[str] = []
         for item in sorted(frontier):
@@ -103,6 +161,8 @@ def walk(
                         where(edge, node),
                     )
                 )
+                if edge["kind"] not in index.realizing:
+                    reached += stand(as_text(target), level)
         frontier = reached
     return sorted(rows, key=lambda r: (r.depth, r.id))
 
@@ -123,7 +183,11 @@ def run(
         described, problems = node_descriptions(start, map_path)
         with reading_fields(start, map_path):
             node_id, resolved = resolve(index, node_id)
-            rows = walk(index, node_id, direction, depth, set(kinds))
+            more: dict[str, int] = {}
+            walked = walk(index, node_id, direction, depth, set(kinds), more)
+            rows = [replace(r, supporting=index.supporting(r.id) is not None) for r in walked]
+            # Supporting code after the rest, each part by depth and id.
+            rows.sort(key=lambda row: row.supporting)
             held = {edge["kind"] for edge in index.edges}
     except HarnessError as error:
         return WalkReport(direction=direction, problems=(error.problem(),))
@@ -134,7 +198,14 @@ def run(
         for row in shown.items
     )
     shown = replace(shown, items=items)
-    return WalkReport(node_id, direction, shown, resolved + kind_warnings(kinds, held), problems)
+    return WalkReport(
+        node_id,
+        direction,
+        shown,
+        resolved + kind_warnings(kinds, held),
+        problems,
+        tuple(sorted(more.items())),
+    )
 
 
 def render_text(report: WalkReport) -> str:
@@ -145,15 +216,22 @@ def render_text(report: WalkReport) -> str:
         lines.append(f"{report.rows.total} items")
     # An affected row's edge points to the item the walk came from.
     toward = "from" if report.direction == "out" else "to"
+    supporting = False
     for row in report.rows.items:
+        if row.supporting and not supporting:
+            supporting = True
+            lines.append("  in supporting code:")
+        how = f"via {_escape(row.kind)} {toward} {_escape(row.via)}"
+        if row.stands_for:
+            relation = "realized by" if report.direction == "in" else "realizes"
+            how = f"{relation} {_escape(row.via)} by {_escape(row.kind)}"
         lines.append(
             f"  {row.depth}  {_escape(row.id)}  {_escape(row.type)}"
-            f"  {_escape(row.state)}"
-            f"  via {_escape(row.kind)} {toward} {_escape(row.via)}"
-            f"  {_escape(located(row.location))}"
+            f"  {_escape(row.state)}  {how}  {_escape(located(row.location))}"
         )
         lines += source_line(row.source)
         lines += description_line(row.description)
+    lines += [stand_in_line(node, n) for node, n in report.more]
     note = footer(report.rows)
     if note:
         lines.append(note)
@@ -162,8 +240,16 @@ def render_text(report: WalkReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+def stand_in_line(node: str, count: int) -> str:
+    """The line that counts the nodes standing for ``node`` past the cap."""
+    name = _escape(node)
+    return f"  +{count} more stand for {name}, past the first {STAND_INS}; see periplus show {name}"
+
+
 def _json_row(row: WalkRow) -> dict[str, Any]:
     return {
+        "stands_for": row.stands_for,
+        "supporting": row.supporting,
         "id": row.id,
         "type": row.type,
         "state": row.state,

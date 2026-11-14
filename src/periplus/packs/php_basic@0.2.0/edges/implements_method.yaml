@@ -22,6 +22,9 @@ edge_kinds:
   description: "the class method implements that same-named method of an interface the class or an ancestor implements"
   from: php.method
   to: php.method
+  # realizes: the from end is a concrete form of the to end; a walk that reaches the to end
+  # adds the from ends at the same hop.
+  realizes: true
 
 rules:
 

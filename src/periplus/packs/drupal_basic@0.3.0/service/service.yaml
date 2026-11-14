@@ -33,6 +33,9 @@ edge_kinds:
   description: "the service is built from that class or interface: its class key names it, or with no class key the service key is a class name"
   from: drupal.service
   to: [php.class, php.interface]
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 
 # A call site $this->helper->run() to Helper::run, when the call's class or its nearest ancestor
 # that declares the property assigns it $this->helper = \Drupal::service('my_module.helper') and

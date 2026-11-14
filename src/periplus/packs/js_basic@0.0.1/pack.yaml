@@ -77,6 +77,8 @@ folders:
   js_source: ./**
 files:
   exclude: ['**/node_modules/**']
+  # Test files by the names test runners look for: mapped, and printed after the rest.
+  supporting: ['**/__tests__/**', '**/*.test.js', '**/*.spec.js']
   types:
     javascript:
       endings: [js]

@@ -19,10 +19,16 @@ edge_kinds:
   description: "the service's factory key names that other service as the one that builds it"
   from: drupal.service
   to: drupal.service
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 - kind: built_by_class
   description: "the service's factory key names that class, whose static method builds the service"
   from: drupal.service
   to: [php.class, php.interface]
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 - kind: names_factory_method
   description: "step to built_by_method: the service's factory key names that method name"
   from: drupal.service
@@ -31,6 +37,9 @@ edge_kinds:
   description: "the service is built by that factory method, on the class the factory key names or on the factory service's class"
   from: drupal.service
   to: php.method
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 
 rules:
 # Both forms in one rule: each item of the list, or the text, is tested by each end's pattern. A

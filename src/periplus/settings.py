@@ -198,6 +198,9 @@ class ResolvedSettings:
     first_party: ResolvedSetting[FirstParty] | None
     exclude: ResolvedSetting[tuple[str, ...]] | None
     re_include: ResolvedSetting[tuple[str, ...]] | None
+    #: Path patterns of supporting code added to the packs' own, and whether the packs' count.
+    supporting: ResolvedSetting[tuple[str, ...]] | None
+    supporting_from_packs: ResolvedSetting[bool] | None
     accepted_unknowns: ResolvedSetting[tuple[Mapping[str, object], ...]] | None
     #: The named text values every template of every pack may name, merged as ``extensions`` is.
     values: Mapping[str, ResolvedSetting[str]]
@@ -391,6 +394,11 @@ def _as_strings(value: object) -> tuple[str, ...] | None:
     return None
 
 
+def _as_bool(value: object) -> bool | None:
+    """``true`` or ``false``, and nothing else."""
+    return value if isinstance(value, bool) else None
+
+
 def _as_string_mapping(value: object) -> Mapping[str, str] | None:
     """A mapping of string to string, all of them, or nothing at all."""
     if isinstance(value, Mapping) and all(
@@ -472,6 +480,8 @@ MERGE_RULES: Mapping[str, _Rule] = {
     "first_party": _Rule("paired", _as_first_party),
     "exclude": _Rule("accumulate", _as_strings),
     "re_include": _Rule("accumulate", _as_strings),
+    "supporting": _Rule("accumulate", _as_strings),
+    "supporting_from_packs": _Rule("replace", _as_bool),
     "accepted_unknowns": _Rule("accumulate", _as_mappings),
     "values": _Rule("per_key", _as_string_mapping),
 }
@@ -612,6 +622,8 @@ def resolve_settings(
         first_party=merged["first_party"],
         exclude=merged["exclude"],
         re_include=merged["re_include"],
+        supporting=merged["supporting"],
+        supporting_from_packs=merged["supporting_from_packs"],
         accepted_unknowns=merged["accepted_unknowns"],
         values=merged["values"],
     )

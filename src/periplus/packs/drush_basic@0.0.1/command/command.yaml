@@ -16,6 +16,9 @@ edge_kinds:
   description: "The Drush command runs that method"
   from: drush.command
   to: php.method
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 - kind: command_class
   description: "The Drush command is defined in that class"
   from: drush.command

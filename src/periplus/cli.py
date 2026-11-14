@@ -376,7 +376,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="print the piece of the map around some words, ids or a path, or write it to a file",
         description="Start from the nodes that IDs name or that WORDS find, as find finds them, "
         "and print the items reached from them along edges, hop by hop, each under the node it "
-        "was reached from. With --out, write the piece to a map file instead. Then stop.",
+        "was reached from, in pieces: the items edges join. With --out, write the piece to a map "
+        "file instead. Then stop.",
     )
     cut.add_argument(
         "id",
@@ -404,7 +405,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="most start nodes the words pick, at most two of one type (default: 8)",
+        help="most start nodes the words pick, at most two of one type (default: 12)",
+    )
+    cut.add_argument(
+        "--support",
+        action="store_true",
+        help="print nodes in supporting code, as tests, and let a start come from it; by default "
+        "each piece counts them in one line",
     )
     cut.add_argument(
         "--out",
@@ -422,7 +429,7 @@ def build_parser() -> argparse.ArgumentParser:
             "(default: both)"
         ),
     )
-    add_walk(cut, None, "2, or 1 with --out")
+    add_walk(cut, None, "2 from the first 8 starts and 1 from the rest, or 1 with --out")
     cut.add_argument(
         "--limit",
         type=int,
@@ -774,6 +781,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             map_path=args.map,
             types=args.type,
             starts=args.starts,
+            support=args.support,
         )
         sys.stdout.write(SLICE_RENDERERS[args.format](sliced))
         return sliced.exit_code

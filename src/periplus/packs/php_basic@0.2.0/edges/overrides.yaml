@@ -32,6 +32,9 @@ edge_kinds:
   description: "the method replaces that same-named method of the nearest ancestor class, or of a trait its class uses"
   from: php.method
   to: php.method
+  # realizes: the from end is a concrete form of the to end; a walk that reaches the to end
+  # adds the from ends at the same hop.
+  realizes: true
 
 - kind: nearest_declaration
   description: "the method joins the slot of the nearest ancestor that declares the same name, a step the overrides rule reads"

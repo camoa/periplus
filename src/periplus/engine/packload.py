@@ -90,6 +90,7 @@ EXECUTED_KEYS = frozenset(
             f"manifest.files{k}"
             for k in (
                 *("", ".extends", ".extensions", ".add_extensions", ".exclude", ".add_excludes"),
+                ".supporting",
                 *(".types", ".types.*.endings", ".types.*.names", ".types.*.reader"),
                 ".types.*.format",
                 *(f".types.*.path_values{k}" for k in ("", ".*.pattern", ".*.template")),
@@ -105,7 +106,7 @@ EXECUTED_KEYS = frozenset(
         *("file.roles", "file.roles.*.name"),
         *(
             f"file.edge_kinds{k}"
-            for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups", ".*.description")
+            for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups", ".*.realizes", ".*.description")
         ),
         *(
             f"file.node_types{k}"
@@ -573,12 +574,14 @@ class EdgeSpec:
 @dataclass(frozen=True, slots=True)
 class EdgeKind:
     """One edge kind: the types allowed at each end, whether its from end belongs to the
-    container at its to end, and the one-line text of what it says, ``""`` for none."""
+    container at its to end, which end is a concrete form of the other: ``from``, ``to``, or
+    ``""`` for neither, and the one-line text of what it says, ``""`` for none."""
 
     name: str
     from_types: tuple[str, ...]
     to_types: tuple[str, ...]
     groups: bool = False
+    realizes: str = ""
     description: str = ""
 
 
@@ -1595,7 +1598,8 @@ def _read_kinds(
             )
         text = entry.get("description")
         said = text if isinstance(text, str) else ""
-        kind = EdgeKind(name, ends[0], ends[1], entry.get("groups") is True, said)
+        realizes = {True: "from", "to": "to"}.get(entry.get("realizes"), "")
+        kind = EdgeKind(name, ends[0], ends[1], entry.get("groups") is True, realizes, said)
         first_pack, first_file = declared_at.setdefault(name, (pack, file))
         known = kinds.setdefault(name, kind)
         # A declaration without a text agrees with one that has it; the text is kept.
@@ -1603,8 +1607,8 @@ def _read_kinds(
             known = kinds[name] = replace(known, description=kind.description)
         if known != replace(kind, description=kind.description or known.description):
             message = (
-                f"the edge kind {name} is declared with different ends, groups or description in "
-                f"{pack}/{file}, after {first_pack}/{first_file}"
+                f"the edge kind {name} is declared with different ends, groups, realizes or "
+                f"description in {pack}/{file}, after {first_pack}/{first_file}"
             )
             detail = {"kind": name, "pack": pack, "file": file}
             conflicts.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))

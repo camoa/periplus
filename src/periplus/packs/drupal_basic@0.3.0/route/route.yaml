@@ -23,10 +23,16 @@ edge_kinds:
   description: "the route is handled by that controller method, as the route definition names it"
   from: drupal.route
   to: php.method
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 - kind: uses_form
   description: "the route's _form default names that form class"
   from: drupal.route
   to: php.class
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
 - kind: titled_by
   description: "the route's _title_callback names that method, written Class::method, which gives the page title"
   from: drupal.route

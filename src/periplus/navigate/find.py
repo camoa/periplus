@@ -42,6 +42,7 @@ class FindRow:
 
     ``matched`` is ``id``, ``attribute`` or ``description``, and ``description`` the node's
     descriptions entry. An attribute match names the attribute and holds the string that matched.
+    ``supporting`` marks a node in supporting code, by the map's ``supporting_paths``.
     """
 
     id: str
@@ -53,6 +54,7 @@ class FindRow:
     description: str | None = None
     matched_attribute: str | None = None
     attribute_value: str | None = None
+    supporting: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,7 +174,10 @@ def _find(
     """``run``'s report, read from the map's node fields and the node descriptions."""
     wanted, prefixes, warnings = narrowing(index, types, paths)
     matches = search(index, text, wanted, prefixes, described)
-    rows = [found_row(match, described) for match in matches]
+    found = [found_row(match, described) for match in matches]
+    rows = [replace(row, supporting=index.supporting(row.id) is not None) for row in found]
+    # Supporting code after the rest, each part in search order.
+    rows.sort(key=lambda row: row.supporting)
     by_type = dict(sorted(Counter(row.type for row in rows).items()))
     return FindReport(cut(rows, limit), by_type, tuple(warnings))
 
@@ -266,6 +271,7 @@ def row_lines(row: FindRow) -> list[str]:
         "attribute": f"  [attribute {_escape(row.matched_attribute or '')}]",
         "description": "  [description]",
     }.get(row.matched, "")
+    marked += "  [supporting code]" if row.supporting else ""
     lines = [
         f"{_escape(row.id)}  {_escape(row.type)}  {_escape(row.state)}  {_escape(where)}" + marked
     ]
@@ -300,6 +306,7 @@ def json_row(row: FindRow) -> dict[str, Any]:
         "matched": row.matched,
         "matched_attribute": row.matched_attribute,
         "description": row.description,
+        "supporting": row.supporting,
     }
 
 

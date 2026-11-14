@@ -190,6 +190,10 @@
         "groups": {
           "type": "boolean",
           "description": "true when the edge says its from end belongs to the container at its to end, as a class belongs to its module, not that one uses or reaches the other. The map lists such kinds under grouping_kinds, and a printed slice does not walk on from the container. why: one hop through a module reached every class, service and route in it, and filled the rows a question had."
+        },
+        "realizes": {
+          "oneOf": [{"type": "boolean"}, {"const": "to"}],
+          "description": "true when the edge says its from end is a concrete form of its to end, as a method implements an interface method or overrides an abstract one; to when its to end is the concrete form of its from end, as a route is carried out by its controller method or a service by its class. The map lists such kinds under realizing_kinds and realizing_to_kinds, and a walk that reaches the declared end adds the concrete ends at the same hop. why: the code behind an interface method sat four hops from its caller, and a walk of two never showed it."
         }
       }
     },

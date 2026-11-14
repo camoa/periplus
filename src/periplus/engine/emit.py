@@ -62,6 +62,7 @@ def build_document(
     settings: str,
     boundary: Mapping[str, Sequence[BoundaryEntry]] | None = None,
     skipped: list[Skipped] | None = None,
+    supporting: Sequence[str] = (),
 ) -> tuple[dict[str, Any], LeftOut]:
     """The map document, and what it leaves out.
 
@@ -194,6 +195,10 @@ def build_document(
     ordered = [node for node in ordered if node["id"] not in hidden]
     written = kept
     grouping = sorted({str(edge["kind"]) for edge in written if edge_kinds[edge["kind"]].groups})
+    realizing, realizing_to = (
+        sorted({str(e["kind"]) for e in written if edge_kinds[e["kind"]].realizes == end})
+        for end in ("from", "to")
+    )
     document = {
         "periplus_map_version": 0,
         "generated_by": f"periplus {tool_version}",
@@ -223,6 +228,12 @@ def build_document(
     }
     if legend:
         document["legend"] = legend
+    if realizing:
+        document["realizing_kinds"] = realizing
+    if realizing_to:
+        document["realizing_to_kinds"] = realizing_to
+    if supporting:
+        document["supporting_paths"] = sorted(set(supporting))
     return document, left_out
 
 

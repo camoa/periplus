@@ -39,6 +39,21 @@
       "description": "The one-line description each pack gives of the edge kinds and node types this map holds, by kind and by type, keys sorted: what an edge says read from its from end to its to end, and what a node is. A kind or type without one is left out, a section without any is left out, and a map whose packs give none has no legend, so it is unchanged."
     },
 
+    "realizing_kinds": {
+      "type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
+      "description": "The edge kinds of this map whose packs declare them realizing (realizes: true), sorted: the edge's from end is a concrete form of its to end. Written only when the map holds an edge of such a kind, so a map without one is unchanged."
+    },
+
+    "realizing_to_kinds": {
+      "type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
+      "description": "The edge kinds of this map whose packs declare realizes: to, sorted: the edge's to end is a concrete form of its from end. Written only when the map holds an edge of such a kind, so a map without one is unchanged."
+    },
+
+    "supporting_paths": {
+      "type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
+      "description": "The path patterns of supporting code, as tests, that the packs and the settings name, sorted. A node whose first location's file matches one is supporting code. Written only when there is one, so a map without one is unchanged."
+    },
+
     "type_hierarchy": {
       "type": "array",
       "items": {

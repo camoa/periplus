@@ -37,6 +37,9 @@ edge_kinds:
     description: "the plugin is implemented by that PHP class"
     from: drupal.plugin
     to:   php.class
+    # realizes: to, the to end is the code that carries out the from end; a walk that
+    # reaches the from end adds the to end at the same hop.
+    realizes: to
     # What code runs for this plugin. Absent where the class is behind the boundary and
     # nothing first-party names it, and that absence is accurate rather than a gap.
 
