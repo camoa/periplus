@@ -1,0 +1,51 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A behavior that binds form.my-form-id through once() binds the form whose id is my_form_id:
+# Drupal's form builder gives each form the class of its form id, its underscores written as
+# dashes. A behavior_binds_form edge from the behavior to the drupal.form_id node, mentioned, as
+# the link rests on the class's text. Read as behavior/behavior_selector.yaml reads a data
+# attribute: each form.<class ending in -form> inside a quoted argument of a once() call inside
+# Drupal.behaviors.name = ..., so form.a-form, form.b-form in one selector gives both. An internal
+# drupal.js_form_selector_use node holds the script, the behavior and the form id; the join makes
+# the edge only when the behavior and the form id are both nodes a file rule found, and sits at
+# the once() call. A class that does not end in -form, a form id no rule maps, and a selector
+# outside once() give none.
+
+node_types:
+- name: drupal.js_form_selector_use
+  id_namespace: drupal.js_form_selector_use
+  internal: true
+
+edge_kinds:
+- kind: behavior_binds_form
+  from: drupal.js_behavior
+  to: drupal.form_id
+
+rules:
+- rule: form_selector_in_behavior
+  reads: file
+  in: [js_source]
+  match:
+    file: '*'
+    filetype: js_text
+    reads_sections: [string]
+    text: '(?<![\w-])form\.(?<form_class>[a-z][a-z0-9-]*-form)(?![\w-])'
+  values:
+    behavior: {from: {enclosing: behavior_body, capture: behavior}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    in_once: {from: {enclosing: once_call, capture: mark}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    form: {from: {capture: form_class}, normalize: [{replace: '-', with: '_'}]}
+  # in_once is empty outside once(), and an empty value makes no id; the step drops its text.
+  id: {template: '{in_once}{script}|{behavior}|{form}', normalize: [{replace: '^once', with: ''}]}
+  emits: [{node: {type: drupal.js_form_selector_use}}]
+  confidence: mentioned
+
+- rule: behavior_binds_form
+  reads: map
+  match:
+    node_type: drupal.js_form_selector_use
+    where: [{id_matches: '^drupal\.js_form_selector_use::[^|]+\|(?<behavior>[^|]+)\|(?<form>\w+)$'}]
+    follow:
+    - node: 'drupal.js_behavior::{behavior}'
+    - node: 'drupal.form_id::{form}'
+  emits: [{edge: {kind: behavior_binds_form, from: {template: '{behavior}', type: drupal.js_behavior}, to: matched_node}}]
+  confidence: mentioned

@@ -19,8 +19,12 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # webform, as webform_basic maps it (salesforce_mapping/salesforce_mapping_token_webform.yaml);
 # this is why the pack depends on webform_basic, which a project without webforms loads and which
 # then makes nothing.
+# A method that compares getMapping()->id() with a quoted id, self::X or static::X has a mentioned
+# acts_on_salesforce_mapping edge to that mapping (event/mapping_id_compared.yaml).
 #
 # Not mapped yet:
+# - A mapping id compared through a constant of another class, Other::X, or held in a variable,
+#   and a comparison in a function of a .module or .inc file: no acts_on_salesforce_mapping edge.
 # - The mapping field manager reads the generic Plugin annotation, so any class in the folder
 #   below that carries a Plugin annotation is read as a mapping field. An id that is not text in
 #   double quotes makes no plugin and is listed under skipped. The other Salesforce plugin types,

@@ -5,8 +5,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # extension that holds the script, found as member/asset_member.yaml finds the script's own. A
 # top-level function is a function declaration, or a const, let or var given an arrow function or a
 # function expression, outside any block. One inside a block, such as another function's body or
-# the (function ($) {...})(jQuery) wrapper, gets no edge of its own: it is reached through its
-# script. A behavior two scripts declare gets an edge to the extension of each.
+# the (function ($) {...})(jQuery) wrapper, gets its claim from member/script_member_in_block.yaml,
+# and the same edges from the map rules here. A behavior two scripts declare gets an edge to the
+# extension of each.
 
 edge_kinds:
 - kind: js_function_in_module

@@ -1,0 +1,86 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A behavior that binds the elements matching [data-x="y"] through once(), as
+# once('cart', '[data-library="cart"]', context), runs on the markup of each template that writes
+# data-x="y" on an element: a behavior_binds_template edge from the behavior to the template.
+# Mentioned: the link rests on the attribute's text alone. Three file rules and a join:
+# - selector_in_behavior reads each [data-x=y], [data-x='y'] or [data-x="y"] inside a quoted
+#   argument of a once() call inside Drupal.behaviors.name = ..., as an internal
+#   drupal.js_selector_use node named by the script, the behavior and data-x=y. A selector
+#   written elsewhere, such as $('[data-x="y"]', el) inside the callback, a selector in a
+#   comment or a template literal, and [data-x] with no value give none.
+# - data_attribute_in_template reads each data-x="y" or data-x='y' a template writes with a
+#   value of letters, digits, _ and - only, as an internal drupal.data_attribute node
+#   data-x=y with an edge to the template. A value holding {{ }}, a space or any other character,
+#   and one inside a Twig comment, give none.
+# - behavior_binds_template joins the two, only when the behavior is a mapped node, and sits at
+#   the once() call. Each template that writes the attribute gets an edge.
+
+node_types:
+- name: drupal.js_selector_use
+  id_namespace: drupal.js_selector_use
+  internal: true
+- name: drupal.data_attribute
+  id_namespace: drupal.data_attribute
+  internal: true
+
+edge_kinds:
+- kind: data_attribute_in_template
+  from: drupal.data_attribute
+  to: drupal.template
+- kind: behavior_binds_template
+  from: drupal.js_behavior
+  to: drupal.template
+
+rules:
+- rule: selector_in_behavior
+  reads: file
+  in: [js_source]
+  match:
+    file: '*'
+    filetype: js_text
+    reads_sections: [string]
+    text: '\[data-(?<attr>[\w-]+)\s*=\s*(?<q>[''"]?)(?<val>[\w-]+)(?P=q)\s*\]'
+  values:
+    behavior: {from: {enclosing: behavior_body, capture: behavior}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    in_once: {from: {enclosing: once_call, capture: mark}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  # in_once is empty outside once(), and an empty value makes no id; the step drops its text.
+  id: {template: '{in_once}{script}|{behavior}|data-{attr}={val}', normalize: [{replace: '^once', with: ''}]}
+  emits: [{node: {type: drupal.js_selector_use}}]
+  confidence: mentioned
+
+- rule: data_attribute_in_template
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\sdata-(?<attr>[\w-]+)=(?<q>[''"])(?<val>[\w-]+)(?P=q)'
+  id: {template: 'data-{attr}={val}'}
+  emits:
+  - node: {type: drupal.data_attribute}
+  confidence: mentioned
+
+- rule: data_attribute_in_template_edge
+  reads: file
+  in: [module_root, theme_root]
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\sdata-(?<attr>[\w-]+)=(?<q>[''"])(?<val>[\w-]+)(?P=q)'
+  id: {template: 'data-{attr}={val}'}
+  emits:
+  - edge: {kind: data_attribute_in_template, from: this_node, to: {template: '{template_name}', type: drupal.template}}
+  confidence: mentioned
+
+- rule: behavior_binds_template
+  reads: map
+  match:
+    node_type: drupal.js_selector_use
+    where: [{id_matches: '^drupal\.js_selector_use::[^|]+\|(?<behavior>[^|]+)\|(?<attribute>.+)$'}]
+    follow:
+    - node: 'drupal.js_behavior::{behavior}'
+    - node: 'drupal.data_attribute::{attribute}'
+    - edge: data_attribute_in_template
+  emits: [{edge: {kind: behavior_binds_template, from: {template: '{behavior}', type: drupal.js_behavior}, to: matched_node}}]
+  confidence: mentioned
