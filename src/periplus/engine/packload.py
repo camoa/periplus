@@ -106,8 +106,9 @@ EXECUTED_KEYS = frozenset(
         *("file.roles", "file.roles.*.name"),
         *(
             f"file.edge_kinds{k}"
-            for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups", ".*.realizes", ".*.description")
+            for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups", ".*.realizes")
         ),
+        "file.edge_kinds.*.description",
         *(
             f"file.node_types{k}"
             for k in ("", ".*.name", ".*.parent", ".*.abstract", ".*.id_namespace", ".*.internal")

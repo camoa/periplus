@@ -99,7 +99,9 @@ nodes = {n["id"]: (n["state"], n.get("attributes", {}).get("label")) for n in do
 assert nodes == {
     "drupal.bundle::webform_submission.my_type": ("mapped", "My form"),
     "drupal.config::webform.webform.my_type": ("mapped", None),
+    "drupal.entity_type::webform": ("referenced", None),
     "drupal.entity_type::webform_submission": ("referenced", None),
+    "drupal.form_id::webform_submission_my_type_add_form": ("mapped", None),
     "drupal.module::mymodule": ("mapped", None),
     "drupal.module::webform": ("referenced", None),
     "drupal.plugin.webform_handler::email": ("referenced", None),
@@ -108,6 +110,7 @@ assert nodes == {
     "php.type::Drupal\\mymodule\\Plugin\\WebformHandler\\ComputedHandler": ("mapped", None),
     "php.type::Drupal\\mymodule\\Plugin\\WebformHandler\\MyHandler": ("mapped", None),
     "php.type::Drupal\\webform\\Plugin\\WebformHandlerBase": ("referenced", None),
+    "drupal.url_path::/webform/my_type": ("mapped", None),
 }, nodes
 kinds = {n["id"]: n["type"] for n in document["nodes"]}
 assert kinds["drupal.plugin.webform_handler::my_handler"] == "drupal.webform_handler", kinds
@@ -145,6 +148,12 @@ assert edges == sorted([
      "drupal.module::mymodule", [(outside, line(outside, "class NotAHandler {"))]),
     ("plugin_in_module", "drupal.plugin.webform_handler::my_handler", "drupal.module::mymodule",
      [(my_handler, line(my_handler, "@WebformHandler("))]),
+    ("instance_of_entity_type", "drupal.config::webform.webform.my_type",
+     "drupal.entity_type::webform", [(config, 1)]),
+    ("path_shows_webform", "drupal.url_path::/webform/my_type",
+     "drupal.config::webform.webform.my_type", [(config, 1)]),
+    ("submission_form_of_webform", "drupal.form_id::webform_submission_my_type_add_form",
+     "drupal.bundle::webform_submission.my_type", [(config, 1)]),
 ]), edges
 
 skipped = sorted((row["file"], row["line"], row["rule"], row["reason"]) for row in report["skipped"])

@@ -169,6 +169,11 @@ assert edges == sorted([
     ("template_in_module", "drupal.template::mymodule-widget", "drupal.module::mymodule",
      [(template, 1)]),
     ("script_in_module", f"js.file::{script}", "drupal.module::mymodule", [(script, 1)]),
+    # A function declared inside the wrapper's block belongs to the module, as a top-level one does.
+    ("js_function_in_module", f"js.function::{script}:format", "drupal.module::mymodule",
+     [(script, 2)]),
+    ("js_function_in_module", f"js.function::{script}:shout", "drupal.module::mymodule",
+     [(script, 6)]),
     ("behavior_in_module", widget, "drupal.module::mymodule",
      [(script, line(script, "Drupal.behaviors.mymoduleWidget = {"))]),
     ("behavior_in_module", other, "drupal.module::mymodule",
