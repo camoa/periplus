@@ -62,6 +62,7 @@ class Places:
         self._files: dict[str, list[tuple[int, str]]] | None = None
         self._outward: dict[str, tuple[str, ...]] = {}
         self._parts: dict[str, int] | None = None
+        self._leaves: dict[str, int] = {}
 
     def in_file(self, file: str) -> list[tuple[int, str]]:
         """Each node located in ``file`` as (its smallest line there, id), by line, then id."""
@@ -119,7 +120,13 @@ class Places:
                 if not held[node_id] and self.names.holder(node_id) is not None:
                     leaves[node["type"]] += 1
             self._parts = {t: n for t, n in sorted(total.items()) if 2 * leaves[t] > n}
+            self._leaves = {t: leaves[t] for t in self._parts}
         return self._parts
+
+    def part_share(self, type_name: str) -> int:
+        """The percent, rounded down, of a part type's mapped, located nodes that nest inside
+        another node and hold none: the share ``part_types`` found over half."""
+        return 100 * self._leaves[type_name] // self.part_types()[type_name]
 
     def why_not_main(self, node_id: str) -> str | None:
         """``None`` for a main thing; else why not: ``unplaced`` (not mapped, or no location),

@@ -30,7 +30,9 @@ class UndescribedReport:
     """The main things counted, how many have an entry, the undescribed counted by ``by``, most
     first (a key of ``None`` is no container), their ids by place, and what was left out: the
     part types with their counts, most first, and the things in supporting code and those not
-    mapped or with no location. ``names`` prints a container's short name."""
+    mapped or with no location. ``names`` prints a container's short name. ``shares`` holds each
+    part type met with its share in percent, as ``Places.part_share`` gives it; ``parts_too``
+    says the things of part types were counted as main things, not left out."""
 
     by: str = "file"
     main: int = 0
@@ -42,6 +44,8 @@ class UndescribedReport:
     unplaced: int = 0
     names: Mapping[str, str] | None = None
     warnings: tuple[str, ...] = ()
+    shares: tuple[tuple[str, int], ...] = ()
+    parts_too: bool = False
     problems: tuple[Problem, ...] = ()
 
     @property
@@ -55,11 +59,16 @@ def _most(counted: Counter[Any]) -> tuple[tuple[Any, int], ...]:
 
 
 def run(
-    start: Path, env: Mapping[str, str], ids: Sequence[str], by: str, map_path: Path | None
+    start: Path,
+    env: Mapping[str, str],
+    ids: Sequence[str],
+    by: str,
+    map_path: Path | None,
+    parts_too: bool = False,
 ) -> UndescribedReport:
     """Count the main things among ``ids``, or in the whole map when there are none, and those
     with no entry under ``nodes`` in the descriptions file, by ``file``, ``type`` or
-    ``container``."""
+    ``container``. ``parts_too`` counts the things of part types as main things."""
     try:
         index = load_map(start, env, map_path)
         _, document, problems = read_descriptions(start, map_path)
@@ -75,12 +84,12 @@ def run(
             main: list[str] = []
             for node_id in things:
                 reason = places.why_not_main(node_id)
-                if reason is None:
+                if reason == "part":
+                    parts[as_text(index.nodes[node_id]["type"])] += 1
+                if reason is None or (reason == "part" and parts_too):
                     main.append(node_id)
                 else:
                     why[reason] += 1
-                    if reason == "part":
-                        parts[as_text(index.nodes[node_id]["type"])] += 1
             bare = [i for i in main if i not in described]
             keys = [_key(index, places, i, by) for i in bare]
             shown = {k: names.short(k) for k in keys if k is not None and by == "container"}
@@ -88,6 +97,7 @@ def run(
             ordered = sorted(
                 bare, key=lambda i: (place_key(place(loc) if (loc := located[i]) else None), i)
             )
+            shares = tuple((t, places.part_share(t)) for t, _ in _most(parts))
     except HarnessError as error:
         return UndescribedReport(by, problems=(error.problem(),))
     return UndescribedReport(
@@ -96,11 +106,13 @@ def run(
         len(main) - len(bare),
         _most(Counter(keys)),
         tuple(ordered),
-        _most(parts),
+        () if parts_too else _most(parts),
         why["supporting"],
         why["unplaced"],
         shown,
         tuple(notes),
+        shares,
+        parts_too,
     )
 
 
@@ -118,8 +130,8 @@ def _key(index: Any, places: Places, node_id: str, by: str) -> str | None:
 
 
 def render_text(report: UndescribedReport) -> str:
-    """The count line, the left-out line when anything was left out, then ``by KEY:`` and one
-    row a key, ``count  key``."""
+    """The count line, the left-out line when anything was left out, the part types met with
+    their shares, then ``by KEY:`` and one row a key, ``count  key``."""
     lines = ["periplus undescribed"]
     if not report.problems:
         bare = report.main - report.described
@@ -135,6 +147,14 @@ def render_text(report: UndescribedReport) -> str:
         if report.unplaced:
             left.append(f"{report.unplaced} not mapped or with no location")
         lines += [f"left out: {', '.join(left)}"] if left else []
+        if report.shares:
+            said = ", ".join(f"{_escape(t)} {share}%" for t, share in report.shares)
+            how = (
+                "counted as main things (--parts-too)"
+                if report.parts_too
+                else "count them too with --parts-too"
+            )
+            lines.append(f"part types: {said}; {how}")
         if report.counts:
             lines.append(f"by {report.by}:")
             names = report.names or {}
@@ -157,6 +177,8 @@ def render_json(report: UndescribedReport) -> str:
             "described": report.described,
             "counts": [{"key": key, "count": n} for key, n in report.counts],
             "undescribed": list(report.ids),
+            "part_types": [{"type": t, "share": share} for t, share in report.shares],
+            "parts_too": report.parts_too,
             "left_out": {
                 "parts": dict(report.parts),
                 "supporting": report.supporting,

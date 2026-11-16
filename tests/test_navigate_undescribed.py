@@ -71,6 +71,7 @@ def test_the_whole_map_counts_main_things_by_file(tmp_path: Path) -> None:
         "described 2 of 6 main things; 4 undescribed",
         "left out: 3 parts (t.param 2, t.call 1), 1 in supporting code, "
         "2 not mapped or with no location",
+        "part types: t.param 100%, t.call 100%; count them too with --parts-too",
         "by file:",
         "  3  m/C.php",
         "  1  m/m.info",
@@ -89,7 +90,7 @@ def test_a_type_is_a_part_type_when_most_of_its_things_nest_and_hold_nothing(
 def test_by_container_counts_under_the_container_of_what_holds_a_thing(tmp_path: Path) -> None:
     report = undescribed.run(tmp_path, {}, [], "container", _write(tmp_path))
 
-    assert undescribed.render_text(report).splitlines()[3:] == [
+    assert undescribed.render_text(report).splitlines()[4:] == [
         "by container:",
         "  3  m",
         "  1  (no container)",

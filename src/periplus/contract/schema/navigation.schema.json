@@ -898,7 +898,7 @@
     "undescribed": {
       "description": "periplus undescribed: the main things of the map, or of the ids, that the descriptions file does not describe. A main thing is mapped, has a location, is not in supporting code, and is not of a part type: a type more than half of whose mapped, located things nest inside another thing by their id and hold none.",
       "type": "object", "additionalProperties": false,
-      "required": ["command", "by", "main", "described", "counts", "undescribed", "left_out", "warnings", "problems"],
+      "required": ["command", "by", "main", "described", "counts", "undescribed", "part_types", "parts_too", "left_out", "warnings", "problems"],
       "properties": {
         "command": {"const": "undescribed"},
         "by": {"enum": ["file", "type", "container"]},
@@ -913,6 +913,15 @@
           }
         },
         "undescribed": {"description": "The undescribed main things' ids, by file, line, then id.", "type": "array", "items": {"type": "string"}},
+        "part_types": {
+          "description": "The part types of the things counted, most things first, each with its share: the percent, rounded down, of its mapped, located things in the whole map that nest inside another thing and hold none. Over 50 makes a part type, so a share near 50 is a close call.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["type", "share"],
+            "properties": {"type": {"type": "string"}, "share": {"type": "integer", "minimum": 50, "maximum": 100}}
+          }
+        },
+        "parts_too": {"description": "True with --parts-too: the things of part types count as main things, and left_out.parts is empty.", "type": "boolean"},
         "left_out": {
           "type": "object", "additionalProperties": false, "required": ["parts", "supporting", "unplaced"],
           "properties": {

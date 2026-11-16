@@ -731,6 +731,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="file",
         help="what to count the undescribed things by (default: file)",
     )
+    bare.add_argument(
+        "--parts-too",
+        action="store_true",
+        help="count the things of part types as main things too",
+    )
     add_ids(bare)
     add_map(bare, "the map file to read")
     add_format(bare)
@@ -1437,7 +1442,12 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
         from periplus.navigate.undescribed import run as run_bare
 
         bare = run_bare(
-            start=Path.cwd(), env=os.environ, ids=args.id, by=args.by, map_path=args.map
+            start=Path.cwd(),
+            env=os.environ,
+            ids=args.id,
+            by=args.by,
+            map_path=args.map,
+            parts_too=args.parts_too,
         )
         return _emit(args, BARE_RENDERERS, bare, bare_listed)
 
