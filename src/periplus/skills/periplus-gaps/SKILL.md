@@ -27,7 +27,7 @@ classes.
 
 1. Check the map and see what it holds. `periplus check-map` exits 0 on a valid map; fix any
    fault it names before you read further. `periplus types` counts the node types and edge kinds.
-2. List every node. Every id holds the text `::`, so `periplus find :: --limit 0 --format json`
+2. List every node. Every id holds the text `::`, so `periplus find :: --limit 0 --no-edges --format json`
    prints all of them, each row with its id, type, state and first location. A row whose state
    is `referenced` (a name seen, with nothing describing it) or `unresolved` (a rule looked and
    failed) is where a missing rule shows, except an id step 4 prints under Site faults.
@@ -59,7 +59,7 @@ classes.
 ```
 $ periplus check-map
 $ periplus types
-$ periplus find :: --limit 0 --format json
+$ periplus find :: --limit 0 --no-edges --format json
 $ periplus map --format json
 ```
 

@@ -374,7 +374,7 @@ the gap is accepted.
 1. Run `periplus map --format json` and read `skipped` for the rows whose `rule` names the new
    rule: each is a match the rule could not turn into a node or edge, with its reason.
 2. Read the `edge  <from>  <kind>  <to>` lines of the measurement. Run
-   `periplus find :: --limit 0 --format json` and look up the `to` ids there: the referenced and
+   `periplus find :: --limit 0 --no-edges --format json` and look up the `to` ids there: the referenced and
    unresolved nodes the new edges end on are what the next rule has to define.
    An end that misses only because the stack tries a second name can list that second resolution
    in `fallback`, run on the name as written after the first name is settled: under `php_basic`,
@@ -388,7 +388,7 @@ the gap is accepted.
 <!-- nav-run -->
 ```console
 $ periplus map --format json
-$ periplus find :: --limit 0 --format json
+$ periplus find :: --limit 0 --no-edges --format json
 ```
 
 ## Stop with an accepted unknown
