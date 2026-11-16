@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from periplus.errors import ExitCode, HarnessError, Problem
+from periplus.navigate import find
 from periplus.navigate.count import _counted, _most
 from periplus.navigate.listing import NONE, Listing, cut, footer, payload, problem_lines
 from periplus.navigate.mapfile import as_json, as_text, reading_fields
@@ -56,7 +57,8 @@ class EdgeRow:
 class DiffReport:
     """One diff: each map as (path, things, edges), the header fields that differ, and for things
     and edges each list added, removed and changed, cut to ``limit`` rows, with its counts by
-    type or kind; ``ids`` are the things of the changes asked, uncut."""
+    type or kind; ``ids`` are the things of the changes asked, uncut. ``limit`` 0 names every
+    type and kind in the count lines."""
 
     maps: tuple[tuple[str, int, int], ...] = ()
     header: tuple[str, ...] = ()
@@ -65,6 +67,7 @@ class DiffReport:
     thing_counts: Mapping[str, tuple[tuple[str, int], ...]] | None = None
     edge_counts: Mapping[str, tuple[tuple[str, int], ...]] | None = None
     ids: tuple[str, ...] = ()
+    limit: int = LIMIT
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
 
@@ -108,6 +111,7 @@ def run(
         {c: _most(Counter(r.type for r in rows)) for c, rows in things.items()},
         {c: _most(Counter(r.kind for r in rows)) for c, rows in edges.items()},
         tuple(sorted(r.id for c in changes for r in things[c])),
+        limit,
     )
 
 
@@ -178,7 +182,16 @@ def render_text(report: DiffReport) -> str:
         )
         for noun, lists, counted, by in sections:
             lines.append(f"{noun}: " + ", ".join(f"{_total(lists[c])} {c}" for c in CHANGES))
-            lines += [f"  {c} by {by}: {_counted(counted[c])}" for c in CHANGES if counted[c]]
+            lines += [
+                f"  {c} by {by}: "
+                + (
+                    find._counted(Counter(dict(counted[c])), f"{by}s")
+                    if report.limit
+                    else _counted(counted[c])
+                )
+                for c in CHANGES
+                if counted[c]
+            ]
         for change in CHANGES:
             lines += _list_lines(f"things {change}", report.things[change], _thing_line)
         for change in CHANGES:
