@@ -467,6 +467,8 @@ attributes:
   on: [box.unit]
   description: The unit is switched off.
   spreads: true
+  spreads_along:
+  - {kind: has_knob, to: to}
   mark: switched off
 ```
 
@@ -479,6 +481,12 @@ attributes:
   one value when they agree, `differs` when they do not. The value is written into the map, with a
   provenance row whose rule is `spread.<name>`, whose pack is the declaring one, and whose
   confidence is the weakest of the row that set the value and the grouping edges on the way.
+- `spreads_along` lists further edge kinds the value travels along, besides the grouping kinds.
+  Each entry names a `kind` and the end the value goes `to`: `to` carries it from the edge's from
+  end to its to end, `from` the other way. The walk takes these steps and grouping steps together,
+  as one walk, with the same nearest-holder rule, row and confidence. Use it for a member that
+  hangs from its container by an edge that does not group, such as a method from its class. It
+  needs `spreads: true`.
 - `mark` is a short text a reader shows beside a node that holds the attribute: one to 40
   characters, with no `[`, `]` or line break. The map's header `marks` names the mark of each
   declared attribute some node holds, so a reader needs no pack. Every navigation command prints
@@ -489,7 +497,8 @@ attributes:
 `drupal.module` and `drupal.theme`, with `spreads: true` and `mark: not installed`. The two map
 rules that find a module or theme `core.extension` does not list write `installed: no` beside
 their `not_installed_by` edge. The value spreads to the module's functions, classes, routes and
-templates, so each of their rows prints `[not installed]`.
+templates, and with `spreads_along` over `php_basic`'s `contains` and `declares_property` on to
+each class's methods and properties, so each of their rows prints `[not installed]`.
 
 Any stack's rutter can declare its own. A Go rutter could declare `built` on a Go file, with
 `spreads: true` and `mark: left out by build tag`, and write `built: no` on a file whose build tag
@@ -498,9 +507,10 @@ the project's build leaves out.
 The check refuses, with exit 19, a rule that writes an attribute neither its rutter nor one it
 depends on declares, when the rule is a map rule or another rutter declares the name; a rule that
 writes a declared attribute on its own node of a type `on` does not reach; one name declared with
-different `on`, `spreads`, `mark` or description in two places; a type in `on` that neither the
-rutter nor one it depends on declares; and a declaration of `type_conflict` or `resolution`, which
-the engine reserves. A mark that breaks its limits is a
+different `on`, `spreads`, `spreads_along`, `mark` or description in two places; a type in `on`
+that neither the rutter nor one it depends on declares; a `spreads_along` without `spreads: true`;
+a kind in `spreads_along` that neither the rutter nor one it depends on declares; and a declaration
+of `type_conflict` or `resolution`, which the engine reserves. A mark that breaks its limits is a
 schema error, exit 16.
 
 ## The grammar's node kinds

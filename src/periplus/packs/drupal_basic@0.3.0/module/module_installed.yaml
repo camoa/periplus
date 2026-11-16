@@ -7,15 +7,20 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # not_installed_by to core.extension: its code is in the codebase and switched off. The same two
 # rules write the attribute installed, value no, on that module or theme. It spreads through the
 # grouping kinds to everything inside it, a function, class, route or template, so every row that
-# names one of them prints [not installed]. The edge stays: it names the config that decides.
-# A project with no exported core.extension gets neither edge nor attribute. installs_module is
-# declared by the file; not_installed_by and installed are inferred, because they are drawn from a
-# name the list does not hold.
+# names one of them prints [not installed]. It also goes from a class, interface or trait to its
+# methods and properties along php_basic's contains and declares_property, which run from the class
+# to the member and do not group. The edge stays: it names the config that decides. A project
+# with no exported core.extension gets neither edge nor attribute. installs_module is declared by
+# the file; not_installed_by and installed are inferred, because they are drawn from a name the
+# list does not hold.
 
 attributes:
 - name: installed
   on: [drupal.module, drupal.theme]
   spreads: true
+  spreads_along:
+  - {kind: contains, to: to}
+  - {kind: declares_property, to: to}
   mark: not installed
   description: "no on a module or theme in the codebase that core.extension does not list, and on everything inside it"
 

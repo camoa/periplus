@@ -166,6 +166,7 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
                 for on in _strings(entry.get("on"))
                 if on not in types
             )
+            problems.extend(_spreads_along(name, file, document, known_kinds))
             problems.extend(_unexecuted_keys(name, file, document, "file."))
             problems.extend(_illegal_ends(name, file, document, twins, rule_set))
         problems.extend(
@@ -245,6 +246,40 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
     problems.extend(_type_conflicts(packs))
     problems.extend(grammar_problems(packs))
     return sorted(problems, key=lambda problem: (int(problem.code), problem.message))
+
+
+def _spreads_along(
+    pack: str, file: str, document: Mapping[str, Any], kinds: set[str]
+) -> list[Problem]:
+    """Each attribute of the file that lists ``spreads_along`` without ``spreads: true``, and each
+    kind it lists that is not in ``kinds``, the kinds the pack and the packs it depends on
+    declare."""
+    problems: list[Problem] = []
+    for entry in _entries(document, "attributes"):
+        along = entry.get("spreads_along")
+        if not isinstance(along, list):
+            continue
+        attribute = entry.get("name")
+        if entry.get("spreads") is not True:
+            problems.append(
+                Problem(
+                    ExitCode.PACK_RULES_UNREADABLE,
+                    f"{pack}/{file}: the attribute {attribute} lists spreads_along, which needs "
+                    "spreads: true",
+                    {"pack": pack, "file": file, "attribute": attribute},
+                )
+            )
+        problems.extend(
+            Problem(
+                ExitCode.PACK_RULES_UNREADABLE,
+                f"{pack}/{file}: the attribute {attribute} spreads along the edge kind {kind}, "
+                f"which neither {pack} nor a pack it depends on declares",
+                {"pack": pack, "file": file, "attribute": attribute, "kind": kind},
+            )
+            for step in along
+            if isinstance(step, Mapping) and (kind := step.get("kind")) not in kinds
+        )
+    return problems
 
 
 #: The attributes the engine gives their meaning, which no pack declares.

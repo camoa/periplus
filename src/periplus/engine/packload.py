@@ -112,6 +112,7 @@ EXECUTED_KEYS = frozenset(
         "file.edge_kinds.*.description",
         *(f"file.attributes{k}" for k in ("", ".*.name", ".*.on", ".*.description")),
         *(f"file.attributes{k}" for k in (".*.spreads", ".*.mark")),
+        *(f"file.attributes.*.spreads_along{k}" for k in ("", ".*.kind", ".*.to")),
         *(
             f"file.node_types{k}"
             for k in ("", ".*.name", ".*.parent", ".*.abstract", ".*.id_namespace", ".*.internal")
@@ -596,12 +597,14 @@ class EdgeKind:
 @dataclass(frozen=True, slots=True)
 class Attribute:
     """One declared node attribute: the types a rule may write it on, whether a container's value
-    reaches its members, the mark a reader shows for it, ``""`` for none, and its text; and the
-    pack and file that declared it first."""
+    reaches its members, the further edge kinds it travels along with the end each goes to, the
+    mark a reader shows for it, ``""`` for none, and its text; and the pack and file that declared
+    it first."""
 
     name: str
     on: tuple[str, ...]
     spreads: bool = False
+    along: tuple[tuple[str, str], ...] = ()
     mark: str = ""
     description: str = ""
     pack: str = field(default="", compare=False)
@@ -1664,6 +1667,7 @@ def _read_attributes(
             name=entry["name"],
             on=tuple(sorted(entry["on"])),
             spreads=entry.get("spreads") is True,
+            along=tuple(sorted({(s["kind"], s["to"]) for s in entry.get("spreads_along", ())})),
             mark=entry.get("mark", ""),
             description=entry.get("description", ""),
             pack=pack,

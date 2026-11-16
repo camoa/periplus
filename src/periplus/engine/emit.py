@@ -96,8 +96,9 @@ def build_document(
     ``resolution`` attribute is runtime, which is an unknown boundary. Locations and provenance
     de-duplicate and sort. Then a node whose type is internal, or lies below an internal type, is
     left out with every edge that has an end on it; ``LeftOut`` counts each. Last, each declared
-    ``attributes`` entry that spreads reaches members through grouping edges, as ``_spread`` says,
-    and the header ``marks`` names the mark of each declared attribute a written node holds.
+    ``attributes`` entry that spreads reaches members through grouping edges and the kinds it lists
+    in ``spreads_along``, as ``_spread`` says, and the header ``marks`` names the mark of each
+    declared attribute a written node holds.
     """
     groups: dict[str, list[FoundNode]] = {}
     for found in nodes:
@@ -199,7 +200,7 @@ def build_document(
     written = kept
     declared = attributes or {}
     for name in sorted(n for n, attribute in declared.items() if attribute.spreads):
-        _spread(name, declared[name].pack, ordered, written, edge_kinds)
+        _spread(name, declared[name], ordered, written, edge_kinds)
     held = {name for node in ordered for name in node.get("attributes", {})}
     marked = {name: a.mark for name, a in sorted(declared.items()) if a.mark and name in held}
     grouping = sorted({str(edge["kind"]) for edge in written if edge_kinds[edge["kind"]].groups})
@@ -253,14 +254,15 @@ _STRENGTH = ("declared", "inferred", "mentioned")
 
 def _spread(
     name: str,
-    pack: str,
+    attribute: Attribute,
     nodes: Sequence[dict[str, Any]],
     edges: Sequence[Mapping[str, Any]],
     edge_kinds: Mapping[str, EdgeKind],
 ) -> None:
     """Write the attribute ``name`` on each member of a container that holds it, through grouping
-    edges from their to end to their from end, transitively, with a provenance row of ``pack``,
-    the declaring pack, and the rule ``spread.<name>``.
+    edges from their to end to their from end and through each kind the declaration's ``along``
+    lists toward the end it names, transitively, with a provenance row of the declaring pack and
+    the rule ``spread.<name>``.
 
     A node that holds a value of its own keeps it. Otherwise the nearest holders decide: one value
     when they agree, else ``differs`` with each holder's value at its first location, or each entry
@@ -268,11 +270,14 @@ def _spread(
     rows and each grouping edge, a node's rows and an edge's rows each counted at their strongest,
     and the weakest of several nearest holders.
     """
+    toward = {kind: end for kind, end in attribute.along}
     members: dict[str, list[tuple[str, str]]] = {}
     for edge in edges:
-        if edge_kinds[edge["kind"]].groups:
+        end = "from" if edge_kinds[edge["kind"]].groups else toward.get(edge["kind"])
+        if end:
             sure = _strongest(row["confidence"] for row in edge["provenance"])
-            members.setdefault(edge["to"], []).append((edge["from"], sure))
+            other = "to" if end == "from" else "from"
+            members.setdefault(edge[other], []).append((edge[end], sure))
     by_id = {node["id"]: node for node in nodes}
     level: dict[str, tuple[frozenset[tuple[str, int, str]], str]] = {}
     for node in nodes:
@@ -296,7 +301,12 @@ def _spread(
             node = by_id[member]
             node.setdefault("attributes", {})[name] = _spread_value(entries)
             node["provenance"].append(
-                {"pack": pack, "rule": f"spread.{name}", "confidence": sure, "sets": [name]}
+                {
+                    "pack": attribute.pack,
+                    "rule": f"spread.{name}",
+                    "confidence": sure,
+                    "sets": [name],
+                }
             )
 
 

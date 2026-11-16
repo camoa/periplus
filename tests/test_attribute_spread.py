@@ -149,3 +149,88 @@ def test_no_header_marks_when_no_node_holds_a_marked_attribute(tmp_path: Path) -
     project(tmp_path, off(), yard="unit A\non A\n")
     _, document = _mapped(tmp_path)
     assert "marks" not in document
+
+
+#: Knobs on items and tags on items, by two kinds that do not group, and ``knob <item> <name>`` and
+#: ``tag <item> <name>`` lines; added to the attributes file and the map rules file.
+KNOBS_TYPES = """\
+node_types:
+- {name: box.knob, id_namespace: box.knob}
+- {name: box.tag, id_namespace: box.tag}
+edge_kinds:
+- {kind: has_knob, from: box.item, to: box.knob}
+- {kind: tags, from: box.tag, to: box.item}
+"""
+KNOBS = r"""- rule: knob
+  reads: file
+  in: [yard]
+  match: {file: '*', filetype: box, text: '(?m)^knob (?<item>[\w.]+) (?<name>\w+)'}
+  id: {template: '{item}.{name}'}
+  emits: [{node: {type: box.knob}}]
+  confidence: declared
+- rule: item_knob
+  reads: file
+  in: [yard]
+  match: {file: '*', filetype: box, text: '(?m)^knob (?<item>[\w.]+) (?<name>\w+)'}
+  id: {template: '{item}'}
+  emits:
+  - edge: {kind: has_knob, from: this_node, to: {template: '{item}.{name}', type: box.knob}}
+  confidence: CONFIDENCE
+- rule: tag
+  reads: file
+  in: [yard]
+  match: {file: '*', filetype: box, text: '(?m)^tag (?<item>[\w.]+) (?<name>\w+)'}
+  id: {template: '{name}'}
+  emits: [{node: {type: box.tag}}]
+  confidence: declared
+- rule: tag_item
+  reads: file
+  in: [yard]
+  match: {file: '*', filetype: box, text: '(?m)^tag (?<item>[\w.]+) (?<name>\w+)'}
+  id: {template: '{name}'}
+  emits: [{edge: {kind: tags, from: this_node, to: {template: '{item}', type: box.item}}}]
+  confidence: declared
+"""
+ALONG = "mark: switched off, spreads_along: [{kind: has_knob, to: to}, {kind: tags, to: from}]}"
+KNOB_YARD = YARD + "knob A.f k\nknob B.g k\ntag B.g t\n"
+
+
+def _knobs(confidence: str = "declared") -> str:
+    return KNOBS.replace("CONFIDENCE", confidence)
+
+
+def _along(declare: str = DECLARE) -> str:
+    return declare.replace("mark: switched off}", ALONG) + KNOBS_TYPES
+
+
+def test_the_value_travels_along_a_listed_kind_toward_its_to_end(tmp_path: Path) -> None:
+    project(tmp_path, off() + _knobs("mentioned"), KNOB_YARD, _along())
+    _, document = _mapped(tmp_path)
+    knob = nodes(document)["box.knob::B.g.k"]
+    assert knob["attributes"] == {"switched": "off"}
+    assert _spread_rows(knob) == [
+        {"pack": "box", "rule": "spread.switched", "confidence": "mentioned", "sets": ["switched"]}
+    ]
+    assert "attributes" not in nodes(document)["box.knob::A.f.k"]
+    first = (tmp_path / "map.json").read_bytes()
+    _mapped(tmp_path)
+    assert (tmp_path / "map.json").read_bytes() == first
+
+
+def test_the_value_travels_along_a_listed_kind_toward_its_from_end(tmp_path: Path) -> None:
+    project(tmp_path, off() + _knobs(), KNOB_YARD, _along())
+    _, document = _mapped(tmp_path)
+    assert nodes(document)["box.tag::t"]["attributes"] == {"switched": "off"}
+
+
+def test_a_kind_the_declaration_does_not_list_carries_nothing(tmp_path: Path) -> None:
+    project(tmp_path, off() + _knobs(), KNOB_YARD, DECLARE + KNOBS_TYPES)
+    _, document = _mapped(tmp_path)
+    assert "attributes" not in nodes(document)["box.knob::B.g.k"]
+    assert "attributes" not in nodes(document)["box.tag::t"]
+
+
+def test_the_nearest_holder_wins_along_a_listed_kind(tmp_path: Path) -> None:
+    project(tmp_path, off() + ITEM_OWN + _knobs(), KNOB_YARD, _along(BOTH))
+    _, document = _mapped(tmp_path)
+    assert nodes(document)["box.knob::B.g.k"]["attributes"] == {"switched": "own"}

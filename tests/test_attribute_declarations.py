@@ -129,3 +129,32 @@ def test_a_type_in_on_that_no_visible_pack_declares_is_refused(tmp_path: Path) -
             "neither box nor a pack it depends on declares",
         )
     ]
+
+
+def test_spreads_along_an_undeclared_kind_is_refused(tmp_path: Path) -> None:
+    declare = DECLARE.replace(
+        "mark: switched off}", "mark: switched off, spreads_along: [{kind: nowhere, to: to}]}"
+    )
+    project(tmp_path, off(), declare=declare)
+    assert _refused(tmp_path) == [
+        (
+            ExitCode.PACK_RULES_UNREADABLE,
+            "box/rules/attributes.yaml: the attribute switched spreads along the edge kind "
+            "nowhere, which neither box nor a pack it depends on declares",
+        )
+    ]
+
+
+def test_spreads_along_without_spreads_is_refused(tmp_path: Path) -> None:
+    declare = DECLARE.replace(
+        "spreads: true, mark: switched off}",
+        "mark: switched off, spreads_along: [{kind: lists, to: to}]}",
+    )
+    project(tmp_path, off(), declare=declare)
+    assert _refused(tmp_path) == [
+        (
+            ExitCode.PACK_RULES_UNREADABLE,
+            "box/rules/attributes.yaml: the attribute switched lists spreads_along, which needs "
+            "spreads: true",
+        )
+    ]

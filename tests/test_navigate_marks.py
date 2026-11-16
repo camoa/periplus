@@ -228,6 +228,11 @@ def test_a_function_in_a_drupal_module_core_extension_does_not_list_carries_the_
         module.mkdir(parents=True)
         (module / f"{name}.info.yml").write_text(f"name: {name}\ntype: module\n")
         (module / f"{name}.module").write_text(f"<?php\n\nfunction {name}_run() {{\n}}\n")
+        (module / "src").mkdir()
+        (module / "src" / "Crate.php").write_text(
+            f"<?php\n\nnamespace Drupal\\{name};\n\n"
+            "class Crate {\n  public function open() {\n  }\n}\n"
+        )
     (tmp_path / "config" / "sync").mkdir(parents=True)
     (tmp_path / "config" / "sync" / "core.extension.yml").write_text("module:\n  shop: 0\n")
     report = run(
@@ -241,3 +246,4 @@ def test_a_function_in_a_drupal_module_core_extension_does_not_list_carries_the_
 
     assert index.marks("php.function::stock_run") == ("not installed",)
     assert index.marks("php.function::shop_run") == ()
+    assert index.marks("php.method::Drupal\\stock\\Crate::open") == ("not installed",)
