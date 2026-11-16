@@ -1,8 +1,18 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# Two routes of core's user module, which no mapped routing file declares: user.login serves
+# Routes of core's user module, which no mapped routing file declares: user.login serves
 # /user/login and builds the form user_login_form, and user.register serves /user/register and
-# builds the form user_register_form, the user entity's register form. Read from core.extension,
+# builds the form user_register_form, the user entity's register form. user.pass serves
+# /user/password and builds user_pass; user.page serves /user; user.logout serves /user/logout;
+# user.reset.form serves /user/reset/{uid} and builds user_pass_reset; user.reset and
+# user.reset.login serve the one-time login links; user.cancel_confirm serves the account
+# cancellation link; and the user entity's routes entity.user.canonical and entity.user.edit_form
+# serve /user/{user} and /user/{user}/edit, the second building the entity's default form
+# user_form. A path with placeholders also gets a shape_of_route edge from its shape, each {x}
+# written as *, as url/path_route.yaml gives a mapped route, so a template's path of that shape
+# links to it. A path with placeholders is the id of a rule of its own, which builds each brace in
+# normalize, since a template reads {x} as a value's name. user.logout.confirm, which core added in 10.3, is left out: core.extension does
+# not say which core release a site runs. Read from core.extension,
 # where the module user is listed when it is installed, so a site with exported configuration gets
 # them whether or not its code links them. The route, the path and the form id end at referenced
 # nodes unless a mapped file declares them, and meet the nodes that links, templates and form
@@ -47,4 +57,196 @@ rules:
       kind: route_uses_form_id
       from: this_node
       to: {from: {key: module.user}, template: 'user_register_form', type: drupal.form_id}
+  confidence: inferred
+
+- rule: core_user_pass_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.pass'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: this_node
+      to: {from: {key: module.user}, template: '/user/password', type: drupal.url_path}
+  - edge:
+      kind: route_uses_form_id
+      from: this_node
+      to: {from: {key: module.user}, template: 'user_pass', type: drupal.form_id}
+  confidence: inferred
+
+- rule: core_user_page_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.page'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: this_node
+      to: {from: {key: module.user}, template: '/user', type: drupal.url_path}
+  confidence: inferred
+
+- rule: core_user_logout_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.logout'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: this_node
+      to: {from: {key: module.user}, template: '/user/logout', type: drupal.url_path}
+  confidence: inferred
+
+- rule: core_user_reset_form_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.reset.form'}]}
+  emits:
+  - edge:
+      kind: shape_of_route
+      from: {from: {key: module.user}, template: '/user/reset/*', type: drupal.path_shape}
+      to: this_node
+  - edge:
+      kind: route_uses_form_id
+      from: this_node
+      to: {from: {key: module.user}, template: 'user_pass_reset', type: drupal.form_id}
+  confidence: inferred
+
+- rule: core_user_reset_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.reset'}]}
+  emits:
+  - edge:
+      kind: shape_of_route
+      from: {from: {key: module.user}, template: '/user/reset/*/*/*', type: drupal.path_shape}
+      to: this_node
+  confidence: inferred
+
+- rule: core_user_reset_login_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.reset.login'}]}
+  emits:
+  - edge:
+      kind: shape_of_route
+      from: {from: {key: module.user}, template: '/user/reset/*/*/*/login', type: drupal.path_shape}
+      to: this_node
+  confidence: inferred
+
+- rule: core_user_cancel_confirm_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.cancel_confirm'}]}
+  emits:
+  - edge:
+      kind: shape_of_route
+      from: {from: {key: module.user}, template: '/user/*/cancel/confirm/*/*', type: drupal.path_shape}
+      to: this_node
+  confidence: inferred
+
+- rule: core_user_canonical_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'entity.user.canonical'}]}
+  emits:
+  - edge:
+      kind: shape_of_route
+      from: {from: {key: module.user}, template: '/user/*', type: drupal.path_shape}
+      to: this_node
+  confidence: inferred
+
+- rule: core_user_edit_form_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'entity.user.edit_form'}]}
+  emits:
+  - edge:
+      kind: shape_of_route
+      from: {from: {key: module.user}, template: '/user/*/edit', type: drupal.path_shape}
+      to: this_node
+  - edge:
+      kind: route_uses_form_id
+      from: this_node
+      to: {from: {key: module.user}, template: 'user_form', type: drupal.form_id}
+  confidence: inferred
+
+- rule: core_user_reset_form_path
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: '/user/reset/<uid>'}, {replace: '<', with: '{'}, {replace: '>', with: '}'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: {from: {key: module.user}, template: 'user.reset.form', type: drupal.route}
+      to: this_node
+  confidence: inferred
+
+- rule: core_user_reset_path
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: '/user/reset/<uid>/<timestamp>/<hash>'}, {replace: '<', with: '{'}, {replace: '>', with: '}'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: {from: {key: module.user}, template: 'user.reset', type: drupal.route}
+      to: this_node
+  confidence: inferred
+
+- rule: core_user_reset_login_path
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: '/user/reset/<uid>/<timestamp>/<hash>/login'}, {replace: '<', with: '{'}, {replace: '>', with: '}'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: {from: {key: module.user}, template: 'user.reset.login', type: drupal.route}
+      to: this_node
+  confidence: inferred
+
+- rule: core_user_cancel_confirm_path
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: '/user/<user>/cancel/confirm/<timestamp>/<hashed_pass>'}, {replace: '<', with: '{'}, {replace: '>', with: '}'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: {from: {key: module.user}, template: 'user.cancel_confirm', type: drupal.route}
+      to: this_node
+  confidence: inferred
+
+- rule: core_user_canonical_path
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: '/user/<user>'}, {replace: '<', with: '{'}, {replace: '>', with: '}'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: {from: {key: module.user}, template: 'entity.user.canonical', type: drupal.route}
+      to: this_node
+  confidence: inferred
+
+- rule: core_user_edit_form_path
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: '/user/<user>/edit'}, {replace: '<', with: '{'}, {replace: '>', with: '}'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: {from: {key: module.user}, template: 'entity.user.edit_form', type: drupal.route}
+      to: this_node
   confidence: inferred
