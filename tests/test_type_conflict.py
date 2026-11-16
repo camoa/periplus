@@ -235,3 +235,17 @@ def test_a_rule_that_writes_the_type_conflict_attribute_is_refused(tmp_path: Pat
             "only the engine writes, on a node rules type as conflicting types",
         )
     ]
+
+
+@pytest.mark.parametrize("name", ["type_conflict", "resolution"])
+def test_a_pack_that_declares_a_reserved_attribute_is_refused(tmp_path: Path, name: str) -> None:
+    _project(tmp_path, f"attributes:\n- {{name: {name}, on: [own.thing]}}\n" + EDIT, LIST)
+    report, document = map_project(tmp_path)
+    assert document == {}
+    assert [(p.code, p.message) for p in report.problems] == [
+        (
+            ExitCode.PACK_RULES_UNREADABLE,
+            f"own/rules/a.yaml: the attribute {name} is declared, and the name is reserved for "
+            "the engine",
+        )
+    ]

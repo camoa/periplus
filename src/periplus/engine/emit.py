@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from periplus.engine.packload import BoundaryEntry, EdgeKind, TypeInfo
+from periplus.engine.packload import Attribute, BoundaryEntry, EdgeKind, TypeInfo
 from periplus.engine.rules import FoundEdge, FoundNode, Skipped
 from periplus.errors import ExitCode, HarnessError
 from periplus.manifest import LoadedPack
@@ -63,6 +63,7 @@ def build_document(
     boundary: Mapping[str, Sequence[BoundaryEntry]] | None = None,
     skipped: list[Skipped] | None = None,
     supporting: Sequence[str] = (),
+    attributes: Mapping[str, Attribute] | None = None,
 ) -> tuple[dict[str, Any], LeftOut]:
     """The map document, and what it leaves out.
 
@@ -93,8 +94,10 @@ def build_document(
     An end that reads boundary by an edge's ``boundary`` also gets that edge's into edge, to the
     into node, which reads boundary by its type. A node a rule found is mapped, except one whose
     ``resolution`` attribute is runtime, which is an unknown boundary. Locations and provenance
-    de-duplicate and sort. Last, a node whose type is internal, or lies below an internal type, is
-    left out with every edge that has an end on it; ``LeftOut`` counts each.
+    de-duplicate and sort. Then a node whose type is internal, or lies below an internal type, is
+    left out with every edge that has an end on it; ``LeftOut`` counts each. Last, each declared
+    ``attributes`` entry that spreads reaches members through grouping edges, as ``_spread`` says,
+    and the header ``marks`` names the mark of each declared attribute a written node holds.
     """
     groups: dict[str, list[FoundNode]] = {}
     for found in nodes:
@@ -194,6 +197,11 @@ def build_document(
     )
     ordered = [node for node in ordered if node["id"] not in hidden]
     written = kept
+    declared = attributes or {}
+    for name in sorted(n for n, attribute in declared.items() if attribute.spreads):
+        _spread(name, declared[name].pack, ordered, written, edge_kinds)
+    held = {name for node in ordered for name in node.get("attributes", {})}
+    marked = {name: a.mark for name, a in sorted(declared.items()) if a.mark and name in held}
     grouping = sorted({str(edge["kind"]) for edge in written if edge_kinds[edge["kind"]].groups})
     realizing, realizing_to = (
         sorted({str(e["kind"]) for e in written if edge_kinds[e["kind"]].realizes == end})
@@ -234,7 +242,89 @@ def build_document(
         document["realizing_to_kinds"] = realizing_to
     if supporting:
         document["supporting_paths"] = sorted(set(supporting))
+    if marked:
+        document["marks"] = marked
     return document, left_out
+
+
+#: The confidences a provenance row may hold, strongest first.
+_STRENGTH = ("declared", "inferred", "mentioned")
+
+
+def _spread(
+    name: str,
+    pack: str,
+    nodes: Sequence[dict[str, Any]],
+    edges: Sequence[Mapping[str, Any]],
+    edge_kinds: Mapping[str, EdgeKind],
+) -> None:
+    """Write the attribute ``name`` on each member of a container that holds it, through grouping
+    edges from their to end to their from end, transitively, with a provenance row of ``pack``,
+    the declaring pack, and the rule ``spread.<name>``.
+
+    A node that holds a value of its own keeps it. Otherwise the nearest holders decide: one value
+    when they agree, else ``differs`` with each holder's value at its first location, or each entry
+    of a holder's own ``differs``. The row's confidence is the weakest along the way: the setting
+    rows and each grouping edge, a node's rows and an edge's rows each counted at their strongest,
+    and the weakest of several nearest holders.
+    """
+    members: dict[str, list[tuple[str, str]]] = {}
+    for edge in edges:
+        if edge_kinds[edge["kind"]].groups:
+            sure = _strongest(row["confidence"] for row in edge["provenance"])
+            members.setdefault(edge["to"], []).append((edge["from"], sure))
+    by_id = {node["id"]: node for node in nodes}
+    level: dict[str, tuple[frozenset[tuple[str, int, str]], str]] = {}
+    for node in nodes:
+        if name in node.get("attributes", {}):
+            rows = (r["confidence"] for r in node["provenance"] if name in r.get("sets", ()))
+            level[node["id"]] = (_holder_entries(node, name), _strongest(rows))
+    held = set(level)
+    while level:
+        arrivals: dict[str, list[tuple[frozenset[tuple[str, int, str]], str]]] = {}
+        for container in sorted(level):
+            entries, sure = level[container]
+            for member, edge_sure in members.get(container, ()):
+                if member not in held:
+                    arrivals.setdefault(member, []).append((entries, _weakest((sure, edge_sure))))
+        level = {
+            member: (frozenset().union(*(e for e, _ in came)), _weakest(c for _, c in came))
+            for member, came in arrivals.items()
+        }
+        held.update(level)
+        for member, (entries, sure) in sorted(level.items()):
+            node = by_id[member]
+            node.setdefault("attributes", {})[name] = _spread_value(entries)
+            node["provenance"].append(
+                {"pack": pack, "rule": f"spread.{name}", "confidence": sure, "sets": [name]}
+            )
+
+
+def _strongest(confidences: Iterable[str]) -> str:
+    return min(confidences, key=_STRENGTH.index)
+
+
+def _weakest(confidences: Iterable[str]) -> str:
+    return max(confidences, key=_STRENGTH.index)
+
+
+def _holder_entries(node: Mapping[str, Any], name: str) -> frozenset[tuple[str, int, str]]:
+    """The holder's value of ``name`` as differs entries: file, line and the value as JSON."""
+    value = node["attributes"][name]
+    if isinstance(value, dict) and set(value) == {"differs"}:
+        rows = [(e["file"], e["line"], e["value"]) for e in value["differs"]]
+    else:
+        rows = [(node["locations"][0]["file"], node["locations"][0]["line"], value)]
+    return frozenset((f, n, json.dumps(v, sort_keys=True)) for f, n, v in rows)
+
+
+def _spread_value(entries: frozenset[tuple[str, int, str]]) -> Any:
+    """One value when the entries agree; otherwise each entry, sorted, as ``differs``."""
+    if len({value for _, _, value in entries}) == 1:
+        return json.loads(next(iter(entries))[2])
+    return {
+        "differs": [{"file": f, "line": n, "value": json.loads(v)} for f, n, v in sorted(entries)]
+    }
 
 
 def counts(
@@ -479,6 +569,9 @@ def _carried(
 
 
 def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> dict[str, Any]:
+    """The node the records of one id make. A record that only writes attributes adds them and
+    its row, which sets only them; it adds no type and no location."""
+    attributed, group = group, [node for node in group if not node.attribute_only]
     found = sorted({node.type for node in group})
     deepest = max(found, key=lambda name: len(type_chain(types, name)))
     conflict: list[str] = []
@@ -502,12 +595,13 @@ def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> di
                 if n.type not in type_chain(types, deepest)
             }
         )
-    values: dict[str, dict[tuple[str, int], Any]] = {}
+    values: dict[str, dict[tuple[str, int, str, str], Any]] = {}
     named: dict[tuple[str, str, str], set[str]] = {}
-    for node in group:
+    minted = {(node.pack, node.rule, node.confidence) for node in group}
+    for node in attributed:
         sets = named.setdefault((node.pack, node.rule, node.confidence), set())
         for name, value, line in node.attributes:
-            values.setdefault(name, {})[(node.file, line)] = value
+            values.setdefault(name, {})[(node.file, line, node.pack, node.rule)] = value
             sets.add(name)
     result: dict[str, Any] = {
         "id": group[0].id,
@@ -517,7 +611,12 @@ def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> di
             {"file": f, "line": n} for f, n in sorted({(node.file, node.line) for node in group})
         ],
         "provenance": [
-            {"pack": p, "rule": r, "confidence": c, "sets": ["id", "type", *sorted(names)]}
+            {
+                "pack": p,
+                "rule": r,
+                "confidence": c,
+                "sets": [*(("id", "type") if (p, r, c) in minted else ()), *sorted(names)],
+            }
             for (p, r, c), names in sorted(named.items())
         ],
     }
@@ -529,12 +628,18 @@ def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> di
     return result
 
 
-def _attribute(contributions: Mapping[tuple[str, int], Any]) -> Any:
-    """The value when every contribution agrees; otherwise every contribution, none winning."""
+def _attribute(contributions: Mapping[tuple[str, int, str, str], Any]) -> Any:
+    """The value when every contribution agrees; otherwise every contribution, none winning, in
+    file, line, pack and rule order, one entry per place and value."""
     ordered = sorted(contributions.items(), key=lambda item: item[0])
     if len({json.dumps(value, sort_keys=True) for _, value in ordered}) == 1:
         return ordered[0][1]
-    return {"differs": [{"file": f, "line": n, "value": value} for (f, n), value in ordered]}
+    entries: list[dict[str, Any]] = []
+    for (f, n, _, _), value in ordered:
+        entry = {"file": f, "line": n, "value": value}
+        if entry not in entries:
+            entries.append(entry)
+    return {"differs": entries}
 
 
 def _edge(

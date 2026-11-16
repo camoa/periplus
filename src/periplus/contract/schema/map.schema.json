@@ -54,6 +54,13 @@
       "description": "The path patterns of supporting code, as tests, that the packs and the settings name, sorted. A node whose first location's file matches one is supporting code. Written only when there is one, so a map without one is unchanged."
     },
 
+    "marks": {
+      "type": "object", "minProperties": 1,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+      "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 40, "pattern": "^[^\\[\\]\\n]*(?![\\s\\S])"},
+      "description": "The mark text of each declared attribute a node of this map holds, by attribute name, keys sorted: a reader shows the mark beside a node that holds the attribute, with no pack loaded. Written only when some node holds a marked attribute, so a map without one is unchanged."
+    },
+
     "type_hierarchy": {
       "type": "array",
       "items": {

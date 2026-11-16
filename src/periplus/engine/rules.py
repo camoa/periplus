@@ -84,6 +84,8 @@ class FoundNode:
     """One node one rule found in one file, before nodes are merged on id.
 
     ``attributes`` holds the name, the plain value and the line of each attribute the rule read.
+    ``attribute_only`` marks a map rule's write on a node other rules found: it adds its attributes
+    and its provenance row, and no type, location or id.
     """
 
     id: str
@@ -94,6 +96,7 @@ class FoundNode:
     rule: str
     confidence: str
     attributes: tuple[tuple[str, Any, int], ...] = ()
+    attribute_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,7 +298,8 @@ def run_map_rules(
     """Run every supported map rule over what the file rules found, in passes, until a pass adds
     nothing; return the nodes and edges the map rules made, each map rule's fires, the passes,
     and a skipped row for each rule that would start from, or follow a ``node`` step to, a node a
-    map rule made with an id no file rule found.
+    map rule made with an id no file rule found, and for each attribute write whose target no rule
+    found or has a type its declaration's ``on`` does not reach.
 
     A pass reads the map as it stood when the pass began, rules in load order and nodes in id
     order, so a rule reads what another made only in a later pass. The ids a map rule reads are
@@ -324,11 +328,12 @@ def run_map_rules(
     fires = {(rule.pack, rule.name): 0 for rule in rules}
     passes: list[MapPass] = []
     missed: set[tuple[str, str, str]] = set()
+    skips: set[Skipped] = set()
     while True:
         typed: dict[str, set[str]] = {}
         places: dict[str, set[tuple[str, int]]] = {}
         for node in (*nodes, *made_nodes):
-            if node.id in known:
+            if node.id in known and not node.attribute_only:
                 typed.setdefault(node.id, set()).add(node.type)
                 places.setdefault(node.id, set()).add((node.file, node.line))
         found = set(typed)
@@ -369,7 +374,9 @@ def run_map_rules(
                     made = [
                         record
                         for place in sorted(places[node_id])
-                        for record in _made(rule, rule_set, node_id, reached, captured, place)
+                        for record in _made(
+                            rule, rule_set, node_id, reached, captured, place, typed, skips
+                        )
                     ]
                     new = [record for record in made if record not in seen]
                     seen.update(new)
@@ -385,7 +392,7 @@ def run_map_rules(
                 made_edges,
                 fires,
                 passes,
-                _unread(rules, rule_set, made_nodes, known, missed, places),
+                sorted({*_unread(rules, rule_set, made_nodes, known, missed, places), *skips}),
             )
         made_nodes.extend(record for record in added if isinstance(record, FoundNode))
         made_edges.extend(record for record in added if isinstance(record, FoundEdge))
@@ -545,10 +552,14 @@ def _made(
     reached: str,
     values: Mapping[str, str],
     place: tuple[str, int],
+    typed: Mapping[str, set[str]],
+    skips: set[Skipped],
 ) -> list[FoundNode | FoundEdge]:
-    """The node or the edges one fire of a map rule makes, at ``place``: ``this`` is the id it
-    matched and ``reached`` the id its follow reached. A template naming an absent capture makes
-    nothing."""
+    """The node, or the edges and attribute writes, one fire of a map rule makes, at ``place``:
+    ``this`` is the id it matched and ``reached`` the id its follow reached. A template naming an
+    absent capture makes nothing. ``typed`` holds the types rules found for each id; a write whose
+    target has none, or none at or below a type its declaration's ``on`` lists, goes to ``skips``
+    instead."""
     file, line = place
     if rule.node_type:
         filled = _fill(rule.id_template, values)
@@ -573,6 +584,35 @@ def _made(
         if composed is not None:
             whole = ends[spec.start or spec.finish]
             made.extend(_edges(rule, rule_set, spec, file, "", [(composed, line)], whole=whole))
+    for name, template, target in rule.writes:
+        value = _fill(template, values)
+        if value is None:
+            continue
+        at = ends[target]
+        allowed = sorted(
+            t for t in typed.get(at, ()) if _allows(rule_set, t, rule_set.attributes[name].on)
+        )
+        if not allowed:
+            why = (
+                f"is a {', '.join(sorted(typed[at]))}, which the attribute's on does not list"
+                if at in typed
+                else "is no node a rule found"
+            )
+            skips.add((file, line, rule.name, f"attribute {name}: {at} {why}"))
+            continue
+        made.append(
+            FoundNode(
+                at,
+                allowed[0],
+                file,
+                line,
+                rule.pack,
+                rule.name,
+                rule.confidence,
+                ((name, value, line),),
+                attribute_only=True,
+            )
+        )
     return made
 
 

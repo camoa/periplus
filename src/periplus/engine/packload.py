@@ -18,6 +18,7 @@ from periplus.validate import MANIFEST_SCHEMA, PACK_FILE_SCHEMA, _schema, pack_f
 __all__ = [
     "PLACEHOLDER",
     "TEXT",
+    "Attribute",
     "BoundaryEntry",
     "Condition",
     "EXECUTED_KEYS",
@@ -109,6 +110,8 @@ EXECUTED_KEYS = frozenset(
             for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups", ".*.realizes")
         ),
         "file.edge_kinds.*.description",
+        *(f"file.attributes{k}" for k in ("", ".*.name", ".*.on", ".*.description")),
+        *(f"file.attributes{k}" for k in (".*.spreads", ".*.mark")),
         *(
             f"file.node_types{k}"
             for k in ("", ".*.name", ".*.parent", ".*.abstract", ".*.id_namespace", ".*.internal")
@@ -170,6 +173,7 @@ EXECUTED_KEYS = frozenset(
         *(f"{_RULE}emits.*.binding{k}" for k in ("", ".name", ".target")),
         *(f"{_RULE}emits.*.{k}" for k in ("node", "node.type", "attribute", "attribute.name")),
         *(f"{_RULE}emits.*.{k}" for k in ("attribute.from", "attribute.template", "edge")),
+        f"{_RULE}emits.*.attribute.target",
         f"{_RULE}emits.*.edge.kind",
         f"{_RULE}emits.*.edge.to.from.attribute_argument",
         f"{_RULE}emits.*.edge.to.from.argument",
@@ -515,6 +519,9 @@ class Rule:
     follow: tuple[tuple[str, Any], ...] = ()
     unless: tuple[tuple[tuple[str, Any], ...], ...] = ()
     unless_matched: tuple[tuple[tuple[str, Any], ...], ...] = ()
+    #: A map rule's attributes, each its name, its template and the node it is written on,
+    #: ``this_node`` or ``matched_node``.
+    writes: tuple[tuple[str, str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -587,6 +594,21 @@ class EdgeKind:
 
 
 @dataclass(frozen=True, slots=True)
+class Attribute:
+    """One declared node attribute: the types a rule may write it on, whether a container's value
+    reaches its members, the mark a reader shows for it, ``""`` for none, and its text; and the
+    pack and file that declared it first."""
+
+    name: str
+    on: tuple[str, ...]
+    spreads: bool = False
+    mark: str = ""
+    description: str = ""
+    pack: str = field(default="", compare=False)
+    file: str = field(default="", compare=False)
+
+
+@dataclass(frozen=True, slots=True)
 class BoundaryEntry:
     """One name a boundary group lists: the pack and group that list it, the group's node type,
     the type that classifies a first-party descendant of it or ``None``, and the edge kinds that
@@ -607,7 +629,7 @@ class RuleSet:
     ``values`` holds the project's settings values, which every template may name.
     ``tables`` holds, for each pack, the tables its table steps may name.
     ``boundary`` holds, by node id, each listing of a name by a boundary group of a loaded pack,
-    sorted by pack and group.
+    sorted by pack and group. ``attributes`` holds each declared attribute by name.
     """
 
     rules: tuple[Rule, ...]
@@ -619,6 +641,7 @@ class RuleSet:
     values: Mapping[str, str] = field(default_factory=dict)
     tables: Mapping[str, Mapping[str, Mapping[str, str]]] = field(default_factory=dict)
     boundary: Mapping[str, tuple[BoundaryEntry, ...]] = field(default_factory=dict)
+    attributes: Mapping[str, Attribute] = field(default_factory=dict)
 
 
 def load_rules(
@@ -640,6 +663,7 @@ def load_rules(
     values = dict(values or {})
     types: dict[str, TypeInfo] = {}
     kinds: dict[str, EdgeKind] = {}
+    attributes: dict[str, Attribute] = {}
     conflicts: list[Problem] = []
     declared_at: dict[str, tuple[str, str]] = {}
     rules: list[Rule] = []
@@ -660,6 +684,9 @@ def load_rules(
             _read_types(pack.name.pack, document.get("node_types"), types)
             _read_kinds(
                 pack.name.pack, relative, document.get("edge_kinds"), kinds, conflicts, declared_at
+            )
+            _read_attributes(
+                pack.name.pack, relative, document.get("attributes"), attributes, conflicts
             )
             imports.setdefault(pack.name.pack, []).extend(
                 (f"{pack.name.pack}/{relative}", entry) for entry in document.get("imports", [])
@@ -751,6 +778,7 @@ def load_rules(
         values=values,
         tables=tables,
         boundary=boundary,
+        attributes=attributes,
     )
 
 
@@ -1622,6 +1650,40 @@ def _read_kinds(
             conflicts.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
 
 
+def _read_attributes(
+    pack: str,
+    file: str,
+    declared: object,
+    attributes: dict[str, Attribute],
+    conflicts: list[Problem],
+) -> None:
+    """Each attribute the file declares into ``attributes``; one declared again with other types,
+    spread or mark, or another text, into ``conflicts``. The schema has checked the shape."""
+    for entry in declared if isinstance(declared, list) else []:
+        attribute = Attribute(
+            name=entry["name"],
+            on=tuple(sorted(entry["on"])),
+            spreads=entry.get("spreads") is True,
+            mark=entry.get("mark", ""),
+            description=entry.get("description", ""),
+            pack=pack,
+            file=file,
+        )
+        known = attributes.setdefault(attribute.name, attribute)
+        # A declaration without a text agrees with one that has it; the text is kept.
+        if not known.description:
+            known = attributes[attribute.name] = replace(known, description=attribute.description)
+        if known != replace(attribute, description=attribute.description or known.description):
+            conflicts.append(
+                Problem(
+                    ExitCode.PACK_RULES_UNREADABLE,
+                    f"the attribute {attribute.name} is declared with different types, spreads, "
+                    f"mark or description in {pack}/{file}, after {known.pack}/{known.file}",
+                    {"attribute": attribute.name, "pack": pack, "file": file},
+                )
+            )
+
+
 def _read_types(pack: str, declared: object, types: dict[str, TypeInfo]) -> None:
     for entry in declared if isinstance(declared, list) else []:
         name = entry.get("name") if isinstance(entry, Mapping) else None
@@ -1668,6 +1730,12 @@ def _build_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]]) -
         raise _Unsupported("only a tree declaration rule takes match.holder")
     if "encloses_for" in item.get("match", {}) and "declaration" not in item["match"]:
         raise _Unsupported("only a tree declaration rule takes match.encloses_for")
+    if item.get("reads") != "map" and any(
+        isinstance(emit.get("attribute"), Mapping) and "target" in emit["attribute"]
+        for emit in item.get("emits", [])
+        if isinstance(emit, Mapping)
+    ):
+        raise _Unsupported("only a map rule takes attribute.target")
     if item.get("reads") == "map":
         return _build_map(pack, item, tables)
     if (
@@ -2163,17 +2231,31 @@ def _build_map(pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[
     follow = _read_follow(match.get("follow", []))
     nodes = node_types(item)
     edges = [_read_map_edge(emit["edge"], bool(follow)) for emit in emits if "edge" in emit]
+    attributes = [emit["attribute"] for emit in emits if "attribute" in emit]
     block = item.get("id")
     if (
-        len(nodes) + len(edges) != len(emits)
+        len(nodes) + len(edges) + len(attributes) != len(emits)
         or len(nodes) > 1
         or any(emit["node"].keys() != {"type"} for emit in emits if "node" in emit)
-        or (edges and block is not None)
+        or (nodes and (edges or attributes))
+        or ((edges or attributes) and block is not None)
         or (nodes and not (isinstance(block, Mapping) and set(block) == {"template"}))
     ):
         raise _Unsupported(
-            "a map rule emits one node with a type and an id from one template, or edges and no id"
+            "a map rule emits one node with a type and an id from one template, or edges and "
+            "attributes and no id"
         )
+    writes = tuple(
+        (str(a["name"]), a.get("template"), a.get("target", "this_node")) for a in attributes
+    )
+    if any(
+        not {"name", "template"} <= set(a) <= {"name", "template", "target"} for a in attributes
+    ) or any(target not in _MAP_ENDS for _, _, target in writes):
+        raise _Unsupported(
+            "an attribute of a map rule is not a name and a template, with an optional target "
+            "this_node or matched_node"
+        )
+    _refuse_resolution_value(pack, "map", ((name, template) for name, template, _ in writes))
     return Rule(
         pack=pack,
         name=str(item["rule"]),
@@ -2192,6 +2274,7 @@ def _build_map(pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[
         unless_matched=tuple(
             tuple(_read_follow(chain)) for chain in match.get("unless_matched", [])
         ),
+        writes=writes,
     )
 
 

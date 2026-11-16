@@ -190,6 +190,7 @@ def run(
             boundary=rule_set.boundary,
             skipped=skipped,
             supporting=_supporting_paths(packs, settings),
+            attributes=rule_set.attributes,
         )
     except HarnessError as error:
         return _failed([error.problem()])

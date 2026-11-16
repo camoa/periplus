@@ -123,6 +123,10 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
         }
         for name in documents
     }
+    attributes = {
+        name: {a for _, document in documents[name] for a in _declared(document, "attributes")}
+        for name in documents
+    }
     rule_files = {
         (owner, str(rule.get("rule"))): file
         for owner, found in documents.items()
@@ -141,10 +145,24 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
             for rule in _rules(document):
                 files_of.setdefault(str(rule.get("rule")), []).append(file)
             problems.extend(_undeclared(name, file, document, types, known_kinds))
+            problems.extend(
+                Problem(
+                    ExitCode.PACK_RULES_UNREADABLE,
+                    f"{name}/{file}: the attribute {reserved} is declared, and the name is "
+                    "reserved for the engine",
+                    {"pack": name, "file": file, "attribute": reserved},
+                )
+                for reserved in _declared(document, "attributes")
+                if reserved in _RESERVED
+            )
             problems.extend(_unexecuted_keys(name, file, document, "file."))
             problems.extend(_illegal_ends(name, file, document, twins, rule_set))
         problems.extend(
             _unexecuted_keys(name, MANIFEST_FILENAME, pack.manifest.document, "manifest.")
+        )
+        seen = set().union(*(attributes[p] for p in visible))
+        problems.extend(
+            _attribute_writes(name, seen, set().union(*attributes.values()), rule_set, rule_files)
         )
         abstract = {
             str(entry.get("name"))
@@ -216,6 +234,56 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
     problems.extend(_type_conflicts(packs))
     problems.extend(grammar_problems(packs))
     return sorted(problems, key=lambda problem: (int(problem.code), problem.message))
+
+
+#: The attributes the engine gives their meaning, which no pack declares.
+_RESERVED = (TYPE_CONFLICT, "resolution")
+
+
+def _attribute_writes(
+    pack: str,
+    visible: set[str],
+    declared: set[str],
+    rule_set: RuleSet,
+    rule_files: Mapping[tuple[str, str], str],
+) -> list[Problem]:
+    """Each attribute a supported rule of the pack writes that ``visible``, the names the pack and
+    the packs it depends on declare, lacks: every one a map rule writes, and one a file rule writes
+    that some pack ``declared``. And each declared attribute a rule writes on its own node of a
+    type not at or below a type the declaration's ``on`` lists."""
+    problems: list[Problem] = []
+    for rule in rule_set.rules:
+        if rule.pack != pack or not rule.supported:
+            continue
+        where = f"{pack}/{rule_files.get((pack, rule.name), rule.name)}"
+        writes = [(n, t) for n, _, t in rule.writes] or [
+            (n, "this_node") for n, _ in (*rule.attributes, *rule.templates)
+        ]
+        for name, target in writes:
+            if name not in visible and (rule.matches_type or name in declared):
+                problems.append(
+                    Problem(
+                        ExitCode.PACK_RULES_UNREADABLE,
+                        f"{where}: the rule {rule.name} writes the attribute {name}, which "
+                        f"neither {pack} nor a pack it depends on declares",
+                        {"pack": pack, "rule": rule.name, "attribute": name},
+                    )
+                )
+                continue
+            on = rule_set.attributes[name].on if name in visible else ()
+            node_type = rule.matches_type or rule.node_type
+            chain = set(type_chain(rule_set.types, node_type))
+            if on and target == "this_node" and not set(on) & chain:
+                problems.append(
+                    Problem(
+                        ExitCode.PACK_RULES_UNREADABLE,
+                        f"{where}: the rule {rule.name} writes the attribute {name} on "
+                        f"{node_type}, which is not at or below a type the declaration of {name} "
+                        f"lists in on: {', '.join(on)}",
+                        {"pack": pack, "rule": rule.name, "attribute": name},
+                    )
+                )
+    return problems
 
 
 def _documents(pack: LoadedPack) -> list[tuple[str, Mapping[str, Any]]]:

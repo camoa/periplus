@@ -455,6 +455,41 @@ The pattern's group is one line, so a summary that runs over two lines keeps its
 says what its author wrote, not what the code does; text a person or a model writes about the
 code goes in the descriptions file, not in the map.
 
+## Declared attributes
+
+A pack file may declare node attributes under `attributes`, as it declares `edge_kinds`. A map
+rule writes only a declared attribute. A file rule may still write an attribute no pack declares,
+as `summary` above; a rule that writes a declared one is held to its declaration.
+
+```yaml
+attributes:
+- name: switched
+  on: [box.unit]
+  description: The unit is switched off.
+  spreads: true
+  mark: switched off
+```
+
+- `on` lists the node types a rule may write the attribute on; a type below one counts. A rule
+  that writes it on its own node is checked before any source file is read. A map rule that writes
+  it on its `matched_node` is checked when it fires.
+- `spreads: true` carries a container's value to its members through every grouping kind
+  (`groups: true`), from the edge's to end to its from end, and on through their members. A node
+  that holds a value of its own keeps it. Otherwise the nearest containers that hold one decide:
+  one value when they agree, `differs` when they do not. The value is written into the map, with a
+  provenance row whose rule is `spread.<name>`, whose pack is the declaring one, and whose
+  confidence is the weakest of the row that set the value and the grouping edges on the way.
+- `mark` is a short text a reader shows beside a node that holds the attribute: one to 40
+  characters, with no `[`, `]` or line break. The map's header `marks` names the mark of each
+  declared attribute some node holds, so a reader needs no pack.
+
+The check refuses, with exit 19, a rule that writes an attribute neither its rutter nor one it
+depends on declares, when the rule is a map rule or another rutter declares the name; a rule that
+writes a declared attribute on its own node of a type `on` does not reach; one name declared with
+different `on`, `spreads`, `mark` or description in two places; and a declaration of
+`type_conflict` or `resolution`, which the engine reserves. A mark that breaks its limits is a
+schema error, exit 16.
+
 ## The grammar's node kinds
 
 No page lists a grammar's node types and fields. Print the tree of a sample file with the
@@ -685,7 +720,6 @@ file.recommendations.*: text topic
 file.resolution: detect_references_independently_of_imports match never_match_by
     on_multiple_definitions on_zero_definitions scope
 file.rules.*.emits.*: role type
-file.rules.*.emits.*.attribute: target
 file.rules.*.emits.*.edge: attributes
 file.rules.*.emits.*.edge.attributes.*: from literal normalize pattern template
 file.rules.*.emits.*.edge.attributes.*.from: annotation_key argument argument_class argument_key

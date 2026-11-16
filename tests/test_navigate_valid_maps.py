@@ -9,8 +9,11 @@ from typing import Any
 
 import pytest
 from _navigate import _edge, _node
+from jsonschema import Draft202012Validator
 
 from periplus.cli import main
+from periplus.mapshared import MAP_SCHEMA, first_error
+from periplus.validate import _schema
 
 DOCUMENT: dict[str, Any] = {
     "periplus_map_version": 0,
@@ -56,3 +59,9 @@ def test_a_type_hierarchy_row_without_a_parent_is_a_root_type(
     assert main(["types", "--map", path]) == 0
     assert main(["find", "run", "--type", "php.method", "--map", path]) == 0
     assert "php.method::B::run" in capsys.readouterr().out
+
+
+def test_a_map_without_marks_passes_the_map_schema() -> None:
+    """A map written before attributes had marks holds no marks header."""
+    assert "marks" not in DOCUMENT
+    assert first_error(Draft202012Validator(_schema(MAP_SCHEMA)).iter_errors(DOCUMENT)) is None

@@ -67,7 +67,8 @@ later pass makes does not take back what the rule already made.
 
 It emits edges whose ends are `this_node`, the node it matched, `matched_node`, the node its
 `follow` reached, or one template end filled from the captures, with `type` or `types` and
-`on_miss` as on any end; or one node, whose `id` is a template. A template end of one type mints
+`on_miss` as on any end, and attributes, as [An attribute from a map rule](#an-attribute-from-a-map-rule)
+says; or one node, whose `id` is a template. A template end of one type mints
 its id in that type's id namespace, and in the kind's only when it names no type. What a fire makes sits at each
 location of the node it matched, whatever its ends name, so a rule that matches a call-site node
 places its edge at the call. Every kind and type it names is
@@ -192,6 +193,35 @@ Map rule passes:
   pass 2: fleet ask_through_part fired 1
   pass 3: none
 ```
+
+## An attribute from a map rule
+
+A map rule may emit attributes beside its edges, never beside a node. Each is `{name, template}`,
+the template filled from the captures, with an optional `target`: `this_node`, the default, writes
+on the node the rule matched, and `matched_node` on the node its `follow` reached. A template that
+names an absent capture writes nothing. The attribute must be declared by the rule's rutter or one
+it depends on, as [Declared attributes](rutter-author-guide-references.md#declared-attributes)
+says. This rule writes `switched: 'off'` on each unit no list names:
+
+```yaml
+- rule: unit_off
+  reads: map
+  match:
+    node_type: box.unit
+    follow: [{node: 'box.list::on'}]
+    unless: [[{incoming_edge: lists}]]
+  emits:
+  - attribute: {name: switched, template: 'off'}
+  confidence: inferred
+```
+
+A write changes no type, id or location. The node keeps what the other rules found, and gains the
+value and one provenance row whose `sets` names only the attribute. A write on a node no rule
+found, or on a node whose type is not at or below a type the declaration's `on` lists, writes
+nothing; the map report lists it under Matches skipped, so a referenced end never turns into a
+mapped node. Two rules that give one value write it once, each with its row; two that give
+different values write `differs`, even at the same place, and the report lists the node under
+Attributes that differ between files. No `follow` step reads an attribute, so the passes still end.
 
 ## Internal node types
 
