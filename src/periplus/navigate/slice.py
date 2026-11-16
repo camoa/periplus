@@ -40,7 +40,7 @@ from periplus.navigate.mapfile import (
 from periplus.navigate.names import Names
 from periplus.navigate.show import node_descriptions
 from periplus.navigate.source import SourceLines, description_line, source_line, where
-from periplus.navigate.walk import stand_in_line, walk
+from periplus.navigate.walk import stand_in_line, start_args, walk
 from periplus.report import _escape, _json_problem
 
 __all__ = [
@@ -167,7 +167,7 @@ class Link:
 class Subject:
     """A mapped node of the piece under its file: line, short name, type, source line, its links
     in the piece, its edges the piece does not show, as (kind, outward, count), how many nodes
-    stand for it past the cap, and its mark texts."""
+    stand for it past the cap, its mark texts, and whether a link names fewer ends than it has."""
 
     id: str
     short: str
@@ -179,6 +179,7 @@ class Subject:
     unwalked: tuple[tuple[str, bool, int], ...]
     more_forms: int = 0
     marks: tuple[str, ...] = ()
+    cut_links: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,7 +210,9 @@ class SliceReport:
 
     A printed piece (``printed``) holds its ``starts`` and ``rows``, what the row cap left out by
     hop and by kind, the kinds its rows hold, whether an edge leads on past ``depth``, the nodes
-    folded into the node above by type, and ``notes`` on how the words were read.
+    folded into the node above by type, and ``notes`` on how the words were read. ``unpicked``
+    counts the nodes the ``words`` matched that the start cap left out; ``piped`` says the starts
+    came from standard input.
     """
 
     out: str | None = None
@@ -237,6 +240,9 @@ class SliceReport:
     legend: tuple[tuple[str, str], ...] = ()
     pieces: tuple[Piece, ...] = ()
     piece_of: Mapping[str, int] | None = None
+    unpicked: int = 0
+    words: tuple[str, ...] = ()
+    piped: bool = False
 
     @property
     def exit_code(self) -> ExitCode:
@@ -258,14 +264,19 @@ def run(
     types: Collection[str] = (),
     starts: int | None = None,
     support: bool = False,
+    from_ids: Sequence[str] = (),
+    piped: bool = False,
 ) -> SliceReport:
     """Write ``ids``, the nodes under each of ``prefixes`` and what they reach to ``out``.
 
     Without ``out``, print the piece instead: see ``_piece``. ``direction`` is ``out``, ``in`` or
     ``both``. A limit of 0 keeps every item. ``depth`` and ``limit`` of ``None`` take the mode's
     default. ``types`` and ``starts`` narrow words, which only the printed piece takes, and
-    ``support`` prints its supporting code.
+    ``support`` prints its supporting code. ``from_ids`` are ids to start from, in place of
+    ``ids``, with no word searched; ``piped`` says they came from standard input.
     """
+    if from_ids:
+        ids = from_ids
     if out is None:
         return _piece(
             start,
@@ -281,6 +292,8 @@ def run(
             START_LIMIT if starts is None else starts,
             limit is None,
             support,
+            not from_ids,
+            piped,
         )
     if types or starts is not None or support:
         message = (
@@ -384,6 +397,8 @@ def _piece(
     most: int,
     budgeted: bool = False,
     support: bool = False,
+    searching: bool = True,
+    piped: bool = False,
 ) -> SliceReport:
     """The piece around the start nodes, as rows to print; ``budgeted`` fits it to
     ``BYTE_LIMIT``, cutting far hops, then the unwalked counts, then names per link, then the
@@ -398,6 +413,8 @@ def _piece(
 
     Unless ``support``, a node in supporting code is not a start, but for one named by its id or
     when every match is there, and the walk does not print or follow it: each piece counts them.
+
+    Without ``searching``, each of ``given`` must name a node, and no word is searched.
     """
     try:
         document = load_document(start, env, map_path)[1]
@@ -412,11 +429,13 @@ def _piece(
                 try:
                     node_id, said = resolve(index, text)
                 except NodeNotFound:
+                    if not searching:
+                        raise
                     rest.append(text)
                     continue
                 warnings += said
                 picked.setdefault(node_id, Start(_row(index, node_id, described), given=text))
-                if several and _WORD.fullmatch(text):
+                if searching and several and _WORD.fullmatch(text):
                     rest.append(text)
             words = list(dict.fromkeys(_WORD.findall(" ".join(rest).casefold())))
             words = [word for word in words if len(word) >= MIN_WORD]
@@ -429,6 +448,7 @@ def _piece(
             weights: dict[str, float] = {}
             scores: dict[str, float] = {}
             notes: list[str] = []
+            unpicked = 0
             search = _Search(index, described)
             for word in words:
                 hits = search(word, None, ())
@@ -447,7 +467,7 @@ def _piece(
                     for node_id, found_ in owned.items()
                 }
                 rarest = sorted(weights, key=lambda w: (-weights[w], w))
-                found = _starts(
+                found, matches = _starts(
                     index,
                     queries,
                     (wanted, narrowed),
@@ -460,6 +480,7 @@ def _piece(
                 )
                 for node_id, chosen in found.items():
                     picked.setdefault(node_id, chosen)
+                unpicked = len(set(matches) - set(picked))
                 lone = found and queries[0] == whole and len(queries) > 1
                 if lone and not search(whole, wanted, narrowed):
                     notes.append(f"no node matches {whole!r} as a whole; started from its words")
@@ -577,6 +598,9 @@ def _piece(
                     legend=legend if told else (),
                     pieces=pieces,
                     piece_of=piece_of,
+                    unpicked=unpicked,
+                    words=tuple(words or [whole]) if queries else (),
+                    piped=piped,
                 )
 
             begun = tuple(
@@ -633,6 +657,10 @@ def _piece(
                 if near_cut:
                     parts.append(f"{near_cut} hop-1 rows left out, largest piece first")
                 cut_note = f"cut to fit {budget} bytes: {', '.join(parts)}; --limit N prints N rows"
+                if not told:
+                    cut_note += "; what a kind means: periplus legend --kind K"
+                if not more or cap < LINK_NAMES:
+                    cut_note += "; a node's links in full: periplus show NAME --limit 0"
                 report = assemble(taking, cap, more, (cut_note,), told)
     except HarnessError as error:
         return SliceReport(printed=True, problems=(error.problem(),))
@@ -728,6 +756,10 @@ def _layout(
                         ends.setdefault((kind, outward), []).append(far)
                 else:
                     unwalked[(kind, outward)] += 1
+        links = tuple(
+            link(k, o, sorted(set(v)), node_id)
+            for (k, o), v in sorted(ends.items(), key=lambda p: (p[0][0], not p[0][1]))
+        )
         found.append(
             (
                 loc["file"] if loc else None,
@@ -738,10 +770,7 @@ def _layout(
                     loc["line"] if loc else None,
                     lines.at(place(loc)) if loc else None,
                     described.get(node_id),
-                    tuple(
-                        link(k, o, sorted(set(v)), node_id)
-                        for (k, o), v in sorted(ends.items(), key=lambda p: (p[0][0], not p[0][1]))
-                    ),
+                    links,
                     tuple(
                         (k, o, n)
                         for (k, o), n in sorted(
@@ -752,6 +781,8 @@ def _layout(
                     else (),
                     more_forms.get(node_id, 0),
                     index.marks(node_id),
+                    more
+                    and any(k.more or k.owners or k.outside_count > len(k.outside) for k in links),
                 ),
             )
         )
@@ -992,8 +1023,9 @@ def _starts(
     standing: _Standing,
     search: _Search,
     support: bool = False,
-) -> dict[str, Start]:
-    """Up to ``most`` start nodes that the queries find, in two passes.
+) -> tuple[dict[str, Start], list[str]]:
+    """Up to ``most`` start nodes that the queries find, in two passes, and every node the
+    queries found that may be a start.
 
     The first pass covers the words: in turn from the rarest word down, it takes the best node
     that holds the word and is not yet taken, until it holds ``WORD_SHARE`` of ``most``, or one
@@ -1065,7 +1097,7 @@ def _starts(
     return {
         node_id: Start(find.found_row(nearest[node_id], described), words=tuple(said[node_id]))
         for node_id in order[:most]
-    }
+    }, ranked
 
 
 def _keep(
@@ -1334,8 +1366,11 @@ def _file_lines(group: FileGroup, under: str) -> list[str]:
                 for kind, outward, n in subject.unwalked
             )
             lines.append(
-                f"      +{total} more links: {counted}; see periplus slice {_escape(subject.short)}"
+                f"      +{total} more links: {counted};"
+                f" see periplus show {_escape(subject.short)} --limit 0"
             )
+        elif subject.cut_links:
+            lines.append(f"      all links: periplus show {_escape(subject.short)} --limit 0")
     return lines
 
 
@@ -1362,7 +1397,8 @@ def _piece_lines(report: SliceReport, shorts: Mapping[str, str], under: str) -> 
             patterns = ", ".join(_escape(p) for p in piece.patterns)
             lines += [
                 "",
-                f"+{piece.supporting} in supporting code ({patterns}): show with --support",
+                f"+{piece.supporting} in supporting code ({patterns}): show with --support,"
+                " or with the in-full commands at the end",
             ]
     if total > 1:
         one, two = (_escape(shorts.get(p.starts[0], p.starts[0])) for p in report.pieces[:2])
@@ -1376,11 +1412,11 @@ def _piece_lines(report: SliceReport, shorts: Mapping[str, str], under: str) -> 
 
 
 def _member_line(members: Members, short: str) -> str:
-    """A container start's member count by type, and the command that lists one type."""
+    """A container start's member count by type, and the command that lists them."""
     counted = ", ".join(f"{_escape(t)} {n}" for t, n in members.by_type.items())
     return (
         f"members of {_escape(short)}: {members.total} ({counted});"
-        f" list one type: periplus slice {_escape(short)} --type T --limit 0"
+        f" all: periplus members {_escape(short)} (--type T for one type)"
     )
 
 
@@ -1393,7 +1429,8 @@ def _left_out(report: SliceReport) -> list[str]:
         lines.append(f"folded into the node above, all their edges joining it: {counted}")
     note = footer(report.rows)
     if note is None:
-        return lines + ([f"go deeper with --depth {report.depth + 1}"] if report.deeper else [])
+        lines += [f"go deeper with --depth {report.depth + 1}"] if report.deeper else []
+        return lines + _in_full(report)
     hops = ", ".join(f"{hop}: {n}" for hop, n in (report.left_by_hop or {}).items())
     left = report.left_by_kind or {}
     first = sorted(left, key=lambda k: (-left[k], k))[:FOOTER_KINDS]
@@ -1417,7 +1454,33 @@ def _left_out(report: SliceReport) -> list[str]:
     ]
     if report.searched:
         lines.append("pick other starts with --type T, --path P or --starts N")
-    return [*lines, "show all with --limit 0"]
+    return lines + _in_full(report)
+
+
+def _in_full(report: SliceReport) -> list[str]:
+    """When the piece left rows out, folded nodes into the node above or left out supporting
+    code, the ``show`` commands that print every edge of each hop: ``show`` on the starts, then
+    each further hop through ``show --ids``."""
+    cut = footer(report.rows) is not None or report.folded
+    if not report.starts or not (cut or any(p.supporting for p in report.pieces)):
+        return []
+    shorts = report.shorts or {}
+    starts = [shorts.get(s.row.id, s.row.id) for s in report.starts]
+    told = (
+        " (with the same ids piped into the first command)"
+        if report.piped
+        else f" (pipe the {len(starts)} starts above into the first command)"
+    )
+    named, said = start_args(starts, report.piped, told)
+    first = f"periplus show {' '.join(_escape(n) for n in named)}"
+    return [
+        "in full, every edge hop by hop, with what is left out, folded or in supporting code"
+        f"{said}:",
+        *(
+            f"  hop {hop}: {first}{' --ids | periplus show -' * (hop - 1)} --limit 0"
+            for hop in range(1, report.depth + 1)
+        ),
+    ]
 
 
 def _legend_lines(legend: Sequence[tuple[str, str]]) -> list[str]:
@@ -1448,6 +1511,14 @@ def render_text(report: SliceReport) -> str:
             lines.append(
                 f"start {short}  {_escape(start.row.type)}  ({_escape(_why(start))})"
                 f"{mark_text(start.row.marks)}"
+            )
+        if report.unpicked:
+            words = ", ".join(_escape(w) for w in report.words)
+            lines.append(
+                f"+{report.unpicked} more"
+                f" {'node matches' if report.unpicked == 1 else 'nodes match'}"
+                " the words: periplus find WORD --limit 0 for"
+                f" each of: {words}; start from any with periplus slice --from ID"
             )
         lines += [_member_line(m, shorts.get(m.container, m.container)) for m in report.members]
         under = _folder(report.files)

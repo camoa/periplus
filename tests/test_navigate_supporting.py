@@ -85,7 +85,10 @@ def test_a_printed_slice_folds_supporting_code_into_one_count_line(tmp_path: Pat
     text = slicing.render_text(report)
 
     assert {row.id for row in report.rows.items} == {SEND}
-    assert "+3 in supporting code (tests/**): show with --support" in text.splitlines()
+    assert (
+        "+3 in supporting code (tests/**): show with --support, or with the in-full commands at"
+        " the end"
+    ) in text.splitlines()
     assert "SenderTest" not in text and "FakeSender" not in text
 
 

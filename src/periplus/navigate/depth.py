@@ -12,10 +12,19 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import problem_lines
 from periplus.navigate.mapfile import MapIndex, as_json, load_map, reading_fields
-from periplus.navigate.walk import HUB, CauseRow, amount, cause_walk, head_line, summary, ways
+from periplus.navigate.walk import (
+    HUB,
+    CauseRow,
+    amount,
+    cause_walk,
+    head_line,
+    start_args,
+    summary,
+    ways,
+)
 from periplus.report import _escape, _json_problem
 
-__all__ = ["RENDERERS", "DepthReport", "render_json", "render_text", "run"]
+__all__ = ["RENDERERS", "DepthReport", "measure", "render_json", "render_text", "run"]
 
 #: The most touching kinds the text names; the rest are counted.
 KINDS_NAMED = 3
@@ -39,6 +48,7 @@ class DepthReport:
     declares: bool = True
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
+    piped: bool = False
 
     @property
     def exit_code(self) -> ExitCode:
@@ -53,10 +63,28 @@ def run(
     map_path: Path | None,
     hub: int = HUB,
     through: Sequence[str] = (),
+    piped: bool = False,
 ) -> DepthReport:
-    """Walk by cause from ``ids`` both ways to the end, with the hub limit and ``through``."""
+    """Walk by cause from ``ids`` both ways to the end, with the hub limit and ``through``;
+    ``piped`` says the ids came from standard input."""
     try:
         index = load_map(start, env, map_path)
+    except HarnessError as error:
+        return DepthReport(problems=(error.problem(),))
+    return measure(start, index, ids, map_path, hub, through, piped)
+
+
+def measure(
+    start: Path,
+    index: MapIndex,
+    ids: Sequence[str],
+    map_path: Path | None,
+    hub: int = HUB,
+    through: Sequence[str] = (),
+    piped: bool = False,
+) -> DepthReport:
+    """``run`` on a map already loaded."""
+    try:
         with reading_fields(start, map_path):
             notes: list[str] = []
             starts: list[str] = []
@@ -83,6 +111,7 @@ def run(
         tuple(sorted({*off.undeclared, *by.undeclared})),
         index.declares_causes,
         tuple(notes),
+        piped=piped,
     )
 
 
@@ -109,7 +138,8 @@ def _kinds(counted: Sequence[tuple[str, int]]) -> str:
 
 def render_text(report: DepthReport) -> str:
     """One line per direction, then the touching line and the undeclared line when there are any."""
-    named = " ".join(_escape(s) for s in report.starts)
+    args, note = start_args(report.starts, report.piped)
+    named = " ".join(_escape(s) for s in args)
     lines = [head_line("depth", report.starts)]
     if report.starts:
         lines.append(summary("sets off:", report.off, True))
@@ -120,12 +150,12 @@ def render_text(report: DepthReport) -> str:
             verb = "points" if report.pointers == 1 else "point"
             parts.append(
                 f"{amount(report.pointers, 'thing')} {verb} at {'it' if one else 'them'}"
-                f" ({_kinds(report.pointed)}); see periplus affected {named} --touch"
+                f" ({_kinds(report.pointed)}); see periplus affected {named} --touch{note}"
             )
         if report.pointees:
             parts.append(
                 f"{'it points' if one else 'they point'} at {amount(report.pointees, 'thing')}"
-                f" ({_kinds(report.pointing)}); see periplus neighbors {named} --touch"
+                f" ({_kinds(report.pointing)}); see periplus neighbors {named} --touch{note}"
             )
         if parts:
             lines.append(f"{'touching:':<12}" + "; ".join(parts))

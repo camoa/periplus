@@ -512,7 +512,7 @@ Then it runs the loop. The map's `referenced` and `unresolved` nodes say which r
 
 ## Read the map
 
-Thirteen commands answer a question about a written map, and stop: `periplus types` counts the node
+Fourteen commands answer a question about a written map, and stop: `periplus types` counts the node
 types and edge kinds, `periplus legend` says what each kind and type means and which types a kind
 joins, `periplus find TEXT` searches node ids, attributes and descriptions, `periplus show ID...` prints
 nodes and their edges, `periplus neighbors ID` and `periplus affected ID` list what a node sets off and
@@ -526,7 +526,9 @@ file, `periplus at FILE:LINE...` names the mapped thing at a line and what holds
 ID...` counts a set by file, `periplus undescribed` counts the main things with no description yet,
 and `periplus order ID...` puts a set in order, each thing after what it uses. `periplus stamp`
 writes into each description a fingerprint of its code, and `periplus stale` lists the
-descriptions whose code changed since. A command that lists things takes `--ids` and prints one full id a line; a command that
+descriptions whose code changed since. `periplus reach ID...` prints `depth`, `neighbors`,
+`affected`, `only` and `hubs` for the ids in one reply, to a character budget, and names the
+command that prints in full each part it cut short. A command that lists things takes `--ids` and prints one full id a line; a command that
 takes ids reads them from standard input when given `-`, so
 `periplus neighbors ID --depth all --ids | periplus count -` joins two. They read the map, the
 descriptions file and the source line under each row, and nothing more. `periplus check-map` runs the full schema check that these commands
@@ -583,6 +585,7 @@ periplus check-map                 # check every node and edge of the map agains
 periplus find TEXT                 # find the nodes whose id, attributes or description hold a text
 periplus show ID...                # show nodes and the edges at each
 periplus depth ID                  # say how far what an item sets off, and what sets it off, reach
+periplus reach ID...               # print depth, neighbors, affected, only and hubs in one reply
 periplus neighbors ID              # list what an item sets off, hop by hop
 periplus affected ID               # list what sets an item off, hop by hop
 periplus only ID...                # list what the ids set off that nothing else sets off
@@ -605,7 +608,7 @@ periplus skills install            # copy the Claude skills Periplus ships into 
 
 `periplus validate` takes a bare `name`, or `name@version` to pick one of several copies.
 `periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `slice`
-and `export` takes `--format json`. The twenty-three commands that read a map take `--map PATH`; the
+and `export` takes `--format json`. The twenty-four commands that read a map take `--map PATH`; the
 [navigation guide](docs/navigation.md) gives their other options. `periplus --version` prints the
 installed version, and `periplus <command> --help` gives each command's options.
 

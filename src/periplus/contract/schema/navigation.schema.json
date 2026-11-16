@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://periplus.dev/schema/0/navigation.schema.json",
   "title": "Periplus navigation result",
-  "description": "What `--format json` prints for the navigation commands: types, legend, find, show, neighbors, affected, depth, only, hubs, members, pieces, count, path and slice, and what `export --report json` prints to standard error. Each command has one definition under $defs, show two (show_many for several ids), slice two (slice with --out, slice_piece without), and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
+  "description": "What `--format json` prints for the navigation commands: types, legend, find, show, neighbors, affected, depth, reach, only, hubs, members, pieces, count, path and slice, and what `export --report json` prints to standard error. Each command has one definition under $defs, show two (show_many for several ids), slice two (slice with --out, slice_piece without), and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
 
   "anyOf": [
     {"$ref": "#/$defs/types"},
@@ -12,6 +12,7 @@
     {"$ref": "#/$defs/neighbors"},
     {"$ref": "#/$defs/affected"},
     {"$ref": "#/$defs/depth"},
+    {"$ref": "#/$defs/reach"},
     {"$ref": "#/$defs/show_many"},
     {"$ref": "#/$defs/only"},
     {"$ref": "#/$defs/hubs"},
@@ -582,6 +583,23 @@
             }
           }
         },
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "reach": {
+      "description": "periplus reach: the depth report of the starts, then neighbors and affected as each prints with --format json, the hubs report of each walk, and the ids only returns.",
+      "type": "object", "additionalProperties": false,
+      "required": ["command", "starts", "depth", "only", "only_command", "walks", "hubs", "warnings", "problems"],
+      "properties": {
+        "command": {"const": "reach"},
+        "starts": {"type": "array", "items": {"type": "string"}},
+        "depth": {"description": "null when an id names no node.", "oneOf": [{"$ref": "#/$defs/depth"}, {"type": "null"}]},
+        "only": {"description": "The ids only returns, by hop and id; null when the walk off was not asked for.", "type": ["array", "null"], "items": {"type": "string"}},
+        "only_command": {"description": "The only command that lists them; null when the walk off was not asked for.", "type": ["string", "null"]},
+        "walks": {"description": "neighbors, then affected, as --direction asks.", "type": "array", "items": {"$ref": "#/$defs/cause_walk"}},
+        "hubs": {"description": "The hubs report of each walk, in the same order.", "type": "array", "items": {"$ref": "#/$defs/hubs"}},
         "warnings": {"$ref": "#/$defs/warnings"},
         "problems": {"$ref": "#/$defs/problems"}
       }

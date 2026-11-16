@@ -44,6 +44,7 @@ from periplus.report import _escape, _json_problem
 __all__ = [
     "BUDGET",
     "HUB",
+    "PIPED",
     "RENDERERS",
     "CauseReport",
     "CauseRow",
@@ -51,6 +52,7 @@ __all__ = [
     "WalkReport",
     "WalkRow",
     "amount",
+    "cause_report",
     "cause_walk",
     "head_line",
     "listed",
@@ -59,6 +61,7 @@ __all__ = [
     "run",
     "run_cause",
     "stand_in_line",
+    "start_args",
     "summary",
     "ways",
 ]
@@ -338,6 +341,16 @@ NO_CAUSES = "the map declares no cause directions; walked by raw direction, as -
 STARTS_NAMED = 3
 #: The share of the things reached within these hops that ``summary`` prints.
 SHARES = (2, 3, 5)
+#: What a suggested command that reads its ids with ``-`` adds after it.
+PIPED = " (with the same ids piped in)"
+
+
+def start_args(starts: Sequence[str], piped: bool, note: str = PIPED) -> tuple[list[str], str]:
+    """The starts a suggested command names, and what follows the command: the ids themselves, or
+    ``-`` and ``note`` when they came from standard input or are more than ``STARTS_NAMED``."""
+    if piped or len(starts) > STARTS_NAMED:
+        return ["-"], note
+    return list(starts), ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -347,7 +360,8 @@ class CauseRow:
 
     ``location`` is where that edge is written, else the thing's own place. ``hub`` is the fan
     of a thing the walk listed and did not walk from. ``touch`` marks a thing a reached node only
-    points at, one hop out. A start is a row at hop 0 with the kind ``start``.
+    points at, one hop out. A start is a row at hop 0 with the kind ``start``. ``only`` marks a
+    thing ``periplus only`` returns, which ``periplus reach`` tags.
     """
 
     hop: int
@@ -362,6 +376,7 @@ class CauseRow:
     touch: bool = False
     supporting: bool = False
     marks: tuple[str, ...] = ()
+    only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -519,8 +534,9 @@ class CauseReport:
 
     ``walked`` holds every thing to the end of the walk, ``depth`` how many hops of it to show
     (``None``: all), ``touching`` the touching rows of the starts and the rows within ``depth``,
-    ``limit`` the text budget in characters (0: none) and ``again`` the command that shows all.
-    ``names`` holds the short name a row prints for each id; ``None`` prints full ids and paths.
+    ``limit`` the text budget in characters (0: none) and ``again`` the command that shows all,
+    which the text follows with ``again_note``. ``names`` holds the short name a row prints for
+    each id; ``None`` prints full ids and paths.
     """
 
     command: str
@@ -535,6 +551,7 @@ class CauseReport:
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
     names: Mapping[str, str] | None = None
+    again_note: str = ""
 
     @property
     def exit_code(self) -> ExitCode:
@@ -555,10 +572,11 @@ def run_cause(
     through: Sequence[str] = (),
     touch: bool = False,
     full: bool = False,
+    piped: bool = False,
 ) -> CauseReport | WalkReport:
     """Walk by cause from ``ids``, ``toward`` ``off`` or ``by``; show ``depth`` hops (``None``:
     all) in at most ``limit`` characters (``None``: ``BUDGET``; 0: no limit). Rows print short
-    names, or with ``full`` full ids.
+    names, or with ``full`` full ids. ``piped`` says the ids came from standard input.
 
     On a map with no cause list the walk is ``run``'s, from one id, with ``limit`` rows (``None``:
     50), and a warning says so.
@@ -580,6 +598,28 @@ def run_cause(
         rows = 50 if limit is None else limit
         old = _raw(start, index, ids[0], direction, depth, kinds, rows, map_path)
         return replace(old, warnings=(*old.warnings, NO_CAUSES)) if old.start else old
+    return cause_report(
+        start, index, ids, toward, depth, kinds, limit, map_path, hub, through, touch, full, piped
+    )
+
+
+def cause_report(
+    start: Path,
+    index: MapIndex,
+    ids: Sequence[str],
+    toward: str,
+    depth: int | None,
+    kinds: Collection[str],
+    limit: int | None,
+    map_path: Path | None,
+    hub: int = HUB,
+    through: Sequence[str] = (),
+    touch: bool = False,
+    full: bool = False,
+    piped: bool = False,
+) -> CauseReport:
+    """``run_cause``'s walk by cause on a map already loaded, whether or not it lists causes."""
+    command = "neighbors" if toward == "off" else "affected"
     try:
         with reading_fields(start, map_path):
             notes: list[str] = []
@@ -611,7 +651,8 @@ def run_cause(
             ]
     except HarnessError as error:
         return CauseReport(command, toward, problems=(error.problem(),))
-    again = ["periplus", command, *starts, "--depth", "all", "--limit", "0"]
+    named, piped_note = start_args(starts, piped)
+    again = ["periplus", command, *named, "--depth", "all", "--limit", "0"]
     again += [f for kind in kinds for f in ("--kind", kind)]
     again += ["--hub", str(hub)] if hub != HUB else []
     again += [f for item in passes for f in ("--through", item)]
@@ -630,6 +671,7 @@ def run_cause(
         walked.undeclared,
         (*notes, *kind_warnings(kinds, held), *asked),
         names=shorts,
+        again_note=piped_note,
     )
 
 
@@ -673,6 +715,7 @@ def _row_text(row: CauseRow, name: str, place: str) -> str:
     tail = "  [supporting code]" if row.supporting else ""
     tail += f"  [hub: {row.hub} links not walked]" if row.hub is not None else ""
     tail += "  [touch]" if row.touch else ""
+    tail += "  [only]" if row.only else ""
     return (
         f"{'  ' * row.hop}{_escape(name)}  {_escape(row.type)}  {_escape(row.state)}"
         f"  {_escape(row.kind)}{' (rev)' if row.backward else ''}  {_escape(place)}"
@@ -739,7 +782,7 @@ def _cause_text(report: CauseReport) -> str:
         cut_line = (
             [
                 f"showing {shown} of {len(report.walked)} (hops 1-{hops} of {last}); "
-                f"all: {_escape(report.again)}"
+                f"all: {_escape(report.again)}{report.again_note}"
             ]
             if shown < len(report.walked)
             else []

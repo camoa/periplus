@@ -277,6 +277,10 @@ class ExitCode(IntEnum):
     #: left as it was. Remedy: declare where the code is under ``folders`` in the settings.
     NOTHING_SELECTED = 33
 
+    #: The reader of standard output closed it early, as ``| head`` does. 128 plus the number of
+    #: SIGPIPE, the status a shell reports for a command that pipe ended. Returned by ``cli.main``.
+    OUTPUT_CLOSED = 141
+
 
 @dataclass(frozen=True, slots=True)
 class Problem:

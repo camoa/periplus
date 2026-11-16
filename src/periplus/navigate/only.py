@@ -13,13 +13,14 @@ from periplus.navigate.listing import first_location, marked_text, place, proble
 from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
 from periplus.navigate.names import Names
 from periplus.navigate.source import places
-from periplus.navigate.walk import CauseRow, cause_walk, head_line, summary, ways
+from periplus.navigate.walk import HUB, CauseRow, cause_walk, head_line, summary, ways
 from periplus.report import _escape, _json_problem
 
 __all__ = [
     "RENDERERS",
     "OnlyReport",
     "Thing",
+    "kept",
     "listed",
     "only_through",
     "render_json",
@@ -79,16 +80,38 @@ def only_through(index: MapIndex, starts: Collection[str], rows: Sequence[CauseR
 
 
 def run(
-    start: Path, env: Mapping[str, str], ids: Sequence[str], map_path: Path | None
+    start: Path,
+    env: Mapping[str, str],
+    ids: Sequence[str],
+    map_path: Path | None,
+    hub: int = HUB,
+    through: Sequence[str] = (),
 ) -> OnlyReport:
-    """Walk by cause from ``ids`` toward what they set off, with the default hub limit, and keep
-    what ``only_through`` keeps."""
+    """Walk by cause from ``ids`` toward what they set off, with the hub limit and ``through``,
+    and keep what ``only_through`` keeps."""
     try:
         index = load_map(start, env, map_path)
+    except HarnessError as error:
+        return OnlyReport(problems=(error.problem(),))
+    return kept(start, index, ids, map_path, hub, through)
+
+
+def kept(
+    start: Path,
+    index: MapIndex,
+    ids: Sequence[str],
+    map_path: Path | None,
+    hub: int = HUB,
+    through: Sequence[str] = (),
+) -> OnlyReport:
+    """``run`` on a map already loaded."""
+    try:
         with reading_fields(start, map_path):
             starts, notes = resolve_all(index, ids)
-            walked = cause_walk(index, starts, "off").rows
-            kept = only_through(index, set(starts), walked)
+            passes, passed = resolve_all(index, through)
+            notes += passed
+            walked = cause_walk(index, starts, "off", (), hub, passes).rows
+            alone = only_through(index, set(starts), walked)
             names = Names(index)
             things = tuple(
                 Thing(
@@ -99,7 +122,7 @@ def run(
                     index.supporting(r.id) is not None,
                 )
                 for r in walked
-                if r.id in kept
+                if r.id in alone
             )
     except HarnessError as error:
         return OnlyReport(problems=(error.problem(),))

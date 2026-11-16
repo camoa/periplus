@@ -155,6 +155,9 @@ def test_an_id_starts_the_piece_and_each_node_names_its_links(tmp_path: Path) ->
         "  t.site 1: 9",
         "  t.method 3: Bank::charge, pay, send",
         "folded into the node above, all their edges joining it: t.site 1",
+        "in full, every edge hop by hop, with what is left out, folded or in supporting code:",
+        "  hop 1: periplus show pay --limit 0",
+        "  hop 2: periplus show pay --ids | periplus show - --limit 0",
         f"warning: resolved 'pay' to {PAY}",
     ]
 
@@ -211,14 +214,16 @@ def test_the_row_cap_says_what_it_left_out(tmp_path: Path) -> None:
     lines = slicing.render_text(report).splitlines()
 
     assert [row.id for row in report.rows.items] == [CHECKOUT, SITE, MAILER]
-    assert lines[-7:-1] == [
+    assert lines[-9:-1] == [
         "folded into the node above, all their edges joining it: t.site 1",
         "showing 3 of 6 rows",
         "left out by hop: 1: 1, 2: 2",
         "left out by kind: calls 2, defines 1",
         "narrow with --kind K (kinds here: calls, defines, holds, instantiates),"
         " --direction out, --direction in or --depth 1",
-        "show all with --limit 0",
+        "in full, every edge hop by hop, with what is left out, folded or in supporting code:",
+        "  hop 1: periplus show pay --limit 0",
+        "  hop 2: periplus show pay --ids | periplus show - --limit 0",
     ]
     again = _piece(tmp_path / "again", "pay", limit=3)
     assert slicing.render_text(again) == slicing.render_text(report)

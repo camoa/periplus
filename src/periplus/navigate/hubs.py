@@ -9,12 +9,12 @@ from pathlib import Path
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve_all
 from periplus.navigate.listing import marked_text, problem_lines
-from periplus.navigate.mapfile import as_json, load_map, reading_fields
+from periplus.navigate.mapfile import MapIndex, as_json, load_map, reading_fields
 from periplus.navigate.names import Names
 from periplus.navigate.walk import HUB, CauseRow, amount, cause_walk, head_line, marked
 from periplus.report import _escape, _json_problem
 
-__all__ = ["RENDERERS", "HubsReport", "listed", "render_json", "render_text", "run"]
+__all__ = ["RENDERERS", "HubsReport", "listed", "render_json", "render_text", "run", "stopped"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,14 +45,34 @@ def run(
     depth: int | None,
     hub: int,
     map_path: Path | None,
+    through: Sequence[str] = (),
 ) -> HubsReport:
-    """Walk by cause from ``ids`` as ``neighbors`` (``off``) or ``affected`` (``by``) do, and
-    keep the things listed as hubs within ``depth`` hops."""
+    """Walk by cause from ``ids`` as ``neighbors`` (``off``) or ``affected`` (``by``) do, walking
+    from the hubs ``through`` names, and keep the things listed as hubs within ``depth`` hops."""
     try:
         index = load_map(start, env, map_path)
+    except HarnessError as error:
+        return HubsReport(toward=toward, problems=(error.problem(),))
+    return stopped(start, index, ids, toward, depth, hub, map_path, through)
+
+
+def stopped(
+    start: Path,
+    index: MapIndex,
+    ids: Sequence[str],
+    toward: str,
+    depth: int | None,
+    hub: int,
+    map_path: Path | None,
+    through: Sequence[str] = (),
+) -> HubsReport:
+    """``run`` on a map already loaded."""
+    try:
         with reading_fields(start, map_path):
             starts, notes = resolve_all(index, ids)
-            rows = cause_walk(index, starts, toward, (), hub).rows
+            passes, passed = resolve_all(index, through)
+            notes += passed
+            rows = cause_walk(index, starts, toward, (), hub, passes).rows
             hubs = tuple(
                 marked(index, r)
                 for r in rows

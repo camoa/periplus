@@ -157,6 +157,8 @@ the header of its rutter's `pack.yaml`. To record a gap, use the periplus-gaps s
 - **What breaks if this changes?** `periplus affected NAME --depth 2`, narrowed with `--kind`. For a
   class, cover its subclasses, the methods that create it, and the definitions that name it. Then
   repeat on each subclass.
+- **How far does this reach, both ways?** `periplus reach NAME`: depth, both walks, `[only]` tags
+  and hubs in one reply; each cut part names the command that prints it in full.
 - **How does A reach B?** `periplus path A B`. On `no path`, try `periplus path B A`. Then step by
   hand: `periplus neighbors A --kind K`, one method at a time.
 - **What makes up a feature?** `periplus slice "WORDS"` with the feature's names. Then

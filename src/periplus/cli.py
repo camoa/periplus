@@ -427,6 +427,50 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="how to print the report (default: text)",
     )
+    reach = subcommands.add_parser(
+        "reach",
+        help="print depth, then what an item sets off and what sets it off, in one reply",
+        description="Print the depth report of the IDs, then neighbors and affected to the "
+        "farthest hops that fit the budget, with the things only returns tagged [only] and the "
+        "hubs each walk stopped at as hubs prints them; a part cut short names the command that "
+        "prints it in full, and stop.",
+    )
+    reach.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    reach.add_argument(
+        "--direction",
+        choices=("off", "by", "both"),
+        default="both",
+        help="off prints what the ids set off, by what sets them off (default: both)",
+    )
+    reach.add_argument(
+        "--depth",
+        type=_depth,
+        default=None,
+        metavar="N",
+        help="the most hops to show, 1 or more, or all (default: all that fit)",
+    )
+    add_hub(reach)
+    reach.add_argument(
+        "--touch",
+        action="store_true",
+        help="add what each thing shown only points at, one hop out, marked [touch]",
+    )
+    reach.add_argument(
+        "--full",
+        action="store_true",
+        help="print full ids and full paths on every row, not short names",
+    )
+    add_ids(reach)
+    reach.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help=f"characters the text may hold before the farthest hops become counts (default: "
+        f"{BUDGET}); 0 for no limit",
+    )
+    add_map(reach, "the map file to read")
+    add_format(reach)
     for name, helptext in (
         ("neighbors", "list what an item sets off, hop by hop"),
         ("affected", "list what sets an item off, hop by hop"),
@@ -487,6 +531,7 @@ def build_parser() -> argparse.ArgumentParser:
         "every one of whose setting-off chains passes through an ID, and stop.",
     )
     only.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    add_hub(only)
     add_ids(only)
     add_map(only, "the map file to read")
     add_format(only)
@@ -517,6 +562,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help=f"a hub has more than N edges to follow (default: {HUB})",
+    )
+    hubs.add_argument(
+        "--through",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="walk from this hub all the same; repeat for several",
     )
     add_ids(hubs)
     add_map(hubs, "the map file to read")
@@ -676,6 +728,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="a node id or short name to start from; any other text is searched as find does",
     )
     cut.add_argument(
+        "--from",
+        dest="start",
+        nargs="+",
+        default=None,
+        metavar="ID",
+        help="start from these ids alone and search no words; - reads ids from standard input, "
+        "one a line",
+    )
+    cut.add_argument(
         "--path",
         action="append",
         default=[],
@@ -795,6 +856,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run ``_dispatch`` and flush standard output, and return the process status.
+
+    When the reader of standard output has closed it, as ``| head`` does, the write or the flush
+    raises ``BrokenPipeError``. Standard output then points at the null device, so the flush at
+    the interpreter's exit raises nothing, and the status is ``OUTPUT_CLOSED``.
+    """
+    try:
+        code = _dispatch(argv)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return ExitCode.OUTPUT_CLOSED
+    return code
+
+
+def _dispatch(argv: Sequence[str] | None = None) -> int:
     """Parse arguments, dispatch, and return the process status.
 
     Returns an integer for every path this function decides, and the interpreter turns it into
@@ -971,12 +1048,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if getattr(args, "ids", False) and getattr(args, "format", "text") != "text":
         parser.error("--ids prints ids; it takes no --format")
-    # slice searches its arguments as words, so a - there is a word, not standard input.
-    if args.command != "slice" and isinstance(getattr(args, "id", None), list) and "-" in args.id:
+    # slice searches its arguments as words, so a - there is a word; its --from takes ids.
+    field = "start" if args.command == "slice" else "id"
+    given = getattr(args, field, None)
+    args.piped = isinstance(given, list) and "-" in given
+    given = given or []
+    if args.piped:
         from periplus.navigate.ids import read_ids
 
-        args.id = read_ids(args.id, sys.stdin)
-        if not args.id:
+        setattr(args, field, read_ids(given, sys.stdin))
+        if not getattr(args, field):
             parser.error("- read no ids from standard input")
     if (getattr(args, "limit", 0) or 0) < 0:
         parser.error("--limit must be 0 or more")
@@ -1062,9 +1143,31 @@ def main(argv: Sequence[str] | None = None) -> int:
             map_path=args.map,
             hub=HUB if args.hub is None else args.hub,
             through=args.through,
+            piped=args.piped,
         )
         sys.stdout.write(DEPTH_RENDERERS[args.format](measured))
         return measured.exit_code
+
+    if args.command == "reach":
+        from periplus.navigate.reach import RENDERERS as REACH_RENDERERS
+        from periplus.navigate.reach import listed as reach_listed
+        from periplus.navigate.reach import run as run_reach
+
+        reached = run_reach(
+            start=Path.cwd(),
+            env=os.environ,
+            ids=args.id,
+            map_path=args.map,
+            direction=args.direction,
+            depth=args.depth,
+            hub=HUB if args.hub is None else args.hub,
+            through=args.through,
+            touch=args.touch,
+            full=args.full,
+            limit=0 if args.ids else args.limit,
+            piped=args.piped,
+        )
+        return _emit(args, REACH_RENDERERS, reached, reach_listed)
 
     if args.command in ("neighbors", "affected"):
         from periplus.navigate.walk import RENDERERS as WALK_RENDERERS
@@ -1102,6 +1205,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 through=args.through,
                 touch=args.touch,
                 full=args.full,
+                piped=args.piped,
             )
         return _emit(args, WALK_RENDERERS, walked, walk_listed)
 
@@ -1110,7 +1214,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         from periplus.navigate.only import listed as only_listed
         from periplus.navigate.only import run as run_only
 
-        kept = run_only(start=Path.cwd(), env=os.environ, ids=args.id, map_path=args.map)
+        kept = run_only(
+            start=Path.cwd(),
+            env=os.environ,
+            ids=args.id,
+            map_path=args.map,
+            hub=HUB if args.hub is None else args.hub,
+            through=args.through,
+        )
         return _emit(args, ONLY_RENDERERS, kept, only_listed)
 
     if args.command == "hubs":
@@ -1126,6 +1237,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             depth=args.depth,
             hub=HUB if args.hub is None else args.hub,
             map_path=args.map,
+            through=args.through,
         )
         return _emit(args, HUBS_RENDERERS, stopped, hubs_listed)
 
@@ -1219,6 +1331,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         from periplus.navigate.slice import RENDERERS as SLICE_RENDERERS
         from periplus.navigate.slice import run as run_slice
 
+        if args.start and args.id:
+            parser.error("--from takes the starts; give no WORDS with it")
         sliced = run_slice(
             start=Path.cwd(),
             env=os.environ,
@@ -1233,6 +1347,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             types=args.type,
             starts=args.starts,
             support=args.support,
+            from_ids=args.start or (),
+            piped=args.piped,
         )
         sys.stdout.write(SLICE_RENDERERS[args.format](sliced))
         return sliced.exit_code

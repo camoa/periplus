@@ -185,7 +185,7 @@ def test_an_edge_inside_one_file_prints_once_at_its_from_end(tmp_path: Path) -> 
 def test_a_node_with_links_the_piece_does_not_show_says_how_many(tmp_path: Path) -> None:
     lines = _text(_piece(tmp_path, ADD))
 
-    assert "      +1 more links: calls -> 1; see periplus slice deep" in lines
+    assert "      +1 more links: calls -> 1; see periplus show deep --limit 0" in lines
 
 
 def test_the_inventory_names_every_node_by_type_rarest_first(tmp_path: Path) -> None:
@@ -200,7 +200,7 @@ def test_the_inventory_names_every_node_by_type_rarest_first(tmp_path: Path) -> 
 
 
 def test_the_default_piece_fits_the_byte_budget_and_says_what_it_cut(tmp_path: Path) -> None:
-    slicing.BYTE_LIMIT, kept = 700, slicing.BYTE_LIMIT
+    slicing.BYTE_LIMIT, kept = 1000, slicing.BYTE_LIMIT
     try:
         report = _piece(tmp_path / "a", ADD)
         text = slicing.render_text(report)
@@ -208,10 +208,10 @@ def test_the_default_piece_fits_the_byte_budget_and_says_what_it_cut(tmp_path: P
     finally:
         slicing.BYTE_LIMIT = kept
 
-    assert len(text.encode()) <= 700 < len(given.encode())
+    assert len(text.encode()) <= 1000 < len(given.encode())
     assert "inventory:" in text
     assert not any(" -> (+" in line or " <- (+" in line for line in text.splitlines())
-    assert any(line.startswith("cut to fit 700 bytes:") for line in text.splitlines())
+    assert any(line.startswith("cut to fit 1000 bytes:") for line in text.splitlines())
 
 
 def test_the_footer_names_the_kinds_with_most_rows_left_out_and_counts_the_rest(

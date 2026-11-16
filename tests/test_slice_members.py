@@ -106,7 +106,7 @@ def test_a_container_start_lists_its_members_by_type_rarest_first(tmp_path: Path
     assert [row.id for row in members.rows] == [S, R1, C3, R2]
     assert lines[2] == (
         "members of app: 6 (t.service 1, t.route 2, t.class 3);"
-        " list one type: periplus slice app --type T --limit 0"
+        " all: periplus members app (--type T for one type)"
     )
 
 
