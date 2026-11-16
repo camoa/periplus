@@ -60,7 +60,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- `periplus slice` prints a start id that holds a control character escaped once.
+- `periplus slice` prints a start given as an id escaped once; before, a backslash in the id printed as four.
 - `drupal_basic`'s `config_names_form` ran to every form id a captcha point or `honeypot.settings` named, switched on or not; it now runs only to a form switched on, and the rest have `config_names_form_off`.
 
 ## [0.8.0] - 2026-11-16
