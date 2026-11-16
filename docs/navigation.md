@@ -78,8 +78,10 @@ periplus legend [--kind K]... [--type T]... [--all] [--map PATH] [--format text|
 Says what the map holds and what it means. It lists the edge kinds, most edges first, each as
 `kind  count  from types -> to types` with the pack's description under it, then the node
 types, most nodes first, each as `type  count  parent: P` with its description. An end names its
-two most frequent types and counts the rest, `+N`. A kind or type whose pack gives no description
-prints its line alone. Read it before a question, to learn which kind answers it: a kind that
+two most frequent types and counts the rest, `+N`. A kind the map lists under a cause ends its
+line with `cause: from`, `cause: to`, `cause: none` or `cause: touch`: which end sets off the
+other, neither, or the from end only points at the to end. A
+kind or type whose pack gives no description prints its line alone. Read it before a question, to learn which kind answers it: a kind that
 is listed is a fact the map holds.
 
 The text aims at 3 KB. Over that, it leaves out the kinds and types with the fewest edges or
@@ -87,7 +89,7 @@ nodes, and ends with `N left out, ...`. `--all` prints every one. `--kind K` or 
 prints only that kind or type, in full: a kind with every type at each end and its count, a type
 with the kinds of the edges leaving it (`out:`) and reaching it (`in:`). A name the map holds no
 edge or node of is a warning. `--format json` prints `edge_kinds` (each with `kind`, `count`,
-`from`, `to` and `description`), `node_types` (each with `type`, `count`, `parent`,
+`from`, `to`, `description` and `cause`, null for an undeclared kind), `node_types` (each with `type`, `count`, `parent`,
 `description`, `out` and `in`), `left_out`, `warnings` and `problems`. The descriptions come from
 the map's `legend`, which `periplus map` writes from the packs.
 

@@ -254,6 +254,10 @@
         "realizes": {
           "oneOf": [{"type": "boolean"}, {"const": "to"}],
           "description": "true when the edge says its from end is a concrete form of its to end, as a method implements an interface method or overrides an abstract one; to when its to end is the concrete form of its from end, as a route is carried out by its controller method or a service by its class. The map lists such kinds under realizing_kinds and realizing_to_kinds, and a walk that reaches the declared end adds the concrete ends at the same hop. why: the code behind an interface method sat four hops from its caller, and a walk of two never showed it."
+        },
+        "cause": {
+          "enum": ["from", "to", "none", "touch"],
+          "description": "Which end sets off the other. from: the from end sets off or uses the to end, as a function calls another. to: the to end sets off the from end, as a hook runs the function that implements it. none: neither, the edge says what a thing is or where it belongs, as a field belongs to its storage. touch: the from end only points at the to end without running it, as a link to a page or a name written as text. Left out, groups: true means none, realizes: true means to, realizes: to means from, and any other kind is undeclared; nothing implies touch. The map lists each kind under cause_from_kinds, cause_to_kinds, cause_none_kinds or cause_touch_kinds; an undeclared kind is in none of them. A grouping kind that declares a cause other than none is refused. why: a walk that follows every edge forward goes the wrong way along a link that runs backward, and through links that only group."
         }
       }
     },

@@ -318,7 +318,7 @@ name. After `from shop.cli import Config`, `Config()` lands on the class. After 
 `<package>.cli.app.command` name beside the command's `registered_on` edge.
 
 An edge kind is one name in every rutter a project loads. Two rutters giving one kind different ends
-or a different `groups` or `realizes` refuse the map with exit 19, naming the kind and both files: `python_text` and `php_basic` each
+or a different `groups`, `realizes` or `cause` refuse the map with exit 19, naming the kind and both files: `python_text` and `php_basic` each
 declare `calls` and `contains`, so one project cannot load both. Give the types at each end of a
 kind one id namespace, or a rule building that end from the kind's types is not executed. An end
 filled only by whole ids, such as `{declared: <type>}`, may list types of different id namespaces.
@@ -392,6 +392,54 @@ at the same hop, so the code behind a declaration costs no extra hop, and `show`
 peers more than forms, such as a parent class and its children.
 Two rutters that declare one kind must agree on `realizes`. `periplus validate` refuses a value
 other than `true` or `false`.
+
+An edge kind may set `cause` to say which end sets off the other. Set `cause: from` when the
+`from` end sets off or uses the `to` end, so the link runs forward, as a function calls another:
+
+```yaml
+- kind: calls
+  from: php.function
+  to: php.function
+  cause: from
+```
+
+Set `cause: to` when the `to` end sets off the `from` end, so the link runs backward, as a hook
+runs the function that implements it:
+
+```yaml
+- kind: implements_hook
+  from: php.function
+  to: app.hook
+  cause: to
+```
+
+Set `cause: none` when neither end sets off the other and the edge says what a thing is or where
+it belongs, as a field belongs to its storage:
+
+```yaml
+- kind: field_of
+  from: app.field
+  to: app.storage
+  cause: none
+```
+
+Set `cause: touch` when the `from` end only points at the `to` end without running it, as a
+template links to a page:
+
+```yaml
+- kind: links_to_page
+  from: app.template
+  to: app.page
+  cause: touch
+```
+
+Left out, `groups: true` means `none`, `realizes: true` means `to`, `realizes: to` means `from`,
+and any other kind is undeclared; nothing implies `touch`. The map lists each kind it holds under
+`cause_from_kinds`, `cause_to_kinds`, `cause_none_kinds` or `cause_touch_kinds`; an undeclared
+kind is in none of them, and `periplus legend` ends a declared kind's line with `cause: <value>`.
+`periplus validate` refuses, with exit 19, a grouping kind that declares a cause other than
+`none`, and refuses any value other than `from`, `to`, `none` or `touch`. Two rutters that declare
+one kind must agree on `cause`.
 
 ## What the format cannot say today
 

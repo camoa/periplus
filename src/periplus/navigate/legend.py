@@ -11,7 +11,7 @@ from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.listing import kind_warnings, problem_lines
-from periplus.navigate.mapfile import as_json, as_text, load_document, reading_fields
+from periplus.navigate.mapfile import as_json, as_text, causes, load_document, reading_fields
 from periplus.report import _escape, _json_problem
 
 __all__ = [
@@ -35,13 +35,15 @@ Counted = tuple[tuple[str, int], ...]
 
 @dataclass(frozen=True, slots=True)
 class KindRow:
-    """An edge kind the map holds: its edges, the types at each end by count, and its text."""
+    """An edge kind the map holds: its edges, the types at each end by count, its text, and the
+    end that sets off the other, ``None`` when the map lists none."""
 
     kind: str
     count: int
     from_types: Counted
     to_types: Counted
     description: str | None
+    cause: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,8 +112,11 @@ def run(
                 at[1][target] += 1
                 links.setdefault(source, (Counter(), Counter()))[0][kind] += 1
                 links.setdefault(target, (Counter(), Counter()))[1][kind] += 1
+            cause = causes(document)
             kind_rows = [
-                KindRow(k, n, _ranked(ends[k][0]), _ranked(ends[k][1]), kind_texts.get(k))
+                KindRow(
+                    k, n, _ranked(ends[k][0]), _ranked(ends[k][1]), kind_texts.get(k), cause.get(k)
+                )
                 for k, n in _ranked(edges)
                 if not (kinds or types) or k in kinds
             ]
@@ -169,7 +174,8 @@ def render_text(report: LegendReport) -> str:
         lines += ["", "Edge kinds, most edges first:"]
     for k in report.edge_kinds:
         ends = f"{_short(k.from_types)} -> {_short(k.to_types)}"
-        lines.append(f"  {_escape(k.kind)}  {k.count}  {ends}")
+        cause = f"  cause: {k.cause}" if k.cause else ""
+        lines.append(f"  {_escape(k.kind)}  {k.count}  {ends}{cause}")
         lines += _said(k.description)
         if report.full:
             lines += [f"      from: {_all(k.from_types)}", f"      to: {_all(k.to_types)}"]
@@ -203,6 +209,7 @@ def render_json(report: LegendReport) -> str:
                     "from": dict(k.from_types),
                     "to": dict(k.to_types),
                     "description": k.description,
+                    "cause": k.cause,
                 }
                 for k in report.edge_kinds
             ],

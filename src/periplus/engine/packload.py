@@ -107,7 +107,7 @@ EXECUTED_KEYS = frozenset(
         *("file.roles", "file.roles.*.name"),
         *(
             f"file.edge_kinds{k}"
-            for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups", ".*.realizes")
+            for k in ("", ".*.kind", ".*.from", ".*.to", ".*.groups", ".*.realizes", ".*.cause")
         ),
         "file.edge_kinds.*.description",
         *(f"file.attributes{k}" for k in ("", ".*.name", ".*.on", ".*.description")),
@@ -584,7 +584,9 @@ class EdgeSpec:
 class EdgeKind:
     """One edge kind: the types allowed at each end, whether its from end belongs to the
     container at its to end, which end is a concrete form of the other: ``from``, ``to``, or
-    ``""`` for neither, and the one-line text of what it says, ``""`` for none."""
+    ``""`` for neither, the one-line text of what it says, ``""`` for none, and which end sets off
+    the other: ``from``, ``to``, ``none``, ``touch`` when the from end only points at the to end,
+    or ``""`` when neither the kind nor its ``groups`` or ``realizes`` says."""
 
     name: str
     from_types: tuple[str, ...]
@@ -592,6 +594,7 @@ class EdgeKind:
     groups: bool = False
     realizes: str = ""
     description: str = ""
+    cause: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1638,7 +1641,18 @@ def _read_kinds(
         text = entry.get("description")
         said = text if isinstance(text, str) else ""
         realizes = {True: "from", "to": "to"}.get(entry.get("realizes"), "")
-        kind = EdgeKind(name, ends[0], ends[1], entry.get("groups") is True, realizes, said)
+        groups = entry.get("groups") is True
+        # The end that sets off the other is the one that is not the concrete form.
+        implied = "none" if groups else {"from": "to", "to": "from"}.get(realizes, "")
+        cause = entry.get("cause", implied)
+        if groups and cause != "none":
+            message = (
+                f"the edge kind {name} declares cause: {cause} in {pack}/{file}, but groups: true "
+                "says neither end sets off the other; declare cause: none or leave it out"
+            )
+            detail = {"kind": name, "pack": pack, "file": file}
+            conflicts.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
+        kind = EdgeKind(name, ends[0], ends[1], groups, realizes, said, cause)
         first_pack, first_file = declared_at.setdefault(name, (pack, file))
         known = kinds.setdefault(name, kind)
         # A declaration without a text agrees with one that has it; the text is kept.
@@ -1646,8 +1660,8 @@ def _read_kinds(
             known = kinds[name] = replace(known, description=kind.description)
         if known != replace(kind, description=kind.description or known.description):
             message = (
-                f"the edge kind {name} is declared with different ends, groups, realizes or "
-                f"description in {pack}/{file}, after {first_pack}/{first_file}"
+                f"the edge kind {name} is declared with different ends, groups, realizes, cause "
+                f"or description in {pack}/{file}, after {first_pack}/{first_file}"
             )
             detail = {"kind": name, "pack": pack, "file": file}
             conflicts.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))

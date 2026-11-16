@@ -29,6 +29,7 @@ __all__ = [
     "NotAMap",
     "as_json",
     "as_text",
+    "causes",
     "damaged",
     "is_whole",
     "load_document",
@@ -82,6 +83,7 @@ class MapIndex:
         self._concrete_from = frozenset(as_text(k) for k in document.get("realizing_kinds", ()))
         self._concrete_to = frozenset(as_text(k) for k in document.get("realizing_to_kinds", ()))
         self.realizing = self._concrete_from | self._concrete_to
+        self._causes = causes(document)
         self._supporting = [
             (as_text(p), _glob(as_text(p))) for p in document.get("supporting_paths", ())
         ]
@@ -124,6 +126,12 @@ class MapIndex:
         in attribute-name order; empty for a map without the header."""
         held = self.nodes[id].get("attributes", {})
         return tuple(self.mark_texts[name] for name in sorted(held) if name in self.mark_texts)
+
+    def cause(self, kind: str) -> str | None:
+        """Which end of an edge of ``kind`` sets off the other: ``from``, ``to``, ``none`` for
+        neither, ``touch`` when the from end only points at the to end, or ``None`` when the map
+        lists the kind under no cause, as every kind of a map written before the cause lists."""
+        return self._causes.get(kind)
 
     def realized(self, kind: str, outward: bool) -> bool:
         """Whether an edge of ``kind``, seen from its from end (``outward``) or its to end, leads to
@@ -246,6 +254,15 @@ def reading_fields(start: Path, map_path: Path | None) -> Iterator[None]:
 def as_json(document: Any) -> str:
     """``document`` as a navigation command's ``--json`` output prints it."""
     return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
+
+
+def causes(document: Mapping[str, Any]) -> dict[str, str]:
+    """The cause of each kind the map's ``cause_<end>_kinds`` lists name, by kind."""
+    return {
+        as_text(kind): cause
+        for cause in ("from", "to", "none", "touch")
+        for kind in document.get(f"cause_{cause}_kinds", ())
+    }
 
 
 def as_text(value: Any) -> str:

@@ -49,6 +49,26 @@
       "description": "The edge kinds of this map whose packs declare realizes: to, sorted: the edge's to end is a concrete form of its from end. Written only when the map holds an edge of such a kind, so a map without one is unchanged."
     },
 
+    "cause_from_kinds": {
+      "type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
+      "description": "The edge kinds of this map whose from end sets off or uses the to end, sorted: those whose packs declare cause: from, or realizes: to without a cause. Written only when the map holds an edge of such a kind. A kind in none of the four cause lists is undeclared."
+    },
+
+    "cause_to_kinds": {
+      "type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
+      "description": "The edge kinds of this map whose to end sets off the from end, sorted: those whose packs declare cause: to, or realizes: true without a cause. Written only when the map holds an edge of such a kind."
+    },
+
+    "cause_none_kinds": {
+      "type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
+      "description": "The edge kinds of this map where neither end sets off the other, sorted: those whose packs declare cause: none, or groups: true. Written only when the map holds an edge of such a kind."
+    },
+
+    "cause_touch_kinds": {
+      "type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
+      "description": "The edge kinds of this map whose from end only points at the to end without running it, sorted: those whose packs declare cause: touch. Written only when the map holds an edge of such a kind."
+    },
+
     "supporting_paths": {
       "type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
       "description": "The path patterns of supporting code, as tests, that the packs and the settings name, sorted. A node whose first location's file matches one is supporting code. Written only when there is one, so a map without one is unchanged."

@@ -149,6 +149,7 @@ def test_json_carries_the_rows(tmp_path: Path) -> None:
         "from": {"php.type": 2},
         "to": {"php.method": 2},
         "description": "the class declares that method",
+        "cause": None,
     }
     assert document["node_types"][1] == {
         "type": "php.type",

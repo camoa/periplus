@@ -101,13 +101,14 @@
         "edge_kinds": {
           "type": "array",
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["kind", "count", "from", "to", "description"],
+            "type": "object", "additionalProperties": false, "required": ["kind", "count", "from", "to", "description", "cause"],
             "properties": {
               "kind": {"type": "string"},
               "count": {"type": "integer", "minimum": 1},
               "from": {"description": "The types at the edges' from ends, with how many edges each.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
               "to": {"description": "The types at the edges' to ends, with how many edges each.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
-              "description": {"type": ["string", "null"]}
+              "description": {"type": ["string", "null"]},
+              "cause": {"description": "Which end sets off the other, from the map's cause lists; null when the map lists the kind under none.", "enum": ["from", "to", "none", "touch", null]}
             }
           }
         },

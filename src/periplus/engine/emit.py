@@ -241,6 +241,10 @@ def build_document(
         document["realizing_kinds"] = realizing
     if realizing_to:
         document["realizing_to_kinds"] = realizing_to
+    for cause in ("from", "to", "none", "touch"):
+        causing = sorted({str(e["kind"]) for e in written if edge_kinds[e["kind"]].cause == cause})
+        if causing:
+            document[f"cause_{cause}_kinds"] = causing
     if supporting:
         document["supporting_paths"] = sorted(set(supporting))
     if marked:
