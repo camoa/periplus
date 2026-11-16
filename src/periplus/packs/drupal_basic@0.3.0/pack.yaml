@@ -549,6 +549,14 @@ detect:
     # alone is the evidence, so this signal needs no `contains`.
     - path: web/core/lib/Drupal.php
 
+# Where else a Drupal project keeps these, when the default above does not exist: a docroot
+# folder in place of web, the Drupal root at the project root, and config/default in place of
+# config/sync. `periplus init` writes the first that exists into the project settings.
+folder_candidates:
+  config: [config/default]
+  custom_module: [docroot/modules/custom, modules/custom]
+  custom_theme: [docroot/themes/custom, themes/custom]
+
 folders:
   config:        ./config/sync
   custom_module: ./web/modules/custom

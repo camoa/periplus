@@ -37,7 +37,7 @@
             "type": "object",
             "additionalProperties": false,
             "required": ["path"],
-            "description": "One alternative: a repository-relative path that must exist as a file, and optionally a literal substring of that file's text. `contains` is a substring and not a regular expression, because detection reads third-party pack data with no time limit around it and a substring has no backtracking cost. The path stays under the repository root — a signal that leaves it never fires, since a detector that reads outside the checkout turns a committed settings file into a readout of the machine that ran `init`. Both levels are closed: an author who writes `contain:` gets a refusal, not a detector that silently degrades to an existence check and fires on every repository in the language.",
+            "description": "One alternative: a repository-relative path that must exist as a file, and optionally a literal substring of that file's text. `contains` is a substring and not a regular expression, because detection reads third-party pack data with no time limit around it and a substring has no backtracking cost. The path stays under the repository root — a signal that leaves it never fires, since a detector that reads outside the checkout turns a committed settings file into a readout of the machine that ran `init`. Both levels are closed: an author who writes `contain:` gets a refusal, not a detector that silently degrades to an existence check and fires on every repository in the language. A path that names a folder in braces or holds `*` is a pattern: the part before its last `/` is a folder value, resolved where `init` places the folders of this pack and the packs it depends on, and the last part is a file-name pattern; the evidence is the first file that matches, by directory and then name.",
             "properties": {
               "path":     {"type": "string"},
               "contains": {"type": "string"}
@@ -194,6 +194,13 @@
       },
       "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
       "description": "Named folders a rule refers to with `in:`. A rule never writes a path. The value is a default; the project settings file overrides it for one repository without touching a rule. A value may reference another folder in braces, because a module's own config lives inside whatever custom_module resolves to."
+    },
+
+    "folder_candidates": {
+      "type": "object",
+      "additionalProperties": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+      "description": "Other places a repository keeps a folder, in order, written as folder values are. When the folder's own value resolves to no directory, `periplus init` writes the first candidate that does under `folders` in the settings it creates, and a detector signal that names the folder reads it there. A candidate outside the repository is never chosen."
     },
 
     "identity": {

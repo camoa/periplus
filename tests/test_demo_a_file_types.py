@@ -290,4 +290,5 @@ def test_claims_that_name_one_type_for_an_ending_load(
 ) -> None:
     _tannery_and_furrier(tmp_path, furrier, tannery_ends)
     report, _ = map_project(tmp_path)
-    assert report.problems == (), report.problems
+    # The fixture holds no source file, so the only problem is that nothing was selected.
+    assert [p.code for p in report.problems] == [ExitCode.NOTHING_SELECTED], report.problems

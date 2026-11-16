@@ -37,16 +37,32 @@ asked for.
 
 from __future__ import annotations
 
+import posixpath
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from pathlib import Path
 
-from periplus.manifest import ManifestUnreadable, load_manifest
-from periplus.packs import PackCandidate
+from periplus.engine.select import FolderUnresolved, folder_values, resolve_folders, resolve_value
+from periplus.engine.source import SourceUnreadable
+from periplus.manifest import LoadedPack, ManifestUnreadable, load_manifest, resolve_pack_order
+from periplus.packs import MatchedPack, PackCandidate
 from periplus.preflight import DependencyStatus
 from periplus.resolution import resolve
 
-__all__ = ["DETECT_KEY", "Detection", "detect", "detect_packs"]
+__all__ = [
+    "CANDIDATES_KEY",
+    "DETECT_KEY",
+    "Detection",
+    "Placement",
+    "detect",
+    "detect_packs",
+    "place",
+    "place_folders",
+]
+
+#: The manifest key a pack lists, per folder, the other places a repository may keep it under.
+CANDIDATES_KEY = "folder_candidates"
 
 #: The manifest key a pack declares its detector under. Named here rather than spelled at each use,
 #: and read out of ``PackManifest.document`` rather than off a field: ``manifest.py`` carries the
@@ -86,6 +102,88 @@ class Detection:
     path: str
 
 
+@dataclass(frozen=True, slots=True)
+class Placement:
+    """Where one folder a pack lists under ``folder_candidates`` was found in a repository.
+
+    ``path`` is the pack's default as written when that exists (``kept`` is true), else the first
+    candidate that exists, else ``None``. ``default`` is the folder's values in the packs and
+    ``candidates`` its candidates, both as written.
+    """
+
+    folder: str
+    path: str | None
+    kept: bool
+    default: tuple[str, ...]
+    candidates: tuple[str, ...]
+
+
+def place_folders(
+    root: Path, candidates: Sequence[PackCandidate], pins: Sequence[str]
+) -> tuple[Placement, ...]:
+    """Each folder that the pinned packs, or a pack beneath them, list under ``folder_candidates``,
+    placed in the repository at ``root``, sorted by folder. Never raises."""
+    return _place(root, _loaded(candidates, pins))[0]
+
+
+def _loaded(candidates: Sequence[PackCandidate], pins: Sequence[str]) -> tuple[LoadedPack, ...]:
+    """The packs the pins name and every pack beneath them, dependencies first. A pin is the first
+    candidate carrying it, as in ``detect_packs``."""
+    first: dict[str, PackCandidate] = {}
+    for one in candidates:
+        if one.status == "named" and one.name is not None and one.entry in pins:
+            first.setdefault(one.entry, one)
+    matched = [
+        MatchedPack(pin=pin, name=one.name, root=one.root, path=str(Path(one.root.display) / pin))
+        for pin, one in first.items()
+        if one.name is not None
+    ]
+    return resolve_pack_order(matched, candidates)[0]
+
+
+def _place(
+    root: Path, packs: Sequence[LoadedPack]
+) -> tuple[tuple[Placement, ...], dict[str, str]]:
+    """The placements, and the candidates chosen as folder overrides.
+
+    A folder is placed in sorted order and a chosen candidate is an override for the folders placed
+    after it, so a candidate may name another folder in braces.
+    """
+    _, settled = folder_values(packs)
+    listed: dict[str, list[str]] = {}
+    for pack in packs:
+        block = pack.manifest.document.get(CANDIDATES_KEY)
+        for name, paths in block.items() if isinstance(block, Mapping) else ():
+            if isinstance(paths, list):
+                listed.setdefault(str(name), []).extend(p for p in paths if isinstance(p, str))
+    overrides: dict[str, str] = {}
+    placed = []
+    for name in sorted(listed):
+        default, candidates = tuple(settled.get(name) or ()), tuple(listed[name])
+        if default and _found(root, name, packs, overrides):
+            placed.append(Placement(name, ", ".join(default), True, default, candidates))
+            continue
+        path = next(
+            (one for one in listed[name] if _found(root, name, packs, {**overrides, name: one})),
+            None,
+        )
+        if path is not None:
+            overrides[name] = path
+        placed.append(Placement(name, path, False, default, candidates))
+    return tuple(placed), overrides
+
+
+def _found(
+    root: Path, name: str, packs: Sequence[LoadedPack], overrides: Mapping[str, str]
+) -> bool:
+    """Whether the folder resolves to at least one directory; a value that cannot resolve, or
+    leaves the root, is not found."""
+    try:
+        return bool(resolve_folders([name], packs, overrides, root)[name])
+    except (FolderUnresolved, SourceUnreadable):
+        return False
+
+
 def detect_packs(root: Path, candidates: Sequence[PackCandidate]) -> tuple[Detection, ...]:
     """Every pack on the search path whose declared detector matches the repository at ``root``.
 
@@ -97,7 +195,8 @@ def detect_packs(root: Path, candidates: Sequence[PackCandidate]) -> tuple[Detec
     Only ``named`` candidates are considered — an entry that is not a ``<pack>@<version>``
     directory is not a pack, whatever is inside it.
 
-    Sorted by pin. Never raises.
+    Each pack after every detected pack it depends on, directly or not, and otherwise by pin. Never
+    raises.
 
     One detection per pin, and the first candidate carrying that pin is the one that answers. Two
     roots holding the same ``<pack>@<version>`` directory are the state ``match_pins`` reports as
@@ -106,6 +205,7 @@ def detect_packs(root: Path, candidates: Sequence[PackCandidate]) -> tuple[Detec
     problem the resolver will name for them anyway.
     """
     found: dict[str, Detection] = {}
+    below: dict[str, set[str]] = {}
     for candidate in candidates:
         if candidate.status != "named" or candidate.name is None or candidate.entry in found:
             continue
@@ -117,15 +217,28 @@ def detect_packs(root: Path, candidates: Sequence[PackCandidate]) -> tuple[Detec
             # third-party pack with a truncated manifest must not turn creating a project into a
             # traceback.
             continue
-        evidence = _first_match(root, manifest.document.get(DETECT_KEY))
+        block = manifest.document.get(DETECT_KEY)
+        if not isinstance(block, Mapping):
+            continue
+        packs = _loaded(candidates, [candidate.entry])
+        evidence = _first_match(root, block, packs)
         if evidence is not None:
             found[candidate.entry] = Detection(
                 pack=candidate.name.pack, pin=candidate.entry, path=evidence
             )
-    return tuple(found[pin] for pin in sorted(found))
+            below[candidate.entry] = {p.name.pack for p in packs} - {candidate.name.pack}
+    pending, ordered = sorted(found), []
+    while pending:
+        present = {found[pin].pack for pin in pending}
+        pin = next(
+            (one for one in pending if not below[one] & (present - {found[one].pack})), pending[0]
+        )
+        ordered.append(found[pin])
+        pending.remove(pin)
+    return tuple(ordered)
 
 
-def _first_match(root: Path, block: object) -> str | None:
+def _first_match(root: Path, block: object, packs: Sequence[LoadedPack]) -> str | None:
     """The path of the first signal in ``block`` that matches ``root``, or nothing.
 
     ``block`` is whatever the manifest had under ``detect:`` — a mapping if the author wrote one,
@@ -142,13 +255,13 @@ def _first_match(root: Path, block: object) -> str | None:
     if not isinstance(alternatives, list | tuple) or not alternatives:
         return None
     for signal in alternatives:
-        matched = _match(root, signal)
+        matched = _match(root, signal, packs)
         if matched is not None:
             return matched
     return None
 
 
-def _match(root: Path, signal: object) -> str | None:
+def _match(root: Path, signal: object, packs: Sequence[LoadedPack]) -> str | None:
     """One alternative against the repository: its declared path if it matches, else nothing.
 
     A signal with no ``path`` matches nothing. That is the case the direction of every decision
@@ -163,25 +276,61 @@ def _match(root: Path, signal: object) -> str | None:
     What comes back is the path **as the pack declared it**, not the absolute path that was
     probed: it is evidence a person reads beside a repository-relative settings file, and the
     machine's own directory layout is not part of why a pack was suggested.
+
+    A path that names a folder in braces, or holds ``*``, is a pattern, and what comes back is the
+    repository-relative path of the file that matched.
     """
     if not isinstance(signal, Mapping) or not set(signal) <= _SIGNAL_KEYS:
         return None
     declared = signal.get(PATH_KEY)
     if not isinstance(declared, str):
         return None
+    if "{" in declared or "*" in declared:
+        return _match_pattern(root, signal, declared, packs)
     target = _under(root, declared)
     if target is None or not target.is_file():
         return None
+    return declared if _holds(target, signal) else None
+
+
+def _holds(target: Path, signal: Mapping[object, object]) -> bool:
+    """Whether the file's text holds the signal's ``contains``; true when it names none."""
     if CONTAINS_KEY not in signal:
-        return declared
+        return True
     wanted = signal[CONTAINS_KEY]
     if not isinstance(wanted, str):
-        return None
+        return False
     try:
         text = target.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError, ValueError):
+        return False
+    return wanted in text
+
+
+def _match_pattern(
+    root: Path, signal: Mapping[object, object], declared: str, packs: Sequence[LoadedPack]
+) -> str | None:
+    """The first file, by directory and then name, that a pattern signal matches, or nothing.
+
+    The part before the last ``/`` is a folder value, resolved with the folders placed as ``init``
+    places them; the last part is a file-name pattern. A value that cannot resolve matches nothing.
+    """
+    folder, _, name = declared.rpartition("/")
+    try:
+        directories = resolve_value(folder or ".", packs, _place(root, packs)[1], root)
+    except (FolderUnresolved, SourceUnreadable):
         return None
-    return declared if wanted in text else None
+    for directory in directories:
+        try:
+            entries = sorted(entry.name for entry in (root / directory).iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            path = posixpath.normpath(posixpath.join(directory, entry))
+            target = _under(root, path) if fnmatchcase(entry, name) else None
+            if target is not None and target.is_file() and _holds(target, signal):
+                return path
+    return None
 
 
 def _under(root: Path, declared: str) -> Path | None:
@@ -226,3 +375,15 @@ def detect(
     command is not about. ``periplus status`` is where the search path is reported on.
     """
     return detect_packs(start, resolve(start=start, env=env, dependencies=dependencies).candidates)
+
+
+def place(
+    start: Path,
+    env: Mapping[str, str],
+    dependencies: tuple[DependencyStatus, ...],
+    detected: Sequence[Detection],
+) -> tuple[Placement, ...]:
+    """The command's entry point for placing folders: the detected packs' placements in ``start``,
+    over the search path ``detect`` reads."""
+    candidates = resolve(start=start, env=env, dependencies=dependencies).candidates
+    return place_folders(start, candidates, [one.pin for one in detected])

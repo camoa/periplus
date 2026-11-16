@@ -120,7 +120,8 @@ the development tools into `.venv`.
 ### 2. Pin a rutter
 
 Run `periplus init` in the project folder. It creates `.periplus/`, a pack folder and a commented
-settings file, and pins a rutter when it recognises the stack:
+settings file. It pins each bundled rutter whose detector matches the project, and writes the
+folders it found where a rutter's default folder does not exist:
 
 ```
 cd /path/to/project
@@ -141,10 +142,16 @@ folders:
 The `folders` line moves the config folder from `drupal_basic`'s default, `./config/sync`. Leave
 it out when your site uses the default.
 
-In a Drupal project, `periplus init` writes the `drupal_basic@0.3.0` pin for you. It looks for
-`drupal/core` in `composer.json`, or for `web/core/lib/Drupal.php`. The rutters that
-`drupal_basic` depends on load without a pin of their own. After you update Periplus, run
-`periplus update` to bring the pins to the installed versions.
+In a Drupal project, `periplus init` pins `drupal_basic@0.3.0` when `composer.json` names
+`drupal/core` or `web/core/lib/Drupal.php` exists. It also pins each contributed-module rutter,
+such as `webform_basic`, whose module `core.extension.yml` lists, plus `drush_basic` for Drush
+commands and `drupal_js_basic` for scripts in custom modules and themes. It prints one line per
+pin with the file that matched. Where `web/modules/custom`, `web/themes/custom` or `config/sync`
+do not exist, it looks for the `docroot/` and project-root versions and `config/default`. It
+writes each one it finds under `folders` and prints what it chose. A folder it found nowhere is
+printed as `unplaced`; declare it under `folders` yourself. The rutters that `drupal_basic`
+depends on load without a pin of their own. After you update Periplus, run `periplus update` to
+bring the pins to the installed versions.
 
 ### 3. Map the project
 
@@ -153,7 +160,9 @@ periplus map --output map.json
 ```
 
 `periplus map` also prints a run report. It names each rule and how often it fired, and the files
-no rule read. It also names folders it could not list, files that did not parse, and rules it
+no rule read. A pinned rutter that selected no file is listed first, under `Packs that selected no
+file`, with the folders it looked in. When no rutter selects a file, `map` writes no map, leaves
+an existing one as it was, and exits 33. It also names folders it could not list, files that did not parse, and rules it
 could not run. The [map report guide](docs/map-report-guide.md) reads each part in turn.
 
 ### 4. Ask the map
@@ -562,7 +571,7 @@ not draw a graph above 500 edges or 50,000 characters, and the export warns when
 Run each command in the project folder.
 
 ```
-periplus init                      # create .periplus/, a pack folder and a commented settings file
+periplus init                      # create .periplus/ and a settings file, pinning the rutters and folders it finds
 periplus status                    # report the settings, where each value came from, and the pack search path
 periplus spec [PACK] [--summary]   # print the rutter contract, and what one rutter declares and inherits
 periplus validate PACK             # check one rutter against the schemas and what map refuses it for
@@ -612,6 +621,10 @@ installed version, and `periplus <command> --help` gives each command's options.
   found. For a language other than PHP, Go and JavaScript, install its `tree-sitter-<language>`
   package at the pinned version. The check runs before any
   source file is opened.
+- **`periplus map` stops at exit 33: no file was selected.** Every pinned rutter looked only in
+  folders that hold none of its files, so no map was written and an existing map was left as it
+  was. The report's first section names each rutter and the folders it looked in. Declare where
+  the code is under `folders` in `.periplus/settings.yml`.
 - **A navigation command stops at exit 29, 30 or 31.** It found no map, the file is not a map,
   or the id names no node. The [navigation guide](docs/navigation.md) gives the remedy for each.
 

@@ -12,6 +12,13 @@ pack: salesforce_eca_basic
 version: 0.0.1
 depends: [eca_basic, salesforce_basic]
 
+# Detected when the site's configuration enables the module: core.extension lists it under
+# module, in the config folder where `periplus init` places it.
+detect:
+  any_of:
+    - path: "{config}/core.extension.yml"
+      contains: "\n  salesforce_eca: "
+
 add_table_rows:
   eca_basic:
     eca_event_names:

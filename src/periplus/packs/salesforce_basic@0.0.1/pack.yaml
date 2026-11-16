@@ -54,6 +54,13 @@ pack: salesforce_basic
 version: 0.0.1
 depends: [drupal_basic, php_basic, webform_basic]
 
+# Detected when the site's configuration enables the module: core.extension lists it under
+# module, in the config folder where `periplus init` places it.
+detect:
+  any_of:
+    - path: "{config}/core.extension.yml"
+      contains: "\n  salesforce: "
+
 folders:
   # The folder the mapping field manager discovers in, below a module's src folder.
   salesforce_mapping_field_classes: "{module_root}/src/Plugin/SalesforceMappingField/**"

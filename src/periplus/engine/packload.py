@@ -71,6 +71,7 @@ _FOLLOW_STEPS = ("edge", "incoming_edge", "ancestors", "node", "id_matches", "tr
 EXECUTED_KEYS = frozenset(
     {
         *(f"manifest.{k}" for k in ("pack", "version", "depends", "folders", "identity")),
+        "manifest.folder_candidates",
         "manifest.tables",
         "manifest.add_table_rows",
         "manifest.values",

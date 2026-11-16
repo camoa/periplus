@@ -35,6 +35,13 @@ pack: webform_basic
 version: 0.0.1
 depends: [drupal_basic, php_basic]
 
+# Detected when the site's configuration enables the module: core.extension lists it under
+# module, in the config folder where `periplus init` places it.
+detect:
+  any_of:
+    - path: "{config}/core.extension.yml"
+      contains: "\n  webform: "
+
 folders:
   # The folder the handler manager discovers in, below a module's src folder.
   webform_handler_classes: "{module_root}/src/Plugin/WebformHandler/**"

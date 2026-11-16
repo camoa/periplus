@@ -373,7 +373,8 @@ def test_a_file_below_the_rules_folders_that_no_rule_read_is_listed_as_unread(
 def test_the_text_report_shows_twenty_unread_paths_and_counts_the_rest(tmp_path: Path) -> None:
     files = {f"drawer/coin{n:02d}.button": "x\n" for n in range(1, 24)}
     _drawer(tmp_path, files, shelf=False)
-    report, _ = clean_map(tmp_path)
+    report, _ = map_site(tmp_path)
+    assert [p.code for p in report.problems] == [ExitCode.NOTHING_SELECTED], report.problems
     planted = sorted(files)
     assert list(report.unread) == planted
     rows = _section(render_text(report), "Files no rule read")

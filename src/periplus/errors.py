@@ -273,6 +273,10 @@ class ExitCode(IntEnum):
     #: A slice reached more items than ``--limit`` allows, so no file was written.
     SLICE_TOO_LARGE = 32
 
+    #: ``periplus map`` selected no file at all, so no map was written and an existing one was
+    #: left as it was. Remedy: declare where the code is under ``folders`` in the settings.
+    NOTHING_SELECTED = 33
+
 
 @dataclass(frozen=True, slots=True)
 class Problem:

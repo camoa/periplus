@@ -53,6 +53,33 @@ $ cp -r "$REPO"/examples/second-stack/packs/. .periplus/packs/
 $ cp "$REPO"/examples/second-stack/settings.yml .periplus/settings.yml
 ```
 
+## How `init` pins a rutter and places its folders
+
+`periplus init` pins each rutter on the search path whose `detect` block matches the project. The
+block lists signals under `any_of`, tried in order. A signal is a `path` to a file, and an
+optional `contains`, a literal text the file must hold. Write the narrowest evidence the stack
+leaves: a dependency it declares, or a file only it has. A rutter with no `detect` block is never
+pinned by `init`. The pins are written with each rutter after the detected rutters it depends on.
+
+A signal path may name a folder in braces and end in a file-name pattern, as
+`{module_root}/*.js`. The part before the last `/` is read as a folder value, and the last part
+matches file names with `*`. The folder resolves where `init` places it, from this rutter's
+folders and those of the rutters it depends on. The evidence printed is the first file that
+matches.
+
+`folder_candidates` lists, for a folder, the other places a project keeps it, in order:
+
+```yaml
+folder_candidates:
+  config: [config/default]
+  custom_module: [docroot/modules/custom, modules/custom]
+```
+
+When a folder's own value finds no folder in the project, `init` writes the first candidate that
+exists under `folders` in the settings, and prints what it chose. A folder whose default and
+candidates all miss is printed as `unplaced`. A candidate outside the project is never chosen.
+Only `init` reads this key; `periplus map` reads the settings it wrote.
+
 ## One rule of each shape
 
 A whole-file rule makes one node per file, at line 1. The id comes from a path value, which the

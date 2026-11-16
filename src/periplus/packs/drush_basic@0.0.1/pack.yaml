@@ -21,3 +21,11 @@ pack: drush_basic
 version: 0.0.1
 depends: [drupal_basic, php_basic]
 
+# Detected when a custom module registers Drush commands, or keeps command classes where
+# Drush looks for them.
+detect:
+  any_of:
+    - path: "{module_root}/drush.services.yml"
+    - path: "{module_root}/src/Drush/Commands/*.php"
+    - path: "{module_root}/src/Commands/*.php"
+

@@ -31,7 +31,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from periplus.detect import Detection
+from periplus.detect import Detection, Placement
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PACKS_DIRECTORY, PROJECT_MARKER, SETTINGS_FILENAME
 from periplus.report import _escape
@@ -51,6 +51,14 @@ _PACKS_PREAMBLE = (
     "# later run loads is what this list says. Delete a line and that pack stops loading; add one\n"
     "# and it starts. Nothing re-runs detection.\n"
     "packs:\n"
+)
+
+#: The prose that introduces a prefilled ``folders:`` block.
+_FOLDERS_PREAMBLE = (
+    "# Where `periplus init` found folders the packs above read, where a pack's default\n"
+    "# folder does not exist in this repository. Edit a path that is wrong; a folder not listed\n"
+    "# here uses the pack's default.\n"
+    "folders:\n"
 )
 
 
@@ -113,6 +121,8 @@ class InitReport:
     created: bool
     problems: tuple[Problem, ...]
     detected: tuple[Detection, ...] = ()
+    #: Each folder the detected packs list candidates for, and where it was found.
+    placed: tuple[Placement, ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -130,6 +140,7 @@ def initialise_project(
     root: Path,
     packs: Sequence[str] | None = None,
     detected: Sequence[Detection] = (),
+    placed: Sequence[Placement] = (),
 ) -> InitReport:
     """Create ``.periplus/``, ``.periplus/packs/`` and the settings file under ``root``.
 
@@ -216,9 +227,10 @@ def initialise_project(
     marker = root / PROJECT_MARKER
     settings = marker / SETTINGS_FILENAME
     found = tuple(detected)
+    places = tuple(placed)
     pins = tuple(packs) if packs is not None else tuple(one.pin for one in found)
     try:
-        _create(marker, settings, pins)
+        _create(marker, settings, pins, places)
     except TargetExists as error:
         return InitReport(
             root=root,
@@ -226,18 +238,23 @@ def initialise_project(
             created=False,
             problems=(error.problem(),),
             detected=found,
+            placed=places,
         )
-    return InitReport(root=root, settings=settings, created=True, problems=(), detected=found)
+    return InitReport(
+        root=root, settings=settings, created=True, problems=(), detected=found, placed=places
+    )
 
 
-def _create(marker: Path, settings: Path, packs: Sequence[str]) -> None:
+def _create(
+    marker: Path, settings: Path, packs: Sequence[str], placed: Sequence[Placement]
+) -> None:
     """The three creations, in order, raising ``TargetExists`` for anything in the way."""
     _make_directory(marker, "marker")
     _make_directory(marker / PACKS_DIRECTORY, "packs")
 
     try:
         with settings.open("x", encoding="utf-8", newline="\n") as stream:
-            stream.write(_stub_text() + _packs_block(packs))
+            stream.write(_stub_text() + _packs_block(packs) + _folders_block(placed))
     except FileExistsError as error:
         raise TargetExists(
             f"the settings file already exists and was not changed: {settings}",
@@ -319,6 +336,20 @@ def _packs_block(packs: Sequence[str]) -> str:
     return f"\n\n{_PACKS_PREAMBLE}{pins}"
 
 
+def _folders_block(placed: Sequence[Placement]) -> str:
+    """The ``folders:`` declaration of each folder placed at a candidate, or nothing at all.
+
+    A kept default is not written: the pack already says it. Name and path are both double-quoted
+    for the reason the pins are: both come from a pack manifest.
+    """
+    rows = "".join(
+        f"  {json.dumps(one.folder)}: {json.dumps(one.path)}\n"
+        for one in placed
+        if one.path is not None and not one.kept
+    )
+    return f"\n\n{_FOLDERS_PREAMBLE}{rows}" if rows else ""
+
+
 def render_text(report: InitReport) -> str:
     """The report as the two or three lines a person reads.
 
@@ -354,5 +385,23 @@ def render_text(report: InitReport) -> str:
             f"  detected  {_escape(found.pin)} via {_escape(found.path)}"
             for found in report.detected
         ]
+        lines += [_placement_line(one) for one in report.placed]
     lines += [f"  {int(problem.code)}  {_escape(problem.message)}" for problem in report.problems]
     return "\n".join(lines) + "\n"
+
+
+def _placement_line(one: Placement) -> str:
+    """One folder's line: kept, written to the settings, or not placed."""
+    name = _escape(one.folder)
+    if one.path is None:
+        tried = _escape(", ".join((*one.default, *one.candidates)))
+        return (
+            f"  unplaced  {name}: none of {tried} exists; declare it under folders in "
+            f"{PROJECT_MARKER}/{SETTINGS_FILENAME}"
+        )
+    if one.kept:
+        return f"  folder    {name} = {_escape(one.path)}, the pack's default"
+    return (
+        f"  folder    {name} = {_escape(one.path)}, written to the settings; the default "
+        f"{_escape(', '.join(one.default) or 'none')} does not exist"
+    )

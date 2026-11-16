@@ -112,3 +112,8 @@ def test_the_internal_and_declared_values_keys_are_executed() -> None:
     keys = {"file.node_types.*.internal", "manifest.values"}
     assert keys <= EXECUTED_KEYS & _schema_paths()
     assert "manifest.values.*" not in EXECUTED_KEYS
+
+
+def test_the_folder_candidates_key_is_executed() -> None:
+    """A manifest's folder candidates, which ``periplus init`` reads."""
+    assert "manifest.folder_candidates" in EXECUTED_KEYS & _schema_paths()

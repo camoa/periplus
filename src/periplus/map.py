@@ -14,7 +14,7 @@ import os
 import posixpath
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -23,8 +23,16 @@ from jsonschema import Draft202012Validator
 import periplus
 from periplus.engine.check import checked
 from periplus.engine.emit import LeftOut, build_document, render
+from periplus.engine.packload import RuleSet
 from periplus.engine.rules import MapPass, run_file_rules, run_map_rules
-from periplus.engine.select import Selection, files_in, folder_problems, resolve_folders
+from periplus.engine.select import (
+    FileTypes,
+    Selection,
+    base_folders,
+    files_in,
+    folder_problems,
+    resolve_folders,
+)
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER, SETTINGS_FILENAME
 from periplus.manifest import LoadedPack, resolve_pack_order
@@ -86,6 +94,9 @@ class MapReport:
     unknown: tuple[tuple[str, str], ...] = ()
     #: Each node of conflicting types and its candidates, by id.
     conflicts: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    #: Each pinned pack whose file rules selected no file, with each base folder its rules reach:
+    #: the folder, its value as written, and the number of directories it resolved to.
+    empty_packs: tuple[tuple[str, tuple[tuple[str, str, int], ...]], ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -171,14 +182,30 @@ def run(
         found_nodes, found_edges, fires, opened, read, removed, broken, skipped = run_file_rules(
             root, rule_set, packs, folders, selection
         )
+        pinned = {matched.name.pack for matched in resolution.packs}
+        empty = _empty_packs(root, rule_set, packs, pinned, folders, read, overrides, selection)
+        directories = sorted({path for name in wanted for path in folders[name]})
+        listed, unlisted = files_in(root, directories, selection)
+        unread = sorted(set(listed) - read)
+        if not read:
+            message = (
+                "no file was selected, so no map was written and any existing map was left as it "
+                "was: every pinned pack looked only in folders that hold none of its files; "
+                f"declare where the code is under folders in {PROJECT_MARKER}/{SETTINGS_FILENAME}"
+            )
+            return replace(
+                _failed([Problem(ExitCode.NOTHING_SELECTED, message, {"setting": "folders"})]),
+                packs=tuple(sorted((p.name.pack, p.name.version) for p in packs)),
+                excluded=len(removed),
+                unread=tuple(unread),
+                unlisted=tuple(unlisted),
+                empty_packs=empty,
+            )
         map_nodes, map_edges, map_fires, map_passes, unread_by_map = run_map_rules(
             rule_set, found_nodes, found_edges
         )
         skipped.extend(unread_by_map)
         fires.update(map_fires)
-        directories = sorted({path for name in wanted for path in folders[name]})
-        listed, unlisted = files_in(root, directories, selection)
-        unread = sorted(set(listed) - read)
         document, left_out = build_document(
             [*found_nodes, *map_nodes],
             [*found_edges, *map_edges],
@@ -239,7 +266,38 @@ def run(
             for n in document["nodes"]
             if "type_conflict" in n.get("attributes", {})
         ),
+        empty_packs=empty,
     )
+
+
+def _empty_packs(
+    root: Path,
+    rule_set: RuleSet,
+    packs: Sequence[LoadedPack],
+    pinned: set[str],
+    folders: Mapping[str, tuple[str, ...]],
+    read: set[str],
+    overrides: Mapping[str, str | Sequence[str]],
+    selection: Selection,
+) -> tuple[tuple[str, tuple[tuple[str, str, int], ...]], ...]:
+    """Each pinned pack with file rules none of whose rules selected a file, with the base folders
+    those rules reach. A file is a rule's when it sits directly in one of the rule's directories
+    and a type of the rule's file type claims it, as ``select_files`` decides."""
+    types = FileTypes.build(packs, selection.extensions)
+    found = []
+    for pack in sorted(pinned):
+        rules = [r for r in rule_set.rules if r.pack == pack and r.supported and not r.matches_type]
+        wanted = {(d, r.filetype) for r in rules for name in r.folders for d in folders[name]}
+        if not rules or any(
+            (posixpath.dirname(file), filetype) in wanted
+            for file in read
+            for filetype in types.names_of(posixpath.basename(file))
+        ):
+            continue
+        bases = base_folders(sorted({n for rule in rules for n in rule.folders}), packs, overrides)
+        resolved = resolve_folders([name for name, _ in bases], packs, overrides, root, selection)
+        found.append((pack, tuple((name, value, len(resolved[name])) for name, value in bases)))
+    return tuple(found)
 
 
 def _boundaries(document: Mapping[str, Any]) -> tuple[tuple[str, int], ...]:
@@ -288,8 +346,24 @@ def _failed(problems: Sequence[Problem]) -> MapReport:
 
 
 def render_text(report: MapReport) -> str:
-    """The report as lines a person reads. Every outside string goes through ``_escape``."""
+    """The report as lines a person reads. Every outside string goes through ``_escape``. Packs
+    that selected no file come first, and only when there are some."""
     lines = ["periplus map"]
+    if report.empty_packs:
+        lines += _section(
+            "Packs that selected no file",
+            [
+                f"{_escape(pack)}: "
+                + "; ".join(
+                    f"{_escape(name)} = {_escape(value)}, "
+                    + (f"{n} folder{'' if n == 1 else 's'} found" if n else "no such folder")
+                    for name, value, n in bases
+                )
+                + "; if the code is elsewhere, declare the folder under folders in "
+                f"{PROJECT_MARKER}/{SETTINGS_FILENAME}"
+                for pack, bases in report.empty_packs
+            ],
+        )
     lines += _section(
         "Map",
         [
@@ -444,6 +518,13 @@ def render_json(report: MapReport) -> str:
             "by_node": [{"node": n, "candidates": list(c)} for n, c in report.conflicts],
         },
         "problems": [_json_problem(p) for p in report.problems],
+        "empty_packs": [
+            {
+                "pack": pack,
+                "folders": [{"folder": f, "value": v, "found": n} for f, v, n in bases],
+            }
+            for pack, bases in report.empty_packs
+        ],
     }
     return json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 

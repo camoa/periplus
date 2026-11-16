@@ -9,6 +9,13 @@ pack: ai_basic
 version: 0.0.1
 depends: [drupal_basic, php_basic]
 
+# Detected when the site's configuration enables the module: core.extension lists it under
+# module, in the config folder where `periplus init` places it.
+detect:
+  any_of:
+    - path: "{config}/core.extension.yml"
+      contains: "\n  ai: "
+
 folders:
   # The folders the two plugin managers discover in, below a module's src folder.
   ai_agent_classes: "{module_root}/src/Plugin/AiAgent/**"

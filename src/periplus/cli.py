@@ -883,7 +883,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # for the whole tool rather than a branch deciding which subcommand is exempt, and `--version`
     # above remains the question answered before any check.
     if args.command == "init":
-        from periplus.detect import detect
+        from periplus.detect import detect, place
         from periplus.init import initialise_project, render_text
 
         # Detection runs here rather than inside `initialise_project`, so that the command that
@@ -896,7 +896,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         # under strict, and it would read as one thing being two.
         # The detections, not their pins. `initialise_project` derives what to write from what was
         # found, so the pins in the file and the evidence in the report cannot disagree.
-        created = initialise_project(here, detected=detected)
+        created = initialise_project(
+            here, detected=detected, placed=place(here, os.environ, dependencies, detected)
+        )
         sys.stdout.write(render_text(created))
         return created.exit_code
 

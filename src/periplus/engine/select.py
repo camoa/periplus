@@ -23,6 +23,7 @@ __all__ = [
     "FileTypes",
     "FolderUnresolved",
     "Selection",
+    "base_folders",
     "extended",
     "files_in",
     "folder_problems",
@@ -30,6 +31,7 @@ __all__ = [
     "holds_double_star",
     "reachable",
     "resolve_folders",
+    "resolve_value",
     "select_files",
 ]
 
@@ -73,6 +75,45 @@ def resolve_folders(
         )
         for name in names
     }
+
+
+def resolve_value(
+    value: str,
+    packs: Sequence[LoadedPack],
+    overrides: Mapping[str, str | Sequence[str]],
+    root: Path,
+) -> tuple[str, ...]:
+    """A value written as a folder value is, as the sorted directories it stands for. Raises as
+    ``resolve_folders`` does."""
+    _, settled = folder_values(packs)
+    combined = [""]
+    for place, part in enumerate(_REFERENCE.split(value)):
+        options = _patterns(part, settled, overrides, ()) if place % 2 else [part]
+        combined = [done + option for done in combined for option in options]
+    return tuple(sorted({d for pattern in combined for d in _expand(pattern, root, None)}))
+
+
+def base_folders(
+    names: Sequence[str], packs: Sequence[LoadedPack], overrides: Mapping[str, str | Sequence[str]]
+) -> tuple[tuple[str, str], ...]:
+    """The folders the names reach that a person declares: each whose value, or one item of it,
+    names no other folder, with its value as written, sorted. Raises ``FolderUnresolved`` as
+    ``resolve_folders`` does."""
+    _, settled = folder_values(packs)
+    found: dict[str, str] = {}
+    pending, seen = list(names), set()
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        _patterns(name, settled, overrides, ())
+        value = overrides[name] if name in overrides else settled[name]
+        items = [value] if isinstance(value, str) else list(value or ())
+        if any(not _REFERENCE.search(item) for item in items):
+            found[name] = ", ".join(items)
+        pending.extend(ref for item in items for ref in _REFERENCE.findall(item))
+    return tuple(sorted(found.items()))
 
 
 def holds_double_star(

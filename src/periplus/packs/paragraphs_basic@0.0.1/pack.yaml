@@ -16,6 +16,13 @@ pack: paragraphs_basic
 version: 0.0.1
 depends: [drupal_basic]
 
+# Detected when the site's configuration enables the module: core.extension lists it under
+# module, in the config folder where `periplus init` places it.
+detect:
+  any_of:
+    - path: "{config}/core.extension.yml"
+      contains: "\n  paragraphs: "
+
 add_table_rows:
   # The module's entity classes by fully qualified name, and the entity type id each declares,
   # read by drupal_basic's entity_class_static_call.

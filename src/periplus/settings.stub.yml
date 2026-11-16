@@ -39,7 +39,8 @@ periplus_version: 0
 
 # Where this repository actually keeps things, when it does not keep them where the pack assumed.
 # A pack states a convention; one repository is always the exception, and this is where you say so
-# rather than forking the pack.
+# rather than forking the pack. `periplus init` writes an active `folders:` block at the end of
+# this file for each folder it found away from a pack's default.
 #
 # folders:
 #   config: config/sync

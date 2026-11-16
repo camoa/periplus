@@ -25,6 +25,8 @@ from test_validate import (
     project,  # noqa: F401 - fixture
 )
 
+from periplus.errors import ExitCode
+
 SOURCE = "drush_basic@0.0.1"
 RULE_FILE = Path("command") / "command_docblock.yaml"
 TEXT_RULE_FILE = Path("command") / "command_text.yaml"
@@ -247,7 +249,9 @@ def test_map_refuses_an_omitted_declared_value_and_maps_when_it_is_given_c2(
         )
     ]
     assert omitted_status == RULE_NOT_EXECUTABLE
-    assert (given_status, given["problems"]) == (0, [])
+    # The project holds no source file, so the run that loads ends at nothing selected.
+    assert given_status == ExitCode.NOTHING_SELECTED
+    assert [p["code"] for p in given["problems"]] == [ExitCode.NOTHING_SELECTED]
 
 
 @pytest.mark.criterion(id="c2")

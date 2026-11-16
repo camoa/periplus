@@ -21,6 +21,13 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: eck_basic
 version: 0.0.1
 depends: [drupal_basic]
+
+# Detected when the site's configuration enables the module: core.extension lists it under
+# module, in the config folder where `periplus init` places it.
+detect:
+  any_of:
+    - path: "{config}/core.extension.yml"
+      contains: "\n  eck: "
 files:
   types:
     # A bundle file names its entity type only in its file name, eck.eck_type.<entity type>.<bundle>.

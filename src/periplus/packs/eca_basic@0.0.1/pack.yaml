@@ -48,6 +48,13 @@ pack: eca_basic
 version: 0.0.1
 depends: [drupal_basic, php_basic]
 
+# Detected when the site's configuration enables the module: core.extension lists it under
+# module, in the config folder where `periplus init` places it.
+detect:
+  any_of:
+    - path: "{config}/core.extension.yml"
+      contains: "\n  eca: "
+
 files:
   types:
     # yaml_basic's type yml, given the path value eca_model: the config name of an ECA model's

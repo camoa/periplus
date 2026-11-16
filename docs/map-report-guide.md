@@ -186,6 +186,19 @@ written, `map` is `null` (text: `not written`), and the command exits with the l
 When it is not empty, fix what the message names first, and run the map again. Nothing else in the
 report is worth reading until it is empty.
 
+Exit 33 says no file was selected at all: every pinned rutter looked only in folders that hold
+none of its files. No map is written, and a map already at the path is left as it was. Read
+`empty_packs`, then declare where the code is under `folders` in `.periplus/settings.yml`.
+
+### `empty_packs`
+
+Text heading: Packs that selected no file, printed first and only when a row exists. Each row is
+a pinned rutter whose file rules selected no file. It names each folder those rules reach that
+names no other folder, with its value and how many folders it found, or `no such folder`. A rutter
+that matches nothing in this project is not an error, so the run goes on. When the rutter should
+have found files, declare the folder it names under `folders` in the settings, and run the map
+again.
+
 ### `parse_errors`
 
 Text heading: Files that did not parse cleanly. Each row is a file whose parse tree holds an
@@ -406,6 +419,9 @@ Rules that fired zero times.
 ```
 $ periplus map
 periplus map
+
+Packs that selected no file:
+  drupal_basic: config = ./config/sync, no such folder; custom_module = ./web/modules/custom, no such folder; custom_theme = ./web/themes/custom, no such folder; if the code is elsewhere, declare the folder under folders in .periplus/settings.yml
 
 Map:
   path    /path/to/project/.periplus/map.json
