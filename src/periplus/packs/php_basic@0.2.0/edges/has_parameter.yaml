@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method or function holds each parameter find_parameter or find_function_parameter maps, as a
+# has_parameter edge at the parameter's line. Each rule is the twin of the rule that makes the
+# parameter, with the same match and id, so this_node is the parameter's node. A promoted
+# constructor parameter is a property, not a parameter, and a closure's or arrow function's own
+# parameter has no node, so neither gets the edge.
+
+edge_kinds:
+- kind: has_parameter
+  cause: none
+  description: "the method or function declares that parameter in its signature"
+  from: [php.method, php.function]
+  to: php.parameter
+
+rules:
+- rule: method_has_parameter
+  reads: file
+  in: [source]
+  match: {declaration: simple_parameter, name_child: name, filetype: php,
+    where: [{not_within: [anonymous_function, arrow_function]}]}
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}"
+  emits: [{edge: {kind: has_parameter, from: enclosing_method, to: this_node}}]
+  confidence: declared
+
+# A plain function is the holder of its parameters (variable_calls_in_function.yaml), so its node
+# is the enclosing class end here.
+- rule: function_has_parameter
+  reads: file
+  in: [source]
+  match:
+    declaration: simple_parameter
+    name_child: name
+    filetype: php
+    holder: function_definition
+    where: [{not_within: [anonymous_function, arrow_function]}]
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{edge: {kind: has_parameter, from: enclosing_class, to: this_node}}]
+  confidence: declared

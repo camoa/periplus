@@ -8,8 +8,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # rules write the attribute installed, value no, on that module or theme. It spreads through the
 # grouping kinds to everything inside it, a function, class, route or template, so every row that
 # names one of them prints [not installed]. It also goes from a class, interface or trait to its
-# methods and properties along php_basic's contains and declares_property, which run from the class
-# to the member and do not group. The edge stays: it names the config that decides. A project
+# methods and properties along php_basic's contains and declares_property, and from a method or
+# function to its parameters along has_parameter, which run from the holder to the member and do
+# not group. The edge stays: it names the config that decides. A project
 # with no exported core.extension gets neither edge nor attribute. installs_module is declared by
 # the file; not_installed_by and installed are inferred, because they are drawn from a name the
 # list does not hold.
@@ -24,6 +25,7 @@ attributes:
   - {kind: has_call_site, to: to}
   - {kind: property_typed_as, to: to}
   - {kind: manager_call_in, to: from}
+  - {kind: has_parameter, to: to}
   mark: not installed
   description: "no on a module or theme in the codebase that core.extension does not list, and on everything inside it"
 

@@ -1,0 +1,17 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A class declares each property a promoted constructor parameter makes,
+# __construct(private Mailer $mailer), as a declares_property edge at the parameter's line, as
+# find_structure.yaml's declares_property does for a property written in the class body. The twin
+# of find_promoted_property: the same match and id, so this_node is the property's node.
+
+rules:
+- rule: declares_promoted_property
+  reads: file
+  in: [source]
+  match: {declaration: property_promotion_parameter, name_child: name, filetype: php}
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{edge: {kind: declares_property, from: enclosing_class, to: this_node}}]
+  confidence: declared
