@@ -157,7 +157,8 @@ def _unknown_options(span: str) -> list[str]:
     parser = build_parser()
     unknown: list[str] = []
     for token in shlex.split(span)[1:]:
-        if token.startswith("-"):
+        # A lone - is the id argument that reads standard input, not an option.
+        if token.startswith("-") and len(token) > 1:
             if token.split("=", 1)[0] not in parser._option_string_actions:
                 unknown.append(token)
             continue

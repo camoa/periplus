@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Sequence
+from typing import TextIO
 
-from periplus.navigate.listing import first_location, place
+from periplus.errors import Problem
+from periplus.navigate.listing import first_location, place, problem_lines
 from periplus.navigate.mapfile import MapIndex, NodeNotFound, as_text
 from periplus.report import _escape
 
@@ -43,11 +46,12 @@ def _short(node_id: str, text: str) -> bool:
     return not (name[before].isalnum() or name[before] == "_")
 
 
-def resolve(index: MapIndex, text: str) -> tuple[str, tuple[str, ...]]:
+def resolve(index: MapIndex, text: str, close: bool = True) -> tuple[str, tuple[str, ...]]:
     """The id ``text`` names, and a warning when it named it by a short name.
 
     A full id or its escaped form is taken as it is. Otherwise ``text`` is matched, ignoring case,
-    against each id's short names: one match is used, several or none is ``NodeNotFound``.
+    against each id's short names: one match is used, several or none is ``NodeNotFound``. Without
+    ``close``, a text that names nothing is not compared with every id for the closest ones.
     """
     unescaped = _unescape(text)
     for given in (text, unescaped):
@@ -70,6 +74,8 @@ def resolve(index: MapIndex, text: str) -> tuple[str, tuple[str, ...]]:
                 "total": len(matches),
             },
         )
+    if not close:
+        raise NodeNotFound(f"no node has the id {text!r}", {"id": text})
     try:
         index.node(text)
     except NodeNotFound as error:
@@ -79,8 +85,71 @@ def resolve(index: MapIndex, text: str) -> tuple[str, tuple[str, ...]]:
     return text, ()
 
 
+def resolve_all(index: MapIndex, texts: Sequence[str]) -> tuple[list[str], list[str]]:
+    """The ids ``texts`` name, each once in the order first named, and ``resolve``'s warnings."""
+    found: list[str] = []
+    notes: list[str] = []
+    for text in texts:
+        node_id, said = resolve(index, text)
+        found.append(node_id)
+        notes += said
+    return list(dict.fromkeys(found)), notes
+
+
 def _candidate(index: MapIndex, node_id: str) -> dict[str, str | None]:
     """One tie candidate as its raw id, type and first ``file:line``, or ``None`` for no place."""
     node = index.nodes[node_id]
     loc = first_location(node)
     return {"id": node_id, "type": as_text(node["type"]), "location": place(loc) if loc else None}
+
+
+def read_ids(given: Sequence[str], stream: TextIO) -> list[str]:
+    """``given`` with a ``-`` replaced by the lines of ``stream``, one id a line.
+
+    Only the line ending is taken off, so an id keeps its spaces; an empty line is skipped. The
+    stream is read at the first ``-``; a second ``-`` adds nothing.
+    """
+    ids: list[str] = []
+    read = False
+    for text in given:
+        if text != "-":
+            ids.append(text)
+        elif not read:
+            read = True
+            lines = (line.removesuffix("\r") for line in stream.read().split("\n"))
+            ids += [line for line in lines if line]
+    return ids
+
+
+def id_output(
+    pieces: Iterable[Sequence[str]], warnings: Sequence[str], problems: Sequence[Problem]
+) -> tuple[str, str]:
+    """What ``--ids`` writes: one full id a line, a blank line between ``pieces``, nothing else;
+    and for standard error, the count, the warnings and the problems.
+
+    An id is printed as it is, but one holding a character ``_escape`` changes other than a
+    backslash, such as a line break, which would split it: that one prints escaped, and ``resolve``
+    reads it back.
+    """
+    blocks: list[str] = []
+    count = escaped = 0
+    for piece in pieces:
+        lines = []
+        for node_id in piece:
+            shown = _escape(node_id)
+            if shown == node_id.replace("\\", "\\\\"):
+                shown = node_id
+            else:
+                escaped += 1
+            lines.append(shown)
+        count += len(lines)
+        blocks.append("".join(f"{line}\n" for line in lines))
+    err = [f"{count} id{'' if count == 1 else 's'}"]
+    if escaped:
+        err.append(
+            f"{escaped} of them hold a control character and print escaped; periplus commands "
+            "read the escaped form back"
+        )
+    err += [f"warning: {_escape(w)}" for w in warnings]
+    err += problem_lines(problems)
+    return "\n".join(b for b in blocks if b), "".join(f"{line}\n" for line in err)

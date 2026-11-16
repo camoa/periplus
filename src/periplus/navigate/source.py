@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import stat
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,8 @@ __all__ = [
     "SourceLines",
     "description_line",
     "located",
+    "place_key",
+    "places",
     "source_line",
     "where",
 ]
@@ -38,6 +40,24 @@ def where(edge: Mapping[str, Any] | None, node: Mapping[str, Any]) -> str | None
 def located(location: str | None) -> str:
     """A row's location as the text form prints it."""
     return location or "no location"
+
+
+def place_key(location: str | None) -> tuple[bool, str, int]:
+    """A ``file:line`` as a sort key: by file, line 9 before line 10, no location last."""
+    file, _, line = (location or "").rpartition(":")
+    return location is None, file, int(line) if line.isdecimal() else 0
+
+
+def places(locations: Sequence[str | None]) -> list[str]:
+    """Each row's location as a list of rows prints it: ``file:line``, but ``:line`` when the row
+    just above is in the same file, and ``no location`` for none."""
+    shown: list[str] = []
+    above = None
+    for location in locations:
+        file, _, line = (location or "").rpartition(":")
+        shown.append(f":{line}" if location and file == above else located(location))
+        above = file if location else None
+    return shown
 
 
 def source_line(source: str | None) -> list[str]:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from importlib.resources import files
 from pathlib import Path
@@ -44,13 +44,17 @@ from periplus.skills_install import SKILLS_DIRECTORY
 __all__ = [
     "RENDERERS",
     "Description",
+    "MANY_RENDERERS",
     "EdgeRow",
     "Location",
     "ShowReport",
+    "ShowReports",
+    "listed",
     "node_descriptions",
     "render_json",
     "render_text",
     "run",
+    "run_many",
 ]
 
 #: The hand-written file that says what a node or edge does: the project's
@@ -177,6 +181,28 @@ def _rows(
     return sorted(rows, key=lambda r: (r.supporting, r.kind, r.other, _first(r.locations)))
 
 
+@dataclass(frozen=True, slots=True)
+class ShowReports:
+    """One ``ShowReport`` for each id asked, in the order asked."""
+
+    reports: tuple[ShowReport, ...]
+
+    @property
+    def exit_code(self) -> ExitCode:
+        """The lowest code any report stopped with, or ``OK`` when none did."""
+        return min((r.exit_code for r in self.reports if r.exit_code), default=ExitCode.OK)
+
+    @property
+    def warnings(self) -> tuple[str, ...]:
+        """Every report's warnings, in order."""
+        return tuple(w for r in self.reports for w in r.warnings)
+
+    @property
+    def problems(self) -> tuple[Problem, ...]:
+        """Every report's problems, in order."""
+        return tuple(p for r in self.reports for p in r.problems)
+
+
 def run(
     start: Path,
     env: Mapping[str, str],
@@ -185,12 +211,48 @@ def run(
     map_path: Path | None,
 ) -> ShowReport:
     """Show the node ``node_id``; a missing map or node is a problem, not a raise."""
+    return run_many(start, env, [node_id], limit, map_path).reports[0]
+
+
+def run_many(
+    start: Path,
+    env: Mapping[str, str],
+    ids: Sequence[str],
+    limit: int,
+    map_path: Path | None,
+) -> ShowReports:
+    """Show each of ``ids`` from one load of the map, as ``run`` shows one. The descriptions
+    file's problems go with the first report."""
     try:
         index = load_map(start, env, map_path)
         document, problems = _descriptions(_locate(start, map_path))
         nodes = document.get("nodes", {})
         edges = {(e["from"], e["kind"], e["to"]): _entry(e) for e in document.get("edges", [])}
         lines = SourceLines(start, map_path)
+    except HarnessError as error:
+        return ShowReports((ShowReport(problems=(error.problem(),)),))
+    told = (nodes, edges)
+    return ShowReports(
+        tuple(
+            _one(start, map_path, index, told, lines, node_id, limit, () if n else problems)
+            for n, node_id in enumerate(ids)
+        )
+    )
+
+
+def _one(
+    start: Path,
+    map_path: Path | None,
+    index: MapIndex,
+    described: tuple[Mapping[str, Any], Mapping[tuple[str, str, str], Description]],
+    lines: SourceLines,
+    node_id: str,
+    limit: int,
+    problems: tuple[Problem, ...],
+) -> ShowReport:
+    """The report of one node; a missing node is a problem, not a raise."""
+    nodes, edges = described
+    try:
         with reading_fields(start, map_path):
             node_id, resolved = resolve(index, node_id)
             node = index.node(node_id)
@@ -410,4 +472,29 @@ def render_json(report: ShowReport) -> str:
     return as_json(document)
 
 
+def render_many_text(shown: ShowReports) -> str:
+    """Each report as ``render_text`` prints it, a ``---`` line between two."""
+    return "---\n".join(render_text(report) for report in shown.reports)
+
+
+def render_many_json(shown: ShowReports) -> str:
+    """One report as ``render_json`` prints it; several as ``{"shown": [...]}``, one each."""
+    if len(shown.reports) == 1:
+        return render_json(shown.reports[0])
+    return as_json({"shown": [json.loads(render_json(report)) for report in shown.reports]})
+
+
+def listed(shown: ShowReports) -> tuple[str, ...]:
+    """The ids ``--ids`` prints: the other end of every edge row, outgoing then incoming, each
+    once, report by report."""
+    ends = (
+        row.other
+        for report in shown.reports
+        for listing in (report.outgoing, report.incoming)
+        for row in listing.items
+    )
+    return tuple(dict.fromkeys(ends))
+
+
 RENDERERS = {"text": render_text, "json": render_json}
+MANY_RENDERERS = {"text": render_many_text, "json": render_many_json}

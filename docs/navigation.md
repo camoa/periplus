@@ -1,6 +1,6 @@
 # Navigating the map
 
-`periplus map` writes the map. Eleven commands read it. Eight answer a question about it. `slice` prints the
+`periplus map` writes the map. Sixteen commands read it. Thirteen answer a question about it. `slice` prints the
 piece of the map around some words or items, or cuts it into a map file of its own; `export` prints the map in
 another format. Each one loads the map, prints its output and stops. None of them changes the map or
 starts a server. The question commands read a source file only to print one line of it under a row.
@@ -10,26 +10,31 @@ starts a server. The question commands read a source file only to print one line
 | `periplus types` | Which node types and edge kinds does the map hold, and how many of each? |
 | `periplus legend` | What does each edge kind and node type of the map mean, and which types does a kind join? |
 | `periplus find TEXT` | Which nodes hold this text in their id, attributes or description? |
-| `periplus show ID` | What is this node, and which edges leave and arrive at it? |
+| `periplus show ID...` | What is each of these nodes, and which edges leave and arrive at it? |
 | `periplus depth ID` | How far does what this item sets off reach, and what sets it off? |
 | `periplus neighbors ID` | What does this item set off, hop by hop? |
 | `periplus affected ID` | What sets this item off, hop by hop? |
+| `periplus only ID...` | What do these items set off that nothing else sets off? |
+| `periplus hubs ID...` | Which hubs does the walk from these items stop at? |
+| `periplus members ID...` | What does this container hold? |
+| `periplus pieces ID...` | Into which groups do edges join these items? |
+| `periplus count ID...` | How many things do these ids name, of which types and states, with how many edges among them? |
 | `periplus path FROM TO` | What is the shortest chain of edges from one item to another? |
 | `periplus slice WORDS` | What lies around the nodes these words or ids name, hop by hop? With `--out FILE`, write that piece to a map file of its own. |
 | `periplus export --format F` | Print the map as GraphML, DOT or Mermaid. |
 
-An eleventh command, `periplus check-map`, checks the whole map against the map schema. See
+A sixteenth command, `periplus check-map`, checks the whole map against the map schema. See
 [Checking the map](#checking-the-map).
 
 ## What every command shares
 
 - `--map PATH` names the map file. Without it, the command reads `.periplus/map.json` under the
   project root, found by walking up from the working directory.
-- The eight question commands and `slice` take `--format text|json` to pick the report (default
+- The thirteen question commands and `slice` take `--format text|json` to pick the report (default
   `text`). The JSON report has sorted keys and is described by the shipped
   `navigation.schema.json`, which `periplus spec` also emits. `export` prints the graph itself and
   takes `--report text|json` for the warnings and problems it writes to standard error.
-- An `ID` argument (`show`, `depth`, `neighbors`, `affected`, `path`, and each argument of `slice`) is a node id or a short name: the
+- An `ID` argument (`show`, `depth`, `neighbors`, `affected`, `only`, `hubs`, `members`, `pieces`, `count`, `path`, and each argument of `slice`) is a node id or a short name: the
   id's name after its first `::`, or a tail of that name that starts after a character other than
   a letter, digit or underscore, compared without case. So `helper` and `tools.helper` both name
   `python.function::shop.tools.helper`. A short name that fits one node is used, with the warning
@@ -44,11 +49,35 @@ An eleventh command, `periplus check-map`, checks the whole map against the map 
   `"truncated": true` in JSON. A cut `find` list adds two lines: `by type:` with the match count of
   each type, and `narrow with --type T or --path P`. Printed `slice` shows 50 rows by default. For `slice --out`,
   the limit (default 500) is the most items the slice may hold. Over it, the command writes nothing and exits 32.
+- `-` in place of the `ID`s reads them from standard input, one id a line, for every command
+  that takes several `ID`s (`show`, `depth`, `neighbors`, `affected`, `only`, `hubs`, `members`,
+  `pieces`, `count`). Only the line ending is taken off, so an id keeps its spaces; empty lines are
+  skipped. `-` that reads no id exits 2. `path` takes two single ids and `slice` reads its
+  arguments as words, so neither reads standard input.
+- A row of `only`, `hubs`, `members` or `pieces` ends with its node's marks and, for a node in
+  supporting code, `[supporting code]`; their JSON items add `marks` and `supporting`.
+- `--ids` prints the ids a command lists, one full id a line, and nothing else, for another
+  command to read with `-`: `find`, `show` (the other end of each edge), `neighbors` and
+  `affected` (the starts, then every thing within `--depth`, and with `--touch` the touching
+  things), `only`, `hubs`, `members` and `pieces` (a blank line between two pieces). The list is
+  never cut: `--limit` does not apply. The count, such as `5 ids`, the warnings and the problems
+  go to standard error, so a pipe carries ids only. An id holding a control character, such as a
+  line break, prints escaped instead, and a line on standard error says how many did; the commands
+  read the escaped form back. `--ids` with `--format json` exits 2.
 - Output is the same on every run for the same map.
+
+Pipe a periplus command only into another periplus command. A pipe into `head`, `grep` or `cut`
+drops rows without a word; a periplus command reads every id and counts what it reads.
+
+```
+periplus neighbors ID --depth all --ids | periplus count -
+periplus find login --ids | periplus pieces -
+```
 
 The question commands report ids, locations and source lines. A row of `find`, `neighbors`,
 `affected` or `path`, and an edge row of `show`, carries a location as `file:line`: where the edge
-is written, else the node's first location. Under a row of `find`, `path`, `show`, or `neighbors`
+is written, else the node's first location; a walk by cause prints `:line` when the row above
+is in the same file. Under a row of `find`, `path`, `show`, or `neighbors`
 or `affected` with `--raw`, marked `|`, comes the source line at
 that place, stripped and cut to 160 characters. It is left out when the file or the line cannot be
 read, as when the map is older than the tree, or when the file is not a regular file, lies outside
@@ -125,7 +154,7 @@ rest.
 A mark is a short fact a rutter declares about a thing, such as `[not installed]`. The map's
 `marks` header names the mark of each attribute that has one, so no pack is needed to read it. A
 node that holds such an attribute prints its mark in brackets on every row that names it, in
-`find`, `show`, `neighbors`, `affected`, `path` and `slice`, after `[attribute NAME]` or
+`find`, `show`, `neighbors`, `affected`, `only`, `hubs`, `members`, `pieces`, `path` and `slice`, after `[attribute NAME]` or
 `[description]` and before `[supporting code]`. Several marks print in attribute-name order. A mark
 the rutter spreads holds for everything inside the thing: a function in a module that is not
 installed prints `[not installed]` too. A map with no `marks` header prints no marks.
@@ -143,8 +172,13 @@ texts, empty when it has none.
 ### show
 
 ```
-periplus show ID [--limit N] [--map PATH] [--format text|json]
+periplus show ID... [--limit N] [--ids] [--map PATH] [--format text|json]
 ```
+
+Several `ID`s print one report each, in the order given, with a line `---` between two, from one
+load of the map. In JSON, several `ID`s print `{"shown": [...]}`, one report each; one `ID` prints
+its report alone. When one `ID` names no node, its report says so, the others print, and the exit
+code is that problem's. `--ids` prints the other end of each edge, each once.
 
 Prints the node's type, state, location and provenance, then its outgoing and incoming edges
 grouped by kind. Each edge row names the other end, the first location, the occurrence count, the
@@ -207,7 +241,7 @@ kinds the walk followed undeclared, or says the map declares no cause directions
 ### neighbors
 
 ```
-periplus neighbors ID... [--depth N|all] [--kind K]... [--hub N] [--through ID]... [--touch] [--limit N] [--map PATH] [--format text|json]
+periplus neighbors ID... [--depth N|all] [--kind K]... [--hub N] [--through ID]... [--touch] [--full] [--ids] [--limit N] [--map PATH] [--format text|json]
 periplus neighbors ID --raw [--depth N|all] [--kind K]... [--limit N] [--map PATH] [--format text|json]
 ```
 
@@ -228,11 +262,16 @@ not go on from it. `--hub 0` walks every hub; `--through ID` walks one hub all t
 be repeated. A start is always walked from. `--kind K` keeps only edges of kind `K`; a kind
 listed under `none` or `touch` given there is a warning.
 
-The text names the command and the starts, then a line for the whole walk, `sets off: 10 hops, 128
+The text names the command and the starts, the first three and how many more, `+5 more`, then a
+line for the whole walk, `sets off: 10 hops, 128
 things; 0 hubs stopped`, then a tree. Each start prints first, then each thing under the thing it
-was reached from, indented two spaces a hop: its id, type and state, the kind of the edge that
-reached it, with `(rev)` when that edge was followed from its to end, its `file:line`, and its
-marks; `[supporting code]` ends a row in supporting code. No source line or description prints
+was reached from, indented two spaces a hop: its name, type and state, the kind of the edge that
+reached it, with `(rev)` when that edge was followed from its to end, its place, and its
+marks; `[supporting code]` ends a row in supporting code. The name is the short name, as `slice`
+prints it: the shortest tail of the id that names this node alone, which any command takes back;
+the full id when no tail does. The place is `file:line`, or `:line` alone when the row just above
+it, in print order whatever its indent, is in the same file. `--full` prints the full id and
+`file:line` on every row. The JSON always carries full ids and paths. No source line or description prints
 here; `periplus show ID` prints them. `--depth N` (1 or more, default 1) sets the hops shown, and
 `--depth all` shows every hop. Each hop not shown prints one count line instead, `hop 4: 37 things
 (php.method 20, php.class 17)`, so nothing is left out unsaid. When the text would pass the budget,
@@ -256,7 +295,8 @@ hop.
 #### The raw walk
 
 `--raw` follows every edge leaving `ID` by its own direction, whatever its kind, as the walk did
-before 0.9; it takes one `ID` and no `--hub`, `--through` or `--touch`. A map with no cause list,
+before 0.9; it takes one `ID` and no `--hub`, `--through`, `--touch` or `--full`. With `--ids` it
+prints the start and every row, past `--limit`. A map with no cause list,
 such as one written before 0.9, gets this walk without `--raw`, from one `ID`, and a last line
 `warning: the map declares no cause directions; walked by raw direction, as --raw does`. Each row
 gives the depth at which the item was first reached, its id, type and state, the edge it was
@@ -277,7 +317,7 @@ so the code behind a declaration is one hop along it.
 ### affected
 
 ```
-periplus affected ID... [--depth N|all] [--kind K]... [--hub N] [--through ID]... [--touch] [--limit N] [--map PATH] [--format text|json]
+periplus affected ID... [--depth N|all] [--kind K]... [--hub N] [--through ID]... [--touch] [--full] [--ids] [--limit N] [--map PATH] [--format text|json]
 periplus affected ID --raw [--depth N|all] [--kind K]... [--limit N] [--map PATH] [--format text|json]
 ```
 
@@ -287,6 +327,85 @@ starts `set off by:`, its JSON `direction` is `by`, and `--touch` adds what poin
 shown. With `--raw` it follows the edges that arrive at `ID`; there a node brings the
 declarations it stands for, a row `realized by X by overrides`, so the callers of an abstract
 method reach the method that replaces it.
+
+### only
+
+```
+periplus only ID... [--ids] [--map PATH] [--format text|json]
+```
+
+Lists what the `ID`s set off, by the walk by cause of `neighbors` with its default hub limit, that
+nothing else sets off. A thing is kept when every chain of things that sets it off, followed back
+as far as it goes, passes through an `ID`: remove the `ID`s, and nothing outside what they set off
+still sets it off. A loop that only the `ID`s feed is kept. Several `ID`s count as one set. The
+text names the command and the `ID`s, prints the walk's `sets off:` line, then `only through the
+starts: N of M`, then one row a thing: its name, type, state, `hop N` and its own first
+`file:line` (`:line` when the row above is in the same file). In JSON: `command`, `starts`,
+`reached` (the things the walk set off), `only` (each with `id`, `type`, `state`, `hop` and
+`location`), `warnings` and `problems`.
+
+Given the ids `neighbors --ids` printed, `only` answers what lies past them that only they reach:
+the things they set off are already in the set.
+
+### hubs
+
+```
+periplus hubs ID... [--direction off|by] [--depth N|all] [--hub N] [--ids] [--map PATH] [--format text|json]
+```
+
+Lists the hubs the walk by cause from the `ID`s stops at: what they set off (`--direction off`, the
+default, as `neighbors`) or what sets them off (`by`, as `affected`). A hub is what the walks call
+one: a thing with more edges to follow than `--hub N` (default 40). The walk does not go on from a
+hub, so a hub past another hub is not listed. `--depth N` keeps the hubs within `N` hops (default
+all). The text prints a count line, `sets off: 2 hubs (more than 40 links to follow)`, then one line
+a hub: name, type, `hop N` and `fan N`, the edges it would follow. In JSON: `command`,
+`direction`, `starts`, `depth`, `hub`, `hubs` (each with `id`, `type`, `hop` and `fan`),
+`warnings` and `problems`. To walk on from one hub, give it to `neighbors --through`.
+
+### members
+
+```
+periplus members ID... [--type T]... [--ids] [--map PATH] [--format text|json]
+```
+
+Lists what each `ID` holds: the from end of every edge of a grouping kind, one the map lists under
+`grouping_kinds`, that arrives at it, each member once. Only direct members count: a method of a
+class of a module is a member of the class, not of the module. `--type T` keeps members of type
+`T` and its subtypes; repeat it for several. Each `ID` prints `members of NAME: N (type n, ...)`,
+the types most first, then one row a member: name, type, state and its own first `file:line`,
+grouped by type in that order, then by file and line. `slice` lists a container start's members
+by the same function. In JSON: `command`, `containers` (each with `container`, `total`, `by_type`
+and `members`, each member with `id`, `type`, `state`, `location` and `kind`, the grouping kind),
+`warnings` and `problems`.
+
+### pieces
+
+```
+periplus pieces ID... [--ids] [--map PATH] [--format text|json]
+```
+
+Splits the things the `ID`s name into pieces. Two share a piece when an edge of any kind joins them
+directly, or a chain of such edges does through other things of the set; a thing outside the set
+joins nothing. Pieces go largest first, then by their smallest id. The text prints `N things in M
+pieces`, then each piece's header, `piece 1: 3 things`, and one row a thing, by file and line:
+name, type, state and place. `--ids` prints the ids with a blank line between two pieces. `slice`
+groups its output into pieces by the same function, leaving out grouping kinds. In JSON:
+`command`, `pieces` (a list of lists, each thing with `id`, `type`, `state` and `location`),
+`warnings` and `problems`.
+
+### count
+
+```
+periplus count ID... [--map PATH] [--format text|json]
+```
+
+Counts what the `ID`s name: how many ids were given and how many things they name, then the things
+by type and by state, most first, and the edges both of whose ends are among them, by kind. An id
+that names no node, or a short name that fits several, is listed under `not in the map:`, with
+`(fits N nodes)` for a short name, and is not a problem: `count` exits 0. The first line also says
+how many ids named a thing an earlier id named (`repeated`) and how many were short names. In JSON:
+`command`, `given`, `things`, `repeated`, `short_names`, `by_type`, `by_state`, `edges`,
+`not_found` (each with `id` and `fits`) and `problems`.
 
 ### path
 
@@ -467,7 +586,7 @@ periplus export --format dot --map foo.map.json > foo.dot
 | Code | Meaning |
 |---|---|
 | 0 | The report printed. An empty result is still 0. |
-| 2 | A bad option, such as `--depth 0`, `--raw` with `--touch` or with several `ID`s, or `slice --out` with `--type` or `--starts`. A walk on a map with no cause list from several `ID`s. |
+| 2 | A bad option, such as `--depth 0`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, or `slice --out` with `--type` or `--starts`. A walk on a map with no cause list from several `ID`s. |
 | 17 | The slice does not pass the map schema, because the map it was cut from does not. Run `periplus check-map` on that map. |
 | 27 | `slice --out` names the map being read, or the file cannot be written. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
@@ -594,16 +713,42 @@ Incoming (2):
 ```
 
 See what the `shop.cli` module sets off by its imports. Each row names the kind that reached it
-and where that edge is written:
+and where that edge is written. A row prints the short name where one fits, and `:2` says the
+edge is in the file of the row above:
 
 <!-- nav-run -->
 ```console
 $ periplus neighbors python.module::shop.cli --kind imports
 periplus neighbors python.module::shop.cli
 sets off:     1 hop, 2 things; 0 hubs stopped
+cli  python.module  mapped  start  shop/cli.py:1
+  tools  python.module  mapped  imports  :2
+  python.module::typer  python.module  referenced  imports  :1
+```
+
+The same walk with full ids and paths:
+
+<!-- nav-run -->
+```console
+$ periplus neighbors python.module::shop.cli --kind imports --full
+periplus neighbors python.module::shop.cli
+sets off:     1 hop, 2 things; 0 hubs stopped
 python.module::shop.cli  python.module  mapped  start  shop/cli.py:1
   python.module::shop.tools  python.module  mapped  imports  shop/cli.py:2
   python.module::typer  python.module  referenced  imports  shop/cli.py:1
+```
+
+The ids alone, for another command to read; the count goes to standard error:
+
+<!-- nav-run -->
+```console
+$ periplus neighbors python.module::shop.cli --ids
+python.module::shop.cli
+python.function::shop.tools.helper
+python.function::typer.Typer
+python.module::shop.tools
+python.module::typer
+5 ids
 ```
 
 See what sets the helper off, named by its short name. The `calls` edge runs from the module to
@@ -614,8 +759,8 @@ the helper, so the walk follows it backward, `(rev)`:
 $ periplus affected helper
 periplus affected python.function::shop.tools.helper
 set off by:   1 hop, 1 thing; 0 hubs stopped
-python.function::shop.tools.helper  python.function  mapped  start  shop/tools.py:1
-  python.module::shop.cli  python.module  mapped  calls (rev)  shop/cli.py:9
+helper  python.function  mapped  start  shop/tools.py:1
+  cli  python.module  mapped  calls (rev)  shop/cli.py:9
 warning: resolved 'helper' to python.function::shop.tools.helper
 ```
 
@@ -642,6 +787,71 @@ $ periplus depth python.module::shop.cli
 periplus depth python.module::shop.cli
 sets off:     1 hop, 4 things; 0 hubs stopped
 set off by:   0 hops, 0 things; 0 hubs stopped
+```
+
+What the module sets off that nothing else sets off. Nothing else in this project calls the
+helper or imports the tools module, so all four are kept:
+
+<!-- nav-run -->
+```console
+$ periplus only python.module::shop.cli
+periplus only python.module::shop.cli
+sets off:     1 hop, 4 things; 0 hubs stopped
+only through the starts: 4 of 4
+  helper  python.function  mapped  hop 1  shop/tools.py:1
+  typer.Typer  python.function  unresolved  hop 1  no location
+  tools  python.module  mapped  hop 1  shop/tools.py:1
+  python.module::typer  python.module  referenced  hop 1  no location
+```
+
+The walk from the module stops at no hub:
+
+<!-- nav-run -->
+```console
+$ periplus hubs python.module::shop.cli
+periplus hubs python.module::shop.cli
+sets off: 0 hubs (more than 40 links to follow)
+```
+
+This example's rutters declare no grouping kind, so a module holds no members here; on a map whose
+rutters do, `members` lists them by type:
+
+<!-- nav-run -->
+```console
+$ periplus members python.module::shop.cli
+periplus members
+members of cli: 0
+```
+
+Split three items into the groups edges join. The tools module contains the helper; nothing among
+the three joins `greet`:
+
+<!-- nav-run -->
+```console
+$ periplus pieces helper greet python.module::shop.tools
+periplus pieces
+3 things in 2 pieces
+piece 1: 2 things
+  helper  python.function  mapped  shop/tools.py:1
+  tools  python.module  mapped  :1
+piece 2: 1 thing
+  greet  python.function  mapped  shop/cli.py:8
+warning: resolved 'helper' to python.function::shop.tools.helper
+warning: resolved 'greet' to python.function::shop.cli.greet
+```
+
+Count a set. An id that names nothing is listed, not an error:
+
+<!-- nav-run -->
+```console
+$ periplus count python.module::shop.cli helper greet nope
+periplus count
+4 ids given: 3 things in the map, 1 not; 2 by a short name
+by type: python.function 2, python.module 1
+by state: mapped 3
+edges among them: 2 (calls 1, contains 1)
+not in the map:
+  nope
 ```
 
 Find the chain from the module to the helper. Edges are followed in their own direction, so the

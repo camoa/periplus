@@ -12,7 +12,7 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import problem_lines
 from periplus.navigate.mapfile import MapIndex, as_json, load_map, reading_fields
-from periplus.navigate.walk import HUB, CauseRow, amount, cause_walk, summary, ways
+from periplus.navigate.walk import HUB, CauseRow, amount, cause_walk, head_line, summary, ways
 from periplus.report import _escape, _json_problem
 
 __all__ = ["RENDERERS", "DepthReport", "render_json", "render_text", "run"]
@@ -110,7 +110,7 @@ def _kinds(counted: Sequence[tuple[str, int]]) -> str:
 def render_text(report: DepthReport) -> str:
     """One line per direction, then the touching line and the undeclared line when there are any."""
     named = " ".join(_escape(s) for s in report.starts)
-    lines = [f"periplus depth {named}" if named else "periplus depth"]
+    lines = [head_line("depth", report.starts)]
     if report.starts:
         lines.append(summary("sets off:", report.off, True))
         lines.append(summary("set off by:", report.by, True))

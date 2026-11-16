@@ -29,8 +29,16 @@ from periplus.navigate.mapfile import (
     load_map,
     reading_fields,
 )
+from periplus.navigate.names import Names
 from periplus.navigate.show import node_descriptions
-from periplus.navigate.source import SourceLines, description_line, located, source_line, where
+from periplus.navigate.source import (
+    SourceLines,
+    description_line,
+    located,
+    places,
+    source_line,
+    where,
+)
 from periplus.report import _escape, _json_problem
 
 __all__ = [
@@ -44,6 +52,8 @@ __all__ = [
     "WalkRow",
     "amount",
     "cause_walk",
+    "head_line",
+    "listed",
     "render_json",
     "render_text",
     "run",
@@ -324,6 +334,8 @@ HUB = 40
 BUDGET = 20_000
 #: The line a walk on a map without cause lists adds.
 NO_CAUSES = "the map declares no cause directions; walked by raw direction, as --raw does"
+#: The most starts a first line names; past them it counts the rest.
+STARTS_NAMED = 3
 #: The share of the things reached within these hops that ``summary`` prints.
 SHARES = (2, 3, 5)
 
@@ -452,6 +464,14 @@ def cause_walk(
     return CauseWalk(tuple(sorted(rows, key=lambda r: (r.hop, r.id))), tuple(undeclared))
 
 
+def head_line(command: str, starts: Sequence[str]) -> str:
+    """``periplus COMMAND`` and the starts, the first ``STARTS_NAMED`` by id and the rest counted,
+    so ids read from standard input do not fill the line."""
+    named = [_escape(s) for s in starts[:STARTS_NAMED]]
+    left = len(starts) - STARTS_NAMED
+    return " ".join(["periplus", command, *named, *([f"+{left} more"] if left > 0 else [])])
+
+
 def head(index: MapIndex, node_id: str) -> CauseRow:
     """A start as the hop 0 row of a walk by cause."""
     node = index.nodes[node_id]
@@ -500,6 +520,7 @@ class CauseReport:
     ``walked`` holds every thing to the end of the walk, ``depth`` how many hops of it to show
     (``None``: all), ``touching`` the touching rows of the starts and the rows within ``depth``,
     ``limit`` the text budget in characters (0: none) and ``again`` the command that shows all.
+    ``names`` holds the short name a row prints for each id; ``None`` prints full ids and paths.
     """
 
     command: str
@@ -513,6 +534,7 @@ class CauseReport:
     undeclared: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
+    names: Mapping[str, str] | None = None
 
     @property
     def exit_code(self) -> ExitCode:
@@ -532,9 +554,11 @@ def run_cause(
     hub: int = HUB,
     through: Sequence[str] = (),
     touch: bool = False,
+    full: bool = False,
 ) -> CauseReport | WalkReport:
     """Walk by cause from ``ids``, ``toward`` ``off`` or ``by``; show ``depth`` hops (``None``:
-    all) in at most ``limit`` characters (``None``: ``BUDGET``; 0: no limit).
+    all) in at most ``limit`` characters (``None``: ``BUDGET``; 0: no limit). Rows print short
+    names, or with ``full`` full ids.
 
     On a map with no cause list the walk is ``run``'s, from one id, with ``limit`` rows (``None``:
     50), and a warning says so.
@@ -573,6 +597,12 @@ def run_cause(
                 _touching(index, heads, reached, toward, depth, set(kinds)) if touch else ()
             )
             held = {edge["kind"] for edge in index.edges}
+            names = None if full else Names(index)
+            shorts = (
+                {r.id: names.short(r.id) for r in (*heads, *reached, *touched)}
+                if names is not None
+                else None
+            )
             asked = [
                 f"the kind {kind!r} is listed under cause {index.cause(kind)}, which the walk by "
                 f"cause does not follow; --raw follows it"
@@ -586,6 +616,7 @@ def run_cause(
     again += ["--hub", str(hub)] if hub != HUB else []
     again += [f for item in passes for f in ("--through", item)]
     again += ["--touch"] if touch else []
+    again += ["--full"] if full else []
     again += ["--map", str(map_path)] if map_path is not None else []
     return CauseReport(
         command,
@@ -598,6 +629,7 @@ def run_cause(
         " ".join(shlex.quote(part) for part in again),
         walked.undeclared,
         (*notes, *kind_warnings(kinds, held), *asked),
+        names=shorts,
     )
 
 
@@ -635,15 +667,15 @@ def _touching(
     return tuple(found)
 
 
-def _row_text(row: CauseRow) -> str:
-    """A tree row: indent by hop, id, type, state, kind (``(rev)`` when followed backward),
-    ``file:line``, marks, then ``[supporting code]``, ``[hub: ...]`` or ``[touch]``."""
+def _row_text(row: CauseRow, name: str, place: str) -> str:
+    """A tree row: indent by hop, name, type, state, kind (``(rev)`` when followed backward),
+    place, marks, then ``[supporting code]``, ``[hub: ...]`` or ``[touch]``."""
     tail = "  [supporting code]" if row.supporting else ""
     tail += f"  [hub: {row.hub} links not walked]" if row.hub is not None else ""
     tail += "  [touch]" if row.touch else ""
     return (
-        f"{'  ' * row.hop}{_escape(row.id)}  {_escape(row.type)}  {_escape(row.state)}"
-        f"  {_escape(row.kind)}{' (rev)' if row.backward else ''}  {_escape(located(row.location))}"
+        f"{'  ' * row.hop}{_escape(name)}  {_escape(row.type)}  {_escape(row.state)}"
+        f"  {_escape(row.kind)}{' (rev)' if row.backward else ''}  {_escape(place)}"
         f"{mark_text(row.marks)}{tail}"
     )
 
@@ -657,19 +689,23 @@ def _tree(report: CauseReport, hops: int) -> list[str]:
     for row in report.touching:
         if row.hop <= hops + 1:
             under[row.via].append(row)
-    lines: list[str] = []
+    rows: list[CauseRow] = []
 
     def emit(row: CauseRow) -> None:
-        lines.append(_row_text(row))
+        rows.append(row)
         for child in sorted(under[row.id], key=lambda r: (r.touch, r.kind, r.id)):
             if child.touch:
-                lines.append(_row_text(child))
+                rows.append(child)
             else:
                 emit(child)
 
     for start in report.starts:
         emit(start)
-    return lines
+    if report.names is None:
+        return [_row_text(r, r.id, located(r.location)) for r in rows]
+    shown = places([r.location for r in rows])
+    names = report.names
+    return [_row_text(r, names.get(r.id, r.id), at) for r, at in zip(rows, shown, strict=True)]
 
 
 def _hop_line(report: CauseReport, hop: int) -> str:
@@ -686,8 +722,7 @@ def _hop_line(report: CauseReport, hop: int) -> str:
 def _cause_text(report: CauseReport) -> str:
     """A walk by cause as text: the cut line first when something is not shown, then the command,
     the summary, the tree, a count line for each hop not shown, and the notes."""
-    named = " ".join(_escape(s.id) for s in report.starts)
-    lines = [f"periplus {report.command}" + (f" {named}" if named else "")]
+    lines = [head_line(report.command, [s.id for s in report.starts])]
     notes = [f"warning: {_escape(w)}" for w in report.warnings] + problem_lines(report.problems)
     if not report.starts:
         return "\n".join(lines + notes) + "\n"
@@ -763,6 +798,21 @@ def _cause_json(report: CauseReport) -> dict[str, Any]:
         "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
     }
+
+
+def listed(report: WalkReport | CauseReport) -> tuple[str, ...]:
+    """The ids ``--ids`` prints: the starts, then every row within ``depth`` and, with
+    ``--touch``, the touching rows, by hop and id; with ``--raw``, the start and its rows."""
+    if isinstance(report, WalkReport):
+        started = [report.start] if report.start else []
+        return tuple(dict.fromkeys([*started, *(r.id for r in report.rows.items)]))
+    last = max((r.hop for r in report.walked), default=0)
+    hops = last if report.depth is None else min(report.depth, last)
+    rows = [r for r in report.walked if r.hop <= hops] + list(report.touching)
+    return (
+        *(s.id for s in report.starts),
+        *(r.id for r in sorted(rows, key=lambda r: (r.hop, r.touch, r.id))),
+    )
 
 
 RENDERERS = {"text": render_text, "json": render_json}

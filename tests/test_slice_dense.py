@@ -21,6 +21,7 @@ from _navigate import _edge, _node
 from periplus.navigate import slice as slicing
 from periplus.navigate.ids import resolve
 from periplus.navigate.mapfile import MapIndex
+from periplus.navigate.names import Names
 
 CART = "t.class::shop.Cart"
 ADD = "t.method::shop.Cart::add"
@@ -144,7 +145,7 @@ def test_each_file_is_a_header_once_with_its_container_and_nodes_in_line_order(
 
 def test_every_short_name_resolves_back_to_its_node(tmp_path: Path) -> None:
     site = _site(tmp_path)
-    names = slicing._Names(MapIndex(json.loads((site / ".periplus/map.json").read_text())))
+    names = Names(MapIndex(json.loads((site / ".periplus/map.json").read_text())))
 
     assert [names.short(i) for i in (ADD, RUN_A, RUN_B, BOX)] == ["add", "A::run", "B::run", "shop"]
     for node_id in (ADD, RUN_A, RUN_B, BOX, CART, QZ, ALIAS):

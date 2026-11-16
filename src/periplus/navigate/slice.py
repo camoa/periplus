@@ -16,6 +16,7 @@ from periplus.engine.emit import counts, hierarchy
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.map import write_document
 from periplus.navigate import find
+from periplus.navigate import grouping as grouping_
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import (
     NONE,
@@ -36,6 +37,7 @@ from periplus.navigate.mapfile import (
     load_document,
     reading_fields,
 )
+from periplus.navigate.names import Names
 from periplus.navigate.show import node_descriptions
 from periplus.navigate.source import SourceLines, description_line, source_line, where
 from periplus.navigate.walk import stand_in_line, walk
@@ -358,8 +360,6 @@ def _under(document: Mapping[str, Any], prefixes: Collection[str]) -> set[str]:
 
 #: A word: a run of letters, digits and underscores.
 _WORD = re.compile(r"\w+")
-#: A character other than a letter, digit or underscore, before one: a short name starts after it.
-_CUT = re.compile(r"\W(?=\w)")
 #: ``find``'s rank for a word found in the id but not in its last ``::`` segment.
 _OUTSIDE_NAME = 4
 #: Where a match was found, by ``find``'s rank: 0 to 4 the id, 5 an attribute, 6 a description.
@@ -512,7 +512,7 @@ def _piece(
             )
             held = {edge["kind"] for edge in index.edges}
             lines = SourceLines(start, map_path)
-            names = _Names(index)
+            names = Names(index)
             homes: dict[str, set[str]] = {}
             for edge in index.edges:
                 if edge["kind"] in grouping and (loc := first_location(index.nodes[edge["from"]])):
@@ -639,67 +639,9 @@ def _piece(
     return report
 
 
-class _Names:
-    """The shortest name ``resolve`` takes back to each node: the tail of its id after its first
-    ``::``, starting after a character other than a letter, digit or underscore, that no other
-    node's id ends with in the same way; the full id when none is unique. Also each node's owner.
-    Each table is built once a run, on first use."""
-
-    def __init__(self, index: MapIndex) -> None:
-        self.index = index
-        self._count: Counter[str] | None = None
-        self._short: dict[str, str] = {}
-        self._owners: dict[str, str] | None = None
-
-    def owner(self, node_id: str) -> str | None:
-        """The node whose id, after its first ``::``, is ``node_id``'s name before its last
-        ``::``, a mapped one first, then the smallest id; ``None`` when there is none."""
-        name = node_id.split("::", 1)[-1]
-        if "::" not in name:
-            return None
-        if self._owners is None:
-            best: dict[str, tuple[bool, str]] = {}
-            for i, node in self.index.nodes.items():
-                key = (node["state"] != "mapped", i)
-                bare = as_text(i).split("::", 1)[-1]
-                if bare not in best or key < best[bare]:
-                    best[bare] = key
-            self._owners = {bare: key[1] for bare, key in best.items()}
-        return self._owners.get(name.rsplit("::", 1)[0])
-
-    @staticmethod
-    def _tail_set(node_id: str) -> set[str]:
-        """Each tail of the id's name that a short name may be."""
-        name = node_id.split("::", 1)[-1]
-        return {name, *(name[cut.end() :] for cut in _CUT.finditer(name))}
-
-    @classmethod
-    def _tails(cls, node_id: str) -> list[str]:
-        """Each tail of the id's name that a short name may be, shortest first."""
-        return sorted(cls._tail_set(node_id), key=lambda t: (len(t), t))
-
-    def short(self, node_id: str) -> str:
-        """The shortest unique tail of ``node_id``, or ``node_id`` itself."""
-        if node_id not in self._short:
-            if self._count is None:
-                self._count = Counter(
-                    t.casefold() for i in self.index.nodes for t in self._tail_set(as_text(i))
-                )
-            self._short[node_id] = next(
-                (
-                    tail
-                    for tail in self._tails(node_id)
-                    if self._count[tail.casefold()] == 1
-                    and (tail not in self.index.nodes or tail == node_id)
-                ),
-                node_id,
-            )
-        return self._short[node_id]
-
-
 def _layout(
     index: MapIndex,
-    names: _Names,
+    names: Names,
     standing: _Standing,
     piece: tuple[list[str], list[PieceRow], list[Members], Collection[str], Mapping[str, set[str]]],
     reading: tuple[SourceLines, Mapping[str, str]],
@@ -892,31 +834,17 @@ def _joined(
     nodes that holds no start, such as the members of a container start, joins the piece of the
     start of the row that reached it, else the piece of the node it is printed under, ``named``.
     """
-    root = {n: n for n in named}
-
-    def top(node: str) -> str:
-        while root[node] != node:
-            root[node] = root[root[node]]
-            node = root[node]
-        return node
-
-    for node in named:
-        for edge in index.outgoing(node):
-            far = as_text(edge["to"])
-            if far in root and edge["kind"] not in grouping:
-                a, b = top(node), top(far)
-                if a != b:
-                    root[max(a, b)] = min(a, b)
+    top = grouping_.joined(index, named, grouping)
     first: dict[str, str] = {}
     for start in starts:
-        first.setdefault(top(start), start)
+        first.setdefault(top[start], start)
     for row in rows:
         for node in (row.parent, row.id):
-            if node in root:
-                first.setdefault(top(node), first[top(row.start)])
+            if node in top:
+                first.setdefault(top[node], first[top[row.start]])
     for node, under in named.items():
-        first.setdefault(top(node), first[top(under)])
-    return {n: first[top(n)] for n in named}
+        first.setdefault(top[node], first[top[under]])
+    return {n: first[top[n]] for n in named}
 
 
 def _near(report: SliceReport, rows: list[PieceRow], taking: list[int]) -> int | None:
@@ -952,15 +880,12 @@ def _members(
     if not any(edge["kind"] in grouping for edge in index.incoming(container)):
         return None
     by_type: dict[str, list[tuple[Mapping[str, Any], str]]] = {}
-    for edge in index.incoming(container):
-        member = as_text(edge["from"])
-        kind = as_text(index.nodes[member]["type"])
-        if edge["kind"] in grouping and (only is None or kind in only):
-            pattern = index.supporting(member) if hidden is not None else None
-            if pattern is not None and hidden is not None:
-                hidden.append((container, member, pattern))
-                continue
-            by_type.setdefault(kind, []).append((edge, member))
+    for edge, member in grouping_.members(index, container, grouping, only):
+        pattern = index.supporting(member) if hidden is not None else None
+        if pattern is not None and hidden is not None:
+            hidden.append((container, member, pattern))
+            continue
+        by_type.setdefault(as_text(index.nodes[member]["type"]), []).append((edge, member))
     ordered = sorted(by_type, key=lambda t: (standing.rarity(by_type[t][0][1]), t))
     for kind in ordered:
         by_type[kind].sort(key=lambda pair: (-standing.depended(pair[1]), pair[1]))

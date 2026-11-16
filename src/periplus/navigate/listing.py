@@ -17,6 +17,7 @@ __all__ = [
     "footer",
     "kind_warnings",
     "mark_text",
+    "marked_text",
     "payload",
     "place",
     "problem_lines",
@@ -55,6 +56,11 @@ def place(location: Mapping[str, Any]) -> str:
 def mark_text(marks: Sequence[str]) -> str:
     """A node's marks as a row prints them after its other suffixes: ``  [mark]`` each."""
     return "".join(f"  [{_escape(mark)}]" for mark in marks)
+
+
+def marked_text(marks: Sequence[str], supporting: bool) -> str:
+    """A row's marks, then ``  [supporting code]`` when its node is in supporting code."""
+    return mark_text(marks) + ("  [supporting code]" if supporting else "")
 
 
 def kind_warnings(kinds: Collection[str], held: set[str]) -> tuple[str, ...]:

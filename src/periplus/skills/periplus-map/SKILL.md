@@ -89,8 +89,11 @@ How to run each command:
 - Run it from the project root, the folder that holds `.periplus/`. Never `cd` elsewhere first. A
   folder reached through a link may sit outside the project, and then no map is found (exit 29).
 - Read each map reply in full before you choose the next step.
-- Keep the default limit. Never pass `--limit 0`. Never pipe map output through `head`, `tail`,
-  `cut` or `grep`, and never run map commands in a loop. Those hide rows you need.
+- Keep the default limit. Never pass `--limit 0`, and never run map commands in a loop.
+- Pipe a periplus command only into another periplus command: `--ids` prints full ids, one a
+  line, and `-` reads them, as when `periplus neighbors NAME --depth all --ids` is piped into
+  `periplus count -`. Any other pipe, such as `head`, `tail`, `cut` or `grep`, drops rows without
+  saying so.
 - When a `find` list is cut, it ends with `showing N of M`, a `by type:` count and
   `narrow with --type T or --path P`. Narrow with `--type` and `--path`; each may be repeated.
 - Take type names from that `by type:` line, or from the warning a wrong `--type` prints. The part

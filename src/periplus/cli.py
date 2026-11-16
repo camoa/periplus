@@ -21,7 +21,7 @@ import argparse
 import io
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -124,6 +124,30 @@ def add_hub(parser: argparse.ArgumentParser) -> None:
         default=[],
         metavar="ID",
         help="walk from this hub all the same; repeat for several",
+    )
+
+
+def add_ids(parser: argparse.ArgumentParser) -> None:
+    """Add ``--ids``, which prints one full id a line instead of the report."""
+    parser.add_argument(
+        "--ids",
+        action="store_true",
+        help="print only the full ids, one a line, for another periplus command to read with -; "
+        "the count and any warning go to standard error",
+    )
+
+
+#: The help of an ID argument that may be ``-``.
+IDS_HELP = "a node id or short name; - reads ids from standard input, one a line"
+
+
+def add_format(parser: argparse.ArgumentParser) -> None:
+    """Add ``--format text|json``; a test asserts the choices equal the command's RENDERERS."""
+    parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
     )
 
 
@@ -352,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
         "to keep several",
     )
     add_limit(find, 50, "rows")
+    add_ids(find)
     add_map(find, "the map file to read")
     find.add_argument(
         "--format",
@@ -362,11 +387,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     show = subcommands.add_parser(
         "show",
-        help="show one node and the edges at it",
-        description="Show the node ID and every edge leaving or arriving at it, and stop.",
+        help="show nodes and the edges at each",
+        description="Show each node ID and every edge leaving or arriving at it, and stop.",
     )
-    show.add_argument("id", metavar="ID", help="the node id, as periplus find prints it")
+    show.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
     add_limit(show, 50, "rows")
+    add_ids(show)
     add_map(show, "the map file to read")
     show.add_argument(
         "--format",
@@ -382,7 +408,7 @@ def build_parser() -> argparse.ArgumentParser:
         "hops, the things reached, the share within 2, 3 and 5 hops and the hubs stopped at, and "
         "stop.",
     )
-    depth.add_argument("id", metavar="ID", nargs="+", help="a node id or short name to start from")
+    depth.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
     add_hub(depth)
     add_map(depth, "the map file to read")
     depth.add_argument(
@@ -397,9 +423,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("affected", "list what sets an item off, hop by hop"),
     ):
         walking = subcommands.add_parser(name, help=helptext, description=f"{helptext}, and stop.")
-        walking.add_argument(
-            "id", metavar="ID", nargs="+", help="a node id or short name to start from"
-        )
+        walking.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
         walking.add_argument(
             "--depth",
             type=_depth,
@@ -421,6 +445,12 @@ def build_parser() -> argparse.ArgumentParser:
             help="add what each thing shown only points at, one hop out, marked [touch]",
         )
         walking.add_argument(
+            "--full",
+            action="store_true",
+            help="print full ids and full paths on every row, not short names",
+        )
+        add_ids(walking)
+        walking.add_argument(
             "--raw",
             action="store_true",
             help="follow every edge by its own direction, from one ID, as before 0.9",
@@ -441,6 +471,82 @@ def build_parser() -> argparse.ArgumentParser:
             default="text",
             help="how to print the report (default: text)",
         )
+    only = subcommands.add_parser(
+        "only",
+        help="list what the ids set off that nothing else sets off",
+        description="Walk by cause from the IDs toward what they set off, and list the things "
+        "every one of whose setting-off chains passes through an ID, and stop.",
+    )
+    only.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    add_ids(only)
+    add_map(only, "the map file to read")
+    add_format(only)
+    hubs = subcommands.add_parser(
+        "hubs",
+        help="list the hubs the walk by cause from the ids stops at",
+        description="Walk by cause from the IDs and list each hub it stops at: name, type, hop "
+        "and fan, and stop.",
+    )
+    hubs.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    hubs.add_argument(
+        "--direction",
+        choices=("off", "by"),
+        default="off",
+        help="off walks what the ids set off, as neighbors; by what sets them off, as affected "
+        "(default: off)",
+    )
+    hubs.add_argument(
+        "--depth",
+        type=_depth,
+        default=None,
+        metavar="N",
+        help="hops to look within, 1 or more, or all (default: all)",
+    )
+    hubs.add_argument(
+        "--hub",
+        type=int,
+        default=None,
+        metavar="N",
+        help=f"a hub has more than N edges to follow (default: {HUB})",
+    )
+    add_ids(hubs)
+    add_map(hubs, "the map file to read")
+    add_format(hubs)
+    held = subcommands.add_parser(
+        "members",
+        help="list what a container holds, by the map's grouping kinds",
+        description="Count each container ID's members by type and list them, and stop.",
+    )
+    held.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    held.add_argument(
+        "--type",
+        action="append",
+        default=[],
+        metavar="T",
+        help="keep members of type T and its subtypes; repeat for several",
+    )
+    add_ids(held)
+    add_map(held, "the map file to read")
+    add_format(held)
+    pieces = subcommands.add_parser(
+        "pieces",
+        help="split ids into the groups that edges among them join",
+        description="Split the things the IDs name into pieces, two in one piece when an edge "
+        "of any kind joins them directly or through others of the IDs, and stop.",
+    )
+    pieces.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    add_ids(pieces)
+    add_map(pieces, "the map file to read")
+    add_format(pieces)
+    count = subcommands.add_parser(
+        "count",
+        help="count the things ids name, by type and state, and the edges among them",
+        description="Count the things the IDs name by type and by state, the edges among them by "
+        "kind, and list the IDs that name no node, and stop.",
+    )
+    count.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    add_map(count, "the map file to read")
+    add_format(count)
     path = subcommands.add_parser(
         "path",
         help="show every shortest chain of edges from one item to another",
@@ -770,6 +876,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.write(MAP_RENDERERS[args.format](written))
         return written.exit_code
 
+    if getattr(args, "ids", False) and getattr(args, "format", "text") != "text":
+        parser.error("--ids prints ids; it takes no --format")
+    # slice searches its arguments as words, so a - there is a word, not standard input.
+    if args.command != "slice" and isinstance(getattr(args, "id", None), list) and "-" in args.id:
+        from periplus.navigate.ids import read_ids
+
+        args.id = read_ids(args.id, sys.stdin)
+        if not args.id:
+            parser.error("- read no ids from standard input")
     if (getattr(args, "limit", 0) or 0) < 0:
         parser.error("--limit must be 0 or more")
     # None is slice's own default, which depends on --out.
@@ -819,27 +934,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             env=os.environ,
             text=args.text,
             types=args.type,
-            limit=args.limit,
+            limit=0 if args.ids else args.limit,
             map_path=args.map,
             paths=args.path,
             marks=args.mark,
         )
-        sys.stdout.write(FIND_RENDERERS[args.format](found))
-        return found.exit_code
+        return _emit(args, FIND_RENDERERS, found, lambda r: [row.id for row in r.matches.items])
 
     if args.command == "show":
-        from periplus.navigate.show import RENDERERS as SHOW_RENDERERS
-        from periplus.navigate.show import run as run_show
+        from periplus.navigate.show import MANY_RENDERERS as SHOW_RENDERERS
+        from periplus.navigate.show import listed as show_listed
+        from periplus.navigate.show import run_many as run_show
 
         shown = run_show(
             start=Path.cwd(),
             env=os.environ,
-            node_id=args.id,
-            limit=args.limit,
+            ids=args.id,
+            limit=0 if args.ids else args.limit,
             map_path=args.map,
         )
-        sys.stdout.write(SHOW_RENDERERS[args.format](shown))
-        return shown.exit_code
+        return _emit(args, SHOW_RENDERERS, shown, show_listed)
 
     if (getattr(args, "hub", None) or 0) < 0:
         parser.error("--hub must be 0 or more")
@@ -862,12 +976,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command in ("neighbors", "affected"):
         from periplus.navigate.walk import RENDERERS as WALK_RENDERERS
         from periplus.navigate.walk import CauseReport, WalkReport, run_cause
+        from periplus.navigate.walk import listed as walk_listed
         from periplus.navigate.walk import run as run_walk
 
         walked: WalkReport | CauseReport
         if args.raw:
-            if args.hub is not None or args.through or args.touch:
-                parser.error("--hub, --through and --touch walk by cause; --raw takes none")
+            if args.hub is not None or args.through or args.touch or args.full:
+                parser.error("--hub, --through, --touch and --full walk by cause; --raw takes none")
             if len(args.id) != 1:
                 parser.error("--raw walks from one ID")
             walked = run_walk(
@@ -877,7 +992,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 direction="out" if args.command == "neighbors" else "in",
                 depth=args.depth,
                 kinds=args.kind,
-                limit=50 if args.limit is None else args.limit,
+                limit=0 if args.ids else 50 if args.limit is None else args.limit,
                 map_path=args.map,
             )
         else:
@@ -888,14 +1003,64 @@ def main(argv: Sequence[str] | None = None) -> int:
                 toward="off" if args.command == "neighbors" else "by",
                 depth=args.depth,
                 kinds=args.kind,
-                limit=args.limit,
+                limit=0 if args.ids else args.limit,
                 map_path=args.map,
                 hub=HUB if args.hub is None else args.hub,
                 through=args.through,
                 touch=args.touch,
+                full=args.full,
             )
-        sys.stdout.write(WALK_RENDERERS[args.format](walked))
-        return walked.exit_code
+        return _emit(args, WALK_RENDERERS, walked, walk_listed)
+
+    if args.command == "only":
+        from periplus.navigate.only import RENDERERS as ONLY_RENDERERS
+        from periplus.navigate.only import listed as only_listed
+        from periplus.navigate.only import run as run_only
+
+        kept = run_only(start=Path.cwd(), env=os.environ, ids=args.id, map_path=args.map)
+        return _emit(args, ONLY_RENDERERS, kept, only_listed)
+
+    if args.command == "hubs":
+        from periplus.navigate.hubs import RENDERERS as HUBS_RENDERERS
+        from periplus.navigate.hubs import listed as hubs_listed
+        from periplus.navigate.hubs import run as run_hubs
+
+        stopped = run_hubs(
+            start=Path.cwd(),
+            env=os.environ,
+            ids=args.id,
+            toward=args.direction,
+            depth=args.depth,
+            hub=HUB if args.hub is None else args.hub,
+            map_path=args.map,
+        )
+        return _emit(args, HUBS_RENDERERS, stopped, hubs_listed)
+
+    if args.command == "members":
+        from periplus.navigate.members import RENDERERS as MEMBERS_RENDERERS
+        from periplus.navigate.members import listed as members_listed
+        from periplus.navigate.members import run as run_members
+
+        held = run_members(
+            start=Path.cwd(), env=os.environ, ids=args.id, types=args.type, map_path=args.map
+        )
+        return _emit(args, MEMBERS_RENDERERS, held, members_listed)
+
+    if args.command == "pieces":
+        from periplus.navigate.pieces import RENDERERS as PIECES_RENDERERS
+        from periplus.navigate.pieces import listed as pieces_listed
+        from periplus.navigate.pieces import run as run_pieces
+
+        split = run_pieces(start=Path.cwd(), env=os.environ, ids=args.id, map_path=args.map)
+        return _emit(args, PIECES_RENDERERS, split, pieces_listed, grouped=True)
+
+    if args.command == "count":
+        from periplus.navigate.count import RENDERERS as COUNT_RENDERERS
+        from periplus.navigate.count import run as run_count
+
+        counted = run_count(start=Path.cwd(), env=os.environ, ids=args.id, map_path=args.map)
+        sys.stdout.write(COUNT_RENDERERS[args.format](counted))
+        return counted.exit_code
 
     if args.command == "slice":
         from periplus.navigate.slice import RENDERERS as SLICE_RENDERERS
@@ -965,6 +1130,31 @@ def main(argv: Sequence[str] | None = None) -> int:
     # the problems it found, and the status carries the verdict.
     sys.stdout.write(RENDERERS[args.format](report))
     return report.exit_code
+
+
+def _emit(
+    args: argparse.Namespace,
+    renderers: Any,
+    report: Any,
+    listed: Callable[[Any], Any],
+    grouped: bool = False,
+) -> int:
+    """Write ``report`` as ``--format`` picks, or with ``--ids`` the ids ``listed`` gives to
+    standard output and the count, warnings and problems to standard error; return its code.
+
+    ``grouped`` says ``listed`` gives groups of ids, printed with a blank line between two.
+    """
+    if not args.ids:
+        sys.stdout.write(renderers[args.format](report))
+        return int(report.exit_code)
+    from periplus.navigate.ids import id_output
+
+    found = listed(report)
+    out, err = id_output(found if grouped else [found], report.warnings, report.problems)
+    sys.stdout.write(out)
+    sys.stdout.flush()
+    sys.stderr.write(err)
+    return int(report.exit_code)
 
 
 def _pin_the_output_stream() -> None:

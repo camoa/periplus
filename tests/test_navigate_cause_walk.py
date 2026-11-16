@@ -186,6 +186,7 @@ def _text(root: Path, *argv: str, edges: Any = EDGES, causes: Any = CAUSES) -> s
         int(argv[argv.index("--limit") + 1]) if "--limit" in argv else None,
         path,
         touch="--touch" in argv,
+        full=True,
     )
     return walk.render_text(report)
 
@@ -229,7 +230,7 @@ def test_the_first_line_says_what_the_depth_left_out_and_the_command_for_all(
 
     assert first == (
         f"showing 2 of 4 (hops 1-2 of 4); all: periplus neighbors x::n0 --depth all --limit 0"
-        f" --map {tmp_path / 'map.json'}"
+        f" --full --map {tmp_path / 'map.json'}"
     )
 
 
@@ -267,7 +268,7 @@ def test_limit_zero_has_no_budget(tmp_path: Path) -> None:
 
 def test_a_hub_row_says_how_many_links_were_not_walked(tmp_path: Path) -> None:
     path = _write(tmp_path, HUB_EDGES)
-    report = walk.run_cause(tmp_path, {}, ["x::a"], "off", 3, [], None, path, hub=2)
+    report = walk.run_cause(tmp_path, {}, ["x::a"], "off", 3, [], None, path, hub=2, full=True)
 
     assert "  x::h  t.x  mapped  calls  src/a.php:1  [hub: 3 links not walked]" in (
         walk.render_text(report).splitlines()
@@ -359,7 +360,7 @@ def test_depth_all_walks_to_the_end(
 ) -> None:
     path = _write(tmp_path, CHAIN)
 
-    assert main(["neighbors", "x::n0", "--depth", "all", "--map", str(path)]) == 0
+    assert main(["neighbors", "x::n0", "--depth", "all", "--full", "--map", str(path)]) == 0
     assert "x::n4" in capsys.readouterr().out
 
 
@@ -367,7 +368,7 @@ def test_hub_and_through_reach_the_walk(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     path = _write(tmp_path, HUB_EDGES)
-    argv = ["neighbors", "x::a", "--depth", "all", "--hub", "2", "--map", str(path)]
+    argv = ["neighbors", "x::a", "--depth", "all", "--hub", "2", "--full", "--map", str(path)]
 
     assert main(argv) == 0
     assert "x::h1" not in capsys.readouterr().out

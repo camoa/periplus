@@ -164,7 +164,7 @@ periplus find TEXT
 periplus show ID
 ```
 
-[Read the map](#read-the-map) lists the six commands that answer a question about the map.
+[Read the map](#read-the-map) lists the thirteen commands that answer a question about the map.
 
 ## Why Periplus
 
@@ -503,12 +503,18 @@ Then it runs the loop. The map's `referenced` and `unresolved` nodes say which r
 
 ## Read the map
 
-Eight commands answer a question about a written map, and stop: `periplus types` counts the node
+Thirteen commands answer a question about a written map, and stop: `periplus types` counts the node
 types and edge kinds, `periplus legend` says what each kind and type means and which types a kind
-joins, `periplus find TEXT` searches node ids, attributes and descriptions, `periplus show ID` prints a node
-and its edges, `periplus neighbors ID` and `periplus affected ID` list what a node sets off and
+joins, `periplus find TEXT` searches node ids, attributes and descriptions, `periplus show ID...` prints
+nodes and their edges, `periplus neighbors ID` and `periplus affected ID` list what a node sets off and
 what sets it off, by the cause each edge kind declares, `periplus depth ID` says how far those two
-walks go, and `periplus path FROM TO` prints the shortest chains between two. They read the map, the
+walks go, and `periplus path FROM TO` prints the shortest chains between two. Five work on a set of
+ids: `periplus only ID...` lists what the ids alone set off, `periplus hubs ID...` the hubs their walk
+stops at, `periplus members ID...` what a container holds, `periplus pieces ID...` splits the set into
+the groups edges join, and `periplus count ID...` counts the set by type and state, with the edges
+among it. A command that lists things takes `--ids` and prints one full id a line; a command that
+takes ids reads them from standard input when given `-`, so
+`periplus neighbors ID --depth all --ids | periplus count -` joins two. They read the map, the
 descriptions file and the source line under each row, and nothing more. `periplus check-map` runs the full schema check that these commands
 skip. The [navigation guide](docs/navigation.md) gives each command's options, output and exit
 codes, with an example you can run.
@@ -561,10 +567,15 @@ periplus types                     # count the node types and edge kinds in the 
 periplus legend                    # say what each edge kind and node type in the map means
 periplus check-map                 # check every node and edge of the map against the map schema
 periplus find TEXT                 # find the nodes whose id, attributes or description hold a text
-periplus show ID                   # show one node and the edges at it
+periplus show ID...                # show nodes and the edges at each
 periplus depth ID                  # say how far what an item sets off, and what sets it off, reach
 periplus neighbors ID              # list what an item sets off, hop by hop
 periplus affected ID               # list what sets an item off, hop by hop
+periplus only ID...                # list what the ids set off that nothing else sets off
+periplus hubs ID...                # list the hubs the walk by cause from the ids stops at
+periplus members ID...             # list what a container holds, by the map's grouping kinds
+periplus pieces ID...              # split ids into the groups that edges among them join
+periplus count ID...               # count the things ids name, by type and state, and the edges among them
 periplus path FROM TO              # show every shortest chain of edges from one item to another
 periplus slice ID --out FILE       # write the items around some items or a path to a smaller map
 periplus export --format F         # print the map as graphml, dot or mermaid
@@ -573,7 +584,7 @@ periplus skills install            # copy the Claude skills Periplus ships into 
 
 `periplus validate` takes a bare `name`, or `name@version` to pick one of several copies.
 `periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `slice`
-and `export` takes `--format json`. The ten commands that read a map take `--map PATH`; the
+and `export` takes `--format json`. The sixteen commands that read a map take `--map PATH`; the
 [navigation guide](docs/navigation.md) gives their other options. `periplus --version` prints the
 installed version, and `periplus <command> --help` gives each command's options.
 

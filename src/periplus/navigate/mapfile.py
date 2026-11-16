@@ -83,6 +83,8 @@ class MapIndex:
         self._concrete_from = frozenset(as_text(k) for k in document.get("realizing_kinds", ()))
         self._concrete_to = frozenset(as_text(k) for k in document.get("realizing_to_kinds", ()))
         self.realizing = self._concrete_from | self._concrete_to
+        #: The kinds whose from end belongs to the container at the to end.
+        self.grouping = frozenset(as_text(k) for k in document.get("grouping_kinds", ()))
         self._causes = causes(document)
         #: Whether the map has any cause list; one written before them walks by raw direction.
         self.declares_causes = any(

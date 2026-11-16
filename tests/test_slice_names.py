@@ -5,7 +5,7 @@ from __future__ import annotations
 from _navigate import _node
 
 from periplus.navigate.mapfile import MapIndex
-from periplus.navigate.slice import _Names
+from periplus.navigate.names import Names
 
 NODES = [
     _node("t.class::app.Box", "t.class", "referenced"),
@@ -19,8 +19,8 @@ NODES = [
 ]
 
 
-def _names() -> _Names:
-    return _Names(MapIndex({"nodes": NODES, "edges": []}))
+def _names() -> Names:
+    return Names(MapIndex({"nodes": NODES, "edges": []}))
 
 
 def test_an_owner_is_the_mapped_node_of_that_name_with_the_smallest_id() -> None:
