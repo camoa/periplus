@@ -12,7 +12,7 @@ The question commands read a source file only to print one line of it under a ro
 |---|---|
 | `periplus types` | Which node types and edge kinds does the map hold, and how many of each? |
 | `periplus legend` | What does each edge kind and node type of the map mean, and which types does a kind join? |
-| `periplus find TEXT` | Which nodes hold this text in their id, attributes or description? |
+| `periplus find TEXT` | Which things hold these words in their id, attributes or description, and which edges in their description or code line? |
 | `periplus show ID...` | What is each of these nodes, and which edges leave and arrive at it? |
 | `periplus depth ID` | How far does what this item sets off reach, and what sets it off? |
 | `periplus reach ID...` | All of `depth`, `neighbors`, `affected`, `only` and `hubs` for these items, in one reply. |
@@ -59,11 +59,11 @@ A twenty-ninth command, `periplus check-map`, checks the whole map against the m
   `id` (the text given), `total` (how many nodes fit) and `candidates`, up to 20 objects with `id`,
   `type` and `location` (`null` when the node has none). One that fits none exits 31 with
   `hint: run periplus find TEXT`. Printed `slice` searches such an argument as words instead.
-- `--limit N` caps the rows shown (`find`, `show`, and `neighbors` or `affected` with `--raw`:
-  default 50; `path`: default 10). `--limit 0` shows all. For the walks by cause of `neighbors`
-  and `affected`, and for `reach`, `--limit N` is a budget in characters instead; see [neighbors](#neighbors). A cut list ends with `showing N of TOTAL` in text, and has
-  `"truncated": true` in JSON. A cut `find` list adds two lines: `by type:` with the match count of
-  each type, and `narrow with --type T or --path P`. Printed `slice` shows 50 rows by default. For `slice --out`,
+- `--limit N` caps the rows shown (`show`, and `neighbors` or `affected` with `--raw`:
+  default 50; `path`: default 10). `--limit 0` shows all. For `find`, the walks by cause of
+  `neighbors` and `affected`, and `reach`, `--limit N` is a budget in characters instead; see
+  [find](#find) and [neighbors](#neighbors). A cut list ends with `showing N of TOTAL` in text, and
+  has `"truncated": true` in JSON. Printed `slice` shows 50 rows by default. For `slice --out`,
   the limit (default 500) is the most items the slice may hold. Over it, the command writes nothing and exits 32.
 - `-` in place of the `ID`s reads them from standard input, one id a line, for every command
   that takes several `ID`s (`show`, `depth`, `reach`, `neighbors`, `affected`, `only`, `hubs`,
@@ -77,8 +77,9 @@ A twenty-ninth command, `periplus check-map`, checks the whole map against the m
 - A row of `only`, `hubs`, `members`, `pieces`, `in`, `at`, `stale` or `order` ends with its node's marks and, for a node in
   supporting code, `[supporting code]`; their JSON items add `marks` and `supporting`.
 - `--ids` prints the ids a command lists, one full id a line, and nothing else, for another
-  command to read with `-`: `find`, `show` (the other end of each edge), `reach` (the starts,
-  then what `neighbors --ids` and `affected --ids` list, each once), `neighbors` and
+  command to read with `-`: `find` (the things, then both ends of each edge), `show` (the other
+  end of each edge), `reach` (the starts, then what `neighbors --ids` and `affected --ids` list,
+  each once), `neighbors` and
   `affected` (the starts, then every thing within `--depth`, and with `--touch` the touching
   things), `only`, `hubs`, `members`, `pieces` (a blank line between two pieces), `in`, `at`,
   `undescribed`, `stale`, `order`, `join`, `common`, `minus` (the things of the result) and
@@ -155,26 +156,104 @@ the map's `legend`, which `periplus map` writes from the packs.
 ### find
 
 ```
-periplus find [TEXT] [--type T]... [--path P]... [--mark TEXT]... [--limit N] [--map PATH] [--format text|json]
+periplus find [TEXT] [--any] [--type T]... [--path P]... [--mark TEXT]... [--parts] [--edges|--no-edges] [--kinds] [--source|--no-source] [--limit N] [--ids] [--map PATH] [--format text|json]
 ```
 
-Lists the nodes whose id holds `TEXT`, closest match first, then the nodes whose string attribute
-values hold it, then the nodes whose description alone holds it. Matching ignores case. A string
-item of a list attribute counts; numbers, booleans and nested objects do not. Each row is the id,
-the type, the state and the first location, then the source line and the description. The state is
-`mapped`, `boundary`, `unknown_boundary`, `unresolved` or `referenced`; the map schema defines each,
-and every command below prints it the same way. A row matched
-by its description ends with `[description]`. A row matched by an attribute ends with
-`[attribute NAME]`, the first matching name in sorted order, and prints `@ NAME: value` under the
-source line. `--type T` keeps type
-`T` and its subtypes. `--path P` keeps the nodes with a file that starts with `P`. Repeat either to
-keep several types or paths. Given both, a node must fit a type and a path. A type the map does not hold prints a warning,
-with up to five node types it may mean (`did you mean: ...`). A `--path` that no file in the map
-starts with prints a warning.
+Lists the things that hold the words of `TEXT`, then the edges that hold them. `TEXT` is split at
+spaces. Each word must match a thing, in its id, a string attribute value or its description;
+`--any` keeps a thing that matches any one word. Matching ignores case, and a word matches inside
+a longer one. A string item of a list attribute counts; numbers, booleans and nested objects do
+not.
 
-A node in supporting code, one whose first file matches a pattern the map lists under
-`supporting_paths`, such as a test, ends with `[supporting code]`, and such rows come after the
-rest.
+**Order.** Main things come first, then parts, then things not mapped or with no location, then
+things in supporting code. A main thing is what `undescribed` counts as one: mapped, located, not
+in supporting code and not of a part type; see [undescribed](#undescribed). Inside each group the
+words are taken from the rarest, the one that matches the fewest things, to the commonest. A thing
+whose id or attribute holds the word comes before one whose description alone holds it; then the
+closer match comes first: the whole id, the name, a name that starts with the word, a name that
+holds it, the id, an attribute, the description. Ties go by id.
+
+**Counts first.** The first line counts the things by group and the edges, and the next lines
+count the main things, the other things and the edges by type or kind:
+
+```
+periplus find: 9 things (4 main, 3 parts, 1 in supporting code, 1 not mapped or with no location), 0 edges
+main by type: t.method 3, t.class 1
+not main by type: t.call 2, t.class 1, t.function 1, t.param 1
+```
+
+Each row is the id, the type, the state and the first location, then the source line and the
+description. The state is `mapped`, `boundary`, `unknown_boundary`, `unresolved` or `referenced`;
+the map schema defines each, and every command below prints it the same way. A row matched by its
+description ends with `[description]`. A row matched by an attribute ends with `[attribute NAME]`,
+the first matching name in sorted order, and prints `@ NAME: value` under the source line. A line
+`not main:` comes before the first row that is not a main thing. A row in supporting code, one
+whose first file matches a pattern the map lists under `supporting_paths`, such as a test, ends
+with `[supporting code]`.
+
+**The budget.** `--limit N` is the most characters the text may hold (default 12000; `--limit 0`
+lifts it). Nothing is cut without a line that says so. Past the budget, the things that are not
+main print as counts first, by the container of each, as `undescribed --by container` counts it,
+with the command that lists them:
+
+```
+not main, not listed: 5
+  by container: shop 3, (no container) 2
+  list them: periplus find login --parts
+```
+
+If the text still does not fit, the edges print as counts by kind, then the rows are cut, keeping
+at least one. A line after the counts then says how many show and gives the command that shows
+all: `showing 31 of 93 main things; all: periplus find login --limit 0`. `--parts` lists only the
+things that are not main, and `--type T` lists those types; neither folds its rows into counts.
+`--ids` prints every id whatever the budget, and the JSON lists every match.
+
+**Edges.** After the things, under `edges:`, come the edges that hold the words, each with its
+kind, the short names of its two ends, its place and why it matched. An edge matches in three ways:
+
+- `[description]`: its entry in the descriptions file holds the words. The entry is under `edges`,
+  keyed by `from`, `kind` and `to`, as the map writes them; see the `periplus-describe` skill.
+- `[source]`: the code line at one of its places holds the words. This finds a name that is
+  only in a line of code, such as a string passed to a call. `--no-source` turns it off; on a map
+  of 87,000 edges in 2,600 files it adds about 0.4 s.
+- `[kind]`: the meaning of its kind, as `periplus legend` prints it, holds the words. A common word
+  would bring every edge of a kind, so this happens only with `--kinds`, or when no thing matches.
+
+An edge found by its description:
+
+```
+$ periplus find lockout
+periplus find: 0 things, 1 edge
+edges by kind: calls 1
+
+edges:
+  calls  submit -> record  shop/Login.php:9  [description]
+      | $this->audit->record($name);
+      # Records the failed attempt for the lockout count.
+```
+
+An edge found by its code line, the word in no id or description:
+
+```
+$ periplus find blocked_admin
+periplus find: 0 things, 1 edge
+edges by kind: calls 1
+
+edges:
+  calls  form -> record  shop/Login.php:23  [source]
+      | $this->audit->record('blocked_admin');
+```
+
+The words must all be in one place: the description, or the code line, or the meaning. An edge
+whose description matches comes first, then those whose code line does, then those whose kind
+does; then by place, kind and ends. An edge is kept when one of its ends fits `--type`, `--path`
+and `--mark`. `--no-edges` leaves the edges out. `--ids` prints the ids of the things, then both
+ends of each edge, each id once. A `TEXT` left out matches no edge.
+
+**Narrowing.** `--type T` keeps type `T` and its subtypes. `--path P` keeps the nodes with a file
+that starts with `P`. Repeat either to keep several types or paths. Given both, a node must fit a
+type and a path. A type the map does not hold prints a warning, with up to five node types it may
+mean (`did you mean: ...`). A `--path` that no file in the map starts with prints a warning.
 
 A mark is a short fact a rutter declares about a thing, such as `[not installed]`. The map's
 `marks` header names the mark of each attribute that has one, so no pack is needed to read it. A
@@ -189,10 +268,13 @@ brackets. Repeat it to keep nodes that carry any of several marks. `TEXT` may th
 `periplus find --mark "not installed"` lists every marked node. A mark no node carries prints a
 warning that names the marks the map holds.
 
-The JSON report adds `by_type`, every match counted by type, also when the list is cut. Each item
-has `location`, `source`, `matched` (`id`, `attribute` or `description`), `matched_attribute` (the
-attribute's name, or null), `description`, `supporting` and `marks`, a list of the node's mark
-texts, empty when it has none.
+The JSON report is never cut: `items` holds every match, so `shown` equals `total`. It adds
+`by_type`, every match counted by type, and `edges`, each with `kind`, `from`, `to`, `location`,
+`source`, `matched` (`description`, `source` or `kind`) and `description` (the entry's text, or
+null). Each item has `location`, `source`, `matched` (`id`, `attribute` or `description`),
+`matched_attribute` (the attribute's name, or null), `description`, `supporting`, `marks`, a list
+of the node's mark texts, empty when it has none, and `group` (`main`, `part`, `unplaced` or
+`supporting`).
 
 ### show
 
@@ -510,7 +592,7 @@ periplus undescribed [ID...] [--by file|type|container] [--ids] [--map PATH] [--
 ```
 
 Counts the main things that `.periplus/descriptions.yaml` has no entry for under `nodes`: in the
-whole map, or among the `ID`s. The first line says `described N of M main things`. A main thing is
+whole map, or among the `ID`s. Entries under `edges` do not count. The first line says `described N of M main things`. A main thing is
 what the `periplus-describe` skill describes, and the rule uses the map alone:
 
 - it is mapped and has a location;
@@ -575,7 +657,8 @@ without a descriptions file), `stamped`, `kept`, `skipped` (each with `id` and `
 periplus stale [--ids] [--map PATH] [--format text|json]
 ```
 
-Compares each stamped node entry's fingerprint with its code now, as `stamp` reads it. The first
+Compares each stamped node entry's fingerprint with its code now, as `stamp` reads it. Entries
+under `edges` are skipped. The first
 line counts the node entries: fresh, changed, gone (the map holds no node of that id), unreadable
 (the code cannot be read) and not stamped. Then it lists the changed, the gone and the unreadable
 entries under a heading each. `--ids` prints the changed, then the gone, then the unreadable ids.
@@ -604,8 +687,8 @@ periplus slice [ID ...] [--from ID...] [--path PREFIX]... --out FILE [--directio
 ```
 
 Without `--out`, `slice` prints the piece of the map around some start nodes, in one call. An
-argument that names a node, by id or short name, starts there. Any other text is searched the
-way `find` searches: as a whole, and word by word. A word is a run of letters, digits and
+argument that names a node, by id or short name, starts there. Any other text is searched as a
+whole and word by word, each as `find` searches one word. A word is a run of letters, digits and
 underscores, at least 3 long, so `sign-up` searches `sign`. When several words are given, one
 that names a node is searched as a word too. Each word weighs the natural log of the map's
 node count over the number of nodes it matches, rounded to 6 places, so a rare word outweighs a
@@ -964,22 +1047,31 @@ Find the helper, then everything under `shop` that is a function:
 <!-- nav-run -->
 ```console
 $ periplus find helper
-periplus find
+periplus find: 1 thing (1 main), 3 edges
+main by type: python.function 1
+edges by kind: calls 1, contains 1, imports 1
 
 python.function::shop.tools.helper  python.function  mapped  shop/tools.py:1
+      | def helper():
+
+edges:
+  imports  cli -> tools  shop/cli.py:2  [source]
+      | from shop.tools import helper
+  calls  cli -> helper  shop/cli.py:9  [source]
+      | helper()
+  contains  tools -> helper  shop/tools.py:1  [source]
       | def helper():
 ```
 
 <!-- nav-run -->
 ```console
-$ periplus find shop --type python.function --limit 1
-periplus find
+$ periplus find shop --type python.function --limit 100
+periplus find: 2 things (2 main), 0 edges
+main by type: python.function 2
+showing 1 of 2 things; all: periplus find shop --type python.function --limit 0
 
 python.function::shop.cli.greet  python.function  mapped  shop/cli.py:8
       | def greet():
-showing 1 of 2
-by type: python.function 2
-narrow with --type T or --path P
 ```
 
 Show the helper and its edges:

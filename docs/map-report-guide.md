@@ -609,7 +609,7 @@ Incoming (2):
 <!-- nav-run -->
 ```
 $ periplus find color
-periplus find
+periplus find: 0 things, 0 edges
 
 no matches
 ```

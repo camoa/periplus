@@ -1,5 +1,6 @@
 """``periplus find`` over node attributes: string values and list items match, ranked after ids
-and before descriptions, marked with the attribute's name, and the matched value printed."""
+and before descriptions inside each group, marked with the attribute's name, and the matched
+value printed."""
 
 from __future__ import annotations
 
@@ -60,7 +61,7 @@ def _find(root: Path, text: str, *types: str) -> find.FindReport:
     map_path = root / "map.json"
     map_path.write_text(json.dumps(DOCUMENT), encoding="utf-8")
     (root / "descriptions.yaml").write_text(DESCRIPTIONS, encoding="utf-8")
-    return find.run(root, {}, text, types, 50, map_path)
+    return find.run(root, {}, text, types, 0, map_path)
 
 
 def _matched(report: find.FindReport) -> list[tuple[str, str, str | None]]:
@@ -68,19 +69,20 @@ def _matched(report: find.FindReport) -> list[tuple[str, str, str | None]]:
 
 
 def test_ids_rank_first_then_attributes_then_descriptions(tmp_path: Path) -> None:
+    # The two located routes are main things; the three with no location come after them.
     assert _matched(_find(tmp_path, "PROFILE")) == [
         ("t.route::profile", "id", None),
+        ("t.route::r1", "attribute", "title"),
         ("t.perm::p1", "attribute", "roles"),
         ("t.plugin::p4", "attribute", "label"),
-        ("t.route::r1", "attribute", "title"),
         ("t.perm::p3", "description", None),
     ]
 
 
 def test_several_matching_attributes_name_the_first_in_sorted_order(tmp_path: Path) -> None:
     assert _matched(_find(tmp_path, "edit")) == [
-        ("t.perm::p1", "attribute", "roles"),
         ("t.route::r1", "attribute", "path"),
+        ("t.perm::p1", "attribute", "roles"),
     ]
 
 
@@ -121,8 +123,8 @@ def test_json_rows_carry_matched_and_matched_attribute(tmp_path: Path) -> None:
 
     assert [(r["matched"], r["matched_attribute"]) for r in rows] == [
         ("id", None),
+        ("attribute", "title"),
         ("attribute", "roles"),
         ("attribute", "label"),
-        ("attribute", "title"),
         ("description", None),
     ]

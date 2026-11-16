@@ -259,11 +259,12 @@ def test_path_steps_carry_location_and_source(tmp_path: Path) -> None:
 
 
 def test_find_rows_carry_the_declaration_line(tmp_path: Path) -> None:
-    report = find.run(_site(tmp_path), {}, "MyForm", (), 1, None)
+    report = find.run(_site(tmp_path), {}, "MyForm", (), 0, None)
 
     lines = find.render_text(report).splitlines()
-    assert lines[2].endswith(f"  {FILE}:5")
-    assert lines[3] == "      | class MyForm extends FormBase {"
+    row = lines.index("") + 1
+    assert lines[row].endswith(f"  {FILE}:5")
+    assert lines[row + 1] == "      | class MyForm extends FormBase {"
     item = json.loads(find.render_json(report))["items"][0]
     assert item["source"] == "class MyForm extends FormBase {"
 
@@ -273,7 +274,7 @@ def test_a_map_given_by_path_reads_source_under_its_project(tmp_path: Path) -> N
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
 
-    report = find.run(elsewhere, {}, "MyForm", (), 1, site / ".periplus" / "map.json")
+    report = find.run(elsewhere, {}, "MyForm", (), 0, site / ".periplus" / "map.json")
 
     assert report.matches.items[0].source == "class MyForm extends FormBase {"
 
@@ -364,10 +365,11 @@ def test_a_source_line_holding_control_characters_is_escaped_in_text(tmp_path: P
         "\n".join(["x"] * 4 + ["class \x1b[2KMyForm  {"]) + "\n", encoding="utf-8"
     )
 
-    report = find.run(site, {}, "MyForm", (), 1, None)
+    report = find.run(site, {}, "MyForm", (), 0, None)
 
     assert report.matches.items[0].source == "class \x1b[2KMyForm  {"
-    assert find.render_text(report).splitlines()[3] == "      | class \\x1b[2KMyForm\\u2028 {"
+    lines = find.render_text(report).splitlines()
+    assert lines[lines.index("") + 2] == "      | class \\x1b[2KMyForm\\u2028 {"
 
 
 # --- review fixes: tie candidates as data -----------------------------------------------------

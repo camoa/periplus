@@ -1,4 +1,4 @@
-"""``periplus find`` narrowing: several types, type hints, path prefixes, the cut footer, and
+"""``periplus find`` narrowing: several types, type hints, path prefixes, the counts by type, and
 matches and rows from the descriptions file."""
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def _find(
     root: Path,
     text: str,
     *types: str,
-    limit: int = 50,
+    limit: int = 0,
     paths: tuple[str, ...] = (),
     descriptions: str | None = DESCRIPTIONS,
 ) -> find.FindReport:
@@ -166,44 +166,26 @@ def test_a_path_matching_no_file_warns(tmp_path: Path) -> None:
     assert report.warnings == ("no file in the map starts with 'web/'",)
 
 
-# 4. the cut footer
+# 4. the counts by type
 
 
-def test_a_cut_list_counts_matches_by_type_and_says_how_to_narrow(tmp_path: Path) -> None:
-    report = _find(tmp_path, "my", limit=2)
-    text = find.render_text(report)
-
-    assert report.by_type == {"php.class": 1, "php.method": 2, "yaml.key": 2}
-    assert text.splitlines()[-3:] == [
-        "showing 2 of 5",
-        "by type: php.method 2, yaml.key 2, php.class 1",
-        "narrow with --type T or --path P",
-    ]
-    assert json.loads(find.render_json(report))["by_type"] == report.by_type
-
-
-def test_the_footer_names_at_most_eight_types() -> None:
-    report = find.FindReport(
-        cut([find.FindRow("a", "t", "mapped", None)] * 3, 1),
-        by_type={f"t{n}": 1 for n in range(10)},
-    )
-
-    assert "by type: t0 1, t1 1, t2 1, t3 1, t4 1, t5 1, t6 1, t7 1, and 2 more types" in (
-        find.render_text(report)
-    )
-
-
-def test_an_uncut_list_has_no_footer_but_json_has_by_type(tmp_path: Path) -> None:
+def test_the_head_counts_matches_by_type_and_json_has_by_type(tmp_path: Path) -> None:
     report = _find(tmp_path, "my")
     text = find.render_text(report)
 
-    assert "by type" not in text
-    assert "narrow with" not in text
-    assert json.loads(find.render_json(report))["by_type"] == {
-        "php.class": 1,
-        "php.method": 2,
-        "yaml.key": 2,
-    }
+    assert report.by_type == {"php.class": 1, "php.method": 2, "yaml.key": 2}
+    assert text.splitlines()[1] == "main by type: php.method 2, yaml.key 2, php.class 1"
+    assert "showing" not in text
+    assert json.loads(find.render_json(report))["by_type"] == report.by_type
+
+
+def test_the_by_type_line_names_at_most_eight_types() -> None:
+    rows = [find.FindRow(f"a{n}", f"t{n}", "mapped", None) for n in range(10)]
+    report = find.FindReport(cut(rows, 0))
+
+    assert "main by type: t0 1, t1 1, t2 1, t3 1, t4 1, t5 1, t6 1, t7 1, and 2 more types" in (
+        find.render_text(report)
+    )
 
 
 # 5. descriptions
@@ -221,9 +203,10 @@ def test_a_description_only_match_ranks_after_every_id_match(tmp_path: Path) -> 
     assert [row["matched"] for row in rows] == ["id", "description"]
 
 
-def test_a_description_matches_as_one_phrase(tmp_path: Path) -> None:
+def test_each_word_of_a_description_matches_in_any_order(tmp_path: Path) -> None:
     assert _ids(_find(tmp_path, "the claim")) == ["php.method::Helper::run"]
-    assert _ids(_find(tmp_path, "claim the")) == []
+    assert _ids(_find(tmp_path, "claim the")) == ["php.method::Helper::run"]
+    assert _ids(_find(tmp_path, "claim nowhere")) == []
 
 
 def test_a_find_row_prints_its_description_first_line(tmp_path: Path) -> None:

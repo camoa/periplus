@@ -152,13 +152,15 @@
 
     "find": {
       "type": "object", "additionalProperties": false,
-      "required": ["items", "total", "shown", "truncated", "by_type", "warnings", "problems"],
+      "description": "Every matching thing and edge: the JSON is never cut, so shown equals total and truncated is false.",
+      "required": ["items", "total", "shown", "truncated", "by_type", "edges", "warnings", "problems"],
       "properties": {
         "items": {
           "type": "array",
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description", "supporting", "marks"],
+            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description", "supporting", "marks", "group"],
             "properties": {
+              "group": {"description": "main for a main thing (mapped, located, not supporting code, not of a part type, as periplus undescribed counts it); part, unplaced (not mapped or no location) or supporting otherwise. Rows come in this order.", "enum": ["main", "part", "unplaced", "supporting"]},
               "id": {"type": "string"},
               "type": {"type": "string"},
               "state": {"type": "string"},
@@ -173,8 +175,24 @@
           }
         },
         "by_type": {
-          "description": "Every match, not only the rows shown, counted by node type.",
+          "description": "Every match counted by node type.",
           "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}
+        },
+        "edges": {
+          "description": "The matching edges, by reason (description, source, kind), then place, kind and ends.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["kind", "from", "to", "location", "source", "matched", "description"],
+            "properties": {
+              "kind": {"type": "string"},
+              "from": {"type": "string"},
+              "to": {"type": "string"},
+              "location": {"$ref": "#/$defs/place"},
+              "source": {"$ref": "#/$defs/source"},
+              "matched": {"description": "description when its descriptions.yaml entry holds the words, source when the code line at one of its places does (with --source), kind when its kind's legend meaning does (with --kinds, or when no thing matched).", "enum": ["description", "source", "kind"]},
+              "description": {"description": "The edge's descriptions.yaml text, or null when it has none.", "type": ["string", "null"]}
+            }
+          }
         },
         "total": {"type": "integer", "minimum": 0},
         "shown": {"type": "integer", "minimum": 0},

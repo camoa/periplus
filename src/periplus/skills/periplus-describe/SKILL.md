@@ -85,6 +85,9 @@ decide from what you read.
 
 **Edges.** Most edges need no entry: the kind and the two ends already say it. Write one only
 when the link itself needs explaining: why it exists, a condition on it, or a surprise.
+`periplus find` lists an edge whose text holds the words searched, so write the words a reader
+would search for. An entry copies `from`, `kind` and `to` from the map, so it outlives a new map
+run while the edge is there; `file` and `line` are the edge's first place.
 
 ## What the text says
 

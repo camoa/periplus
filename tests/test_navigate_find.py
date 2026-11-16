@@ -1,4 +1,4 @@
-"""``periplus find``: the order, the type filter, the empty cases, the cut and the CLI tie."""
+"""``periplus find``: the order, the type filter, the empty cases, the budget and the CLI tie."""
 
 from __future__ import annotations
 
@@ -120,13 +120,13 @@ def test_text_matching_nothing_is_empty_with_total_0_and_exit_0(tmp_path: Path) 
     assert "no matches" in find.render_text(report)
 
 
-def test_limit_cuts_the_list_and_says_so(tmp_path: Path) -> None:
+def test_limit_is_a_text_budget_that_cuts_the_rows_and_says_so(tmp_path: Path) -> None:
     path = _map(tmp_path)
-    report = find.run(tmp_path, {}, "cache", (), 2, path)
+    report = find.run(tmp_path, {}, "cache", (), 10, path)
 
-    assert (report.matches.shown, report.matches.total, report.matches.truncated) == (2, 6, True)
-    assert "showing 2 of 6" in find.render_text(report)
-    assert find.run(tmp_path, {}, "cache", (), 0, path).matches.shown == 6
+    assert (report.matches.shown, report.matches.total, report.matches.truncated) == (6, 6, False)
+    assert "showing 1 of 4 main things" in find.render_text(report)
+    assert "showing" not in find.render_text(find.run(tmp_path, {}, "cache", (), 0, path))
 
 
 def test_a_missing_map_is_a_problem_with_its_exit_code(tmp_path: Path) -> None:
@@ -158,5 +158,10 @@ def test_main_prints_the_json_listing_and_two_runs_agree(
     assert main([*argv, "--format", "json"]) == 0
     assert capsys.readouterr().out == first
     document = json.loads(first)
-    assert [row["id"] for row in document["items"]] == ["php.type::Cache", "php.type::CacheBackend"]
-    assert document["truncated"] is True
+    assert [row["id"] for row in document["items"]] == [
+        "php.type::Cache",
+        "php.type::CacheBackend",
+        "php.type::MyCache",
+        "php.type::Cache::Zed",
+    ]
+    assert document["truncated"] is False

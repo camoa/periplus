@@ -43,8 +43,9 @@ DOCUMENT: dict[str, Any] = {
 }
 
 # What each command printed with --format json on DOCUMENT before rows were dataclasses, plus the
-# location, source, warnings, description, matched, matched_attribute, by_type and mark fields
-# added since, and the warning neighbors and affected give on a map with no cause lists.
+# location, source, warnings, description, matched, matched_attribute, by_type, mark, group and
+# edges fields added since, and the warning neighbors and affected give on a map with no cause
+# lists.
 PINNED: dict[str, str] = {
     "types": """\
 {
@@ -78,9 +79,11 @@ PINNED: dict[str, str] = {
   "by_type": {
     "php.method": 2
   },
+  "edges": [],
   "items": [
     {
       "description": null,
+      "group": "main",
       "id": "php.method::B::run",
       "location": "src/a.php:3",
       "marks": [],
@@ -93,6 +96,7 @@ PINNED: dict[str, str] = {
     },
     {
       "description": null,
+      "group": "unplaced",
       "id": "php.method::C::run",
       "location": null,
       "marks": [],

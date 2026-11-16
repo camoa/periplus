@@ -99,6 +99,8 @@ def add_walk(parser: argparse.ArgumentParser, default: int | None = 1, said: str
 
 #: The text budget of a walk by cause; ``navigate.walk.BUDGET``, which a test holds equal.
 BUDGET = 20_000
+#: The text budget of ``find``; ``navigate.find.BUDGET``, which a test holds equal.
+FIND_BUDGET = 12_000
 #: The hub limit of a walk by cause; ``navigate.walk.HUB``, which a test holds equal.
 HUB = 40
 
@@ -350,17 +352,45 @@ def build_parser() -> argparse.ArgumentParser:
     add_map(check, "the map file to check")
     find = subcommands.add_parser(
         "find",
-        help="find the nodes whose id, attributes or description hold a text",
-        description="List the nodes whose id, string attributes or description hold TEXT, "
-        "closest match first, and stop.",
+        help="find the things and edges that hold some words",
+        description="Count, then list, the things whose id, string attributes or description "
+        "hold each word of TEXT, main things first, then the edges whose description, kind "
+        "meaning or code line holds them, and stop.",
     )
     find.add_argument(
         "text",
         metavar="TEXT",
         nargs="?",
         default="",
-        help="the text to look for in node ids, attributes and descriptions; left out, every "
-        "node matches, as with --mark alone",
+        help="the words to look for, split at spaces; each must match a thing's id, attributes "
+        "or description; left out, every node matches, as with --mark alone",
+    )
+    find.add_argument(
+        "--any",
+        action="store_true",
+        help="match a thing or edge that holds any one of the words",
+    )
+    find.add_argument(
+        "--parts",
+        action="store_true",
+        help="list only the things that are not main: parts, supporting code, not mapped",
+    )
+    find.add_argument(
+        "--edges",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="search the edges too (default: yes)",
+    )
+    find.add_argument(
+        "--kinds",
+        action="store_true",
+        help="match edges by the meaning of their kind even when a thing matches",
+    )
+    find.add_argument(
+        "--source",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="match edges by the code line at each of their places (default: yes)",
     )
     find.add_argument(
         "--type",
@@ -384,7 +414,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="keep nodes that carry the mark TEXT, as rows print it in brackets; give it again "
         "to keep several",
     )
-    add_limit(find, 50, "rows")
+    find.add_argument(
+        "--limit",
+        type=int,
+        default=FIND_BUDGET,
+        metavar="N",
+        help="characters the text may hold before what is not main, then the edges, become "
+        f"counts and then rows are cut (default: {FIND_BUDGET}); 0 for no limit",
+    )
     add_ids(find)
     add_map(find, "the map file to read")
     find.add_argument(
@@ -1151,6 +1188,7 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "find":
         from periplus.navigate.find import RENDERERS as FIND_RENDERERS
+        from periplus.navigate.find import listed as find_listed
         from periplus.navigate.find import run as run_find
 
         found = run_find(
@@ -1162,8 +1200,13 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
             map_path=args.map,
             paths=args.path,
             marks=args.mark,
+            any_word=args.any,
+            parts=args.parts,
+            edges=args.edges,
+            kinds=args.kinds,
+            source=args.source,
         )
-        return _emit(args, FIND_RENDERERS, found, lambda r: [row.id for row in r.matches.items])
+        return _emit(args, FIND_RENDERERS, found, find_listed)
 
     if args.command == "show":
         from periplus.navigate.show import MANY_RENDERERS as SHOW_RENDERERS

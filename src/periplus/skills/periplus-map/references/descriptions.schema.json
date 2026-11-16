@@ -11,7 +11,7 @@
       "additionalProperties": { "$ref": "#/$defs/entry" }
     },
     "edges": {
-      "description": "Edge entries, each keyed by the edge's from, kind and to as the map writes them.",
+      "description": "Edge entries, each keyed by the edge's from, kind and to as the map writes them, so an entry survives a new map run while that edge is in it. periplus show prints an edge's entry under its row, and periplus find lists an edge whose text holds the words searched. periplus stamp, stale and undescribed read node entries only.",
       "type": "array",
       "items": {
         "allOf": [

@@ -514,7 +514,7 @@ Then it runs the loop. The map's `referenced` and `unresolved` nodes say which r
 
 Fourteen commands answer a question about a written map, and stop: `periplus types` counts the node
 types and edge kinds, `periplus legend` says what each kind and type means and which types a kind
-joins, `periplus find TEXT` searches node ids, attributes and descriptions, `periplus show ID...` prints
+joins, `periplus find TEXT` searches node ids, attributes and descriptions, then edge descriptions and code lines, `periplus show ID...` prints
 nodes and their edges, `periplus neighbors ID` and `periplus affected ID` list what a node sets off and
 what sets it off, by the cause each edge kind declares, `periplus depth ID` says how far those two
 walks go, and `periplus path FROM TO` prints the shortest chains between two. Five work on a set of
@@ -586,7 +586,7 @@ periplus map --output map.json     # map this project and write the map, with a 
 periplus types                     # count the node types and edge kinds in the written map
 periplus legend                    # say what each edge kind and node type in the map means
 periplus check-map                 # check every node and edge of the map against the map schema
-periplus find TEXT                 # find the nodes whose id, attributes or description hold a text
+periplus find TEXT                 # find the things and edges that hold some words, main things first
 periplus show ID...                # show nodes and the edges at each
 periplus depth ID                  # say how far what an item sets off, and what sets it off, reach
 periplus reach ID...               # print depth, neighbors, affected, only and hubs in one reply
