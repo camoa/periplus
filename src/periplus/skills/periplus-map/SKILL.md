@@ -1,9 +1,70 @@
 ---
 name: periplus-map
-description: Answers code questions from a Periplus map by following its edges, and records what a node or edge does in the descriptions file beside the map. Use when a project has a .periplus/map.json and the user asks what calls or uses this, who uses this service, what breaks if this changes, where something is defined, how A reaches B, which subscribers listen to an event, what makes up a feature, or which files take part in a feature. Use it before grep.
+description: Answers code questions with a Periplus map used together with code search, and records what a node or edge does in the descriptions file beside the map. Use when a project has a .periplus/map.json and the user asks what calls or uses this, who uses this service, what breaks if this changes, where something is defined, how A reaches B, which subscribers listen to an event, what makes up a feature, or which files take part in a feature. Search the code first, then ask the map what touches each thing found.
 ---
 
 # Navigate a Periplus map
+
+## Two kinds of finding
+
+Use code search and the map together. They find different things.
+
+- Text search finds what is written: every place a word or a name appears.
+- The map holds ties that are not one text match: the method behind a route, the class behind a
+  service, the template a hook renders, the config a thing reads, the library a template attaches,
+  the module that owns a thing, and what calls a method and what it calls. Each tie sits at the
+  file and line of the code that makes it.
+
+## Order of work
+
+1. Search the code for the question's words. Read the hits that bear on it. Note the real name of
+   each thing you find: class, method, function, route, service, template, config name, module.
+2. Ask the map what touches each name: `periplus show NAME`. You may send several `show` commands
+   in one step. Each prints every link kind in and out, at its file and line.
+3. Read the code of each linked thing you have not seen yet. It may be a second module, a template
+   or a config record that changes the same feature.
+4. Run `periplus slice "WORDS"` with the names and words you learned. It also matches the
+   plain-words descriptions, so it reaches things whose names hold none of your search words.
+5. Search the code again for each new name the map gave you. Repeat step 2 for those that matter.
+
+The map names the links. Read the code of a thing before you say what it does.
+
+## What a slice prints
+
+`periplus slice "WORDS"` picks start things from the words and prints the piece of the map around
+them, in one call. `periplus slice NAME` starts at that one thing. Read every part of the reply:
+
+- `start` lines: one per start, with each word it matched and where, or `given as` for a name. A
+  start that has nothing to do with the question is noise; skip its block.
+- `members of NAME: ...`: the start is a container, such as a module. It counts what it holds.
+- `piece N of M`: things that links join. Pieces share no link, but the words tie them. Read
+  them all.
+- One block per file: the path, then `:LINE  name  type` per thing, with its source line.
+- `#` lines: what the thing does, in plain words. Read it before you open the file.
+- Link lines: `calls -> X, Y` goes out, `calls <- Z` comes in. A name on a link line belongs to the
+  answer as much as a name at the start of a line.
+- `realized by (KIND) -> X`: X is the code that does the work of a declared thing, such as the
+  method behind a route or the class behind an interface. X belongs in the answer.
+- `+N in supporting code (...)`: tests and helpers the walk met and did not print. `--support`
+  prints them.
+- `+N more links: ...; see periplus slice NAME`: the map holds more links of that thing than the
+  piece shows. Run that command when the thing matters.
+- `inventory:`: every thing the reply names, by type. Check your answer against it.
+- Cut lines, after the inventory: `showing N of M rows`, `left out by kind: ...`, `cut to fit ...`
+  and `go deeper with --depth N`. See the next section.
+- `legend:` comes last, when the packs describe the kinds shown: one line per link kind.
+  `periplus legend --kind K` prints one kind in full.
+
+Use the question's own nouns, three or four words. Paste names as printed into the next command.
+
+## A cut reply is not the whole answer
+
+A slice keeps to about 50 rows. When its last lines say rows or link kinds were left out, and a
+kind named there bears on the question, ask again on the thing that matters: `periplus show NAME`,
+or `periplus slice NAME --kind K`.
+
+Never answer that nothing else touches a thing from a cut reply, or from a search that found
+nothing. Say what you ran and what it left out.
 
 ## The loop
 
@@ -22,11 +83,10 @@ How to run each command:
 
 - Run it from the project root, the folder that holds `.periplus/`. Never `cd` elsewhere first. A
   folder reached through a link may sit outside the project, and then no map is found (exit 29).
-- Run one map command per step. Read its output before you choose the next one. Never send a file
-  search in the same step as a map command.
+- Read each map reply in full before you choose the next step.
 - Keep the default limit. Never pass `--limit 0`. Never pipe map output through `head`, `tail`,
   `cut` or `grep`, and never run map commands in a loop. Those hide rows you need.
-- When a list is cut, it ends with `showing N of M`, a `by type:` count and
+- When a `find` list is cut, it ends with `showing N of M`, a `by type:` count and
   `narrow with --type T or --path P`. Narrow with `--type` and `--path`; each may be repeated.
 - Take type names from that `by type:` line, or from the warning a wrong `--type` prints. The part
   of an id before `::` is not always its type name.
@@ -48,12 +108,11 @@ their callers.
 
 ## When to read code
 
-The source line under a row is often enough. Open the file at the given line only when the answer
+The source line under a row is often enough. Open the file at the given line when the answer
 needs more than that line.
 
-Search files only for what the map cannot hold, and only after a map command has shown it absent.
-Search for that one thing. Do not add every file that holds the question's words: those hits bring
-in docs, tests and comments that are not part of the answer.
+A search hit is a lead, not an answer. Leave out hits in docs, tests and comments that are not
+part of the answer.
 
 Each row carries a state:
 
@@ -92,9 +151,9 @@ the header of its rutter's `pack.yaml`. To record a gap, use the periplus-gaps s
   repeat on each subclass.
 - **How does A reach B?** `periplus path A B`. On `no path`, try `periplus path B A`. Then step by
   hand: `periplus neighbors A --kind K`, one method at a time.
-- **What makes up a feature?** `periplus find "" --path FOLDER --type T` for each type the feature
-  holds. Run `show` on each main item. Things in other folders point in, so follow the incoming
-  kinds with `affected`: links, includes, placements and callers.
+- **What makes up a feature?** `periplus slice "WORDS"` with the feature's names. Then
+  `periplus find "" --path FOLDER --type T` for each type the feature holds, and `show` on each
+  main item. Things in other folders point in, so follow the incoming kinds with `affected`.
 
 ## Worked example
 
@@ -135,60 +194,38 @@ Incoming (2):
     python.module::shop.tools  python.module  mapped  shop/tools.py:1  x1  declared  python_text:function_contained
       | def helper():
 warning: resolved 'helper' to python.function::shop.tools.helper
-$ periplus neighbors cli --kind calls
-periplus neighbors python.module::shop.cli
-2 items
-  1  python.function::shop.tools.helper  python.function  mapped  via calls from python.module::shop.cli  shop/cli.py:9
-      | helper()
-      # Returns the constant 1. It reads nothing and changes nothing.
-  1  python.function::typer.Typer  python.function  unresolved  via calls from python.module::shop.cli  shop/cli.py:4
-      | app = typer.Typer()
-warning: resolved 'cli' to python.module::shop.cli
-$ periplus affected helper --depth 2
-periplus affected python.function::shop.tools.helper
-2 items
-  1  python.module::shop.cli  python.module  mapped  via calls to python.function::shop.tools.helper  shop/cli.py:9
-      | helper()
-  1  python.module::shop.tools  python.module  mapped  via contains to python.function::shop.tools.helper  shop/tools.py:1
+$ periplus slice "returns constant" --depth 1
+periplus slice
+no node matches 'returns constant' as a whole; started from its words
+start helper  python.function  (words: 'returns' in description, 'constant' in description)
+paths under: shop/
+
+piece 1 of 1: 3 things, starts: helper
+
+tools.py
+  :1  helper  python.function
       | def helper():
-warning: resolved 'helper' to python.function::shop.tools.helper
-$ periplus path cli helper
-periplus path python.module::shop.cli python.function::shop.tools.helper
-1 shortest chains
-  chain 1:
-    python.module::shop.cli --calls--> python.function::shop.tools.helper  shop/cli.py:9
-      | helper()
       # Returns the constant 1. It reads nothing and changes nothing.
-warning: resolved 'cli' to python.module::shop.cli
-warning: resolved 'helper' to python.function::shop.tools.helper
-$ periplus types
-periplus types
+      calls <- cli
+  :1  tools  python.module
+      | def helper():
+      contains -> helper
+      imports <- cli
 
-Node types:
-  python.function  3  parent: none
-  python.module  3  parent: none
-  typer.app  1  parent: none
-  typer.command  1  parent: none
+cli.py
+  :1  cli  python.module
+      | import typer
+      calls -> helper
+      imports -> tools
+      +3 more links: calls -> 1, contains -> 1, imports -> 1; see periplus slice cli
 
-Edge kinds:
-  calls  2
-  contains  2
-  imports  2
-  registered_on  1
-
-Problems:
-  none
+inventory: 3 nodes
+  python.function 1: helper
+  python.module 2: cli, tools
+go deeper with --depth 2
 ```
 
-A short name that fits two items lists both and exits 31:
-
-```console
-$ periplus show typer
-periplus show
-31 'typer' matches 2 nodes; give one of these ids
-  python.function::typer.Typer  python.function  no location
-  python.module::typer  python.module  no location
-```
+The slice words matched the helper's description, not its name.
 
 ## Read and write the descriptions file
 
