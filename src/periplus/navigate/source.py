@@ -102,13 +102,17 @@ class SourceLines:
         file, _, number = location.rpartition(":")
         if not number.isdecimal():
             return None
-        if file not in self._files:
-            self._files[file] = self._read(file)
-        lines = self._files[file]
+        lines = self.lines(file)
         line = int(number)
         if lines is None or not 1 <= line <= len(lines):
             return None
         return lines[line - 1].strip()[:SOURCE_WIDTH]
+
+    def lines(self, file: str) -> list[str] | None:
+        """The file's lines as the engine counts them, or ``None`` when ``_read`` reads nothing."""
+        if file not in self._files:
+            self._files[file] = self._read(file)
+        return self._files[file]
 
     def _read(self, file: str) -> list[str] | None:
         """The file's lines as the engine counts them, or ``None`` when it is not a regular file

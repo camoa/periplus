@@ -108,6 +108,15 @@ def _depth(text: str) -> int | None:
     return None if text == "all" else int(text)
 
 
+def _place(text: str) -> tuple[str, int]:
+    """A ``FILE:LINE`` argument as (file, line); a line that is not a whole number above 0 is a
+    usage error."""
+    file, _, line = text.rpartition(":")
+    if not file or not line.isdecimal() or int(line) < 1:
+        raise argparse.ArgumentTypeError(f"{text!r} is not FILE:LINE with a line of 1 or more")
+    return file, int(line)
+
+
 def add_hub(parser: argparse.ArgumentParser) -> None:
     """Add ``--hub`` and ``--through``, the hub options of a walk by cause."""
     parser.add_argument(
@@ -547,6 +556,88 @@ def build_parser() -> argparse.ArgumentParser:
     count.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
     add_map(count, "the map file to read")
     add_format(count)
+    held_in = subcommands.add_parser(
+        "in",
+        help="list the things the map holds in each file, in line order",
+        description="List the things the map locates in each FILE, by line, and stop.",
+    )
+    held_in.add_argument("file", metavar="FILE", nargs="+", help="a file as the map names it")
+    held_in.add_argument(
+        "--type",
+        action="append",
+        default=[],
+        metavar="T",
+        help="keep things of type T and its subtypes; repeat for several",
+    )
+    add_ids(held_in)
+    add_map(held_in, "the map file to read")
+    add_format(held_in)
+    placed = subcommands.add_parser(
+        "at",
+        help="name the mapped thing at a file and line, and what holds it",
+        description="Name the mapped things on the line of FILE:LINE, or on the nearest line "
+        "above it that holds one, then what holds them, and stop.",
+    )
+    placed.add_argument(
+        "place", metavar="FILE:LINE", nargs="+", type=_place, help="a file and a line number"
+    )
+    add_ids(placed)
+    add_map(placed, "the map file to read")
+    add_format(placed)
+    holding = subcommands.add_parser(
+        "files",
+        help="list the files that hold a set of things, most first",
+        description="Count the things the IDs name by file, most first, and stop.",
+    )
+    holding.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    add_map(holding, "the map file to read")
+    add_format(holding)
+    bare = subcommands.add_parser(
+        "undescribed",
+        help="count the main things with no description, by file, type or container",
+        description="Count the main things of the map, or of the IDs, that the descriptions "
+        "file does not describe, and stop.",
+    )
+    bare.add_argument("id", metavar="ID", nargs="*", help=IDS_HELP + "; none counts the whole map")
+    bare.add_argument(
+        "--by",
+        choices=("file", "type", "container"),
+        default="file",
+        help="what to count the undescribed things by (default: file)",
+    )
+    add_ids(bare)
+    add_map(bare, "the map file to read")
+    add_format(bare)
+    stamp = subcommands.add_parser(
+        "stamp",
+        help="write a fingerprint of its code into each node entry of the descriptions file",
+        description="Write the fingerprint of the code each node entry describes into the entries "
+        "that have none, and stop. Nothing else in the file changes.",
+    )
+    stamp.add_argument(
+        "--all", action="store_true", help="write a fresh fingerprint into every node entry"
+    )
+    add_map(stamp, "the map file to read")
+    add_format(stamp)
+    stale = subcommands.add_parser(
+        "stale",
+        help="list the node entries whose code changed or whose node is gone",
+        description="Compare each stamped node entry's fingerprint with its code now, list the "
+        "entries that differ and those whose node the map no longer holds, and stop.",
+    )
+    add_ids(stale)
+    add_map(stale, "the map file to read")
+    add_format(stale)
+    order = subcommands.add_parser(
+        "order",
+        help="list a set so that each thing comes after what it calls or uses",
+        description="Print the things the IDs name so that each comes after the things of the set "
+        "it sets off or uses, loops together and marked, and stop.",
+    )
+    order.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    add_ids(order)
+    add_map(order, "the map file to read")
+    add_format(order)
     path = subcommands.add_parser(
         "path",
         help="show every shortest chain of edges from one item to another",
@@ -1061,6 +1152,66 @@ def main(argv: Sequence[str] | None = None) -> int:
         counted = run_count(start=Path.cwd(), env=os.environ, ids=args.id, map_path=args.map)
         sys.stdout.write(COUNT_RENDERERS[args.format](counted))
         return counted.exit_code
+
+    if args.command == "in":
+        from periplus.navigate.inside import RENDERERS as IN_RENDERERS
+        from periplus.navigate.inside import listed as in_listed
+        from periplus.navigate.inside import run as run_in
+
+        found_in = run_in(
+            start=Path.cwd(), env=os.environ, paths=args.file, types=args.type, map_path=args.map
+        )
+        return _emit(args, IN_RENDERERS, found_in, in_listed)
+
+    if args.command == "at":
+        from periplus.navigate.at import RENDERERS as AT_RENDERERS
+        from periplus.navigate.at import listed as at_listed
+        from periplus.navigate.at import run as run_at
+
+        found_at = run_at(start=Path.cwd(), env=os.environ, places=args.place, map_path=args.map)
+        return _emit(args, AT_RENDERERS, found_at, at_listed)
+
+    if args.command == "files":
+        from periplus.navigate.files import RENDERERS as FILES_RENDERERS
+        from periplus.navigate.files import run as run_files
+
+        holding = run_files(start=Path.cwd(), env=os.environ, ids=args.id, map_path=args.map)
+        sys.stdout.write(FILES_RENDERERS[args.format](holding))
+        return holding.exit_code
+
+    if args.command == "undescribed":
+        from periplus.navigate.undescribed import RENDERERS as BARE_RENDERERS
+        from periplus.navigate.undescribed import listed as bare_listed
+        from periplus.navigate.undescribed import run as run_bare
+
+        bare = run_bare(
+            start=Path.cwd(), env=os.environ, ids=args.id, by=args.by, map_path=args.map
+        )
+        return _emit(args, BARE_RENDERERS, bare, bare_listed)
+
+    if args.command == "stamp":
+        from periplus.navigate.fingerprint import STAMP_RENDERERS
+        from periplus.navigate.fingerprint import stamp as run_stamp
+
+        stamped = run_stamp(start=Path.cwd(), env=os.environ, every=args.all, map_path=args.map)
+        sys.stdout.write(STAMP_RENDERERS[args.format](stamped))
+        return stamped.exit_code
+
+    if args.command == "stale":
+        from periplus.navigate.fingerprint import STALE_RENDERERS
+        from periplus.navigate.fingerprint import listed as stale_listed
+        from periplus.navigate.fingerprint import stale as run_stale
+
+        aged = run_stale(start=Path.cwd(), env=os.environ, map_path=args.map)
+        return _emit(args, STALE_RENDERERS, aged, stale_listed)
+
+    if args.command == "order":
+        from periplus.navigate.order import RENDERERS as ORDER_RENDERERS
+        from periplus.navigate.order import listed as order_listed
+        from periplus.navigate.order import run as run_order
+
+        ordered = run_order(start=Path.cwd(), env=os.environ, ids=args.id, map_path=args.map)
+        return _emit(args, ORDER_RENDERERS, ordered, order_listed)
 
     if args.command == "slice":
         from periplus.navigate.slice import RENDERERS as SLICE_RENDERERS

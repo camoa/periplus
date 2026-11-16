@@ -36,7 +36,12 @@
       "properties": {
         "text": { "type": "string", "minLength": 1 },
         "file": { "type": "string", "minLength": 1 },
-        "line": { "type": "integer", "minimum": 1 }
+        "line": { "type": "integer", "minimum": 1 },
+        "fingerprint": {
+          "description": "Written by periplus stamp: the first 16 hex digits of the SHA-256 of the code the entry describes. periplus stale compares it with the code now.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        }
       }
     }
   }

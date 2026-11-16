@@ -11,6 +11,16 @@ description: Writes what the main items of a Periplus slice do into .periplus/de
 - [The descriptions schema](https://github.com/camoa/periplus/blob/v0.8.0/src/periplus/skills/periplus-map/references/descriptions.schema.json) holds the exact shape of the file.
 - [Navigation](https://github.com/camoa/periplus/blob/v0.8.0/docs/navigation.md) holds the signature, output rows and exit codes of `periplus slice`.
 
+## Tools for the work
+
+- `periplus undescribed` counts the main things with no entry, by file; `--ids` lists them.
+- `periplus in FILE` lists what the map holds in a file, in line order.
+- `periplus at FILE:12` names the mapped thing at line 12, or nearest above, and what holds it.
+- `periplus files ID...` counts a set by file, most first.
+- `periplus order ID...` puts a set in order, each thing after what it calls or uses.
+- `periplus stamp` writes a fingerprint of its code into each entry; `periplus stale` lists the
+  entries whose code changed since, and those whose node is gone.
+
 ## Why an entry matters
 
 `periplus find` searches entry text as well as ids. `find` and `path`, and `neighbors` and

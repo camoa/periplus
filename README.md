@@ -512,7 +512,12 @@ walks go, and `periplus path FROM TO` prints the shortest chains between two. Fi
 ids: `periplus only ID...` lists what the ids alone set off, `periplus hubs ID...` the hubs their walk
 stops at, `periplus members ID...` what a container holds, `periplus pieces ID...` splits the set into
 the groups edges join, and `periplus count ID...` counts the set by type and state, with the edges
-among it. A command that lists things takes `--ids` and prints one full id a line; a command that
+among it. Five go between files and the map: `periplus in FILE...` lists what the map holds in a
+file, `periplus at FILE:LINE...` names the mapped thing at a line and what holds it, `periplus files
+ID...` counts a set by file, `periplus undescribed` counts the main things with no description yet,
+and `periplus order ID...` puts a set in order, each thing after what it uses. `periplus stamp`
+writes into each description a fingerprint of its code, and `periplus stale` lists the
+descriptions whose code changed since. A command that lists things takes `--ids` and prints one full id a line; a command that
 takes ids reads them from standard input when given `-`, so
 `periplus neighbors ID --depth all --ids | periplus count -` joins two. They read the map, the
 descriptions file and the source line under each row, and nothing more. `periplus check-map` runs the full schema check that these commands
@@ -576,6 +581,13 @@ periplus hubs ID...                # list the hubs the walk by cause from the id
 periplus members ID...             # list what a container holds, by the map's grouping kinds
 periplus pieces ID...              # split ids into the groups that edges among them join
 periplus count ID...               # count the things ids name, by type and state, and the edges among them
+periplus in FILE...                # list the things the map holds in each file, in line order
+periplus at FILE:LINE...           # name the mapped thing at a file and line, and what holds it
+periplus files ID...               # list the files that hold a set of things, most first
+periplus undescribed [ID...]       # count the main things with no description, by file, type or container
+periplus order ID...               # list a set so that each thing comes after what it calls or uses
+periplus stamp                     # write a fingerprint of its code into each node description
+periplus stale                     # list the node descriptions whose code changed or whose node is gone
 periplus path FROM TO              # show every shortest chain of edges from one item to another
 periplus slice ID --out FILE       # write the items around some items or a path to a smaller map
 periplus export --format F         # print the map as graphml, dot or mermaid
@@ -584,7 +596,7 @@ periplus skills install            # copy the Claude skills Periplus ships into 
 
 `periplus validate` takes a bare `name`, or `name@version` to pick one of several copies.
 `periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `slice`
-and `export` takes `--format json`. The sixteen commands that read a map take `--map PATH`; the
+and `export` takes `--format json`. The twenty-three commands that read a map take `--map PATH`; the
 [navigation guide](docs/navigation.md) gives their other options. `periplus --version` prints the
 installed version, and `periplus <command> --help` gives each command's options.
 

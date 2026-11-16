@@ -1,9 +1,10 @@
 # Navigating the map
 
-`periplus map` writes the map. Sixteen commands read it. Thirteen answer a question about it. `slice` prints the
+`periplus map` writes the map. Twenty-three commands read it. Eighteen answer a question about it. `slice` prints the
 piece of the map around some words or items, or cuts it into a map file of its own; `export` prints the map in
-another format. Each one loads the map, prints its output and stops. None of them changes the map or
-starts a server. The question commands read a source file only to print one line of it under a row.
+another format. `stamp` and `stale` keep the descriptions file in step with the code. Each one loads the map,
+prints its output and stops. None of them changes the map or starts a server, and only `stamp` writes a file.
+The question commands read a source file only to print one line of it under a row.
 
 | Command | Question it answers |
 |---|---|
@@ -19,22 +20,29 @@ starts a server. The question commands read a source file only to print one line
 | `periplus members ID...` | What does this container hold? |
 | `periplus pieces ID...` | Into which groups do edges join these items? |
 | `periplus count ID...` | How many things do these ids name, of which types and states, with how many edges among them? |
+| `periplus in FILE...` | Which things does the map hold in this file, line by line? |
+| `periplus at FILE:LINE...` | Which mapped thing is at this line, or nearest above it, and what holds it? |
+| `periplus files ID...` | Which files hold these things, and how many each? |
+| `periplus undescribed [ID...]` | Which main things have no description yet, counted by file, type or container? |
+| `periplus order ID...` | In what order do these things come, each after what it calls or uses? |
+| `periplus stamp` | Write into each node entry a fingerprint of the code it describes. |
+| `periplus stale` | Which node entries describe code that changed since they were stamped, or a node that is gone? |
 | `periplus path FROM TO` | What is the shortest chain of edges from one item to another? |
 | `periplus slice WORDS` | What lies around the nodes these words or ids name, hop by hop? With `--out FILE`, write that piece to a map file of its own. |
 | `periplus export --format F` | Print the map as GraphML, DOT or Mermaid. |
 
-A sixteenth command, `periplus check-map`, checks the whole map against the map schema. See
+A twenty-third command, `periplus check-map`, checks the whole map against the map schema. See
 [Checking the map](#checking-the-map).
 
 ## What every command shares
 
 - `--map PATH` names the map file. Without it, the command reads `.periplus/map.json` under the
   project root, found by walking up from the working directory.
-- The thirteen question commands and `slice` take `--format text|json` to pick the report (default
+- The question commands, `slice`, `stamp` and `stale` take `--format text|json` to pick the report (default
   `text`). The JSON report has sorted keys and is described by the shipped
   `navigation.schema.json`, which `periplus spec` also emits. `export` prints the graph itself and
   takes `--report text|json` for the warnings and problems it writes to standard error.
-- An `ID` argument (`show`, `depth`, `neighbors`, `affected`, `only`, `hubs`, `members`, `pieces`, `count`, `path`, and each argument of `slice`) is a node id or a short name: the
+- An `ID` argument (`show`, `depth`, `neighbors`, `affected`, `only`, `hubs`, `members`, `pieces`, `count`, `files`, `undescribed`, `order`, `path`, and each argument of `slice`) is a node id or a short name: the
   id's name after its first `::`, or a tail of that name that starts after a character other than
   a letter, digit or underscore, compared without case. So `helper` and `tools.helper` both name
   `python.function::shop.tools.helper`. A short name that fits one node is used, with the warning
@@ -51,15 +59,16 @@ A sixteenth command, `periplus check-map`, checks the whole map against the map 
   the limit (default 500) is the most items the slice may hold. Over it, the command writes nothing and exits 32.
 - `-` in place of the `ID`s reads them from standard input, one id a line, for every command
   that takes several `ID`s (`show`, `depth`, `neighbors`, `affected`, `only`, `hubs`, `members`,
-  `pieces`, `count`). Only the line ending is taken off, so an id keeps its spaces; empty lines are
+  `pieces`, `count`, `files`, `undescribed`, `order`). Only the line ending is taken off, so an id keeps its spaces; empty lines are
   skipped. `-` that reads no id exits 2. `path` takes two single ids and `slice` reads its
   arguments as words, so neither reads standard input.
-- A row of `only`, `hubs`, `members` or `pieces` ends with its node's marks and, for a node in
+- A row of `only`, `hubs`, `members`, `pieces`, `in`, `at`, `stale` or `order` ends with its node's marks and, for a node in
   supporting code, `[supporting code]`; their JSON items add `marks` and `supporting`.
 - `--ids` prints the ids a command lists, one full id a line, and nothing else, for another
   command to read with `-`: `find`, `show` (the other end of each edge), `neighbors` and
   `affected` (the starts, then every thing within `--depth`, and with `--touch` the touching
-  things), `only`, `hubs`, `members` and `pieces` (a blank line between two pieces). The list is
+  things), `only`, `hubs`, `members`, `pieces` (a blank line between two pieces), `in`, `at`,
+  `undescribed`, `stale` and `order`. The list is
   never cut: `--limit` does not apply. The count, such as `5 ids`, the warnings and the problems
   go to standard error, so a pipe carries ids only. An id holding a control character, such as a
   line break, prints escaped instead, and a line on standard error says how many did; the commands
@@ -407,6 +416,127 @@ how many ids named a thing an earlier id named (`repeated`) and how many were sh
 `command`, `given`, `things`, `repeated`, `short_names`, `by_type`, `by_state`, `edges`,
 `not_found` (each with `id` and `fits`) and `problems`.
 
+### in
+
+```
+periplus in FILE... [--type T]... [--ids] [--map PATH] [--format text|json]
+```
+
+Lists the things the map locates in each `FILE`, as the map names the file, relative to the
+project root; a leading `./` is taken off. Each `FILE` prints `FILE: N things`, then one row a
+thing in line order, then by id: short name, type, state, `:LINE` and marks. A thing with several
+locations in the file prints once, at its smallest line. A file the map locates nothing in prints
+`FILE: nothing mapped`, and exits 0. `--type T` keeps things of type `T` and its subtypes. In
+JSON: `command`, `files` (each with `file` and `things`), `warnings` and `problems`.
+
+### at
+
+```
+periplus at FILE:LINE... [--ids] [--map PATH] [--format text|json]
+```
+
+The bridge from a line of code, such as a search hit, to the map. A location in the map is a file
+and a start line, never a span, so `at` takes the mapped things on `LINE`, or else on the nearest
+line above it that holds one, and says `nearest above: :N`. Several things on one line print
+innermost first. Then `in` rows name what holds them, outward. A thing is held by the node its id
+nests inside, the node whose name, the id after its first `::`, is the longest part of its own
+name before one of its `::`; else by the container its grouping edge names. So a call site on a
+method's line prints, then `in` the method, its class and the class's module. A line above every
+mapped thing prints `nothing mapped at or above this line`, a file with none `nothing mapped in
+this file`; both exit 0. A `FILE:LINE` without a line number of 1 or more exits 2. In JSON:
+`command`, `places` (each with `file`, `line`, `found_line`, `things` and `containers`) and
+`problems`.
+
+### files
+
+```
+periplus files ID... [--map PATH] [--format text|json]
+```
+
+Counts the things the `ID`s name by the files of their locations, most first, then by file. A
+thing with locations in two files counts in each. It prints `N things in M files`, one row a file,
+`count  file`, then `no location: N` for things with none. In JSON: `command`, `things`, `files`
+(each with `file` and `count`), `no_location`, `warnings` and `problems`.
+
+### undescribed
+
+```
+periplus undescribed [ID...] [--by file|type|container] [--ids] [--map PATH] [--format text|json]
+```
+
+Counts the main things that `.periplus/descriptions.yaml` has no entry for under `nodes`: in the
+whole map, or among the `ID`s. The first line says `described N of M main things`. A main thing is
+what the `periplus-describe` skill describes, and the rule uses the map alone:
+
+- it is mapped and has a location;
+- it is not in supporting code, by the map's `supporting_paths`;
+- its type is not a part type. A type is a part type when more than half of its mapped, located
+  things nest inside another node by their id, as `at` reads nesting, and have no node nesting
+  inside them: a parameter or a call site, read as part of the method that holds it.
+
+A `left out:` line counts the rest: the parts by type, the things in supporting code, and those not
+mapped or with no location. Then the undescribed things are counted by file (the default), by type
+(`--by type`) or by container (`--by container`): the first grouping container of the thing or of
+what holds it, `(no container)` for none. `--ids` prints their ids by file, line, then id. A
+descriptions file that is not YAML or does not match its schema exits 30. In JSON: `command`,
+`by`, `main`, `described`, `counts` (each with `key`, `null` for no container, and `count`),
+`undescribed` (the ids), `left_out` (`parts` by type, `supporting`, `unplaced`), `warnings` and
+`problems`.
+
+### order
+
+```
+periplus order ID... [--ids] [--map PATH] [--format text|json]
+```
+
+Prints the things the `ID`s name so that each comes after the things of the set it calls or uses:
+a thing uses another when an edge between them is of a kind whose cause, as `periplus legend`
+shows it, is `from` (the user is the from end) or `to` (the user is the to end). A `none` or
+`touch` kind orders nothing. A kind under no cause list goes by its raw direction, its from end the
+user, and a last line names it; on a map with no cause list every kind does, but a grouping kind,
+and a last line says so. Things that use each other through a chain are a loop: they print
+together, by place, each marked `[loop N]`. Ties go by the first file and line, then id. The text
+prints `N things, M loops`, then one row a thing. Describing the things in this order reads each
+callee before its callers. In JSON: `command`, `things` (each a row with `loop`, a number or
+`null`), `warnings` and `problems`.
+
+### stamp
+
+```
+periplus stamp [--all] [--map PATH] [--format text|json]
+```
+
+Writes into each node entry of `.periplus/descriptions.yaml` that has none a `fingerprint`: the
+first 16 hex digits of the SHA-256 of the code the entry describes. That code runs from the node's
+first location to the line before the next mapped thing of the same file, on a later line, that
+the node does not hold, as `at` reads holding; or to the end of the file. Blank lines at its end
+are left out. So a method's code ends where the next method starts, and a class holds its methods.
+`--all` writes a fresh fingerprint into every node entry.
+
+`stamp` adds one line, `fingerprint: '<digits>'`, after the entry's `line` key, at its indent, or
+replaces the value of the entry's `fingerprint`. No other byte of the file changes: comments, order,
+quoting and line endings stay. An entry written inline, `{text: ...}`, an entry whose node the map
+does not hold, and one whose code cannot be read are skipped and listed with why. If the file read
+back would differ in anything but the fingerprints, nothing is written and it exits 30; a file
+that cannot be written exits 27. Run `periplus map` first, so the lines are the code's. The map
+never reads the descriptions file, so its bytes do not depend on it, and a file without
+fingerprints loads as before. Edge entries are not stamped. In JSON: `command`, `found` (false
+without a descriptions file), `stamped`, `kept`, `skipped` (each with `id` and `reason`) and
+`problems`.
+
+### stale
+
+```
+periplus stale [--ids] [--map PATH] [--format text|json]
+```
+
+Compares each stamped node entry's fingerprint with its code now, as `stamp` reads it. The first
+line counts the node entries: fresh, changed, gone (the map holds no node of that id), unreadable
+(the code cannot be read) and not stamped. Then it lists the changed, the gone and the unreadable
+entries under a heading each. `--ids` prints the changed, then the gone, then the unreadable ids.
+In JSON: `command`, `found`, `entries`, `fresh`, `changed`, `gone`, `unreadable`, `unstamped` and
+`problems`.
+
 ### path
 
 ```
@@ -588,9 +718,9 @@ periplus export --format dot --map foo.map.json > foo.dot
 | 0 | The report printed. An empty result is still 0. |
 | 2 | A bad option, such as `--depth 0`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, or `slice --out` with `--type` or `--starts`. A walk on a map with no cause list from several `ID`s. |
 | 17 | The slice does not pass the map schema, because the map it was cut from does not. Run `periplus check-map` on that map. |
-| 27 | `slice --out` names the map being read, or the file cannot be written. |
+| 27 | `slice --out` names the map being read, or the file cannot be written; or `stamp` cannot write the descriptions file. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
-| 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. Also a descriptions file `show` reads that is not YAML or does not match the descriptions schema. |
+| 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. Also a descriptions file a command reads that is not YAML or does not match the descriptions schema, or one `stamp` cannot change without changing other text. |
 | 31 | An id names no node in the map, or a short name fits more than one node. |
 | 32 | The slice reaches more items than `--limit` allows. |
 
@@ -613,7 +743,8 @@ valid map, 30 with the path and the first error on a failing one, and 29 with no
 
 The shipped `examples/second-stack` holds three rutters and their settings. They need a project
 to read. Make one in a new, empty folder, away from the Periplus checkout: copy the rutters and
-settings into `.periplus/`, and add two Python files. Replace `/path/to/periplus` with the checkout.
+settings into `.periplus/`, and add two Python files and a descriptions file. Replace
+`/path/to/periplus` with the checkout.
 
 ```
 mkdir -p .periplus shop
@@ -637,6 +768,23 @@ app = typer.Typer()
 @app.command("hello")
 def greet():
     helper()
+```
+
+The descriptions file describes two things. The first carries a fingerprint that does not match
+its code, so `stale` has something to show:
+
+<!-- nav-file: .periplus/descriptions.yaml -->
+```yaml
+nodes:
+  typer.app::shop.cli.app:
+    text: The shop's command-line app.
+    file: shop/cli.py
+    line: 4
+    fingerprint: '0000000000000000'
+  typer.command::shop.cli.app:hello:
+    text: The hello command; it runs greet.
+    file: shop/cli.py
+    line: 7
 ```
 
 Then map it. `periplus map` writes `.periplus/map.json` by default, which is where the commands
@@ -982,6 +1130,109 @@ inventory: 3 nodes
   python.function 1: helper
   python.module 2: cli, tools
 go deeper with --depth 2
+```
+
+List what the map holds in a file, line by line:
+
+<!-- nav-run -->
+```console
+$ periplus in shop/cli.py
+periplus in
+shop/cli.py: 4 things
+  cli  python.module  mapped  :1
+  app  typer.app  mapped  :4
+  hello  typer.command  mapped  :7
+  greet  python.function  mapped  :8
+```
+
+Go from a line of code, such as a search hit on `helper()`, to the thing that holds it. Line 9
+holds no mapped thing, so the nearest above answers:
+
+<!-- nav-run -->
+```console
+$ periplus at shop/cli.py:9
+periplus at
+shop/cli.py:9  nearest above: :8
+  greet  python.function  mapped  :8
+```
+
+Count a set by file:
+
+<!-- nav-run -->
+```console
+$ periplus files greet helper python.module::shop.cli python.module::typer
+periplus files
+4 things in 2 files
+  2  shop/cli.py
+  1  shop/tools.py
+no location: 1
+warning: resolved 'greet' to python.function::shop.cli.greet
+warning: resolved 'helper' to python.function::shop.tools.helper
+```
+
+See what is left to describe. The two things with no location are not main things:
+
+<!-- nav-run -->
+```console
+$ periplus undescribed
+periplus undescribed
+described 2 of 6 main things; 4 undescribed
+left out: 2 not mapped or with no location
+by file:
+  2  shop/cli.py
+  2  shop/tools.py
+```
+
+<!-- nav-run -->
+```console
+$ periplus undescribed --ids
+python.module::shop.cli
+python.function::shop.cli.greet
+python.function::shop.tools.helper
+python.module::shop.tools
+4 ids
+```
+
+Order a set so that each thing comes after what it uses. The module uses the helper and the tools
+module, and the app runs the command registered on it, so the command comes before the app:
+
+<!-- nav-run -->
+```console
+$ periplus order python.module::shop.cli python.module::shop.tools greet helper hello app
+periplus order
+6 things, 0 loops; each after what it calls or uses
+  hello  typer.command  mapped  shop/cli.py:7
+  app  typer.app  mapped  :4
+  greet  python.function  mapped  :8
+  helper  python.function  mapped  shop/tools.py:1
+  tools  python.module  mapped  :1
+  cli  python.module  mapped  shop/cli.py:1
+warning: resolved 'greet' to python.function::shop.cli.greet
+warning: resolved 'helper' to python.function::shop.tools.helper
+warning: resolved 'hello' to typer.command::shop.cli.app:hello
+warning: resolved 'app' to typer.app::shop.cli.app
+```
+
+Check the descriptions against the code. The app's fingerprint does not match, and the command's
+entry has none yet:
+
+<!-- nav-run -->
+```console
+$ periplus stale
+periplus stale
+2 node entries: 0 fresh, 1 changed, 0 gone, 0 unreadable, 1 not stamped
+changed:
+  app  typer.app  mapped  shop/cli.py:4
+```
+
+Stamp the entry that has no fingerprint. The app keeps its own until its description is checked
+and `stamp --all` runs:
+
+<!-- nav-run -->
+```console
+$ periplus stamp
+periplus stamp
+stamped 1 node entry; 1 kept the fingerprint they had
 ```
 
 An id that is not in the map exits 31:

@@ -18,6 +18,13 @@
     {"$ref": "#/$defs/members"},
     {"$ref": "#/$defs/pieces"},
     {"$ref": "#/$defs/count"},
+    {"$ref": "#/$defs/in"},
+    {"$ref": "#/$defs/at"},
+    {"$ref": "#/$defs/files"},
+    {"$ref": "#/$defs/undescribed"},
+    {"$ref": "#/$defs/stamp"},
+    {"$ref": "#/$defs/stale"},
+    {"$ref": "#/$defs/order"},
     {"$ref": "#/$defs/path"},
     {"$ref": "#/$defs/slice"},
     {"$ref": "#/$defs/slice_piece"},
@@ -679,6 +686,159 @@
             }
           }
         },
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "in": {
+      "description": "periplus in: the things the map locates in each file asked, by line; a thing's location is its smallest line in that file.",
+      "type": "object", "additionalProperties": false, "required": ["command", "files", "warnings", "problems"],
+      "properties": {
+        "command": {"const": "in"},
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["file", "things"],
+            "properties": {
+              "file": {"type": "string"},
+              "things": {"description": "Empty when the map locates nothing in the file.", "type": "array", "items": {"$ref": "#/$defs/set_thing"}}
+            }
+          }
+        },
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "at": {
+      "description": "periplus at: for each file and line asked, the mapped things on that line or the nearest line above it that holds one, innermost first, then what holds them, outward.",
+      "type": "object", "additionalProperties": false, "required": ["command", "places", "problems"],
+      "properties": {
+        "command": {"const": "at"},
+        "places": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["file", "line", "found_line", "things", "containers"],
+            "properties": {
+              "file": {"type": "string"},
+              "line": {"type": "integer", "minimum": 1},
+              "found_line": {"description": "The line the things are on, or null when no mapped thing is at or above the line.", "type": ["integer", "null"]},
+              "things": {"type": "array", "items": {"$ref": "#/$defs/set_thing"}},
+              "containers": {"description": "What holds the things: the node each id nests inside, else the container of its grouping edge, outward.", "type": "array", "items": {"$ref": "#/$defs/set_thing"}}
+            }
+          }
+        },
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "files": {
+      "description": "periplus files: the files that hold the things the ids name, each with how many, most first.",
+      "type": "object", "additionalProperties": false, "required": ["command", "things", "files", "no_location", "warnings", "problems"],
+      "properties": {
+        "command": {"const": "files"},
+        "things": {"type": "integer", "minimum": 0},
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["file", "count"],
+            "properties": {"file": {"type": "string"}, "count": {"type": "integer", "minimum": 1}}
+          }
+        },
+        "no_location": {"description": "Things with no location.", "type": "integer", "minimum": 0},
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "undescribed": {
+      "description": "periplus undescribed: the main things of the map, or of the ids, that the descriptions file does not describe. A main thing is mapped, has a location, is not in supporting code, and is not of a part type: a type more than half of whose mapped, located things nest inside another thing by their id and hold none.",
+      "type": "object", "additionalProperties": false,
+      "required": ["command", "by", "main", "described", "counts", "undescribed", "left_out", "warnings", "problems"],
+      "properties": {
+        "command": {"const": "undescribed"},
+        "by": {"enum": ["file", "type", "container"]},
+        "main": {"type": "integer", "minimum": 0},
+        "described": {"type": "integer", "minimum": 0},
+        "counts": {
+          "description": "The undescribed things counted by file, type or container, most first. A key of null is no container.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["key", "count"],
+            "properties": {"key": {"type": ["string", "null"]}, "count": {"type": "integer", "minimum": 1}}
+          }
+        },
+        "undescribed": {"description": "The undescribed main things' ids, by file, line, then id.", "type": "array", "items": {"type": "string"}},
+        "left_out": {
+          "type": "object", "additionalProperties": false, "required": ["parts", "supporting", "unplaced"],
+          "properties": {
+            "parts": {"description": "The things of part types, by type.", "type": "object", "additionalProperties": {"type": "integer"}},
+            "supporting": {"description": "Things in supporting code.", "type": "integer", "minimum": 0},
+            "unplaced": {"description": "Things not mapped, or with no location.", "type": "integer", "minimum": 0}
+          }
+        },
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "stamp": {
+      "description": "periplus stamp: the node entries of the descriptions file given a fingerprint of the code they describe, those that kept the one they had, and those skipped.",
+      "type": "object", "additionalProperties": false, "required": ["command", "found", "stamped", "kept", "skipped", "problems"],
+      "properties": {
+        "command": {"const": "stamp"},
+        "found": {"description": "False when there is no descriptions file.", "type": "boolean"},
+        "stamped": {"type": "integer", "minimum": 0},
+        "kept": {"description": "Entries that had a fingerprint, left as they were without --all.", "type": "integer", "minimum": 0},
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "reason"],
+            "properties": {"id": {"type": "string"}, "reason": {"type": "string"}}
+          }
+        },
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "stale": {
+      "description": "periplus stale: the node entries of the descriptions file whose fingerprint no longer matches their code, whose node the map no longer holds, or whose code cannot be read.",
+      "type": "object", "additionalProperties": false,
+      "required": ["command", "found", "entries", "fresh", "changed", "gone", "unreadable", "unstamped", "problems"],
+      "properties": {
+        "command": {"const": "stale"},
+        "found": {"description": "False when there is no descriptions file.", "type": "boolean"},
+        "entries": {"type": "integer", "minimum": 0},
+        "fresh": {"type": "integer", "minimum": 0},
+        "changed": {"type": "array", "items": {"$ref": "#/$defs/set_thing"}},
+        "gone": {"description": "Entry ids no node of the map has.", "type": "array", "items": {"type": "string"}},
+        "unreadable": {"type": "array", "items": {"$ref": "#/$defs/set_thing"}},
+        "unstamped": {"description": "Entries with no fingerprint.", "type": "integer", "minimum": 0},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "order": {
+      "description": "periplus order: the given things, each after the things of the set it calls or uses by the cause of each edge kind; things that use each other through a chain are a loop and come together.",
+      "type": "object", "additionalProperties": false, "required": ["command", "things", "warnings", "problems"],
+      "properties": {
+        "command": {"const": "order"},
+        "things": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "marks", "supporting", "loop"],
+            "properties": {
+              "id": {"type": "string"},
+              "type": {"type": "string"},
+              "state": {"type": "string"},
+              "location": {"$ref": "#/$defs/place"},
+              "marks": {"$ref": "#/$defs/marks"},
+              "supporting": {"type": "boolean"},
+              "loop": {"description": "The number of the loop the thing is in, counted in printed order, or null.", "type": ["integer", "null"]}
+            }
+          }
+        },
+        "warnings": {"$ref": "#/$defs/warnings"},
         "problems": {"$ref": "#/$defs/problems"}
       }
     },

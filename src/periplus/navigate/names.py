@@ -16,7 +16,8 @@ _CUT = re.compile(r"\W(?=\w)")
 class Names:
     """The shortest name ``resolve`` takes back to each node: the tail of its id after its first
     ``::``, starting after a character other than a letter, digit or underscore, that no other
-    node's id ends with in the same way; the full id when none is unique. Also each node's owner.
+    node's id ends with in the same way; the full id when none is unique. Also each node's owner
+    and the node it nests inside.
     Each table is built once a run, on first use."""
 
     def __init__(self, index: MapIndex) -> None:
@@ -31,6 +32,22 @@ class Names:
         name = node_id.split("::", 1)[-1]
         if "::" not in name:
             return None
+        return self._by_name().get(name.rsplit("::", 1)[0])
+
+    def holder(self, node_id: str) -> str | None:
+        """The node ``node_id`` nests inside: the owner of the longest part of its name before one
+        of its ``::`` that names a node, chosen as ``owner`` chooses; ``None`` when none does."""
+        parts = node_id.split("::", 1)[-1].split("::")
+        names = self._by_name()
+        for cut in range(len(parts) - 1, 0, -1):
+            found = names.get("::".join(parts[:cut]))
+            if found is not None:
+                return found
+        return None
+
+    def _by_name(self) -> dict[str, str]:
+        """Each name, an id after its first ``::``, to its node: a mapped one first, then the
+        smallest id."""
         if self._owners is None:
             best: dict[str, tuple[bool, str]] = {}
             for i, node in self.index.nodes.items():
@@ -39,7 +56,7 @@ class Names:
                 if bare not in best or key < best[bare]:
                     best[bare] = key
             self._owners = {bare: key[1] for bare, key in best.items()}
-        return self._owners.get(name.rsplit("::", 1)[0])
+        return self._owners
 
     @staticmethod
     def _tail_set(node_id: str) -> set[str]:

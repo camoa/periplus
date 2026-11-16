@@ -49,8 +49,10 @@ __all__ = [
     "Location",
     "ShowReport",
     "ShowReports",
+    "descriptions_path",
     "listed",
     "node_descriptions",
+    "read_descriptions",
     "render_json",
     "render_text",
     "run",
@@ -299,12 +301,9 @@ def _shown(rows: list[EdgeRow], limit: int, lines: SourceLines) -> Listing[EdgeR
 def _descriptions(map_file: Path) -> tuple[Mapping[str, Any], tuple[Problem, ...]]:
     """The project's descriptions file: empty when absent, a problem when unreadable.
 
-    Found from the folder of ``map_file``, so a slice at the project root and another
-    project's map each read their own; beside ``map_file`` only when no project is found.
+    Found as ``descriptions_path`` finds it.
     """
-    folder = map_file.absolute().parent
-    root = find_project_root(folder)
-    path = root / PROJECT_MARKER / DESCRIPTIONS if root else folder / DESCRIPTIONS
+    path = descriptions_path(map_file)
     if not path.is_file():
         return {}, ()
     try:
@@ -321,6 +320,24 @@ def _descriptions(map_file: Path) -> tuple[Mapping[str, Any], tuple[Problem, ...
         return document, ()
     message = f"{path} does not match the descriptions schema: {invalid.message}"
     return {}, (Problem(ExitCode.NOT_A_MAP, message, {"path": str(path)}),)
+
+
+def descriptions_path(map_file: Path) -> Path:
+    """Where the descriptions file of ``map_file`` is: found from the folder of ``map_file``, so a
+    slice at the project root and another project's map each read their own; beside ``map_file``
+    only when no project is found."""
+    folder = map_file.absolute().parent
+    root = find_project_root(folder)
+    return root / PROJECT_MARKER / DESCRIPTIONS if root else folder / DESCRIPTIONS
+
+
+def read_descriptions(
+    start: Path, map_path: Path | None
+) -> tuple[Path, Mapping[str, Any], tuple[Problem, ...]]:
+    """The descriptions file's path, its document as ``_descriptions`` reads it, and the
+    problems."""
+    map_file = _locate(start, map_path)
+    return (descriptions_path(map_file), *_descriptions(map_file))
 
 
 def node_descriptions(
