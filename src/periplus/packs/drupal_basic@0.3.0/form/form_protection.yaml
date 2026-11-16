@@ -1,0 +1,117 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Configuration of two contributed modules that switches a form's protection on or off, named by
+# form id. config_names_form runs to a form the file switches on, and config_names_form_off to a
+# form it names and leaves off, so each edge says which:
+# - a captcha point, captcha.captcha_point.<id>, names its form in formId; its top-level status
+#   decides, true or absent on, false off (config/config_status.yaml also writes it on the node);
+# - honeypot.settings protects each form_settings key whose value is true. A key whose value is
+#   false is off only while protect_all_forms is false, so it is read only below
+#   protect_all_forms: false. Each item of unprotected_forms is off, whatever protect_all_forms is.
+# The form_settings entries are read as text, through the spans honeypot_form_settings and
+# honeypot_selected_forms the pack declares, since a data rule cannot test an entry's own true or
+# false. A rule's id is the config object's, built from the captures of those spans, so a match
+# outside them names an empty value and makes nothing.
+#
+# Missing results: with protect_all_forms: true, honeypot protects every form outside
+# unprotected_forms, and no edge says so for a form the file does not name. A form_settings key
+# written in quotes is not read.
+
+edge_kinds:
+- kind: config_names_form
+  cause: to
+  description: "The config object switches protection on for that form id: a captcha point whose status is not false, or a form honeypot.settings protects"
+  from: drupal.config_object
+  to: drupal.form_id
+- kind: config_names_form_off
+  cause: to
+  description: "The config object names that form id and leaves its protection off: a captcha point whose status is false, or a form honeypot.settings leaves unprotected"
+  from: drupal.config_object
+  to: drupal.form_id
+
+rules:
+- rule: captcha_point_form
+  reads: file
+  in: [config, module_config]
+  match:
+    file: captcha.captcha_point.*
+    filetype: yaml
+    where:
+    - key: {name: status, not_equals: false}
+  id: {from: file_stem}
+  emits:
+  - edge:
+      kind: config_names_form
+      from: this_node
+      to: {from: {key: formId}}
+  confidence: declared
+
+- rule: captcha_point_form_off
+  reads: file
+  in: [config, module_config]
+  match:
+    file: captcha.captcha_point.*
+    filetype: yaml
+    where:
+    - key: {name: status, equals: false}
+  id: {from: file_stem}
+  emits:
+  - edge:
+      kind: config_names_form_off
+      from: this_node
+      to: {from: {key: formId}}
+  confidence: declared
+
+- rule: honeypot_unprotected_forms
+  reads: file
+  in: [config, module_config]
+  match:
+    file: honeypot.settings
+    filetype: yaml
+  id: {from: file_stem}
+  emits:
+  - edge:
+      kind: config_names_form_off
+      from: this_node
+      to: {from: {key: unprotected_forms}, each: true}
+  confidence: declared
+
+# my_form: true inside form_settings, whatever protect_all_forms is.
+- rule: honeypot_protected_form
+  reads: file
+  in: [config, module_config]
+  match:
+    file: honeypot.settings
+    filetype: drupal_yml_text
+    text: '(?m)^[ \t]+(?<form>[A-Za-z0-9_]+):[ \t]*true[ \t]*$'
+  values:
+    config: {from: {enclosing: honeypot_form_settings, capture: mark}, normalize: [{replace: '^form_settings$', with: 'honeypot.settings'}]}
+  id: {template: '{config}'}
+  line: {capture: form}
+  emits:
+  - edge:
+      kind: config_names_form
+      from: this_node
+      to: {template: '{form}', type: drupal.form_id}
+  confidence: declared
+
+# my_form: false inside form_settings, below protect_all_forms: false. Each span gives half of the
+# id, so it is whole only inside both.
+- rule: honeypot_unprotected_form_setting
+  reads: file
+  in: [config, module_config]
+  match:
+    file: honeypot.settings
+    filetype: drupal_yml_text
+    text: '(?m)^[ \t]+(?<form>[A-Za-z0-9_]+):[ \t]*false[ \t]*$'
+  values:
+    owner: {from: {enclosing: honeypot_form_settings, capture: mark}, normalize: [{replace: '^form_settings$', with: 'honeypot'}]}
+    name: {from: {enclosing: honeypot_selected_forms, capture: mark}, normalize: [{replace: '^protect_all_forms$', with: 'settings'}]}
+  id: {template: '{owner}.{name}'}
+  line: {capture: form}
+  emits:
+  - edge:
+      kind: config_names_form_off
+      from: this_node
+      to: {template: '{form}', type: drupal.form_id}
+  confidence: declared

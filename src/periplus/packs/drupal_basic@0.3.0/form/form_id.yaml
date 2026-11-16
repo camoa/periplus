@@ -2,10 +2,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A form id: the name a form class's getFormId returns, as my_form, and the name configuration
 # gives a form by. A class under src whose getFormId returns a quoted literal declares the id and
-# links to it, read as text as '#theme' is. Three contributed configuration keys name core and
-# custom form ids, so they are read here: a captcha point's formId, and honeypot.settings'
-# unprotected_forms list and form_settings keys. A form id no class returns, such as a core form's,
-# ends at a referenced node. A getFormId that returns a constant or a concatenation gives nothing.
+# links to it, read as text as '#theme' is. The configuration that switches a form's protection on
+# or off, a captcha point or honeypot.settings, is read in form/form_protection.yaml. A form id no
+# class returns, such as a core form's, ends at a referenced node. A getFormId that returns a
+# constant or a concatenation gives nothing.
 node_types:
 - name: drupal.form_id
   description: "A form id: the literal a form class's getFormId returns, or a form name that a form alter hook or a config file gives, which may be a base form id"
@@ -16,11 +16,6 @@ edge_kinds:
   cause: to
   description: "The form class returns that form id as a quoted literal from getFormId()"
   from: php.class
-  to: drupal.form_id
-- kind: config_names_form
-  cause: to
-  description: "The config object names that form id in a key, such as a captcha point's formId or the honeypot settings' form lists"
-  from: drupal.config_object
   to: drupal.form_id
 
 rules:
@@ -50,36 +45,4 @@ rules:
       kind: form_has_id
       from: {template: '{psr4_class}', types: [php.class]}
       to: this_node
-  confidence: declared
-
-- rule: captcha_point_form
-  reads: file
-  in: [config, module_config]
-  match:
-    file: captcha.captcha_point.*
-    filetype: yaml
-  id: {from: file_stem}
-  emits:
-  - edge:
-      kind: config_names_form
-      from: this_node
-      to: {from: {key: formId}}
-  confidence: declared
-
-- rule: honeypot_forms
-  reads: file
-  in: [config, module_config]
-  match:
-    file: honeypot.settings
-    filetype: yaml
-  id: {from: file_stem}
-  emits:
-  - edge:
-      kind: config_names_form
-      from: this_node
-      to: {from: {key: unprotected_forms}, each: true}
-  - edge:
-      kind: config_names_form
-      from: this_node
-      to: {from: [{each: form_settings.*}], template: '{key}'}
   confidence: declared

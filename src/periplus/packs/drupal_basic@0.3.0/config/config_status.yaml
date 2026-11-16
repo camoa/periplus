@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The top-level status of a configuration file, as the attribute status on its config object, so a
+# reader sees a record switched off without opening the file. A configuration entity holds it:
+# true or false for most, as a view, a block placement, a captcha point or an action; open,
+# closed or scheduled for a webform. The value is kept as written. A file with no top-level status,
+# as most simple configuration, gets no attribute. A status nested below the top level, as a
+# field's settings, is not read.
+
+attributes:
+- name: status
+  on: [drupal.config_object]
+  description: "the configuration file's top-level status as written: false switches the record off; a webform writes open, closed or scheduled"
+
+rules:
+- rule: config_status
+  reads: file
+  in: [config, module_config]
+  match:
+    file: '*'
+    filetype: yaml
+    where:
+    - key: {name: status, not_equals: null}
+  id: {from: file_stem}
+  emits:
+  - node: {type: drupal.config_object}
+  - attribute: {name: status, from: {key: status}}
+  confidence: declared

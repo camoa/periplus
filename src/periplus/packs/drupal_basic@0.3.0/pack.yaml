@@ -874,6 +874,15 @@ files:
       - name: services_block
         open: '(?m)^(?<mark>services):[ \t]*$'
         balance: ['(?!x)x', '(?m)^[A-Za-z_]']
+      # honeypot.settings' form_settings block, to the next top-level key; read by
+      # form/form_protection.yaml.
+      - name: honeypot_form_settings
+        open: '(?m)^(?<mark>form_settings):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^[A-Za-z_]']
+      # The rest of a file after protect_all_forms: false, to its end: neither token ever matches.
+      - name: honeypot_selected_forms
+        open: '(?m)^(?<mark>protect_all_forms):[ \t]*false[ \t]*$'
+        balance: ['(?!x)x', '(?!y)y']
 
 grammar:
   provider: tree-sitter
