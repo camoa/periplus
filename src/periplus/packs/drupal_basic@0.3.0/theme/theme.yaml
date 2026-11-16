@@ -9,10 +9,12 @@ node_types:
 
 edge_kinds:
 - kind: based_on_theme
+  cause: none
   description: "the theme's info file names that theme as its base theme"
   from: drupal.theme
   to: drupal.theme
 - kind: uses_library
+  cause: from
   description: "the theme's info file lists that asset library under libraries"
   from: drupal.theme
   to: drupal.library

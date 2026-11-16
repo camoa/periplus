@@ -8,6 +8,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: eca_reacts_to_event
+  cause: to
   description: "Inferred: an event plugin of the ECA model fires on that event, found by looking its plugin id up in the table eca_event_names"
   from: eca.model
   to: drupal.event

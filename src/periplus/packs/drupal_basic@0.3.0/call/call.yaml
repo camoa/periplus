@@ -39,14 +39,17 @@ node_types:
 
 edge_kinds:
 - kind: manager_call_in
+  cause: none
   description: "the manager call sits in that method"
   from: drupal.manager_call
   to: php.method
 - kind: uses_service
+  cause: from
   description: "the function or method gets that service by its id, from the service container or by a Drupal:: shortcut such as Drupal::currentUser()"
   from: [php.function, php.method]
   to: drupal.service
 - kind: uses_entity_type
+  cause: from
   description: "the function or method names that entity type in a call, as getStorage('node'), entityQuery('node') or Node::load()"
   from: [php.function, php.method]
   to: drupal.entity_type

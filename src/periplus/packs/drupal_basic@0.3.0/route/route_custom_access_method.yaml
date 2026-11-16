@@ -19,6 +19,7 @@ node_types:
 
 edge_kinds:
 - kind: route_names_access_method
+  cause: none
   from: drupal.route
   to: drupal.custom_access_method
   description: "internal: the route's _custom_access names that service and method, kept so a map rule can find the method on the service's class"

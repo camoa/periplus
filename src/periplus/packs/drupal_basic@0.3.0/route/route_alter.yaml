@@ -16,6 +16,7 @@ node_types:
 
 edge_kinds:
 - kind: alters_routes
+  cause: to
   description: "the class extends RouteSubscriberBase, read as written after extends, so it alters routes picked at run time"
   from: php.class
   to: drupal.route_alter

@@ -14,6 +14,7 @@ node_types:
 
 edge_kinds:
 - kind: behavior_holds_class
+  cause: none
   description: "the behavior's function holds that named class, so the class's settings reads and behavior calls count as the behavior's"
   from: drupal.js_behavior
   to: drupal.js_class

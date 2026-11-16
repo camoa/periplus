@@ -43,18 +43,22 @@ node_types:
 
 edge_kinds:
 - kind: names_field
+  cause: none
   description: "The method, function or template read names that field machine name: a literal or constant in ->get(), ->set() or ->hasField() on any object, or x.field_y in Twig"
   from: [php.method, php.function, drupal.template_field_read]
   to: drupal.field_name
 - kind: read_on_entity
+  cause: none
   description: "The template field read's variable or template name points at that entity hint, an entity type from a lookup table or the name as written"
   from: drupal.template_field_read
   to: drupal.field_entity_hint
 - kind: accesses_field
+  cause: from
   description: "The method, function or template names that field storage's machine name in ->get(), ->set(), ->hasField() or Twig; a field_ name no storage has ends unresolved"
   from: [php.method, php.function, drupal.template]
   to: drupal.field_storage
 - kind: accesses_shared_field_name
+  cause: from
   description: "The method, function or template names that field machine name, which storages on two or more entity types share, so the storage it means is not known"
   from: [php.method, php.function, drupal.template]
   to: drupal.shared_field_name

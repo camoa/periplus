@@ -9,6 +9,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: suggests_menu
+  cause: to
   from: drupal.template
   to: drupal.config_object
   description: "the template menu--<name> is a suggestion for that menu; matched by the file name"

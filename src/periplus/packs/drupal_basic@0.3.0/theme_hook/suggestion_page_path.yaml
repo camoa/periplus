@@ -11,6 +11,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: suggests_path
+  cause: to
   from: drupal.template
   to: drupal.url_path
   description: "the page template page--a--b is the one Drupal picks for that path /a/b; matched by the file name"

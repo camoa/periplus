@@ -24,6 +24,7 @@ node_types:
 
 edge_kinds:
 - kind: module_template_name_of
+  cause: none
   from: drupal.module_template_name
   to: drupal.template
   description: "internal: a module template's name read as a theme hook name, its dashes as underscores"

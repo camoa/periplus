@@ -19,18 +19,22 @@ node_types:
 
 edge_kinds:
 - kind: names_checked_role
+  cause: none
   description: "step to checks_role: the method or function calls hasRole() on any object with that role name as text"
   from: [php.method, php.function]
   to: drupal.role_name
 - kind: names_changed_role
+  cause: none
   description: "step to changes_role: the method or function calls addRole() or removeRole() on any object with that role name as text"
   from: [php.method, php.function]
   to: drupal.role_name
 - kind: checks_role
+  cause: touch
   description: "the method or function calls hasRole() with that role's name, as text or a class constant; the object's type is not read"
   from: [php.method, php.function]
   to: drupal.role
 - kind: changes_role
+  cause: from
   description: "the method or function calls addRole() or removeRole() with that role's name, as text or a class constant; the object's type is not read"
   from: [php.method, php.function]
   to: drupal.role

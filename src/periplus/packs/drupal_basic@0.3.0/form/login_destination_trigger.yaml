@@ -17,6 +17,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: redirects_after_form
+  cause: to
   from: drupal.config_object
   to: drupal.form_id
   description: "the Login Destination rule redirects the person after that form is submitted, by its login or registration trigger"

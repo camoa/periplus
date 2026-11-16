@@ -9,6 +9,7 @@ node_types:
 
 edge_kinds:
 - kind: depends_on_library
+  cause: from
   description: "The library lists that library under its dependencies key in a libraries.yml file"
   from: drupal.library
   to: drupal.library

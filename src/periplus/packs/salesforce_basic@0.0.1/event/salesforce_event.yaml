@@ -17,6 +17,7 @@ node_types:
 
 edge_kinds:
 - kind: subscribes_to_salesforce_event
+  cause: to
   description: "Inferred: the class keys that SalesforceEvents constant in getSubscribedEvents, read as text; the class comes from the file's path"
   from: php.class
   to: salesforce.event

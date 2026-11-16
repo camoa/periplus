@@ -15,10 +15,12 @@ node_types:
 
 edge_kinds:
 - kind: writes_global
+  cause: from
   from: [php.function, php.method]
   to: php.global
   description: "the function or method assigns that global variable through $GLOBALS"
 - kind: reads_global
+  cause: from
   from: [php.function, php.method]
   to: php.global
   description: "the function or method reads that global variable through $GLOBALS"

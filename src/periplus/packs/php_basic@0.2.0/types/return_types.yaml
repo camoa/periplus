@@ -26,6 +26,7 @@ node_types:
 
 edge_kinds:
 - kind: returns_type
+  cause: none
   description: "the method declares that class as its return type; self gives the declaring class"
   from: php.method
   to: php.return_type

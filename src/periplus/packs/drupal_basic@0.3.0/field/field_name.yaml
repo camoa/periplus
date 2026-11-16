@@ -29,18 +29,22 @@ node_types:
 
 edge_kinds:
 - kind: field_name_of
+  cause: none
   description: "Internal: the field machine name hub has that field storage, one link per entity type that has a storage of the name"
   from: drupal.field_name
   to: drupal.field_storage
 - kind: shared_field_name_of
+  cause: none
   description: "The shared field name is the machine name of that field storage, one link per storage of the name"
   from: drupal.shared_field_name
   to: drupal.field_storage
 - kind: field_name_ready
+  cause: none
   description: "Internal: a self-link on a field name hub that has a storage, so rules that need to know a name is not shared run after that is settled"
   from: drupal.field_name
   to: drupal.field_name
 - kind: field_name_shared
+  cause: none
   description: "Internal: the field name hub has storages on more than one entity type; the link ends at a storage of the name"
   from: drupal.field_name
   to: drupal.field_storage

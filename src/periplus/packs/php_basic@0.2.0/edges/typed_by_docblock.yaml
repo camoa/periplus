@@ -59,26 +59,31 @@ node_types:
 
 edge_kinds:
 - kind: method_doc_param_type
+  cause: none
   description: "the method's docblock @param line at that position names that class"
   from: php.method
   to: php.doc_param_type
 
 - kind: method_doc_param_name
+  cause: none
   description: "the method's docblock @param line at that position names that parameter"
   from: php.method
   to: php.doc_param_name
 
 - kind: function_doc_param_type
+  cause: none
   description: "the function's docblock @param line at that position names that class"
   from: php.function
   to: php.doc_param_type
 
 - kind: function_doc_param_name
+  cause: none
   description: "the function's docblock @param line at that position names that parameter"
   from: php.function
   to: php.doc_param_name
 
 - kind: doc_var_typed_as
+  cause: none
   description: "the local variable is typed as that class by a @var comment just before its assignment or foreach"
   from: php.doc_var_name
   to: php.doc_var_type

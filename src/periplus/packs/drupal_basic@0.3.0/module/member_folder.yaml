@@ -23,14 +23,17 @@ node_types:
 
 edge_kinds:
 - kind: folder_of_module
+  cause: none
   description: "Internal: the extension folder holds that module's info.yml file"
   from: drupal.extension_folder
   to: drupal.module
 - kind: folder_of_theme
+  cause: none
   description: "Internal: the extension folder holds that theme's info.yml file"
   from: drupal.extension_folder
   to: drupal.theme
 - kind: claim_in_folder
+  cause: none
   description: "Internal: the claimed thing's file sits under that extension folder, the nearest one above it that holds an info.yml file"
   from: drupal.member_claim
   to: drupal.extension_folder

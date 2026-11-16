@@ -38,11 +38,13 @@ node_types:
 
 edge_kinds:
 - kind: local_assigned
+  cause: none
   description: "the local variable is assigned that value somewhere in its method or function, one edge per distinct value"
   from: php.local_variable
   to: php.local_value
 
 - kind: local_value_typed_as
+  cause: none
   description: "the value assigned to a local variable is new of that class, $x = new Foo()"
   from: php.local_value
   to: php.local_type

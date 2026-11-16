@@ -21,18 +21,22 @@ node_types:
 
 edge_kinds:
 - kind: displays
+  cause: to
   description: "the form or view display sets how that bundle is edited or rendered, by its entity type and bundle keys"
   from: [drupal.form_display, drupal.view_display]
   to: drupal.bundle
 - kind: shows_field
+  cause: from
   description: "the form or view display shows that field, a key under its content section"
   from: [drupal.form_display, drupal.view_display]
   to: drupal.field_instance
 - kind: in_mode
+  cause: none
   description: "the display belongs to that form mode or view mode; a display in the default mode has none"
   from: [drupal.form_display, drupal.view_display]
   to: [drupal.form_mode, drupal.view_mode]
 - kind: mode_of
+  cause: none
   description: "the form mode or view mode belongs to that entity type"
   from: [drupal.form_mode, drupal.view_mode]
   to: drupal.entity_type

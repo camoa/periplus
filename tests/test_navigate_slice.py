@@ -285,6 +285,7 @@ def test_the_map_file_is_unchanged_by_the_shared_counts_and_write_functions_wo1(
     location = [{"file": "src/Greeter.php", "line": 3}]
     assert {k: v for k, v in document.items() if k != "generated_by"} == {
         "periplus_map_version": 0,
+        "cause_none_kinds": ["contains"],
         "packs": [{"pack": "php_basic", "version": "0.2.0"}],
         "settings": ".periplus/settings.yml",
         "roots": ["."],

@@ -8,6 +8,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: mentions_library
+  cause: touch
   from: [php.method, php.function, drupal.template]
   to: drupal.library
   description: "the code or template holds a text equal to that library's id outside an attachment; it names the library as text, and what it does with it is not known"

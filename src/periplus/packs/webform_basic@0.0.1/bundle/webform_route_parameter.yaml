@@ -25,10 +25,12 @@ node_types:
 
 edge_kinds:
 - kind: reads_route_entity
+  cause: from
   from: [php.function, php.method]
   to: drupal.entity_type
   description: "the function or method reads the route parameter of that entity type and tests it with instanceof, so it acts on every page of that type"
 - kind: instance_of_entity_type
+  cause: none
   from: drupal.config_object
   to: drupal.entity_type
   description: "the webform's config object is an entity of that entity type"

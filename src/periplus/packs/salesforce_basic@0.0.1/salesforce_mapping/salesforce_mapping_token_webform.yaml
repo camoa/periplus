@@ -18,10 +18,12 @@ node_types:
 
 edge_kinds:
 - kind: token_names_element
+  cause: none
   description: "The Salesforce mapping names that element key in a [webform_submission:values:<key>] token or a WebformElements row"
   from: salesforce.mapping
   to: salesforce.token_element
 - kind: maps_webform_element
+  cause: from
   description: "Inferred: the Salesforce mapping of a webform's submissions maps that element of the webform"
   from: salesforce.mapping
   to: webform.element

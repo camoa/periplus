@@ -15,6 +15,7 @@ node_types:
   id_namespace: go.interface
 edge_kinds:
 - kind: calls
+  cause: from
   description: "the function or method calls that function or method; a call on an object may be inferred from declared types, and in Go the end may be a type converted by name"
   from: [go.function, go.method]
   to: [go.function, go.struct, go.interface]

@@ -37,6 +37,7 @@ node_types:
 
 edge_kinds:
 - kind: local_value_static_call
+  cause: none
   description: "the value assigned to a local variable is a static call on that class, $y = Foo::create()"
   from: php.local_value
   to: php.local_static_class

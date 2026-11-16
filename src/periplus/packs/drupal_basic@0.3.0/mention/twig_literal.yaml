@@ -10,6 +10,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # A text rule's from end is one id namespace, so the template has its own kind.
 edge_kinds:
 - kind: template_names_literal
+  cause: none
   from: drupal.template
   to: drupal.literal
   description: "internal: the template holds a quoted text shaped like a Drupal id, with that text"

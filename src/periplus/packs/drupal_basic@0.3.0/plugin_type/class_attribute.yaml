@@ -11,6 +11,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: has_attribute
+  cause: none
   description: "The class, method, function, property or parameter carries that PHP attribute class; an attribute on a declaration the map lacks starts at the one around it"
   from: [php.class_like, php.callable, php.property, php.parameter]
   to: php.class_like

@@ -29,10 +29,12 @@ edge_kinds:
 # The internal end takes the inferred edge of a constraint class that writes validatedBy(), so
 # the written map leaves that edge out.
 - kind: validated_by
+  cause: from
   description: "the constraint is checked by that validator class: the class its validatedBy() returns, or by naming convention its own class name plus Validator"
   from: drupal.constraint_plugin
   to: [php.class, drupal.validated_by_written]
 - kind: returns_class
+  cause: none
   description: "the function or method returns that class name, as Name::class or a full class name in a string"
   from: [php.function, php.method]
   to: drupal.class_ref

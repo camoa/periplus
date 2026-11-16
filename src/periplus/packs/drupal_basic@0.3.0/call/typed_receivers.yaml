@@ -52,6 +52,7 @@ node_types:
 
 edge_kinds:
 - kind: typed_call_in
+  cause: none
   description: "the typed call sits in that method or function"
   from: drupal.typed_call
   to: [php.method, php.function]

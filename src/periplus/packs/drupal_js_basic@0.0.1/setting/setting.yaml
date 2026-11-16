@@ -7,10 +7,12 @@ node_types:
 
 edge_kinds:
 - kind: provides_setting
+  cause: from
   description: "the PHP class or function attaches that drupalSettings key to the page through #attached"
   from: [php.class, php.function]
   to: drupal.js_setting
 - kind: reads_setting
+  cause: from
   description: "the behavior reads that drupalSettings key as drupalSettings.key, in its own code or in a class it holds"
   from: [drupal.js_behavior, drupal.js_class]
   to: drupal.js_setting

@@ -25,6 +25,7 @@ node_types:
 
 edge_kinds:
 - kind: checks_menu
+  cause: touch
   from: [php.method, php.function]
   to: drupal.config_object
   description: "the method or function compares a menu_name with that menu's name, or switches on one with a case of it; a name written as text"

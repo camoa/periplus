@@ -11,10 +11,12 @@ node_types:
 
 edge_kinds:
 - kind: eca_entry_of
+  cause: none
   description: "The entry belongs to that ECA model"
   from: eca.model_entry
   to: eca.model
 - kind: eca_next
+  cause: from
   description: "The entry lists that entry among its successors"
   from: eca.model_entry
   to: eca.model_entry

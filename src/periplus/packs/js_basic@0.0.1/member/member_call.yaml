@@ -18,11 +18,13 @@ node_types:
 
 edge_kinds:
 - kind: calls_member
+  cause: from
   description: "internal step: the function or script calls a dotted name; map rules give js_calls where a member function of that name is mapped"
   from: [js.function, js.file]
   to: js.member_call
 # A call on a shared object that is not a built-in one: the map rules mark it when nothing maps it.
 - kind: calls_shared_member
+  cause: from
   description: "internal step: the function or script calls a member of a shared object; map rules give js_calls, unresolved when no script assigns it"
   from: [js.function, js.file]
   to: js.member_call

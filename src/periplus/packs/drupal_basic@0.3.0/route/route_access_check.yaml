@@ -16,10 +16,12 @@ node_types:
 
 edge_kinds:
 - kind: route_names_requirement
+  cause: none
   description: "step to access_checked_by_service: the route's requirements hold that key"
   from: drupal.route
   to: drupal.route_requirement
 - kind: requirement_checked_by
+  cause: none
   description: "step to access_checked_by_service: a tag of the service, of any tag name, has applies_to set to that requirement key"
   from: drupal.route_requirement
   to: drupal.service

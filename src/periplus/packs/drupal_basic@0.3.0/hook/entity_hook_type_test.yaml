@@ -33,6 +33,7 @@ node_types:
 
 edge_kinds:
 - kind: acts_on_entity_type
+  cause: to
   from: php.function
   to: drupal.entity_type
   description: "the generic entity hook acts on that entity type only, as it tests $entity->getEntityTypeId() against its name; a name written as text"

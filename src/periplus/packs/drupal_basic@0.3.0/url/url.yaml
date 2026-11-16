@@ -26,14 +26,17 @@ node_types:
 
 edge_kinds:
 - kind: route_serves_path
+  cause: to
   description: "the route serves that path, as its routing file or its view's page display writes it"
   from: drupal.route
   to: drupal.url_path
 - kind: links_to_path
+  cause: touch
   description: "the code or template links to that exact path: Url::fromUserInput(), Url::fromUri('internal:...') or an attribute value written as a path"
   from: [php.class, php.function, php.method, drupal.template]
   to: drupal.url_path
 - kind: component_links_path
+  cause: touch
   description: "the component's Twig file writes that path as an attribute value, such as an href"
   from: drupal.component
   to: drupal.url_path

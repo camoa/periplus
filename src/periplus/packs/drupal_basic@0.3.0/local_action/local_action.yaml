@@ -9,6 +9,7 @@ node_types:
 
 edge_kinds:
 - kind: appears_on_route
+  cause: to
   description: "The local action shows on that route, named in its appears_on list"
   from: drupal.local_action
   to: drupal.route

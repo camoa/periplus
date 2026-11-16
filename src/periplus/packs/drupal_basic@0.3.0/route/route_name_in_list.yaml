@@ -32,10 +32,12 @@ node_types:
 
 edge_kinds:
 - kind: listed_in
+  cause: none
   from: drupal.route_list_item
   to: drupal.route_list
   description: "internal: the quoted route name is an item of that array literal in the same function or method"
 - kind: tests_route_list
+  cause: none
   from: drupal.route_name_var
   to: drupal.route_list
   description: "internal: the getRouteName() variable is tested with in_array against that array"

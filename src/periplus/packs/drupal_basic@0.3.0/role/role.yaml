@@ -11,6 +11,7 @@ node_types:
 
 edge_kinds:
 - kind: grants_permission
+  cause: none
   description: "the role's config file lists that permission under permissions"
   from: drupal.role
   to: drupal.permission

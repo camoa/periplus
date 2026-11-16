@@ -19,6 +19,7 @@ node_types:
 
 edge_kinds:
 - kind: behavior_binds_form
+  cause: to
   from: drupal.js_behavior
   to: drupal.form_id
   description: "the behavior binds that form through once() on a form.<id>-form selector, the class read as the form id; a name written as text"

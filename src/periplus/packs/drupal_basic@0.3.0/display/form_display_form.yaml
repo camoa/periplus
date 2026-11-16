@@ -16,10 +16,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: form_uses_display
+  cause: from
   from: drupal.form_id
   to: drupal.form_display
   description: "the entity form is built with that form display, by core's naming of entity form ids and form modes"
 - kind: form_of_entity_type
+  cause: none
   from: drupal.form_id
   to: drupal.entity_type
   description: "the entity form belongs to that entity type, by core's naming of entity form ids"

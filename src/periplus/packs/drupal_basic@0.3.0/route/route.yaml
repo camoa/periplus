@@ -12,10 +12,12 @@ node_types:
 
 edge_kinds:
 - kind: requires_permission
+  cause: touch
   description: "the route's _permission requirement names that permission as needed; permissions joined by commas are each needed"
   from: drupal.route
   to: drupal.permission
 - kind: accepts_permission
+  cause: touch
   description: "the route's _permission requirement lists that permission joined by plus signs, so any one of the listed permissions lets a user in"
   from: drupal.route
   to: drupal.permission
@@ -34,26 +36,32 @@ edge_kinds:
   # reaches the from end adds the to end at the same hop.
   realizes: to
 - kind: titled_by
+  cause: from
   description: "the route's _title_callback names that method, written Class::method, which gives the page title"
   from: drupal.route
   to: php.method
 - kind: requires_role
+  cause: touch
   description: "the route's _role requirement names that role as needed; roles joined by commas are each needed"
   from: drupal.route
   to: drupal.role
 - kind: accepts_role
+  cause: touch
   description: "the route's _role requirement lists that role joined by plus signs, so any one of the listed roles lets a user in"
   from: drupal.route
   to: drupal.role
 - kind: access_checked_by_service
+  cause: from
   description: "that service checks access to the route: _custom_access names it as service:method, or its tag's applies_to answers a key in the route's requirements"
   from: drupal.route
   to: drupal.service
 - kind: access_checked_by
+  cause: from
   description: "the route's _custom_access requirement names that method, written Class::method, to check access"
   from: drupal.route
   to: php.method
 - kind: loads_entity_type
+  cause: from
   description: "a route parameter of type entity:<type> is loaded as an entity of that type"
   from: drupal.route
   to: drupal.entity_type

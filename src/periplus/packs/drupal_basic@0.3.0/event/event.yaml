@@ -38,37 +38,45 @@ node_types:
 
 edge_kinds:
 - kind: subscribed_by
+  cause: from
   description: "the method listens to that event: getSubscribedEvents() keys it, or it is an on<status> handler of a subclass of HttpExceptionSubscriberBase"
   from: drupal.event
   to: php.method
 - kind: dispatched_by
+  cause: to
   description: "the method dispatches that event, by ->dispatch($event, X::NAME)"
   from: drupal.event
   to: php.method
 # A text rule builds its to end from the kind's types, which must share one id namespace, so a
 # dispatch in a function has its own kind.
 - kind: dispatched_by_function
+  cause: to
   description: "the function dispatches that event, by ->dispatch($event, X::NAME) in a module, install, inc, theme or profile file"
   from: drupal.event
   to: php.function
 - kind: names_event
+  cause: none
   description: "the event constant holds that event's name as its text"
   from: drupal.event_constant
   to: drupal.event
 - kind: is_event_constant
+  cause: none
   description: "a self-link marking the class constant as an event name, because its class descends from an Event class or its class name ends in Events"
   from: drupal.class_constant
   to: drupal.class_constant
 - kind: text_may_name_event
+  cause: none
   description: "the constant text could be that event's name; read from const declarations as text, and kept out of the written map"
   from: drupal.constant_text
   to: drupal.event
 # A use's listener, so a listener no mapped file declares stays in the map as a referenced end.
 - kind: use_names_listener
+  cause: none
   description: "the subscription or dispatch names that method, the listener or the method that dispatches"
   from: drupal.event_use
   to: php.method
 - kind: use_names_function
+  cause: none
   description: "the dispatch sits in that function"
   from: drupal.event_use
   to: php.function

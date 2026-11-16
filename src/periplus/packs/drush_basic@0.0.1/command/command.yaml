@@ -20,14 +20,17 @@ edge_kinds:
   # reaches the from end adds the to end at the same hop.
   realizes: to
 - kind: command_class
+  cause: none
   description: "The Drush command is defined in that class"
   from: drush.command
   to: php.class
 - kind: alias_of_command
+  cause: from
   description: "The alias is another name for that Drush command"
   from: drush.command_alias
   to: drush.command
 - kind: command_service
+  cause: none
   description: "Inferred: the Drush command's class, or a class that directly inherits it, is registered as that service in a services file"
   from: drush.command
   to: drupal.service

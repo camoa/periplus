@@ -11,6 +11,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: builds_form
+  cause: from
   description: "The method or function builds that form class with ->getForm(X::class)"
   from: [php.method, php.function]
   to: php.class

@@ -24,6 +24,7 @@ node_types:
 
 edge_kinds:
 - kind: script_links_to_route
+  cause: touch
   description: "the script requests a template-literal path whose shape, placeholders as *, matches that route's path; inferred from the shape"
   from: js.file
   to: drupal.route

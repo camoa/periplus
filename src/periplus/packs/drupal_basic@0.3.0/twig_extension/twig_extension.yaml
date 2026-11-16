@@ -22,26 +22,32 @@ node_types:
 
 edge_kinds:
 - kind: twig_filter_provided_by
+  cause: from
   description: "the filter is created with new TwigFilter() in that class, which extends Twig's AbstractExtension"
   from: twig.filter
   to: php.class
 - kind: twig_function_provided_by
+  cause: from
   description: "the function is created with new TwigFunction() in that class, which extends Twig's AbstractExtension"
   from: twig.function
   to: php.class
 - kind: template_uses_twig_filter
+  cause: from
   description: "the template applies that filter, as {{ x|name }}, and a mapped Twig extension provides it"
   from: drupal.template
   to: twig.filter
 - kind: template_uses_twig_function
+  cause: from
   description: "the template calls that function, as {{ name() }}, and a mapped Twig extension provides it"
   from: drupal.template
   to: twig.function
 - kind: twig_callable_in_class
+  cause: from
   description: "step to the provided_by edges: the class creates a Twig filter or function of that name with new TwigFilter() or new TwigFunction()"
   from: drupal.twig_callable
   to: php.class
 - kind: template_calls_twig_callable
+  cause: from
   description: "step to template_uses_twig_filter and template_uses_twig_function: the template uses a filter or function of that name, read as text"
   from: drupal.template
   to: drupal.twig_callable

@@ -30,6 +30,7 @@ edge_kinds:
   # reaches the from end adds the to end at the same hop.
   realizes: to
 - kind: names_factory_method
+  cause: none
   description: "step to built_by_method: the service's factory key names that method name"
   from: drupal.service
   to: drupal.factory_method

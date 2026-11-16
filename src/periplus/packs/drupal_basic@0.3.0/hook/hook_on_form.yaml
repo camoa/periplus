@@ -17,6 +17,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: hook_runs_on_form
+  cause: to
   from: drupal.hook
   to: drupal.form_id
   description: "core runs the hook when that form is submitted, as user_login on user_login_form; the hook may also run without a form"

@@ -17,6 +17,7 @@ node_types:
 
 edge_kinds:
 - kind: has_constant_text
+  cause: none
   description: "the class constant is declared with that text"
   from: drupal.class_constant
   to: drupal.constant_text

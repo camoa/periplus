@@ -16,14 +16,17 @@ node_types:
 
 edge_kinds:
 - kind: script_declares_function
+  cause: none
   description: "the script declares that function or member function"
   from: js.file
   to: js.function
 - kind: js_calls
+  cause: from
   description: "the function or script calls that function by its name or dotted name; the edge starts at the script when no named function holds the call"
   from: [js.function, js.file]
   to: js.function
 - kind: calls_global_name
+  cause: from
   description: "internal step: the function or script calls a name a global function also has; map rules give js_calls when the script declares that name"
   from: [js.function, js.file]
   to: js.global_name_call

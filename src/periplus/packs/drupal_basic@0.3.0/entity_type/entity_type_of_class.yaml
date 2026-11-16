@@ -6,6 +6,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: entity_type_of_class
+  cause: to
   description: "the PHP class defines that entity type, the reverse of entity_class"
   from: php.class
   to: drupal.entity_type

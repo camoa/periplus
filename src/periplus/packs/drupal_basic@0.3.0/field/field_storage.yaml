@@ -13,14 +13,17 @@ node_types:
 
 edge_kinds:
 - kind: stored_by
+  cause: none
   description: "the field instance uses that field storage, the one of its entity type and field name"
   from: drupal.field_instance
   to: drupal.field_storage
 - kind: field_of
+  cause: none
   description: "the field instance is attached to that bundle, named by its entity_type and bundle keys"
   from: drupal.field_instance
   to: drupal.bundle
 - kind: storage_of
+  cause: none
   description: "The field storage belongs to that entity type, named by the entity_type key of its config file"
   from: drupal.field_storage
   to: drupal.entity_type

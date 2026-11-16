@@ -14,18 +14,22 @@ node_types:
 
 edge_kinds:
 - kind: injects_service
+  cause: from
   description: "the service's arguments in services.yml name that service, written @name or @?name"
   from: drupal.service
   to: drupal.service
 - kind: extends_service
+  cause: none
   description: "the service's parent key names that service, so it takes that service's definition as its base"
   from: drupal.service
   to: drupal.service
 - kind: alias_of_service
+  cause: from
   description: "the service is an alias of that service, by its alias key or a value written @name"
   from: drupal.service
   to: drupal.service
 - kind: tagged_as
+  cause: none
   description: "the service carries that tag in its services.yml entry"
   from: drupal.service
   to: drupal.service_tag

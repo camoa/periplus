@@ -13,10 +13,12 @@ node_types:
 
 edge_kinds:
 - kind: form_has_id
+  cause: to
   description: "The form class returns that form id as a quoted literal from getFormId()"
   from: php.class
   to: drupal.form_id
 - kind: config_names_form
+  cause: to
   description: "The config object names that form id in a key, such as a captcha point's formId or the honeypot settings' form lists"
   from: drupal.config_object
   to: drupal.form_id

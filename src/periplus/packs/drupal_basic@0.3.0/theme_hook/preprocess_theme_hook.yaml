@@ -11,6 +11,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: preprocesses_theme_hook
+  cause: to
   from: [php.method, php.function]
   to: drupal.theme_hook
   description: "the function or method implements preprocess_<hook> for that theme hook or a suggestion of it; matched by the name"

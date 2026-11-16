@@ -9,6 +9,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: path_shows_webform
+  cause: from
   from: drupal.url_path
   to: drupal.config_object
   description: "the path /webform/<id> shows that webform's page, through Webform's canonical route"

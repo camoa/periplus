@@ -36,11 +36,13 @@ node_types:
 edge_kinds:
 
 - kind: property_written_as
+  cause: none
   description: "the property's @var names that type, as written"
   from: php.property
   to: php.property_written_type
 
 - kind: property_resolved_as
+  cause: none
   description: "the property's @var names that type, resolved through the file's imports and namespace"
   from: php.property
   to: php.property_resolved_type

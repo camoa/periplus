@@ -7,6 +7,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # nothing. The name is read at the end of the file, because most templates open with a comment.
 edge_kinds:
 - kind: suggests_bundle
+  cause: to
   description: "the template's file name, <entity>--<bundle>--<view mode>, suggests it for that bundle, by naming convention"
   from: drupal.template
   to: drupal.bundle

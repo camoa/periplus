@@ -5,10 +5,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: renders_field
+  cause: from
   description: "The template calls drupal_field() for that field storage, named by its quoted field name and entity type"
   from: drupal.template
   to: drupal.field_storage
 - kind: component_renders_field
+  cause: from
   description: "The component's Twig file calls drupal_field() for that field storage, named by its quoted field name and entity type"
   from: drupal.component
   to: drupal.field_storage

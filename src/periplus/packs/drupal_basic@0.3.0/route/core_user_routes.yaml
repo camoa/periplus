@@ -11,6 +11,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: route_uses_form_id
+  cause: from
   from: drupal.route
   to: drupal.form_id
   description: "the core route builds that form, as user.login builds user_login_form"

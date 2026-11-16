@@ -29,10 +29,12 @@ attributes:
 
 edge_kinds:
 - kind: installs_module
+  cause: none
   from: drupal.config_object
   to: drupal.module
   description: "core.extension lists that module as installed"
 - kind: not_installed_by
+  cause: none
   from: [drupal.module, drupal.theme]
   to: drupal.config_object
   description: "the module or theme is in the codebase, but core.extension does not list it, so it is not installed"

@@ -12,6 +12,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: route_renders_theme_hook
+  cause: from
   from: drupal.route
   to: drupal.theme_hook
   description: "the entity's canonical route renders that theme hook, named as the entity type, by core's entity view builder"

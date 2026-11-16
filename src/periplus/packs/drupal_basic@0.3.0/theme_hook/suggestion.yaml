@@ -15,18 +15,22 @@ node_types:
 
 edge_kinds:
 - kind: suggests_block_plugin
+  cause: to
   description: "the template's file name, block--<id>, suggests it for that block plugin, by naming convention"
   from: drupal.template
   to: drupal.block_plugin
 - kind: suggests_block_placement
+  cause: to
   description: "the template's file name, block--<id>, suggests it for that placed block, by naming convention"
   from: drupal.template
   to: drupal.block_placement
 - kind: suggests_theme_hook
+  cause: to
   description: "the template's file name, <hook>--<anything>, suggests it for that theme hook, by naming convention"
   from: drupal.template
   to: drupal.theme_hook
 - kind: suggests_field
+  cause: to
   description: "the template's file name, field--...field-<name>, suggests it for that field storage, by naming convention"
   from: drupal.template
   to: drupal.field_storage

@@ -28,6 +28,7 @@ edge_kinds:
   groups: true
   description: "the block placement puts its block in that region of its theme"
 - kind: suggests_region
+  cause: to
   from: drupal.template
   to: drupal.theme_region
   description: "the theme's template region--<region> is a suggestion for that region of the theme; matched by the file name"

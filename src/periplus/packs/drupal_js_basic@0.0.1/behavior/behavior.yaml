@@ -13,23 +13,28 @@ node_types:
 
 edge_kinds:
 - kind: attaches_behavior
+  cause: from
   description: "the behavior runs that other behavior by calling Drupal.behaviors.other.attach(), in its own code or in a class it holds"
   from: [drupal.js_behavior, drupal.js_class]
   to: drupal.js_behavior
 - kind: library_includes_script
+  cause: from
   description: "the library lists that script under js: in its libraries file"
   from: drupal.library
   to: js.file
 - kind: library_includes_stylesheet
+  cause: from
   description: "the library lists that stylesheet under css:, in any group"
   from: drupal.library
   to: css.file
 - kind: script_declares_behavior
+  cause: none
   description: "the script assigns that behavior to Drupal.behaviors"
   from: js.file
   to: drupal.js_behavior
 # drupal_basic's links_to_path cannot start at a script: drupal_basic does not depend on js_basic.
 - kind: script_links_to_path
+  cause: touch
   description: "the script requests or names that Drupal path, written whole in a string, in a Drupal.url() call or in a template literal"
   from: js.file
   to: drupal.url_path

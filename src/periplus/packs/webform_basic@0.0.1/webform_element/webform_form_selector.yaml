@@ -10,6 +10,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: submission_form_of_webform
+  cause: none
   from: drupal.form_id
   to: drupal.bundle
   description: "the form id is the add form of a submission of that webform's bundle, by Webform's form naming"

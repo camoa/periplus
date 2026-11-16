@@ -22,6 +22,7 @@ node_types:
 
 edge_kinds:
 - kind: names_literal
+  cause: none
   from: [php.method, php.function, php.class_like]
   to: drupal.literal
   description: "internal: the method, function or class holds a string literal shaped like a Drupal id, with that text"

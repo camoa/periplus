@@ -34,18 +34,22 @@ node_types:
 
 edge_kinds:
 - kind: token_names_field
+  cause: none
   description: "The token names that field by its machine name"
   from: salesforce.token_field
   to: drupal.field_name
 - kind: token_on_entity
+  cause: none
   description: "The token's type names that entity type"
   from: salesforce.token_field
   to: salesforce.token_entity
 - kind: maps_token_field
+  cause: from
   description: "Inferred: the Salesforce mapping maps that field storage through a token such as [node:field_x]; it may end at an unresolved storage"
   from: salesforce.mapping
   to: drupal.field_storage
 - kind: maps_token_shared_field_name
+  cause: from
   description: "Inferred: the Salesforce mapping names that field in a token of unknown entity type, and storages on two or more entity types share the name"
   from: salesforce.mapping
   to: drupal.shared_field_name

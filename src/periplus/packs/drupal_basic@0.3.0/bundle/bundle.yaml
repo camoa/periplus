@@ -14,10 +14,12 @@ node_types:
 
 edge_kinds:
 - kind: configured_by
+  cause: none
   description: "the bundle is declared by that config file, as node.article by node.type.article"
   from: drupal.bundle
   to: drupal.config_object
 - kind: bundle_of
+  cause: none
   description: "the bundle belongs to that entity type; read from the bundle's config file, or inferred from a field or display that names the bundle"
   from: drupal.bundle
   to: drupal.entity_type

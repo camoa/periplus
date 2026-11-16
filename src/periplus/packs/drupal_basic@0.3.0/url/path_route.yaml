@@ -32,6 +32,7 @@ node_types:
 
 edge_kinds:
 - kind: shape_of_route
+  cause: none
   description: "step to template_links_route: the route's path has this shape, its placeholders written as *"
   from: drupal.path_shape
   to: drupal.route

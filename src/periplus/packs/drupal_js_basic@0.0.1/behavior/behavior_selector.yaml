@@ -28,10 +28,12 @@ node_types:
 
 edge_kinds:
 - kind: data_attribute_in_template
+  cause: none
   from: drupal.data_attribute
   to: drupal.template
   description: "internal: the template writes that data attribute with that value on an element"
 - kind: behavior_binds_template
+  cause: to
   from: drupal.js_behavior
   to: drupal.template
   description: "the behavior binds elements through once() on a [data-x=y] selector that the template writes on an element; matched by the attribute's text"

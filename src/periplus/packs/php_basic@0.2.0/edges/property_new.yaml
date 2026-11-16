@@ -27,6 +27,7 @@ node_types:
 edge_kinds:
 
 - kind: member_new_typed_as
+  cause: none
   description: "the assignment $this->name = new Foo() creates that class"
   from: php.member_assignment
   to: php.member_new_type

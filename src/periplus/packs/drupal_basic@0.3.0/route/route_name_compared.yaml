@@ -36,6 +36,7 @@ node_types:
 
 edge_kinds:
 - kind: checks_route
+  cause: touch
   from: [php.function, php.method]
   to: drupal.route
   description: "the function or method tests the current route name against that route, with == or === or in_array on a getRouteName() variable; a name written as text"

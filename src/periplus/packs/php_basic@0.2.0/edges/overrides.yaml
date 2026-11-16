@@ -37,6 +37,7 @@ edge_kinds:
   realizes: true
 
 - kind: nearest_declaration
+  cause: none
   description: "the method joins the slot of the nearest ancestor that declares the same name, a step the overrides rule reads"
   from: php.method
   to: php.method_slot

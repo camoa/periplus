@@ -10,14 +10,17 @@ node_types:
 
 edge_kinds:
 - kind: maps_bundle
+  cause: from
   description: "The Salesforce mapping syncs that bundle, from its drupal_entity_type and drupal_bundle keys"
   from: salesforce.mapping
   to: drupal.bundle
 - kind: maps_entity_type
+  cause: from
   description: "The Salesforce mapping syncs entities of that entity type, from its drupal_entity_type key"
   from: salesforce.mapping
   to: drupal.entity_type
 - kind: maps_field
+  cause: from
   description: "Inferred: the Salesforce mapping lists that field instance under dependencies.config, which Salesforce writes from its field mappings"
   from: salesforce.mapping
   to: drupal.field_instance

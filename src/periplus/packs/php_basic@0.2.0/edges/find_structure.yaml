@@ -5,6 +5,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 edge_kinds:
 
 - kind: property_typed_as
+  cause: none
   description: "the property's class declares that type for it, on the property, a promoted parameter or a @var docblock"
   from: php.property
   to: php.property_type

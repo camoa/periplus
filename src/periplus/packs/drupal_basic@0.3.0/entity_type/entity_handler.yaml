@@ -17,50 +17,62 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: names_access_handler
+  cause: none
   description: "the entity class's definition names that class as its access handler"
   from: php.class
   to: drupal.class_ref
 - kind: names_list_builder
+  cause: none
   description: "the entity class's definition names that class as its list builder"
   from: php.class
   to: drupal.class_ref
 - kind: names_view_builder
+  cause: none
   description: "the entity class's definition names that class as its view builder"
   from: php.class
   to: drupal.class_ref
 - kind: names_storage_handler
+  cause: none
   description: "the entity class's definition names that class as its storage handler"
   from: php.class
   to: drupal.class_ref
 - kind: names_form_handler
+  cause: none
   description: "the entity class's definition names that class as its form for the default, add, edit or delete operation"
   from: php.class
   to: drupal.class_ref
 - kind: names_route_provider
+  cause: none
   description: "the entity class's definition names that class as its html route provider"
   from: php.class
   to: drupal.class_ref
 - kind: has_access_handler
+  cause: from
   description: "the entity type's definition names that class as its access handler"
   from: drupal.entity_type
   to: php.class
 - kind: has_list_builder
+  cause: from
   description: "the entity type's definition names that class as its list builder"
   from: drupal.entity_type
   to: php.class
 - kind: has_view_builder
+  cause: from
   description: "the entity type's definition names that class as its view builder"
   from: drupal.entity_type
   to: php.class
 - kind: has_storage_handler
+  cause: from
   description: "the entity type's definition names that class as its storage handler"
   from: drupal.entity_type
   to: php.class
 - kind: has_form_handler
+  cause: from
   description: "the entity type's definition names that class as its form for the default, add, edit or delete operation"
   from: drupal.entity_type
   to: php.class
 - kind: has_route_provider
+  cause: from
   description: "the entity type's definition names that class as its html route provider"
   from: drupal.entity_type
   to: php.class

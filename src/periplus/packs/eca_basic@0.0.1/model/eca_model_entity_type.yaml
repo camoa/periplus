@@ -9,10 +9,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 edge_kinds:
 - kind: eca_acts_on_bundle
+  cause: from
   description: "Inferred: an event or action of the ECA model names that bundle, in a type value written <entity type> <bundle>"
   from: eca.model
   to: drupal.bundle
 - kind: eca_acts_on_entity_type
+  cause: from
   description: "Inferred: an event or action of the ECA model names that entity type, by a type value <entity type> _all or an action's entity_type"
   from: eca.model
   to: drupal.entity_type
