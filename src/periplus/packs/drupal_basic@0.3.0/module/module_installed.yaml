@@ -21,6 +21,9 @@ attributes:
   spreads_along:
   - {kind: contains, to: to}
   - {kind: declares_property, to: to}
+  - {kind: has_call_site, to: to}
+  - {kind: property_typed_as, to: to}
+  - {kind: manager_call_in, to: from}
   mark: not installed
   description: "no on a module or theme in the codebase that core.extension does not list, and on everything inside it"
 
