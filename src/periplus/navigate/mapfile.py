@@ -84,6 +84,10 @@ class MapIndex:
         self._concrete_to = frozenset(as_text(k) for k in document.get("realizing_to_kinds", ()))
         self.realizing = self._concrete_from | self._concrete_to
         self._causes = causes(document)
+        #: Whether the map has any cause list; one written before them walks by raw direction.
+        self.declares_causes = any(
+            f"cause_{cause}_kinds" in document for cause in ("from", "to", "none", "touch")
+        )
         self._supporting = [
             (as_text(p), _glob(as_text(p))) for p in document.get("supporting_paths", ())
         ]

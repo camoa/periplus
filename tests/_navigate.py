@@ -55,3 +55,24 @@ def _edge(
     if occurrences is not None:
         edge["occurrences"] = occurrences
     return edge
+
+
+def _document(
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    causes: dict[str, list[str]] | None = None,
+    **header: Any,
+) -> dict[str, Any]:
+    """A map document; ``causes`` maps ``from``, ``to``, ``none`` or ``touch`` to the kinds the
+    header lists under ``cause_<that>_kinds``."""
+    document = {
+        "periplus_map_version": 0,
+        "packs": [{"pack": "php", "version": "0.1.0"}],
+        "roots": ["."],
+        "nodes": nodes,
+        "edges": edges,
+        **header,
+    }
+    for cause, kinds in (causes or {}).items():
+        document[f"cause_{cause}_kinds"] = sorted(kinds)
+    return document

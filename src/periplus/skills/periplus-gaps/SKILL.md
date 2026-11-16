@@ -45,7 +45,7 @@ classes.
    map file holds no folder list, so read the folders `custom_module`, `custom_theme` and
    `js_source` in `settings.yml` to tell which first-party files a gap sits in.
 5. Open the file and line of each gap and read the code; a row whose location is null has none,
-   so `periplus affected ID` names the nodes whose edges reach it, and you read those. Skip
+   so `periplus affected ID --raw` names the nodes whose edges reach it, and you read those. Skip
    the ids printed under Site faults; they are site faults, not missing rules. Decide
    whether a rule would resolve it: name the shape the rule would match and the node or edge it
    would emit.

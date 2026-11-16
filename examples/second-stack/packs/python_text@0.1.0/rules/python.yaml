@@ -9,12 +9,15 @@ edge_kinds:
 - kind: contains
   from: python.module
   to: [python.class, python.function]
+  cause: none
 - kind: imports
   from: python.module
   to: python.module
+  cause: from
 - kind: calls
   from: python.module
   to: [python.function, python.class, python.module]
+  cause: from
 rules:
 # One module per .py file, named by its path.
 - rule: module

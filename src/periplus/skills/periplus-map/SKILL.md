@@ -75,8 +75,10 @@ nothing. Say what you ran and what it left out.
    at that place follows, marked `|`. A description follows when there is one, marked `#`.
 2. `periplus show NAME` on the item you want. It prints every edge kind in and out, each row with
    its `file:line` and source line.
-3. `periplus neighbors NAME --kind K` follows edges out. `periplus affected NAME --kind K`
-   follows edges in. Add `--depth N` to go further.
+3. `periplus neighbors NAME` lists what the item sets off, and `periplus affected NAME` what
+   sets it off, each by the cause the map declares for each edge kind. Add `--kind K` to keep one
+   kind and `--depth N` or `--depth all` to go further. `periplus depth NAME` first says how far
+   each walk goes. `--raw` follows every edge by its own direction instead.
 4. `periplus path FROM TO` prints the shortest chain between two items.
 
 NAME may be the full id or a short name: `helper`, `MyForm` or `MyForm::buildForm`. When a short
@@ -139,14 +141,14 @@ the answer:
 - `periplus find NAME` printed `no matches`; or
 - `periplus show ID` printed edge kinds, and none of them is the link in question.
 
-`0 items` from `--kind K` means the item has no edge of that kind. It does not mean the map lacks
-the link: run `show` first to see which kinds the item has. What each stack does not map yet is in
+`0 things` from `--kind K` means the walk found no edge of that kind to follow that way. It does
+not mean the map lacks the link: run `show` first to see which kinds the item has. What each stack does not map yet is in
 the header of its rutter's `pack.yaml`. To record a gap, use the periplus-gaps skill.
 
 ## Recipes by question
 
 - **What uses this?** `periplus show NAME`. Then `periplus affected NAME --kind K` for each kind
-  under Incoming. For a class, do the same on each public method, and on the interface methods it
+  `show` lists that bears on the question. For a class, do the same on each public method, and on the interface methods it
   implements.
 - **Where is this defined?** `periplus find NAME --type T`. The row's `file:line` is the place.
 - **What breaks if this changes?** `periplus affected NAME --depth 2`, narrowed with `--kind`. For a
@@ -156,7 +158,7 @@ the header of its rutter's `pack.yaml`. To record a gap, use the periplus-gaps s
   hand: `periplus neighbors A --kind K`, one method at a time.
 - **What makes up a feature?** `periplus slice "WORDS"` with the feature's names. Then
   `periplus find "" --path FOLDER --type T` for each type the feature holds, and `show` on each
-  main item. Things in other folders point in, so follow the incoming kinds with `affected`.
+  main item. Things in other folders point in, so follow them with `affected`.
 
 ## Worked example
 
@@ -237,8 +239,8 @@ The map holds ids, types and locations, not what a thing does. That text lives i
 writes the file, so the map stays byte-identical from run to run. Commit it with the map.
 
 `periplus show` prints a node's entry, or `description: none` when it has none, and an edge's
-entry under its row. The rows of `find`, `neighbors`, `affected` and `path` print the first line
-of each node's entry, marked `#`. `find` also searches the entries' text, and marks a row it
+entry under its row. The rows of `find` and `path`, and of `neighbors` and `affected` with
+`--raw`, print the first line of each node's entry, marked `#`. `find` also searches the entries' text, and marks a row it
 matched there `[description]`.
 
 When you read the code of a node or an edge that has no entry, write its entry before you answer,

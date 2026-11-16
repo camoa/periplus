@@ -7,9 +7,11 @@ edge_kinds:
 - kind: registered_on
   from: typer.command
   to: typer.app
+  cause: to
 - kind: mounted_under
   from: typer.app
   to: typer.app
+  cause: to
 rules:
 # name = typer.Typer(...) or name: T = x.Typer(...), a direct statement of the module body. Which
 # module x names is not read: the rule assumes it is typer.

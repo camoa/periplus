@@ -13,8 +13,8 @@ description: Writes what the main items of a Periplus slice do into .periplus/de
 
 ## Why an entry matters
 
-`periplus find` searches entry text as well as ids. `find`, `neighbors`, `affected` and `path`
-print the first line of a node's entry under its row. So an entry is how a plain-word question,
+`periplus find` searches entry text as well as ids. `find` and `path`, and `neighbors` and
+`affected` with `--raw`, print the first line of a node's entry under its row. So an entry is how a plain-word question,
 such as who sends the reminder email, reaches a node whose id lacks those words.
 
 An entry that restates the id or the source line adds nothing, and it turns up as noise in every

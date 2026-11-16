@@ -286,6 +286,7 @@ def test_the_subcommands_are_exactly_the_set_listed_below() -> None:
         "show",
         "neighbors",
         "affected",
+        "depth",
         "path",
         "skills",
         "slice",

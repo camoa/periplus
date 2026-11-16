@@ -348,11 +348,12 @@ Incoming (2):
 
 The script reaches the behavior it declares, the path it fetches whole and the module whose
 folder holds it. The function `attach` written in the behavior's object is the behavior's, so it
-is no node of its own. `fetch` is a browser global, so its calls make no node.
+is no node of its own. `fetch` is a browser global, so its calls make no node. `--raw` follows
+every edge leaving the script, whatever its cause:
 
 <!-- nav-run -->
 ```
-$ periplus neighbors js.file::web/modules/custom/greet/js/banner.js
+$ periplus neighbors js.file::web/modules/custom/greet/js/banner.js --raw
 periplus neighbors js.file::web/modules/custom/greet/js/banner.js
 3 items
   1  drupal.js_behavior::greetBanner  drupal.js_behavior  mapped  via script_declares_behavior from js.file::web/modules/custom/greet/js/banner.js  web/modules/custom/greet/js/banner.js:2

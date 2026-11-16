@@ -65,7 +65,7 @@ for ((i = 0; i < count; i++)); do
 done
 
 # Every command the guide documents has a block, and the guide names the full check and the exit codes.
-for name in types find show neighbors affected path check-map; do
+for name in types find show depth neighbors affected path check-map; do
     grep -q "^\\\$ periplus $name" "$doc" || { echo "the guide has no example of $name"; exit 1; }
 done
 for code in 29 30 31; do

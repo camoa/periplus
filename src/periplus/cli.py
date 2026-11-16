@@ -97,6 +97,36 @@ def add_walk(parser: argparse.ArgumentParser, default: int | None = 1, said: str
     )
 
 
+#: The text budget of a walk by cause; ``navigate.walk.BUDGET``, which a test holds equal.
+BUDGET = 20_000
+#: The hub limit of a walk by cause; ``navigate.walk.HUB``, which a test holds equal.
+HUB = 40
+
+
+def _depth(text: str) -> int | None:
+    """A ``--depth`` of a walk: a number, or ``all`` for ``None``."""
+    return None if text == "all" else int(text)
+
+
+def add_hub(parser: argparse.ArgumentParser) -> None:
+    """Add ``--hub`` and ``--through``, the hub options of a walk by cause."""
+    parser.add_argument(
+        "--hub",
+        type=int,
+        default=None,
+        metavar="N",
+        help=f"list but do not walk from a thing with more than N edges to follow; 0 for no "
+        f"limit (default: {HUB})",
+    )
+    parser.add_argument(
+        "--through",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="walk from this hub all the same; repeat for several",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the argument parser.
 
@@ -345,14 +375,64 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="how to print the report (default: text)",
     )
+    depth = subcommands.add_parser(
+        "depth",
+        help="say how far what an item sets off, and what sets it off, reach",
+        description="Walk by cause from ID both ways to the end and print, per direction, the "
+        "hops, the things reached, the share within 2, 3 and 5 hops and the hubs stopped at, and "
+        "stop.",
+    )
+    depth.add_argument("id", metavar="ID", nargs="+", help="a node id or short name to start from")
+    add_hub(depth)
+    add_map(depth, "the map file to read")
+    depth.add_argument(
+        "--format",
+        # A literal for the reason `types`' is; a test asserts it equals `tuple(depth.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
     for name, helptext in (
-        ("neighbors", "list the items an item's edges lead to"),
-        ("affected", "list the items whose edges lead to an item"),
+        ("neighbors", "list what an item sets off, hop by hop"),
+        ("affected", "list what sets an item off, hop by hop"),
     ):
         walking = subcommands.add_parser(name, help=helptext, description=f"{helptext}, and stop.")
-        walking.add_argument("id", metavar="ID", help="the node id, as periplus find prints it")
-        add_walk(walking)
-        add_limit(walking, 50, "rows")
+        walking.add_argument(
+            "id", metavar="ID", nargs="+", help="a node id or short name to start from"
+        )
+        walking.add_argument(
+            "--depth",
+            type=_depth,
+            default=1,
+            metavar="N",
+            help="hops to show, 1 or more, or all (default: 1)",
+        )
+        walking.add_argument(
+            "--kind",
+            action="append",
+            default=[],
+            metavar="K",
+            help="keep only edges of kind K; repeat for several",
+        )
+        add_hub(walking)
+        walking.add_argument(
+            "--touch",
+            action="store_true",
+            help="add what each thing shown only points at, one hop out, marked [touch]",
+        )
+        walking.add_argument(
+            "--raw",
+            action="store_true",
+            help="follow every edge by its own direction, from one ID, as before 0.9",
+        )
+        walking.add_argument(
+            "--limit",
+            type=int,
+            default=None,
+            metavar="N",
+            help="characters the text may hold before the farthest hops become counts "
+            f"(default: {BUDGET}), or with --raw the rows to show (default: 50); 0 for no limit",
+        )
         add_map(walking, "the map file to read")
         walking.add_argument(
             "--format",
@@ -761,20 +841,59 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.write(SHOW_RENDERERS[args.format](shown))
         return shown.exit_code
 
-    if args.command in ("neighbors", "affected"):
-        from periplus.navigate.walk import RENDERERS as WALK_RENDERERS
-        from periplus.navigate.walk import run as run_walk
+    if (getattr(args, "hub", None) or 0) < 0:
+        parser.error("--hub must be 0 or more")
 
-        walked = run_walk(
+    if args.command == "depth":
+        from periplus.navigate.depth import RENDERERS as DEPTH_RENDERERS
+        from periplus.navigate.depth import run as run_depth
+
+        measured = run_depth(
             start=Path.cwd(),
             env=os.environ,
-            node_id=args.id,
-            direction="out" if args.command == "neighbors" else "in",
-            depth=args.depth,
-            kinds=args.kind,
-            limit=args.limit,
+            ids=args.id,
             map_path=args.map,
+            hub=HUB if args.hub is None else args.hub,
+            through=args.through,
         )
+        sys.stdout.write(DEPTH_RENDERERS[args.format](measured))
+        return measured.exit_code
+
+    if args.command in ("neighbors", "affected"):
+        from periplus.navigate.walk import RENDERERS as WALK_RENDERERS
+        from periplus.navigate.walk import CauseReport, WalkReport, run_cause
+        from periplus.navigate.walk import run as run_walk
+
+        walked: WalkReport | CauseReport
+        if args.raw:
+            if args.hub is not None or args.through or args.touch:
+                parser.error("--hub, --through and --touch walk by cause; --raw takes none")
+            if len(args.id) != 1:
+                parser.error("--raw walks from one ID")
+            walked = run_walk(
+                start=Path.cwd(),
+                env=os.environ,
+                node_id=args.id[0],
+                direction="out" if args.command == "neighbors" else "in",
+                depth=args.depth,
+                kinds=args.kind,
+                limit=50 if args.limit is None else args.limit,
+                map_path=args.map,
+            )
+        else:
+            walked = run_cause(
+                start=Path.cwd(),
+                env=os.environ,
+                ids=args.id,
+                toward="off" if args.command == "neighbors" else "by",
+                depth=args.depth,
+                kinds=args.kind,
+                limit=args.limit,
+                map_path=args.map,
+                hub=HUB if args.hub is None else args.hub,
+                through=args.through,
+                touch=args.touch,
+            )
         sys.stdout.write(WALK_RENDERERS[args.format](walked))
         return walked.exit_code
 

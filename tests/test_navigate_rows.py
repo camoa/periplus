@@ -44,7 +44,7 @@ DOCUMENT: dict[str, Any] = {
 
 # What each command printed with --format json on DOCUMENT before rows were dataclasses, plus the
 # location, source, warnings, description, matched, matched_attribute, by_type and mark fields
-# added since.
+# added since, and the warning neighbors and affected give on a map with no cause lists.
 PINNED: dict[str, str] = {
     "types": """\
 {
@@ -151,7 +151,9 @@ PINNED: dict[str, str] = {
     "truncated": false
   },
   "start": "php.method::A::go",
-  "warnings": []
+  "warnings": [
+    "the map declares no cause directions; walked by raw direction, as --raw does"
+  ]
 }
 """,
     "affected": """\
@@ -194,7 +196,9 @@ PINNED: dict[str, str] = {
     "truncated": false
   },
   "start": "php.method::A::go",
-  "warnings": []
+  "warnings": [
+    "the map declares no cause directions; walked by raw direction, as --raw does"
+  ]
 }
 """,
     "show": """\

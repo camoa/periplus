@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://periplus.dev/schema/0/navigation.schema.json",
   "title": "Periplus navigation result",
-  "description": "What `--format json` prints for the navigation commands: types, legend, find, show, neighbors, affected, path and slice, and what `export --report json` prints to standard error. Each command has one definition under $defs, slice two (slice with --out, slice_piece without), and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
+  "description": "What `--format json` prints for the navigation commands: types, legend, find, show, neighbors, affected, depth, path and slice, and what `export --report json` prints to standard error. Each command has one definition under $defs, slice two (slice with --out, slice_piece without), and the root accepts any of them. A command that returns a list wraps it in the shared listing: items, total (every item there was), shown (how many items are here) and truncated (true when --limit cut the list). Output is deterministic: keys sorted, ASCII only.",
 
   "anyOf": [
     {"$ref": "#/$defs/types"},
@@ -11,6 +11,7 @@
     {"$ref": "#/$defs/show"},
     {"$ref": "#/$defs/neighbors"},
     {"$ref": "#/$defs/affected"},
+    {"$ref": "#/$defs/depth"},
     {"$ref": "#/$defs/path"},
     {"$ref": "#/$defs/slice"},
     {"$ref": "#/$defs/slice_piece"},
@@ -253,8 +254,117 @@
         "problems": {"$ref": "#/$defs/problems"}
       }
     },
-    "neighbors": {"allOf": [{"$ref": "#/$defs/walk"}], "properties": {"direction": {"const": "out"}}},
-    "affected": {"allOf": [{"$ref": "#/$defs/walk"}], "properties": {"direction": {"const": "in"}}},
+    "neighbors": {
+      "description": "A walk by cause (direction off), or the raw walk (direction out) with --raw or on a map with no cause lists.",
+      "oneOf": [
+        {"allOf": [{"$ref": "#/$defs/walk"}], "properties": {"direction": {"const": "out"}}},
+        {"allOf": [{"$ref": "#/$defs/cause_walk"}], "properties": {"direction": {"const": "off"}}}
+      ]
+    },
+    "affected": {
+      "description": "A walk by cause (direction by), or the raw walk (direction in) with --raw or on a map with no cause lists.",
+      "oneOf": [
+        {"allOf": [{"$ref": "#/$defs/walk"}], "properties": {"direction": {"const": "in"}}},
+        {"allOf": [{"$ref": "#/$defs/cause_walk"}], "properties": {"direction": {"const": "by"}}}
+      ]
+    },
+
+    "hub": {
+      "type": "object", "additionalProperties": false, "required": ["id", "hop", "fan"],
+      "properties": {
+        "id": {"type": "string"},
+        "hop": {"type": "integer", "minimum": 1},
+        "fan": {"description": "How many edges the walk would have followed from it, over the hub limit.", "type": "integer", "minimum": 1}
+      }
+    },
+    "cause_row": {
+      "type": "object", "additionalProperties": false,
+      "required": ["hop", "id", "type", "state", "via_kind", "via_direction", "from", "file", "line", "marks", "supporting", "hub", "touch"],
+      "properties": {
+        "hop": {"description": "Hops from the starts; a touching row is one hop past the row it hangs from.", "type": "integer", "minimum": 1},
+        "id": {"type": "string"},
+        "type": {"type": "string"},
+        "state": {"type": "string"},
+        "via_kind": {"description": "The kind of the edge that reached it.", "type": "string"},
+        "via_direction": {"description": "forward when that edge was followed from its from end, backward from its to end.", "enum": ["forward", "backward"]},
+        "from": {"description": "The node it was reached from.", "type": "string"},
+        "file": {"description": "Where that edge is written, else the node's first location; null when neither has one.", "type": ["string", "null"]},
+        "line": {"type": ["integer", "null"]},
+        "marks": {"$ref": "#/$defs/marks"},
+        "supporting": {"description": "true when the node is in supporting code, by the map's supporting_paths.", "type": "boolean"},
+        "hub": {"description": "The fan of a node the walk listed and did not walk from, or null.", "type": ["integer", "null"], "minimum": 1},
+        "touch": {"description": "true for a node a reached node only points at, by a kind listed under cause touch; given with --touch and never walked from.", "type": "boolean"}
+      }
+    },
+    "cause_walk": {
+      "description": "neighbors (direction off: what the starts set off) or affected (direction by: what sets them off), walked by the map's cause lists to the end; rows holds every row within --depth, with no text budget.",
+      "type": "object", "additionalProperties": false,
+      "required": ["command", "direction", "starts", "rows", "hops", "total", "last_hop", "shown_hops", "hubs", "undeclared", "again", "warnings", "problems"],
+      "properties": {
+        "command": {"enum": ["neighbors", "affected"]},
+        "direction": {"enum": ["off", "by"]},
+        "starts": {"type": "array", "items": {"type": "string"}},
+        "rows": {"type": "array", "items": {"$ref": "#/$defs/cause_row"}},
+        "hops": {
+          "description": "Every hop of the walk to its end, also past --depth: how many things it reached, by type.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["hop", "things", "by_type"],
+            "properties": {
+              "hop": {"type": "integer", "minimum": 1},
+              "things": {"type": "integer", "minimum": 0},
+              "by_type": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}}
+            }
+          }
+        },
+        "total": {"description": "Every thing the walk reached to its end.", "type": "integer", "minimum": 0},
+        "last_hop": {"type": "integer", "minimum": 0},
+        "shown_hops": {"description": "The hops rows holds: --depth, or last_hop when that is less.", "type": "integer", "minimum": 0},
+        "hubs": {"type": "array", "items": {"$ref": "#/$defs/hub"}},
+        "undeclared": {"description": "The kinds under no cause list that reached a row; walked by raw direction.", "type": "array", "items": {"type": "string"}},
+        "again": {"description": "The command that prints the whole walk.", "type": "string"},
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
+
+    "depth_direction": {
+      "type": "object", "additionalProperties": false, "required": ["hops", "things", "per_hop", "hubs"],
+      "properties": {
+        "hops": {"description": "Hops until the walk reaches nothing new.", "type": "integer", "minimum": 0},
+        "things": {"type": "integer", "minimum": 0},
+        "per_hop": {"description": "How many things each hop reached, from hop 1.", "type": "array", "items": {"type": "integer", "minimum": 0}},
+        "hubs": {"type": "array", "items": {"$ref": "#/$defs/hub"}}
+      }
+    },
+    "touching_count": {
+      "type": "object", "additionalProperties": false, "required": ["things", "kinds"],
+      "properties": {
+        "things": {"type": "integer", "minimum": 0},
+        "kinds": {"description": "Edges by touch kind.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}}
+      }
+    },
+    "depth": {
+      "description": "periplus depth: both walks by cause from the starts, to the end.",
+      "type": "object", "additionalProperties": false,
+      "required": ["starts", "sets_off", "set_off_by", "touching", "undeclared", "declares_causes", "warnings", "problems"],
+      "properties": {
+        "starts": {"type": "array", "items": {"type": "string"}},
+        "sets_off": {"$ref": "#/$defs/depth_direction"},
+        "set_off_by": {"$ref": "#/$defs/depth_direction"},
+        "touching": {
+          "type": "object", "additionalProperties": false, "required": ["point_at_starts", "starts_point_at"],
+          "properties": {
+            "point_at_starts": {"$ref": "#/$defs/touching_count"},
+            "starts_point_at": {"$ref": "#/$defs/touching_count"}
+          }
+        },
+        "undeclared": {"type": "array", "items": {"type": "string"}},
+        "declares_causes": {"description": "false for a map with no cause list, where every kind was walked by raw direction.", "type": "boolean"},
+        "warnings": {"$ref": "#/$defs/warnings"},
+        "problems": {"$ref": "#/$defs/problems"}
+      }
+    },
 
     "path": {
       "type": "object", "additionalProperties": false, "required": ["from", "to", "chains", "warnings", "problems"],
