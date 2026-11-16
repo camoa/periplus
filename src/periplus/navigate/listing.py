@@ -16,6 +16,7 @@ __all__ = [
     "first_location",
     "footer",
     "kind_warnings",
+    "mark_text",
     "payload",
     "place",
     "problem_lines",
@@ -49,6 +50,11 @@ def first_location(item: Mapping[str, Any]) -> Mapping[str, Any] | None:
 def place(location: Mapping[str, Any]) -> str:
     """A location as ``file:line``."""
     return f"{location['file']}:{location['line']}"
+
+
+def mark_text(marks: Sequence[str]) -> str:
+    """A node's marks as a row prints them after its other suffixes: ``  [mark]`` each."""
+    return "".join(f"  [{_escape(mark)}]" for mark in marks)
 
 
 def kind_warnings(kinds: Collection[str], held: set[str]) -> tuple[str, ...]:

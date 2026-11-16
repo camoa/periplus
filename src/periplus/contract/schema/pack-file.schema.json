@@ -378,12 +378,21 @@
             ]
           },
           "then": {
-            "properties": {
-              "emits": {
-                "items": {
-                  "required": [
-                    "edge"
-                  ]
+            "if": {"properties": {"reads": {"const": "map"}}, "required": ["reads"]},
+            "then": {
+              "properties": {
+                "emits": {"items": {"anyOf": [{"required": ["edge"]}, {"required": ["attribute"]}]}}
+              },
+              "description": "A map rule may write attributes beside its edges: they land on a node another rule found, at its own place."
+            },
+            "else": {
+              "properties": {
+                "emits": {
+                  "items": {
+                    "required": [
+                      "edge"
+                    ]
+                  }
                 }
               }
             }

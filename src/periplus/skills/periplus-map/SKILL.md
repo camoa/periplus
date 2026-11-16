@@ -47,6 +47,9 @@ them, in one call. `periplus slice NAME` starts at that one thing. Read every pa
   method behind a route or the class behind an interface. X belongs in the answer.
 - `+N in supporting code (...)`: tests and helpers the walk met and did not print. `--support`
   prints them.
+- `[...]` after a row, such as `[not installed]`: a fact about that thing that holds for
+  everything inside it. A function marked `[not installed]` sits in a module that is not
+  installed, so its code does not run.
 - `+N more links: ...; see periplus slice NAME`: the map holds more links of that thing than the
   piece shows. Run that command when the thing matters.
 - `inventory:`: every thing the reply names, by type. Check your answer against it.

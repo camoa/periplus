@@ -17,7 +17,16 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER
 from periplus.mapshared import first_error
 from periplus.navigate.ids import resolve
-from periplus.navigate.listing import NONE, Listing, cut, footer, payload, place, problem_lines
+from periplus.navigate.listing import (
+    NONE,
+    Listing,
+    cut,
+    footer,
+    mark_text,
+    payload,
+    place,
+    problem_lines,
+)
 from periplus.navigate.mapfile import (
     MapIndex,
     _locate,
@@ -74,7 +83,8 @@ class EdgeRow:
     """One edge at the shown node: its kind, the other end, where it is, and why it is there.
 
     ``location`` is the edge's first location, or the other end's when the edge has none, and
-    ``source`` the line of code there. ``supporting`` marks an other end in supporting code.
+    ``source`` the line of code there. ``supporting`` marks an other end in supporting code, and
+    ``other_marks`` holds the other end's mark texts.
     """
 
     kind: str
@@ -89,6 +99,7 @@ class EdgeRow:
     location: str | None = None
     source: str | None = None
     supporting: bool = False
+    other_marks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,11 +107,13 @@ class ShowReport:
     """One node, and its ``outgoing`` and ``incoming`` edge rows as a ``Listing`` each.
 
     ``forms`` are the nodes that stand for it across realizing edges, as (id, type, kind, the node
-    each stands for), and ``more_forms`` how many more there are past the cap."""
+    each stands for), and ``more_forms`` how many more there are past the cap. ``marks`` holds the
+    node's mark texts."""
 
     id: str = ""
     type: str = ""
     state: str = ""
+    marks: tuple[str, ...] = ()
     roles: tuple[str, ...] = ()
     attributes: Mapping[str, Any] | None = None
     locations: tuple[Mapping[str, Any], ...] = ()
@@ -158,6 +171,7 @@ def _rows(
                 described.get((edge["from"], edge["kind"], edge["to"])),
                 where(edge, other),
                 supporting=index.supporting(edge[end]) is not None,
+                other_marks=index.marks(edge[end]),
             )
         )
     return sorted(rows, key=lambda r: (r.supporting, r.kind, r.other, _first(r.locations)))
@@ -196,6 +210,7 @@ def run(
                 id=node["id"],
                 type=as_text(node["type"]),
                 state=as_text(node["state"]),
+                marks=index.marks(node_id),
                 roles=tuple(as_text(role) for role in node.get("roles", ())),
                 attributes=attributes,
                 locations=tuple(_placed(node["locations"])),
@@ -286,6 +301,7 @@ def _json_row(row: EdgeRow) -> dict[str, Any]:
         "other": row.other,
         "other_type": row.other_type,
         "other_state": row.other_state,
+        "other_marks": list(row.other_marks),
         "locations": [_json_location(loc) for loc in row.locations],
         "occurrences": row.occurrences,
         "confidences": list(row.confidences),
@@ -317,7 +333,7 @@ def _edge_lines(listing: Listing[EdgeRow]) -> list[str]:
             f"    {_escape(row.other)}  {_escape(row.other_type)}"
             f"  {_escape(row.other_state)}"
             f"  {_escape(where)}{count}  {confidences}"
-            f"  {_escape(', '.join(row.rules))}"
+            f"  {_escape(', '.join(row.rules))}{mark_text(row.other_marks)}"
         )
         lines += source_line(row.source)
         if row.description is not None:
@@ -340,7 +356,11 @@ def _form_lines(report: ShowReport) -> list[str]:
 
 def render_text(report: ShowReport) -> str:
     """The report as lines a person reads. Every outside string goes through ``_escape``."""
-    lines = [f"periplus show {_escape(report.id)}" if report.id else "periplus show"]
+    lines = [
+        f"periplus show {_escape(report.id)}{mark_text(report.marks)}"
+        if report.id
+        else "periplus show"
+    ]
     if report.id:
         lines += [f"type: {_escape(report.type)}", f"state: {_escape(report.state)}"]
         if report.roles:
@@ -369,6 +389,7 @@ def render_json(report: ShowReport) -> str:
         "id": report.id,
         "type": report.type,
         "state": report.state,
+        "marks": list(report.marks),
         "roles": list(report.roles),
         "attributes": dict(report.attributes or {}),
         "locations": list(report.locations),

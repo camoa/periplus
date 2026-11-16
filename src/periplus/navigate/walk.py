@@ -15,6 +15,7 @@ from periplus.navigate.listing import (
     cut,
     footer,
     kind_warnings,
+    mark_text,
     payload,
     problem_lines,
 )
@@ -49,7 +50,7 @@ class WalkRow:
     and ``source`` the line of code there. ``description`` is the item's descriptions entry.
     ``stands_for`` marks an item added because it stands for ``via`` across a realizing edge,
     at ``via``'s depth: a form of a declaration, or with ``in`` the declaration of a form.
-    ``supporting`` marks an item in supporting code.
+    ``supporting`` marks an item in supporting code, and ``marks`` holds its mark texts.
     """
 
     id: str
@@ -63,6 +64,7 @@ class WalkRow:
     description: str | None = None
     stands_for: bool = False
     supporting: bool = False
+    marks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,7 +187,10 @@ def run(
             node_id, resolved = resolve(index, node_id)
             more: dict[str, int] = {}
             walked = walk(index, node_id, direction, depth, set(kinds), more)
-            rows = [replace(r, supporting=index.supporting(r.id) is not None) for r in walked]
+            rows = [
+                replace(r, supporting=index.supporting(r.id) is not None, marks=index.marks(r.id))
+                for r in walked
+            ]
             # Supporting code after the rest, each part by depth and id.
             rows.sort(key=lambda row: row.supporting)
             held = {edge["kind"] for edge in index.edges}
@@ -228,6 +233,7 @@ def render_text(report: WalkReport) -> str:
         lines.append(
             f"  {row.depth}  {_escape(row.id)}  {_escape(row.type)}"
             f"  {_escape(row.state)}  {how}  {_escape(located(row.location))}"
+            f"{mark_text(row.marks)}"
         )
         lines += source_line(row.source)
         lines += description_line(row.description)
@@ -250,6 +256,7 @@ def _json_row(row: WalkRow) -> dict[str, Any]:
     return {
         "stands_for": row.stands_for,
         "supporting": row.supporting,
+        "marks": list(row.marks),
         "id": row.id,
         "type": row.type,
         "state": row.state,

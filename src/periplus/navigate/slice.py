@@ -23,6 +23,7 @@ from periplus.navigate.listing import (
     first_location,
     footer,
     kind_warnings,
+    mark_text,
     payload,
     place,
     problem_lines,
@@ -109,7 +110,8 @@ class PieceRow:
 
     ``outward`` is true when the edge runs from ``parent`` to ``id``. ``again`` marks a node
     printed in full elsewhere in the piece; its row is a back-reference. ``container`` marks the
-    container end of a grouping edge, which the walk does not go on from.
+    container end of a grouping edge, which the walk does not go on from. ``marks`` holds the
+    mark texts of ``id``.
     """
 
     start: str
@@ -125,6 +127,7 @@ class PieceRow:
     source: str | None = None
     description: str | None = None
     container: bool = False
+    marks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,8 +164,8 @@ class Link:
 @dataclass(frozen=True, slots=True)
 class Subject:
     """A mapped node of the piece under its file: line, short name, type, source line, its links
-    in the piece, its edges the piece does not show, as (kind, outward, count), and how many nodes
-    stand for it past the cap."""
+    in the piece, its edges the piece does not show, as (kind, outward, count), how many nodes
+    stand for it past the cap, and its mark texts."""
 
     id: str
     short: str
@@ -173,6 +176,7 @@ class Subject:
     links: tuple[Link, ...]
     unwalked: tuple[tuple[str, bool, int], ...]
     more_forms: int = 0
+    marks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -544,7 +548,12 @@ def _piece(
                     starts=begun,
                     rows=Listing(
                         tuple(
-                            replace(r, source=lines.at(r.location), description=described.get(r.id))
+                            replace(
+                                r,
+                                source=lines.at(r.location),
+                                description=described.get(r.id),
+                                marks=index.marks(r.id),
+                            )
                             for r in shown
                         ),
                         len(rows),
@@ -577,6 +586,7 @@ def _piece(
                         s.row,
                         source=lines.at(s.row.location),
                         supporting=index.supporting(s.row.id) is not None,
+                        marks=index.marks(s.row.id),
                     ),
                 )
                 for s in picked.values()
@@ -585,7 +595,12 @@ def _piece(
                 replace(
                     m,
                     rows=tuple(
-                        replace(r, source=lines.at(r.location), description=described.get(r.id))
+                        replace(
+                            r,
+                            source=lines.at(r.location),
+                            description=described.get(r.id),
+                            marks=index.marks(r.id),
+                        )
                         for r in m.rows
                     ),
                 )
@@ -794,6 +809,7 @@ def _layout(
                     if more
                     else (),
                     more_forms.get(node_id, 0),
+                    index.marks(node_id),
                 ),
             )
         )
@@ -1377,7 +1393,10 @@ def _file_lines(group: FileGroup, under: str) -> list[str]:
     lines = ["", header]
     for subject in group.subjects:
         line = "" if subject.line is None else subject.line
-        lines.append(f"  :{line}  {_escape(subject.short)}  {_escape(subject.type)}")
+        lines.append(
+            f"  :{line}  {_escape(subject.short)}  {_escape(subject.type)}"
+            f"{mark_text(subject.marks)}"
+        )
         lines += source_line(subject.source)
         lines += description_line(subject.description)
         lines += [f"      {_clause(link)}" for link in subject.links]
@@ -1501,7 +1520,10 @@ def render_text(report: SliceReport) -> str:
             lines.append("no matches")
         for start in report.starts:
             short = _escape(shorts.get(start.row.id, start.row.id))
-            lines.append(f"start {short}  {_escape(start.row.type)}  ({_escape(_why(start))})")
+            lines.append(
+                f"start {short}  {_escape(start.row.type)}  ({_escape(_why(start))})"
+                f"{mark_text(start.row.marks)}"
+            )
         lines += [_member_line(m, shorts.get(m.container, m.container)) for m in report.members]
         under = _folder(report.files)
         lines += [f"paths under: {_escape(under)}"] if under else []
@@ -1546,6 +1568,7 @@ def _json_row(row: PieceRow, piece_of: Mapping[str, int]) -> dict[str, Any]:
         "id": row.id,
         "type": row.type,
         "state": row.state,
+        "marks": list(row.marks),
         "again": row.again,
         "location": row.location,
         "source": row.source,

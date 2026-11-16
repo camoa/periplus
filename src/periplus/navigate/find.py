@@ -9,7 +9,16 @@ from pathlib import Path
 from typing import Any
 
 from periplus.errors import ExitCode, HarnessError, Problem
-from periplus.navigate.listing import NONE, Listing, cut, first_location, footer, payload, place
+from periplus.navigate.listing import (
+    NONE,
+    Listing,
+    cut,
+    first_location,
+    footer,
+    mark_text,
+    payload,
+    place,
+)
 from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
 from periplus.navigate.show import node_descriptions
 from periplus.navigate.source import SOURCE_WIDTH, SourceLines, description_line, source_line
@@ -42,7 +51,8 @@ class FindRow:
 
     ``matched`` is ``id``, ``attribute`` or ``description``, and ``description`` the node's
     descriptions entry. An attribute match names the attribute and holds the string that matched.
-    ``supporting`` marks a node in supporting code, by the map's ``supporting_paths``.
+    ``supporting`` marks a node in supporting code, by the map's ``supporting_paths``, and
+    ``marks`` holds its mark texts, by ``MapIndex.marks``.
     """
 
     id: str
@@ -55,6 +65,7 @@ class FindRow:
     matched_attribute: str | None = None
     attribute_value: str | None = None
     supporting: bool = False
+    marks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,18 +155,20 @@ def run(
     limit: int,
     map_path: Path | None,
     paths: Collection[str] = (),
+    marks: Collection[str] = (),
 ) -> FindReport:
     """Find the nodes whose id, attributes or description hold ``text``; a load failure is a
     problem.
 
-    ``types`` keeps a node of any of them or their subtypes, and ``paths`` a node with a location
-    whose file starts with any of them; empty keeps every node.
+    ``types`` keeps a node of any of them or their subtypes, ``paths`` a node with a location
+    whose file starts with any of them, and ``marks`` a node that carries any of these mark
+    texts; empty keeps every node.
     """
     try:
         index = load_map(start, env, map_path)
         described, problems = node_descriptions(start, map_path)
         with reading_fields(start, map_path):
-            report = _find(index, text, types, paths, described, limit)
+            report = _find(index, text, types, paths, marks, described, limit)
     except HarnessError as error:
         return FindReport(problems=(error.problem(),))
     lines = SourceLines(start, map_path)
@@ -168,14 +181,23 @@ def _find(
     text: str,
     types: Collection[str],
     paths: Collection[str],
+    marks: Collection[str],
     described: Mapping[str, str],
     limit: int,
 ) -> FindReport:
     """``run``'s report, read from the map's node fields and the node descriptions."""
     wanted, prefixes, warnings = narrowing(index, types, paths)
+    held = sorted(set(index.mark_texts.values()))
+    for mark in sorted(set(marks) - set(held)):
+        known = f"the map's marks: {', '.join(held)}" if held else "the map holds no marks"
+        warnings.append(f"no node carries the mark {mark!r}; {known}")
     matches = search(index, text, wanted, prefixes, described)
     found = [found_row(match, described) for match in matches]
-    rows = [replace(row, supporting=index.supporting(row.id) is not None) for row in found]
+    rows = [
+        replace(row, supporting=index.supporting(row.id) is not None, marks=index.marks(row.id))
+        for row in found
+    ]
+    rows = [row for row in rows if not marks or set(marks) & set(row.marks)]
     # Supporting code after the rest, each part in search order.
     rows.sort(key=lambda row: row.supporting)
     by_type = dict(sorted(Counter(row.type for row in rows).items()))
@@ -271,6 +293,7 @@ def row_lines(row: FindRow) -> list[str]:
         "attribute": f"  [attribute {_escape(row.matched_attribute or '')}]",
         "description": "  [description]",
     }.get(row.matched, "")
+    marked += mark_text(row.marks)
     marked += "  [supporting code]" if row.supporting else ""
     lines = [
         f"{_escape(row.id)}  {_escape(row.type)}  {_escape(row.state)}  {_escape(where)}" + marked
@@ -307,6 +330,7 @@ def json_row(row: FindRow) -> dict[str, Any]:
         "matched_attribute": row.matched_attribute,
         "description": row.description,
         "supporting": row.supporting,
+        "marks": list(row.marks),
     }
 
 

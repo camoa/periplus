@@ -14,6 +14,7 @@ from periplus.navigate.listing import (
     Listing,
     footer,
     kind_warnings,
+    mark_text,
     payload,
     problem_lines,
 )
@@ -31,6 +32,7 @@ class Step:
 
     ``location`` is where the first such edge is written, or the item reached when it has none,
     and ``source`` the line of code there. ``description`` is the descriptions entry of ``end``.
+    ``start_marks`` and ``end_marks`` hold the mark texts of the two items.
     """
 
     start: str
@@ -39,6 +41,8 @@ class Step:
     location: str | None = None
     source: str | None = None
     description: str | None = None
+    start_marks: tuple[str, ...] = ()
+    end_marks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,13 +152,18 @@ def run(
 def _placed(
     index: MapIndex, step: Step, lines: SourceLines, described: Mapping[str, str]
 ) -> Step:
-    """``step`` with the location of the first edge it stands for, the source line there, and
-    the description of the item it reaches."""
+    """``step`` with the location of the first edge it stands for, the source line there, the
+    description of the item it reaches, and the marks of both items."""
     edges = index.outgoing(step.start)
     edge = next(e for e in edges if e["kind"] == step.kind and e["to"] == step.end)
     location = where(edge, index.nodes[step.end])
     return replace(
-        step, location=location, source=lines.at(location), description=described.get(step.end)
+        step,
+        location=location,
+        source=lines.at(location),
+        description=described.get(step.end),
+        start_marks=index.marks(step.start),
+        end_marks=index.marks(step.end),
     )
 
 
@@ -164,8 +173,8 @@ def _chain_lines(chain: tuple[Step, ...]) -> list[str]:
     lines = []
     for s in chain:
         lines.append(
-            f"    {_escape(s.start)} --{_escape(s.kind)}--> {_escape(s.end)}"
-            f"  {_escape(located(s.location))}"
+            f"    {_escape(s.start)}{mark_text(s.start_marks)} --{_escape(s.kind)}-->"
+            f" {_escape(s.end)}{mark_text(s.end_marks)}  {_escape(located(s.location))}"
         )
         lines += source_line(s.source)
         lines += description_line(s.description)
@@ -191,12 +200,14 @@ def render_text(report: PathReport) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _json_chain(chain: tuple[Step, ...]) -> list[dict[str, str | None]]:
+def _json_chain(chain: tuple[Step, ...]) -> list[dict[str, Any]]:
     return [
         {
             "from": s.start,
             "kind": s.kind,
             "to": s.end,
+            "from_marks": list(s.start_marks),
+            "to_marks": list(s.end_marks),
             "location": s.location,
             "source": s.source,
             "description": s.description,

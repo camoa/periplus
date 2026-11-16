@@ -43,8 +43,8 @@ DOCUMENT: dict[str, Any] = {
 }
 
 # What each command printed with --format json on DOCUMENT before rows were dataclasses, plus the
-# location, source, warnings, description, matched, matched_attribute and by_type fields added
-# since.
+# location, source, warnings, description, matched, matched_attribute, by_type and mark fields
+# added since.
 PINNED: dict[str, str] = {
     "types": """\
 {
@@ -83,6 +83,7 @@ PINNED: dict[str, str] = {
       "description": null,
       "id": "php.method::B::run",
       "location": "src/a.php:3",
+      "marks": [],
       "matched": "id",
       "matched_attribute": null,
       "source": null,
@@ -94,6 +95,7 @@ PINNED: dict[str, str] = {
       "description": null,
       "id": "php.method::C::run",
       "location": null,
+      "marks": [],
       "matched": "id",
       "matched_attribute": null,
       "source": null,
@@ -121,6 +123,7 @@ PINNED: dict[str, str] = {
         "id": "php.method::B::run",
         "kind": "calls",
         "location": "src/a.php:7",
+        "marks": [],
         "source": null,
         "stands_for": false,
         "state": "mapped",
@@ -134,6 +137,7 @@ PINNED: dict[str, str] = {
         "id": "php.method::C::run",
         "kind": "calls",
         "location": "src/a.php:9",
+        "marks": [],
         "source": null,
         "stands_for": false,
         "state": "referenced",
@@ -162,6 +166,7 @@ PINNED: dict[str, str] = {
         "id": "php.method::B::run",
         "kind": "calls",
         "location": "src/a.php:4",
+        "marks": [],
         "source": null,
         "stands_for": false,
         "state": "mapped",
@@ -175,6 +180,7 @@ PINNED: dict[str, str] = {
         "id": "php.type::A",
         "kind": "defines",
         "location": "src/a.php:1",
+        "marks": [],
         "source": null,
         "stands_for": false,
         "state": "mapped",
@@ -215,6 +221,7 @@ PINNED: dict[str, str] = {
         ],
         "occurrences": 2,
         "other": "php.method::B::run",
+        "other_marks": [],
         "other_state": "mapped",
         "other_type": "php.method",
         "rules": [
@@ -238,6 +245,7 @@ PINNED: dict[str, str] = {
         ],
         "occurrences": 2,
         "other": "php.type::A",
+        "other_marks": [],
         "other_state": "mapped",
         "other_type": "php.type",
         "rules": [
@@ -257,6 +265,7 @@ PINNED: dict[str, str] = {
       "line": 3
     }
   ],
+  "marks": [],
   "outgoing": {
     "items": [
       {
@@ -275,6 +284,7 @@ PINNED: dict[str, str] = {
         ],
         "occurrences": 2,
         "other": "php.method::B::run",
+        "other_marks": [],
         "other_state": "mapped",
         "other_type": "php.method",
         "rules": [
@@ -299,6 +309,7 @@ PINNED: dict[str, str] = {
         ],
         "occurrences": 2,
         "other": "php.method::C::run",
+        "other_marks": [],
         "other_state": "referenced",
         "other_type": "php.method",
         "rules": [
@@ -341,10 +352,12 @@ PINNED: dict[str, str] = {
         {
           "description": null,
           "from": "php.method::A::go",
+          "from_marks": [],
           "kind": "calls",
           "location": "src/a.php:7",
           "source": null,
-          "to": "php.method::B::run"
+          "to": "php.method::B::run",
+          "to_marks": []
         }
       ]
     ],

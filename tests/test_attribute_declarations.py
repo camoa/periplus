@@ -117,3 +117,15 @@ def test_a_file_rule_writing_an_undeclared_attribute_still_maps(tmp_path: Path) 
     report, document = map_project(tmp_path)
     assert report.problems == (), report.problems
     assert nodes(document)["box.unit::A"]["attributes"] == {"note": "kept"}
+
+
+def test_a_type_in_on_that_no_visible_pack_declares_is_refused(tmp_path: Path) -> None:
+    declare = DECLARE.replace("on: [box.unit]", "on: [box.unit, box.nowhere]")
+    project(tmp_path, off(), declare=declare)
+    assert _refused(tmp_path) == [
+        (
+            ExitCode.PACK_RULES_UNREADABLE,
+            "box/rules/attributes.yaml: the attribute switched lists box.nowhere in on, which "
+            "neither box nor a pack it depends on declares",
+        )
+    ]

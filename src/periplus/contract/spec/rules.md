@@ -119,6 +119,9 @@ The schema refuses a rule that emits both. Before the split, all three said line
 An edge rule still computes an id — it needs one to name its endpoint. It just does not emit
 a node with it.
 
+A map rule may write declared attributes beside its edges. They land on a node another rule
+found, at that node's own place, so no location is stamped twice.
+
 ---
 
 ## 6. A rule never writes a path

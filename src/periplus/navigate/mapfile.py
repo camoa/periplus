@@ -86,6 +86,10 @@ class MapIndex:
             (as_text(p), _glob(as_text(p))) for p in document.get("supporting_paths", ())
         ]
         self._support: dict[str, str | None] = {}
+        #: The mark text of each attribute name the map's ``marks`` header names.
+        self.mark_texts: dict[str, str] = {
+            as_text(name): as_text(text) for name, text in document.get("marks", {}).items()
+        }
 
     def outgoing(self, id: str) -> list[dict[str, Any]]:
         """The edges leaving ``id``, in map order."""
@@ -114,6 +118,12 @@ class MapIndex:
                 None,
             )
         return self._support[id]
+
+    def marks(self, id: str) -> tuple[str, ...]:
+        """The mark text of each attribute the node holds that the map's ``marks`` header names,
+        in attribute-name order; empty for a map without the header."""
+        held = self.nodes[id].get("attributes", {})
+        return tuple(self.mark_texts[name] for name in sorted(held) if name in self.mark_texts)
 
     def realized(self, kind: str, outward: bool) -> bool:
         """Whether an edge of ``kind``, seen from its from end (``outward``) or its to end, leads to

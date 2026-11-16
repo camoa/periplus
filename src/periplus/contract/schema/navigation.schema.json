@@ -31,6 +31,7 @@
     "warnings": {"type": "array", "items": {"type": "string"}},
     "place": {"description": "Where a row's edge is written as file:line, else the node it reaches, or null when neither has a location.", "type": ["string", "null"]},
     "source": {"description": "The stripped source line at the row's place, at most 160 characters, or null when the file or line cannot be read.", "type": ["string", "null"]},
+    "marks": {"description": "The mark text of each attribute the node holds that the map's marks header names, in attribute-name order, as the text prints each in brackets; empty when none.", "type": "array", "items": {"type": "string"}},
     "node_text": {"description": "The descriptions.yaml text of the row's node, or null when it has none.", "type": ["string", "null"]},
 
     "location": {
@@ -137,7 +138,7 @@
         "items": {
           "type": "array",
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description", "supporting"],
+            "type": "object", "additionalProperties": false, "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description", "supporting", "marks"],
             "properties": {
               "id": {"type": "string"},
               "type": {"type": "string"},
@@ -146,6 +147,7 @@
               "source": {"$ref": "#/$defs/source"},
               "matched": {"description": "id when the node id holds the text, attribute when a string attribute value or list item does, description when only its description does.", "enum": ["id", "attribute", "description"]},
               "supporting": {"description": "true when the node is in supporting code, by the map's supporting_paths.", "type": "boolean"},
+              "marks": {"$ref": "#/$defs/marks"},
               "matched_attribute": {"description": "The name of the attribute that matched, the first in sorted order when several do; null unless matched is attribute.", "type": ["string", "null"]},
               "description": {"$ref": "#/$defs/node_text"}
             }
@@ -165,13 +167,14 @@
 
     "edge_row": {
       "type": "object", "additionalProperties": false,
-      "required": ["kind", "other", "other_type", "other_state", "locations", "occurrences", "confidences", "rules", "description", "location", "source", "supporting"],
+      "required": ["kind", "other", "other_type", "other_state", "other_marks", "locations", "occurrences", "confidences", "rules", "description", "location", "source", "supporting"],
       "properties": {
         "kind": {"type": "string"},
         "other": {"type": "string"},
         "supporting": {"description": "true when the other end is in supporting code, by the map's supporting_paths; such rows come after the rest.", "type": "boolean"},
         "other_type": {"type": "string"},
         "other_state": {"type": "string"},
+        "other_marks": {"$ref": "#/$defs/marks"},
         "locations": {"type": "array", "items": {"$ref": "#/$defs/location"}},
         "occurrences": {"type": ["integer", "null"]},
         "confidences": {"type": "array", "items": {"enum": ["declared", "inferred", "mentioned"]}},
@@ -188,11 +191,12 @@
 
     "show": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "type", "state", "roles", "attributes", "locations", "provenance", "description", "outgoing", "incoming", "realized_by", "warnings", "problems"],
+      "required": ["id", "type", "state", "marks", "roles", "attributes", "locations", "provenance", "description", "outgoing", "incoming", "realized_by", "warnings", "problems"],
       "properties": {
         "id": {"type": "string"},
         "type": {"type": "string"},
         "state": {"type": "string"},
+        "marks": {"$ref": "#/$defs/marks"},
         "roles": {"type": "array", "items": {"type": "string"}},
         "attributes": {"type": "object"},
         "locations": {"type": "array", "items": {"$ref": "#/$defs/location"}},
@@ -225,7 +229,7 @@
               "type": "array",
               "items": {
                 "type": "object", "additionalProperties": false,
-                "required": ["id", "type", "state", "depth", "kind", "via", "location", "source", "description", "stands_for", "supporting"],
+                "required": ["id", "type", "state", "depth", "kind", "via", "location", "source", "description", "stands_for", "supporting", "marks"],
                 "properties": {
                   "id": {"type": "string"},
                   "type": {"type": "string"},
@@ -234,6 +238,7 @@
                   "kind": {"type": "string"},
                   "via": {"type": "string"},
                   "supporting": {"description": "true when the item is in supporting code, by the map's supporting_paths; such rows come after the rest.", "type": "boolean"},
+                  "marks": {"$ref": "#/$defs/marks"},
                   "stands_for": {"description": "true when the item was added because it stands for via across a realizing edge, at via's depth: a form of a declaration, or in affected the declaration of a form.", "type": "boolean"},
                   "location": {"$ref": "#/$defs/place"},
                   "source": {"$ref": "#/$defs/source"},
@@ -263,11 +268,13 @@
               "items": {
                 "type": "array",
                 "items": {
-                  "type": "object", "additionalProperties": false, "required": ["from", "kind", "to", "location", "source", "description"],
+                  "type": "object", "additionalProperties": false, "required": ["from", "kind", "to", "from_marks", "to_marks", "location", "source", "description"],
                   "properties": {
                     "from": {"type": "string"},
                     "kind": {"type": "string"},
                     "to": {"type": "string"},
+                    "from_marks": {"$ref": "#/$defs/marks", "description": "The marks of the step's from node."},
+                    "to_marks": {"$ref": "#/$defs/marks", "description": "The marks of the step's to node."},
                     "location": {"$ref": "#/$defs/place"},
                     "source": {"$ref": "#/$defs/source"},
                     "description": {"$ref": "#/$defs/node_text", "description": "The descriptions.yaml text of the step's to node, or null."}
@@ -302,7 +309,7 @@
           "type": "array",
           "items": {
             "type": "object", "additionalProperties": false,
-            "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description", "supporting", "given", "words", "piece"],
+            "required": ["id", "type", "state", "location", "source", "matched", "matched_attribute", "description", "supporting", "marks", "given", "words", "piece"],
             "properties": {
               "id": {"type": "string"},
               "piece": {"$ref": "#/$defs/piece_number"},
@@ -312,6 +319,7 @@
               "source": {"$ref": "#/$defs/source"},
               "matched": {"description": "Where the best word matched, as find reports it; id for a given start.", "enum": ["id", "attribute", "description"]},
               "supporting": {"description": "true when the node is in supporting code, by the map's supporting_paths.", "type": "boolean"},
+              "marks": {"$ref": "#/$defs/marks"},
               "matched_attribute": {"type": ["string", "null"]},
               "description": {"$ref": "#/$defs/node_text"},
               "given": {"description": "The argument that named this node, or null when words found it.", "type": ["string", "null"]},
@@ -388,7 +396,7 @@
     "slice_row": {
       "description": "One walk row of a slice piece, and one member row of a container start.",
       "type": "object", "additionalProperties": false,
-      "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "again", "location", "source", "description", "container", "piece"],
+      "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "marks", "again", "location", "source", "description", "container", "piece"],
       "properties": {
         "piece": {"$ref": "#/$defs/piece_number"},
         "start": {"description": "The start node this row hangs under.", "type": "string"},
@@ -399,6 +407,7 @@
         "id": {"type": "string"},
         "type": {"type": "string"},
         "state": {"type": "string"},
+        "marks": {"$ref": "#/$defs/marks"},
         "again": {"description": "true when id is printed in full on another row of this piece.", "type": "boolean"},
         "container": {"description": "true when id is the container end of a grouping edge; the walk does not go on from it.", "type": "boolean"},
         "location": {"$ref": "#/$defs/place"},

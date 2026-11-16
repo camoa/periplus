@@ -94,7 +94,7 @@ the map's `legend`, which `periplus map` writes from the packs.
 ### find
 
 ```
-periplus find TEXT [--type T]... [--path P]... [--limit N] [--map PATH] [--format text|json]
+periplus find [TEXT] [--type T]... [--path P]... [--mark TEXT]... [--limit N] [--map PATH] [--format text|json]
 ```
 
 Lists the nodes whose id holds `TEXT`, closest match first, then the nodes whose string attribute
@@ -115,9 +115,23 @@ A node in supporting code, one whose first file matches a pattern the map lists 
 `supporting_paths`, such as a test, ends with `[supporting code]`, and such rows come after the
 rest.
 
+A mark is a short fact a rutter declares about a thing, such as `[not installed]`. The map's
+`marks` header names the mark of each attribute that has one, so no pack is needed to read it. A
+node that holds such an attribute prints its mark in brackets on every row that names it, in
+`find`, `show`, `neighbors`, `affected`, `path` and `slice`, after `[attribute NAME]` or
+`[description]` and before `[supporting code]`. Several marks print in attribute-name order. A mark
+the rutter spreads holds for everything inside the thing: a function in a module that is not
+installed prints `[not installed]` too. A map with no `marks` header prints no marks.
+
+`--mark TEXT` keeps the nodes that carry the mark `TEXT`, as the rows print it without the
+brackets. Repeat it to keep nodes that carry any of several marks. `TEXT` may then be left out:
+`periplus find --mark "not installed"` lists every marked node. A mark no node carries prints a
+warning that names the marks the map holds.
+
 The JSON report adds `by_type`, every match counted by type, also when the list is cut. Each item
 has `location`, `source`, `matched` (`id`, `attribute` or `description`), `matched_attribute` (the
-attribute's name, or null), `description` and `supporting`.
+attribute's name, or null), `description`, `supporting` and `marks`, a list of the node's mark
+texts, empty when it has none.
 
 ### show
 
@@ -129,8 +143,10 @@ Prints the node's type, state, location and provenance, then its outgoing and in
 grouped by kind. Each edge row names the other end, the first location, the occurrence count, the
 confidences (`declared`, `inferred` or `mentioned`, each once) and the rules, with the source line
 under it. `--limit` applies to each of the two edge lists. Take `ID` from `find`. Edges whose
-other end is supporting code come after the rest of each list, under `in supporting code:`. In
-JSON each edge row adds `location`, `source` and `supporting`, and the report adds `warnings`.
+other end is supporting code come after the rest of each list, under `in supporting code:`. The
+shown node's marks end its first line, and each edge row ends with the other end's marks. In JSON
+each edge row adds `location`, `source`, `supporting` and `other_marks`, and the report adds
+`marks` and `warnings`.
 
 An edge kind the map lists under `realizing_kinds` says its `from` end is a concrete form of its
 `to` end, as a method implements an interface method; one under `realizing_to_kinds` says the
@@ -165,8 +181,9 @@ periplus neighbors ID [--depth N] [--kind K] [--limit N] [--map PATH] [--format 
 Follows the edges that leave `ID`. Each row gives the depth at which the item was first reached,
 its id, type and state, the edge it was reached by and that edge's location, with the source line
 and description under it. `--depth N` (1 or more, default 1) sets how many edges to follow.
-`--kind K` keeps only edges of kind `K`; repeat it for several kinds. In JSON each row adds
-`location`, `source`, `description`, `stands_for` and `supporting`.
+`--kind K` keeps only edges of kind `K`; repeat it for several kinds. A row ends with the item's
+marks. In JSON each row adds `location`, `source`, `description`, `stands_for`, `supporting` and
+`marks`.
 
 When the walk reaches a node, the mapped nodes that stand for it across realizing edges join at
 the same depth, whatever `--kind` says: a row `realizes X by implements_method`. So the code
@@ -194,7 +211,9 @@ periplus path FROM TO [--kind K] [--limit N] [--map PATH] [--format text|json]
 
 Prints every shortest chain of edges from `FROM` to `TO`, following each edge in its own
 direction. Each step names its edge's location, with the source line and the description of the
-node it reaches under it; in JSON a step adds `location`, `source` and `description`. Without a
+node it reaches under it. Each end of a step is followed by its marks,
+`a --calls--> b  [not installed]  file:line`. In JSON a step adds `location`, `source`,
+`description`, `from_marks` and `to_marks`. Without a
 chain it prints `no path`, and exits 0. `--kind K` follows only edges of kind `K`; repeat it for
 several kinds.
 
@@ -233,7 +252,7 @@ any command that takes an id, resolves back to that node alone, else the full id
 prints can be pasted into the next command.
 
 The output lists each start first, on one line: its short name, its type, and why it was picked
-(`given as 'helper'`, or each word and where it matched). Then `paths under: DIR/` names once the
+(`given as 'helper'`, or each word and where it matched), then its marks. Then `paths under: DIR/` names once the
 longest folder that holds every printed file, and each file prints below it: `cli.py` under
 `paths under: shop/` is `shop/cli.py`.
 
@@ -248,8 +267,8 @@ nodes not printed or relate in ways the map does not hold, and gives `periplus p
 the first starts of the first two pieces.
 
 Inside a piece, each file prints once, as a header, with `in X` naming the containers its nodes
-belong to by grouping edges. Under it, in line order, each node prints `:LINE  name  type`, its
-source line and its description, then one line per edge kind and direction to other nodes of
+belong to by grouping edges. Under it, in line order, each node prints `:LINE  name  type` and its
+marks, its source line and its description, then one line per edge kind and direction to other nodes of
 the piece: `calls -> a, b` for edges the node has, `calls <- c` for edges to it. An edge between two nodes of one
 file prints only under the node it starts from. Far ends a rule
 did not map fold to `(+N outside the project: x, y)`, naming the first 3. Three or more far ends
@@ -315,8 +334,10 @@ last hop ends with `go deeper with --depth N`. `--format json` prints the same p
 `pieces` (each with `piece`, its number, `starts`, `things` and `supporting`, the count the text
 prints),
 `rows` (each with `start`, `hop`, `from`, `kind`, `direction`, `again`, `location`, `source`,
-`description` and `piece`), `left_out`, `deeper`, `folded`, `notes`, `depth` and `direction`. Each
-start and each row carries the `piece` number of its node.
+`description`, `marks` and `piece`), `left_out`, `deeper`, `folded`, `notes`, `depth` and
+`direction`. Each start and each row carries the `piece` number and the `marks` of its node. The
+names on a link line carry no marks, to keep it short; a node printed under its file shows its
+marks on its own line.
 
 With `--out FILE`, `slice` writes the items around the start items to a map file of their own
 instead, and takes ids, not words. Name the start items as `ID`s, with `--path PREFIX` (every

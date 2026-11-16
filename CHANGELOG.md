@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - A pack file may declare node attributes under `attributes`: the types a rule may write each on (`on`), whether a container's value reaches its members (`spreads`), and a short `mark` a reader shows. A map rule may now write a declared attribute, beside its edges, on the node it matched or, with `target: matched_node`, on the node its follow steps reached; a write changes no type or location, and a target no rule found or of a type `on` does not reach is listed under Matches skipped. A spreading attribute is written on each member of a container through the grouping kinds, the nearest container winning, with a provenance row `spread.<name>`. The map header `marks` names the mark of each declared attribute a node holds; maps without one are unchanged. The check refuses, with exit 19, an undeclared attribute a map rule writes, a write on a type `on` does not reach, one name declared two ways, and a declaration of `type_conflict` or `resolution`; a mark that is empty, longer than 40 characters, or holds a bracket or a line break is a schema error. Two rules that give one node's attribute different values at the same file and line now both show under `differs`; before, one value was dropped without a word.
+- Every navigation command prints a node's marks in brackets, such as `[not installed]`, on each row that names the node: `find`, `show` (the node's first line and the other end of each edge row), `neighbors`, `affected`, `path` (both ends of a step) and `slice` (the start line and the node's line under its file). The JSON adds `marks` to find, walk and slice rows and to the show report, `other_marks` to show's edge rows, and `from_marks` and `to_marks` to path steps, each a list that is empty when the node has none. `find --mark TEXT`, repeatable, keeps the nodes that carry that mark, and `TEXT` may then be left out; a mark no node carries prints a warning that names the marks the map holds.
+- `drupal_basic` declares `installed` on modules and themes, with `spreads: true` and `mark: not installed`. The rules that draw `not_installed_by` also write `installed: no`, so a function, class, route or template of a module `core.extension` does not list prints `[not installed]`. The `not_installed_by` edge stays.
+
+### Fixed
+
+- A map rule may write attributes beside its edges, as the rutter guide says; the pack-file schema refused it before.
+- The check refuses, with exit 19, a type in an attribute's `on` that neither the pack nor one it depends on declares; before, a misspelt type was never refused.
 
 ## [0.8.0] - 2026-11-16
 

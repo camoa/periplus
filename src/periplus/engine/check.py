@@ -155,6 +155,17 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
                 for reserved in _declared(document, "attributes")
                 if reserved in _RESERVED
             )
+            problems.extend(
+                Problem(
+                    ExitCode.PACK_RULES_UNREADABLE,
+                    f"{name}/{file}: the attribute {entry.get('name')} lists {on} in on, which "
+                    f"neither {name} nor a pack it depends on declares",
+                    {"pack": name, "file": file, "attribute": entry.get("name"), "type": on},
+                )
+                for entry in _entries(document, "attributes")
+                for on in _strings(entry.get("on"))
+                if on not in types
+            )
             problems.extend(_unexecuted_keys(name, file, document, "file."))
             problems.extend(_illegal_ends(name, file, document, twins, rule_set))
         problems.extend(

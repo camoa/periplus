@@ -229,7 +229,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   each region--<region>.html.twig in a theme, as an inferred suggests_region edge to the region
 #   when the map holds it;
 # - each module core.extension lists, as an installs_module edge, and each mapped module or theme
-#   it does not list, as an inferred not_installed_by edge to core.extension;
+#   it does not list, as an inferred not_installed_by edge to core.extension and the attribute
+#   installed: no, which spreads to everything inside the module or theme and prints as
+#   [not installed];
 # - each string literal in a PHP method or function, and each quoted text in a template, whose whole
 #   text equals the id of a route, a service, a configuration object or a queue worker, as a
 #   mentions_route, mentions_service, mentions_config or mentions_queue edge with confidence
@@ -455,7 +457,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   A theme hook of core not listed in the core_hook path value gives no template edge, and a
 #   preprocess function of such a hook links only when another rule makes the hook. A
 #   region--<region> template of a sub-theme that takes its regions from its base theme links to
-#   nothing. Whether a module is installed is an edge, not an attribute on the module.
+#   nothing.
 # - A factory class written without a namespace, and a factory set in code, give no edge; a factory
 #   service no mapped file declares names no method. A local task, local action or contextual link
 #   that a deriver makes at run time is not a node: the entry that names the deriver is. A menu

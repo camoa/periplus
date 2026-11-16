@@ -292,7 +292,12 @@ def build_parser() -> argparse.ArgumentParser:
         "closest match first, and stop.",
     )
     find.add_argument(
-        "text", metavar="TEXT", help="the text to look for in node ids, attributes and descriptions"
+        "text",
+        metavar="TEXT",
+        nargs="?",
+        default="",
+        help="the text to look for in node ids, attributes and descriptions; left out, every "
+        "node matches, as with --mark alone",
     )
     find.add_argument(
         "--type",
@@ -307,6 +312,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="P",
         help="keep nodes with a file starting with P; give it again to keep several",
+    )
+    find.add_argument(
+        "--mark",
+        action="append",
+        default=[],
+        metavar="TEXT",
+        help="keep nodes that carry the mark TEXT, as rows print it in brackets; give it again "
+        "to keep several",
     )
     add_limit(find, 50, "rows")
     add_map(find, "the map file to read")
@@ -729,6 +742,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             limit=args.limit,
             map_path=args.map,
             paths=args.path,
+            marks=args.mark,
         )
         sys.stdout.write(FIND_RENDERERS[args.format](found))
         return found.exit_code

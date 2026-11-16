@@ -481,13 +481,26 @@ attributes:
   confidence is the weakest of the row that set the value and the grouping edges on the way.
 - `mark` is a short text a reader shows beside a node that holds the attribute: one to 40
   characters, with no `[`, `]` or line break. The map's header `marks` names the mark of each
-  declared attribute some node holds, so a reader needs no pack.
+  declared attribute some node holds, so a reader needs no pack. Every navigation command prints
+  it in brackets on each row that names such a node, whatever the value, and `periplus find
+  --mark TEXT` lists those nodes. Write the attribute only on the things the mark is true of.
+
+`drupal_basic` uses all three keys. `module/module_installed.yaml` declares `installed` on
+`drupal.module` and `drupal.theme`, with `spreads: true` and `mark: not installed`. The two map
+rules that find a module or theme `core.extension` does not list write `installed: no` beside
+their `not_installed_by` edge. The value spreads to the module's functions, classes, routes and
+templates, so each of their rows prints `[not installed]`.
+
+Any stack's rutter can declare its own. A Go rutter could declare `built` on a Go file, with
+`spreads: true` and `mark: left out by build tag`, and write `built: no` on a file whose build tag
+the project's build leaves out.
 
 The check refuses, with exit 19, a rule that writes an attribute neither its rutter nor one it
 depends on declares, when the rule is a map rule or another rutter declares the name; a rule that
 writes a declared attribute on its own node of a type `on` does not reach; one name declared with
-different `on`, `spreads`, `mark` or description in two places; and a declaration of
-`type_conflict` or `resolution`, which the engine reserves. A mark that breaks its limits is a
+different `on`, `spreads`, `mark` or description in two places; a type in `on` that neither the
+rutter nor one it depends on declares; and a declaration of `type_conflict` or `resolution`, which
+the engine reserves. A mark that breaks its limits is a
 schema error, exit 16.
 
 ## The grammar's node kinds

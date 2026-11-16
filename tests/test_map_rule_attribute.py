@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from test_demo_a_support import map_project, nodes, pin, plant, rutter
+from test_demo_a_support import edges, map_project, nodes, pin, plant, rutter
 
 from periplus.engine.packload import _read_rule
 from periplus.errors import ExitCode
@@ -247,3 +247,16 @@ def test_an_attribute_rule_with_an_attribute_target_is_not_executed() -> None:
     rule = _read_rule("box", item)
     assert not rule.supported
     assert rule.reason == "only a map rule takes attribute.target"
+
+
+def test_a_map_rule_writes_an_attribute_beside_an_edge(tmp_path: Path) -> None:
+    kind = "edge_kinds:\n- {kind: off_by, from: box.unit, to: box.list}\n"
+    rule = off().replace(
+        "  - attribute:",
+        "  - edge: {kind: off_by, from: this_node, to: matched_node}\n  - attribute:",
+    )
+    project(tmp_path, rule, declare=DECLARE + kind)
+    report, document = map_project(tmp_path)
+    assert report.problems == () and report.not_executed == (), report
+    assert nodes(document)["box.unit::B"]["attributes"] == {"switched": "off"}
+    assert ("off_by", "box.unit::B", "box.list::on") in edges(document)

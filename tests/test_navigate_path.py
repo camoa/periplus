@@ -119,6 +119,8 @@ def test_the_output_is_the_same_every_run(tmp_path: Path) -> None:
         "from": "x::a",
         "kind": "calls",
         "to": "x::b",
+        "from_marks": [],
+        "to_marks": [],
         "location": None,
         "source": None,
         "description": None,
