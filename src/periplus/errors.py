@@ -22,8 +22,8 @@ and cannot be satisfied — ``ExitCode`` needs ``enum``, ``Problem`` needs ``dat
 ``ClassVar`` needs ``typing`` and ``Mapping`` needs ``collections.abc``. The two-clause form above
 replaced it.
 
-``tests/test_console_script.py`` asserts the graph property directly: it imports ``periplus.cli`` in
-a subprocess with every runtime distribution blocked at ``sys.meta_path``, having first confirmed in
+No test asserts the graph property now. To check it by hand, import ``periplus.cli`` in a
+subprocess with every runtime distribution blocked at ``sys.meta_path``, having first confirmed in
 that same subprocess that the block works.
 
 What this module costs, recorded because it is paid on every invocation and the trade is

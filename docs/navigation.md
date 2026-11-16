@@ -17,7 +17,7 @@ starts a server. The question commands read a source file only to print one line
 | `periplus slice WORDS` | What lies around the nodes these words or ids name, hop by hop? With `--out FILE`, write that piece to a map file of its own. |
 | `periplus export --format F` | Print the map as GraphML, DOT or Mermaid. |
 
-A ninth command, `periplus check-map`, checks the whole map against the map schema. See
+A tenth command, `periplus check-map`, checks the whole map against the map schema. See
 [Checking the map](#checking-the-map).
 
 ## What every command shares
@@ -44,7 +44,7 @@ A ninth command, `periplus check-map`, checks the whole map against the map sche
   the limit (default 500) is the most items the slice may hold. Over it, the command writes nothing and exits 32.
 - Output is the same on every run for the same map.
 
-The six question commands report ids, locations and source lines. A row of `find`, `neighbors`,
+The question commands report ids, locations and source lines. A row of `find`, `neighbors`,
 `affected` or `path`, and an edge row of `show`, carries a location as `file:line`: where the edge
 is written, else the node's first location. Under the row, marked `|`, comes the source line at
 that place, stripped and cut to 160 characters. It is left out when the file or the line cannot be
@@ -80,7 +80,7 @@ Says what the map holds and what it means. It lists the edge kinds, most edges f
 types, most nodes first, each as `type  count  parent: P` with its description. An end names its
 two most frequent types and counts the rest, `+N`. A kind or type whose pack gives no description
 prints its line alone. Read it before a question, to learn which kind answers it: a kind that
-is listed is a fact the map holds, so read it from the map, not from the source files.
+is listed is a fact the map holds.
 
 The text aims at 3 KB. Over that, it leaves out the kinds and types with the fewest edges or
 nodes, and ends with `N left out, ...`. `--all` prints every one. `--kind K` or `--type T`
@@ -302,7 +302,7 @@ defaults to `both`, since a chain often goes up one kind and down another. Witho
 the piece holds at most 50 rows and aims at 8 KB of text: over that, it leaves out the rows past
 the first hop, farthest and lowest-ranked start first, then the `more links` lines, then names
 per link, then the first-hop rows of the piece that names the most things, and says what it left
-out in a line `cut to fit 8192 bytes: ...`. The legend is left out before any of these, and the
+out in a line `cut to fit 8192 bytes: ...; --limit N prints N rows`. The legend is left out before any of these, and the
 line says `legend left out`. It never leaves out a start's own line or the inventory. `--limit N` caps the rows at `N` (`0` for all)
 with no byte aim. The cap keeps full rows before back-references. Among them it keeps first the nodes more
 starts reach, then those reached from the starts of more words, then those whose own id,

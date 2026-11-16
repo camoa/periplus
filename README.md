@@ -334,15 +334,17 @@ To map a Laravel application, pin `php_basic@0.2.0` and `laravel_basic@0.0.5` an
 at the application's root. The default Laravel folders need no settings. To move the templates,
 set `views_root` under `folders`; a template is named by its path below `views_root`.
 
-New in this release: `php_basic` maps `$this->method()` calls, `new Foo()` and `Foo::class`;
-`drupal_basic` joins a module or theme to its routes, services, classes, libraries and templates,
-starts a theme hook link at the method or function that renders it, joins a template or script
-path to the route of the same shape, and maps `getForm(Foo::class)`; `drupal_js_basic` starts a
-library attachment at the method; and a `name_matches` condition can test a later child with
-`nth`. `php_basic` also joins calls on a variable through its parameter type, a `new`, a return
-type or a trait's using class, and marks a method that `overrides` an inherited one;
-`drupal_basic` joins calls on a service and maps a view's page display as a route. Node and edge
-ids move, so map again after upgrading.
+New in this release: `periplus slice "WORDS"` prints the piece of the map around the things
+those words name, in linked pieces grouped by file, and `periplus legend` says what each edge kind
+means. `php_basic` maps `$this->method()` calls, `new Foo()` and `Foo::class`, joins calls on a
+variable through its parameter type, a `new`, a return type or a trait's using class, and marks a
+method that `overrides` an inherited one. `drupal_basic` joins a module or theme to its routes,
+services, classes, libraries and templates, joins calls on a service, maps a view's page display
+as a route, and maps what acts on a page from outside it: route checks, theme hooks and their
+preprocess functions, form alter hooks, menus and regions. A rule can mark a call that leaves the
+project as a `boundary`, and a link drawn only from a name written as text as `mentioned`. The
+map skill now starts from a code search and asks the map what touches each thing found. Node and
+edge ids move, so map again after upgrading.
 
 ## Write a rutter
 

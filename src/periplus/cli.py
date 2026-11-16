@@ -638,8 +638,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     # imports `jsonschema` at its module level. That is the third runtime distribution, it arrived
     # after this file's arrangement was settled, and a module-level import of this module here would
     # break the startup property for it exactly as one reaching `ruamel.yaml` broke it for the
-    # first two. A test imports `periplus.cli` in a child and asserts that neither
-    # `periplus.validate` nor `jsonschema` is in `sys.modules` afterwards.
+    # first two. No test guards this now: after `import periplus.cli`, neither
+    # `periplus.validate` nor `jsonschema` may be in `sys.modules`.
     if args.command == "validate":
         from periplus.validate import RENDERERS as VALIDATE_RENDERERS
         from periplus.validate import validate
