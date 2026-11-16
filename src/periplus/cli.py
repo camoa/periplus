@@ -148,6 +148,39 @@ def add_ids(parser: argparse.ArgumentParser) -> None:
     )
 
 
+#: The groups of ``periplus --help``, in the order it prints them; each command is in one group,
+#: and a test holds this to the parser's commands. The map skill quotes the printed catalogue.
+CATALOGUE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "set up and build",
+        ("init", "status", "spec", "validate", "update", "map", "check-map", "skills"),
+    ),
+    ("learn the map's words", ("types", "legend")),
+    ("cheap counts: ask these before pulling rows", ("depth", "count", "pieces", "files", "hubs")),
+    (
+        "fetch things and their links",
+        ("find", "show", "neighbors", "affected", "only", "members", "in", "at", "path"),
+    ),
+    ("macros: several answers in one reply", ("reach", "slice")),
+    ("sets and map files", ("extract", "join", "common", "minus", "diff", "export")),
+    ("descriptions", ("undescribed", "order", "stamp", "stale")),
+)
+CONVENTIONS = (
+    "Shared options, where a command has them: --ids prints only full ids, one a line; - in place\n"
+    "of the ids reads them from standard input; --format json prints JSON; --limit 0 lifts a\n"
+    "budget; --map PATH reads another map or a slice file. periplus COMMAND --help prints the\n"
+    "options of one command."
+)
+
+
+class _CatalogueFormatter(argparse.RawDescriptionHelpFormatter):
+    """Prints the catalogue as written, at one width whatever the terminal, so the help is the
+    same text everywhere."""
+
+    def __init__(self, prog: str) -> None:
+        super().__init__(prog, width=100)
+
+
 #: The help of an ID argument that may be ``-``.
 IDS_HELP = "a node id or short name; - reads ids from standard input, one a line"
 
@@ -180,6 +213,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="periplus",
         description="A schema-first, deterministic codebase mapper, configurable to any stack.",
+        usage="periplus [-h] [--version] COMMAND ...",
+        formatter_class=_CatalogueFormatter,
         **_COLOUR,
     )
     parser.add_argument(
@@ -191,7 +226,9 @@ def build_parser() -> argparse.ArgumentParser:
     # list read badly; with three members argparse's own default renders ``{init,spec,status}``.
     # Deleting it is the twelfth rename site, and the one a search for the quoted literal misses
     # because the name sat inside a longer string.
-    subcommands = parser.add_subparsers(dest="command")
+    # Hidden: the epilog lists the commands by group instead of argparse's one flat list. `prog`,
+    # or each command's usage would start with the top parser's whole usage line.
+    subcommands = parser.add_subparsers(dest="command", prog="periplus", help=argparse.SUPPRESS)
     subcommands.add_parser(
         "init",
         help="create this project's .periplus directory and a stub settings file",
@@ -449,7 +486,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     depth = subcommands.add_parser(
         "depth",
-        help="say how far what an item sets off, and what sets it off, reach",
+        help="say how far the walks from an item go, both ways, and where hubs stop them",
         description="Walk by cause from ID both ways to the end and print, per direction, the "
         "hops, the things reached, the share within 2, 3 and 5 hops and the hubs stopped at, and "
         "stop.",
@@ -938,6 +975,14 @@ def build_parser() -> argparse.ArgumentParser:
         "install",
         help="copy the skills into ~/.claude/skills, replacing older copies",
         description="Copy every shipped skill into ~/.claude/skills, and stop.",
+    )
+    lines = {action.dest: action.help for action in subcommands._choices_actions}
+    parser.epilog = "\n\n".join(
+        [
+            f"{title}:\n" + "\n".join(f"  {name:<11}  {lines[name]}" for name in names)
+            for title, names in CATALOGUE
+        ]
+        + [CONVENTIONS]
     )
     return parser
 
