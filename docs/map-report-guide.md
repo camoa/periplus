@@ -315,7 +315,8 @@ Text: the Unknown boundaries section. JSON: `{"total": N, "by_pack": {...}, "by_
 `total` counts the nodes in state `unknown_boundary`: what the map could not make known.
 `by_pack` names the pack whose rule set the mark. `by_reason` is `no rule`, an end that leaves the
 mapped code with no rule identifying it yet, or `run-time`, a call whose target is built at run
-time. Each `no rule` node is a rule a rutter still lacks; `periplus find` lists them by id.
+time. Each `no rule` node is a rule a rutter still lacks. No navigation command selects nodes by state;
+the map's `counts.nodes_by_state` counts them, and each row a command prints names its state.
 
 ### `type_conflicts`
 
@@ -325,8 +326,8 @@ ancestor, such as two kinds of form for one class. Each such node keeps the near
 candidates share, and its `type_conflict` attribute names each candidate as `<type> by
 <pack>/<rule>`. `edges_left_out` counts the edges only a candidate type could carry, which the map
 does not write. Each row is one node and its candidates; the text shows ten. Fix the rule that
-should not match the node, or declare one candidate below the other. `periplus find <type>` lists
-the nodes a candidate type names.
+should not match the node, or declare one candidate below the other. `periplus find --type <type>`
+lists the nodes a candidate type names.
 
 ### `map`
 
@@ -380,7 +381,8 @@ periplus neighbors js.file::web/modules/custom/greet/js/banner.js
 ## A shape the map lacks
 
 The map lacks a node or an edge the code holds. Before you write a rule for it, look for it in the
-Not mapped yet comment at the top of the `pack.yaml` of the rutter that maps that part of the stack.
+Not mapped yet comment at the top of the `pack.yaml` of the rutter that maps that part of the stack,
+when it has one; not every rutter does.
 A shape listed there is a rule not written yet: the rutter's authors saw it and left it out, so it needs a new rule, not a fix.
 
 Do not wait for the report to point at it. A rutter refuses a shape by not matching it, so a
@@ -621,7 +623,7 @@ A rule for a convention only this project uses stays in the project's own rutter
 the stack can hold goes to the bundled rutter for that stack, so every project gets it. Write a
 rule in the project first, and move it once a second project needs it. The pins sit in
 `.periplus/settings.yml`, and a bundled rutter loads by its pin alone; `periplus status` lists the
-search path the pins are found on: the project's packs, the user configuration folder, the bundled
+search path the pins are found on: the project's packs, the user configuration directory, the bundled
 rutters, and any `pack_paths`.
 
 The bundled example is `path_in_script_string` in `drupal_js_basic`: a path written whole in a

@@ -2,8 +2,8 @@
 
 Read [Writing a rutter](rutter-author-guide.md) and [Reading the Drupal
 rutters](rutter-author-guide-drupal.md) first. A reference is a use of a thing in a body, as a call.
-A tree rutter states one with a reference rule. `php_basic` has two for PHP calls, of a kind with
-[php.function, php.method] at each end; each block below is from the file its fence names, in
+A tree rutter states one with a reference rule. `php_basic` has several for PHP calls, of a kind
+with [php.function, php.method] at each end; each block below is from the file its fence names, in
 src/periplus/packs.
 
 ```yaml php_basic@0.2.0/edges/find_structure.yaml
@@ -129,7 +129,7 @@ that read a call's argument.
 
 A written name that no file declares, such as the method of a `\Drupal::` shortcut, can still name
 its end through a table the rutter carries. `tables` is a top-level key of `pack.yaml`: a map from
-a table's name to a map of written name to node name. The Drupal pack declares two:
+a table's name to a map of written name to node name. The Drupal pack declares several; two of them:
 
 ```yaml drupal_basic@0.3.0/pack.yaml
 # Name tables that call/call.yaml looks a written name up in.
@@ -299,7 +299,7 @@ The project's classes extend and implement classes the map never reads, such as 
 
 ```yaml drupal_basic@0.3.0/pack.yaml
 # The core and Symfony classes and interfaces that the custom code builds on and the map never
-# reads. Each one an inherits or implements edge reaches becomes a declared node this pack draws,
+# reads. Each one an inherits or implements edge reaches becomes a boundary node this pack draws,
 # with no location. A custom class that descends from a name with a type takes that type: those
 # roles have no attribute to read. A plugin base names no type, because its attribute or
 # annotation already gives the plugin. Contributed modules' bases belong to their own rutters.
@@ -497,8 +497,10 @@ attributes:
 `drupal.module` and `drupal.theme`, with `spreads: true` and `mark: not installed`. The two map
 rules that find a module or theme `core.extension` does not list write `installed: no` beside
 their `not_installed_by` edge. The value spreads to the module's functions, classes, routes and
-templates, and with `spreads_along` over `php_basic`'s `contains` and `declares_property` on to
-each class's methods and properties, so each of their rows prints `[not installed]`.
+templates, and with `spreads_along` over `php_basic`'s `contains`, `declares_property`,
+`has_call_site`, `property_typed_as` and `has_parameter`, and `manager_call_in` toward its from
+end, on to each class's methods, properties, call sites, property types and parameters, so each
+of their rows prints `[not installed]`.
 
 Any stack's rutter can declare its own. A Go rutter could declare `built` on a Go file, with
 `spreads: true` and `mark: left out by build tag`, and write `built: no` on a file whose build tag
@@ -646,16 +648,20 @@ A `property_typed_as` edge runs from each property to its type node. The map rul
     - id_matches: '^php\.type::(?<owner>.+)$'
     - node: 'php.property::{owner}::${member}'
     - edge: property_typed_as
-    - id_matches: '^php\.property_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: *method_on_type_or_ancestor
     - node: 'php.call_site::{site}'
     - edge: call_site_in
-  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
   confidence: inferred
 ```
 
 It goes up `inherits` from the call's class to the class that declares the property, through
-`property_typed_as` to its type, and emits `calls` from the method around the call to
-`<type>::<method>`, at the call site's line, inferred. A property with no declared type keeps its
+`property_typed_as` to its type. The `try` step, the YAML alias of the steps that
+`calls_through_assigned_property` below names `method_on_type_or_ancestor`, goes up `inherits`
+from the type to the nearest class that declares the method, and sets `declarer` to it. A `try`
+step that finds nothing is skipped, so `declarer` stays the type. The rule emits `calls` from the
+method around the call to `<declarer>::<method>`, at the call site's line, inferred. A property with no declared type keeps its
 call site node and gets no `calls` edge and no skipped row.
 
 A nullable type, `?Mailer`, and a union of one class name with null, false or scalars, such as
@@ -699,17 +705,23 @@ node, not its twin. A function's parameter has no enclosing method;
     - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
     - node: 'php.parameter::{owner}::{setter}::${parameter}'
     - edge: parameter_typed_as
-    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>\\?[A-Za-z_][\w\\]*)$'
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: &method_on_type_or_ancestor
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
     - node: 'php.call_site::{site}'
     - edge: call_site_in
-  emits: [{edge: {kind: calls, from: matched_node, to: {template: "{type}::{method}", types: [php.method], on_miss: unresolved}}}]
+  emits: [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
   confidence: inferred
 ```
 
 It goes up `inherits` to the call's class or its nearest ancestor that declares the property, to
 that class's assignment of it, to the assigned parameter of the assigning method, and to its type.
-Every step names a whole id with `node:` or follows an edge. The `calls` edge runs from the method
-around the call to `<type>::<method>`, at the call site's line, inferred.
+Every step names a whole id with `node:` or follows an edge. The `try` step then finds the class
+that declares the method, as in the rule above. The `calls` edge runs from the method around the
+call to `<declarer>::<method>`, at the call site's line, inferred.
 `drupal_basic@0.3.0/service` holds the same walk for a property assigned `\Drupal::service('<id>')`, in single or double quotes: it follows
 `service_class` from that service to its class. Its `service_chain_calls.yaml` and
 `service_local_calls.yaml` take the same walk for a call on the service written in one expression

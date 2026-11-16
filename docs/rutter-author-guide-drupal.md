@@ -179,7 +179,7 @@ and second item, misreads this: `route_definition.yaml` reshapes a key's value w
 
 ## A rule read on one ending
 
-`drupal_basic` claims the endings module, install, inc, theme and profile for PHP. `match.ending`
+`drupal_basic` claims the endings module, install, inc, theme, profile and engine for PHP. `match.ending`
 narrows a rule to the files of one ending, or of any in a list, written without the dot. With no
 `ending`, every file the type claims passes. The rule for a theme's include files reads `.inc` and
 `.theme` files. The theme's own `.theme` file has no `theme_name`, so there it leaves one skipped row:

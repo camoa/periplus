@@ -235,7 +235,8 @@ edge_kinds: [{kind: enters, from: gen.function, to: spec.api}]
 to: {template: 'gen.function::config', boundary: {into: {template: config, type: spec.api}, kind: enters}}
 ```
 
-`periplus affected spec.api::config` then lists the config end and each function that calls it.
+`periplus affected spec.api::config --depth 2` then lists the config end and each function that
+calls it.
 When rules mark one end differently, mapped beats boundary, boundary beats unresolved, unresolved
 beats unknown boundary, and any mark beats referenced, whatever the rule and file order.
 
@@ -413,12 +414,13 @@ a service's class, set `realizes: to`:
 ```
 
 The map lists the kind under `realizing_kinds`, or under `realizing_to_kinds` for `realizes: to`.
-A walk in `slice`, `neighbors` and `affected` that reaches the declared end adds the concrete ends
-at the same hop, so the code behind a declaration costs no extra hop, and `show` lists them under
-`Realized by`. Leave it unset on a kind where one declared end gathers many concrete ends that are
+A walk in `slice`, or in `neighbors` and `affected` with `--raw`, that reaches the declared end
+adds the concrete ends at the same hop, so the code behind a declaration costs no extra hop. The
+walk by cause follows the realizing kind itself, so the concrete end is one hop further. `show`
+lists them under `Realized by`. Leave it unset on a kind where one declared end gathers many concrete ends that are
 peers more than forms, such as a parent class and its children.
-Two rutters that declare one kind must agree on `realizes`. `periplus validate` refuses a value
-other than `true` or `false`.
+Two rutters that declare one kind must agree on `realizes`. `periplus validate` refuses, with exit
+16, a value other than `true`, `false` or `to`.
 
 An edge kind may set `cause` to say which end sets off the other. Set `cause: from` when the
 `from` end sets off or uses the `to` end, so the link runs forward, as a function calls another:
@@ -465,7 +467,7 @@ and any other kind is undeclared; nothing implies `touch`. The map lists each ki
 `cause_from_kinds`, `cause_to_kinds`, `cause_none_kinds` or `cause_touch_kinds`; an undeclared
 kind is in none of them, and `periplus legend` ends a declared kind's line with `cause: <value>`.
 `periplus validate` refuses, with exit 19, a grouping kind that declares a cause other than
-`none`, and refuses any value other than `from`, `to`, `none` or `touch`. Two rutters that declare
+`none`, and, with exit 16, any value other than `from`, `to`, `none` or `touch`. Two rutters that declare
 one kind must agree on `cause`.
 
 ## What the format cannot say today

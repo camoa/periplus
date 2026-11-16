@@ -156,13 +156,15 @@ bring the pins to the installed versions.
 ### 3. Map the project
 
 ```
-periplus map --output map.json
+periplus map
 ```
 
-`periplus map` also prints a run report. It names each rule and how often it fired, and the files
+`periplus map` writes the map to `.periplus/map.json`, where the other commands look for it. It
+also prints a run report. It names each rule and how often it fired, and the files
 no rule read. A pinned rutter that selected no file is listed first, under `Packs that selected no
-file`, with the folders it looked in. When no rutter selects a file, `map` writes no map, leaves
-an existing one as it was, and exits 33. It also names folders it could not list, files that did not parse, and rules it
+file`, with the folders it looked in. Exit 33 means no rutter selected any file: `map` writes no
+map, leaves an existing one as it was, and asks you to declare where the code is under `folders`
+in `.periplus/settings.yml`. The report also names folders it could not list, files that did not parse, and rules it
 could not run. The [map report guide](docs/map-report-guide.md) reads each part in turn.
 
 ### 4. Ask the map
@@ -173,7 +175,7 @@ periplus find TEXT
 periplus show ID
 ```
 
-[Read the map](#read-the-map) lists the thirteen commands that answer a question about the map.
+[Read the map](#read-the-map) lists the commands that read the map, grouped by what they are for.
 
 ## Why Periplus
 
@@ -197,17 +199,24 @@ loaded and the settings file used. When it holds an edge of a kind its rutter de
 (`groups: true`: the edge's `from` end belongs to the container at its `to` end), it lists those
 kinds, sorted, under `grouping_kinds`. When its rutters describe a node type or edge kind it holds,
 it carries those one-line texts under `legend`, as `edge_kinds` and `node_types` maps from name to
-text, keys sorted; a map whose rutters describe none has no `legend`. Each node has an `id`, a `type`, a `state` and its `locations`
+text, keys sorted; a map whose rutters describe none has no `legend`. It lists each edge kind it
+holds under its cause, the end that sets off the other: `cause_from_kinds`, `cause_to_kinds`,
+`cause_none_kinds` or `cause_touch_kinds`; a kind in none of them is undeclared. When a node holds
+an attribute its rutter gives a mark, `marks` names the mark of each such attribute. Each node has an `id`, a `type`, a `state` and its `locations`
 (file and line). Its `provenance` names the pack, the rule and the rule's declared confidence: `declared`,
 `inferred` or `mentioned`, strongest first. Rules that reach one node or edge at different
 confidences each keep their own row.
 
-The engine writes three states today:
+The engine writes five states:
 
 - `mapped`: a rule found the thing in a file the project holds.
+- `boundary`: the thing is outside the mapped code, and a rule says what it is.
+- `unknown_boundary`: the thing leaves the mapped code and no rule says what it is, or it is a
+  call site whose target is built at run time. The node records why.
+- `unresolved`: a rule looked for a name inside the mapped code and no rule maps it. The node
+  records what was searched.
 - `referenced`: a file names the thing, but no rule read where it is defined. Drupal core is an
   example when only custom code is mapped.
-- `unresolved`: a rule looked for a name and no rule maps it. The node records what was searched.
 
 An unresolved node from a map of a Drupal site, shortened: a method calls `my_module_format()`,
 which no mapped file declares.
@@ -343,17 +352,26 @@ To map a Laravel application, pin `php_basic@0.2.0` and `laravel_basic@0.0.5` an
 at the application's root. The default Laravel folders need no settings. To move the templates,
 set `views_root` under `folders`; a template is named by its path below `views_root`.
 
-New in this release: `periplus slice "WORDS"` prints the piece of the map around the things
-those words name, in linked pieces grouped by file, and `periplus legend` says what each edge kind
-means. `php_basic` maps `$this->method()` calls, `new Foo()` and `Foo::class`, joins calls on a
-variable through its parameter type, a `new`, a return type or a trait's using class, and marks a
-method that `overrides` an inherited one. `drupal_basic` joins a module or theme to its routes,
-services, classes, libraries and templates, joins calls on a service, maps a view's page display
-as a route, and maps what acts on a page from outside it: route checks, theme hooks and their
-preprocess functions, form alter hooks, menus and regions. A rule can mark a call that leaves the
-project as a `boundary`, and a link drawn only from a name written as text as `mentioned`. The
-map skill now starts from a code search and asks the map what touches each thing found. Node and
-edge ids move, so map again after upgrading.
+New in this release:
+
+- **Marks.** A rutter can declare attributes with a short mark, such as `[not installed]`. Every
+  row that names a marked thing prints its mark, and `find --mark` selects by it.
+- **Cause.** Each edge kind says which end sets off the other. `neighbors` lists what an item sets
+  off and `affected` what sets it off, hop by hop, and stop at hubs.
+- **Depth and reach.** `depth` says how far those walks go before you list them. `reach` prints
+  `depth`, both walks, `only` and `hubs` in one reply, within a character budget.
+- **Sets and pipes.** `only`, `hubs`, `members`, `pieces` and `count` work on a set of ids.
+  `--ids` prints ids, and `-` reads them, so one command feeds the next. Map files combine with
+  `extract`, `join`, `common`, `minus` and `diff`.
+- **Description tools.** `in` and `at` go from a file or a line to the map. `undescribed` counts
+  what is left to describe, `order` puts it in reading order, and `stamp` and `stale` keep the
+  descriptions in step with the code.
+- **First run.** `init` finds the project's folders and pins each bundled rutter it detects.
+  `map` exits 33 instead of writing an empty map.
+- **find.** It ranks main things first, counts before it lists, keeps to a character budget, and
+  finds edges by their description or code line.
+
+Map again after upgrading, so the walks can read each edge kind's cause.
 
 ## Write a rutter
 
@@ -399,7 +417,7 @@ The settings file, `.periplus/settings.yml`, names:
 - `re_include`: globs that take back the files a rutter's `files.exclude` leaves out.
 
 `periplus status` lists where Periplus looks for a pinned rutter: the project's
-`.periplus/packs`, the user's configuration folder, the bundled rutters and each `pack_paths`
+`.periplus/packs`, the user configuration directory, the bundled rutters and each `pack_paths`
 folder. A bundled rutter, such as `php_basic`, loads by its pin alone.
 
 ### A complete small rutter
@@ -512,50 +530,62 @@ Then it runs the loop. The map's `referenced` and `unresolved` nodes say which r
 
 ## Read the map
 
-Fourteen commands answer a question about a written map, and stop: `periplus types` counts the node
-types and edge kinds, `periplus legend` says what each kind and type means and which types a kind
-joins, `periplus find TEXT` searches node ids, attributes and descriptions, then edge descriptions and code lines, `periplus show ID...` prints
-nodes and their edges, `periplus neighbors ID` and `periplus affected ID` list what a node sets off and
-what sets it off, by the cause each edge kind declares, `periplus depth ID` says how far those two
-walks go, and `periplus path FROM TO` prints the shortest chains between two. Five work on a set of
-ids: `periplus only ID...` lists what the ids alone set off, `periplus hubs ID...` the hubs their walk
-stops at, `periplus members ID...` what a container holds, `periplus pieces ID...` splits the set into
-the groups edges join, and `periplus count ID...` counts the set by type and state, with the edges
-among it. Five go between files and the map: `periplus in FILE...` lists what the map holds in a
-file, `periplus at FILE:LINE...` names the mapped thing at a line and what holds it, `periplus files
-ID...` counts a set by file, `periplus undescribed` counts the main things with no description yet,
-and `periplus order ID...` puts a set in order, each thing after what it uses. `periplus stamp`
-writes into each description a fingerprint of its code, and `periplus stale` lists the
-descriptions whose code changed since. `periplus reach ID...` prints `depth`, `neighbors`,
-`affected`, `only` and `hubs` for the ids in one reply, to a character budget, and names the
-command that prints in full each part it cut short. A command that lists things takes `--ids` and prints one full id a line; a command that
-takes ids reads them from standard input when given `-`, so
-`periplus neighbors ID --depth all --ids | periplus count -` joins two. They read the map, the
-descriptions file and the source line under each row, and nothing more. `periplus check-map` runs the full schema check that these commands
-skip. The [navigation guide](docs/navigation.md) gives each command's options, output and exit
-codes, with an example you can run.
+Twenty-nine commands read a written map, and stop. They read the map, the descriptions file and
+the source line under each row, and nothing more. They come in two layers: small commands that do
+one job each, and two macros, `reach` and `slice`, that combine them in one reply.
 
-### Slice and export
+- **Learn the map's words.** `periplus types` counts the node types and edge kinds. `periplus
+  legend` says what each kind and type means and which types a kind joins.
+- **Cheap counts, to decide what to read.** `periplus depth ID...` says how far what the ids set
+  off, and what sets them off, reaches. `periplus count ID...` counts a set by type and state, with
+  the edges among it. `periplus pieces ID...` splits a set into the groups edges join. `periplus
+  files ID...` counts a set by file. `periplus hubs ID...` lists the hubs a walk stops at.
+- **Fetch things and their links.** `periplus find TEXT` searches node ids, attributes and
+  descriptions, then edge descriptions and code lines. `periplus show ID...` prints nodes and their
+  edges. `periplus neighbors ID...` and `periplus affected ID...` list what the ids set off and
+  what sets them off, hop by hop, by the cause each edge kind declares. `periplus only ID...` lists
+  what the ids alone set off. `periplus members ID...` lists what a container holds. `periplus in
+  FILE...` lists what the map holds in a file, and `periplus at FILE:LINE...` names the mapped
+  thing at a line and what holds it. `periplus path FROM TO` prints the shortest chains between
+  two.
+- **Macros.** `periplus reach ID...` prints `depth`, `neighbors`, `affected`, `only` and `hubs` for
+  the ids in one reply, to a character budget. `periplus slice WORDS` prints the piece of the map
+  around the things some words or ids name, in linked pieces grouped by file. Each names the small
+  command that prints in full a part it cut.
+- **Sets and map files.** `periplus extract`, `join`, `common`, `minus` and `diff` write and compare
+  map files. `periplus export` prints the map as GraphML, DOT or Mermaid.
+- **Descriptions.** `periplus undescribed` counts the main things with no description yet.
+  `periplus order ID...` puts a set in order, each thing after what it uses. `periplus stamp`
+  writes into each node entry of the descriptions file a fingerprint of its code, and `periplus
+  stale` lists the entries whose code changed since.
 
-`periplus slice` writes a piece of the map to a map file of its own, and `periplus extract ID...
---out FILE` writes exactly the things some ids name and the edges among them. Map files combine as
-sets: `periplus join`, `common` and `minus` read two or more and count, or with `--out` write, what
-any, every, or only the first of them holds; `periplus diff OLD NEW` lists the things and edges
-added, removed and changed. `periplus export` prints the whole map as GraphML, DOT or Mermaid. To
-draw a part of the map, slice it, then export the slice.
+A command that lists things takes `--ids` and prints one full id a line; a command that takes ids
+reads them from standard input when given `-`, so `periplus neighbors ID --depth all --ids |
+periplus count -` joins two. `periplus check-map` runs the full schema check that the other
+commands skip. The [navigation guide](docs/navigation.md) gives each command's options, output and
+exit codes, with an example you can run.
+
+### Slice, sets and export
+
+`periplus slice` prints a piece of the map, and with `--out FILE` writes it to a map file of its
+own. `periplus extract ID... --out FILE` writes exactly the things some ids name and the edges
+among them. Map files combine as sets: `periplus join`, `common` and `minus` read two or more and
+count, or with `--out` write, what any, every, or only the first of them holds; `periplus diff OLD
+NEW` lists the things and edges added, removed and changed. `periplus export` prints the whole map
+as GraphML, DOT or Mermaid. To draw a part of the map, slice it to a file, then export the slice.
 
 ```
-periplus slice [ID ...] [--path PREFIX]... --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH]
+periplus slice [ID ...] [--from ID...] [--path PREFIX]... --out FILE [--direction out|in|both] [--depth N] [--kind K]... [--limit N] [--map PATH]
 periplus export --format graphml|dot|mermaid [--map PATH]
 ```
 
-`slice` starts from the ids you name and from every node whose first file starts with `--path PREFIX`, and follows edges
+With `--out`, `slice` starts from the ids you name and from every node whose first file starts with `--path PREFIX`, and follows edges
 from them. Repeat `--path` for several prefixes. `--direction out` and `in` follow edges one way; `both` follows an edge either way at every hop (default `both`).
 `--depth N` sets how many edges to follow (default 1), and `--kind K` keeps only edges of kind `K`;
 repeat it for several. `--limit N` stops the slice when it would hold more than `N` items (default
 500, `0` for no limit): the command exits 32 and writes nothing. An unknown id, or a prefix that
-matches nothing, exits 31. `--out` is required, and a slice is a smaller map, so name it so it
-cannot replace the full map.
+matches nothing, exits 31. A slice is a smaller map, so name it so it cannot replace the full
+map.
 
 `export` prints to standard output and its warnings to standard error. GraphML names each node by
 a generated token, labels it with a short name and carries the map id as its `id` data, with the
@@ -577,46 +607,60 @@ not draw a graph above 500 edges or 50,000 characters, and the export warns when
 Run each command in the project folder.
 
 ```
+# set up and build
 periplus init                      # create .periplus/ and a settings file, pinning the rutters and folders it finds
 periplus status                    # report the settings, where each value came from, and the pack search path
 periplus spec [PACK] [--summary]   # print the rutter contract, and what one rutter declares and inherits
 periplus validate PACK             # check one rutter against the schemas and what map refuses it for
 periplus update                    # move each pin to the installed version of that rutter
-periplus map --output map.json     # map this project and write the map, with a run report
+periplus map                       # map this project and write .periplus/map.json, with a run report
+periplus check-map                 # check every node and edge of the map against the map schema
+periplus skills install            # copy the Claude skills Periplus ships into ~/.claude/skills
+
+# learn the map's words
 periplus types                     # count the node types and edge kinds in the written map
 periplus legend                    # say what each edge kind and node type in the map means
-periplus check-map                 # check every node and edge of the map against the map schema
+
+# cheap counts
+periplus depth ID...               # say how far what an item sets off, and what sets it off, reach
+periplus count ID...               # count the things ids name, by type and state, and the edges among them
+periplus pieces ID...              # split ids into the groups that edges among them join
+periplus files ID...               # list the files that hold a set of things, most first
+periplus hubs ID...                # list the hubs the walk by cause from the ids stops at
+
+# fetch things and their links
 periplus find TEXT                 # find the things and edges that hold some words, main things first
 periplus show ID...                # show nodes and the edges at each
-periplus depth ID                  # say how far what an item sets off, and what sets it off, reach
-periplus reach ID...               # print depth, neighbors, affected, only and hubs in one reply
-periplus neighbors ID              # list what an item sets off, hop by hop
-periplus affected ID               # list what sets an item off, hop by hop
+periplus neighbors ID...           # list what an item sets off, hop by hop
+periplus affected ID...            # list what sets an item off, hop by hop
 periplus only ID...                # list what the ids set off that nothing else sets off
-periplus hubs ID...                # list the hubs the walk by cause from the ids stops at
 periplus members ID...             # list what a container holds, by the map's grouping kinds
-periplus pieces ID...              # split ids into the groups that edges among them join
-periplus count ID...               # count the things ids name, by type and state, and the edges among them
 periplus in FILE...                # list the things the map holds in each file, in line order
 periplus at FILE:LINE...           # name the mapped thing at a file and line, and what holds it
-periplus files ID...               # list the files that hold a set of things, most first
-periplus undescribed [ID...]       # count the main things with no description, by file, type or container
-periplus order ID...               # list a set so that each thing comes after what it calls or uses
-periplus stamp                     # write a fingerprint of its code into each node description
-periplus stale                     # list the node descriptions whose code changed or whose node is gone
 periplus path FROM TO              # show every shortest chain of edges from one item to another
+
+# macros
+periplus reach ID...               # print depth, neighbors, affected, only and hubs in one reply
+periplus slice WORDS               # print the piece of the map around some words, ids or a path
 periplus slice ID --out FILE       # write the items around some items or a path to a smaller map
+
+# sets and map files
 periplus extract ID... --out FILE  # write the things ids name, and the edges among them, to a map file
 periplus join MAP MAP...           # count or write (--out) the things and edges in any of the maps
 periplus common MAP MAP...         # count or write (--out) the things and edges in every one of the maps
 periplus minus MAP MAP...          # count or write (--out) the things in the first map and in no other
 periplus diff OLD NEW              # list the things and edges added, removed and changed between two maps
 periplus export --format F         # print the map as graphml, dot or mermaid
-periplus skills install            # copy the Claude skills Periplus ships into ~/.claude/skills
+
+# descriptions
+periplus undescribed [ID...]       # count the main things with no description, by file, type or container
+periplus order ID...               # list a set so that each thing comes after what it calls or uses
+periplus stamp                     # write a fingerprint of its code into each node entry of the descriptions file
+periplus stale                     # list the node entries whose code changed or whose node is gone
 ```
 
 `periplus validate` takes a bare `name`, or `name@version` to pick one of several copies.
-`periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `slice`
+`periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `skills`
 and `export` takes `--format json`. The twenty-five commands that read one map take `--map PATH`; the
 [navigation guide](docs/navigation.md) gives their other options. `periplus --version` prints the
 installed version, and `periplus <command> --help` gives each command's options.

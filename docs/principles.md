@@ -9,9 +9,8 @@ gives the reasons for that decision, and the reasons for a new mapper.
 Most code mappers read source files. In a code base built on a framework, the source files are a
 small part of the structure.
 
-Before the design, the custom code of two production Drupal sites was counted. Source files
-were about 3% of it. The rest was framework configuration, templates and component definitions.
-Those files hold the services, the routes, the content model and the page structure. A mapper
+Much of a framework project's custom code is framework configuration, templates and component
+definitions, not source files. Those files hold the services, the routes, the content model and the page structure. A mapper
 that reads only source files does not see them. Drupal is the example here, not the target. Any
 framework with a container and a template layer has the same shape.
 
