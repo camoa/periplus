@@ -537,8 +537,12 @@ codes, with an example you can run.
 
 ### Slice and export
 
-`periplus slice` writes a piece of the map to a map file of its own. `periplus export` prints the
-whole map as GraphML, DOT or Mermaid. To draw a part of the map, slice it, then export the slice.
+`periplus slice` writes a piece of the map to a map file of its own, and `periplus extract ID...
+--out FILE` writes exactly the things some ids name and the edges among them. Map files combine as
+sets: `periplus join`, `common` and `minus` read two or more and count, or with `--out` write, what
+any, every, or only the first of them holds; `periplus diff OLD NEW` lists the things and edges
+added, removed and changed. `periplus export` prints the whole map as GraphML, DOT or Mermaid. To
+draw a part of the map, slice it, then export the slice.
 
 ```
 periplus slice [ID ...] [--path PREFIX]... --out FILE [--direction out|in|both] [--depth N] [--kind K] [--limit N] [--map PATH]
@@ -602,13 +606,18 @@ periplus stamp                     # write a fingerprint of its code into each n
 periplus stale                     # list the node descriptions whose code changed or whose node is gone
 periplus path FROM TO              # show every shortest chain of edges from one item to another
 periplus slice ID --out FILE       # write the items around some items or a path to a smaller map
+periplus extract ID... --out FILE  # write the things ids name, and the edges among them, to a map file
+periplus join MAP MAP...           # count or write (--out) the things and edges in any of the maps
+periplus common MAP MAP...         # count or write (--out) the things and edges in every one of the maps
+periplus minus MAP MAP...          # count or write (--out) the things in the first map and in no other
+periplus diff OLD NEW              # list the things and edges added, removed and changed between two maps
 periplus export --format F         # print the map as graphml, dot or mermaid
 periplus skills install            # copy the Claude skills Periplus ships into ~/.claude/skills
 ```
 
 `periplus validate` takes a bare `name`, or `name@version` to pick one of several copies.
 `periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `slice`
-and `export` takes `--format json`. The twenty-four commands that read a map take `--map PATH`; the
+and `export` takes `--format json`. The twenty-five commands that read one map take `--map PATH`; the
 [navigation guide](docs/navigation.md) gives their other options. `periplus --version` prints the
 installed version, and `periplus <command> --help` gives each command's options.
 

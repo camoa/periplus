@@ -797,6 +797,56 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="how to print the report (default: text)",
     )
+    taken = subcommands.add_parser(
+        "extract",
+        help="write the things ids name, and the edges among them, to a map file",
+        description="Write the things the IDs name and the edges between two of them to FILE as "
+        "a map, following no edge, and stop.",
+    )
+    taken.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
+    taken.add_argument(
+        "--out", type=Path, required=True, metavar="FILE", help="the map file to write"
+    )
+    add_map(taken, "the map file to read")
+    add_format(taken)
+    for name, helptext in (
+        ("join", "the things and edges in any of the maps"),
+        ("common", "the things and edges in every one of the maps"),
+        ("minus", "the things in the first map and in no other, and the edges among them"),
+    ):
+        combined = subcommands.add_parser(
+            name,
+            help=f"count or write {helptext}",
+            description=f"Count {helptext}, by type, state and kind, and with --out write them to "
+            "FILE as a map, and stop. A thing is the same in two maps when its id is.",
+        )
+        combined.add_argument(
+            "maps", metavar="MAP", nargs="+", type=Path, help="a map file: a whole map or a slice"
+        )
+        combined.add_argument(
+            "--out", type=Path, default=None, metavar="FILE", help="the map file to write"
+        )
+        add_ids(combined)
+        add_format(combined)
+    changed = subcommands.add_parser(
+        "diff",
+        help="list the things and edges added, removed and changed from one map to another",
+        description="Compare the map NEW with the map OLD: count the things added, removed and "
+        "changed by type and the edges by kind, then list them, and stop.",
+    )
+    changed.add_argument("old", metavar="OLD", type=Path, help="the earlier map file")
+    changed.add_argument("new", metavar="NEW", type=Path, help="the later map file")
+    changed.add_argument(
+        "--change",
+        action="append",
+        choices=("added", "removed", "changed"),
+        default=[],
+        help="with --ids, print only the things of this change; repeat for several "
+        "(default: all three)",
+    )
+    add_limit(changed, 50, "rows of each list")
+    add_ids(changed)
+    add_format(changed)
     export = subcommands.add_parser(
         "export",
         help="print the map as GraphML, DOT or Mermaid",
@@ -1352,6 +1402,44 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
         )
         sys.stdout.write(SLICE_RENDERERS[args.format](sliced))
         return sliced.exit_code
+
+    if args.command == "extract":
+        from periplus.navigate.extract import RENDERERS as EXTRACT_RENDERERS
+        from periplus.navigate.extract import run as run_extract
+
+        taken = run_extract(
+            start=Path.cwd(), env=os.environ, ids=args.id, out=args.out, map_path=args.map
+        )
+        sys.stdout.write(EXTRACT_RENDERERS[args.format](taken))
+        return taken.exit_code
+
+    if args.command in ("join", "common", "minus"):
+        from periplus.navigate.sets import RENDERERS as SETS_RENDERERS
+        from periplus.navigate.sets import listed as sets_listed
+        from periplus.navigate.sets import run as run_sets
+
+        combined = run_sets(
+            start=Path.cwd(), env=os.environ, command=args.command, paths=args.maps, out=args.out
+        )
+        return _emit(args, SETS_RENDERERS, combined, sets_listed)
+
+    if args.command == "diff":
+        from periplus.navigate.diff import CHANGES
+        from periplus.navigate.diff import RENDERERS as DIFF_RENDERERS
+        from periplus.navigate.diff import listed as diff_listed
+        from periplus.navigate.diff import run as run_diff
+
+        if args.change and not args.ids:
+            parser.error("--change picks what --ids prints; give --ids too")
+        compared = run_diff(
+            start=Path.cwd(),
+            env=os.environ,
+            old=args.old,
+            new=args.new,
+            limit=0 if args.ids else args.limit,
+            changes=args.change or CHANGES,
+        )
+        return _emit(args, DIFF_RENDERERS, compared, diff_listed)
 
     if args.command == "export":
         from periplus.navigate.export import RENDERERS as EXPORT_RENDERERS

@@ -1,9 +1,11 @@
 # Navigating the map
 
-`periplus map` writes the map. Twenty-four commands read it. Nineteen answer a question about it. `slice` prints the
+`periplus map` writes the map. Twenty-nine commands read it. Nineteen answer a question about it. `slice` prints the
 piece of the map around some words or items, or cuts it into a map file of its own; `export` prints the map in
-another format. `stamp` and `stale` keep the descriptions file in step with the code. Each one loads the map,
-prints its output and stops. None of them changes the map or starts a server, and only `stamp` writes a file.
+another format. `stamp` and `stale` keep the descriptions file in step with the code. `extract`, `join`, `common`,
+`minus` and `diff` treat map files as sets. Each one loads the map,
+prints its output and stops. None of them changes the map or starts a server, and only `stamp`, and `slice`,
+`extract`, `join`, `common` and `minus` with `--out`, write a file.
 The question commands read a source file only to print one line of it under a row.
 
 | Command | Question it answers |
@@ -30,16 +32,21 @@ The question commands read a source file only to print one line of it under a ro
 | `periplus stale` | Which node entries describe code that changed since they were stamped, or a node that is gone? |
 | `periplus path FROM TO` | What is the shortest chain of edges from one item to another? |
 | `periplus slice WORDS` | What lies around the nodes these words or ids name, hop by hop? With `--out FILE`, write that piece to a map file of its own. |
+| `periplus extract ID... --out FILE` | Write the things these ids name, and the edges among them, to a map file. |
+| `periplus join MAP MAP...` | What do any of these map files hold? With `--out FILE`, write it as a map. |
+| `periplus common MAP MAP...` | What do all of these map files hold, as what two features share? |
+| `periplus minus MAP MAP...` | What does the first map file hold that no other does? |
+| `periplus diff OLD NEW` | Which things and edges were added, removed and changed from one map to another? |
 | `periplus export --format F` | Print the map as GraphML, DOT or Mermaid. |
 
-A twenty-fourth command, `periplus check-map`, checks the whole map against the map schema. See
+A twenty-ninth command, `periplus check-map`, checks the whole map against the map schema. See
 [Checking the map](#checking-the-map).
 
 ## What every command shares
 
 - `--map PATH` names the map file. Without it, the command reads `.periplus/map.json` under the
   project root, found by walking up from the working directory.
-- The question commands, `slice`, `stamp` and `stale` take `--format text|json` to pick the report (default
+- The question commands, `slice`, `stamp`, `stale`, `extract`, `join`, `common`, `minus` and `diff` take `--format text|json` to pick the report (default
   `text`). The JSON report has sorted keys and is described by the shipped
   `navigation.schema.json`, which `periplus spec` also emits. `export` prints the graph itself and
   takes `--report text|json` for the warnings and problems it writes to standard error.
@@ -60,7 +67,7 @@ A twenty-fourth command, `periplus check-map`, checks the whole map against the 
   the limit (default 500) is the most items the slice may hold. Over it, the command writes nothing and exits 32.
 - `-` in place of the `ID`s reads them from standard input, one id a line, for every command
   that takes several `ID`s (`show`, `depth`, `reach`, `neighbors`, `affected`, `only`, `hubs`,
-  `members`, `pieces`, `count`, `files`, `undescribed`, `order`), and for `slice --from`. Only the
+  `members`, `pieces`, `count`, `files`, `undescribed`, `order`, `extract`), and for `slice --from`. Only the
   line ending is taken off, so an id keeps its spaces; empty lines are skipped. `-` that reads no id
   exits 2. `path` takes two single ids and `slice` reads its other arguments as words, so neither
   reads standard input there.
@@ -74,7 +81,8 @@ A twenty-fourth command, `periplus check-map`, checks the whole map against the 
   then what `neighbors --ids` and `affected --ids` list, each once), `neighbors` and
   `affected` (the starts, then every thing within `--depth`, and with `--touch` the touching
   things), `only`, `hubs`, `members`, `pieces` (a blank line between two pieces), `in`, `at`,
-  `undescribed`, `stale` and `order`. The list is
+  `undescribed`, `stale`, `order`, `join`, `common`, `minus` (the things of the result) and
+  `diff` (the things added, removed and changed). The list is
   never cut: `--limit` does not apply. The count, such as `5 ids`, the warnings and the problems
   go to standard error, so a pipe carries ids only. An id holding a control character, such as a
   line break, prints escaped instead, and a line on standard error says how many did; the commands
@@ -105,8 +113,9 @@ report names its command, also when the command stops before its answer; only a 
 that does not show everything puts its `showing` line first. The commands have no
 `between` query. `export` labels each node with its id (DOT and Mermaid add its type); GraphML labels it with the short name instead.
 
-A slice is a smaller map, told apart from the full map by its file name. `slice` and `export`
-read it with `--map`, like any other map. Do not give `--out` the path of the map you read: the
+A slice is a smaller map, told apart from the full map by its file name. Every command that
+takes `--map` reads it, like any other map; `join`, `common`, `minus` and `diff` take map files
+as their arguments. Do not give `--out` the path of the map you read: the
 slice would replace it.
 
 ## Commands
@@ -755,6 +764,81 @@ slice to the edges of the feature.
 periplus slice ID --depth 2 --out foo.map.json
 ```
 
+### extract
+
+```
+periplus extract ID... --out FILE [--map PATH] [--format text|json]
+```
+
+Writes the things the `ID`s name, and the edges between two of them, to `FILE` as a map. It follows
+no edge: what it writes is what the ids name. The file has the form `slice --out` writes: the
+map's header, counts and type hierarchy made from what it holds, and a legend cut to its kinds and
+types. It matches the map schema, and every command reads it with `--map`. `-` reads the ids from
+standard input, so `periplus neighbors ID --depth all --ids | periplus extract - --out F` writes a
+walk to a file. An id that names no node exits 31 and writes nothing. `--out` naming the map being
+read exits 27. The text prints `wrote FILE: N nodes, M edges`. In JSON: `command`, `out`, `nodes`,
+`edges`, `warnings` and `problems`.
+
+### join, common and minus
+
+```
+periplus join MAP MAP... [--out FILE] [--ids] [--format text|json]
+periplus common MAP MAP... [--out FILE] [--ids] [--format text|json]
+periplus minus MAP MAP... [--out FILE] [--ids] [--format text|json]
+```
+
+Read two map files or more, whole maps or slices, as sets of things and edges. `join` keeps what
+any of them holds; `common` keeps the things every one holds and the edges every one holds;
+`minus` keeps the things the first holds and no other does, and the edges among them. A thing is
+the same thing in two maps when its id is the same; an edge is the same edge when its kind, from
+and to are.
+
+The text names each input with its size, then the result: things and edges, things by type and by
+state, edges by kind. With `--out`, the result is also written to `FILE` as a map, and a last line
+says so; without it nothing is written. `--ids` prints the result's ids instead.
+
+- **Copies that differ.** Maps from different builds can hold one id with a different state,
+  location or provenance. The result keeps one copy, the one whose JSON, keys sorted, sorts
+  first, and a warning counts the things and edges that differ and names the first. `diff` on
+  the two maps names the fields.
+- **Header.** `minus` keeps the first map's header. `join` and `common` merge the inputs':
+  `packs`, `roots` and the kind lists hold each item of every input once, sorted; `generated_by`
+  and `settings` hold each input's value once, sorted and joined with `; `, so a result of two
+  builds says `periplus 0.8.0; periplus 0.9.0`; `marks` and `legend` are merged by key. The
+  counts, the type hierarchy and the legend are then made from what the result holds, as
+  `extract` makes them. The file does not record the command or the input files, so the same
+  inputs give the same bytes from any folder.
+- **Order.** `join` and `common` give the same bytes whatever the order of their inputs, and list
+  the inputs sorted by path. `minus` reads the first input apart and lists the others sorted.
+
+Two maps of different `periplus_map_version`, or a single input, exit 2. A file that is not a map
+exits 30. `--out` naming one of the inputs exits 27. In JSON: `command`, `inputs` (each with
+`path`, `things` and `edges`), `things`, `edges`, `by_type`, `by_state`, `by_kind`, `out`,
+`warnings` and `problems`.
+
+### diff
+
+```
+periplus diff OLD NEW [--limit N] [--ids [--change added|removed|changed]...] [--format text|json]
+```
+
+Says what changed from the map `OLD` to the map `NEW`, with the compare `join` uses: things and
+edges are matched by id and by kind, from and to. The text names the two maps, then the header
+fields other than nodes, edges and counts whose values differ (`header: same` when none), then
+counts: things added, removed and changed, each by type, and edges added, removed and changed,
+each by kind. Then each list: a thing with its type (a removed thing's type in `OLD`), an edge as
+`kind  from -> to`, and for a changed one the fields that differ, as `(locations, provenance)`.
+Each list shows `--limit` rows (default 50; `0` shows all). A cut list ends with `showing N of
+TOTAL`, and the report then ends with `--limit 0 prints every row`; the counts above it are never
+cut. `--ids` prints the ids of the things added, removed and changed, never cut; `--change`,
+repeated, keeps the changes named. `--change` without `--ids` exits 2. In JSON: `command`, `maps`
+(each with `path`, `things` and `edges`), `header`, `things` and `edges` (each with `added`,
+`removed` and `changed`, each a cut list whose items hold `id`, `type` and `fields`, or `kind`,
+`from`, `to` and `fields`), `things_by_type`, `edges_by_kind`, `warnings` and `problems`.
+
+Between two builds of one project, it is the change a pull request makes to the map. Between the
+whole map and a slice, it is what the slice leaves out.
+
 ### export
 
 ```
@@ -777,9 +861,9 @@ periplus export --format dot --map foo.map.json > foo.dot
 | Code | Meaning |
 |---|---|
 | 0 | The report printed. An empty result is still 0. |
-| 2 | A bad option, such as `--depth 0`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, `slice --out` with `--type` or `--starts`, or `slice --from` with `WORDS`. A walk on a map with no cause list from several `ID`s. |
+| 2 | A bad option, such as `--depth 0`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, `slice --out` with `--type` or `--starts`, `slice --from` with `WORDS`, or `diff --change` without `--ids`. `join`, `common` or `minus` with one map, or maps of different versions. A walk on a map with no cause list from several `ID`s. |
 | 17 | The slice does not pass the map schema, because the map it was cut from does not. Run `periplus check-map` on that map. |
-| 27 | `slice --out` names the map being read, or the file cannot be written; or `stamp` cannot write the descriptions file. |
+| 27 | `slice --out` or `extract --out` names the map being read, `--out` of `join`, `common` or `minus` names one of its inputs, or the file cannot be written; or `stamp` cannot write the descriptions file. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
 | 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. Also a descriptions file a command reads that is not YAML or does not match the descriptions schema, or one `stamp` cannot change without changing other text. |
 | 31 | An id names no node in the map, or a short name fits more than one node. |
@@ -1325,6 +1409,87 @@ and `stamp --all` runs:
 $ periplus stamp
 periplus stamp
 stamped 1 node entry; 1 kept the fingerprint they had
+```
+
+Cut two features out of the map and combine them. Extract the command and what it runs, and the
+module's own parts:
+
+<!-- nav-run -->
+```console
+$ periplus extract hello greet helper --out hello.map.json
+periplus extract
+wrote /path/to/project/hello.map.json: 3 nodes, 0 edges
+warning: resolved 'hello' to typer.command::shop.cli.app:hello
+warning: resolved 'greet' to python.function::shop.cli.greet
+warning: resolved 'helper' to python.function::shop.tools.helper
+```
+
+<!-- nav-run -->
+```console
+$ periplus extract python.module::shop.cli greet app --out cli.map.json
+periplus extract
+wrote /path/to/project/cli.map.json: 3 nodes, 1 edges
+warning: resolved 'greet' to python.function::shop.cli.greet
+warning: resolved 'app' to typer.app::shop.cli.app
+```
+
+Join them into one map file:
+
+<!-- nav-run -->
+```console
+$ periplus join hello.map.json cli.map.json --out both.map.json
+periplus join
+inputs: cli.map.json (3 things, 1 edges), hello.map.json (3 things, 0 edges)
+result: 5 things, 1 edges
+by type: python.function 2, python.module 1, typer.app 1, typer.command 1
+by state: mapped 5
+edges by kind: contains 1
+wrote /path/to/project/both.map.json: 5 nodes, 1 edges
+```
+
+What the two features share, and what the command has that the module's parts do not:
+
+<!-- nav-run -->
+```console
+$ periplus common hello.map.json cli.map.json
+periplus common
+inputs: cli.map.json (3 things, 1 edges), hello.map.json (3 things, 0 edges)
+result: 1 things, 0 edges
+by type: python.function 1
+by state: mapped 1
+edges by kind: none
+```
+
+<!-- nav-run -->
+```console
+$ periplus minus hello.map.json cli.map.json --ids
+python.function::shop.tools.helper
+typer.command::shop.cli.app:hello
+2 ids
+```
+
+What changes from one to the other:
+
+<!-- nav-run -->
+```console
+$ periplus diff cli.map.json hello.map.json
+periplus diff
+old: cli.map.json (3 things, 1 edges)
+new: hello.map.json (3 things, 0 edges)
+header: type_hierarchy
+things: 2 added, 2 removed, 0 changed
+  added by type: python.function 1, typer.command 1
+  removed by type: python.module 1, typer.app 1
+edges: 0 added, 1 removed, 0 changed
+  removed by kind: contains 1
+things added:
+  python.function::shop.tools.helper  python.function
+  typer.command::shop.cli.app:hello  typer.command
+things removed:
+  python.module::shop.cli  python.module
+  typer.app::shop.cli.app  typer.app
+edges removed:
+  contains  python.module::shop.cli -> python.function::shop.cli.greet
 ```
 
 An id that is not in the map exits 31:

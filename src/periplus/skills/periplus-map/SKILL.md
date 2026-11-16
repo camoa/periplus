@@ -94,6 +94,11 @@ How to run each command:
   line, and `-` reads them, as when `periplus neighbors NAME --depth all --ids` is piped into
   `periplus count -`. Any other pipe, such as `head`, `tail`, `cut` or `grep`, drops rows without
   saying so.
+- `periplus extract - --out FILE` writes the ids it reads to a map file that `--map FILE` reads.
+- `periplus join A B` counts what any of two map files holds; `--out FILE` writes it.
+- `periplus common A B` counts what every map file holds, as what two features share.
+- `periplus minus A B` counts what A holds that B does not.
+- `periplus diff OLD NEW` lists the things and edges added, removed and changed.
 - When a `find` list is cut, it ends with `showing N of M`, a `by type:` count and
   `narrow with --type T or --path P`. Narrow with `--type` and `--path`; each may be repeated.
 - Take type names from that `by type:` line, or from the warning a wrong `--type` prints. The part

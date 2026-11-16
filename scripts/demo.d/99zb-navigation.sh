@@ -65,7 +65,7 @@ for ((i = 0; i < count; i++)); do
 done
 
 # Every command the guide documents has a block, and the guide names the full check and the exit codes.
-for name in types find show depth reach neighbors affected only hubs members pieces count in at files undescribed order stale stamp path check-map; do
+for name in types find show depth reach neighbors affected only hubs members pieces count in at files undescribed order stale stamp path extract join common minus diff check-map; do
     grep -q "^\\\$ periplus $name" "$doc" || { echo "the guide has no example of $name"; exit 1; }
 done
 for code in 29 30 31; do

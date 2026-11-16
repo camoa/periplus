@@ -12,7 +12,6 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from periplus.engine.emit import counts, hierarchy
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.map import write_document
 from periplus.navigate import find
@@ -38,6 +37,7 @@ from periplus.navigate.mapfile import (
     reading_fields,
 )
 from periplus.navigate.names import Names
+from periplus.navigate.sets import sub_document
 from periplus.navigate.show import node_descriptions
 from periplus.navigate.source import SourceLines, description_line, source_line, where
 from periplus.navigate.walk import stand_in_line, start_args, walk
@@ -328,25 +328,7 @@ def run(
                 return SliceReport(problems=(Problem(ExitCode.SLICE_TOO_LARGE, message, {}),))
             nodes = [node for node in document["nodes"] if node["id"] in kept]
             edges = [e for e in document["edges"] if e["from"] in kept and e["to"] in kept]
-            piece: dict[str, Any] = {
-                **document,
-                "counts": counts(nodes, edges),
-                "nodes": nodes,
-                "edges": edges,
-                "type_hierarchy": hierarchy({str(node["type"]) for node in nodes}, index.parent),
-            }
-            texts = piece.pop("legend", {})
-            held_names = {
-                "edge_kinds": {edge["kind"] for edge in edges},
-                "node_types": {node["type"] for node in nodes},
-            }
-            legend = {
-                section: given
-                for section, names in held_names.items()
-                if (given := {k: v for k, v in texts.get(section, {}).items() if k in names})
-            }
-            if legend:
-                piece["legend"] = legend
+            piece = sub_document(document, nodes, edges, index.parent)
     except HarnessError as error:
         return SliceReport(problems=(error.problem(),))
     problems = write_document(piece, target)
