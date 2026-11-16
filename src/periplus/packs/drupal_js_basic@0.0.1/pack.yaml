@@ -157,6 +157,13 @@ detect:
     - path: "{module_root}/*.js"
     - path: "{theme_root}/*.js"
 
+# Scripts are read in custom modules and themes only; js_basic alone reads the whole project.
+# A project that keeps scripts elsewhere declares js_source under folders in its settings.
+folders:
+  js_source:
+  - "{custom_module}/**"
+  - "{custom_theme}/**"
+
 # The global functions Drupal core's libraries core/once and core/jquery define: js_basic's
 # function_call makes a call to one that its script does not declare one unresolved node for every
 # script. And the global objects of Drupal core's scripts and of core/jquery, whose members every

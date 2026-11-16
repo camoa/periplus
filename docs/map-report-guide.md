@@ -87,6 +87,15 @@ one joined with `+`.
 })(Drupal, drupalSettings);
 ```
 
+Its `README.md` says what the module does. No rule of the pinned rutters reads Markdown.
+
+<!-- nav-file: web/modules/custom/greet/README.md -->
+```markdown
+# Greet
+
+Shows a greeting banner on every page.
+```
+
 ## Run the map
 
 Run `periplus map` in the project folder. The report is long, because it lists every rule the
@@ -119,17 +128,14 @@ Type conflicts:
 Files:
   selected  5
   excluded  0
-  unread    3
+  unread    1
   unlisted  0
 
 Files no rule read, by ending:
-  yaml 2
-  yml 1
+  md 1
 
 Files no rule read:
-  .periplus/packs/myproject@0.0.1/event.yaml
-  .periplus/packs/myproject@0.0.1/pack.yaml
-  .periplus/settings.yml
+  web/modules/custom/greet/README.md
 
 Folders that could not be listed:
   none
@@ -211,7 +217,8 @@ Text headings: the `unread` count under Files; Files no rule read, by ending; an
 read, which shows the first 20 and says how many more the JSON report lists. Each row is a file in
 the rules' folders that no rule read. The map knows nothing about it. When it is not empty, look at
 the endings first: a whole family of files is a rule to write, and a single file may be one to
-exclude. On a second run the map's own `.periplus/map.json` is listed too.
+exclude. Here the `greet` module's `README.md` is listed, since no rule reads Markdown. A file
+outside every rule's folder, such as the files under `.periplus`, is not counted.
 
 ### `unlisted`
 
@@ -405,7 +412,7 @@ packs:
   - drupal_js_basic@0.0.1
 ```
 
-<!-- nav-file: joined-only/js/join.js -->
+<!-- nav-file: joined-only/web/modules/custom/join/js/join.js -->
 ```js
 const id = 7;
 fetch('/join/user/' + id);
@@ -423,7 +430,7 @@ $ periplus map
 periplus map
 
 Packs that selected no file:
-  drupal_basic: config = ./config/sync, no such folder; custom_module = ./web/modules/custom, no such folder; custom_theme = ./web/themes/custom, no such folder; if the code is elsewhere, declare the folder under folders in .periplus/settings.yml
+  drupal_basic: config = ./config/sync, no such folder; custom_module = ./web/modules/custom, 1 folder found; custom_theme = ./web/themes/custom, no such folder; if the code is elsewhere, declare the folder under folders in .periplus/settings.yml
 
 Map:
   path    /path/to/project/.periplus/map.json
@@ -444,14 +451,14 @@ Type conflicts:
 Files:
   selected  1
   excluded  0
-  unread    1
+  unread    0
   unlisted  0
 
 Files no rule read, by ending:
-  yml 1
+  none
 
 Files no rule read:
-  .periplus/settings.yml
+  none
 
 Folders that could not be listed:
   none
@@ -527,19 +534,14 @@ Type conflicts:
 Files:
   selected  5
   excluded  0
-  unread    4
+  unread    1
   unlisted  0
 
 Files no rule read, by ending:
-  yaml 2
-  json 1
-  yml 1
+  md 1
 
 Files no rule read:
-  .periplus/map.json
-  .periplus/packs/myproject@0.0.1/event.yaml
-  .periplus/packs/myproject@0.0.1/pack.yaml
-  .periplus/settings.yml
+  web/modules/custom/greet/README.md
 
 Folders that could not be listed:
   none
