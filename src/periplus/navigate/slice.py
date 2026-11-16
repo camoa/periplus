@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import shlex
 from collections import Counter
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -243,6 +244,7 @@ class SliceReport:
     unpicked: int = 0
     words: tuple[str, ...] = ()
     piped: bool = False
+    map_path: str | None = None
 
     @property
     def exit_code(self) -> ExitCode:
@@ -583,6 +585,7 @@ def _piece(
                     unpicked=unpicked,
                     words=tuple(words or [whole]) if queries else (),
                     piped=piped,
+                    map_path=None if map_path is None else str(map_path),
                 )
 
             begun = tuple(
@@ -639,10 +642,11 @@ def _piece(
                 if near_cut:
                     parts.append(f"{near_cut} hop-1 rows left out, largest piece first")
                 cut_note = f"cut to fit {budget} bytes: {', '.join(parts)}; --limit N prints N rows"
+                on = _on(str(map_path)) if map_path is not None else ""
                 if not told:
-                    cut_note += "; what a kind means: periplus legend --kind K"
+                    cut_note += f"; what a kind means: periplus legend --kind K{on}"
                 if not more or cap < LINK_NAMES:
-                    cut_note += "; a node's links in full: periplus show NAME --limit 0"
+                    cut_note += f"; a node's links in full: periplus show NAME --limit 0{on}"
                 report = assemble(taking, cap, more, (cut_note,), told)
     except HarnessError as error:
         return SliceReport(printed=True, problems=(error.problem(),))
@@ -1295,9 +1299,14 @@ def _grow(
     return rows, deeper, folded, more
 
 
+def _on(map_path: str | None) -> str:
+    """The ``--map PATH`` a suggested command carries when the run was given one, else empty."""
+    return "" if map_path is None else f" --map {shlex.quote(map_path)}"
+
+
 def _why(start: Start) -> str:
     if start.given is not None:
-        return f"given as {start.given!r}"
+        return f"given as '{start.given}'"
     said = [
         f"{word!r} in {'attribute ' + (name or '') if matched == 'attribute' else matched}"
         for word, matched, name in start.words
@@ -1323,7 +1332,7 @@ def _clause(link: Link) -> str:
     return text
 
 
-def _file_lines(group: FileGroup, under: str) -> list[str]:
+def _file_lines(group: FileGroup, under: str, on: str) -> list[str]:
     """A file's header, its path below ``under``, then each of its nodes: line, short name,
     type, source, description, links, and the count of edges the piece leaves out."""
     header = _escape(group.file[len(under) :]) if group.file is not None else "no file"
@@ -1340,7 +1349,7 @@ def _file_lines(group: FileGroup, under: str) -> list[str]:
         lines += description_line(subject.description)
         lines += [f"      {_clause(link)}" for link in subject.links]
         if subject.more_forms:
-            lines.append(f"    {stand_in_line(subject.short, subject.more_forms)}")
+            lines.append(f"    {stand_in_line(subject.short, subject.more_forms)}{_escape(on)}")
         if subject.unwalked:
             total = sum(n for _, _, n in subject.unwalked)
             counted = ", ".join(
@@ -1349,10 +1358,12 @@ def _file_lines(group: FileGroup, under: str) -> list[str]:
             )
             lines.append(
                 f"      +{total} more links: {counted};"
-                f" see periplus show {_escape(subject.short)} --limit 0"
+                f" see periplus show {_escape(subject.short)} --limit 0{_escape(on)}"
             )
         elif subject.cut_links:
-            lines.append(f"      all links: periplus show {_escape(subject.short)} --limit 0")
+            lines.append(
+                f"      all links: periplus show {_escape(subject.short)} --limit 0{_escape(on)}"
+            )
     return lines
 
 
@@ -1374,7 +1385,7 @@ def _piece_lines(report: SliceReport, shorts: Mapping[str, str], under: str) -> 
         lines += ["", f"piece {number} of {total}: {things}, starts: {starts}"]
         for group in report.files:
             if group.piece == number:
-                lines += _file_lines(group, under)
+                lines += _file_lines(group, under, _on(report.map_path))
         if piece.supporting:
             patterns = ", ".join(_escape(p) for p in piece.patterns)
             lines += [
@@ -1388,17 +1399,17 @@ def _piece_lines(report: SliceReport, shorts: Mapping[str, str], under: str) -> 
             "",
             f"no edge of the map joins these {total} pieces as printed; they may still meet"
             " through nodes not printed, or relate in ways the map does not hold;"
-            f" test two with periplus path {one} {two}",
+            f" test two with periplus path {one} {two}{_escape(_on(report.map_path))}",
         ]
     return lines
 
 
-def _member_line(members: Members, short: str) -> str:
+def _member_line(members: Members, short: str, on: str) -> str:
     """A container start's member count by type, and the command that lists them."""
     counted = ", ".join(f"{_escape(t)} {n}" for t, n in members.by_type.items())
     return (
         f"members of {_escape(short)}: {members.total} ({counted});"
-        f" all: periplus members {_escape(short)} (--type T for one type)"
+        f" all: periplus members {_escape(short)}{_escape(on)} (--type T for one type)"
     )
 
 
@@ -1454,18 +1465,19 @@ def _in_full(report: SliceReport) -> list[str]:
         else f" (pipe the {len(starts)} starts above into the first command)"
     )
     named, said = start_args(starts, report.piped, told)
+    on = _escape(_on(report.map_path))
     first = f"periplus show {' '.join(_escape(n) for n in named)}"
     return [
         "in full, every edge hop by hop, with what is left out, folded or in supporting code"
         f"{said}:",
         *(
-            f"  hop {hop}: {first}{' --ids | periplus show -' * (hop - 1)} --limit 0"
+            f"  hop {hop}: {first}{f'{on} --ids | periplus show -' * (hop - 1)} --limit 0{on}"
             for hop in range(1, report.depth + 1)
         ),
     ]
 
 
-def _legend_lines(legend: Sequence[tuple[str, str]]) -> list[str]:
+def _legend_lines(legend: Sequence[tuple[str, str]], on: str) -> list[str]:
     """The description of each kind the piece's links show, within ``LEGEND_BYTES``, then a
     count of the rest."""
     if not legend:
@@ -1475,7 +1487,7 @@ def _legend_lines(legend: Sequence[tuple[str, str]]) -> list[str]:
         line = f"  {_escape(kind)}: {_escape(text)}"
         size += len(line.encode()) + 1
         if size > LEGEND_BYTES:
-            return [*lines, f"  +{len(legend) - at} more: periplus legend --kind K"]
+            return [*lines, f"  +{len(legend) - at} more: periplus legend --kind K{_escape(on)}"]
         lines.append(line)
     return lines
 
@@ -1496,13 +1508,17 @@ def render_text(report: SliceReport) -> str:
             )
         if report.unpicked:
             words = ", ".join(_escape(w) for w in report.words)
+            on = _escape(_on(report.map_path))
             lines.append(
                 f"+{report.unpicked} more"
                 f" {'node matches' if report.unpicked == 1 else 'nodes match'}"
-                " the words: periplus find WORD --limit 0 for"
-                f" each of: {words}; start from any with periplus slice --from ID"
+                f" the words: periplus find WORD --limit 0{on} for"
+                f" each of: {words}; start from any with periplus slice --from ID{on}"
             )
-        lines += [_member_line(m, shorts.get(m.container, m.container)) for m in report.members]
+        lines += [
+            _member_line(m, shorts.get(m.container, m.container), _on(report.map_path))
+            for m in report.members
+        ]
         under = _folder(report.files)
         lines += [f"paths under: {_escape(under)}"] if under else []
         lines += _piece_lines(report, shorts, under)
@@ -1517,7 +1533,7 @@ def render_text(report: SliceReport) -> str:
             ]
         lines += _left_out(report)
         lines += [_escape(cut) for cut in report.cuts]
-        lines += _legend_lines(report.legend)
+        lines += _legend_lines(report.legend, _on(report.map_path))
     if report.out is not None:
         lines.append(f"wrote {_escape(report.out)}: {report.nodes} nodes, {report.edges} edges")
     lines += [f"warning: {_escape(w)}" for w in report.warnings]
