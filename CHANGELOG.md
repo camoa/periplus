@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `periplus show` takes several ids: one report each, a `---` line between two, and in JSON `{"shown": [...]}`.
 - `neighbors` and `affected` take `--full`.
 - The first line of `neighbors`, `affected`, `depth`, `only` and `hubs` names at most three starts and counts the rest, `+N more`, so ids read from standard input do not fill it.
+- `php_basic` maps `has_parameter`, from a method or function to each parameter it declares outside a closure, and gives a property a promoted constructor parameter makes its `declares_property` edge from the class. `drupal_basic`'s `installed` spreads along `has_parameter`, so the parameters of a module that is not installed print `[not installed]`.
+- `drupal_basic` maps:
+  - core's routes `user.pass`, `user.page`, `user.logout`, `user.reset`, `user.reset.login`, `user.reset.form`, `user.cancel_confirm`, `entity.user.canonical` and `entity.user.edit_form` beside `user.login` and `user.register`, when `core.extension` lists the user module: each with its path, the form it builds where it builds one, and the shape of a path with placeholders, so a template's path of that shape links to it;
+  - `registers_form_handler`, from the method or function that adds a `#validate` or `#submit` handler with `[] =` or `array_unshift`, to the function or method the handler names: a function name, `'::method'` on a form class or on each class that returns the form id an alter hook names, `[$this, 'method']`, `[static::class, 'method']`, `[self::class, 'method']` and `'Class::method'`;
+  - the attribute `status` on a configuration object, its top-level `status` as written;
+  - `config_names_form_off`, from a captcha point whose status is false, or `honeypot.settings`, to a form it names and leaves unprotected.
 
 ### Changed
 
@@ -28,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `drupal_basic`'s `config_names_form` ran to every form id a captcha point or `honeypot.settings` named, switched on or not; it now runs only to a form switched on, and the rest have `config_names_form_off`.
 - A map rule may write attributes beside its edges, as the rutter guide says; the pack-file schema refused it before.
 - The check refuses, with exit 19, a type in an attribute's `on` that neither the pack nor one it depends on declares; before, a misspelt type was never refused.
 

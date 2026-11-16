@@ -269,8 +269,12 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   groups list, joined with the libraries file's folder or, for a key that starts with `/`, with
   the Drupal root, as scripts are.
 - `drupal.form_id`, a node for each literal a form class's `getFormId()` returns; `form_has_id`,
-  from that class to it; `config_names_form`, from a configuration object that names a form id,
-  such as a CAPTCHA point, to it. Two edges join a configuration file to a form class.
+  from that class to it; `config_names_form`, from a configuration object that switches a form's
+  protection on, such as a CAPTCHA point, to its form id, and `config_names_form_off` from one that
+  names the form and leaves it off. Two edges join a configuration file to a form class.
+- `registers_form_handler`, inferred, from the method or function that adds a `#validate` or
+  `#submit` handler, as `$form['#submit'][] = '::save'`, to the function or method it names,
+  joined in the map through the internal `drupal.form_handler_site` node.
 - `hook_acts_on_entity_type`, inferred from a hook named `<extension>_<type>_<operation>`, such as
   `mymod_node_presave`, to the entity type `node`.
 - `drupal.manager_call`, a node for each `getStorage`, `getViewBuilder`, `getListBuilder`,

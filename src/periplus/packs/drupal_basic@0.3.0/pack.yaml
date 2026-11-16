@@ -79,7 +79,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   to the module of that name, inferred when the map does not hold it; each theme core.extension
 #   lists, as an installs_theme edge; each literal form id a form class returns, as a drupal.form_id
 #   node with a form_has_id edge from the class, and each form id a CAPTCHA point or the honeypot
-#   settings name, as a config_names_form edge; each hook named <extension>_<type>_<operation>,
+#   settings switch protection on for, as a config_names_form edge, and each they name and leave
+#   off, as a config_names_form_off edge; each config file's top-level status, as the attribute
+#   status; each #validate or #submit handler a method or function adds with [] = or
+#   array_unshift, as a registers_form_handler edge to the function or method it names; each hook
+#   named <extension>_<type>_<operation>,
 #   as an inferred hook_acts_on_entity_type edge to <type>; each route's path, as a
 #   route_serves_path edge to a drupal.url_path node, and each path Url::fromUserInput or
 #   Url::fromUri('internal:...') names, as a links_to_path edge; each route name Url::fromRoute,
@@ -203,9 +207,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   path, a route_from_view edge to the view's config object and a shape_of_route edge;
 # - a _custom_access written service:method as an access_checked_by edge to the method on the
 #   service's class or its nearest ancestor (route/route_custom_access_method.yaml);
-# - core's user.login and user.register, when core.extension lists the user module, as the routes
-#   of /user/login and /user/register with route_uses_form_id edges to user_login_form and
-#   user_register_form; and a page--a--b template as a suggests_path edge to /a/b when the map
+# - core's user.login, user.register, user.pass, user.page, user.logout, user.reset,
+#   user.reset.login, user.reset.form, user.cancel_confirm, entity.user.canonical and
+#   entity.user.edit_form, when core.extension lists the user module, as routes with their paths,
+#   route_uses_form_id edges to the forms four of them build, and the shape of each path with
+#   placeholders (route/core_user_routes.yaml); and a page--a--b template as a suggests_path edge to /a/b when the map
 #   holds that path;
 # - a variable assigned from getRouteName() and compared with == or === to a quoted route name,
 #   or tested with in_array against a literal list in the same function, as a checks_route edge
@@ -258,7 +264,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   cookie_delete, mass_update, set_edit_access and translate_access end at the referenced entity
 #   types cookie, mass, set_edit and translate.
 # - Any function whose name starts with the first part of the file name reads as a hook: the form
-#   callback mymod_settings_submit reads as the hook settings_submit, the helper mymod_build_list
+#   callback mymod_settings_submit reads as the hook settings_submit, even when a
+#   registers_form_handler edge reaches it, the helper mymod_build_list
 #   as build_list, and mymod_update_NEXT as update_NEXT. The same holds for a theme's inc file
 #   and the theme folder's name.
 # - The prefix is the file name, not an installed module's name. If Drupal core were inside the
@@ -394,8 +401,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   constant or another function, a route name held in a parameter such as hook_help's
 #   $route_name, and a variable bound twice in one function give no checks_route edge. A file
 #   that holds two classes with a method of one name reads both as the class its path names.
-# - Only the core routes user.login and user.register get a path and a form id, and only from an
-#   exported core.extension. A page--a--b template whose path parts hold underscores, or name an
+# - Only the core user routes listed above get a path, and only from an exported core.extension;
+#   user.logout.confirm, which core added in 10.3, and the routes of other core modules get none. A page--a--b template whose path parts hold underscores, or name an
 #   argument as %, links to no path.
 # - The applies_to key of a service's access_check tag is kept as the service's applies_to
 #   attribute, not on the tagged_as edge, because an attribute on an edge is accepted and not
