@@ -7,6 +7,7 @@ import shlex
 from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
+from itertools import groupby
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +66,8 @@ __all__ = [
 BUDGET = 12_000
 #: The most types or containers a count line names.
 _FOOTER_TYPES = 8
+#: The most edges at one code line the text names one by one; past it, it counts them by kind.
+_FOLDED_ENDS = 3
 #: The most type names a warning about an unknown type suggests.
 _SUGGESTED = 5
 #: The groups of things in print order: main things, parts, things not mapped or with no
@@ -507,6 +510,29 @@ def _edge_lines(edge: EdgeMatch) -> list[str]:
     return lines + source_line(edge.code) + description_line(edge.description)
 
 
+def _edge_rows(edges: Sequence[EdgeMatch]) -> list[str]:
+    """The edges as text, those matched by ``[source]`` at one place with no description folded
+    into one row: the place once, then each edge's kind and ends, or past ``_FOLDED_ENDS`` the
+    count by kind, then the code line once."""
+    lines: list[str] = []
+    for at, grouped in groupby(
+        edges, lambda e: e.location if e.matched == "source" and e.description is None else e
+    ):
+        group = list(grouped)
+        if len(group) == 1 or not isinstance(at, str):
+            lines += [line for edge in group for line in _edge_lines(edge)]
+            continue
+        if len(group) > _FOLDED_ENDS:
+            said = f"{len(group)} edges: {_counted(Counter(e.kind for e in group), 'kinds')}"
+        else:
+            said = "; ".join(
+                f"{_escape(e.kind)} {_escape(e.source_name)} -> {_escape(e.target_name)}"
+                for e in group
+            )
+        lines += [f"  {_escape(at)}  [source]  {said}", *source_line(group[0].code)]
+    return lines
+
+
 def _counted(counts: Counter[Any], noun: str) -> str:
     """The counts, most first, then by name (``None`` as ``(no container)`` last), the first
     ``_FOOTER_TYPES`` named and the rest counted."""
@@ -580,8 +606,7 @@ def _text(report: FindReport, fold: bool, fold_edges: bool, keep: int | None) ->
         ]
     elif report.edges:
         body.append("edges:")
-        for edge in report.edges:
-            body += _edge_lines(edge)
+        body += _edge_rows(report.edges)
     notes = [f"warning: {_escape(w)}" for w in report.warnings]
     notes += [f"{int(p.code)} {_escape(p.message)}" for p in report.problems]
     return "\n".join([*head, "", *(body or ["no matches"]), *notes]) + "\n"
