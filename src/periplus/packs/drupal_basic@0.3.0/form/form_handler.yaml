@@ -1,0 +1,179 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A validate or submit handler a form gets from code: $form['#validate'][] = X;,
+# $form['#submit'][] = X;, the same on an element such as $form['actions']['submit']['#submit'][],
+# and array_unshift($form['#validate'], X), on any variable. registers_form_handler runs from the
+# method or function that adds the handler to the function or method X names:
+# - 'my_handler', a function by its name;
+# - '::myMethod', a method of the form object: in a form class, one whose getFormId returns a
+#   literal, that class; in a form alter hook, each class that returns the altered form id;
+# - [$this, 'myMethod'], [static::class, 'myMethod'] or [self::class, 'myMethod'], a method of the
+#   class around the line;
+# - 'Drupal\my_module\Handlers::check', a static method written whole.
+# A method is looked up on the class and then its ancestors through extends and used traits; one
+# the map does not hold lands unresolved under the class the walk started from, and a function the
+# map does not hold, such as core's, lands unresolved. A walk from a form id reaches the handler
+# through alters_form or form_has_id and contains, then this edge, so no edge runs from the form id.
+#
+# Each registration is read as text, as '#theme' is, into an internal drupal.form_handler_site
+# node, <class>::<method>::<handler> or <function>::<handler>, the handler as written with its
+# spaces taken out and double quotes made single; form_handler_site_in joins it to the method or
+# function around it. The map rules below read the handler's shape from the id. The method's class
+# is the one the file's path names by Drupal's PSR-4 layout, so the edges are inferred.
+#
+# Missing results: a handler list written whole, as '#submit' => ['a', '::b'] in an array or
+# $form['#submit'] = [...], a handler held in a variable, [Foo::class, 'm'] with the class
+# imported by a use statement, a handler added to a key other than #validate or #submit, and a
+# '::myMethod' in a form class whose getFormId returns no literal, or in an alter of a base form id
+# no class returns, give no edge.
+
+node_types:
+- name: drupal.form_handler_site
+  description: "internal: one validate or submit handler, as written, that one method or function adds to a form"
+  id_namespace: drupal.form_handler_site
+  internal: true
+
+edge_kinds:
+- kind: form_handler_site_in
+  cause: none
+  description: "step to registers_form_handler: the handler is added in that method or function"
+  from: drupal.form_handler_site
+  to: [php.method, php.function]
+- kind: registers_form_handler
+  cause: from
+  description: "the method or function adds that function or method to a form as a #validate or #submit handler"
+  from: [php.method, php.function]
+  to: [php.function, php.method]
+
+rules:
+- rule: form_handler_site_in_method
+  reads: file
+  in: [source]
+  match: &method_match
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?:\$\w+(?:\[\s*[''"][\w#-]*[''"]\s*\])*\[\s*[''"]#(?:validate|submit)[''"]\s*\]\[\s*\]\s*=|\barray_unshift\(\s*\$\w+(?:\[\s*[''"][\w#-]*[''"]\s*\])*\[\s*[''"]#(?:validate|submit)[''"]\s*\]\s*,)\s*(?<handler>''[^''\n]*''|"[^"\n]*"|\[[^\]\n]*\])\s*[;)]'
+  values: &method_values
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: &method_id {template: '{psr4_class}::{method}::{handler}', normalize: [{replace: '\s+', with: ''}, {replace: '"', with: ''''}, {replace: '\\\\', with: '\'}]}
+  line: {capture: handler}
+  emits: [{node: {type: drupal.form_handler_site}}]
+  confidence: declared
+
+- rule: form_handler_site_in_method_edge
+  reads: file
+  in: [source]
+  match: *method_match
+  values: *method_values
+  id: *method_id
+  line: {capture: handler}
+  emits: [{edge: {kind: form_handler_site_in, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}}}]
+  confidence: inferred
+
+- rule: form_handler_site_in_function
+  reads: file
+  in: [source]
+  match: &function_match
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '(?:\$\w+(?:\[\s*[''"][\w#-]*[''"]\s*\])*\[\s*[''"]#(?:validate|submit)[''"]\s*\]\[\s*\]\s*=|\barray_unshift\(\s*\$\w+(?:\[\s*[''"][\w#-]*[''"]\s*\])*\[\s*[''"]#(?:validate|submit)[''"]\s*\]\s*,)\s*(?<handler>''[^''\n]*''|"[^"\n]*"|\[[^\]\n]*\])\s*[;)]'
+  values: &function_values
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: &function_id {template: '{function}::{handler}', normalize: [{replace: '\s+', with: ''}, {replace: '"', with: ''''}, {replace: '\\\\', with: '\'}]}
+  line: {capture: handler}
+  emits: [{node: {type: drupal.form_handler_site}}]
+  confidence: declared
+
+- rule: form_handler_site_in_function_edge
+  reads: file
+  in: [source]
+  match: *function_match
+  values: *function_values
+  id: *function_id
+  line: {capture: handler}
+  emits: [{edge: {kind: form_handler_site_in, from: this_node, to: {template: '{function}', types: [php.function]}}}]
+  confidence: declared
+
+# 'my_handler': a function by its name.
+- rule: form_handler_function
+  reads: map
+  match:
+    node_type: drupal.form_handler_site
+    where: [{id_matches: '^drupal\.form_handler_site::.+::''(?<handler>[A-Za-z_]\w*)''$'}]
+    follow: [{edge: form_handler_site_in}]
+  emits: [{edge: {kind: registers_form_handler, from: matched_node, to: {template: '{handler}', types: [php.function], on_miss: unresolved}}}]
+  confidence: inferred
+
+# '::myMethod' in a form class: the class's own form object.
+- rule: form_handler_form_method
+  reads: map
+  match:
+    node_type: drupal.form_handler_site
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<declarer>[^:]+)::\w+::''::(?<handler>\w+)'')$'}]
+    follow:
+    - node: 'php.type::{declarer}'
+    - edge: form_has_id
+    - try:
+      - node: 'php.type::{declarer}'
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{handler}'
+    - node: 'drupal.form_handler_site::{site}'
+    - edge: form_handler_site_in
+  emits: &method_edge [{edge: {kind: registers_form_handler, from: matched_node, to: {template: '{declarer}::{handler}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+# '::myMethod' in a form alter: each class that returns the altered form id.
+- rule: form_handler_altered_form_method
+  reads: map
+  match:
+    node_type: drupal.form_handler_site
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::''::(?<handler>\w+)'')$'}]
+    follow:
+    - edge: form_handler_site_in
+    - edge: alters_form
+    - incoming_edge: form_has_id
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - try:
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{handler}'
+    - node: 'drupal.form_handler_site::{site}'
+    - edge: form_handler_site_in
+  emits: *method_edge
+  confidence: inferred
+
+# [$this, 'myMethod'], [static::class, 'myMethod'] or [self::class, 'myMethod'].
+- rule: form_handler_own_method
+  reads: map
+  match:
+    node_type: drupal.form_handler_site
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<declarer>[^:]+)::\w+::\[(?:\$this|static::class|self::class),''(?<handler>\w+)''\])$'}]
+    follow:
+    - try:
+      - node: 'php.type::{declarer}'
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{handler}'
+    - node: 'drupal.form_handler_site::{site}'
+    - edge: form_handler_site_in
+  emits: *method_edge
+  confidence: inferred
+
+# 'Drupal\my_module\Handlers::check': a static method written whole.
+- rule: form_handler_static_method
+  reads: map
+  match:
+    node_type: drupal.form_handler_site
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::''\\?(?<declarer>[A-Za-z_][\w\\]*)::(?<handler>\w+)'')$'}]
+    follow:
+    - try:
+      - node: 'php.type::{declarer}'
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{handler}'
+    - node: 'drupal.form_handler_site::{site}'
+    - edge: form_handler_site_in
+  emits: *method_edge
+  confidence: inferred
