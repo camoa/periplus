@@ -164,12 +164,26 @@ def test_a_procedural_hook_is_mapped_by_its_function_name_and_implements_it(
             "other_helper",
         )
     ]
+    # Each function with a parameter holds it.
+    parameters = [
+        ("has_parameter", f"php.function::{fn}", f"php.parameter::{fn}::{name}", ["declared"])
+        for fn, name in (
+            ("mymod_form_alter", "$form"),
+            ("mymod_settings_submit", "$form"),
+            ("my_theme_preprocess_page", "$variables"),
+            ("my_theme_preprocess_node", "$variables"),
+            ("my_theme_preprocess_html", "$variables"),
+            ("mymod_post_update_fix_things", "$sandbox"),
+            ("mymod_deploy_seed", "$sandbox"),
+        )
+    ]
     assert edges == sorted(
         [
             ("implements_hook", f"php.function::{function}", f"drupal.hook::{hook}", ["inferred"])
             for hook, (_, function) in wanted.items()
         ]
         + members
+        + parameters
     )
     ids = {n["id"] for n in document["nodes"] if n["type"] == "drupal.hook"}
     assert "drupal.hook::" not in ids and not [i for i in ids if "helper" in i], ids

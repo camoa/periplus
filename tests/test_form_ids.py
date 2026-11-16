@@ -91,8 +91,10 @@ def test_configuration_that_names_a_form_id_links_to_that_form_id(tmp_path: Path
     document = _map(tmp_path)
     assert _edges(document, "config_names_form") == {
         ("drupal.config::captcha.captcha_point.my_form", "drupal.form_id::my_form"),
-        ("drupal.config::honeypot.settings", "drupal.form_id::user_login_form"),
         ("drupal.config::honeypot.settings", "drupal.form_id::my_form"),
+    }
+    assert _edges(document, "config_names_form_off") == {
+        ("drupal.config::honeypot.settings", "drupal.form_id::user_login_form"),
         ("drupal.config::honeypot.settings", "drupal.form_id::contact_message_feedback_form"),
     }
     nodes = {str(n["id"]): n["state"] for n in document["nodes"]}
