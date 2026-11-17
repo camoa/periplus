@@ -960,7 +960,7 @@ files:
         open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<!\\)\b(?<key>(?<class>[A-Z]\w*|parent)::(?<constant>[A-Z][A-Z0-9_]*))\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
       - name: own_listener_list
-        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<sw>self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
       # The same list under a key written as a name, 'kernel.request' => [[...]], name the name, or
       # with its namespace, \A\B::NAME => [[...]], key the key. Read by event/listener_registration.yaml.
@@ -986,9 +986,15 @@ files:
       # own a call in an anonymous class by that function or method. The parentheses after the name
       # or after new class are read balanced, four levels deep, past quoted text on one line, so a
       # closure or an array among an anonymous class's arguments, with its own braces and
-      # semicolons, is not taken for its body.
+      # semicolons, is not taken for its body. An anonymous class whose arguments are not read so
+      # opens no span, never one at a brace among its arguments: its methods are then named
+      # functions inside the one that creates the class, which the event rules read as methods of
+      # an anonymous class.
       - name: function_scope
-        open: '\b(?<scope>function\s+\w+(?=\s*\([^)]*\))|new\s+class\b)(?:\s*\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"])*\))*\))*\))*\))?[^{;]*'
+        open: '\b(?<scope>function\s+\w+(?=\s*\([^)]*\)))(?:\s*\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"])*\))*\))*\))*\))?[^{;]*'
+        balance: ['{', '}']
+      - name: function_scope
+        open: '\b(?<scope>new\s+class\b)(?:\s*\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"])*\))*\))*\))*\)|(?!\s*\())[^{;()]*'
         balance: ['{', '}']
       # The type of a named function's or method's first parameter, from after its opening
       # parenthesis to the $ of the parameter, the comma or the closing parenthesis; method is the

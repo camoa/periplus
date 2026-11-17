@@ -49,7 +49,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # is the constant of the file's own namespace, unresolved when no mapped file declares it;
 # parent::NAME and parent::class read the parent the class extends, for an attribute on a class
 # through the span attributed_class; parent::NAME or parent::class with no written parent, in a
-# trait or a class that extends nothing, is a runtime registration, as an expression is; a priority written as a constant holds the integer a mapped
+# trait or a class that extends nothing, is a runtime registration, as an expression is; so is,
+# on a method of a trait, self::class, static::class, and self::NAME or static::NAME unless the
+# trait declares the constant (event/event.yaml); a priority written as a constant holds the integer a mapped
 # file declares it with (event/event_subscriber.yaml). A dispatcher key stays the service id as
 # written: no edge kind of the pack says a listener is added to another dispatcher.
 #
@@ -968,6 +970,9 @@ rules:
     # class the attribute sits on.
     parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     aparent: {from: {enclosing: attributed_class, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    # trait for an attribute on a method of a trait, where self:: and static:: name the class that
+    # uses the trait (event/event.yaml).
+    trt: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '^(?!trait$).*$', with: ''}]}
     ev0: {template: '{tag}|{n_event}{p1}', normalize: [{replace: '^[^|]*\|\s*', with: ''}, {replace: '\s+$', with: ''}, {replace: '^null$', with: ''}]}
     ev: {template: '{tag}|{parent_cls}{aparent}§{ev0}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^[^§]*§(?!parent::(?:[A-Z]|class\b))', with: ''}, {replace: '^§', with: ''}, {replace: '§parent(?=::)', with: ''}]}
     key: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*$).*$', with: ''}]}
@@ -983,10 +988,11 @@ rules:
     meth: {template: '{tag}|{meth_arg}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!''\w+''$|"\w+"$).*$', with: ''}, {replace: '^.|.$', with: ''}]}
     meth_expr: {template: '{tag}|{meth_arg}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?:''\w+''|"\w+")$', with: ''}]}
     # parent::NAME or parent::class left in ev has no written parent, in a trait or a class that extends nothing.
-    ev_expr: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?:''[^'']*''|"[^"]*"|(?!parent::(?:[A-Z][A-Z0-9_]*|class)$)\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)$', with: ''}]}
+    ev_expr: {template: '{tag}|{ev}§{trt}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?=(?:self|static)::(?:[A-Z][A-Z0-9_]*|class)§trait$)', with: '¤'}, {replace: '§[\s\S]*$', with: ''}, {replace: '^(?:''[^'']*''|"[^"]*"|(?!parent::(?:[A-Z][A-Z0-9_]*|class)$)\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)$', with: ''}, {replace: '^¤', with: ''}]}
     expr: {template: '§{ev_expr}§{meth_expr}', normalize: [{replace: '^§§', with: ''}, {replace: '§$', with: ''}, {replace: '^§', with: ''}, {replace: '§', with: ','}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
     owner_at: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: '{psr4_class}'}, {replace: '^[^|]*\|', with: '{psr4_class}::'}]}
     listener: {template: '{tag}|{method}{meth}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+    tmark: {template: '§{trt}§{own}§trait‖drupal.event_use::{psr4_class}::{own}|subscribed_here|{psr4_class}::{listener}‖drupal.runtime_subscription::{owner_at}|{expr}‖drupal.class_constant::{psr4_class}::{own}', normalize: [{replace: '^§trait§[^§]+§', with: ''}, {replace: '^§[\s\S]*$', with: ''}]}
     no_method: {template: '{tag}|{method}{meth_arg}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
     typed_method: {template: '{tag}|{method}{meth}|{meth_expr}', normalize: [{replace: '^[^|]*\|[^|]*\|.+$', with: ''}, {replace: '^[^|]*\|\|$', with: '__invoke'}, {replace: '^[^|]*\|', with: ''}, {replace: '\|$', with: ''}]}
     disp: {template: '{tag}|{n_disp_text}{p4_text}|{n_dispatcher}{p4}', normalize: [{replace: '^[^|]*\|\|', with: ''}, {replace: '^[^|]*\|(?=[^|]*\|)', with: ''}, {replace: '\|.*$', with: ''}, {replace: '^\s+|\s+$', with: ''}]}
@@ -998,8 +1004,9 @@ rules:
     ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
     # An event written as a class, X::class, as written, and the class for the event's end.
     class_ev: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class$).*$', with: ''}, {replace: '^parent::class$', with: ''}]}
+    class_ev_t: {template: '{class_ev}§{trt}', normalize: [{replace: '^(?:self|static)::class§trait$', with: ''}, {replace: '§[\s\S]*$', with: ''}]}
     # parent::class is the class the attribute's class extends, as written.
-    cls: {template: '{tag}|{class_ev}§P{parent_cls}{aparent}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '::class(?=§P)', with: ''}, {replace: '^parent§P', with: ''}, {replace: '§P.*$', with: ''}, {replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
+    cls: {template: '{tag}|{class_ev_t}§P{parent_cls}{aparent}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '::class(?=§P)', with: ''}, {replace: '^parent§P', with: ''}, {replace: '§P.*$', with: ''}, {replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
   id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: declared
@@ -1047,6 +1054,17 @@ rules:
   values: *attribute_values
   id: {template: '{psr4_class}::{own}|subscribed_here|{psr4_class}::{listener}'}
   emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{listener}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}::{own}|subscribed_here|{psr4_class}::{listener}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+# In a trait, self::NAME or static::NAME: the site that keeps the use above or the runtime
+# registration listener_attribute_expression gives (event/event.yaml).
+- rule: listener_attribute_own_class_trait_site
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{tmark}'}
+  emits: [{node: {type: drupal.event_use}}]
   confidence: declared
 
 - rule: listener_attribute_in_namespace
@@ -1102,7 +1120,7 @@ rules:
   in: [source]
   match: *listener_attribute
   values: *attribute_values
-  id: {template: '{psr4_class}|{listener}|listens|{class_ev}'}
+  id: {template: '{psr4_class}|{listener}|listens|{class_ev_t}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: declared
 
@@ -1111,12 +1129,12 @@ rules:
   in: [source]
   match: *listener_attribute
   values: *attribute_values
-  id: {template: '{psr4_class}|{listener}|listens|{class_ev}'}
+  id: {template: '{psr4_class}|{listener}|listens|{class_ev_t}'}
   emits:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - {edge: {kind: use_names_event, from: this_node, to: {template: '{cls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}, attributes: {priority: {template: '{prio}'}}}}
-  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}|{listener}|listens|{class_ev}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}|{listener}|listens|{class_ev_t}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: declared
 
 - rule: listener_attribute_class_derived_use
@@ -1124,7 +1142,7 @@ rules:
   in: [source]
   match: *listener_attribute
   values: *attribute_values
-  id: {template: '{no_method}|{psr4_class}|-|listens_class|{class_ev}', normalize: [{replace: '^none\|', with: ''}]}
+  id: {template: '{no_method}|{psr4_class}|-|listens_class|{class_ev_t}', normalize: [{replace: '^none\|', with: ''}]}
   emits: [{node: {type: drupal.event_use}}]
   confidence: declared
 
@@ -1133,12 +1151,12 @@ rules:
   in: [source]
   match: *listener_attribute
   values: *attribute_values
-  id: {template: '{no_method}|{psr4_class}|-|listens_class|{class_ev}', normalize: [{replace: '^none\|', with: ''}]}
+  id: {template: '{no_method}|{psr4_class}|-|listens_class|{class_ev_t}', normalize: [{replace: '^none\|', with: ''}]}
   emits:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - {edge: {kind: use_names_event, from: this_node, to: {template: '{cls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}, attributes: {priority: {template: '{prio}'}}}}
-  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}|-|listens_class|{class_ev}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}|-|listens_class|{class_ev_t}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: declared
 
 - rule: listener_attribute_class_derived

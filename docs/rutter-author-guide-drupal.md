@@ -414,8 +414,27 @@ two calls share holds each place's value under `differs`.
   through the span `function_scope`, which reads the class's arguments with their parentheses
   balanced, so a closure or an array among them is not taken for its body; there `self::`,
   `static::`, `parent::`, `$this`, a property, a variable and the object the call runs on get the
-  runtime mark. `parent::NAME` and `parent::class` in a trait or a class that extends nothing get
-  it too.
+  runtime mark. An anonymous class whose arguments that span cannot read, nested more than four
+  levels or holding a quoted line break, opens no span: its methods are named methods inside the
+  method that creates the class, which the rules read as methods of an anonymous class, so nothing
+  in them is read against the class around it. `parent::NAME` and `parent::class` in a trait or a
+  class that extends nothing get the mark too.
+- In a method of a trait, `self::` and `static::` name the class that uses the trait, which the
+  trait's code never shows (`event/event.yaml`). A key, an attribute event, an `addListener()` or
+  `addTag()` event or a dispatch written `self::NAME` or `static::NAME` names the trait's own
+  constant only when the trait declares it, as PHP 8.2 allows, and is otherwise a runtime
+  registration or a `drupal.runtime_event` with the text as written. `self::class`,
+  `static::class`, `new self`, `new static`, `addSubscriber($this)` and
+  `->register('id', self::class)` always name the using class, so they always get the mark. A
+  callable `[$this, 'm']`, `[self::class, 'm']`, `[static::class, 'm']` or `$this->m(...)` is the
+  trait's `m()` when the trait declares it, else a `drupal.runtime_listener`. `$this` as the object
+  a call runs on is of no known type. None of these is resolved to a class that uses the trait,
+  even when one mapped class does: another class may use the trait too, mapped or not, and the
+  edge would change meaning when a file elsewhere adds a `use`. A rule reads each such form both
+  ways, against the trait and as the mark, and an internal site
+  `trait‖<reading against the trait>‖<mark>‖<constant or method>` lets two withholding map rules
+  keep one before the passes. In a class, `->register('id', self::class)` and
+  `new Definition(static::class)` are that class.
 - `subscribed_by` from Symfony's `#[AsEventListener]`, on a method or a class, and from a
   `kernel.event_listener` tag in a services file (`event/event_listener.yaml`). The event is a
   class constant, read as a subscriber's key is, a quoted name, or, with none, the class that

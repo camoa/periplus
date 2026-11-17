@@ -53,7 +53,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #
 # The object an addListener, addSubscriber or dispatch call (event/event_dispatch.yaml) runs on is
 # in its site's id: v:<parameter>,
-# p:<property of $this>, t for $this, x for anything else. The map rules read its type from what
+# p:<property of $this>, t for $this outside a trait, x for anything else. The map rules read its type from what
 # php_basic maps: a parameter's declared type; a property's, typed, promoted or in a @var docblock,
 # on the class or its nearest ancestor that declares it; the parameter an untyped property is
 # assigned from once; and, for $this, the class. A known type that is not an event dispatcher gives
@@ -62,7 +62,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # ContainerAwareEventDispatcher, PSR-14's EventDispatcherInterface, which core aliases to the event
 # dispatcher, or a mapped class or interface that implements or extends one of them. With no type known, as for an untyped parameter, one assigned in the body or declared by a
 # closure, an undeclared property, a call's result such as \Drupal::service('event_dispatcher'),
-# or any object in a method of an anonymous class, the registration stays, and its edge holds receiver: not known to be an event dispatcher; one on
+# $this in a trait, or any object in a method of an anonymous class, the registration stays, and its edge holds receiver: not known to be an event dispatcher; one on
 # a known event dispatcher holds receiver: an event dispatcher, so an edge two registrations share
 # holds each place's value under differs. The node sits at the call's line.
 # An event or a listener only the running code names - a variable, an expression, a key or a
@@ -80,6 +80,15 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # table core_event_names, else as written. In a method of an anonymous class, the callable
 # [$this, 'm'], [self::class, 'm'] or $this->m(...) ends at the drupal.runtime_listener
 # <owner>|<callable>, and a priority self::NAME or static::NAME stays as written.
+#
+# In a method of a trait (event/event.yaml), an addListener or addTag event or a key self::NAME or
+# static::NAME is the trait's constant only when the trait declares it, else the runtime
+# registration <owner>|<as written>; an event or key self::class or static::class, a subscriber
+# $this, and a tag's class ->register('id', self::class), the listener <owner>|self::class, are
+# always the using class's, so runtime. A callable [$this, 'm'], [self::class, 'm'],
+# [static::class, 'm'] or $this->m(...) is the trait's m() when the trait declares it, else the
+# drupal.runtime_listener <owner>|<callable>. In a class, ->register('id', self::class) and new
+# Definition(static::class) are that class.
 
 node_types:
 - name: drupal.runtime_subscription
@@ -140,12 +149,16 @@ rules:
     filetype: drupal_php_text
     text: '(?=[$-])(?:(?<![\w$>:\\])(?<rv>\$(?!this\b)\w+)|(?<![\w$>:\\])\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<rp>\w+)|(?<![\w$>:\\])(?<rt>\$this))?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<call>addListener)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:parent::(?<epc>[A-Z][A-Z0-9_]*)|(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,)|[''\"](?<en>[^''\"$]+)[''\"]|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:(?<cs>\[\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<a1>\w+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\]|\[\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:self|static)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<a2>\w+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\]|\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<a3>\w+)\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\.\.\.\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\))|\[\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<e1>\w+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\]|(?<d2>\\?[A-Za-z_][\w\\]*)::(?<e2>\w+)\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\.\.\.\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|[''\"](?<b1>\\?[A-Za-z_][\w\\]*)::(?<e3>\w+)[''\"]|[''\"](?<f1>\\?[A-Za-z_][\w\\]*)[''\"]|(?<g1>(?:static\s+)?function\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\([^)]*\)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*use\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\([^)]*\))?(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\??[\w\\]+)?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}|(?:static\s+)?fn\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\([^)]*\)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>(?:[^,()]|\((?:[^()]|\([^()]*\))*\))+|(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)'
   values: &listener_added_values
-    # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this, x for any
+    # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this outside a trait, x for any
     # other, as a call's result; xmark, the mark, only for x.
-    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
-    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}‡{anon}', normalize: [{replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)(?![\s\S]*\|)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    # trait in a method of a trait outside an anonymous class, where self:: and static:: name the
+    # class that uses the trait (event/event.yaml).
+    trt: {template: '{kind}‡{anon}', normalize: [{replace: '^trait‡$', with: 'trait'}, {replace: '^(?!trait$)[\s\S]*$', with: ''}]}
+    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}¶{trt}‡{anon}', normalize: [{replace: '§T\$this¶trait', with: '§T'}, {replace: '¶[^‡]*', with: ''}, {replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
     xmark: {template: '{recv}', normalize: [{replace: '^x$', with: 'not known to be an event dispatcher'}, {replace: '^(?!not ).*$', with: ''}]}
-    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '\|[\s\S]*$', with: ''}, {replace: '^function\s+', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -167,16 +180,21 @@ rules:
     hk: {template: '§{here_ns}{h_ev}'}
     prio: {template: '{call}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
     pk: {template: '§{this_cls}§{pcref}{pcu}‡{anon}', normalize: [{replace: '^§[^§]*§(?=[^‡]*‡.)', with: ''}, {replace: '‡[\s\S]*$', with: ''}, {replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
-    ec_ok: {template: '{ec}‡{anon}¶{parent_cls}', normalize: [{replace: '^(?:self|static|parent)‡.+¶[\s\S]*$', with: ''}, {replace: '^parent‡¶$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
+    ec_ok: {template: '{ec}‡{anon}{trt}¶{parent_cls}', normalize: [{replace: '^(?:self|static|parent)‡.+¶[\s\S]*$', with: ''}, {replace: '^parent‡¶$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
     # parent::NAME or parent::class with no written parent, in a trait or a class that extends
     # nothing, outside an anonymous class, is read as an expression is.
     unknown: {template: '{ex}§P{epc}§C{ec}¶{parent_cls}‡{anon}', normalize: [{replace: '§P[^§]*§C[^¶]*¶[^‡]+‡$', with: ''}, {replace: '§P[^§]*§C[^¶]*¶[^‡]*‡.+$', with: ''}, {replace: '¶‡$', with: ''}, {replace: '§C(?!parent$)[^§]*$', with: ''}, {replace: '§P(?=§|$)', with: ''}, {replace: '§Cparent$', with: 'parent::class'}, {replace: '§P', with: 'parent::'}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
     self_class: {template: '§{a1}{a2}{a3}§{this_cls}‡{anon}', normalize: [{replace: '^§[^§]*§[^‡]*‡.+$', with: 'self'}, {replace: '‡$', with: ''}, {replace: '^§[^§]*§', with: ''}]}
     scoped: {template: '{call}‡{anon}§S{eo}§P{epc}§C{ec}§E', normalize: [{replace: '^[\w.]+‡§[\s\S]*$', with: ''}, {replace: '^[\w.]+‡\w+', with: ''}, {replace: '§C(?!(?:self|static|parent)§E)[^§]*', with: '§C'}, {replace: '§C§E', with: ''}, {replace: '§[SP](?=§|$)', with: ''}, {replace: '§P', with: 'parent::'}, {replace: '§E', with: '::class'}, {replace: '§[SC]', with: ''}]}
+    # In a trait, a callable on $this, self::class or static::class: t:<method>¦<callable as
+    # written>, the trait's method when the trait declares it, else the runtime listener.
+    tpl: {template: '{call}‡{trt}§{a1}{a2}{a3}§{cs}', normalize: [{replace: '^\w+‡§[\s\S]*$', with: ''}, {replace: '^\w+‡trait§§[\s\S]*$', with: ''}, {replace: '^\w+‡trait§', with: 't:'}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}, {replace: '§', with: '¦'}]}
     pl:
-      template: '§C{a1}{a2}{a3}{e1}{e2}{e3}§F{f1}§R{g1}‡{anon}§S{cs}'
+      template: '{tpl}¤§C{a1}{a2}{a3}{e1}{e2}{e3}§F{f1}§R{g1}‡{anon}§S{cs}'
       normalize:
+      - {replace: '^(?!t:)[^¤]*¤', with: ''}
+      - {replace: '¤[\s\S]*$', with: ''}
       - {replace: '^[\s\S]*‡\w+§S(?=.)', with: '§R'}
       - {replace: '‡[\s\S]*$', with: ''}
       - {replace: '§[CFR](?=§|$)', with: ''}
@@ -185,6 +203,21 @@ rules:
       - {replace: '^§C', with: 'c:'}
       - {replace: '^§F\\?', with: 'f:'}
       - {replace: '^§R', with: 'r:'}
+    # In a trait, an event self::NAME or static::NAME as written, kept or taken back by the site
+    # below, and self::class or static::class, the using class: the runtime registration.
+    tscoped:
+      template: '{call}‡{trt}§S{eo}§C{ec}'
+      normalize:
+      - {replace: '^[\w.]+‡§[\s\S]*$', with: ''}
+      - {replace: '^[\w.]+‡trait', with: ''}
+      - {replace: '§C(?!(?:self|static)$)[^§]*$', with: ''}
+      - {replace: '§C', with: ''}
+      - {replace: '(?<=^§Sself)$', with: '::class'}
+      - {replace: '(?<=^§Sstatic)$', with: '::class'}
+      - {replace: '^§S', with: ''}
+    scope_rt: {template: '{scoped}{tscoped}'}
+    tn: {template: '‡{trt}§{eo}', normalize: [{replace: '^‡trait§\w+::', with: ''}, {replace: '^‡[\s\S]*$', with: ''}]}
+    tmark: {template: '§{tn}§trait‖drupal.event_use::{this_cls}::{tn}|reg~{recv}|{owner}|{pl}‖drupal.runtime_subscription::{bare}|{eo}~{recv}‖drupal.class_constant::{this_cls}::{tn}', normalize: [{replace: '^§§[\s\S]*$', with: ''}, {replace: '^§[^§]*§', with: ''}]}
 
   id: {template: '{r_ev}|reg~{recv}|{owner}|{pl}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
   emits: [{node: {type: drupal.event_use}}]
@@ -352,14 +385,16 @@ rules:
   confidence: inferred
 
 # In an anonymous class, an event read against the class around the call: self::NAME,
-# static::NAME, parent::NAME, self::class, static::class or parent::class.
+# static::NAME, parent::NAME, self::class, static::class or parent::class; in a trait, self::NAME
+# or static::NAME, which the site below keeps only when the trait does not declare it, and
+# self::class or static::class.
 - rule: listener_added_scope_runtime
   reads: file
   line: {capture: call}
   in: [source]
   match: *listener_added_match
   values: *listener_added_values
-  id: {template: '{bare}|{scoped}~{recv}'}
+  id: {template: '{bare}|{scope_rt}~{recv}'}
   emits:
   - node: {type: drupal.runtime_subscription}
   - attribute: {name: resolution, template: runtime}
@@ -371,8 +406,18 @@ rules:
   in: [source]
   match: *listener_added_match
   values: *listener_added_values
-  id: {template: '{bare}|{scoped}~{recv}'}
+  id: {template: '{bare}|{scope_rt}~{recv}'}
   emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
+  confidence: inferred
+
+- rule: listener_added_trait_site
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *listener_added_match
+  values: *listener_added_values
+  id: {template: '{tmark}'}
+  emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
 # ->addTag('kernel.event_listener', [...]) on a definition a service provider or a pass names.
@@ -385,8 +430,12 @@ rules:
     text: '(?=[-n$])(?:->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*register\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"][^''\"]+[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|new\s+Definition\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\))?|->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:getDefinition|findDefinition)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<sid>[^''\"]+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:register|getDefinition|findDefinition|setDefinition)\()(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\))?)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*addTag\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<tag>kernel\.event_listener)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:\[|array\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:parent::(?<epc>[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"]%(?<ep>[^''\"%\s]+)%[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<e1>\w+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)'
   values: &listener_tag_added_values
     disp: {template: '{dispatcher}{dispx}'}
-    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
-    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '\|[\s\S]*$', with: ''}, {replace: '^function\s+', with: ''}]}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)(?![\s\S]*\|)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    # trait in a method of a trait outside an anonymous class, where self:: and static:: name the
+    # class that uses the trait (event/event.yaml).
+    trt: {template: '{kind}‡{anon}', normalize: [{replace: '^trait‡$', with: 'trait'}, {replace: '^(?!trait$)[\s\S]*$', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -394,6 +443,11 @@ rules:
     f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
     meth: {template: '{m_src}{m_mod}'}
     this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    # The class registered, ->register('id', X::class) or new Definition(X::class): self::class or
+    # static::class is the class the call is written in. In a trait it is the using class: pl is
+    # then r:self::class (dself), the runtime listener, whose rules never read this class.
+    dcls: {template: '§{d1}{d2}§{this_cls}', normalize: [{replace: '^§(?:self|static)§', with: '\'}, {replace: '^§', with: ''}, {replace: '§[\s\S]*$', with: ''}]}
+    dself: {template: '{tag}§{d1}{d2}§{trt}', normalize: [{replace: '^[\w.]+§(?=(?:self|static)§trait$)', with: ''}, {replace: '§trait$', with: '::class'}, {replace: '^[\w.]+§[\s\S]*$', with: ''}]}
     parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
     cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
@@ -408,13 +462,13 @@ rules:
     hk: {template: '§{here_ns}{h_ev}'}
     prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
     pk: {template: '§{this_cls}§{pcref}{pcu}‡{anon}', normalize: [{replace: '^§[^§]*§(?=[^‡]*‡.)', with: ''}, {replace: '‡[\s\S]*$', with: ''}, {replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
-    ec_ok: {template: '{ec}‡{anon}¶{parent_cls}', normalize: [{replace: '^(?:self|static|parent)‡.+¶[\s\S]*$', with: ''}, {replace: '^parent‡¶$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
+    ec_ok: {template: '{ec}‡{anon}{trt}¶{parent_cls}', normalize: [{replace: '^(?:self|static|parent)‡.+¶[\s\S]*$', with: ''}, {replace: '^parent‡¶$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
     unknown: {template: '§{ex}§{ek}{eo}{ec}{en}§{mx}', normalize: [{replace: '^§§[^§]+§.*$', with: ''}, {replace: '^§§§', with: ''}, {replace: '(?<=.)§.*$', with: ''}, {replace: '^§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
     scoped: {template: '{tag}‡{anon}§S{eo}§P{epc}§C{ec}§E¶{parent_cls}‡{anon}', normalize: [{replace: '^[\s\S]*¶[^‡]+‡$', with: ''}, {replace: '§S[^§]*(?=[\s\S]*¶‡$)', with: '§S'}, {replace: '§C(?:self|static)(?=§E[\s\S]*¶‡$)', with: '§C'}, {replace: '¶[\s\S]*$', with: ''}, {replace: '^[\w.]+‡\w*', with: ''}, {replace: '§C(?!(?:self|static|parent)§E)[^§]*', with: '§C'}, {replace: '§C§E', with: ''}, {replace: '§[SP](?=§|$)', with: ''}, {replace: '§P', with: 'parent::'}, {replace: '§E', with: '::class'}, {replace: '§[SC]', with: ''}]}
     no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ep}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
     pl:
-      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§W{d1}{d2}{sid}§Z{tag}'
+      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}{dself}§W{d1}{d2}{sid}§Z{tag}'
       normalize:
       - {replace: '§[MXKVW](?=§)', with: ''}
       - {replace: '^.*§V', with: 'r:'}
@@ -426,6 +480,21 @@ rules:
       - {replace: '§Z.*$', with: ''}
       - {replace: '^§M', with: 'c:'}
       - {replace: '\s+', with: ''}
+    # In a trait, an event self::NAME or static::NAME as written, kept or taken back by the site
+    # below, and self::class or static::class, the using class: the runtime registration.
+    tscoped:
+      template: '{tag}‡{trt}§S{eo}§C{ec}'
+      normalize:
+      - {replace: '^[\w.]+‡§[\s\S]*$', with: ''}
+      - {replace: '^[\w.]+‡trait', with: ''}
+      - {replace: '§C(?!(?:self|static)$)[^§]*$', with: ''}
+      - {replace: '§C', with: ''}
+      - {replace: '(?<=^§Sself)$', with: '::class'}
+      - {replace: '(?<=^§Sstatic)$', with: '::class'}
+      - {replace: '^§S', with: ''}
+    scope_rt: {template: '{scoped}{tscoped}'}
+    tn: {template: '‡{trt}§{eo}', normalize: [{replace: '^‡trait§\w+::', with: ''}, {replace: '^‡[\s\S]*$', with: ''}]}
+    tmark: {template: '§{tn}§trait‖drupal.event_use::{this_cls}::{tn}|reg|{owner}|{pl}‖drupal.runtime_subscription::{bare}|{eo}‖drupal.class_constant::{this_cls}::{tn}', normalize: [{replace: '^§§[\s\S]*$', with: ''}, {replace: '^§[^§]*§', with: ''}]}
 
   id: {template: '{r_ev}|reg|{owner}|{pl}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
   emits: [{node: {type: drupal.event_use}}]
@@ -443,7 +512,7 @@ rules:
   - {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{hk}|reg|{owner}|{pl}', type: drupal.event_use}}}
   - edge: {kind: use_has_priority, from: this_node, to: {template: '{r_ev}|reg|{owner}|{pl}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
   - edge: {kind: use_names_event, from: this_node, to: {template: '{r_ev}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::', types: [drupal.event_text]}}
-  - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
+  - edge: {kind: use_names_class, from: this_node, to: {template: '{dcls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
   - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{r_ev}|reg|{owner}|{pl}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
@@ -469,7 +538,7 @@ rules:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - edge: {kind: use_has_priority, from: this_node, to: {template: '{r_ev}|reg|{owner}|{pl}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '\', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
   - edge: {kind: use_names_event, from: this_node, to: {template: '{r_ev}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '\', types: [drupal.event_text]}}
-  - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
+  - edge: {kind: use_names_class, from: this_node, to: {template: '{dcls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
   - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{r_ev}|reg|{owner}|{pl}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '\', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
@@ -494,7 +563,7 @@ rules:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - edge: {kind: use_has_priority, from: this_node, to: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
   - edge: {kind: use_names_event, from: this_node, to: {template: '{here_ns}{h_ev}', types: [drupal.event_text]}}
-  - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
+  - edge: {kind: use_names_class, from: this_node, to: {template: '{dcls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
   - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
@@ -519,7 +588,7 @@ rules:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - edge: {kind: use_has_priority, from: this_node, to: {template: '{en}|reg_named|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
   - edge: {kind: use_names_event, from: this_node, to: {template: '{en}', resolve: [{lookup_last_segment_in: core_event_names}, as_written], separator: ' ', types: [drupal.event]}}
-  - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
+  - edge: {kind: use_names_class, from: this_node, to: {template: '{dcls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
   - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{en}|reg_named|{owner}|{pl}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
@@ -544,7 +613,7 @@ rules:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - edge: {kind: use_has_priority, from: this_node, to: {template: '{ec_ok}::class|reg|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
   - edge: {kind: use_names_event, from: this_node, to: {template: '{cls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
-  - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
+  - edge: {kind: use_names_class, from: this_node, to: {template: '{dcls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
   - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{ec_ok}::class|reg|{owner}|{pl}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
@@ -559,8 +628,12 @@ rules:
     text: '(?=[-n$])(?:->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*register\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"][^''\"]+[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|new\s+Definition\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\))?|->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:getDefinition|findDefinition)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<sid>[^''\"]+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:register|getDefinition|findDefinition|setDefinition)\()(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\))?)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*addTag\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<tag>kernel\.event_listener)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:\[|array\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:parent::(?<epc>[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"]%(?<ep>[^''\"%\s]+)%[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<e1>\w+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)'
   values: &listener_tag_added_derived_values
     disp: {template: '{dispatcher}{dispx}'}
-    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
-    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '\|[\s\S]*$', with: ''}, {replace: '^function\s+', with: ''}]}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)(?![\s\S]*\|)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    # trait in a method of a trait outside an anonymous class, where self:: and static:: name the
+    # class that uses the trait (event/event.yaml).
+    trt: {template: '{kind}‡{anon}', normalize: [{replace: '^trait‡$', with: 'trait'}, {replace: '^(?!trait$)[\s\S]*$', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -568,6 +641,11 @@ rules:
     f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
     meth: {template: '{m_src}{m_mod}'}
     this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    # The class registered, ->register('id', X::class) or new Definition(X::class): self::class or
+    # static::class is the class the call is written in. In a trait it is the using class: pl is
+    # then r:self::class (dself), the runtime listener, whose rules never read this class.
+    dcls: {template: '§{d1}{d2}§{this_cls}', normalize: [{replace: '^§(?:self|static)§', with: '\'}, {replace: '^§', with: ''}, {replace: '§[\s\S]*$', with: ''}]}
+    dself: {template: '{tag}§{d1}{d2}§{trt}', normalize: [{replace: '^[\w.]+§(?=(?:self|static)§trait$)', with: ''}, {replace: '§trait$', with: '::class'}, {replace: '^[\w.]+§[\s\S]*$', with: ''}]}
     parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
     cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
@@ -583,7 +661,7 @@ rules:
     unknown: {template: '§{ex}§{ek}{eo}{ec}{en}§{mx}', normalize: [{replace: '^§§[^§]+§.*$', with: ''}, {replace: '^§§§', with: ''}, {replace: '(?<=.)§.*$', with: ''}, {replace: '^§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
     no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ep}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
     pl_unused:
-      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§W{d1}{d2}{sid}§Z{tag}'
+      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}{dself}§W{d1}{d2}{sid}§Z{tag}'
       normalize:
       - {replace: '§[MXKVW](?=§)', with: ''}
       - {replace: '^.*§V', with: 'r:'}
@@ -655,7 +733,7 @@ rules:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - edge: {kind: use_has_priority, from: this_node, to: {template: '{en}|reg_named|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
   - edge: {kind: use_names_event, from: this_node, to: {template: '{en}', resolve: [{lookup_last_segment_in: core_event_names}, as_written], separator: ' ', types: [drupal.event]}}
-  - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
+  - edge: {kind: use_names_class, from: this_node, to: {template: '{dcls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
   - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{en}|reg_named|{owner}|{pl}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
@@ -670,8 +748,12 @@ rules:
     text: '(?=[-n$])(?:->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*register\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"][^''\"]+[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|new\s+Definition\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\))?|->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:getDefinition|findDefinition)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<sid>[^''\"]+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:register|getDefinition|findDefinition|setDefinition)\()(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\))?)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*addTag\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<tag>kernel\.event_listener)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:\[|array\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:parent::(?<epc>[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"]%(?<ep>[^''\"%\s]+)%[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<e1>\w+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)'
   values: &listener_tag_added_typed_values
     disp: {template: '{dispatcher}{dispx}'}
-    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
-    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '\|[\s\S]*$', with: ''}, {replace: '^function\s+', with: ''}]}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)(?![\s\S]*\|)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    # trait in a method of a trait outside an anonymous class, where self:: and static:: name the
+    # class that uses the trait (event/event.yaml).
+    trt: {template: '{kind}‡{anon}', normalize: [{replace: '^trait‡$', with: 'trait'}, {replace: '^(?!trait$)[\s\S]*$', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -679,6 +761,11 @@ rules:
     f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
     meth: {template: '{m_src}{m_mod}'}
     this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    # The class registered, ->register('id', X::class) or new Definition(X::class): self::class or
+    # static::class is the class the call is written in. In a trait it is the using class: pl is
+    # then r:self::class (dself), the runtime listener, whose rules never read this class.
+    dcls: {template: '§{d1}{d2}§{this_cls}', normalize: [{replace: '^§(?:self|static)§', with: '\'}, {replace: '^§', with: ''}, {replace: '§[\s\S]*$', with: ''}]}
+    dself: {template: '{tag}§{d1}{d2}§{trt}', normalize: [{replace: '^[\w.]+§(?=(?:self|static)§trait$)', with: ''}, {replace: '§trait$', with: '::class'}, {replace: '^[\w.]+§[\s\S]*$', with: ''}]}
     parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
     cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
@@ -694,7 +781,7 @@ rules:
     unknown: {template: '§{ex}§{ek}{eo}{ec}{en}§{mx}', normalize: [{replace: '^§§[^§]+§.*$', with: ''}, {replace: '^§§§', with: ''}, {replace: '(?<=.)§.*$', with: ''}, {replace: '^§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
     no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ep}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
     pl_unused:
-      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§W{d1}{d2}{sid}§Z{tag}'
+      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}{dself}§W{d1}{d2}{sid}§Z{tag}'
       normalize:
       - {replace: '§[MXKVW](?=§)', with: ''}
       - {replace: '^.*§V', with: 'r:'}
@@ -765,7 +852,7 @@ rules:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - edge: {kind: use_has_priority, from: this_node, to: {template: '{typed}|reg_typed|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
-  - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
+  - edge: {kind: use_names_class, from: this_node, to: {template: '{dcls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
   - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{typed}|reg_typed|{owner}|{pl}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
@@ -790,13 +877,15 @@ rules:
   emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node}}]
   confidence: inferred
 
-# In an anonymous class, an event read against the class around the call, as for addListener.
+# In an anonymous class, an event read against the class around the call, as for addListener; in a
+# trait, self::NAME or static::NAME, which the site below keeps only when the trait does not declare
+# it, and self::class or static::class.
 - rule: listener_tag_added_scope_runtime
   reads: file
   in: [source]
   match: *listener_tag_added_match
   values: *listener_tag_added_values
-  id: {template: '{bare}|{scoped}'}
+  id: {template: '{bare}|{scope_rt}'}
   emits:
   - node: {type: drupal.runtime_subscription}
   - attribute: {name: resolution, template: runtime}
@@ -807,8 +896,17 @@ rules:
   in: [source]
   match: *listener_tag_added_match
   values: *listener_tag_added_values
-  id: {template: '{bare}|{scoped}'}
+  id: {template: '{bare}|{scope_rt}'}
   emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node}}]
+  confidence: inferred
+
+- rule: listener_tag_added_trait_site
+  reads: file
+  in: [source]
+  match: *listener_tag_added_match
+  values: *listener_tag_added_values
+  id: {template: '{tmark}'}
+  emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
 # An event written as a container parameter, 'event' => '%name%': Symfony's RegisterListenersPass
@@ -840,7 +938,7 @@ rules:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - edge: {kind: use_has_priority, from: this_node, to: {template: '{ep}|reg_param|{owner}|{pp}~{who}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
-  - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
+  - edge: {kind: use_names_class, from: this_node, to: {template: '{dcls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
   - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{ep}|reg_param|{owner}|{pp}~{who}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
@@ -877,12 +975,16 @@ rules:
     filetype: drupal_php_text
     text: '(?=[$-])(?:(?<![\w$>:\\])(?<rv>\$(?!this\b)\w+)|(?<![\w$>:\\])\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<rp>\w+)|(?<![\w$>:\\])(?<rt>\$this))?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<call>addSubscriber)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:new\s+(?<sc>\\?[A-Za-z_][\w\\]*)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:\(|\))|(?<st>\$this)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|(?<sx>(?:[^()]|\((?:[^()]|\([^()]*\))*\))+?)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\))'
   values: &subscriber_added_values
-    # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this, x for any
+    # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this outside a trait, x for any
     # other, as a call's result; xmark, the mark, only for x.
-    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
-    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}‡{anon}', normalize: [{replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)(?![\s\S]*\|)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    # trait in a method of a trait outside an anonymous class: $this is the class that uses the
+    # trait, the runtime mark as in an anonymous class (event/event.yaml).
+    trt: {template: '{kind}‡{anon}', normalize: [{replace: '^trait‡$', with: 'trait'}, {replace: '^(?!trait$)[\s\S]*$', with: ''}]}
+    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}¶{trt}‡{anon}', normalize: [{replace: '§T\$this¶trait', with: '§T'}, {replace: '¶[^‡]*', with: ''}, {replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
     xmark: {template: '{recv}', normalize: [{replace: '^x$', with: 'not known to be an event dispatcher'}, {replace: '^(?!not ).*$', with: ''}]}
-    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '\|[\s\S]*$', with: ''}, {replace: '^function\s+', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -896,9 +998,9 @@ rules:
     bare: {template: '{meth}{f_own}'}
     ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     unknown: {from: {capture: sx}, normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
-    scoped: {template: '{st}‡{anon}', normalize: [{replace: '^[\s\S]*‡$', with: ''}, {replace: '‡\w+$', with: ''}]}
+    scoped: {template: '{st}‡{anon}{trt}', normalize: [{replace: '^[\s\S]*‡$', with: ''}, {replace: '‡\w+$', with: ''}]}
     this_class: {template: '§{st}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
-    target: {template: '§{sc}§{st}‡{anon}', normalize: [{replace: '^§§\$this‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}, {replace: '^§§\$this$', with: 'this'}, {replace: '^§(?=[^§])', with: 'c:'}, {replace: '§$', with: ''}, {replace: '^§.*$', with: ''}]}
+    target: {template: '§{sc}§{st}‡{anon}{trt}', normalize: [{replace: '^§§\$this‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}, {replace: '^§§\$this$', with: 'this'}, {replace: '^§(?=[^§])', with: 'c:'}, {replace: '§$', with: ''}, {replace: '^§.*$', with: ''}]}
   id: {template: 'sub~{recv}|{owner}|{target}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
@@ -947,7 +1049,8 @@ rules:
   emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
   confidence: inferred
 
-# In an anonymous class, $this added: the anonymous class, which no rule maps.
+# In an anonymous class, $this added: the anonymous class, which no rule maps; in a trait, the class
+# that uses it.
 - rule: subscriber_added_scope_runtime
   reads: file
   line: {capture: call}
@@ -1257,7 +1360,9 @@ rules:
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
     cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
     # parent::class with no written parent: none here, a runtime registration (key_parent_runtime).
-    ec_k: {template: '{ec}¶{parent_cls}', normalize: [{replace: '^parent¶$', with: ''}, {replace: '¶[\s\S]*$', with: ''}]}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    # In a trait, self::class or static::class: the using class, a runtime registration too.
+    ec_k: {template: '{ec}¶{parent_cls}¶{kind}', normalize: [{replace: '^parent¶¶[\s\S]*$', with: ''}, {replace: '^(?:self|static)¶[^¶]*¶trait$', with: ''}, {replace: '¶[\s\S]*$', with: ''}]}
   id: {template: '{ec_k}::class|reg|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
@@ -1306,7 +1411,9 @@ rules:
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
     cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
     # parent::class with no written parent: none here, a runtime registration (key_parent_runtime).
-    ec_k: {template: '{ec}¶{parent_cls}', normalize: [{replace: '^parent¶$', with: ''}, {replace: '¶[\s\S]*$', with: ''}]}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    # In a trait, self::class or static::class: the using class, a runtime registration too.
+    ec_k: {template: '{ec}¶{parent_cls}¶{kind}', normalize: [{replace: '^parent¶¶[\s\S]*$', with: ''}, {replace: '^(?:self|static)¶[^¶]*¶trait$', with: ''}, {replace: '¶[\s\S]*$', with: ''}]}
   id: {template: '{ec_k}::class|reg|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
@@ -1350,6 +1457,7 @@ rules:
     bare: {template: '{meth}{f_own}'}
     ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     unknown: {template: '{k1}{k2}{k3}{k4}{k5}', normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
 
   id: {template: '{in_subscriber}|{bare}|{unknown}', normalize: [{replace: '^function\|', with: ''}]}
@@ -1369,7 +1477,10 @@ rules:
   confidence: inferred
 
 # A key parent::NAME or parent::class, => ... or $events[...] = ..., with no written parent: in a
-# trait the class that uses it decides the parent, and a class that extends nothing has none.
+# trait the class that uses it decides the parent, and a class that extends nothing has none. In a
+# trait, a key self::NAME, static::NAME, self::class or static::class names the using class too: the
+# runtime registration, which event/event.yaml's site takes back for self::NAME or static::NAME
+# when the trait declares the constant.
 - rule: key_parent_runtime
   reads: file
   line: {capture: pc}
@@ -1377,10 +1488,10 @@ rules:
   match: &key_parent_runtime_match
     file: '**'
     filetype: drupal_php_text
-    text: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])parent::(?<pc>[A-Z][A-Z0-9_]*|class)\s*=>|\$\w+\[\s*parent::(?<pd>[A-Z][A-Z0-9_]*|class)\s*\](?:\s*\[\s*\])?\s*=(?![=>])'
+    text: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?<pw>parent|self|static)::(?<pc>[A-Z][A-Z0-9_]*|class)\s*=>|\$\w+\[\s*(?<pv>parent|self|static)::(?<pd>[A-Z][A-Z0-9_]*|class)\s*\](?:\s*\[\s*\])?\s*=(?![=>])'
   values: &key_parent_runtime_values
     <<: *key_runtime_values
-    unknown: {template: '{parent_cls}§parent::{pc}{pd}', normalize: [{replace: '^[^§]+§[\s\S]*$', with: ''}, {replace: '^§', with: ''}]}
+    unknown: {template: '{parent_cls}§{kind}§{pw}{pv}::{pc}{pd}', normalize: [{replace: '^[^§]+§[^§]*§parent::[\s\S]*$', with: ''}, {replace: '^§[^§]*§(?=parent::)', with: ''}, {replace: '^[^§]*§trait§(?=(?:self|static)::)', with: ''}, {replace: '^[^§]*§[\s\S]*$', with: ''}]}
   id: {template: '{in_subscriber}|{bare}|{unknown}', normalize: [{replace: '^function\|', with: ''}]}
   emits:
   - node: {type: drupal.runtime_subscription}
@@ -2113,6 +2224,59 @@ rules:
   emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{payload}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}, {edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{payload}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}]
   confidence: inferred
 
+# In a trait, a callable on $this, self::class or static::class whose method the trait declares:
+# that method. One the trait does not declare is registered_listener_r_named's runtime listener.
+- rule: registered_listener_t_named
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_named)?(?:~[^|]*)?\|(?<owner>(?:php\.method|php\.function)::(?<bare>[^|]+))\|(?<pl>t:(?<payload>[^¦]*)¦[\s\S]*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - edge: use_names_class
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.method::{declarer}::{payload}'
+    - node: 'drupal.event_use::{site}'
+    - edge: use_names_event
+    - id_matches: '^drupal\.event::(?<ev>.+)$'
+    - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
+    - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - node: 'drupal.event::{ev}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{payload}', types: [php.method]}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}, {edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{payload}', types: [php.method]}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: registered_listener_t_here
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?<hev>[^|]*)\|reg_here(?<tail>(?:~[^|]*)?)\|(?<owner>(?:php\.method|php\.function)::(?<bare>[^|]+))\|(?<pl>t:(?<payload>[^¦]*)¦[\s\S]*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: [[{node: 'drupal.event_use::bound|§{hev}|reg{tail}|{owner}|{pl}'}]]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - edge: use_names_class
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.method::{declarer}::{payload}'
+    - node: 'drupal.event_use::{site}'
+    - edge: use_names_event
+    - id_matches: '^drupal\.event::(?<ev>.+)$'
+    - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
+    - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - node: 'drupal.event::{ev}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{payload}', types: [php.method]}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}, {edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{payload}', types: [php.method]}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}]
+  confidence: inferred
+
 - rule: registered_listener_s_named
   reads: map
   match:
@@ -2223,7 +2387,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_named)?(?:~[^|]*)?\|(?<owner>(?:php\.method|php\.function)::(?<bare>[^|]+))\|r:(?<payload>.*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_named)?(?:~[^|]*)?\|(?<owner>(?:php\.method|php\.function)::(?<bare>[^|]+))\|(?<pl>(?:r:|t:[^¦]*¦)(?<payload>.*)))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
@@ -2238,7 +2402,10 @@ rules:
     - node: 'drupal.event::{ev}'
     - id_matches: '^(?<target_id>[\s\S]+)$'
     - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
-    unless_matched: [[{node: 'drupal.event_use::{site}'}, {id_matches: '\|r:no-method~[^|]*$'}, {node: 'drupal.constant_text::{ev}'}]]
+    # A callable in a trait on a method the trait declares: registered_listener_c_named's edge.
+    unless_matched:
+    - [{node: 'drupal.event_use::{site}'}, {id_matches: '\|r:no-method~[^|]*$'}, {node: 'drupal.constant_text::{ev}'}]
+    - [{node: 'drupal.event_use::{site}'}, {id_matches: '\|php\.method::(?<tcls>[^|]+)::\w+\|t:(?<tm>[^¦]*)¦'}, {node: 'php.method::{tcls}::{tm}'}]
   emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{bare}|{payload}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}, {edge: {kind: subscribed_by, from: matched_node, to: {template: '{bare}|{payload}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}]
   confidence: inferred
 
@@ -2246,8 +2413,8 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>(?<hev>[^|]*)\|reg_here(?<tail>(?:~[^|]*)?)\|(?<owner>(?:php\.method|php\.function)::(?<bare>[^|]+))\|r:(?<payload>.*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
-    unless: [[{node: 'drupal.event_use::bound|§{hev}|reg{tail}|{owner}|r:{payload}'}]]
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?<hev>[^|]*)\|reg_here(?<tail>(?:~[^|]*)?)\|(?<owner>(?:php\.method|php\.function)::(?<bare>[^|]+))\|(?<pl>(?:r:|t:[^¦]*¦)(?<payload>.*)))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: [[{node: 'drupal.event_use::bound|§{hev}|reg{tail}|{owner}|{pl}'}]]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
@@ -2262,7 +2429,10 @@ rules:
     - node: 'drupal.event::{ev}'
     - id_matches: '^(?<target_id>[\s\S]+)$'
     - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
-    unless_matched: [[{node: 'drupal.event_use::{site}'}, {id_matches: '\|r:no-method~[^|]*$'}, {node: 'drupal.constant_text::{ev}'}]]
+    # A callable in a trait on a method the trait declares: registered_listener_c_named's edge.
+    unless_matched:
+    - [{node: 'drupal.event_use::{site}'}, {id_matches: '\|r:no-method~[^|]*$'}, {node: 'drupal.constant_text::{ev}'}]
+    - [{node: 'drupal.event_use::{site}'}, {id_matches: '\|php\.method::(?<tcls>[^|]+)::\w+\|t:(?<tm>[^¦]*)¦'}, {node: 'php.method::{tcls}::{tm}'}]
   emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{bare}|{payload}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}, {edge: {kind: subscribed_by, from: matched_node, to: {template: '{bare}|{payload}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}]
   confidence: inferred
 

@@ -9,6 +9,18 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # fully qualified, and stays referenced. An event dispatched as an object is named by its class's
 # full name, as drupal.event::Drupal\my_module\Event\Paid.
 # A subscriber method subscribes to an event and a method dispatches it.
+#
+# In a trait, self:: and static:: name the class that uses the trait, which the trait's own code
+# never shows, so the event rules read self::NAME, static::NAME and the method of a callable on
+# $this, self::class or static::class against the trait only when the trait itself declares that
+# constant or method, as PHP 8.2 lets a trait declare a constant. Every other reading is the
+# runtime mark with the text as written, even when one mapped class uses the trait: another class,
+# mapped or not, may use it too, and an edge to one user would change meaning when a file elsewhere
+# adds a use. Such a registration or dispatch is read both ways, and an internal site
+# trait‖<the reading against the trait>‖<the runtime mark>‖<the constant or method> lets the two
+# rules below keep one, before the passes. self::class, static::class, new self, new static and
+# $this as a subscriber, an event object or a tag's class are the using class, so in a trait they
+# are always the runtime mark.
 
 node_types:
 - name: drupal.event
@@ -97,3 +109,26 @@ edge_kinds:
   description: "the use's priority is written as that class constant"
   from: drupal.event_use
   to: drupal.class_constant
+
+rules:
+
+# The trait declares the name: the runtime mark is taken back at the site's place.
+- rule: trait_name_declared
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::trait‖(?<use>[^‖]+)‖(?<mark>[^‖]+)‖(?<check>[^‖]+)$'}]
+    follow: [{node: '{check}'}, {node: '{mark}'}]
+  emits: [{withhold: matched_node}]
+  confidence: inferred
+
+# It does not: the reading against the trait is taken back, and the runtime mark stays.
+- rule: trait_name_undeclared
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::trait‖(?<use>[^‖]+)‖(?<mark>[^‖]+)‖(?<check>[^‖]+)$'}]
+    follow: [{node: '{use}'}]
+    unless: [[{node: '{check}'}]]
+  emits: [{withhold: matched_node}]
+  confidence: inferred

@@ -36,7 +36,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # <owner>|<expression>~<object>, marked as an unknown boundary. So are, in a method of an
 # anonymous class, the forms read against the class or the method around the call: self::NAME,
 # static::NAME, parent::NAME, self::class, static::class, parent::class, new self, new static,
-# new parent, $this, a property of $this, and a variable or parameter. A call whose arguments are not
+# new parent, $this, a property of $this, and a variable or parameter. In a method of a trait,
+# self::NAME and static::NAME name the trait's constant only when the trait declares it, and
+# self::class, static::class, new self, new static and $this always name the class that uses the
+# trait: each other reading is the same mark (event/event.yaml). A call whose arguments are not
 # read, nested more than six levels deep, with a third argument or with a heredoc that breaks
 # them, gets the same mark with the expression (unread). A call with no argument dispatches no
 # event and gives nothing.
@@ -44,7 +47,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # dispatch() is a common method name, so the object the call runs on is read as for addListener
 # (event/listener_registration.yaml): a known type that is not an event dispatcher, PSR-14's
 # among them, gives nothing; a known dispatcher holds receiver: an event dispatcher; and an object
-# of no known type, as a call's result or any object in a method of an anonymous class, holds
+# of no known type, as a call's result, $this in a trait or any object in a method of an anonymous
+# class, holds
 # receiver: not known to be an event dispatcher.
 #
 # Each call is an internal drupal.event_use site at its line, <event>|<use>~<object>|<owner>|<key>,
@@ -94,11 +98,16 @@ rules:
     # The named function or method around the call; in an anonymous class, the one that creates
     # the outermost such class, since no rule maps a method of an anonymous class. anon is set
     # inside one, where the forms below read against the class or the method around the call get
-    # the runtime mark.
-    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
-    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    # the runtime mark. A named method inside another named function is a method of an anonymous
+    # class whose arguments function_scope did not read: anon is set there too, and the outermost
+    # named function owns the call.
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '\|[\s\S]*$', with: ''}, {replace: '^function\s+', with: ''}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)(?![\s\S]*\|)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    # trait in a method of a trait outside an anonymous class, where self:: and static:: name the
+    # class that uses the trait (event/event.yaml).
+    trt: {template: '{kind}‡{anon}', normalize: [{replace: '^trait‡$', with: 'trait'}, {replace: '^(?!trait$)[\s\S]*$', with: ''}]}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     # The method around the call, <class>::<method>, of a class under src or kept elsewhere; the
     # function around it in a file that keeps functions; the owner, either as a node id.
@@ -115,11 +124,11 @@ rules:
     h_ev: {template: '{ek}{ek2}', normalize: [{replace: '^\\.*$', with: ''}]}
     # The event as the file's own namespace reads it, so a bound call's marker names no other call.
     hk: {template: '§{here_ns}{h_ev}'}
-    ec_all: {template: '{ec}{ec2}‡{anon}', normalize: [{replace: '^(?:self|static)‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
+    ec_all: {template: '{ec}{ec2}‡{anon}{trt}', normalize: [{replace: '^(?:self|static)‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
     cls: {template: '§E{ec}{ec2}§T{this_class}', normalize: [{replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
     en_all: {template: '{en}{eq}{en2}{eq2}'}
     pform: {template: '§{pf}{pf2}§{npar}‡{anon}', normalize: [{replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§§parent$', with: 'class'}, {replace: '^§class§$', with: 'class'}, {replace: '^§', with: 'c:'}, {replace: '§$', with: ''}]}
-    nc_all: {template: '{nc}‡{anon}', normalize: [{replace: '^(?:self|static)‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
+    nc_all: {template: '{nc}‡{anon}{trt}', normalize: [{replace: '^(?:self|static)‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
     ncls: {template: '§E{nc}§T{this_class}', normalize: [{replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
     # $this dispatched in a class or an enum: the class.
     this_ev: {template: '§{ot}§{kind}§{this_class}‡{anon}', normalize: [{replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§\$this§(?:class|enum)§(?=.)', with: ''}, {replace: '^§[\s\S]*$', with: ''}]}
@@ -129,9 +138,9 @@ rules:
     # What only the running code names: the second argument as an expression, any other object,
     # $this outside a class or enum or in an anonymous class, or arguments not read.
     unknown: {template: '§{ex2}§{oe}§{deep}§{ot}§K{kind}§C{this_class}‡{anon}', normalize: [{replace: '^§§§§\$this§K(?:class|enum)§C.+‡$', with: ''}, {replace: '^§§§§\$this§K[\s\S]*$', with: '$this'}, {replace: '^§§§§§K[\s\S]*$', with: '(unread)'}, {replace: '§K[\s\S]*$', with: ''}, {replace: '§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
-    # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this, x for any
+    # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this outside a trait, x for any
     # other, as a call's result.
-    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}‡{anon}', normalize: [{replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
+    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}¶{trt}‡{anon}', normalize: [{replace: '§T\$this¶trait', with: '§T'}, {replace: '¶[^‡]*', with: ''}, {replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
     # In an anonymous class, the forms read against the class or the method around the call, as
     # written: self::NAME, static::NAME, parent::NAME, parent::class, self::class, static::class,
     # and a variable, a property of $this, new self, new static or new parent dispatched.
@@ -152,6 +161,25 @@ rules:
       - {replace: '\s+', with: ''}
       - {replace: '\|', with: '¦'}
     key: {from: {capture: sig}, normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+    # In a trait, the forms that name the using class, as written: self::class, static::class, new
+    # self or new static dispatched.
+    tscoped:
+      template: '{call}‡{trt}§C{ec}{ec2}§N{nc}§O{oa}'
+      normalize:
+      - {replace: '^\w+‡§[\s\S]*$', with: ''}
+      - {replace: '^\w+‡trait', with: ''}
+      - {replace: '^§Cself§[\s\S]*$', with: 'self::class'}
+      - {replace: '^§Cstatic§[\s\S]*$', with: 'static::class'}
+      - {replace: '^§C[^§]*§N(?:self|static)§O', with: ''}
+      - {replace: '^§C[\s\S]*$', with: ''}
+      - {replace: '\s+', with: ''}
+      - {replace: '\|', with: '¦'}
+    scope_rt: {template: '{scoped}{tscoped}'}
+    # In a trait, self::NAME or static::NAME as written, its NAME, and the site that keeps either the
+    # reading against the trait or the runtime mark (event/event.yaml).
+    tconst: {template: '{call}‡{trt}§{eo}{eo2}', normalize: [{replace: '^\w+‡§[\s\S]*$', with: ''}, {replace: '^\w+‡trait§', with: ''}]}
+    tn: {template: '{tconst}', normalize: [{replace: '^\w+::', with: ''}]}
+    tmark: {template: '§{tconst}§trait‖drupal.event_use::{this_class}::{tn}|disp~{recv}|{owner}|{key}‖drupal.event_use::{tconst}|disp_rt~{recv}|{owner}|{key}‖drupal.class_constant::{this_class}::{tn}', normalize: [{replace: '^§§[\s\S]*$', with: ''}, {replace: '^§[^§]*§', with: ''}]}
   id: {template: '{r_ev}|disp~{recv}|{owner}|{key}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
@@ -326,14 +354,37 @@ rules:
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-# In an anonymous class, a form read against the class or the method around the call.
+# In an anonymous class, a form read against the class or the method around the call; in a trait,
+# one that names the using class.
 - rule: dispatch_scope_runtime
   reads: file
   line: {capture: call}
   in: [source]
   match: *start
   values: *start_values
-  id: {template: '{scoped}|disp_rt~{recv}|{owner}|{key}'}
+  id: {template: '{scope_rt}|disp_rt~{recv}|{owner}|{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+# In a trait, self::NAME or static::NAME: the runtime mark, and the site that keeps it or the
+# reading against the trait.
+- rule: dispatch_trait_runtime
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{tconst}|disp_rt~{recv}|{owner}|{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: dispatch_trait_site
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{tmark}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 

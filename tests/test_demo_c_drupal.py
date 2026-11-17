@@ -8544,6 +8544,126 @@ trait ParentTrait {
 
 }
 """,
+    str(MODULE / "src/Listen/SelfTrait.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+trait SelfTrait {
+
+  const TOWN = 'my_module.trait_own';
+
+  public static function getSubscribedEvents() {
+    $events = [
+      self::OWN => 'sKey',
+      static::OWN => [['sKey'], ['sOwn']],
+      self::class => 'sKey',
+      static::class => [['sKey'], ['sOwn']],
+      self::TOWN => 'sOwn',
+    ];
+    $events[self::OWN][] = ['sKey'];
+    $events[static::TOWN][] = ['sOwn'];
+    return $events;
+  }
+
+  #[AsEventListener(event: self::OWN)]
+  public function sAttr() {}
+
+  #[AsEventListener(event: static::class)]
+  public function sAttrClass() {}
+
+  #[AsEventListener(event: self::TOWN)]
+  public function sOwn() {}
+
+  public function sWire($d, $container) {
+    $d->addListener(self::OWN, [$this, 'sOwn']);
+    $d->addListener(static::OWN, [$this, 'sOwn']);
+    $d->addListener(self::class, [$this, 'sOwn']);
+    $d->addListener(self::TOWN, [$this, 'sOwn']);
+    $d->addListener(OrderEvents::PAID, [$this, 'sKey']);
+    $d->addListener(self::TOWN, [self::class, 'sKey']);
+    $d->addListener(self::TOWN, [static::class, 'sOwn']);
+    $d->addListener(self::TOWN, $this->sKey(...));
+    $d->addSubscriber($this);
+    $container->register('my_module.s1', Tagged::class)"""
+    r"""->addTag('kernel.event_listener', ['event' => self::OWN, 'method' => 'onFlow']);
+    $container->register('my_module.s2', Tagged::class)"""
+    r"""->addTag('kernel.event_listener', ['event' => self::TOWN, 'method' => 'onFlow']);
+    $container->register('my_module.s3', self::class)"""
+    r"""->addTag('kernel.event_listener', ['event' => 'my_module.s3', 'method' => 'sOwn']);
+    $container->register('my_module.s4', Tagged::class)"""
+    r"""->addTag('kernel.event_listener', ['event' => static::class, 'method' => 'onFlow']);
+  }
+
+  public function sFire($d, $e) {
+    $d->dispatch($e, self::OWN);
+    $d->dispatch($e, static::OWN);
+    $d->dispatch($e, self::TOWN);
+    $d->dispatch($e, self::class);
+    $d->dispatch($e, static::class);
+    $d->dispatch(new self());
+    $d->dispatch(new static());
+    $this->dispatch($e, 'my_module.this');
+    $this->addListener('my_module.this', [$this, 'sOwn']);
+  }
+
+}
+""",
+    str(MODULE / "src/Listen/TraitUser.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+class TraitUser {
+  use SelfTrait;
+  const OWN = 'my_module.own';
+  public function sKey() {}
+}
+""",
+    str(MODULE / "src/Listen/SelfTag.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Symfony\Component\DependencyInjection\Definition;
+
+class SelfTag {
+  public function tags($container) {
+    $container->register('my_module.st', self::class)"""
+    r"""->addTag('kernel.event_listener', ['event' => 'my_module.st', 'method' => 'onSt']);
+    (new Definition(static::class))"""
+    r"""->addTag('kernel.event_listener', ['event' => 'my_module.st', 'method' => 'onSt']);
+  }
+  public function onSt() {}
+}
+""",
+    str(MODULE / "src/Listen/Unread.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+class Unread {
+  const OWN = 'my_module.own';
+  public function deep($d) {
+    return new class($d, f(g(h(i(j(k(l(1))))))), function ($x) use ($d) {"""
+    r""" $d->dispatch($x, self::OWN); return $x; }) {
+      public function go($d, $e) {
+        $d->dispatch($e, self::OWN);
+        $d->addListener('my_module.unread', [$this, 'on']);
+      }
+    };
+  }
+  public function wrapped($d) {
+    return new class($d, function ($x) { return $x; }, 'one
+two') {
+      public function go($d, $e) {
+        $d->dispatch($e, self::OWN);
+        $d->addListener('my_module.unread', [$this, 'on']);
+      }
+    };
+  }
+  public function on() {}
+}
+""",
     str(MODULE / "src/Listen/Lone.php"): r"""<?php
 
 namespace Drupal\my_module\Listen;
@@ -8778,6 +8898,183 @@ _EVENT_FORM_RESULTS = [
         "Listen\\ParentTrait::tWire|$this~v:d",
         "Listen\\ParentTrait::tWire",
     ),
+    ("SelfTag.php", 9, "subscribed_by", "my_module.st", "Listen\\SelfTag::onSt"),
+    ("SelfTag.php", 10, "subscribed_by", "my_module.st", "Listen\\SelfTag::onSt"),
+    (
+        "SelfTrait.php",
+        14,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::getSubscribedEvents",
+        "Listen\\SelfTrait::getSubscribedEvents|self::OWN",
+    ),
+    (
+        "SelfTrait.php",
+        15,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::getSubscribedEvents",
+        "Listen\\SelfTrait::getSubscribedEvents|static::OWN",
+    ),
+    (
+        "SelfTrait.php",
+        16,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::getSubscribedEvents",
+        "Listen\\SelfTrait::getSubscribedEvents|self::class",
+    ),
+    (
+        "SelfTrait.php",
+        17,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::getSubscribedEvents",
+        "Listen\\SelfTrait::getSubscribedEvents|static::class",
+    ),
+    ("SelfTrait.php", 18, "subscribed_by", "my_module.trait_own", "Listen\\SelfTrait::sOwn"),
+    (
+        "SelfTrait.php",
+        20,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::getSubscribedEvents",
+        "Listen\\SelfTrait::getSubscribedEvents|self::OWN",
+    ),
+    ("SelfTrait.php", 21, "subscribed_by", "my_module.trait_own", "Listen\\SelfTrait::sOwn"),
+    (
+        "SelfTrait.php",
+        25,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::sAttr",
+        "Listen\\SelfTrait::sAttr|self::OWN",
+    ),
+    (
+        "SelfTrait.php",
+        28,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::sAttrClass",
+        "Listen\\SelfTrait::sAttrClass|static::class",
+    ),
+    ("SelfTrait.php", 31, "subscribed_by", "my_module.trait_own", "Listen\\SelfTrait::sOwn"),
+    (
+        "SelfTrait.php",
+        35,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::sWire",
+        "Listen\\SelfTrait::sWire|self::OWN~v:d",
+    ),
+    (
+        "SelfTrait.php",
+        36,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::sWire",
+        "Listen\\SelfTrait::sWire|static::OWN~v:d",
+    ),
+    (
+        "SelfTrait.php",
+        37,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::sWire",
+        "Listen\\SelfTrait::sWire|self::class~v:d",
+    ),
+    ("SelfTrait.php", 38, "subscribed_by", "my_module.trait_own", "Listen\\SelfTrait::sOwn"),
+    (
+        "SelfTrait.php",
+        39,
+        "subscribed_by",
+        "my_module.paid",
+        "Listen\\SelfTrait::sWire|[$this,'sKey']",
+    ),
+    (
+        "SelfTrait.php",
+        40,
+        "subscribed_by",
+        "my_module.trait_own",
+        "Listen\\SelfTrait::sWire|[self::class,'sKey']",
+    ),
+    ("SelfTrait.php", 41, "subscribed_by", "my_module.trait_own", "Listen\\SelfTrait::sOwn"),
+    (
+        "SelfTrait.php",
+        42,
+        "subscribed_by",
+        "my_module.trait_own",
+        "Listen\\SelfTrait::sWire|$this->sKey(...)",
+    ),
+    (
+        "SelfTrait.php",
+        43,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::sWire",
+        "Listen\\SelfTrait::sWire|$this~v:d",
+    ),
+    (
+        "SelfTrait.php",
+        44,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::sWire",
+        "Listen\\SelfTrait::sWire|self::OWN",
+    ),
+    ("SelfTrait.php", 45, "subscribed_by", "my_module.trait_own", "Listen\\Tagged::onFlow"),
+    ("SelfTrait.php", 46, "subscribed_by", "my_module.s3", "Listen\\SelfTrait::sWire|self::class"),
+    (
+        "SelfTrait.php",
+        47,
+        "registers_listener_at_runtime",
+        "Listen\\SelfTrait::sWire",
+        "Listen\\SelfTrait::sWire|static::class",
+    ),
+    (
+        "SelfTrait.php",
+        51,
+        "dispatched_by",
+        "Listen\\SelfTrait::sFire|self::OWN~v:d",
+        "Listen\\SelfTrait::sFire",
+    ),
+    (
+        "SelfTrait.php",
+        52,
+        "dispatched_by",
+        "Listen\\SelfTrait::sFire|static::OWN~v:d",
+        "Listen\\SelfTrait::sFire",
+    ),
+    ("SelfTrait.php", 53, "dispatched_by", "my_module.trait_own", "Listen\\SelfTrait::sFire"),
+    (
+        "SelfTrait.php",
+        54,
+        "dispatched_by",
+        "Listen\\SelfTrait::sFire|self::class~v:d",
+        "Listen\\SelfTrait::sFire",
+    ),
+    (
+        "SelfTrait.php",
+        55,
+        "dispatched_by",
+        "Listen\\SelfTrait::sFire|static::class~v:d",
+        "Listen\\SelfTrait::sFire",
+    ),
+    (
+        "SelfTrait.php",
+        56,
+        "dispatched_by",
+        "Listen\\SelfTrait::sFire|newself()~v:d",
+        "Listen\\SelfTrait::sFire",
+    ),
+    (
+        "SelfTrait.php",
+        57,
+        "dispatched_by",
+        "Listen\\SelfTrait::sFire|newstatic()~v:d",
+        "Listen\\SelfTrait::sFire",
+    ),
+    ("SelfTrait.php", 58, "dispatched_by", "my_module.this", "Listen\\SelfTrait::sFire"),
+    ("SelfTrait.php", 59, "subscribed_by", "my_module.this", "Listen\\SelfTrait::sOwn"),
+    ("Unread.php", 8, "dispatched_by", "my_module.own", "Listen\\Unread::deep"),
+    ("Unread.php", 10, "dispatched_by", "Listen\\Unread::deep|self::OWN~x", "Listen\\Unread::deep"),
+    ("Unread.php", 11, "subscribed_by", "my_module.unread", "Listen\\Unread::deep|[$this,'on']"),
+    (
+        "Unread.php",
+        19,
+        "dispatched_by",
+        "Listen\\Unread::wrapped|self::OWN~x",
+        "Listen\\Unread::wrapped",
+    ),
+    ("Unread.php", 20, "subscribed_by", "my_module.unread", "Listen\\Unread::wrapped|[$this,'on']"),
     ("Wiring.php", 28, "subscribed_by", "my_module.placed", "Listen\\Wiring::wUse"),
     ("Wiring.php", 29, "subscribed_by", "my_module.done", "Listen\\Wiring::wUse"),
     ("Wiring.php", 30, "subscribed_by", "my_module.deep", "Listen\\Wiring::wUse"),
@@ -9009,8 +9306,13 @@ def test_every_registration_and_dispatch_form_gives_one_result_at_its_line(tmp_p
     mark, and no other result exists: parent::NAME in a class that extends gives no extra mark,
     parent::class in a trait or a class with no parent is marked, one callable on one dispatcher
     for three events keeps three edges, A\\B::NAME with A bound gives no edge of the file's own
-    namespace, and a tag event that goes on past its line is marked, never cut. Look-alikes give
-    nothing."""
+    namespace, and a tag event that goes on past its line is marked, never cut. In a trait that one
+    class uses, self::NAME and static::NAME are the trait's constant only when the trait declares
+    it, a callable's method the trait's only when the trait declares it, and self::class,
+    static::class, new self, new static and $this as subscriber are the runtime mark; $this as the
+    object a call runs on is of no known type. register('id', self::class) in a class is that
+    class. An anonymous class whose arguments nest past six levels or hold a quoted line break is
+    read as an anonymous class, never as the class around it. Look-alikes give nothing."""
     _plant(tmp_path, EVENT_FORMS)
     document, report = _map(tmp_path)
     assert _event_results(document) == _EVENT_FORM_RESULTS

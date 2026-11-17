@@ -25,7 +25,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # is in the file's own namespace, as PHP reads it, and so are self::NAME and static::NAME, which
 # name a constant of the subscriber's own class: the event of that constant, unresolved when no
 # mapped class declares it, and kept only when no use binds X (a use_bound edge from the bound
-# key). parent::NAME is X::NAME with X the class's written parent, read here when the parent is
+# key). In a trait, self::NAME and static::NAME name the using class's constant: the key is kept
+# only when the trait declares the constant, else it is the runtime registration
+# event/listener_registration.yaml gives (event/event.yaml). parent::NAME is X::NAME with X the
+# class's written parent, read here when the parent is
 # written with no backslash and by event/listener_registration.yaml when it has one; with no
 # written parent, in a trait or a class that extends nothing, it is a runtime registration
 # (event/listener_registration.yaml). A priority
@@ -109,7 +112,7 @@ rules:
   match: &event_subscribed_use_own_class
     file: '**'
     filetype: drupal_php_text
-    text: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"](?=\s*[,\]\);])(?:\s*,\s*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?[^\]\[''"=>;,]*?)\s*,?\s*\])?'
+    text: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<sw>self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"](?=\s*[,\]\);])(?:\s*,\s*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?[^\]\[''"=>;,]*?)\s*,?\s*\])?'
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
@@ -154,6 +157,26 @@ rules:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - {edge: {kind: use_names_listener, from: this_node, to: {template: '{this_cls}::{method}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{prio}'}}}}
   - {edge: {kind: use_has_priority, from: this_node, to: {template: '{this_cls}::{constant}|subscribed_here|{this_cls}::{method}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}
+  confidence: inferred
+
+# In a trait, self::NAME or static::NAME names the using class's constant unless the trait declares
+# it: the site that keeps this key or the runtime registration key_trait_runtime gives
+# (event/event.yaml).
+- rule: event_subscribed_use_own_class_trait_site
+  reads: file
+  line: {capture: constant}
+  in: [source]
+  match: *event_subscribed_use_own_class
+  values:
+    in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    meth: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    tmark: {template: '§{in_subscriber}§{kind}§trait‖drupal.event_use::{this_cls}::{constant}|subscribed_here|{this_cls}::{method}‖drupal.runtime_subscription::{meth}|{sw}::{constant}‖drupal.class_constant::{this_cls}::{constant}', normalize: [{replace: '^§[^§]+§trait§', with: ''}, {replace: '^§[\s\S]*$', with: ''}]}
+  id: {template: '{tmark}'}
+  emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
 - rule: event_key_in_namespace
@@ -270,6 +293,9 @@ rules:
     key: {template: '{parent_cls}§{wkey}', normalize: [{replace: '^[^§]*§(?!parent::)', with: ''}, {replace: '^[^§]*\\[^§]*§parent::[\s\S]*$', with: ''}, {replace: '^§parent::[\s\S]*$', with: ''}, {replace: '§parent(?=::)', with: ''}]}
     class: {template: '{parent_cls}§{wclass}', normalize: [{replace: '^[^§]*§(?!parent$)', with: ''}, {replace: '^[^§]*\\[^§]*§parent$', with: ''}, {replace: '^§parent$', with: ''}, {replace: '§parent$', with: ''}]}
     own: {from: {enclosing: own_listener_list, capture: constant}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    sw: {from: {enclosing: own_listener_list, capture: sw}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    kind: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    tmark: {template: '§{in_subscriber}§{kind}§trait‖drupal.event_use::{this_cls}::{own}|subscribed_here|{this_cls}::{method}‖drupal.runtime_subscription::{meth}|{sw}::{own}‖drupal.class_constant::{this_cls}::{own}', normalize: [{replace: '^§[^§]+§trait§', with: ''}, {replace: '^§[\s\S]*$', with: ''}]}
     prio: {template: '{method}|{priority}', normalize: [{replace: '//[^\n]*|/\*(?:[^*]|\*(?!/))*\*/|#[^\n]*', with: ''}, {replace: '\|\s+', with: '|'}, {replace: '\s+$', with: ''}, {replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
     pk: {template: '§{this_cls}§{pcref}{pcu}', normalize: [{replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
@@ -327,6 +353,16 @@ rules:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - {edge: {kind: use_names_listener, from: this_node, to: {template: '{this_cls}::{method}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{prio}'}}}}
   - {edge: {kind: use_has_priority, from: this_node, to: {template: '{this_cls}::{own}|subscribed_here|{this_cls}::{method}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}
+  confidence: inferred
+
+- rule: event_subscribed_use_own_class_later_trait_site
+  reads: file
+  in: [source]
+  match: *later_listener
+  values: *later_values
+  id: {template: '{tmark}'}
+  line: {capture: method}
+  emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
 - rule: event_key_in_namespace_later
