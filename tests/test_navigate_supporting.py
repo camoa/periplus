@@ -1,6 +1,6 @@
 """Nodes in supporting code, by the map's supporting_paths, are folded or printed after the rest.
 
-An invented app; `tests/**` is supporting code.
+An invented app; `tests/**` is supporting code, and `calls` sets off its to end.
 
     RUN -calls-> SEND;  RUN_TEST -calls-> RUN;  SEND_TEST, FAKE -calls-> SEND
 """
@@ -48,6 +48,7 @@ def _map(root: Path, patterns: bool = True) -> Path:
         "periplus_map_version": 0,
         "packs": [{"pack": "own", "version": "0.1.0"}],
         "roots": ["."],
+        "cause_from_kinds": ["calls"],
         "nodes": sorted(NODES, key=lambda n: n["id"]),
         "edges": EDGES,
     }
@@ -81,10 +82,11 @@ def _valid(document: Any, name: str) -> list[Any]:
 
 
 def test_a_printed_slice_folds_supporting_code_into_one_count_line(tmp_path: Path) -> None:
-    report = _piece(tmp_path, RUN)
+    report = _piece(tmp_path, SEND)
     text = slicing.render_text(report)
 
-    assert {row.id for row in report.rows.items} == {SEND}
+    assert {row.id for row in report.rows.items} == {RUN}
+    assert set(report.held) == {SEND, RUN, RUN_TEST, SEND_TEST, FAKE}
     assert (
         "+3 in supporting code (tests/**): show with --support, or with the in-full commands at"
         " the end"
@@ -93,7 +95,7 @@ def test_a_printed_slice_folds_supporting_code_into_one_count_line(tmp_path: Pat
 
 
 def test_support_prints_supporting_code(tmp_path: Path) -> None:
-    report = _piece(tmp_path, RUN, support=True)
+    report = _piece(tmp_path, SEND, support=True)
     text = slicing.render_text(report)
 
     assert {RUN_TEST, SEND_TEST, FAKE} <= {row.id for row in report.rows.items}
@@ -101,7 +103,7 @@ def test_support_prints_supporting_code(tmp_path: Path) -> None:
 
 
 def test_a_map_without_patterns_prints_as_before(tmp_path: Path) -> None:
-    report = _piece(tmp_path, RUN, patterns=False)
+    report = _piece(tmp_path, SEND, patterns=False)
 
     assert {RUN_TEST, SEND_TEST, FAKE} <= {row.id for row in report.rows.items}
 
@@ -123,7 +125,7 @@ def test_support_lets_a_start_come_from_supporting_code(tmp_path: Path) -> None:
 
 
 def test_the_piece_json_counts_supporting_code_and_fits_the_schema(tmp_path: Path) -> None:
-    document = json.loads(slicing.render_json(_piece(tmp_path, RUN)))
+    document = json.loads(slicing.render_json(_piece(tmp_path, SEND)))
 
     assert _valid(document, "slice_piece") == []
     assert document["pieces"][0]["supporting"] == 3

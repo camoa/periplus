@@ -1,7 +1,8 @@
 """periplus slice: cut a piece of a planted map into a map file of its own.
 
-The map is planted as a document, so the walk is the only thing under test. Graph, all ``calls``
-unless named, files in brackets:
+The map is planted as a document, so the walk is the only thing under test. It lists no cause,
+as a map written before 0.9, so the slice walks by raw direction from each start. Graph, all
+``calls`` unless named, files in brackets:
 
     ext[src/ext] -> a1[src/a/one] -> a2[src/a/two] -> b1[src/b/one] (a2 -> b1 is ``uses``)
     a1 -> b1;  b1 -> b2[src/b/two];  b2 -> c1[src/c/one];  c1 -> far[src/far] (a class)
@@ -172,7 +173,7 @@ def test_slice_along_named_edge_kinds_only_follows_those_kinds_c1(
 ) -> None:
     out = tmp_path / "piece.json"
     code, _ = _call(
-        tmp_path, planted, out, ids=("py::a2",), direction="out", depth=2, kinds=("uses",)
+        tmp_path, planted, out, ids=("py::a2",), direction="off", depth=2, kinds=("uses",)
     )
 
     assert code == 0

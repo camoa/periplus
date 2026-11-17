@@ -103,6 +103,8 @@ BUDGET = 20_000
 FIND_BUDGET = 12_000
 #: The hub limit of a walk by cause; ``navigate.walk.HUB``, which a test holds equal.
 HUB = 40
+#: The hops each walk of ``slice`` goes; ``navigate.slice.PRINT_DEPTH``, which a test holds equal.
+SLICE_DEPTH = 2
 
 
 def _depth(text: str) -> int | None:
@@ -796,8 +798,9 @@ def build_parser() -> argparse.ArgumentParser:
         "slice",
         help="print the piece of the map around some words, ids or a path, or write it to a file",
         description="Start from the nodes that IDs name or that WORDS find, as find finds them, "
-        "and print the items reached from them along edges, hop by hop, each under the node it "
-        "was reached from, in pieces: the items edges join. With --out, write the piece to a map "
+        "and the members of a container start, as members lists them; walk by cause from them, "
+        "as neighbors and affected do; and print each thing reached under its file with its "
+        "links among them, in pieces: the things edges join. With --out, write them to a map "
         "file instead. Then stop.",
     )
     cut.add_argument(
@@ -828,7 +831,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="T",
-        help="keep starts the words find of type T and its subtypes; repeat for several",
+        help="keep starts the words find of type T and its subtypes; without words, keep the "
+        "members of a container start of type T; repeat for several",
     )
     cut.add_argument(
         "--starts",
@@ -848,25 +852,46 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         metavar="FILE",
-        help="write the piece to FILE as a map instead of printing it",
+        help="write the things --ids would print, and the edges among them, to FILE as a map "
+        "instead of printing them",
     )
     cut.add_argument(
         "--direction",
-        choices=("out", "in", "both"),
+        # out and in are the raw directions slice took before it walked by cause; they are
+        # refused with the values that replace them.
+        choices=("off", "by", "both", "out", "in"),
         default="both",
-        help=(
-            "out or in follows one direction; both follows an edge either way at every hop "
-            "(default: both)"
-        ),
+        metavar="off|by|both",
+        help="off walks what the starts set off, by what sets them off (default: both)",
     )
-    add_walk(cut, None, "2 from the first 8 starts and 1 from the rest, or 1 with --out")
+    cut.add_argument(
+        "--depth",
+        type=_depth,
+        default=SLICE_DEPTH,
+        metavar="N",
+        help=f"the hops each walk goes, 1 or more, or all (default: {SLICE_DEPTH})",
+    )
+    cut.add_argument(
+        "--kind",
+        action="append",
+        default=[],
+        metavar="K",
+        help="walk only edges of kind K; repeat for several",
+    )
+    add_hub(cut)
+    cut.add_argument(
+        "--touch",
+        action="store_true",
+        help="add what each thing reached only points at, one hop out",
+    )
+    add_ids(cut)
     cut.add_argument(
         "--limit",
         type=int,
         default=None,
         metavar="N",
-        help="most rows to print (default: 50), or with --out the most items the slice may "
-        "hold (default: 500); 0 for no limit",
+        help="most things past the starts to print (default: 50), or with --out the most things "
+        "the slice may hold (default: 500); 0 for no limit",
     )
     add_map(cut, "the map file to read")
     cut.add_argument(
@@ -1198,7 +1223,7 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
             parser.error("- read no ids from standard input")
     if (getattr(args, "limit", 0) or 0) < 0:
         parser.error("--limit must be 0 or more")
-    # None is slice's own default, which depends on --out.
+    # None is --depth all.
     if (depth := getattr(args, "depth", 1)) is not None and depth < 1:
         parser.error("--depth must be 1 or more")
     if (starts := getattr(args, "starts", 1)) is not None and starts < 1:
@@ -1477,10 +1502,18 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "slice":
         from periplus.navigate.slice import RENDERERS as SLICE_RENDERERS
+        from periplus.navigate.slice import listed as slice_listed
         from periplus.navigate.slice import run as run_slice
 
         if args.start and args.id:
             parser.error("--from takes the starts; give no WORDS with it")
+        if args.direction in ("out", "in"):
+            parser.error(
+                "--direction out and in followed raw edges; slice now walks by cause: "
+                "--direction off for what the starts set off, by for what sets them off"
+            )
+        if args.ids and args.out is not None:
+            parser.error("--ids prints the ids --out would write; give one of them")
         sliced = run_slice(
             start=Path.cwd(),
             env=os.environ,
@@ -1489,7 +1522,7 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
             direction=args.direction,
             depth=args.depth,
             kinds=args.kind,
-            limit=args.limit,
+            limit=0 if args.ids else args.limit,
             out=args.out,
             map_path=args.map,
             types=args.type,
@@ -1497,9 +1530,11 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
             support=args.support,
             from_ids=args.start or (),
             piped=args.piped,
+            hub=HUB if args.hub is None else args.hub,
+            through=args.through,
+            touch=args.touch,
         )
-        sys.stdout.write(SLICE_RENDERERS[args.format](sliced))
-        return sliced.exit_code
+        return _emit(args, SLICE_RENDERERS, sliced, slice_listed)
 
     if args.command == "extract":
         from periplus.navigate.extract import RENDERERS as EXTRACT_RENDERERS

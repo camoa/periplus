@@ -1,6 +1,8 @@
-"""A printed slice stops at the container end of a grouping edge, and lists a container's members.
+"""A printed slice adds the members of a container start and walks from them; it never walks
+through a grouping edge.
 
-An invented app. `in_box` is a grouping kind: a member belongs to the box.
+An invented app. `in_box` is a grouping kind, so its cause is none: a member belongs to the box.
+The other kinds set off their to end.
 
     C1, C2, C3 (t.class), R1, R2 (t.route), S (t.service) -in_box-> BOX (t.box)
     X (t.method) -uses-> C1, -uses-> C2;  C1 -calls-> S;  Y and Z -use-> S and C3 (other files)
@@ -60,6 +62,8 @@ def _piece(root: Path, *ids: str, **kw: Any) -> slicing.SliceReport:
         "packs": [{"pack": "own", "version": "0.1.0"}],
         "roots": ["."],
         "grouping_kinds": ["in_box"],
+        "cause_from_kinds": ["calls", "needs", "uses"],
+        "cause_none_kinds": ["in_box"],
         "nodes": sorted(NODES, key=lambda n: n["id"]),
         "edges": EDGES,
     }
@@ -77,57 +81,54 @@ def _piece(root: Path, *ids: str, **kw: Any) -> slicing.SliceReport:
     return slicing.run(root, {}, ids, **args)
 
 
-def test_the_walk_stops_at_a_container_and_marks_it(tmp_path: Path) -> None:
+def test_the_walk_never_goes_through_a_container(tmp_path: Path) -> None:
     report = _piece(tmp_path, C1)
-    ids = [row.id for row in report.rows.items]
 
-    assert [row.container for row in report.rows.items if row.id == BOX] == [True]
-    assert R1 not in ids and BASE not in ids
-
-
-def test_a_container_is_one_row_per_start(tmp_path: Path) -> None:
-    report = _piece(tmp_path, X)
-
-    assert [row.id for row in report.rows.items].count(BOX) == 1
+    assert report.held == (C1, S, X)
+    assert BOX not in report.held and R1 not in report.held
 
 
-def test_naming_the_grouping_kind_walks_through_the_container(tmp_path: Path) -> None:
+def test_naming_the_grouping_kind_walks_nothing_and_says_why(tmp_path: Path) -> None:
     report = _piece(tmp_path, C1, kinds=("in_box",))
 
-    assert C2 in [row.id for row in report.rows.items]
+    assert report.held == (C1,)
+    assert (
+        "the kind 'in_box' is listed under cause none, which the walk by cause does not follow;"
+        " --raw follows it"
+    ) in report.warnings
 
 
-def test_a_container_start_lists_its_members_by_type_rarest_first(tmp_path: Path) -> None:
-    report = _piece(tmp_path, BOX, limit=4)
+def test_a_container_start_lists_its_members_as_members_does_and_walks_from_them(
+    tmp_path: Path,
+) -> None:
+    report = _piece(tmp_path, BOX, limit=0)
     (members,) = report.members
     lines = slicing.render_text(report).splitlines()
 
-    assert list(members.by_type.items()) == [("t.service", 1), ("t.route", 2), ("t.class", 3)]
-    assert [row.id for row in members.rows] == [S, R1, C3, R2]
+    assert members.by_type == (("t.class", 3), ("t.route", 2), ("t.service", 1))
+    assert [row.id for row in members.rows] == [C1, C2, C3, R1, R2, S]
     assert lines[2] == (
-        "members of app: 6 (t.service 1, t.route 2, t.class 3);"
+        "members of app: 6 (t.class 3, t.route 2, t.service 1);"
         " all: periplus members app (--type T for one type)"
     )
+    assert report.held == (BOX, C1, C2, C3, R1, R2, S, BASE, X, Y, Z)
 
 
-def test_a_type_with_a_container_start_lists_that_type_alone_in_full(tmp_path: Path) -> None:
+def test_a_type_without_words_keeps_the_members_of_that_type(tmp_path: Path) -> None:
     report = _piece(tmp_path, BOX, types=("t.class",), limit=0)
     (members,) = report.members
 
-    assert [row.id for row in members.rows] == [C3, C1, C2]
-    assert report.rows.items == ()
+    assert [row.id for row in members.rows] == [C1, C2, C3]
+    assert report.held == (BOX, C1, C2, C3, BASE, S, X, Y, Z)
 
 
-def test_the_json_piece_carries_members_and_fits_the_schema(tmp_path: Path) -> None:
+def test_the_json_slice_carries_members_and_fits_the_schema(tmp_path: Path) -> None:
     document = json.loads(slicing.render_json(_piece(tmp_path, BOX, limit=4)))
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
 
     validator = Draft202012Validator({**schema, "anyOf": [{"$ref": "#/$defs/slice_piece"}]})
     assert list(validator.iter_errors(document)) == []
-    assert document["members"][0]["by_type"] == {"t.class": 3, "t.route": 2, "t.service": 1}
-
-
-def test_a_container_start_walks_its_own_edges_but_not_its_members(tmp_path: Path) -> None:
-    report = _piece(tmp_path, BOX, limit=0)
-
-    assert [row.id for row in report.rows.items if row.hop == 1] == [BASE]
+    assert document["members"] == [
+        {"container": BOX, "total": 6, "by_type": {"t.class": 3, "t.route": 2, "t.service": 1}}
+    ]
+    assert [(r["walk"], r["hop"]) for r in document["rows"]["items"]] == [("members", 0)] * 4

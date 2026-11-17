@@ -224,12 +224,6 @@ def test_a_printed_slice_says_realized_by(tmp_path: Path) -> None:
     assert "      realized by (overrides) -> One::deliver, Two::deliver" in lines
 
 
-def test_a_printed_slice_counts_the_forms_past_the_cap(tmp_path: Path) -> None:
-    lines = slicing.render_text(_piece(tmp_path, RUN)).splitlines()
-
-    assert "      +4 more stand for Wide::go, past the first 8; see periplus show Wide::go" in lines
-
-
 def test_a_written_slice_holds_the_forms(tmp_path: Path) -> None:
     report = _piece(tmp_path, RUN, out=Path("piece.json"), limit=None)
     written = json.loads((tmp_path / "piece.json").read_text(encoding="utf-8"))

@@ -447,9 +447,9 @@
     },
 
     "slice_piece": {
-      "description": "What slice prints without --out: the start nodes, the pieces they fall into, then the rows reached from them breadth-first.",
+      "description": "What slice prints without --out: the start nodes, the members of each container start, the walks by cause from them, the pieces the result falls into, then the things past the starts, by hop.",
       "type": "object", "additionalProperties": false,
-      "required": ["starts", "pieces", "rows", "left_out", "deeper", "folded", "notes", "members", "depth", "direction", "warnings", "problems"],
+      "required": ["starts", "pieces", "members", "walks", "rows", "left_out", "held", "notes", "depth", "direction", "warnings", "problems"],
       "properties": {
         "starts": {
           "type": "array",
@@ -507,31 +507,48 @@
           }
         },
         "left_out": {
-          "description": "The rows --limit cut, counted by hop and by edge kind.",
+          "description": "The things past the starts the text left out, farthest hop first, counted by hop and by edge kind.",
           "type": "object", "additionalProperties": false, "required": ["by_hop", "by_kind"],
           "properties": {
             "by_hop": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
             "by_kind": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}}
           }
         },
-        "deeper": {"description": "true when an edge leads on past the last hop.", "type": "boolean"},
-        "folded": {"description": "Nodes left out of the rows because all their edges, two or more, join them to the node above, counted by type.", "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+        "held": {"description": "How many things the result holds, starts included: what --ids prints and --out writes.", "type": "integer", "minimum": 0},
         "members": {
-          "description": "For each start that is a container: its members by grouping edges, counted by type, rarest type first, and the rows shown.",
+          "description": "For each start that is a container: its members by grouping edges, as members counts them, by type, most first. The member rows are in rows, with walk members.",
           "type": "array",
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["container", "total", "by_type", "rows"],
+            "type": "object", "additionalProperties": false, "required": ["container", "total", "by_type"],
             "properties": {
               "container": {"type": "string"},
               "total": {"type": "integer", "minimum": 0},
-              "by_type": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
-              "rows": {"type": "array", "items": {"$ref": "#/$defs/slice_row"}}
+              "by_type": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}}
+            }
+          }
+        },
+        "walks": {
+          "description": "Each walk of the slice, off as neighbors takes it and by as affected does, from the starts and their members.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["direction", "raw", "total", "held", "last_hop", "hubs", "undeclared", "command", "all"],
+            "properties": {
+              "direction": {"enum": ["off", "by"]},
+              "raw": {"description": "true on a map that lists no cause: the raw walk, from each id in turn.", "type": "boolean"},
+              "total": {"description": "The things the walk reaches to its end.", "type": "integer", "minimum": 0},
+              "held": {"description": "The things the slice holds of it, within depth.", "type": "integer", "minimum": 0},
+              "last_hop": {"type": "integer", "minimum": 0},
+              "hubs": {"description": "The things the walk listed and did not walk from.", "type": "array", "items": {"type": "string"}},
+              "undeclared": {"description": "The kinds the walk followed by raw direction.", "type": "array", "items": {"type": "string"}},
+              "command": {"description": "The small command that prints the part the slice holds.", "type": "string"},
+              "all": {"description": "The small command that prints the whole walk.", "type": "string"}
             }
           }
         },
         "notes": {"description": "How the words were read, such as a text that matched nothing as a whole.", "type": "array", "items": {"type": "string"}},
-        "depth": {"type": "integer", "minimum": 1},
-        "direction": {"enum": ["out", "in", "both"]},
+        "depth": {"description": "The hops each walk goes; null for all.", "type": ["integer", "null"], "minimum": 1},
+        "direction": {"enum": ["off", "by", "both"]},
         "warnings": {"$ref": "#/$defs/warnings"},
         "problems": {"$ref": "#/$defs/problems"}
       }
@@ -540,22 +557,23 @@
     "piece_number": {"description": "The number of the piece the node is in, from 1, as printed.", "type": "integer", "minimum": 1},
 
     "slice_row": {
-      "description": "One walk row of a slice piece, and one member row of a container start.",
+      "description": "One thing of a slice past the starts: a member of a container start, or a thing a walk reached.",
       "type": "object", "additionalProperties": false,
-      "required": ["start", "hop", "from", "kind", "direction", "id", "type", "state", "marks", "again", "location", "source", "description", "container", "piece"],
+      "required": ["start", "hop", "from", "kind", "direction", "walk", "id", "type", "state", "marks", "location", "source", "description", "hub", "touch", "piece"],
       "properties": {
         "piece": {"$ref": "#/$defs/piece_number"},
-        "start": {"description": "The start node this row hangs under.", "type": "string"},
-        "hop": {"description": "Hops from the start; 0 for a node that stands for the start.", "type": "integer", "minimum": 0},
-        "from": {"description": "The node the row was reached from.", "type": "string"},
+        "start": {"description": "The start whose walk, or whose members, hold this thing.", "type": "string"},
+        "hop": {"description": "Hops from the starts and their members; 0 for a member.", "type": "integer", "minimum": 0},
+        "from": {"description": "The thing it was reached from: the container for a member.", "type": "string"},
         "kind": {"type": "string"},
-        "direction": {"description": "out when the edge runs from the from node to id, in when it runs from id to the from node.", "enum": ["out", "in"]},
+        "direction": {"description": "out when the edge runs from the from thing to id, in when it runs from id to the from thing.", "enum": ["out", "in"]},
+        "walk": {"description": "The part that found it: off as neighbors, by as affected, or members.", "enum": ["off", "by", "members"]},
         "id": {"type": "string"},
         "type": {"type": "string"},
         "state": {"type": "string"},
         "marks": {"$ref": "#/$defs/marks"},
-        "again": {"description": "true when id is printed in full on another row of this piece.", "type": "boolean"},
-        "container": {"description": "true when id is the container end of a grouping edge; the walk does not go on from it.", "type": "boolean"},
+        "hub": {"description": "The edges it has to follow when the walk stopped at it as a hub, else null.", "type": ["integer", "null"], "minimum": 0},
+        "touch": {"description": "true when only a touching edge reached it, with --touch.", "type": "boolean"},
         "location": {"$ref": "#/$defs/place"},
         "source": {"$ref": "#/$defs/source"},
         "description": {"$ref": "#/$defs/node_text"}

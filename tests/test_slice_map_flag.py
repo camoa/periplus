@@ -2,7 +2,8 @@
 start named by an id shows that id escaped once.
 
 A tiny map at ``other/m.json``, not the default place: box ``b`` groups class ``C``; ``C``
-contains ``go`` and ``stop``; ``go`` calls ``stop``, ``far`` and ``farther``.
+contains ``go`` and ``stop``; ``go`` calls ``stop``, ``far`` and ``farther``. ``calls`` sets off
+its to end; the other kinds are structure.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ STOP = "t.method::C::stop"
 FAR = "t.method::D::far"
 FARTHER = "t.method::D::farther"
 SLASHED = "t.method::A\\B::run"
-SUGGESTS = re.compile(r"periplus (show|members|find|legend|path|slice --from)\b")
+SUGGESTS = re.compile(r"periplus (show|members|find|legend|path|neighbors|affected|slice --from)\b")
 
 
 def _site(root: Path) -> Path:
@@ -47,6 +48,8 @@ def _site(root: Path) -> Path:
         "roots": ["."],
         "grouping_kinds": ["in_box"],
         "legend": {"edge_kinds": {"calls": "x" * 400, "contains": "y" * 400}},
+        "cause_from_kinds": ["calls"],
+        "cause_none_kinds": ["contains", "in_box"],
         "nodes": sorted(nodes, key=lambda n: n["id"]),
         "edges": edges,
     }
@@ -68,7 +71,7 @@ def test_every_suggested_command_carries_the_map_given(tmp_path: Path) -> None:
     suggesting = [line for line in lines if SUGGESTS.search(line)]
     commands = sum(len(SUGGESTS.findall(line)) for line in suggesting)
 
-    assert {"members", "find", "slice --from", "show", "path"} <= {
+    assert {"members", "find", "slice --from", "show", "path", "neighbors", "affected"} <= {
         m for line in suggesting for m in SUGGESTS.findall(line)
     }
     assert commands == sum(line.count(f"--map {tmp_path}/other/m.json") for line in suggesting)
@@ -82,7 +85,7 @@ def test_a_cut_legend_and_its_command_carry_the_map(tmp_path: Path) -> None:
     finally:
         slicing.LEGEND_BYTES = kept
 
-    assert f"  +2 more: periplus legend --kind K --map {tmp_path}/other/m.json" in lines
+    assert f"  +1 more: periplus legend --kind K --map {tmp_path}/other/m.json" in lines
 
 
 def test_a_start_given_by_id_shows_the_id_escaped_once(tmp_path: Path) -> None:

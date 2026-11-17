@@ -1,7 +1,8 @@
 """A printed slice ends with the descriptions of the edge kinds its links show, within a small
 byte allowance, and drops them first when the piece is over its bytes.
 
-    X (t.method) -uses-> C1, C2 (t.class);  C1 -calls-> S (t.service)
+    X (t.method) -uses-> C1, C2 (t.class);  C1 -calls-> S (t.service); both kinds set off their
+    to end
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ def _piece(root: Path, *ids: str, texts: dict[str, str] = TEXTS, **kw: Any) -> s
         "packs": [{"pack": "own", "version": "0.1.0"}],
         "roots": ["."],
         **({"legend": {"edge_kinds": texts}} if texts else {}),
+        "cause_from_kinds": ["calls", "uses"],
         "nodes": sorted(NODES, key=lambda n: n["id"]),
         "edges": EDGES,
     }
@@ -109,19 +111,20 @@ def test_a_written_slice_keeps_the_texts_of_its_own_kinds_and_types(tmp_path: Pa
         "packs": [{"pack": "own", "version": "0.1.0"}],
         "roots": ["."],
         "legend": {"edge_kinds": TEXTS, "node_types": types},
+        "cause_from_kinds": ["calls", "uses"],
         "nodes": sorted(NODES, key=lambda n: n["id"]),
         "edges": EDGES,
     }
     (tmp_path / ".periplus" / "map.json").write_text(json.dumps(document), encoding="utf-8")
-    common = {"prefixes": (), "kinds": (), "limit": None, "map_path": None, "depth": None}
-    slicing.run(tmp_path, {}, [X], direction="out", out=Path("piece.json"), **common)
+    common = {"prefixes": (), "kinds": (), "limit": None, "map_path": None, "depth": 1}
+    slicing.run(tmp_path, {}, [X], direction="off", out=Path("piece.json"), **common)
     piece = json.loads((tmp_path / "piece.json").read_text())
 
     assert piece["legend"] == {
         "edge_kinds": {"uses": "the method uses that class"},
         "node_types": {"t.class": "a class", "t.method": "a method"},
     }
-    slicing.run(tmp_path, {}, [S], direction="out", out=Path("lone.json"), **common)
+    slicing.run(tmp_path, {}, [S], direction="off", out=Path("lone.json"), **common)
     assert json.loads((tmp_path / "lone.json").read_text())["legend"] == {
         "node_types": {"t.service": "a service"}
     }

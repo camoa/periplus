@@ -145,10 +145,10 @@ def test_a_tie_of_more_than_twenty_lists_twenty_and_counts_the_rest(tmp_path: Pa
 def test_a_tie_is_the_same_bytes_on_every_run(tmp_path: Path) -> None:
     site = _site(tmp_path)
     first = slice.render_json(
-        slice.run(site, {}, ["submitForm"], [], "out", 1, [], 0, Path("s.json"), None)
+        slice.run(site, {}, (), [], out=Path("s.json"), from_ids=["submitForm"])
     )
     second = slice.render_json(
-        slice.run(site, {}, ["submitForm"], [], "out", 1, [], 0, Path("s.json"), None)
+        slice.run(site, {}, (), [], out=Path("s.json"), from_ids=["submitForm"])
     )
 
     assert first == second

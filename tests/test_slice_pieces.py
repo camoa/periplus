@@ -1,7 +1,8 @@
 """The printed slice as pieces: the words gather nodes, edges join some of them, and the output
 says which are joined and which stand alone.
 
-An invented app; `in_box` is a grouping kind. Every start holds the word "token":
+An invented app; `in_box` is a grouping kind, and the other kinds set off their to end. Every
+start holds the word "token":
 
     TokenForm -checks-> TokenCheck                 [site/app/src/]
     TokenRule -calls-> Util::h1 .. Util::h6        [site/app/src/]
@@ -60,6 +61,8 @@ def _site(root: Path, nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) 
         "packs": [{"pack": "own", "version": "0.1.0"}],
         "roots": ["."],
         "grouping_kinds": ["in_box"],
+        "cause_from_kinds": ["calls", "checks", "to"],
+        "cause_none_kinds": ["in_box"],
         "nodes": sorted(nodes, key=lambda n: n["id"]),
         "edges": edges,
     }
@@ -161,7 +164,7 @@ def test_the_inventory_names_the_piece_of_each_node(tmp_path: Path) -> None:
     assert "  t.check 1: TokenCheck [1]" in lines[at:]
 
 
-def test_a_start_past_the_eighth_walks_one_hop_unless_depth_says(tmp_path: Path) -> None:
+def test_every_start_walks_the_same_depth(tmp_path: Path) -> None:
     words = [f"t.note::n.word{k:02}" for k in range(10)]
     nodes = [_node(w, "t.note", line=1, file=f"n/{k}.txt") for k, w in enumerate(words)]
     nodes += [_node(f"t.x::mid{k}", "t.x", line=1, file=f"n/{k}.txt") for k in range(10)]
@@ -169,21 +172,17 @@ def test_a_start_past_the_eighth_walks_one_hop_unless_depth_says(tmp_path: Path)
     edges = [_edge("to", w, f"t.x::mid{k}", 1, file=f"n/{k}.txt") for k, w in enumerate(words)]
     edges += [_edge("to", f"t.x::mid{k}", f"t.x::far{k}", 2, file=f"n/{k}.txt") for k in range(10)]
 
-    report = _run(_site(tmp_path / "a", nodes, edges), "word")
-    deepest = {
-        s.row.id: max(r.hop for r in report.rows.items if r.start == s.row.id)
-        for s in report.starts
-    }
+    report = _run(_site(tmp_path / "a", nodes, edges), "word", depth=slicing.PRINT_DEPTH, limit=0)
     assert len(report.starts) == 10 and len(report.pieces) == 10
-    assert [deepest[s.row.id] for s in report.starts] == [2] * 8 + [1] * 2
-    assert "walked 2 hops from the first 8 starts and 1 hop from the other 2" in _lines(report)
-
-    given = _run(_site(tmp_path / "b", nodes, edges), "word", depth=2)
-    assert {r.hop for r in given.rows.items if r.start == given.starts[-1].row.id} == {1, 2}
+    assert all(
+        {r.hop for r in report.rows.items if r.start == s.row.id} == {1, 2} for s in report.starts
+    )
+    one = _run(_site(tmp_path / "b", nodes, edges), "word", depth=1, limit=0)
+    assert {r.hop for r in one.rows.items} == {1}
     assert len(_run(_site(tmp_path / "c", nodes, edges), "word", starts=3).starts) == 3
 
 
-def test_a_tight_budget_keeps_every_start_and_cuts_near_rows_of_the_largest_piece_first(
+def test_a_tight_budget_lowers_detail_then_cuts_the_farthest_things_and_keeps_every_start(
     tmp_path: Path,
 ) -> None:
     many = [f"t.method::app.Util::m{n}" for n in range(1, 31)]
@@ -193,29 +192,26 @@ def test_a_tight_budget_keeps_every_start_and_cuts_near_rows_of_the_largest_piec
     ]
     edges = [*EDGES, *(_edge("calls", RULE, m, 7, file=f"{SRC}/TokenRule.php") for m in many)]
     root = _site(tmp_path, nodes, edges)
-    full = _run(root, "token")
-    first = {(r.start, r.id) for r in full.rows.items if r.start in (CHECK, FORM)}
+    full = _run(root, "token", limit=0)
     kept = slicing.BYTE_LIMIT
     try:
-        found = None
-        for budget in range(len(slicing.render_text(full)), 200, -10):
-            slicing.BYTE_LIMIT = budget
-            report = _run(root, "token")
-            if report.cuts and "hop-1 row" in report.cuts[0]:
-                found = report
-                break
-        slicing.BYTE_LIMIT = 300
-        tight = _lines(_run(root, "token"))
+        slicing.BYTE_LIMIT = 3000
+        report = _run(root, "token")
+        tight = _lines(report)
     finally:
         slicing.BYTE_LIMIT = kept
 
-    assert found is not None
-    assert first <= {(r.start, r.id) for r in found.rows.items}
-    assert not set(HELPERS + many) <= {r.id for r in found.rows.items}
+    ids = [r.id for r in report.rows.items]
+    assert 0 < len(ids) < len(full.rows.items)
+    assert ids == [r.id for r in full.rows.items][: len(ids)]
     for start in ("TokenForm", "TokenCheck", "TokenRule", "token_js", "look_token_alter"):
         assert any(line.startswith("  :") and f"  {start}  " in line for line in tight)
     assert any(line.startswith("inventory: ") for line in tight)
-    assert any(line.startswith("cut to fit 300 bytes:") for line in tight)
+    (cut,) = report.cuts
+    assert cut.startswith(
+        "cut to fit 3000 bytes: the +N more links lines dropped, at most 1 names per link,"
+    )
+    assert f"{len(full.rows.items) - len(ids)} things left out, farthest hop first" in cut
 
 
 def test_json_carries_the_pieces_and_a_piece_per_node(tmp_path: Path) -> None:

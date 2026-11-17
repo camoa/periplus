@@ -549,9 +549,10 @@ one job each, and two macros, `reach` and `slice`, that combine them in one repl
   thing at a line and what holds it. `periplus path FROM TO` prints the shortest chains between
   two.
 - **Macros.** `periplus reach ID...` prints `depth`, `neighbors`, `affected`, `only` and `hubs` for
-  the ids in one reply, to a character budget. `periplus slice WORDS` prints the piece of the map
-  around the things some words or ids name, in linked pieces grouped by file. Each names the small
-  command that prints in full a part it cut.
+  the ids in one reply, to a character budget. `periplus slice WORDS` takes the things some words
+  or ids name, and the members of a container among them, walks by cause from them as `neighbors`
+  and `affected` do, and prints each thing reached under its file with its links, in linked
+  pieces. Each names the small command that prints in full a part it cut.
 - **Sets and map files.** `periplus extract`, `join`, `common`, `minus` and `diff` write and compare
   map files. `periplus export` prints the map as GraphML, DOT or Mermaid.
 - **Descriptions.** `periplus undescribed` counts the main things with no description yet.
@@ -575,17 +576,20 @@ NEW` lists the things and edges added, removed and changed. `periplus export` pr
 as GraphML, DOT or Mermaid. To draw a part of the map, slice it to a file, then export the slice.
 
 ```
-periplus slice [ID ...] [--from ID...] [--path PREFIX]... --out FILE [--direction out|in|both] [--depth N] [--kind K]... [--limit N] [--map PATH]
+periplus slice [WORDS ...] [--from ID...] [--path PREFIX]... --out FILE [--direction off|by|both] [--depth N|all] [--kind K]... [--limit N] [--map PATH]
 periplus export --format graphml|dot|mermaid [--map PATH]
 ```
 
-With `--out`, `slice` starts from the ids you name and from every node whose first file starts with `--path PREFIX`, and follows edges
-from them. Repeat `--path` for several prefixes. `--direction out` and `in` follow edges one way; `both` follows an edge either way at every hop (default `both`).
-`--depth N` sets how many edges to follow (default 1), and `--kind K` keeps only edges of kind `K`;
-repeat it for several. `--limit N` stops the slice when it would hold more than `N` items (default
-500, `0` for no limit): the command exits 32 and writes nothing. An unknown id, or a prefix that
-matches nothing, exits 31. A slice is a smaller map, so name it so it cannot replace the full
-map.
+With `--out`, `slice` writes every thing of the slice, which `--ids` lists and the printed text
+may cut: the starts, the members of a container start, and what the walks by cause reach from
+them. It starts from the ids
+or words you give, or from every node whose first file starts with `--path PREFIX`; repeat `--path`
+for several prefixes. `--direction off` walks what the starts set off, `by` what sets them off
+(default both). `--depth N` sets the hops each walk goes (default 2, `all` to the end), and `--kind
+K` keeps only edges of kind `K`; repeat it for several. `--limit N` stops the slice when it would
+hold more than `N` things (default 500, `0` for no limit): the command exits 32 and writes nothing.
+Starts that match nothing, or a prefix that matches nothing, exit 31. A slice is a smaller map, so
+name it so it cannot replace the full map.
 
 `export` prints to standard output and its warnings to standard error. GraphML names each node by
 a generated token, labels it with a short name and carries the map id as its `id` data, with the

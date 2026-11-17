@@ -51,7 +51,7 @@ you want several answers about the same items at once.
 | Command | What it combines |
 |---|---|
 | `periplus reach ID...` | `depth`, `neighbors`, `affected`, `only` and `hubs` for these items, in one reply. |
-| `periplus slice [WORDS...]` | `find`, `members`, `pieces` and a walk both ways: what lies around the nodes these words or ids name, hop by hop. With `--out FILE`, it writes that piece to a map file of its own. |
+| `periplus slice [WORDS...]` | `find`, `members`, `neighbors`, `affected` and `pieces`: the things around the nodes these words or ids name, each with its file, source line and links. With `--out FILE`, it writes them to a map file of its own. |
 
 **Sets and map files.**
 
@@ -104,8 +104,8 @@ letter, digit or underscore, compared without case. So `helper` and `tools.helpe
   location. In JSON the problem's `detail` holds `id` (the text given), `total` (how many nodes
   fit) and `candidates`, up to 20 objects with `id`, `type` and `location` (`null` when the node
   has none).
-- One that fits none exits 31 with `hint: run periplus find TEXT`. Printed `slice` searches such
-  an argument as words instead.
+- One that fits none exits 31 with `hint: run periplus find TEXT`. `slice` searches such an
+  argument as words instead, unless it came with `--from`.
 
 Most rows print a thing by its short name: the shortest tail of its id that names this node
 alone, else the full id. Any name a row prints can be pasted into the next command. The thing
@@ -125,6 +125,8 @@ line, and nothing else:
 - `find`: the things, then both ends of each edge;
 - `show`: the other end of each edge;
 - `reach`: the starts, then what `neighbors --ids` and `affected --ids` list, each once;
+- `slice`: the starts, the members of each container start, then what `neighbors --ids` and
+  `affected --ids` list from them, each once;
 - `neighbors` and `affected`: the starts, then every thing within `--depth`, and with `--touch`
   the touching things;
 - `pieces`: a blank line between two pieces;
@@ -162,8 +164,8 @@ limit. What `N` counts depends on the command:
 | `neighbors --raw`, `affected --raw` | rows | 50 |
 | `show` | rows of each edge list | 50 |
 | `path` | chains | 10 |
-| `slice` | rows, aiming at 8 KB of text | 50 |
-| `slice --out` | items the slice file may hold; over it, nothing is written and it exits 32 | 500 |
+| `slice` | things past the starts, aiming at 8 KB of text | 50 |
+| `slice --out` | things the slice file may hold; over it, nothing is written and it exits 32 | 500 |
 | `diff` | rows of each list | 50 |
 
 Nothing is cut without a line that says so. A cut list of `show`, `path` or a raw walk ends with
@@ -206,7 +208,7 @@ output is closed early, as by `| head`, stops quietly and exits 141. The command
 
 ## The walk by cause
 
-`depth`, `neighbors`, `affected`, `reach`, `only` and `hubs` walk the map by cause. Each edge
+`depth`, `neighbors`, `affected`, `reach`, `only`, `hubs` and `slice` walk the map by cause. Each edge
 kind of a map made by Periplus 0.9 or later has a cause, which `periplus legend` prints:
 
 - `from`: the from end sets off the to end, as a function calls another.
@@ -228,7 +230,8 @@ be repeated. A start is always walked from. Several `ID`s walk as one set.
 
 A map with no cause list, such as one written before 0.9, has no walk by cause. There,
 `neighbors` and `affected` give the raw walk of `--raw`, from one `ID` only, and several `ID`s
-exit 2; `depth` walks every kind by its raw direction and says so on a last line.
+exit 2; `slice` takes that raw walk from each start in turn; `depth` walks every kind by its raw
+direction and says so on a last line.
 
 ## Learn the map's words
 
@@ -693,165 +696,165 @@ and `only_command`, `walks` (each walk's `neighbors` or `affected` document, eve
 ### slice
 
 ```
-periplus slice [WORDS ...] [--from ID...] [--path PREFIX]... [--type T]... [--starts N] [--support] [--direction out|in|both] [--depth N] [--kind K]... [--limit N] [--map PATH] [--format text|json]
-periplus slice [ID ...] [--from ID...] [--path PREFIX]... --out FILE [--direction out|in|both] [--depth N] [--kind K]... [--limit N] [--map PATH] [--format text|json]
+periplus slice [WORDS ...] [--from ID...] [--path PREFIX]... [--type T]... [--starts N] [--support] [--direction off|by|both] [--depth N|all] [--kind K]... [--hub N] [--through ID]... [--touch] [--ids] [--limit N] [--map PATH] [--format text|json]
+periplus slice [WORDS ...] [--from ID...] [--path PREFIX]... [--type T]... [--starts N] --out FILE [--direction off|by|both] [--depth N|all] [--kind K]... [--hub N] [--through ID]... [--touch] [--limit N] [--map PATH] [--format text|json]
 ```
 
-Without `--out`, `slice` prints the piece of the map around some start nodes, in one call. An
-argument that names a node, by id or short name, starts there. Any other text is searched as a
-whole and word by word, each as `find` searches one word. A word is a run of letters, digits and
-underscores, at least 3 long, so `sign-up` searches `sign`. When several words are given, one
-that names a node is searched as a word too. Each word weighs the natural log of the map's
-node count over the number of nodes it matches, rounded to 6 places, so a rare word outweighs a
-common one. A start's score is the sum of the weights of the words it holds in its own name,
-an attribute or its description; a word found only in the id's type, or in the part before the
-id's last `::` that names its owner, adds nothing. The starts are picked in two passes. The
-first covers the words: in turn from the rarest word down, it takes the best node that holds
-the word, by score, until it holds half the starts, or one per word when that is more. The
-second fills the rest by score. In the second pass, a start of
-lower score never comes before one of higher score. Among starts of equal score, rarer types
-come first, counted over the whole map, and at most two of a type, counted over all the starts,
-come before the rest of that score. Inside a type, a mapped node comes first, then the node that
-nodes in more other files have edges into, then the one whose id the words cover most, then
-`find`'s order. `--starts N` sets how many starts the words pick in all (default 12). `--type T`
-and `--path P` keep only the starts the words find of type `T` or under `P`, as they narrow
-`find`.
-Without words, `--path PREFIX` starts from every node whose first file starts with `PREFIX`.
-When the whole text matches nothing and its words do, the piece says so on its second line.
-Words that match nothing print `no matches`, and exit 0.
-When the start count leaves out nodes the words match, a line under the starts says how many and
-how to list them: `+N more nodes match the words: periplus find WORD --limit 0 for each of: user,
-login; start from any with periplus slice --from ID`.
+A named combination of the small commands. It picks the starts, as below. It adds the members of
+each start that is a container, as `members` lists them, since a container sets nothing off by
+itself. Then it walks by cause from the starts and those members, as `neighbors` and `affected`
+do from the same ids, `--depth N` hops each way. What it adds over `reach` is the content of each
+thing it reached: its file, source line, description, marks and links among the result, the
+legend of the kinds met and an inventory.
 
-`--from ID...` starts from those ids alone, and searches no word: pick the starts with `find`
-and give them here, or `-` to read them from standard input. An id that names no node exits 31.
+`--ids` prints every id of the result, never cut: the starts, the members, then what
+`neighbors --ids` and `affected --ids` list from the starts and members at the same depth, each
+once. So `periplus slice --from X --ids` gives the same set as `periplus members X --ids` together
+with `periplus neighbors` and `periplus affected` on X and those members, `--depth 2 --ids`.
+
+**Starts.** An argument that names a node, by id or short name, starts there. Any other text is
+searched as a whole and word by word, each as `find` searches one word. A word is a run of
+letters, digits and underscores, at least 3 long, so `sign-up` searches `sign`. When several words
+are given, one that names a node is searched as a word too. Each word weighs the natural log of
+the map's node count over the number of nodes it matches, rounded to 6 places, so a rare word
+outweighs a common one. A start's score is the sum of the weights of the words it holds in its own
+name, an attribute or its description; a word found only in the id's type, or in the part before
+the id's last `::` that names its owner, adds nothing. The starts are picked in two passes. The
+first covers the words: in turn from the rarest word down, it takes the best node that holds the
+word, by score, until it holds half the starts, or one per word when that is more. The second
+fills the rest by score. In the second pass, a start of lower score never comes before one of
+higher score. Among starts of equal score, rarer types come first, counted over the whole map, and
+at most two of a type, counted over all the starts, come before the rest of that score. Inside a
+type, a mapped node comes first, then the node that nodes in more other files have edges into,
+then the one whose id the words cover most, then `find`'s order. `--starts N` sets how many starts
+the words pick in all (default 12). `--type T` and `--path P` keep only the starts the words find
+of type `T` or under `P`, as they narrow `find`. Without words, `--path PREFIX` starts from every
+node whose first file starts with `PREFIX`, and `--type T` keeps the members of a container start
+of type `T` and its subtypes. When the whole text matches nothing and its words do, the slice says
+so on its second line. Words that match nothing print `no matches`, and exit 0. When the start
+count leaves out nodes the words match, a line under the starts says how many and how to list
+them: `+N more nodes match the words: periplus find WORD --limit 0 for each of: user, login; start
+from any with periplus slice --from ID`.
+
+`--from ID...` starts from those ids alone, and searches no word: pick the starts with `find` and
+give them here, or `-` to read them from standard input. An id that names no node exits 31.
 `--from` takes no `WORDS` with it.
 
-The output names each node by its short name. It lists each start first, on one line: its short name, its type, and why it was picked
-(`given as 'helper'`, or each word and where it matched), then its marks. Then `paths under: DIR/` names once the
-longest folder that holds every printed file, and each file prints below it: `cli.py` under
-`paths under: shop/` is `shop/cli.py`.
+**Members.** A start that is a container prints `members of NAME: N (type n, ...); all: periplus
+members NAME (--type T for one type)`, the types most first, as `members` counts them. Its members
+are things of the slice at hop 0, and the walks start from them too. Only direct members count,
+as for `members`.
 
-The words gather pieces of the map. A piece is a set of the printed nodes that edges of the map
-join. An edge of a grouping kind joins none: two classes of one module are two pieces unless
-another edge joins them. Each piece prints a header, `piece 1 of 4: 12 things, starts: A, B`,
-then its nodes grouped by file. Pieces go by the summed word score of their starts, highest
-first, then by the things they name, most first, then by their smallest start id. A start that
-an edge joins to another start's piece prints in that piece. After the last of several pieces,
-one line says that no edge of the map joins them as printed, that they may still meet through
-nodes not printed or relate in ways the map does not hold, and gives `periplus path A B` with
-the first starts of the first two pieces.
+**The walks.** `--direction off` walks only what the starts and members set off, `by` only what
+sets them off; `both`, the default, walks both. `--depth N` sets the hops each walk goes, and
+`--depth all` walks to the end. It defaults to 2: a walk by cause often goes past 10 hops, and
+most of what one start sets off lies past hop 2, so 2 keeps a slice from one start near its 8 KB
+aim. `periplus depth` says how far each walk goes before you ask for more. `--kind`, `--hub`,
+`--through` and `--touch` work as in `neighbors`, for both walks. `--direction out` and `in`, the
+raw directions `slice` took before it walked by cause, exit 2 and name `off` and `by`.
 
-Inside a piece, each file prints once, as a header, with `in X` naming the containers its nodes
-belong to by grouping edges. Under it, in line order, each node prints `:LINE  name  type` and its
-marks, its source line and its description, then one line per edge kind and direction to other nodes of
-the piece: `calls -> a, b` for edges the node has, `calls <- c` for edges to it. An edge between two nodes of one
-file prints only under the node it starts from. Far ends a rule
-did not map fold to `(+N outside the project: x, y)`, naming the first 3. Three or more far ends
-that share an owner, the part of their ids before the last `::`, fold to the owner and a count,
-`Mailer (3)`. A clause names at most 5 far ends and counts the rest, `(+N more)`. A node with
-edges the piece does not show ends with `+N more links: calls -> 8, calls <- 3; see periplus
-show NAME --limit 0`. A node with no such edge, but a clause that counts or folds ends, ends with
-`all links: periplus show NAME --limit 0`. A source line with fewer than two letters, digits or underscores, such as `{#`, is
-not printed.
+Under the starts and members, each walk prints one line, as `neighbors` and `affected` sum theirs
+up: `sets off:     12 hops, 88 things; 0 hubs stopped`. When the walk goes past the depth, the line
+adds what the slice holds and the command that prints the whole walk: `; this slice holds hops
+1-2: 13; all: periplus neighbors ID --depth all --limit 0`. A last line names the kinds the walks
+followed undeclared. A thing the walk stopped at prints `[hub: N links not walked]` on its line.
 
-The output ends with an inventory: every node it names, grouped by type with a count, rarest type
+On a map with no cause list, such as one written before 0.9, each walk is the raw walk that
+`neighbors` and `affected` fall back to, from each start and member in turn, and a warning says so:
+`warning: the map declares no cause directions; walked by raw direction, as --raw does`. The walk
+line then reads `sets off:   4 things by the raw walk, as the map lists no cause; each: periplus
+neighbors ID --raw --depth 2 --limit 0 (for each of the 2 ids it walks from)`.
+
+**The content.** The output names each thing by its short name. It lists each start first, on one
+line: its short name, its type, and why it was picked (`given as 'helper'`, or each word and where
+it matched), then its marks. Then `paths under: DIR/` names once the longest folder that holds
+every printed file, and each file prints below it: `cli.py` under `paths under: shop/` is
+`shop/cli.py`.
+
+The result falls into pieces. A piece is a set of the printed things that edges of the map join.
+An edge of a grouping kind joins none: two classes of one module are two pieces unless another
+edge joins them. A member joins the piece of its container. Each piece prints a header, `piece 1
+of 4: 12 things, starts: A, B`, then its things grouped by file. Pieces go by the summed word score
+of their starts, highest first, then by the things they name, most first, then by their smallest
+start id. After the last of several pieces, one line says that no edge of the map joins them as
+printed, that they may still meet through things not printed or relate in ways the map does not
+hold, and gives `periplus path A B` with the first starts of the first two pieces. `pieces` splits
+a set by the same function.
+
+Inside a piece, each file prints once, as a header, with `in X` naming the containers its things
+belong to by grouping edges. Under it, in line order, each thing prints `:LINE  name  type` and its
+marks, its source line and its description, then one line per edge kind and direction to other
+things of the slice: `calls -> a, b` for edges the thing has, `calls <- c` for edges to it. An edge
+between two things of one file prints only under the thing it starts from. Far ends a rule did not
+map fold to `(+N outside the project: x, y)`, naming the first 3. Three or more far ends that share
+an owner, the part of their ids before the last `::`, fold to the owner and a count, `Mailer (3)`.
+A clause names at most 5 far ends and counts the rest, `(+N more)`. A link to the concrete end of a
+realizing kind prints `realized by (implements_method) -> Base::send, Other::send`. A thing with
+edges the slice does not show ends with `+N more links: calls -> 8, calls <- 3; see periplus show
+NAME --limit 0`. A thing with no such edge, but a clause that counts or folds ends, ends with `all
+links: periplus show NAME --limit 0`. A source line with fewer than two letters, digits or
+underscores, such as `{#`, is not printed.
+
+The output ends with an inventory: every thing it names, grouped by type with a count, rarest type
 first. When there are several pieces, each name is followed by its piece number, `send [2]`.
-Check an answer against it. When the map's packs describe an edge kind the pieces' links show, a
-`legend:` block comes last, one `kind: description` line per such kind, in up to 640 bytes; past
-them it counts the rest, `+N more: periplus legend --kind K`.
+Check an answer against it. When the map's packs describe an edge kind the links show, a `legend:`
+block comes last, one `kind: description` line per such kind, in up to 640 bytes; past them it
+counts the rest, `+N more: periplus legend --kind K`.
 
-An edge of a grouping kind, one the map lists under `grouping_kinds`, says its `from` end belongs
-to the container at its `to` end, as a class belongs to its module. The walk follows such an
-edge only from the member to the container. The container is named once, in the header of
-its members' files, and the walk goes no further from it,
-so one module does not pull every class, service and route it holds into the piece. `--kind K`
-naming a grouping kind walks it as any other kind.
+Supporting code, the things whose first file matches a pattern the map lists under
+`supporting_paths`, such as tests, is not printed: the walks go through it as `neighbors` does,
+and `--ids` and `--out` keep it. Each piece ends with one line that counts it, `+14 in supporting
+code (**/tests/**): show with --support, or with the in-full commands at the end`. A start comes
+from supporting code only when an argument names it, or when every node the words match is there.
+`--support` prints supporting code as any other, and lets the words pick a start there.
 
-A start that is a container prints `members of NAME: N (type n, ...); all: periplus members
-NAME (--type T for one type)`, the types rarest first. Its members join the piece one type at a
-time in turn, the member more other files depend on first, up to the start's share of
-`--limit`. With `--type T` and no words, a container start lists only its members of type `T`
-and its subtypes, and nothing else. In JSON, `members` holds, per container start, `container`,
-`total`, `by_type` and `rows`; a walk row has `container: true` at a container.
+**The budget.** Without `--limit`, the text shows at most 50 things past the starts and aims at 8
+KB. Over the aim it lowers detail first: it leaves out the legend, then the `more links` lines,
+then halves the names per link down to 1. Then it leaves out things, the farthest hop first; at
+one hop, the walk off before the walk by, then by id. It never leaves out a start's own line or the
+inventory, and says what it did in a line `cut to fit 8192 bytes: ...; --limit N prints N things`.
+That line adds `what a kind means: periplus legend --kind K` when it left out the legend, and `a
+node's links in full: periplus show NAME --limit 0` when it dropped the `more links` lines or names
+per link. `--limit N` shows at most `N` things past the starts (`0` for all), with no byte aim, in
+the same order.
 
-A node whose edges, two or more, all join it to the node above is a satellite of that node. It
-gets no row and costs no hop. The piece ends with how many were folded, by type.
-
-The walk adds, at the hop of each node it reaches and of each start, the mapped nodes that stand
-for it across realizing edges, as `neighbors --raw` does, and costs no hop for them: the code behind an
-interface method joins the piece with the method. The node prints them as `realized by
-(implements_method) -> Base::send, Other::send`, and past 8 a line `+N more stand for NAME, past
-the first 8; see periplus show NAME`.
-
-Supporting code, the nodes whose first file matches a pattern the map lists under
-`supporting_paths`, such as tests, is neither printed nor walked. Each piece ends with one line
-that counts what its walk met there, `+14 in supporting code (**/tests/**): show with --support,
-or with the in-full commands at the end`.
-A start comes from supporting code only when an argument names it, or when every node the words
-match is there. `--support` prints supporting code as any other, and lets the words pick a start
-there.
-
-`--depth N` sets how many edges to follow from every start. Without it, the first 8 starts walk
-2 hops and any later start 1 hop, so that more separate pieces fit; the output then says so on
-a line `walked 2 hops from the first 8 starts and 1 hop from the other N`. `--direction`
-defaults to `both`, since a chain often goes up one kind and down another. Without `--limit`,
-the piece holds at most 50 rows and aims at 8 KB of text: over that, it leaves out the rows past
-the first hop, farthest and lowest-ranked start first, then the `more links` lines, then names
-per link, then the first-hop rows of the piece that names the most things, and says what it left
-out in a line `cut to fit 8192 bytes: ...; --limit N prints N rows`. The legend is left out before any of these, and the
-line says `legend left out` and adds `what a kind means: periplus legend --kind K`. When it dropped
-the `more links` lines or names per link, it adds `a node's links in full: periplus show NAME --limit 0`. It never leaves out a start's own line or the inventory. `--limit N` caps the rows at `N` (`0` for all)
-with no byte aim. The cap keeps full rows before back-references. Among them it keeps first the nodes more
-starts reach, then those reached from the starts of more words, then those whose own id,
-attributes or description more of the words match, then rarer types, then nodes more other
-files have edges into, then the nearer hop, then by id. It first gives each start an even share
-of the cap, then fills the rest with the best rows left. A kept row brings the rows above it. A cut piece ends with what it left out, counted by hop and by edge
-kind (at most 6 kinds, most left out first), and the flags that narrow it (`--kind`, `--direction`, `--depth`, and `--type`, `--path`
-or `--starts` when words picked the starts). A piece that left out rows, folded nodes into the
-node above, or left out supporting code then prints the `show` commands that print every edge of
-each hop, the nodes left out among them:
+When things are left out, the slice ends with `showing N of M things past the starts`, what it left
+out by hop and by edge kind (at most 6 kinds, most left out first), and the flags that narrow it
+(`--kind`, `--direction`, `--depth`, and `--type`, `--path` or `--starts` when words picked the
+starts). When it left out things, link details or supporting code, it then names the small
+commands that print each walk it holds in full:
 
 ```
-in full, every edge hop by hop, with what is left out, folded or in supporting code:
-  hop 1: periplus show helper --limit 0
-  hop 2: periplus show helper --ids | periplus show - --limit 0
+in full, each part this slice holds:
+  sets off: periplus neighbors helper --depth 2 --limit 0
+  set off by: periplus affected helper --depth 2 --limit 0
 ```
 
-`show` prints every edge at a node, and `show --ids` the node at the other end of each, so hop 2
-is `show` on what hop 1 reached. The walk of `slice` follows edges both ways at every hop, which
-no walk by cause does, so these are `show` commands and not `neighbors`. With more than three
-starts the commands read them with `-`, and the first line says `(pipe the N starts above into
-the first command)`; with starts read from standard input, `(with the same ids piped into the
-first command)`. A piece that was not cut and has edges past its
-last hop ends with `go deeper with --depth N`. `--format json` prints the same piece with full ids and full paths: `starts`,
-`pieces` (each with `piece`, its number, `starts`, `things` and `supporting`, the count the text
-prints),
-`rows` (each with `start`, `hop`, `from`, `kind`, `direction`, `again`, `location`, `source`,
-`description`, `marks` and `piece`), `left_out`, `deeper`, `folded`, `notes`, `depth` and
-`direction`. Each start and each row carries the `piece` number and the `marks` of its node. The
-names on a link line carry no marks, to keep it short; a node printed under its file shows its
-marks on its own line.
+With more than three ids to walk from, or ids read from standard input, these commands name `-`
+and say which ids to pipe in: `(pipe in the 4 starts above)`, `(pipe in the 12 ids it walks from:
+the starts and their members)`, or `(with the same ids piped in)`.
 
-With `--out FILE`, `slice` writes the items around the start items to a map file of their own
-instead, and takes ids, not words. Name the start items as `ID`s, with `--path PREFIX` (every
-node whose first file starts with `PREFIX`), or both; one of the two is required. Repeat
-`--path` for several prefixes; each one must match a node. `--out` exits 27 when it is the map
-being read, and `--type`, `--starts` or `--support` with it exits 2. `--depth N` defaults to 1 here. The nodes that stand for a
-reached node join the file as in the printed piece, so the code behind an interface is in the
-working set; supporting code is kept, and the file carries `supporting_paths`. `--limit
-N` is the most items the slice may hold (default 500, `0` for no limit). It prints `wrote FILE: N
-nodes, M edges`. `--format json` prints one JSON document to standard output instead: `out` (the
-file written, or null), `nodes`, `edges`, `warnings` and `problems`. Problems stay in that
-document, with the report.
+`--format json` prints the same slice with full ids and full paths: `starts` (each as `find` prints
+a row, with `given`, `words` and `piece`), `pieces` (each with `piece`, `starts`, `things` and
+`supporting`), `members` (each with `container`, `total` and `by_type`), `walks` (each with
+`direction`, `off` or `by`, `raw`, `total`, `held`, `last_hop`, `hubs`, `undeclared`, `command`,
+the part the slice holds, and `all`, the whole walk), `rows` (each thing past the starts, with
+`piece`, `start`, `hop`, `from`, `kind`, `direction`, `walk` (`off`, `by` or `members`), `id`,
+`type`, `state`, `marks`, `location`, `source`, `description`, `hub` and `touch`), `left_out`,
+`held` (how many things `--ids` prints), `notes`, `depth` (null for all), `direction`, `warnings`
+and `problems`.
 
-A kind is the type of an edge: it says how two items relate. A slice that follows edges either
-way widens through a hub, an item many others share, such as a service every feature uses or a
-permission many routes require, and can reach far more than the feature. `--kind` keeps the
-slice to the edges of the feature.
+**`--out FILE`** writes the things `--ids` prints, and the edges between two of them, to `FILE` as
+a map, by the same writer as `extract`: `periplus extract` given those ids writes the same bytes.
+It takes the starts and walk options the printed slice takes. `--limit N` is the most things the
+file may hold (default 500, `0` for no limit); over it, nothing is written and it exits 32. Starts
+that match nothing write nothing and exit 31. `--out` naming the map being read exits 27, and
+`--ids` with `--out` exits 2. The file keeps supporting code and carries `supporting_paths`. It
+prints `wrote FILE: N nodes, M edges`. `--format json` prints one JSON document instead: `out` (the
+file written, or null), `nodes`, `edges`, `warnings` and `problems`.
 
 ```
-periplus slice ID --depth 2 --out foo.map.json
+periplus slice ID --depth 3 --out foo.map.json
 ```
 
 ## Sets and map files
@@ -1040,13 +1043,13 @@ In JSON: `command`, `found`, `entries`, `fresh`, `changed`, `gone`, `unreadable`
 | Code | Meaning |
 |---|---|
 | 0 | The report printed. An empty result is still 0. |
-| 2 | A bad option, such as `--depth 0`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, `slice` with no start, `slice --out` with `--type`, `--starts` or `--support`, `slice --from` with `WORDS`, `at` with no line number of 1 or more, or `diff --change` without `--ids`. `join`, `common` or `minus` with one map, or `join`, `common`, `minus` or `diff` with maps of different versions. A walk on a map with no cause list from several `ID`s. |
+| 2 | A bad option, such as `--depth 0`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, `slice` with no start, `slice --direction out` or `in`, `slice --ids` with `--out`, `slice --from` with `WORDS`, `at` with no line number of 1 or more, or `diff --change` without `--ids`. `join`, `common` or `minus` with one map, or `join`, `common`, `minus` or `diff` with maps of different versions. A walk on a map with no cause list from several `ID`s. |
 | 17 | The map file that `slice --out`, `extract`, `join`, `common` or `minus` would write does not pass the map schema, because a map it was made from does not. Nothing is written. Run `periplus check-map` on that map. |
 | 27 | `slice --out` or `extract --out` names the map being read, `--out` of `join`, `common` or `minus` names one of its inputs, or the file cannot be written; or `stamp` cannot write the descriptions file. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
 | 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. Also a descriptions file a command reads that is not YAML or does not match the descriptions schema, or one `stamp` cannot change without changing other text. |
-| 31 | An id names no node in the map, or a short name fits more than one node. |
-| 32 | The slice reaches more items than `--limit` allows. |
+| 31 | An id names no node in the map, or a short name fits more than one node; or `slice --out` has no start, as when its words match nothing. |
+| 32 | `slice --out` holds more things than `--limit` allows. |
 | 141 | Standard output was closed before the report was written, as when the output is piped into `head`. Nothing more is printed. |
 
 ## Checking the map
@@ -1382,81 +1385,88 @@ periplus path python.function::shop.tools.helper python.module::shop.cli
 no path
 ```
 
-Print what lies around the helper, two hops out, in one call. Nodes group by file, and each
-names its links:
+Print what lies around the helper in one call: what the walks by cause reach from it, two hops
+each way, each thing under its file with its links among them. Nothing calls into the module, so
+the walk by stops at it:
 
 <!-- nav-run -->
 ```console
 $ periplus slice helper
 periplus slice
 start helper  python.function  (given as 'helper')
+sets off:     0 hops, 0 things; 0 hubs stopped
+set off by:   1 hop, 1 thing; 0 hubs stopped
 paths under: shop/
 
-piece 1 of 1: 6 things, starts: helper
+piece 1 of 1: 2 things, starts: helper
 
 tools.py
   :1  helper  python.function
       | def helper():
       calls <- cli
-  :1  tools  python.module
-      | def helper():
-      contains -> helper
-      imports <- cli
-
-cli.py
-  :1  cli  python.module
-      | import typer
-      calls -> helper (+1 outside the project: typer.Typer)
-      contains -> greet
-      imports -> tools (+1 outside the project: python.module::typer)
-  :8  greet  python.function
-      | def greet():
-
-inventory: 6 nodes
-  python.function 3: greet, helper, typer.Typer
-  python.module 3: cli, python.module::typer, tools
-warning: resolved 'helper' to python.function::shop.tools.helper
-```
-
-The same piece, cut to two rows, says what it left out and which `show` commands print each hop in
-full, and `cli` counts the links it no longer shows:
-
-<!-- nav-run -->
-```console
-$ periplus slice helper --limit 2
-periplus slice
-start helper  python.function  (given as 'helper')
-paths under: shop/
-
-piece 1 of 1: 3 things, starts: helper
-
-tools.py
-  :1  helper  python.function
-      | def helper():
-      calls <- cli
-  :1  tools  python.module
-      | def helper():
-      contains -> helper
-      imports <- cli
+      +1 more link: contains <- 1; see periplus show helper --limit 0
 
 cli.py
   :1  cli  python.module
       | import typer
       calls -> helper
-      imports -> tools
-      +3 more links: calls -> 1, contains -> 1, imports -> 1; see periplus show cli --limit 0
+      +4 more links: imports -> 2, calls -> 1, contains -> 1; see periplus show cli --limit 0
+
+inventory: 2 nodes
+  python.function 1: helper
+  python.module 1: cli
+warning: resolved 'helper' to python.function::shop.tools.helper
+```
+
+The same ids, for another command; `affected helper --ids` lists the same two, since the helper
+sets nothing off:
+
+<!-- nav-run -->
+```console
+$ periplus slice helper --ids
+python.function::shop.tools.helper
+python.module::shop.cli
+2 ids
+warning: resolved 'helper' to python.function::shop.tools.helper
+```
+
+From the module, cut to two things past the start: the slice says what it left out and names the
+`neighbors` and `affected` commands that print each walk in full, and `cli` counts the links it no
+longer shows:
+
+<!-- nav-run -->
+```console
+$ periplus slice python.module::shop.cli --limit 2
+periplus slice
+start cli  python.module  (given as 'python.module::shop.cli')
+sets off:     1 hop, 4 things; 0 hubs stopped
+set off by:   0 hops, 0 things; 0 hubs stopped
+paths under: shop/
+
+piece 1 of 1: 3 things, starts: cli
+
+cli.py
+  :1  cli  python.module
+      | import typer
+      calls -> helper (+1 outside the project: typer.Typer)
+      +3 more links: imports -> 2, contains -> 1; see periplus show cli --limit 0
+
+tools.py
+  :1  helper  python.function
+      | def helper():
+      calls <- cli
+      +1 more link: contains <- 1; see periplus show helper --limit 0
 
 inventory: 3 nodes
-  python.function 1: helper
-  python.module 2: cli, tools
-showing 2 of 6 rows
-left out by hop: 2: 4
-left out by kind: imports 2, calls 1, contains 1
-narrow with --kind K (kinds here: imports, calls, contains), --direction out, --direction in or --depth 1
-in full, every edge hop by hop, with what is left out, folded or in supporting code:
-  hop 1: periplus show helper --limit 0
-  hop 2: periplus show helper --ids | periplus show - --limit 0
-warning: resolved 'helper' to python.function::shop.tools.helper
+  python.function 2: helper, typer.Typer
+  python.module 1: cli
+showing 2 of 4 things past the starts
+left out by hop: 1: 2
+left out by kind: imports 2
+narrow with --kind K (kinds here: imports, calls), --direction off or --direction by
+in full, each part this slice holds:
+  sets off: periplus neighbors cli --depth 2 --limit 0
+  set off by: periplus affected cli --depth 2 --limit 0
 ```
 
 Start from plain words. Neither names a node, and the two together match nothing, so each word
@@ -1470,30 +1480,27 @@ periplus slice
 no node matches 'tool help' as a whole; started from its words
 start helper  python.function  (words: 'tool' in id, 'help' in id)
 +1 more node matches the words: periplus find WORD --limit 0 for each of: tool, help; start from any with periplus slice --from ID
+sets off:     0 hops, 0 things; 0 hubs stopped
+set off by:   1 hop, 1 thing; 0 hubs stopped
 paths under: shop/
 
-piece 1 of 1: 3 things, starts: helper
+piece 1 of 1: 2 things, starts: helper
 
 tools.py
   :1  helper  python.function
       | def helper():
       calls <- cli
-  :1  tools  python.module
-      | def helper():
-      contains -> helper
-      imports <- cli
+      +1 more link: contains <- 1; see periplus show helper --limit 0
 
 cli.py
   :1  cli  python.module
       | import typer
       calls -> helper
-      imports -> tools
-      +3 more links: calls -> 1, contains -> 1, imports -> 1; see periplus show cli --limit 0
+      +4 more links: imports -> 2, calls -> 1, contains -> 1; see periplus show cli --limit 0
 
-inventory: 3 nodes
+inventory: 2 nodes
   python.function 1: helper
-  python.module 2: cli, tools
-go deeper with --depth 2
+  python.module 1: cli
 ```
 
 List what the map holds in a file, line by line:

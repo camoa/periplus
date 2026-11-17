@@ -1,7 +1,8 @@
 """The printed slice in its dense form: nodes grouped by file, links as short clauses, folds,
 the nodes left unwalked, an inventory, and a byte budget.
 
-An invented shop, with files in brackets; `in_box` is a grouping kind:
+An invented shop, with files in brackets; `in_box` is a grouping kind, `calls` sets off its to
+end and `contains` is structure:
 
     Cart [src/Cart.php:2] -contains-> add [:4], total [:8];  Cart, Mailer -in_box-> shop
     add -calls-> total, Mailer::send, ::hello, ::bye [src/Mailer.php], vendor Log::write
@@ -107,6 +108,8 @@ def _site(root: Path) -> Path:
         "packs": [{"pack": "own", "version": "0.1.0"}],
         "roots": ["."],
         "grouping_kinds": ["in_box"],
+        "cause_from_kinds": ["calls"],
+        "cause_none_kinds": ["contains", "in_box"],
         "nodes": sorted(NODES, key=lambda n: n["id"]),
         "edges": EDGES,
     }
@@ -137,10 +140,10 @@ def test_each_file_is_a_header_once_with_its_container_and_nodes_in_line_order(
 ) -> None:
     lines = _text(_piece(tmp_path, ADD))
 
-    assert lines.count("src/Cart.php  in shop") == 1
-    assert "src/Mailer.php  in shop" in lines
+    assert lines.count("Cart.php  in shop") == 1
+    assert "Mailer.php  in shop" in lines
     nodes = [line for line in lines if line.startswith("  :")]
-    assert nodes[:3] == ["  :2  Cart  t.class", "  :4  add  t.method", "  :8  total  t.method"]
+    assert nodes[:3] == ["  :4  add  t.method", "  :8  total  t.method", "  :3  send  t.method"]
 
 
 def test_every_short_name_resolves_back_to_its_node(tmp_path: Path) -> None:
@@ -175,17 +178,17 @@ def test_links_fold_outside_ends_and_members_of_one_owner(tmp_path: Path) -> Non
 
 def test_an_edge_inside_one_file_prints_once_at_its_from_end(tmp_path: Path) -> None:
     lines = _text(_piece(tmp_path, ADD))
-    cart = lines[lines.index("src/Cart.php  in shop") : lines.index("src/Mailer.php  in shop")]
+    cart = lines[lines.index("Cart.php  in shop") : lines.index("Mailer.php  in shop")]
 
-    assert "      contains -> add, total" in cart
-    assert "      contains <- Cart" not in cart and "      calls <- add" not in cart
+    assert "      calls -> Mailer (3), total (+2 outside the project: dump, write)" in cart
+    assert "      calls <- add" not in cart
     assert "      calls <- add" in lines
 
 
 def test_a_node_with_links_the_piece_does_not_show_says_how_many(tmp_path: Path) -> None:
-    lines = _text(_piece(tmp_path, ADD))
+    lines = _text(_piece(tmp_path, ADD, depth=1))
 
-    assert "      +1 more link: calls -> 1; see periplus show deep --limit 0" in lines
+    assert "      +1 more link: calls -> 1; see periplus show send --limit 0" in lines
 
 
 def test_the_inventory_names_every_node_by_type_rarest_first(tmp_path: Path) -> None:
@@ -194,8 +197,8 @@ def test_the_inventory_names_every_node_by_type_rarest_first(tmp_path: Path) -> 
 
     assert lines[at + 1 : at + 4] == [
         "  t.zone 1: shop",
-        "  t.class 2: Cart, Mailer",
-        "  t.method 8: add, bye, deep, dump, hello, send, total, write",
+        "  t.class 1: Mailer",
+        "  t.method 9: add, bye, deep, deeper, dump, hello, send, total, write",
     ]
 
 

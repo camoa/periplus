@@ -1,4 +1,13 @@
-"""``periplus slice``: the items around a start set, printed as rows or cut into a map file."""
+"""``periplus slice``: the things around some starts, printed under their files or written to a map.
+
+A macro. It picks the starts from words, as ``find`` ranks them, or takes them as ids; adds the
+members of a container start, as ``members`` lists them; then walks by cause from them, as
+``neighbors`` and ``affected`` do, to ``--depth`` hops. What it adds is the content of each thing
+of the result: its file, source line, description, marks and links among the result, the legend
+of the kinds met and an inventory. The ids ``--ids`` prints are the starts, the members and what
+``neighbors --ids`` and ``affected --ids`` list from them, so the result is reproducible with the
+small commands; a part the text cuts names the small command that prints it in full.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +32,6 @@ from periplus.navigate.listing import (
     Listing,
     first_location,
     footer,
-    kind_warnings,
     mark_text,
     payload,
     place,
@@ -35,17 +43,28 @@ from periplus.navigate.mapfile import (
     as_json,
     as_text,
     load_document,
+    map_flag,
     reading_fields,
 )
+from periplus.navigate.members import _held
 from periplus.navigate.names import Names
+from periplus.navigate.reach import DIRECTIONS
 from periplus.navigate.sets import sub_document
 from periplus.navigate.show import node_descriptions
-from periplus.navigate.source import SourceLines, description_line, source_line, where
-from periplus.navigate.walk import stand_in_line, start_args, walk
+from periplus.navigate.source import SourceLines, description_line, source_line
+from periplus.navigate.walk import (
+    HUB,
+    NO_CAUSES,
+    PIPED,
+    CauseRow,
+    cause_report,
+    start_args,
+    summary,
+    walk,
+)
 from periplus.report import _escape, _json_problem, amount
 
 __all__ = [
-    "DEEP_STARTS",
     "PRINT_DEPTH",
     "ROW_LIMIT",
     "START_LIMIT",
@@ -54,6 +73,8 @@ __all__ = [
     "PieceRow",
     "SliceReport",
     "Start",
+    "Walked",
+    "listed",
     "render_json",
     "render_text",
     "run",
@@ -61,9 +82,6 @@ __all__ = [
 
 #: The most start nodes the words pick in all, unless ``starts`` says otherwise.
 START_LIMIT = 12
-#: How many starts, the first by rank, walk ``PRINT_DEPTH`` hops; the rest walk one, unless
-#: ``depth`` says otherwise.
-DEEP_STARTS = 8
 #: The most start nodes the words pick of any one node type.
 TYPE_STARTS = 2
 #: The share of the start budget the first pass gives to the words, one start each in turn from
@@ -73,11 +91,13 @@ WORD_SHARE = Fraction(1, 2)
 WEIGHT_PLACES = 6
 #: The fewest characters a word needs to be searched; a shorter one matches too much.
 MIN_WORD = 3
-#: The most rows a printed piece shows, unless ``limit`` says otherwise.
+#: The most things past the starts a printed slice shows, unless ``limit`` says otherwise.
 ROW_LIMIT = 50
-#: How many edges a printed piece follows, unless ``depth`` says otherwise.
+#: The hops each walk by cause goes, unless ``depth`` says otherwise. On a real map a start's walk
+#: off held 15% of its things within 2 hops and 40% within 3, so 2 keeps one start's slice near the
+#: byte aim and leaves the rest to ``--depth``.
 PRINT_DEPTH = 2
-#: The bytes the default printed piece aims at; an explicit ``limit`` caps rows alone instead.
+#: The bytes the default printed slice aims at; an explicit ``limit`` caps things alone instead.
 BYTE_LIMIT = 8 * 1024
 #: The most far-end names one link clause prints before it counts the rest.
 LINK_NAMES = 5
@@ -87,16 +107,17 @@ OUTSIDE_NAMES = 3
 FOOTER_KINDS = 6
 #: Far ends of one clause that share an owner, at least this many, print as the owner and a count.
 OWNER_FOLD = 3
-#: The bytes the legend at the end of a printed piece may take; past them it counts the rest.
+#: The bytes the legend at the end of a printed slice may take; past them it counts the rest.
 LEGEND_BYTES = 640
-#: The depth and the item limit of a slice written to a file, as before the printed piece.
-FILE_DEPTH = 1
+#: The most things a slice written to a file may hold, unless ``limit`` says otherwise.
 FILE_LIMIT = 500
+#: What each walk is called in the text, and the small command that prints it.
+_WALKS = {"off": ("sets off:", "neighbors"), "by": ("set off by:", "affected")}
 
 
 @dataclass(frozen=True, slots=True)
 class Start:
-    """A start node of a printed piece, as ``find`` shows it, and why it was picked.
+    """A start node of a slice, as ``find`` shows it, and why it was picked.
 
     ``given`` is the argument that named it; ``words`` each word, or the whole text, that found
     it, with where it matched (``id``, ``attribute`` or ``description``) and the attribute's name.
@@ -109,12 +130,12 @@ class Start:
 
 @dataclass(frozen=True, slots=True)
 class PieceRow:
-    """One row of a printed piece: the edge from the node above, ``parent``, to the node ``id``.
+    """One thing of the result past the starts: ``id``, reached from ``parent`` by an edge of
+    ``kind`` at ``hop``, by the walk from the start ``start``.
 
-    ``outward`` is true when the edge runs from ``parent`` to ``id``. ``again`` marks a node
-    printed in full elsewhere in the piece; its row is a back-reference. ``container`` marks the
-    container end of a grouping edge, which the walk does not go on from. ``marks`` holds the
-    mark texts of ``id``.
+    ``walk`` names the part that found it: ``off`` (as ``neighbors``), ``by`` (as ``affected``)
+    or ``members``. ``outward`` is true when the edge runs from ``parent`` to ``id``. ``hub`` is
+    the fan of a thing the walk did not go on from; ``touch`` marks a thing only pointed at.
     """
 
     start: str
@@ -125,28 +146,44 @@ class PieceRow:
     id: str
     type: str
     state: str
-    again: bool
+    walk: str
     location: str | None = None
     source: str | None = None
     description: str | None = None
-    container: bool = False
     marks: tuple[str, ...] = ()
+    hub: int | None = None
+    touch: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class Members:
-    """The members of a start that is a container: how many, how many of each type, rarest type
-    first, and the rows shown."""
+    """The members of a start that is a container: how many, how many of each type, most first,
+    as ``members`` counts them, and the rows of the slice."""
 
     container: str
     total: int
-    by_type: Mapping[str, int]
+    by_type: tuple[tuple[str, int], ...]
     rows: tuple[PieceRow, ...]
 
 
 @dataclass(frozen=True, slots=True)
+class Walked:
+    """One walk of the slice, ``off`` or ``by``: every thing it reached to its end (empty for the
+    raw walk), how many the slice holds within its depth, the kinds it followed undeclared, and the
+    commands that print the part the slice holds and the whole walk."""
+
+    toward: str
+    rows: tuple[CauseRow, ...]
+    held: int
+    undeclared: tuple[str, ...]
+    command: str
+    whole: str
+    raw: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Link:
-    """A subject's edges of one kind and direction to other nodes of the piece, by short name.
+    """A subject's edges of one kind and direction to other nodes of the slice, by short name.
 
     ``owners`` are far ends folded into their owner, with a count; ``more`` counts the mapped far
     ends past the names shown; ``outside`` names the first far ends not mapped, of
@@ -166,9 +203,9 @@ class Link:
 
 @dataclass(frozen=True, slots=True)
 class Subject:
-    """A mapped node of the piece under its file: line, short name, type, source line, its links
-    in the piece, its edges the piece does not show, as (kind, outward, count), how many nodes
-    stand for it past the cap, its mark texts, and whether a link names fewer ends than it has."""
+    """A mapped node of the slice under its file: line, short name, type, source line, its links
+    in the slice, its edges the slice does not show, as (kind, outward, count), its mark texts,
+    whether a link names fewer ends than it has, and its fan when the walk stopped at it."""
 
     id: str
     short: str
@@ -178,14 +215,14 @@ class Subject:
     description: str | None
     links: tuple[Link, ...]
     unwalked: tuple[tuple[str, bool, int], ...]
-    more_forms: int = 0
     marks: tuple[str, ...] = ()
     cut_links: bool = False
+    hub: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class FileGroup:
-    """One file of the piece, the containers its nodes belong to, and its nodes in line order."""
+    """One file of the slice, the containers its nodes belong to, and its nodes in line order."""
 
     file: str | None
     containers: tuple[str, ...]
@@ -196,8 +233,8 @@ class FileGroup:
 @dataclass(frozen=True, slots=True)
 class Piece:
     """Nodes the output names that edges other than grouping edges join: its starts, in pick
-    order, how many things the output names in it, and how many nodes in supporting code its
-    walk left out, with the patterns they match."""
+    order, how many things the output names in it, and how many nodes in supporting code it
+    left out, with the patterns they match."""
 
     starts: tuple[str, ...]
     things: int
@@ -209,11 +246,12 @@ class Piece:
 class SliceReport:
     """One slice run. ``out`` is ``None`` when nothing was written.
 
-    A printed piece (``printed``) holds its ``starts`` and ``rows``, what the row cap left out by
-    hop and by kind, the kinds its rows hold, whether an edge leads on past ``depth``, the nodes
-    folded into the node above by type, and ``notes`` on how the words were read. ``unpicked``
-    counts the nodes the ``words`` matched that the start cap left out; ``piped`` says the starts
-    came from standard input.
+    A printed slice (``printed``) holds its ``starts``, the ``members`` of its container starts,
+    its ``walks``, and ``rows``: the things past the starts it prints, with what the cap left out
+    by hop and by kind, the kinds and the farthest hop of all of them. ``held`` is every id of the
+    result, never cut. ``notes`` say how the words
+    were read; ``unpicked`` counts the nodes the ``words`` matched that the start cap left out;
+    ``piped`` says the starts came from standard input.
     """
 
     out: str | None = None
@@ -227,13 +265,14 @@ class SliceReport:
     left_by_hop: Mapping[int, int] | None = None
     left_by_kind: Mapping[str, int] | None = None
     kinds: tuple[str, ...] = ()
-    deeper: bool = False
-    depth: int = PRINT_DEPTH
+    deepest: int = 0
+    depth: int | None = PRINT_DEPTH
     direction: str = "both"
     searched: bool = False
-    folded: Mapping[str, int] | None = None
     notes: tuple[str, ...] = ()
     members: tuple[Members, ...] = ()
+    walks: tuple[Walked, ...] = ()
+    walk_note: str = ""
     files: tuple[FileGroup, ...] = ()
     inventory: tuple[tuple[str, tuple[tuple[str, int], ...]], ...] = ()
     shorts: Mapping[str, str] | None = None
@@ -244,7 +283,8 @@ class SliceReport:
     unpicked: int = 0
     words: tuple[str, ...] = ()
     piped: bool = False
-    map_path: str | None = None
+    map_path: Path | None = None
+    held: tuple[str, ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -252,101 +292,104 @@ class SliceReport:
         return min((problem.code for problem in self.problems), default=ExitCode.OK)
 
 
+@dataclass(frozen=True, slots=True)
+class _Walking:
+    """How the slice walks: which ways, how many hops (``None``: all), the kinds kept, the hub
+    limit, the hubs walked all the same and whether to add touching things."""
+
+    direction: str = "both"
+    depth: int | None = PRINT_DEPTH
+    kinds: Collection[str] = ()
+    hub: int = HUB
+    through: Sequence[str] = ()
+    touch: bool = False
+
+
 def run(
     start: Path,
     env: Mapping[str, str],
     ids: Collection[str],
     prefixes: Collection[str],
-    direction: str,
-    depth: int | None,
-    kinds: Collection[str],
-    limit: int | None,
-    out: Path | None,
-    map_path: Path | None,
+    direction: str = "both",
+    depth: int | None = PRINT_DEPTH,
+    kinds: Collection[str] = (),
+    limit: int | None = None,
+    out: Path | None = None,
+    map_path: Path | None = None,
     types: Collection[str] = (),
     starts: int | None = None,
     support: bool = False,
     from_ids: Sequence[str] = (),
     piped: bool = False,
+    hub: int = HUB,
+    through: Sequence[str] = (),
+    touch: bool = False,
 ) -> SliceReport:
-    """Write ``ids``, the nodes under each of ``prefixes`` and what they reach to ``out``.
+    """Pick the starts, add the members of a container start, walk by cause from them and print
+    the result; with ``out``, write it to that map file instead.
 
-    Without ``out``, print the piece instead: see ``_piece``. ``direction`` is ``out``, ``in`` or
-    ``both``. A limit of 0 keeps every item. ``depth`` and ``limit`` of ``None`` take the mode's
-    default. ``types`` and ``starts`` narrow words, which only the printed piece takes, and
-    ``support`` prints its supporting code. ``from_ids`` are ids to start from, in place of
-    ``ids``, with no word searched; ``piped`` says they came from standard input.
+    ``ids`` are words or ids; ``from_ids`` are ids alone, with no word searched, and ``piped``
+    says they came from standard input. ``direction`` is ``off``, ``by`` or ``both``; ``depth``
+    ``None`` walks to the end. ``limit`` of ``None`` takes the mode's default and 0 keeps every
+    thing: printed, the most things past the starts, with a byte aim when not given; written, the
+    most things the file may hold.
     """
-    if from_ids:
-        ids = from_ids
-    if out is None:
-        return _piece(
-            start,
-            env,
-            ids,
-            prefixes,
-            direction,
-            depth,
-            kinds,
-            ROW_LIMIT if limit is None else limit,
-            map_path,
-            types,
-            START_LIMIT if starts is None else starts,
-            limit is None,
-            support,
-            not from_ids,
-            piped,
-        )
-    if types or starts is not None or support:
-        message = (
-            "--type, --starts and --support shape the printed piece, which --out does not take"
-        )
-        return SliceReport(problems=(Problem(ExitCode.USAGE, message, {}),))
-    depth = FILE_DEPTH if depth is None else depth
-    limit = FILE_LIMIT if limit is None else limit
+    walking = _Walking(direction, depth, tuple(kinds), hub, tuple(through), touch)
+    printed = out is None
     try:
-        if not ids and not prefixes:
-            return SliceReport(
-                problems=(Problem(ExitCode.USAGE, "give at least one id or a path prefix", {}),)
-            )
         path, document = load_document(start, env, map_path)
-        target = start / out
-        if target.resolve() == path.resolve():
+        target = None if out is None else start / out
+        if target is not None and target.resolve() == path.resolve():
             message = f"--out {target} is the map being read; choose another file"
             return SliceReport(
                 problems=(Problem(ExitCode.OUTPUT_UNWRITABLE, message, {"path": str(target)}),)
             )
         with reading_fields(start, map_path):
             index = MapIndex(document, map_path)
-            resolved = [resolve(index, text) for text in ids]
-            begun = {node_id for node_id, _ in resolved}
-            begun |= _under(document, prefixes)
-            kept = set(begun)
-            for item in sorted(begun):
-                kept.update(row.id for row in walk(index, item, direction, depth, set(kinds)))
-            held = {edge["kind"] for edge in index.edges}
-            if limit and len(kept) > limit:
-                message = f"the slice reaches {len(kept)} items, over the limit of {limit}"
+            report = _piece(
+                start,
+                index,
+                document.get("legend", {}).get("edge_kinds", {}),
+                from_ids or ids,
+                prefixes,
+                walking,
+                (ROW_LIMIT if limit is None else limit) if printed else 0,
+                map_path,
+                types,
+                START_LIMIT if starts is None else starts,
+                printed and limit is None,
+                support,
+                not from_ids,
+                piped,
+            )
+            if target is None or report.problems:
+                return report if printed else replace(report, printed=False)
+            cap = FILE_LIMIT if limit is None else limit
+            if not report.held:
+                message = "no node matches the words; nothing written"
+                return SliceReport(problems=(Problem(ExitCode.NODE_NOT_FOUND, message, {}),))
+            if cap and len(report.held) > cap:
+                message = f"the slice holds {len(report.held)} items, over the limit of {cap}"
                 return SliceReport(problems=(Problem(ExitCode.SLICE_TOO_LARGE, message, {}),))
+            kept = set(report.held)
             nodes = [node for node in document["nodes"] if node["id"] in kept]
             edges = [e for e in document["edges"] if e["from"] in kept and e["to"] in kept]
             piece = sub_document(document, nodes, edges, index.parent)
     except HarnessError as error:
-        return SliceReport(problems=(error.problem(),))
+        return SliceReport(printed=printed, problems=(error.problem(),))
     problems = write_document(piece, target)
     if problems:
         return SliceReport(problems=problems)
-    warnings = tuple(w for _, said in resolved for w in said) + kind_warnings(kinds, held)
-    return SliceReport(str(target), len(nodes), len(edges), warnings)
+    return SliceReport(str(target), len(nodes), len(edges), report.warnings)
 
 
-def _under(document: Mapping[str, Any], prefixes: Collection[str]) -> set[str]:
+def _under(nodes: Mapping[str, Any], prefixes: Collection[str]) -> set[str]:
     """The nodes whose first location's file starts with one of ``prefixes``; each must hold one."""
     starts: set[str] = set()
     for prefix in prefixes:
         under = {
-            node["id"]
-            for node in document["nodes"]
+            node_id
+            for node_id, node in nodes.items()
             if (loc := first_location(node)) and loc["file"].startswith(prefix)
         }
         if not under:
@@ -369,12 +412,11 @@ def _place(rank: int) -> str:
 
 def _piece(
     start: Path,
-    env: Mapping[str, str],
+    index: MapIndex,
+    texts: Mapping[str, Any],
     given: Collection[str],
     prefixes: Collection[str],
-    direction: str,
-    depth: int | None,
-    kinds: Collection[str],
+    walking: _Walking,
     limit: int,
     map_path: Path | None,
     types: Collection[str],
@@ -384,284 +426,402 @@ def _piece(
     searching: bool = True,
     piped: bool = False,
 ) -> SliceReport:
-    """The piece around the start nodes, as rows to print; ``budgeted`` fits it to
-    ``BYTE_LIMIT``, cutting far hops, then the unwalked counts, then names per link, then the
-    nearest rows of the largest piece first.
-
-    Without ``depth``, the first ``DEEP_STARTS`` starts walk ``PRINT_DEPTH`` hops and the rest
-    one hop each.
+    """The slice around the start nodes; ``budgeted`` fits its text to ``BYTE_LIMIT``, leaving
+    out the legend, then the unwalked counts, then names per link, then the farthest things.
+    ``texts`` are the map's edge kind descriptions.
 
     An argument that names a node starts there. The rest is searched as ``find`` searches, as a
     whole and word by word; see ``_starts``. ``types`` and, when there are words, ``prefixes``
     narrow those starts. Without words, each prefix adds the nodes under it.
 
     Unless ``support``, a node in supporting code is not a start, but for one named by its id or
-    when every match is there, and the walk does not print or follow it: each piece counts them.
+    when every match is there, and it is not printed: each piece counts them.
 
     Without ``searching``, each of ``given`` must name a node, and no word is searched.
     """
-    try:
-        document = load_document(start, env, map_path)[1]
-        described, problems = node_descriptions(start, map_path)
-        with reading_fields(start, map_path):
-            index = MapIndex(document, map_path)
-            picked: dict[str, Start] = {}
-            warnings: list[str] = []
-            rest: list[str] = []
-            several = len(_WORD.findall(" ".join(given))) > 1
-            for text in given:
-                try:
-                    node_id, said = resolve(index, text)
-                except NodeNotFound:
-                    if not searching:
-                        raise
-                    rest.append(text)
-                    continue
-                warnings += said
-                picked.setdefault(node_id, Start(_row(index, node_id, described), given=text))
-                if searching and several and _WORD.fullmatch(text):
-                    rest.append(text)
-            words = list(dict.fromkeys(_WORD.findall(" ".join(rest).casefold())))
-            words = [word for word in words if len(word) >= MIN_WORD]
-            whole = " ".join(rest).casefold().strip()
-            queries = list(dict.fromkeys(([whole] if whole and whole not in words else []) + words))
-            matched: dict[str, set[str]] = {}
-            # The words a node holds in its own name, an attribute or its description: a word
-            # only in the id's type or in the owner part before its last ``::`` is not the node's.
-            owned: dict[str, set[str]] = {}
-            weights: dict[str, float] = {}
-            scores: dict[str, float] = {}
-            notes: list[str] = []
-            unpicked = 0
-            search = _Search(index, described)
-            for word in words:
-                hits = search(word, None, ())
-                for match in hits:
-                    matched.setdefault(match[1], set()).add(word)
-                    if match[0] != _OUTSIDE_NAME:
-                        owned.setdefault(match[1], set()).add(word)
-                if hits:
-                    weights[word] = round(math.log(len(index.nodes) / len(hits)), WEIGHT_PLACES)
-            standing = _Standing(index)
-            if queries:
-                wanted, narrowed, noted = find.narrowing(index, types, prefixes)
-                warnings += noted
-                scores = {
-                    node_id: round(sum(weights[w] for w in found_), WEIGHT_PLACES)
-                    for node_id, found_ in owned.items()
-                }
-                rarest = sorted(weights, key=lambda w: (-weights[w], w))
-                found, matches = _starts(
-                    index,
-                    queries,
-                    (wanted, narrowed),
-                    described,
-                    (scores, owned, rarest),
-                    most,
-                    standing,
-                    search,
-                    support,
-                )
-                for node_id, chosen in found.items():
-                    picked.setdefault(node_id, chosen)
-                unpicked = len(set(matches) - set(picked))
-                lone = found and queries[0] == whole and len(queries) > 1
-                if lone and not search(whole, wanted, narrowed):
-                    notes.append(f"no node matches {whole!r} as a whole; started from its words")
-            elif prefixes:
-                under = sorted(_under(document, prefixes))
-                not_supporting = [n for n in under if support or index.supporting(n) is None]
-                for node_id in not_supporting or under:
-                    picked.setdefault(node_id, Start(_row(index, node_id, described)))
-            elif not picked:
-                message = "give some words, an id or a path prefix"
-                return SliceReport(printed=True, problems=(Problem(ExitCode.USAGE, message, {}),))
-            order = list(picked)
-            depths = {
-                s: depth if depth is not None else PRINT_DEPTH if n < DEEP_STARTS else 1
-                for n, s in enumerate(order)
-            }
-            if len(set(depths.values())) > 1:
-                notes.append(
-                    f"walked {PRINT_DEPTH} hops from the first {DEEP_STARTS} starts"
-                    f" and 1 hop from the other {len(order) - DEEP_STARTS}"
-                )
-            deepest = max(depths.values(), default=PRINT_DEPTH if depth is None else depth)
-            grouping = {as_text(k) for k in document.get("grouping_kinds", ())} - set(kinds)
-            alone = bool(types) and not queries
-            only = find.narrowing(index, types, ())[0] if alone else None
-            share = max(1, limit // len(order)) if limit and order else 0
-            hidden: list[tuple[str, str, str]] = []
-            found_members = (
-                _members(index, s, grouping, only, share, standing, None if support else hidden)
-                for s in order
-            )
-            members = [m for m in found_members if m is not None]
-            rows: list[PieceRow] = []
-            deeper, folded, more_forms = False, Counter[str](), dict[str, int]()
-            if not (alone and members):
-                rows, deeper, folded, more_forms = _grow(
-                    index,
-                    depths,
-                    direction,
-                    set(kinds),
-                    standing,
-                    grouping,
-                    None if support else hidden,
-                )
-            left_over = limit - sum(len(m.rows) for m in members) if limit else 0
-            kept = (
-                []
-                if limit and left_over <= 0
-                else _keep(rows, picked, matched, left_over, standing)
-            )
-            held = {edge["kind"] for edge in index.edges}
-            lines = SourceLines(start, map_path)
-            names = Names(index)
-            homes: dict[str, set[str]] = {}
-            for edge in index.edges:
-                if edge["kind"] in grouping and (loc := first_location(index.nodes[edge["from"]])):
-                    homes.setdefault(as_text(loc["file"]), set()).add(as_text(edge["to"]))
+    described, problems = node_descriptions(start, map_path)
+    picked: dict[str, Start] = {}
+    warnings: list[str] = []
+    rest: list[str] = []
+    several = len(_WORD.findall(" ".join(given))) > 1
+    for text in given:
+        try:
+            node_id, said = resolve(index, text)
+        except NodeNotFound:
+            if not searching:
+                raise
+            rest.append(text)
+            continue
+        warnings += said
+        picked.setdefault(node_id, Start(_row(index, node_id, described), given=text))
+        if searching and several and _WORD.fullmatch(text):
+            rest.append(text)
+    words = list(dict.fromkeys(_WORD.findall(" ".join(rest).casefold())))
+    words = [word for word in words if len(word) >= MIN_WORD]
+    whole = " ".join(rest).casefold().strip()
+    queries = list(dict.fromkeys(([whole] if whole and whole not in words else []) + words))
+    # The words a node holds in its own name, an attribute or its description: a word only in
+    # the id's type or in the owner part before its last ``::`` is not the node's.
+    owned: dict[str, set[str]] = {}
+    weights: dict[str, float] = {}
+    notes: list[str] = []
+    unpicked = 0
+    search = _Search(index, described)
+    for word in words:
+        hits = search(word, None, ())
+        for match in hits:
+            if match[0] != _OUTSIDE_NAME:
+                owned.setdefault(match[1], set()).add(word)
+        if hits:
+            weights[word] = round(math.log(len(index.nodes) / len(hits)), WEIGHT_PLACES)
+    standing = _Standing(index)
+    scores: dict[str, float] = {}
+    if queries:
+        wanted, narrowed, noted = find.narrowing(index, types, prefixes)
+        warnings += noted
+        scores = {
+            node_id: round(sum(weights[w] for w in found_), WEIGHT_PLACES)
+            for node_id, found_ in owned.items()
+        }
+        rarest = sorted(weights, key=lambda w: (-weights[w], w))
+        found, matches = _starts(
+            index,
+            queries,
+            (wanted, narrowed),
+            described,
+            (scores, owned, rarest),
+            most,
+            standing,
+            search,
+            support,
+        )
+        for node_id, chosen in found.items():
+            picked.setdefault(node_id, chosen)
+        unpicked = len(set(matches) - set(picked))
+        lone = found and queries[0] == whole and len(queries) > 1
+        if lone and not search(whole, wanted, narrowed):
+            notes.append(f"no node matches {whole!r} as a whole; started from its words")
+    elif prefixes:
+        under = sorted(_under(index.nodes, prefixes))
+        not_supporting = [n for n in under if support or index.supporting(n) is None]
+        for node_id in not_supporting or under:
+            picked.setdefault(node_id, Start(_row(index, node_id, described)))
+    elif not picked:
+        message = "give some words, an id or a path prefix"
+        return SliceReport(printed=True, problems=(Problem(ExitCode.USAGE, message, {}),))
+    order = list(picked)
+    names = Names(index)
+    only = find.narrowing(index, types, ())[0] if types and not queries else None
+    roots = {s: s for s in order}
+    hidden: list[tuple[str, str, str]] = []
 
-            texts = document.get("legend", {}).get("edge_kinds", {})
+    def shown(begun: str, node: str) -> bool:
+        """Whether ``node`` prints; one in supporting code is added to ``hidden`` instead."""
+        pattern = None if support or node in picked else index.supporting(node)
+        if pattern is not None:
+            hidden.append((begun, node, pattern))
+        return pattern is None
 
-            def assemble(
-                chosen: Sequence[int], cap: int, more: bool, cuts: tuple[str, ...], told: bool
-            ) -> SliceReport:
-                shown = [rows[i] for i in chosen]
-                files, inventory, pieces, piece_of = _layout(
-                    index,
-                    names,
-                    standing,
-                    (list(picked), shown, members, grouping, homes),
-                    (lines, described),
-                    (cap, more),
-                    scores,
-                    more_forms,
+    members: list[Members] = []
+    for container in order:
+        if not any(edge["kind"] in index.grouping for edge in index.incoming(container)):
+            continue
+        holding = _held(index, names, container, only)
+        rows = []
+        for member in holding.members:
+            roots.setdefault(member.id, container)
+            if member.id not in picked and shown(container, member.id):
+                rows.append(
+                    PieceRow(
+                        container,
+                        0,
+                        container,
+                        member.kind,
+                        False,
+                        member.id,
+                        member.type,
+                        member.state,
+                        "members",
+                        member.location,
+                    )
                 )
-                pieces = _with_supporting(pieces, piece_of, hidden)
-                shorts = {i: names.short(i) for i in [*picked, *(m.container for m in members)]}
-                shown_kinds = {k.kind for g in files for s in g.subjects for k in s.links}
-                legend = tuple((k, as_text(texts[k])) for k in sorted(shown_kinds) if k in texts)
-                left = [row for i, row in enumerate(rows) if i not in set(chosen)]
-                return SliceReport(
-                    nodes=len({r.id for r in rows} | set(order)),
-                    edges=len(rows),
-                    warnings=tuple(warnings) + kind_warnings(kinds, held),
-                    problems=problems,
-                    printed=True,
-                    starts=begun,
-                    rows=Listing(
-                        tuple(
-                            replace(
-                                r,
-                                source=lines.at(r.location),
-                                description=described.get(r.id),
-                                marks=index.marks(r.id),
-                            )
-                            for r in shown
-                        ),
-                        len(rows),
-                        len(shown),
-                        len(shown) < len(rows),
-                    ),
-                    left_by_hop=dict(sorted(Counter(r.hop for r in left).items())),
-                    left_by_kind=dict(sorted(Counter(r.kind for r in left).items())),
-                    kinds=tuple(sorted({r.kind for r in rows})),
-                    deeper=deeper,
-                    depth=deepest,
-                    direction=direction,
-                    searched=bool(queries),
-                    folded=dict(sorted(folded.items())),
-                    notes=tuple(notes),
-                    members=tuple(members),
-                    files=files,
-                    inventory=inventory,
-                    shorts=shorts,
-                    cuts=cuts,
-                    legend=legend if told else (),
-                    pieces=pieces,
-                    piece_of=piece_of,
-                    unpicked=unpicked,
-                    words=tuple(words or [whole]) if queries else (),
-                    piped=piped,
-                    map_path=None if map_path is None else str(map_path),
-                )
+        members.append(Members(container, len(holding.members), holding.by_type, tuple(rows)))
+    walk_from = list(roots)
+    on = map_flag(map_path)
+    if len(walk_from) == len(order):
+        note = PIPED if piped else f" (pipe in the {len(order)} starts above)"
+    else:
+        note = f" (pipe in the {len(walk_from)} ids it walks from: the starts and their members)"
+    named, walk_note = start_args([names.short(i) for i in walk_from], piped, note)
+    reached, walks, walked = _walk(start, index, walk_from, roots, walking, map_path, named)
+    if isinstance(reached, tuple):
+        return SliceReport(printed=True, problems=reached)
+    warnings += walked
+    raw_note = f" (for each of the {len(walk_from)} ids it walks from)"
+    walks = [
+        replace(
+            w,
+            command=w.command + on + (raw_note if w.raw else walk_note),
+            whole=w.whole + on + (raw_note if w.raw else walk_note),
+        )
+        for w in walks
+    ]
+    held = list(dict.fromkeys([*walk_from, *(r.id for r in reached)]))
+    rows = [r for m in members for r in m.rows] + [r for r in reached if shown(r.start, r.id)]
+    hubs = {r.id: r.hub for r in reached if r.hub is not None}
+    lines = SourceLines(start, map_path)
+    homes: dict[str, set[str]] = {}
+    for edge in index.edges:
+        if edge["kind"] in index.grouping and (loc := first_location(index.nodes[edge["from"]])):
+            homes.setdefault(as_text(loc["file"]), set()).add(as_text(edge["to"]))
+    begun = tuple(
+        replace(
+            s,
+            row=replace(
+                s.row,
+                source=lines.at(s.row.location),
+                supporting=index.supporting(s.row.id) is not None,
+                marks=index.marks(s.row.id),
+            ),
+        )
+        for s in picked.values()
+    )
+    shown_members = tuple(
+        replace(m, rows=tuple(_filled(r, lines, described, index) for r in m.rows)) for m in members
+    )
 
-            begun = tuple(
-                replace(
-                    s,
-                    row=replace(
-                        s.row,
-                        source=lines.at(s.row.location),
-                        supporting=index.supporting(s.row.id) is not None,
-                        marks=index.marks(s.row.id),
-                    ),
-                )
-                for s in picked.values()
-            )
-            members = [
-                replace(
-                    m,
-                    rows=tuple(
-                        replace(
-                            r,
-                            source=lines.at(r.location),
-                            description=described.get(r.id),
-                            marks=index.marks(r.id),
-                        )
-                        for r in m.rows
-                    ),
-                )
-                for m in members
-            ]
-            taking, cap, more, far_cut, near_cut = list(kept), LINK_NAMES, True, 0, 0
-            told = True
-            report = assemble(taking, cap, more, (), told)
-            budget = BYTE_LIMIT if budgeted else 0
-            while budget and len(render_text(report).encode()) > budget:
-                far = [i for i in taking if rows[i].hop > 1]
-                if told and report.legend:
-                    told = False
-                elif far:
-                    taking.remove(max(far, key=lambda i: (rows[i].hop, i)))
-                    far_cut += 1
-                elif more:
-                    more = False
-                elif cap > 1:
-                    cap //= 2
-                elif (near := _near(report, rows, taking)) is not None:
-                    taking.remove(near)
-                    near_cut += 1
-                else:
-                    break
-                parts = [] if told else ["legend left out"]
-                parts += [f"{amount(far_cut, 'row')} past hop 1 left out"] if far_cut else []
-                parts += [] if more else ["the +N more links lines dropped"]
-                parts += [f"at most {cap} names per link"] if cap < LINK_NAMES else []
-                if near_cut:
-                    parts.append(f"{amount(near_cut, 'hop-1 row')} left out, largest piece first")
-                cut_note = f"cut to fit {budget} bytes: {', '.join(parts)}; --limit N prints N rows"
-                on = _on(str(map_path)) if map_path is not None else ""
-                if not told:
-                    cut_note += f"; what a kind means: periplus legend --kind K{on}"
-                if not more or cap < LINK_NAMES:
-                    cut_note += f"; a node's links in full: periplus show NAME --limit 0{on}"
-                report = assemble(taking, cap, more, (cut_note,), told)
-    except HarnessError as error:
-        return SliceReport(printed=True, problems=(error.problem(),))
+    def assemble(
+        taking: int, cap: int, more: bool, cuts: tuple[str, ...], told: bool
+    ) -> SliceReport:
+        kept = rows[:taking]
+        files, inventory, pieces, piece_of = _layout(
+            index,
+            names,
+            standing,
+            (order, kept, index.grouping, homes),
+            (lines, described),
+            (cap, more),
+            scores,
+            hubs,
+        )
+        pieces = _with_supporting(pieces, piece_of, hidden)
+        shorts = {i: names.short(i) for i in [*picked, *(m.container for m in members)]}
+        shown_kinds = {k.kind for g in files for s in g.subjects for k in s.links}
+        legend = tuple((k, as_text(texts[k])) for k in sorted(shown_kinds) if k in texts)
+        left = rows[taking:]
+        return SliceReport(
+            nodes=len(held),
+            edges=len(reached),
+            warnings=tuple(dict.fromkeys(warnings)),
+            problems=problems,
+            printed=True,
+            starts=begun,
+            rows=Listing(
+                tuple(_filled(r, lines, described, index) for r in kept),
+                len(rows),
+                len(kept),
+                len(kept) < len(rows),
+            ),
+            left_by_hop=dict(sorted(Counter(r.hop for r in left).items())),
+            left_by_kind=dict(sorted(Counter(r.kind for r in left).items())),
+            kinds=tuple(sorted({r.kind for r in rows})),
+            deepest=max((r.hop for r in rows), default=0),
+            depth=walking.depth,
+            direction=walking.direction,
+            searched=bool(queries),
+            notes=tuple(notes),
+            members=shown_members,
+            walks=tuple(walks),
+            walk_note=walk_note,
+            files=files,
+            inventory=inventory,
+            shorts=shorts,
+            cuts=cuts,
+            legend=legend if told else (),
+            pieces=pieces,
+            piece_of=piece_of,
+            unpicked=unpicked,
+            words=tuple(words or [whole]) if queries else (),
+            piped=piped,
+            map_path=map_path,
+            held=tuple(held),
+        )
+
+    taking = min(len(rows), limit) if limit else len(rows)
+    cap, more, told, cut = LINK_NAMES, True, True, 0
+    report = assemble(taking, cap, more, (), told)
+    budget = BYTE_LIMIT if budgeted else 0
+    while budget and len(render_text(report).encode()) > budget:
+        if told and report.legend:
+            told = False
+        elif more:
+            more = False
+        elif cap > 1:
+            cap //= 2
+        elif taking:
+            taking -= 1
+            cut += 1
+        else:
+            break
+        parts = [] if told else ["legend left out"]
+        parts += [] if more else ["the +N more links lines dropped"]
+        parts += [f"at most {cap} names per link"] if cap < LINK_NAMES else []
+        parts += [f"{amount(cut, 'thing')} left out, farthest hop first"] if cut else []
+        cut_note = f"cut to fit {budget} bytes: {', '.join(parts)}; --limit N prints N things"
+        if not told:
+            cut_note += f"; what a kind means: periplus legend --kind K{on}"
+        if not more or cap < LINK_NAMES:
+            cut_note += f"; a node's links in full: periplus show NAME --limit 0{on}"
+        report = assemble(taking, cap, more, (cut_note,), told)
     return report
+
+
+def _filled(
+    row: PieceRow, lines: SourceLines, described: Mapping[str, str], index: MapIndex
+) -> PieceRow:
+    """``row`` with its source line, description and marks."""
+    return replace(
+        row,
+        source=lines.at(row.location),
+        description=described.get(row.id),
+        marks=index.marks(row.id),
+    )
+
+
+def _walk(
+    start: Path,
+    index: MapIndex,
+    walk_from: Sequence[str],
+    roots: dict[str, str],
+    walking: _Walking,
+    map_path: Path | None,
+    named: Sequence[str],
+) -> tuple[list[PieceRow] | tuple[Problem, ...], list[Walked], list[str]]:
+    """The things the walks of ``walking`` reach from ``walk_from`` within its depth, each once,
+    by hop, the walk off before the walk by; each walk; and their warnings. Each row hangs under
+    the start whose walk reached it, by ``roots``, which it extends. ``named`` are the ids a
+    command the walk names takes.
+
+    On a map that lists causes, each walk is ``cause_report``'s, as ``neighbors`` and
+    ``affected`` take it. On one that lists none, it is the raw walk those commands fall back
+    to, from each id in turn, and a warning says so. The problems of a walk come back in place
+    of the rows.
+    """
+    if not walk_from:
+        return [], [], []
+    rows: list[PieceRow] = []
+    walks: list[Walked] = []
+    warnings: list[str] = []
+    seen = set(walk_from)
+    for toward in DIRECTIONS[walking.direction]:
+        verb = _WALKS[toward][1]
+        found: list[PieceRow] = []
+        if index.declares_causes:
+            report = cause_report(
+                start,
+                index,
+                walk_from,
+                toward,
+                walking.depth,
+                walking.kinds,
+                0,
+                map_path,
+                walking.hub,
+                walking.through,
+                walking.touch,
+            )
+            if report.problems:
+                return report.problems, [], []
+            warnings += report.warnings
+            last = max((r.hop for r in report.walked), default=0)
+            hops = last if walking.depth is None else min(walking.depth, last)
+            inside = [r for r in report.walked if r.hop <= hops] + list(report.touching)
+            for r in sorted(inside, key=lambda r: (r.hop, r.touch, r.id)):
+                root = roots.setdefault(r.id, roots[r.via])
+                if r.id not in seen:
+                    seen.add(r.id)
+                    found.append(
+                        PieceRow(
+                            root,
+                            r.hop,
+                            r.via,
+                            r.kind,
+                            not r.backward,
+                            r.id,
+                            r.type,
+                            r.state,
+                            toward,
+                            r.location,
+                            hub=r.hub,
+                            touch=r.touch,
+                        )
+                    )
+            walks.append(
+                Walked(
+                    toward,
+                    report.walked,
+                    len(inside),
+                    report.undeclared,
+                    _command(verb, named, walking.depth, walking),
+                    _command(verb, named, None, walking),
+                )
+            )
+        else:
+            levels = len(index.nodes) if walking.depth is None else walking.depth
+            for item in walk_from:
+                raw = walk(index, item, "out" if toward == "off" else "in", levels, walking.kinds)
+                for w in raw:
+                    root = roots.setdefault(w.id, roots.get(w.via, roots[item]))
+                    if w.id not in seen:
+                        seen.add(w.id)
+                        found.append(
+                            PieceRow(
+                                root,
+                                w.depth,
+                                w.via,
+                                w.kind,
+                                toward == "off" and not w.stands_for,
+                                w.id,
+                                w.type,
+                                w.state,
+                                toward,
+                                w.location,
+                            )
+                        )
+            raw_command = _command(verb, ["ID"], walking.depth, walking, raw=True)
+            walks.append(Walked(toward, (), len(found), (), raw_command, raw_command, raw=True))
+            warnings.append(NO_CAUSES)
+        rows += found
+    rows.sort(key=lambda r: (r.hop, r.walk != "off", r.touch, r.id))
+    return rows, walks, warnings
+
+
+def _command(
+    verb: str, named: Sequence[str], depth: int | None, walking: _Walking, raw: bool = False
+) -> str:
+    """The ``neighbors`` or ``affected`` command, ``verb``, that prints a walk of the slice from
+    ``named`` to ``depth`` hops (``None``: all), with the slice's walk options and ``--limit 0``;
+    ``raw`` names the raw walk."""
+    words = ["periplus", verb, *named, *(["--raw"] if raw else [])]
+    words += ["--depth", "all" if depth is None else str(depth)]
+    words += [f for kind in walking.kinds for f in ("--kind", kind)]
+    if not raw:
+        words += ["--hub", str(walking.hub)] if walking.hub != HUB else []
+        words += [f for item in walking.through for f in ("--through", item)]
+        words += ["--touch"] if walking.touch else []
+    words += ["--limit", "0"]
+    return " ".join(shlex.quote(word) for word in words)
 
 
 def _layout(
     index: MapIndex,
     names: Names,
     standing: _Standing,
-    piece: tuple[list[str], list[PieceRow], list[Members], Collection[str], Mapping[str, set[str]]],
+    piece: tuple[list[str], list[PieceRow], Collection[str], Mapping[str, set[str]]],
     reading: tuple[SourceLines, Mapping[str, str]],
     folding: tuple[int, bool],
     scores: Mapping[str, float],
-    more_forms: Mapping[str, int],
+    hubs: Mapping[str, int],
 ) -> tuple[
     tuple[FileGroup, ...],
     tuple[tuple[str, tuple[tuple[str, int], ...]], ...],
@@ -674,19 +834,18 @@ def _layout(
     A piece is a set of the nodes the output names that edges join; see ``_joined``. Pieces go
     by the summed word score, ``scores``, of their starts, highest first,
     then by the things they name, most first, then by their smallest start id. Inside a piece,
-    files go in the order the starts, the rows and the members first reach them; nodes inside a
+    files go in the order the starts and the rows first reach them; nodes inside a
     file by line. A file's header names the containers its nodes belong to by grouping edges,
     ``homes``. A node's links are its edges to other nodes of the piece, by kind and direction,
     a grouping edge from the node to its container left to the header. An edge between two nodes
     of one file prints only at its ``from`` end.
     ``folding`` gives the most names per link and whether to count the edges the piece leaves
-    out. ``more_forms`` counts, by node, the nodes that stand for it past the cap.
+    out. ``hubs`` holds the fan of each node the walk did not go on from.
     """
-    starts, rows, members, grouping, homes = piece
+    starts, rows, grouping, homes = piece
     lines, described = reading
     cap, more = folding
-    held = list(dict.fromkeys([*starts, *(i for r in rows for i in (r.parent, r.id))]))
-    held += [r.id for m in members for r in m.rows if r.id not in held]
+    held = list(dict.fromkeys([*starts, *(r.id for r in rows)]))
     inside = set(held)
     # Each node the output names, and the node it is printed under.
     named: dict[str, str] = {}
@@ -731,7 +890,7 @@ def _layout(
             for edge in edges:
                 far = as_text(edge["to" if outward else "from"])
                 kind = as_text(edge["kind"])
-                if far == node_id or standing.satellite(far) == node_id:
+                if far == node_id:
                     continue
                 if outward and kind in grouping:
                     continue
@@ -765,10 +924,10 @@ def _layout(
                     )
                     if more
                     else (),
-                    more_forms.get(node_id, 0),
                     index.marks(node_id),
                     more
                     and any(k.more or k.owners or k.outside_count > len(k.outside) for k in links),
+                    hubs.get(node_id),
                 ),
             )
         )
@@ -777,7 +936,7 @@ def _layout(
             named.setdefault(container, subject.id)
     for start in starts:
         named.setdefault(start, start)
-    joined = _joined(index, starts, [*rows, *(r for m in members for r in m.rows)], named, grouping)
+    joined = _joined(index, starts, rows, named, grouping)
     groups: dict[tuple[str, str | None], list[Subject]] = {}
     for file, subject in found:
         groups.setdefault((joined[subject.id], file), []).append(subject)
@@ -815,7 +974,7 @@ def _layout(
     pieces = tuple(Piece(held_by[key], things[key]) for key in keys)
     piece_of = {n: number[k] for n, k in joined.items()}
     # A node a row reached that the output does not name goes to the piece of the node above.
-    for row in [*rows, *(r for m in members for r in m.rows)]:
+    for row in rows:
         piece_of.setdefault(row.id, piece_of.get(row.parent, piece_of[row.start]))
     return files, inventory, pieces, piece_of
 
@@ -864,83 +1023,9 @@ def _joined(
     return {n: first[top[n]] for n in named}
 
 
-def _near(report: SliceReport, rows: list[PieceRow], taking: list[int]) -> int | None:
-    """The last row kept of the piece that names the most things, the later piece on a tie,
-    or ``None`` when no row is kept."""
-    piece_of = report.piece_of or {}
-    sizes = sorted(enumerate(report.pieces, 1), key=lambda p: (-p[1].things, -p[0]))
-    for number, _ in sizes:
-        mine = [i for i in taking if piece_of.get(rows[i].id) == number]
-        if mine:
-            return max(mine)
-    return None
-
-
-def _members(
-    index: MapIndex,
-    container: str,
-    grouping: Collection[str],
-    only: set[str] | None,
-    most: int,
-    standing: _Standing,
-    hidden: list[tuple[str, str, str]] | None = None,
-) -> Members | None:
-    """The members of ``container`` by its incoming grouping edges, or ``None`` when it has none.
-
-    With ``hidden``, a member in supporting code is left out and added to it as (container,
-    member, pattern).
-
-    Types go rarest first; inside a type, the member more other files depend on comes first,
-    then the id. Rows are taken one type at a time in turn, up to ``most`` (0 takes them all).
-    ``only`` keeps the members of those types.
-    """
-    if not any(edge["kind"] in grouping for edge in index.incoming(container)):
-        return None
-    by_type: dict[str, list[tuple[Mapping[str, Any], str]]] = {}
-    for edge, member in grouping_.members(index, container, grouping, only):
-        pattern = index.supporting(member) if hidden is not None else None
-        if pattern is not None and hidden is not None:
-            hidden.append((container, member, pattern))
-            continue
-        by_type.setdefault(as_text(index.nodes[member]["type"]), []).append((edge, member))
-    ordered = sorted(by_type, key=lambda t: (standing.rarity(by_type[t][0][1]), t))
-    for kind in ordered:
-        by_type[kind].sort(key=lambda pair: (-standing.depended(pair[1]), pair[1]))
-    rows: list[PieceRow] = []
-    depth = max((len(v) for v in by_type.values()), default=0)
-    for turn in range(depth):
-        for kind in ordered:
-            if turn < len(by_type[kind]) and (not most or len(rows) < most):
-                link, member = by_type[kind][turn]
-                node = index.nodes[member]
-                rows.append(
-                    PieceRow(
-                        container,
-                        1,
-                        container,
-                        as_text(link["kind"]),
-                        False,
-                        member,
-                        kind,
-                        as_text(node["state"]),
-                        False,
-                        where(link, node),
-                    )
-                )
-    counted = {kind: len(by_type[kind]) for kind in ordered}
-    return Members(container, sum(counted.values()), counted, tuple(rows))
-
-
 def _row(index: MapIndex, node_id: str, described: Mapping[str, str]) -> find.FindRow:
     """A start named by its id, as ``find`` shows a row matched by its id."""
     return find.found_row((0, node_id, index.nodes[node_id], None), described)
-
-
-def _satellite(index: MapIndex, node_id: str) -> str | None:
-    """The one other node all of ``node_id``'s edges join it to, when it has two edges or more."""
-    edges = index.outgoing(node_id) + index.incoming(node_id)
-    others = {e["to"] if e["from"] == node_id else e["from"] for e in edges}
-    return others.pop() if len(edges) > 1 and len(others) == 1 and node_id not in others else None
 
 
 class _Search:
@@ -961,21 +1046,13 @@ class _Search:
 
 
 class _Standing:
-    """What the map alone says about a node: how many nodes share its type, how many other
-    files hold nodes with an edge into it, and the node it is a satellite of. Each is counted
-    once per run."""
+    """What the map alone says about a node: how many nodes share its type, and how many other
+    files hold nodes with an edge into it. Each is counted once per run."""
 
     def __init__(self, index: MapIndex) -> None:
         self._index = index
         self._types = Counter(as_text(node["type"]) for node in index.nodes.values())
         self._files: dict[str, int] = {}
-        self._satellites: dict[str, str | None] = {}
-
-    def satellite(self, node_id: str) -> str | None:
-        """``_satellite`` of the node."""
-        if node_id not in self._satellites:
-            self._satellites[node_id] = _satellite(self._index, node_id)
-        return self._satellites[node_id]
 
     def rarity(self, node_id: str) -> int:
         """How many nodes of the map share ``node_id``'s type; fewer is rarer."""
@@ -1086,224 +1163,6 @@ def _starts(
     }, ranked
 
 
-def _keep(
-    rows: list[PieceRow],
-    picked: Mapping[str, Start],
-    matched: Mapping[str, set[str]],
-    limit: int,
-    standing: _Standing,
-) -> list[int]:
-    """The indexes of the rows the cap keeps, in walk order; a limit of 0 keeps them all.
-
-    Rows are taken best first: full rows before back-references, then a node more starts reach,
-    then one reached from starts of more words, then one whose own id, attributes or description
-    more words match, then a rarer type, then a node more other files depend on, then the
-    nearer hop, then the id. A first pass takes rows in that order while each start holds no
-    more than an even share of the cap; a second pass fills the cap with the best rows left.
-    Each row brings the rows above it, and a back-reference the full row it points to; a row
-    whose rows do not fit is passed over.
-    """
-    if not limit or len(rows) <= limit:
-        return list(range(len(rows)))
-    reach: dict[str, set[str]] = {}
-    for row in rows:
-        reach.setdefault(row.id, set()).add(row.start)
-    groups = {
-        node_id: {q for s in starts for q in _queries(picked[s])}
-        for node_id, starts in reach.items()
-    }
-    full = {row.id: i for i, row in enumerate(rows) if not row.again}
-
-    def needs(i: int) -> set[int]:
-        chain: set[int] = set()
-        todo = [i]
-        while todo:
-            j = todo.pop()
-            if j in chain:
-                continue
-            chain.add(j)
-            row = rows[j]
-            todo += [full[n] for n in (row.parent, row.id if row.again else None) if n in full]
-        return chain
-
-    def rank(i: int) -> tuple[bool, int, int, int, int, int, int, str, int]:
-        row = rows[i]
-        return (
-            row.again,
-            -len(reach[row.id]),
-            -len(groups[row.id]),
-            -len(matched.get(row.id, ())),
-            standing.rarity(row.id),
-            -standing.depended(row.id),
-            row.hop,
-            row.id,
-            i,
-        )
-
-    ranked = sorted(range(len(rows)), key=rank)
-    starts = list(dict.fromkeys(row.start for row in rows))
-    share = max(1, limit // len(starts))
-    kept: set[int] = set()
-    taken: Counter[str] = Counter()
-    for i in ranked:
-        new = needs(i) - kept
-        if taken[rows[i].start] + len(new) <= share and len(kept) + len(new) <= limit:
-            taken[rows[i].start] += len(new)
-            kept |= new
-    for i in ranked:
-        new = needs(i) - kept
-        if len(kept) + len(new) <= limit:
-            kept |= new
-    return sorted(kept)
-
-
-def _queries(start: Start) -> set[str]:
-    """The words, or the argument, that picked ``start``."""
-    return {start.given} if start.given is not None else {q for q, _, _ in start.words}
-
-
-def _grow(
-    index: MapIndex,
-    depths: Mapping[str, int],
-    direction: str,
-    kinds: Collection[str],
-    standing: _Standing,
-    grouping: Collection[str] = (),
-    hidden: list[tuple[str, str, str]] | None = None,
-) -> tuple[list[PieceRow], bool, Counter[str], dict[str, int]]:
-    """Every row breadth-first, hop by hop across all starts, each start to its own depth in
-    ``depths``, whether an edge leads on, and the nodes folded into the node above, counted by
-    type.
-
-    Each edge is one row at most. A node first reached is a full row and is followed at the next
-    hop; one reached again is a back-reference. A node all of whose edges join it to the node
-    above, two edges or more, is folded: it makes no row and costs no hop. Edges go in (kind,
-    other end, end) order, so the rows are the same on every run. An edge of a ``grouping``
-    kind is followed only from its member to its container: the container is a row once per
-    start, marked, and the walk does not go on from it. A start, and a node first reached by an
-    edge of a kind that does not realize, brings the nodes that stand for it as rows at its own
-    hop, as ``walk`` does; the last value counts those past the cap, by node. With ``hidden``, a
-    node in supporting code makes no row and is not followed: it is added to ``hidden`` as
-    (start, node, pattern).
-    """
-    ways = {"out": (("to", index.outgoing),), "in": (("from", index.incoming),)}.get(
-        direction, (("to", index.outgoing), ("from", index.incoming))
-    )
-    starts = list(depths)
-    seen = set(starts)
-    used: set[tuple[str, str, str]] = set()
-    rows: list[PieceRow] = []
-    folded: Counter[str] = Counter()
-    boxed: set[tuple[str, str]] = set()
-    more: dict[str, int] = {}
-
-    def hide(begun: str, node: str) -> bool:
-        pattern = index.supporting(node) if hidden is not None else None
-        if pattern is not None and hidden is not None:
-            hidden.append((begun, node, pattern))
-        return pattern is not None
-
-    def stand(begun: str, item: str, hop: int) -> list[str]:
-        found, left = index.stand_ins(item, direction == "in")
-        if left:
-            more[item] = left
-        added = []
-        for other, edge, via in found:
-            if other in seen or hide(begun, other):
-                continue
-            seen.add(other)
-            used.add((edge["from"], edge["kind"], edge["to"]))
-            added.append(other)
-            node = index.nodes[other]
-            rows.append(
-                PieceRow(
-                    begun,
-                    hop,
-                    via,
-                    as_text(edge["kind"]),
-                    edge["from"] == via,
-                    other,
-                    as_text(node["type"]),
-                    as_text(node["state"]),
-                    False,
-                    where(edge, node),
-                )
-            )
-        return added
-
-    frontiers = {s: [s, *stand(s, s, 0)] for s in starts}
-
-    def edges(item: str) -> list[tuple[Mapping[str, Any], str]]:
-        found = [
-            (e, end)
-            for end, follow in ways
-            for e in follow(item)
-            if (not kinds or e["kind"] in kinds)
-            and (e["from"], e["kind"], e["to"]) not in used
-            and not (end == "from" and e["kind"] in grouping)
-        ]
-        return sorted(found, key=lambda p: (p[0]["kind"], p[0][p[1]], p[1]))
-
-    for hop in range(1, max(depths.values(), default=0) + 1):
-        for begun in starts:
-            if hop > depths[begun]:
-                continue
-            reached = []
-            for item in frontiers[begun]:
-                for edge, end in edges(item):
-                    key = (edge["from"], edge["kind"], edge["to"])
-                    if key in used:
-                        continue
-                    target = as_text(edge[end])
-                    node = index.nodes[target]
-                    if target not in seen and hide(begun, target):
-                        continue
-                    if target not in seen and standing.satellite(target) == item:
-                        seen.add(target)
-                        folded[as_text(node["type"])] += 1
-                        used.update(
-                            (e["from"], e["kind"], e["to"])
-                            for e in index.outgoing(target) + index.incoming(target)
-                        )
-                        continue
-                    used.add(key)
-                    container = edge["kind"] in grouping
-                    if container and (begun, target) in boxed:
-                        continue
-                    if container:
-                        boxed.add((begun, target))
-                    again = target in seen
-                    rows.append(
-                        PieceRow(
-                            begun,
-                            hop,
-                            item,
-                            as_text(edge["kind"]),
-                            end == "to",
-                            target,
-                            as_text(node["type"]),
-                            as_text(node["state"]),
-                            again,
-                            where(edge, node),
-                            container=container,
-                        )
-                    )
-                    if not again:
-                        seen.add(target)
-                        if not container:
-                            reached.append(target)
-                            if edge["kind"] not in index.realizing:
-                                reached += stand(begun, target, hop)
-            frontiers[begun] = reached
-    deeper = any(edges(item) for items in frontiers.values() for item in items)
-    return rows, deeper, folded, more
-
-
-def _on(map_path: str | None) -> str:
-    """The ``--map PATH`` a suggested command carries when the run was given one, else empty."""
-    return "" if map_path is None else f" --map {shlex.quote(map_path)}"
-
-
 def _why(start: Start) -> str:
     if start.given is not None:
         return f"given as '{start.given}'"
@@ -1334,22 +1193,22 @@ def _clause(link: Link) -> str:
 
 def _file_lines(group: FileGroup, under: str, on: str) -> list[str]:
     """A file's header, its path below ``under``, then each of its nodes: line, short name,
-    type, source, description, links, and the count of edges the piece leaves out."""
+    type, marks, hub fan, source, description, links, and the count of edges the slice leaves
+    out."""
     header = _escape(group.file[len(under) :]) if group.file is not None else "no file"
     if group.containers:
         header += f"  in {', '.join(_escape(c) for c in group.containers)}"
     lines = ["", header]
     for subject in group.subjects:
         line = "" if subject.line is None else subject.line
+        hub = "" if subject.hub is None else f"  [hub: {subject.hub} links not walked]"
         lines.append(
             f"  :{line}  {_escape(subject.short)}  {_escape(subject.type)}"
-            f"{mark_text(subject.marks)}"
+            f"{mark_text(subject.marks)}{hub}"
         )
         lines += source_line(subject.source)
         lines += description_line(subject.description)
         lines += [f"      {_clause(link)}" for link in subject.links]
-        if subject.more_forms:
-            lines.append(f"    {stand_in_line(subject.short, subject.more_forms)}{_escape(on)}")
         if subject.unwalked:
             total = sum(n for _, _, n in subject.unwalked)
             counted = ", ".join(
@@ -1385,7 +1244,7 @@ def _piece_lines(report: SliceReport, shorts: Mapping[str, str], under: str) -> 
         lines += ["", f"piece {number} of {total}: {things}, starts: {starts}"]
         for group in report.files:
             if group.piece == number:
-                lines += _file_lines(group, under, _on(report.map_path))
+                lines += _file_lines(group, under, map_flag(report.map_path))
         if piece.supporting:
             patterns = ", ".join(_escape(p) for p in piece.patterns)
             lines += [
@@ -1399,31 +1258,50 @@ def _piece_lines(report: SliceReport, shorts: Mapping[str, str], under: str) -> 
             "",
             f"no edge of the map joins these {total} pieces as printed; they may still meet"
             " through nodes not printed, or relate in ways the map does not hold;"
-            f" test two with periplus path {one} {two}{_escape(_on(report.map_path))}",
+            f" test two with periplus path {one} {two}{_escape(map_flag(report.map_path))}",
         ]
     return lines
 
 
 def _member_line(members: Members, short: str, on: str) -> str:
     """A container start's member count by type, and the command that lists them."""
-    counted = ", ".join(f"{_escape(t)} {n}" for t, n in members.by_type.items())
+    counted = ", ".join(f"{_escape(t)} {n}" for t, n in members.by_type)
     return (
         f"members of {_escape(short)}: {members.total} ({counted});"
         f" all: periplus members {_escape(short)}{_escape(on)} (--type T for one type)"
     )
 
 
-def _left_out(report: SliceReport) -> list[str]:
-    """The folded nodes, what the row cap left out, by hop and by kind, and the flags that narrow
-    or deepen."""
+def _walk_lines(report: SliceReport) -> list[str]:
+    """Each walk in a line, as ``neighbors`` and ``affected`` sum theirs up; when the slice holds
+    part of it, how much and the command that prints the whole walk; then the kinds it followed
+    undeclared."""
     lines = []
-    if report.folded:
-        counted = ", ".join(f"{_escape(t)} {n}" for t, n in report.folded.items())
-        lines.append(f"folded into the node above, all their edges joining it: {counted}")
+    for walked in report.walks:
+        label, _ = _WALKS[walked.toward]
+        if walked.raw:
+            lines.append(
+                f"{label:<12}{amount(walked.held, 'thing')} by the raw walk, as the map lists"
+                f" no cause; each: {_escape(walked.command)}"
+            )
+            continue
+        line = summary(label, walked.rows, False)
+        if walked.held < len(walked.rows):
+            hops = "hop 1" if report.depth == 1 else f"hops 1-{report.depth}"
+            line += f"; this slice holds {hops}: {walked.held}; all: {_escape(walked.whole)}"
+        lines.append(line)
+    undeclared = sorted({k for w in report.walks for k in w.undeclared})
+    if undeclared:
+        named = ", ".join(_escape(k) for k in undeclared)
+        lines.append(f"undeclared kinds, walked by raw direction: {named}")
+    return lines
+
+
+def _left_out(report: SliceReport) -> list[str]:
+    """What the cap left out, by hop and by kind, and the flags that narrow."""
     note = footer(report.rows)
     if note is None:
-        lines += [f"go deeper with --depth {report.depth + 1}"] if report.deeper else []
-        return lines + _in_full(report)
+        return []
     hops = ", ".join(f"{hop}: {n}" for hop, n in (report.left_by_hop or {}).items())
     left = report.left_by_kind or {}
     first = sorted(left, key=lambda k: (-left[k], k))[:FOOTER_KINDS]
@@ -1436,11 +1314,11 @@ def _left_out(report: SliceReport) -> list[str]:
     named += f", and {len(here) - FOOTER_KINDS} more" if len(here) > FOOTER_KINDS else ""
     ways = [f"--kind K (kinds here: {named})"]
     if report.direction == "both":
-        ways += ["--direction out", "--direction in"]
-    if report.depth > 1:
-        ways.append(f"--depth {report.depth - 1}")
-    lines += [
-        f"{note} rows",
+        ways += ["--direction off", "--direction by"]
+    if report.deepest > 1:
+        ways.append(f"--depth {report.deepest - 1}")
+    lines = [
+        f"showing {report.rows.shown} of {amount(report.rows.total, 'thing')} past the starts",
         f"left out by hop: {hops}",
         f"left out by kind: {kinds}",
         f"narrow with {', '.join(ways[:-1])} or {ways[-1]}"
@@ -1449,33 +1327,18 @@ def _left_out(report: SliceReport) -> list[str]:
     ]
     if report.searched:
         lines.append("pick other starts with --type T, --path P or --starts N")
-    return lines + _in_full(report)
+    return lines
 
 
 def _in_full(report: SliceReport) -> list[str]:
-    """When the piece left rows out, folded nodes into the node above or left out supporting
-    code, the ``show`` commands that print every edge of each hop: ``show`` on the starts, then
-    each further hop through ``show --ids``."""
-    cut = footer(report.rows) is not None or report.folded
-    if not report.starts or not (cut or any(p.supporting for p in report.pieces)):
+    """When the slice left things out, cut their links or left out supporting code, the
+    commands that print each walk it holds in full; ``show`` prints a thing's links."""
+    cut = footer(report.rows) is not None or bool(report.cuts)
+    if not report.walks or not (cut or any(p.supporting for p in report.pieces)):
         return []
-    shorts = report.shorts or {}
-    starts = [shorts.get(s.row.id, s.row.id) for s in report.starts]
-    told = (
-        " (with the same ids piped into the first command)"
-        if report.piped
-        else f" (pipe the {len(starts)} starts above into the first command)"
-    )
-    named, said = start_args(starts, report.piped, told)
-    on = _escape(_on(report.map_path))
-    first = f"periplus show {' '.join(_escape(n) for n in named)}"
     return [
-        "in full, every edge hop by hop, with what is left out, folded or in supporting code"
-        f"{said}:",
-        *(
-            f"  hop {hop}: {first}{f'{on} --ids | periplus show -' * (hop - 1)} --limit 0{on}"
-            for hop in range(1, report.depth + 1)
-        ),
+        "in full, each part this slice holds:",
+        *(f"  {_WALKS[w.toward][0]} {_escape(w.command)}" for w in report.walks),
     ]
 
 
@@ -1510,7 +1373,7 @@ def render_text(report: SliceReport) -> str:
             )
         if report.unpicked:
             words = ", ".join(_escape(w) for w in report.words)
-            on = _escape(_on(report.map_path))
+            on = _escape(map_flag(report.map_path))
             lines.append(
                 f"+{report.unpicked} more"
                 f" {'node matches' if report.unpicked == 1 else 'nodes match'}"
@@ -1518,9 +1381,10 @@ def render_text(report: SliceReport) -> str:
                 f" each of: {words}; start from any with periplus slice --from ID{on}"
             )
         lines += [
-            _member_line(m, shorts.get(m.container, m.container), _on(report.map_path))
+            _member_line(m, shorts.get(m.container, m.container), map_flag(report.map_path))
             for m in report.members
         ]
+        lines += _walk_lines(report)
         under = _folder(report.files)
         lines += [f"paths under: {_escape(under)}"] if under else []
         lines += _piece_lines(report, shorts, under)
@@ -1535,7 +1399,8 @@ def render_text(report: SliceReport) -> str:
             ]
         lines += _left_out(report)
         lines += [_escape(cut) for cut in report.cuts]
-        lines += _legend_lines(report.legend, _on(report.map_path))
+        lines += _in_full(report)
+        lines += _legend_lines(report.legend, map_flag(report.map_path))
     if report.out is not None:
         lines.append(
             f"wrote {_escape(report.out)}: {amount(report.nodes, 'node')}, "
@@ -1564,24 +1429,30 @@ def _json_row(row: PieceRow, piece_of: Mapping[str, int]) -> dict[str, Any]:
         "from": row.parent,
         "kind": row.kind,
         "direction": "out" if row.outward else "in",
+        "walk": row.walk,
         "id": row.id,
         "type": row.type,
         "state": row.state,
         "marks": list(row.marks),
-        "again": row.again,
         "location": row.location,
         "source": row.source,
         "description": row.description,
-        "container": row.container,
+        "hub": row.hub,
+        "touch": row.touch,
     }
 
 
-def _json_members(members: Members, piece_of: Mapping[str, int]) -> dict[str, Any]:
+def _json_walk(walked: Walked) -> dict[str, Any]:
     return {
-        "container": members.container,
-        "total": members.total,
-        "by_type": dict(members.by_type),
-        "rows": [_json_row(row, piece_of) for row in members.rows],
+        "direction": walked.toward,
+        "raw": walked.raw,
+        "total": len(walked.rows) if not walked.raw else walked.held,
+        "held": walked.held,
+        "last_hop": max((r.hop for r in walked.rows), default=0),
+        "hubs": [r.id for r in walked.rows if r.hub is not None],
+        "undeclared": list(walked.undeclared),
+        "command": walked.command,
+        "all": walked.whole,
     }
 
 
@@ -1601,15 +1472,22 @@ def render_json(report: SliceReport) -> str:
                     }
                     for n, p in enumerate(report.pieces, 1)
                 ],
+                "members": [
+                    {
+                        "container": m.container,
+                        "total": m.total,
+                        "by_type": dict(m.by_type),
+                    }
+                    for m in report.members
+                ],
+                "walks": [_json_walk(w) for w in report.walks],
                 "rows": payload(report.rows, lambda row: _json_row(row, piece_of)),
                 "left_out": {
                     "by_hop": {str(h): n for h, n in (report.left_by_hop or {}).items()},
                     "by_kind": dict(report.left_by_kind or {}),
                 },
-                "deeper": report.deeper,
-                "folded": dict(report.folded or {}),
+                "held": len(report.held),
                 "notes": list(report.notes),
-                "members": [_json_members(m, piece_of) for m in report.members],
                 "depth": report.depth,
                 "direction": report.direction,
                 "warnings": list(report.warnings),
@@ -1624,6 +1502,12 @@ def render_json(report: SliceReport) -> str:
         "problems": [_json_problem(p) for p in report.problems],
     }
     return as_json(document)
+
+
+def listed(report: SliceReport) -> tuple[str, ...]:
+    """The ids ``--ids`` prints: every thing of the result, never cut: the starts, the members of
+    each container start, then what each walk reached within the depth, by hop."""
+    return report.held
 
 
 RENDERERS = {"text": render_text, "json": render_json}

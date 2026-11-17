@@ -1,4 +1,4 @@
-"""How printed slice picks its start nodes from words, and ranks the rows under each start.
+"""How printed slice picks its start nodes from words.
 
 An invented app. Node types by count in the map: t.class 1, t.service 1, t.route 3, t.method 99, of
 which 90 are fillers that make "app" a word most nodes match.
@@ -167,21 +167,6 @@ def test_a_unique_name_among_several_words_is_also_searched_as_a_word(tmp_path: 
 
     assert _ids(_piece(tmp_path / "a", "makeClaim", nodes=nodes)) == [CLAIM]
     assert later in _ids(_piece(tmp_path / "b", "makeClaim", "wishlist", nodes=nodes))
-
-
-def test_rows_are_budgeted_per_start(tmp_path: Path) -> None:
-    report = _piece(tmp_path, "claim_service", "ClaimService::makeClaim", limit=2)
-
-    assert [row.start for row in report.rows.items] == [SERVICE, CLAIM]
-
-
-def test_inside_a_start_a_rarer_type_ranks_before_a_common_one(tmp_path: Path) -> None:
-    callers = [
-        _edge("calls", c, SAVE, 9, file=f) for c, f in ((RUN, "src/a.php"), (GO, "src/b.php"))
-    ]
-    report = _piece(tmp_path, "Store::run", limit=1, edges=[*EDGES, *callers])
-
-    assert [row.id for row in report.rows.items] == [SERVICE]
 
 
 def test_the_rarest_word_has_its_best_node_among_the_starts(tmp_path: Path) -> None:
