@@ -120,7 +120,8 @@ def walk(
     kinds: Collection[str],
     more: dict[str, int] | None = None,
 ) -> list[WalkRow]:
-    """Breadth-first rows, each item once at its nearest depth with the first edge that reached it.
+    """Breadth-first rows, each item once at its nearest depth with the first edge that reached it,
+    along edges (``direction`` ``out``) or against them (``in``).
 
     A layer's items are expanded in id order and each item's edges in (kind, other end) order, so
     the edge that wins a tie is the same on every run. The start and each item reached are
@@ -129,9 +130,7 @@ def walk(
     declaration reached from one of them are siblings, not the code behind it. ``more`` gathers
     the count past the cap by node.
     """
-    ways = {"out": (("to", index.outgoing),), "in": (("from", index.incoming),)}.get(
-        direction, (("to", index.outgoing), ("from", index.incoming))
-    )
+    ways = {"out": (("to", index.outgoing),), "in": (("from", index.incoming),)}[direction]
     seen = {start}
     rows: list[WalkRow] = []
 
