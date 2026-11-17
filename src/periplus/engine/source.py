@@ -62,7 +62,8 @@ def load_data(path: Path, name: str) -> dict[str, Entry]:
 
     Raises ``SourceUnreadable`` for a parse error, bytes that are not UTF-8, a root that is not a
     mapping, a tag outside the YAML core set on a key, a tag in the YAML namespace outside that set
-    on a value, and a key written twice in one mapping. A value with a local tag, one written with
+    on a value, a key that is a mapping or a list, and a key written twice in one mapping. Any
+    scalar key written once is read, the empty one too. A value with a local tag, one written with
     a single ``!``, is read as if untagged: text as its text. The text is composed, never
     constructed, so no tag runs anything.
     """
@@ -109,11 +110,15 @@ def _convert(node: Node, name: str, active: tuple[int, ...]) -> Any:
                     f"{name} line {key.start_mark.line + 1} holds the key tag {key.tag}",
                     {"file": name},
                 )
-            text = str(key.value) if isinstance(key, ScalarNode) else ""
-            if not text or text in mapping:
+            if not isinstance(key, ScalarNode):
                 raise SourceUnreadable(
-                    f"{name} line {key.start_mark.line + 1} writes the key {text!r} twice "
-                    "or uses a key that is not a plain scalar",
+                    f"{name} line {key.start_mark.line + 1} uses a key that is not a scalar",
+                    {"file": name},
+                )
+            text = str(key.value)
+            if text in mapping:
+                raise SourceUnreadable(
+                    f"{name} line {key.start_mark.line + 1} writes the key {text!r} twice",
                     {"file": name},
                 )
             mapping[text] = Entry(_convert(item, name, inside), key.start_mark.line + 1)
