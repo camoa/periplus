@@ -30,16 +30,21 @@ node_types:
 # event as <class>::<CONST>. The use is subscribed or dispatched for a class written through a
 # use statement, dispatched_function for a dispatch in a function, and subscribed_here or
 # dispatched_here for a class of the file's own namespace or self:: and static::, which a map rule
-# keeps only when a mapped class declares that constant.
+# keeps only when a mapped class declares that constant. A listener attribute or tag
+# (event/event_listener.yaml) is <owner>|<method>|<use>|<event as written>, the owner a class or a
+# service, the use listens, listens_derived, tagged or tagged_derived, or <owner>|<method>|<use>
+# with listens_typed or tagged_typed when the event comes from the method's parameter type, and
+# <event>|subscribed_runtime|<class>|<constant as written> for a drupal.runtime_listener, with
+# subscribed_runtime_here for a constant of the file's own namespace.
 - name: drupal.event_use
-  description: "one event key in getSubscribedEvents() or one ->dispatch() call, at its line, kept so map rules can make the event's edges"
+  description: "one event key in getSubscribedEvents(), one listener attribute or tag, or one ->dispatch() call, at its line, kept so map rules can make the event's edges"
   id_namespace: drupal.event_use
   internal: true
 
 edge_kinds:
 - kind: subscribed_by
   cause: from
-  description: "the method listens to that event: getSubscribedEvents() keys it, or it is an on<status> handler of a subclass of HttpExceptionSubscriberBase"
+  description: "the method listens to that event: a getSubscribedEvents() key, an AsEventListener attribute or a kernel.event_listener tag names it, or it is an exception handler"
   from: drupal.event
   to: php.method
 - kind: dispatched_by

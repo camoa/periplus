@@ -1437,7 +1437,7 @@ def test_a_subscribed_by_edge_holds_the_priority_as_written_and_0_when_none_is(
     tmp_path: Path,
 ) -> None:
     """Each form of getSubscribedEvents gives its listener's priority: a number, a negative one, a
-    constant, a value on its own line, and 0 when none is written, as Symfony runs it; the first
+    constant, a value on its own line, and 0 when none is written, as Symfony runs it; each
     listener of a list of lists holds its own. A key outside getSubscribedEvents gives nothing."""
     _plant(tmp_path, PRIORITIES)
     document, _ = _map(tmp_path)
@@ -1455,11 +1455,609 @@ def test_a_subscribed_by_edge_holds_the_priority_as_written_and_0_when_none_is(
         "OrderSubscriber::onPaid": {"priority": "0"},
         "OrderSubscriber::onLocal": {"priority": "0"},
         "PrioritySubscriber::onPaidFirst": {"priority": "-10"},
+        "PrioritySubscriber::onPaidSecond": {"priority": "20"},
         "PrioritySubscriber::onPlacedLate": {"priority": "self::LATE"},
         "PrioritySubscriber::onLocalHigh": {"priority": "50"},
         "PrioritySubscriber::onRequestMax": {"priority": "PHP_INT_MAX"},
         "PrioritySubscriber::onCancelledPlain": {"priority": "0"},
     }
+
+
+LIST_LISTENERS = {
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+
+  const PAID = 'my_module.paid';
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/LocalEvents.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+final class LocalEvents {
+
+  const LOCAL = 'my_module.local';
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/ListSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpKernel\KernelEvents;
+
+class ListSubscriber implements EventSubscriberInterface {
+
+  const MINE = 'my_module.mine';
+
+  public static function getSubscribedEvents() {
+    $events[KernelEvents::RESPONSE] = [['onResponseA', 3], ['onResponseB']];
+    return $events + [
+      OrderEvents::PAID => [['first', 10], ['second'], ['third', -5]],
+      self::MINE => [
+        ['mineFirst'],
+        ['mineSecond', self::LATE],
+      ],
+      LocalEvents::LOCAL => [['localFirst', 1], ['localSecond', 2]],
+      KernelEvents::REQUEST => ['onRequestSingle', 7],
+    ];
+  }
+
+  public function helper() {
+    return [OrderEvents::PAID => [['notA', 1], ['notB', 2]]];
+  }
+
+  public function first() {}
+  public function second() {}
+  public function third() {}
+  public function mineFirst() {}
+  public function mineSecond() {}
+  public function localFirst() {}
+  public function localSecond() {}
+  public function onResponseA() {}
+  public function onResponseB() {}
+  public function onRequestSingle() {}
+  public function notA() {}
+  public function notB() {}
+
+}
+""",
+}
+
+
+ATTRIBUTE_LISTENERS = {
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+
+  const PAID = 'my_module.paid';
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/LocalEvents.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+final class LocalEvents {
+
+  const LOCAL = 'my_module.local';
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/LocalEvent.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Contracts\EventDispatcher\Event;
+
+class LocalEvent extends Event {
+}
+""",
+    str(MODULE / "src/EventSubscriber/MethodListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+use Symfony\Component\HttpKernel\KernelEvents;
+
+class MethodListener {
+
+  const MINE = 'my_module.mine_attr';
+
+  #[AsEventListener(event: OrderEvents::PAID, priority: 20)]
+  public function onPaid($event) {
+  }
+
+  #[AsEventListener(KernelEvents::REQUEST)]
+  public function onRequest(RequestEvent $event) {
+  }
+
+  #[AsEventListener(event: 'kernel.response', priority: -5)]
+  public function onResponse($event) {
+  }
+
+  #[AsEventListener]
+  public function onTyped(RequestEvent $event) {
+  }
+
+  #[AsEventListener(priority: 3)]
+  public function onTypedLocal(?LocalEvent $event): void {
+  }
+
+  #[AsEventListener(event: self::MINE)]
+  public function onMine($event) {
+  }
+
+  #[AsEventListener(event: 'my_module.paid')]
+  public function onPaidByName($event) {
+  }
+
+  #[AsEventListener(priority: 4, event: LocalEvents::LOCAL)]
+  public function onLocal($event) {
+  }
+
+  // #[AsEventListener(event: 'my_module.commented')]
+  #[Hook('cron')]
+  #[AsEventListenerish(event: KernelEvents::REQUEST)]
+  #[EventListener(event: 'kernel.view')]
+  public function notAListener() {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/ClassListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+use Symfony\Component\HttpKernel\KernelEvents;
+
+#[AsEventListener(event: KernelEvents::EXCEPTION, method: 'handle', priority: 9)]
+#[AsEventListener(event: 'kernel.terminate')]
+#[AsEventListener(event: 'my_module.custom_thing', priority: 2)]
+#[AsEventListener(event: OrderEvents::PAID)]
+#[AsEventListener(method: 'onTypedClass')]
+final class ClassListener {
+
+  public function handle($event) {
+  }
+
+  public function onKernelTerminate($event) {
+  }
+
+  public function __invoke($event) {
+  }
+
+  public function onTypedClass(RequestEvent $event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/InvokeListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\HttpKernel\Event\ResponseEvent;
+
+#[AsEventListener]
+class InvokeListener {
+
+  public function __invoke(ResponseEvent $event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/LostListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: 'my_module.lost')]
+class LostListener {
+
+  public function other($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/OwnConstantListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: self::DONE, priority: -1)]
+#[AsEventListener(event: LocalEvents::LOCAL)]
+class OwnConstantListener {
+
+  const DONE = 'my_module.done';
+
+  public function __invoke($event) {
+  }
+
+}
+""",
+}
+
+
+TAG_LISTENERS = {
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+
+  const PAID = 'my_module.paid';
+
+}
+""",
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "my_module.services.yml"): r"""services:
+  my_module.flow_listener:
+    class: Drupal\my_module\EventSubscriber\FlowListener
+    tags:
+      - { name: kernel.event_listener, event: kernel.request, method: onRequest, priority: 12 }
+      - { name: kernel.event_listener, event: my_module.paid, method: onPaid }
+      - { name: kernel.event_listener, event: kernel.response }
+  my_module.block_listener:
+    class: Drupal\my_module\EventSubscriber\BlockListener
+    arguments: ['@current_user']
+    tags:
+      - name: kernel.event_listener
+        event: kernel.exception
+        method: onException
+        priority: -20
+      - name: kernel.event_listener
+        method: onTyped
+  Drupal\my_module\EventSubscriber\KeyListener:
+    tags:
+      - { name: 'kernel.event_listener', event: 'kernel.controller', method: 'onController' }
+  my_module.core_class_listener:
+    class: Drupal\Core\EventSubscriber\SomeCoreListener
+    tags:
+      - { name: kernel.event_listener, event: kernel.view, method: onView }
+  my_module.inherits_listener:
+    class: Drupal\my_module\EventSubscriber\ChildListener
+    tags:
+      - { name: kernel.event_listener, event: kernel.finish_request, method: onRequest }
+  my_module.invoke_listener:
+    class: Drupal\my_module\EventSubscriber\InvokeOnly
+    tags:
+      - { name: kernel.event_listener, event: my_module.thing }
+  my_module.lost_listener:
+    class: Drupal\my_module\EventSubscriber\KeyListener
+    tags:
+      - { name: kernel.event_listener, event: my_module.lost }
+  # A child service with no class of its own.
+  my_module.child_service:
+    parent: my_module.flow_listener
+    tags:
+      - { name: kernel.event_listener, event: kernel.request, method: onChild, priority: 1 }
+  my_module.not_listener:
+    class: Drupal\my_module\EventSubscriber\FlowListener
+    tags:
+      - { name: some_other_tag, event: kernel.request, method: onRequest }
+      - { name: event_subscriber }
+      - name: some_block_tag
+        event: kernel.request
+        method: onRequest
+""",
+    str(MODULE / "src/EventSubscriber/FlowListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class FlowListener {
+
+  public function onRequest($event) {
+  }
+
+  public function onPaid($event) {
+  }
+
+  public function onKernelResponse($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/ChildListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class ChildListener extends FlowListener {
+}
+""",
+    str(MODULE / "src/EventSubscriber/BlockListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\HttpKernel\Event\ViewEvent;
+
+class BlockListener {
+
+  public function onException($event) {
+  }
+
+  public function onTyped(ViewEvent $event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/KeyListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class KeyListener {
+
+  public function onController($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/InvokeOnly.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class InvokeOnly {
+
+  public function __invoke($event) {
+  }
+
+}
+""",
+}
+
+
+EXCEPTION_PRIORITIES = {
+    str(MODULE / "src/EventSubscriber/ChildOfComputedSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class ChildOfComputedSubscriber extends ComputedExceptionSubscriber {
+
+  public function on401($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/ChildOfLiteralSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class ChildOfLiteralSubscriber extends LiteralExceptionSubscriber {
+
+  public function on5xx($event) {
+  }
+
+  public function onJson404($event) {
+  }
+
+  public function onward($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/ComputedExceptionSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase;
+
+class ComputedExceptionSubscriber extends HttpExceptionSubscriberBase {
+
+  protected static function getPriority() {
+    return parent::getPriority() + 1;
+  }
+
+  public function on4xx($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/LiteralExceptionSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase;
+
+class LiteralExceptionSubscriber extends HttpExceptionSubscriberBase {
+
+  protected static function getPriority() {
+    return 75;
+  }
+
+  public function on404($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/NotAnExceptionSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class NotAnExceptionSubscriber {
+
+  protected static function getPriority() {
+    return 5;
+  }
+
+  public function on403($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/OverridingChildSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class OverridingChildSubscriber extends LiteralExceptionSubscriber {
+
+  protected static function getPriority(): int {
+    return -10;
+  }
+
+  public function on410($event) {
+  }
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/PlainExceptionSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase;
+
+class PlainExceptionSubscriber extends HttpExceptionSubscriberBase {
+
+  protected function getHandledFormats() {
+    return ['html'];
+  }
+
+  public function on403($event) {
+  }
+
+}
+""",
+}
+
+
+def _subscribed(document: dict[str, Any]) -> set[tuple[str, str, str | None]]:
+    """Each subscribed_by edge as (event, listener, priority), the module's prefixes cut."""
+    own = "Drupal\\my_module\\EventSubscriber\\"
+    kernel = "Symfony\\Component\\HttpKernel\\"
+    return {
+        (
+            e["from"].removeprefix("drupal.event::").replace(kernel, ""),
+            e["to"].removeprefix("php.method::").replace(own, ""),
+            e.get("attributes", {}).get("priority"),
+        )
+        for e in document["edges"]
+        if e["kind"] == "subscribed_by"
+    }
+
+
+def test_each_listener_of_a_list_of_lists_is_subscribed_with_its_own_priority(
+    tmp_path: Path,
+) -> None:
+    """X::NAME => [['a', 10], ['b'], ['c', -5]] gives every listener its edge, in each key form:
+    a class through use, self::NAME, a class of the file's namespace, and $events[X::NAME] = [...].
+    A list of lists outside getSubscribedEvents gives nothing."""
+    _plant(tmp_path, LIST_LISTENERS)
+    document, report = _map(tmp_path)
+    assert _subscribed(document) == {
+        ("KernelEvents::REQUEST", "ListSubscriber::onRequestSingle", "7"),
+        ("KernelEvents::RESPONSE", "ListSubscriber::onResponseA", "3"),
+        ("KernelEvents::RESPONSE", "ListSubscriber::onResponseB", "0"),
+        ("my_module.local", "ListSubscriber::localFirst", "1"),
+        ("my_module.local", "ListSubscriber::localSecond", "2"),
+        ("my_module.mine", "ListSubscriber::mineFirst", "0"),
+        ("my_module.mine", "ListSubscriber::mineSecond", "self::LATE"),
+        ("my_module.paid", "ListSubscriber::first", "10"),
+        ("my_module.paid", "ListSubscriber::second", "0"),
+        ("my_module.paid", "ListSubscriber::third", "-5"),
+    }
+    assert report.skipped == ()
+
+
+def test_an_as_event_listener_attribute_subscribes_its_method_as_symfony_reads_it(
+    tmp_path: Path,
+) -> None:
+    """On a method: the event by constant, by quoted name or by the first parameter's type, the
+    priority by name. On a class: the method argument, else on<Event> for a quoted event, then
+    __invoke, then the unresolved derived name; a constant event with no method ends at a
+    listener marked resolution runtime; no event reads the method's parameter type. A comment, an
+    attribute of another name and Hook give nothing."""
+    _plant(tmp_path, ATTRIBUTE_LISTENERS)
+    document, report = _map(tmp_path)
+    assert _subscribed(document) == {
+        ("Drupal\\my_module\\EventSubscriber\\LocalEvent", "MethodListener::onTypedLocal", "3"),
+        ("Event\\RequestEvent", "ClassListener::onTypedClass", "0"),
+        ("Event\\RequestEvent", "MethodListener::onTyped", "0"),
+        ("Event\\ResponseEvent", "InvokeListener::__invoke", "0"),
+        ("KernelEvents::EXCEPTION", "ClassListener::handle", "9"),
+        ("KernelEvents::REQUEST", "MethodListener::onRequest", "0"),
+        ("KernelEvents::RESPONSE", "MethodListener::onResponse", "-5"),
+        ("KernelEvents::TERMINATE", "ClassListener::onKernelTerminate", "0"),
+        ("my_module.custom_thing", "ClassListener::__invoke", "2"),
+        ("my_module.done", "OwnConstantListener|self::DONE", "-1"),
+        ("my_module.local", "MethodListener::onLocal", "4"),
+        ("my_module.local", "OwnConstantListener|LocalEvents::LOCAL", "0"),
+        ("my_module.lost", "LostListener::onMyModuleLost", "0"),
+        ("my_module.mine_attr", "MethodListener::onMine", "0"),
+        ("my_module.paid", "ClassListener|OrderEvents::PAID", "0"),
+        ("my_module.paid", "MethodListener::onPaid", "20"),
+        ("my_module.paid", "MethodListener::onPaidByName", "0"),
+    }
+    nodes = {n["id"]: n for n in document["nodes"]}
+    own = "php.method::Drupal\\my_module\\EventSubscriber\\"
+    runtime = nodes[own + "ClassListener|OrderEvents::PAID"]
+    assert (runtime["type"], runtime["attributes"]) == (
+        "drupal.runtime_listener",
+        {"resolution": "runtime"},
+    )
+    assert nodes[own + "LostListener::onMyModuleLost"]["state"] == "unresolved"
+    assert report.skipped == ()
+
+
+def test_a_kernel_event_listener_tag_subscribes_the_service_class_method(tmp_path: Path) -> None:
+    """A tag in the flow or the block form gives its event, a core name meeting its constant, the
+    method on the class or a mapped ancestor, else unresolved, its priority, on<Event> or
+    __invoke with no method, and the parameter's type with no event. A service with no class
+    names the method by its id. A tag of another name gives nothing."""
+    _plant(tmp_path, TAG_LISTENERS)
+    document, report = _map(tmp_path)
+    assert _subscribed(document) == {
+        ("Event\\ViewEvent", "BlockListener::onTyped", "0"),
+        ("KernelEvents::CONTROLLER", "KeyListener::onController", "0"),
+        ("KernelEvents::EXCEPTION", "BlockListener::onException", "-20"),
+        ("KernelEvents::FINISH_REQUEST", "FlowListener::onRequest", "0"),
+        ("KernelEvents::REQUEST", "FlowListener::onRequest", "12"),
+        ("KernelEvents::REQUEST", "my_module.child_service::onChild", "1"),
+        ("KernelEvents::RESPONSE", "FlowListener::onKernelResponse", "0"),
+        ("KernelEvents::VIEW", "Drupal\\Core\\EventSubscriber\\SomeCoreListener::onView", "0"),
+        ("my_module.lost", "KeyListener::onMyModuleLost", "0"),
+        ("my_module.paid", "FlowListener::onPaid", "0"),
+        ("my_module.thing", "InvokeOnly::__invoke", "0"),
+    }
+    assert report.skipped == ()
+
+
+def test_an_inherited_exception_handler_holds_the_priority_get_priority_gives(
+    tmp_path: Path,
+) -> None:
+    """on<status> and on<digit>xx of an HttpExceptionSubscriberBase descendant listen to
+    KernelEvents::EXCEPTION: with the base's 0 when no class of the line declares getPriority(),
+    the nearest literal return otherwise, and no priority when the nearest one computes it.
+    onJson404, onward and a class outside the line give nothing."""
+    _plant(tmp_path, EXCEPTION_PRIORITIES)
+    document, report = _map(tmp_path)
+    assert _subscribed(document) == {
+        ("KernelEvents::EXCEPTION", "ChildOfComputedSubscriber::on401", None),
+        ("KernelEvents::EXCEPTION", "ChildOfLiteralSubscriber::on5xx", "75"),
+        ("KernelEvents::EXCEPTION", "ComputedExceptionSubscriber::on4xx", None),
+        ("KernelEvents::EXCEPTION", "LiteralExceptionSubscriber::on404", "75"),
+        ("KernelEvents::EXCEPTION", "OverridingChildSubscriber::on410", "-10"),
+        ("KernelEvents::EXCEPTION", "PlainExceptionSubscriber::on403", "0"),
+    }
+    assert report.skipped == ()
+
 
 TWIG_EXTENSIONS = {
     str(MODULE / "src/Twig/ShopExtension.php"): r"""<?php

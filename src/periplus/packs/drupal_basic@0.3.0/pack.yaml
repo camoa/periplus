@@ -119,8 +119,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   is itself a list of @names, one level down; a class that extends RouteSubscriberBase or
 #   HttpExceptionSubscriberBase as an event subscriber, and a route subscriber's alters_routes
 #   edge to a drupal.route_alter node marked resolution runtime; each method named on<status> or
-#   on<Format><status>, as on403 or onJson404, of a class that descends from
-#   HttpExceptionSubscriberBase, as an inferred subscribed_by edge from KernelEvents::EXCEPTION;
+#   on<digit>xx, as on403 or on4xx, of a class that descends from HttpExceptionSubscriberBase, as
+#   an inferred subscribed_by edge from KernelEvents::EXCEPTION holding the priority getPriority()
+#   gives: core's 0, or the integer the nearest class of its line that declares it returns;
 # - each constraint plugin's validator class, as a validated_by edge: declared from a validatedBy()
 #   that returns Name::class or the class's full name in single quotes, else inferred from the name
 #   <constraint class>Validator when the map holds it and the constraint class writes no
@@ -138,9 +139,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   Events, as a drupal.event named by the text the constant holds, with a drupal.event_constant
 #   <class>::<CONST> and its names_event edge to it, or named <class>::<CONST> when the mapped file
 #   gives the constant no text; each key of getSubscribedEvents, written X::NAME, self::NAME or
-#   static::NAME, as a subscribed_by edge from the event to the listener method, holding the
-#   listener's priority as written in the edge attribute priority, 0 when none is written, as
-#   Symfony runs it; and each
+#   static::NAME, as a subscribed_by edge from the event to the listener method, each listener of
+#   a list of lists its own, holding the listener's priority as written in the edge attribute
+#   priority, 0 when none is written, as Symfony runs it; the same edge from each AsEventListener
+#   attribute on a method or a class and each kernel.event_listener tag in a services file, its
+#   event a constant, a name, the core constant the table core_event_names gives for a core name,
+#   or the method's parameter type, its method written, or derived as Symfony derives it, or a
+#   drupal.runtime_listener marked resolution runtime when only a constant's text names it
+#   (event/event_listener.yaml); and each
 #   ->dispatch($event, X::NAME) as a dispatched_by edge to the method around it, or a
 #   dispatched_by_function edge to the function around it in a module, install, inc, theme or
 #   profile file, each at the key's line. A key's event is the text its constant holds when a
@@ -334,7 +340,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   template_links_route edge from each template path of that shape.
 # - The subscribed_by edge of an HttpExceptionSubscriberBase descendant reads the method's name
 #   only, not getHandledFormats(), so a method for a format the class does not handle still links.
-#   It holds no priority, which the base class's getPriority() gives at run time.
+#   Its priority is read only from a getPriority() whose body is return <integer>;, so one that
+#   returns a constant or an expression holds no priority.
 #
 # Missing results:
 # - A literal mentions a thing only by its whole id: a name inside another id, such as a view id
@@ -447,13 +454,25 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   constant. A constant read from a parent of the class the key names, or one whose text holds a
 #   backslash, keys its event by the constant and meets no other constant of that text. A
 #   constant written after a comma with no space, as B in const A = 'a',B = 'b';, gets its event
-#   but no names_event edge to it. A listener the map holds no method for gives no edge. Only the first listener of a key is
-#   read. A priority is kept as written, so self::LATE stays a name, not its number.
+#   but no names_event edge to it. A listener the map holds no method for gives no edge. A
+#   priority is kept as written, so self::LATE stays a name, not its number.
 #   dispatch($event)
 #   with no name, the name written first, a first argument four levels of parentheses deep, a
 #   subscriber outside a src folder, and a dispatch in a plain PHP file outside a src folder give
 #   nothing. A method of a class kept in a module file reads as a function of its name. A grouped
 #   use binds no name for these rules.
+# - Drupal core, as of 11.4, registers no listener from an AsEventListener attribute by itself; its
+#   edge holds what the attribute declares. The attribute is read when it stands alone in its
+#   #[...], with arguments that hold no parentheses; a union type gives its first class only. A
+#   class-level attribute or a tag with no event reads the parameter types the map holds, so a
+#   nullable or union type gives no edge, and a method with two class-typed parameters gives an
+#   event for each. A tag is read in a dash item of a services block, not in tags: [{...}]; its
+#   event written !php/const, its dispatcher, and a parent service's class are not read, so a
+#   child service with no class of its own ends at a method named by its id. A name the table
+#   core_event_names does not list, as a contributed module's, is the event of that name, which
+#   meets a subscriber's constant only when a mapped file gives the constant that text; with core
+#   itself in the map, a core name meets the constant, not the text. A derived on<Event> is
+#   matched with the letter case Symfony writes, though PHP finds a method in any case.
 # - A filter or function name that is not a text literal, and an extension that implements
 #   ExtensionInterface without AbstractExtension, give nothing. A filter or function after a hash
 #   in the same print, as {{ {a: 1}|money }}, gives nothing. A template's use edge sits at the
@@ -827,8 +846,8 @@ files:
     # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
     # attachment. The sections are the comments and the strings. The spans kept here are attached,
     # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
-    # subscribed_events, named_function, array_assigned, in_array_list, alter_list, any_function
-    # and switch_body.
+    # subscribed_events, listener_list, own_listener_list, named_function, array_assigned,
+    # in_array_list, alter_list, any_function and switch_body.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
       reader: text
@@ -894,6 +913,15 @@ files:
       - name: subscribed_events
         open: '\b(?<mark>function)\s+getSubscribedEvents\s*\(\s*\)[^{;]*'
         balance: ['{', '}']
+      # A key whose value is a list of listeners, X::NAME => [['a', 10], ['b']] or
+      # $events[X::NAME] = [[...], ...]: key is X::NAME, class X and constant NAME. The second span
+      # is the same key written self::NAME or static::NAME. Read by event/event_subscriber.yaml.
+      - name: listener_list
+        open: '\b(?<key>(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*))\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
+      - name: own_listener_list
+        open: '\b(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
       # The body of a named function or method; function is its name. A closure has no name and
       # opens none, so a match inside one reads the function around it.
       - name: named_function
@@ -964,6 +992,11 @@ files:
       - name: services_block
         open: '(?m)^(?<mark>services):[ \t]*$'
         balance: ['(?!x)x', '(?m)^[A-Za-z_]']
+      # One service of a services block, from its key to the next line indented two spaces or
+      # less that is no comment; service is the key. Read by event/event_listener_tag.yaml.
+      - name: service_entry
+        open: '(?m)^  (?<service>[A-Za-z0-9\\][\w.\\-]*):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^ {0,2}[^\s#]']
       # honeypot.settings' form_settings block, to the next top-level key; read by
       # form/form_protection.yaml.
       - name: honeypot_form_settings
@@ -1036,6 +1069,69 @@ tables:
     translation: string_translation
     typedDataManager: typed_data_manager
     urlGenerator: url_generator
+  # Each event name a constant of an *Events class of Drupal 11.4 core holds, and of Symfony 7.4's
+  # KernelEvents and ConsoleEvents, and that constant, so a listener tag's event: kernel.request
+  # meets the event a subscriber names KernelEvents::REQUEST, which keeps its constant's name
+  # because core is outside the map (event/event_listener_tag.yaml).
+  core_event_names:
+    account.set: Drupal\Core\Session\AccountEvents::SET_USER
+    block_content.get_dependency: Drupal\block_content\BlockContentEvents::BLOCK_CONTENT_GET_DEPENDENCY
+    config.collection_info: Drupal\Core\Config\ConfigCollectionEvents::COLLECTION_INFO
+    config.delete: Drupal\Core\Config\ConfigEvents::DELETE
+    config.delete.collection: Drupal\Core\Config\ConfigCollectionEvents::DELETE_IN_COLLECTION
+    config.importer.import: Drupal\Core\Config\ConfigEvents::IMPORT
+    config.importer.missing_content: Drupal\Core\Config\ConfigEvents::IMPORT_MISSING_CONTENT
+    config.importer.validate: Drupal\Core\Config\ConfigEvents::IMPORT_VALIDATE
+    config.rename: Drupal\Core\Config\ConfigEvents::RENAME
+    config.rename.collection: Drupal\Core\Config\ConfigCollectionEvents::RENAME_IN_COLLECTION
+    config.save: Drupal\Core\Config\ConfigEvents::SAVE
+    config.save.collection: Drupal\Core\Config\ConfigCollectionEvents::SAVE_IN_COLLECTION
+    config.transform.export: Drupal\Core\Config\ConfigEvents::STORAGE_TRANSFORM_EXPORT
+    config.transform.import: Drupal\Core\Config\ConfigEvents::STORAGE_TRANSFORM_IMPORT
+    config_translation.populate_mapper: Drupal\config_translation\Event\ConfigTranslationEvents::POPULATE_MAPPER
+    console.command: Symfony\Component\Console\ConsoleEvents::COMMAND
+    console.error: Symfony\Component\Console\ConsoleEvents::ERROR
+    console.signal: Symfony\Component\Console\ConsoleEvents::SIGNAL
+    console.terminate: Symfony\Component\Console\ConsoleEvents::TERMINATE
+    entity_type.definition.create: Drupal\Core\Entity\EntityTypeEvents::CREATE
+    entity_type.definition.delete: Drupal\Core\Entity\EntityTypeEvents::DELETE
+    entity_type.definition.update: Drupal\Core\Entity\EntityTypeEvents::UPDATE
+    field_storage.definition.create: Drupal\Core\Field\FieldStorageDefinitionEvents::CREATE
+    field_storage.definition.delete: Drupal\Core\Field\FieldStorageDefinitionEvents::DELETE
+    field_storage.definition.update: Drupal\Core\Field\FieldStorageDefinitionEvents::UPDATE
+    jsonapi.resource_type.build: Drupal\jsonapi\ResourceType\ResourceTypeBuildEvents::BUILD
+    kernel.controller: Symfony\Component\HttpKernel\KernelEvents::CONTROLLER
+    kernel.controller_arguments: Symfony\Component\HttpKernel\KernelEvents::CONTROLLER_ARGUMENTS
+    kernel.exception: Symfony\Component\HttpKernel\KernelEvents::EXCEPTION
+    kernel.finish_request: Symfony\Component\HttpKernel\KernelEvents::FINISH_REQUEST
+    kernel.request: Symfony\Component\HttpKernel\KernelEvents::REQUEST
+    kernel.response: Symfony\Component\HttpKernel\KernelEvents::RESPONSE
+    kernel.terminate: Symfony\Component\HttpKernel\KernelEvents::TERMINATE
+    kernel.view: Symfony\Component\HttpKernel\KernelEvents::VIEW
+    language.delete_override: Drupal\language\Config\LanguageConfigOverrideEvents::DELETE_OVERRIDE
+    language.save_override: Drupal\language\Config\LanguageConfigOverrideEvents::SAVE_OVERRIDE
+    locale.save_translation: Drupal\locale\LocaleEvents::SAVE_TRANSLATION
+    migrate.idmap_message: Drupal\migrate\Event\MigrateEvents::IDMAP_MESSAGE
+    migrate.map_delete: Drupal\migrate\Event\MigrateEvents::MAP_DELETE
+    migrate.map_save: Drupal\migrate\Event\MigrateEvents::MAP_SAVE
+    migrate.post_import: Drupal\migrate\Event\MigrateEvents::POST_IMPORT
+    migrate.post_rollback: Drupal\migrate\Event\MigrateEvents::POST_ROLLBACK
+    migrate.post_row_delete: Drupal\migrate\Event\MigrateEvents::POST_ROW_DELETE
+    migrate.post_row_save: Drupal\migrate\Event\MigrateEvents::POST_ROW_SAVE
+    migrate.pre_import: Drupal\migrate\Event\MigrateEvents::PRE_IMPORT
+    migrate.pre_rollback: Drupal\migrate\Event\MigrateEvents::PRE_ROLLBACK
+    migrate.pre_row_delete: Drupal\migrate\Event\MigrateEvents::PRE_ROW_DELETE
+    migrate.pre_row_save: Drupal\migrate\Event\MigrateEvents::PRE_ROW_SAVE
+    prepare_layout: Drupal\layout_builder\LayoutBuilderEvents::PREPARE_LAYOUT
+    render.page_display_variant.select: Drupal\Core\Render\RenderEvents::SELECT_PAGE_DISPLAY_VARIANT
+    routing.route_alter: Drupal\Core\Routing\RoutingEvents::ALTER
+    routing.route_dynamic: Drupal\Core\Routing\RoutingEvents::DYNAMIC
+    routing.route_finished: Drupal\Core\Routing\RoutingEvents::FINISHED
+    routing.static: Drupal\Core\Routing\RoutingEvents::STATIC
+    section_component.build.render_array: Drupal\layout_builder\LayoutBuilderEvents::SECTION_COMPONENT_BUILD_RENDER_ARRAY
+    site.maintenance_mode_request: Drupal\Core\Site\MaintenanceModeEvents::MAINTENANCE_MODE_REQUEST
+    user.flood_blocked_ip: Drupal\user\Event\UserEvents::FLOOD_BLOCKED_IP
+    user.flood_blocked_user: Drupal\user\Event\UserEvents::FLOOD_BLOCKED_USER
   # Each entity class of Drupal 11.4 core by its fully qualified name, and its entity type id. A
   # contributed module's rutter adds its own classes under add_table_rows. The contact module's
   # Message, for contact_message, is not listed.

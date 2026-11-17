@@ -4,8 +4,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # ['method', 10], or $events[X::NAME][] = ['method']. Each key is a subscribed_by edge from the
 # event to that method of the class the file's path names by Drupal's PSR-4 layout, so the rules
 # are inferred and a file outside a src folder gives nothing. Only a key inside the body of
-# getSubscribedEvents counts. The first listener of a key is read; a second, as in
-# X::NAME => [['first', 10], ['second', 0]], gives nothing. Each subscribed_by edge holds the
+# getSubscribedEvents counts. Every listener of a list of lists, as in
+# X::NAME => [['first', 10], ['second']], is read: the first at the key's line, each later one at
+# its own line by the _later rules below. Each subscribed_by edge holds the
 # listener's priority as written, 10 or self::LATE, in the edge attribute priority, and 0 when none
 # is written, the priority Symfony gives such a listener, so a reader compares the listeners of
 # one event on one scale. The _listener twin writes it on its use_names_listener edge, a key of
@@ -110,6 +111,94 @@ rules:
   id:
     template: '{in_subscriber}|{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}'
     normalize: [{replace: '^[^|]*\|', with: ''}]
+  emits: [{edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}]
+  confidence: inferred
+
+# The second and later listeners of a list of lists, X::NAME => [['a', 10], ['b'], ['c', -5]]: each
+# ['method', priority] after a comma inside the key's listener_list span (pack.yaml) is a use of
+# the same shapes as above, at the method's line, so the same map rules make its edge.
+- rule: event_subscribed_use_later
+  reads: file
+  in: [source]
+  match: &later_listener
+    file: '**'
+    filetype: drupal_php_text
+    text: ',\s*\[\s*[''"](?<method>\w+)[''"]\s*(?:,\s*(?<priority>[^\]\[''"=>;,]*?)\s*,?\s*)?\]'
+  values: &later_values
+    in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+    key: {from: {enclosing: listener_list, capture: key}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    class: {from: {enclosing: listener_list, capture: class}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    constant: {from: {enclosing: listener_list, capture: constant}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    own: {from: {enclosing: own_listener_list, capture: constant}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
+  id:
+    template: '{key}|{in_subscriber}|subscribed|{psr4_class}::{method}'
+    resolve: [bound_first_segment]
+    separator: '::'
+    normalize: [{replace: '\|[^|]*\|subscribed\|', with: '|subscribed|'}]
+  line: {capture: method}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: event_subscribed_use_later_listener
+  reads: file
+  in: [source]
+  match: *later_listener
+  values: *later_values
+  id:
+    template: '{key}|{in_subscriber}|subscribed|{psr4_class}::{method}'
+    resolve: [bound_first_segment]
+    separator: '::'
+    normalize: [{replace: '\|[^|]*\|subscribed\|', with: '|subscribed|'}]
+  line: {capture: method}
+  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}]
+  confidence: inferred
+
+- rule: event_subscribed_use_own_class_later
+  reads: file
+  in: [source]
+  match: *later_listener
+  values: *later_values
+  id:
+    template: '{in_subscriber}|{psr4_class}::{own}|subscribed_here|{psr4_class}::{method}'
+    normalize: [{replace: '^[^|]*\|', with: ''}]
+  line: {capture: method}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: event_subscribed_use_own_class_later_listener
+  reads: file
+  in: [source]
+  match: *later_listener
+  values: *later_values
+  id:
+    template: '{in_subscriber}|{psr4_class}::{own}|subscribed_here|{psr4_class}::{method}'
+    normalize: [{replace: '^[^|]*\|', with: ''}]
+  line: {capture: method}
+  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}]
+  confidence: inferred
+
+- rule: event_key_in_namespace_later
+  reads: file
+  in: [source]
+  match: *later_listener
+  values: *later_values
+  id:
+    template: '{in_subscriber}|{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}'
+    normalize: [{replace: '^[^|]*\|', with: ''}]
+  line: {capture: method}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: event_key_in_namespace_later_priority
+  reads: file
+  in: [source]
+  match: *later_listener
+  values: *later_values
+  id:
+    template: '{in_subscriber}|{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}'
+    normalize: [{replace: '^[^|]*\|', with: ''}]
+  line: {capture: method}
   emits: [{edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}]
   confidence: inferred
 

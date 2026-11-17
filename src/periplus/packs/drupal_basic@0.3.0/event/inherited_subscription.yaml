@@ -1,23 +1,98 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A subscriber whose events its base class keys. HttpExceptionSubscriberBase subscribes its own
-# onException to KernelEvents::EXCEPTION, then calls on<status> or on<Format><status>, as on403
-# or onJson404, by a name built at run time. Each such method of a class that descends from the
-# base, through mapped parents, is a subscribed_by edge from the event of that constant. The rule
-# reads the method's name, so it is inferred. A method of that name in a class that does not
-# descend from the base gives nothing, nor does a name such as onward. Another core base that keys
-# its subscriber's events takes its own rule here.
+# onException to KernelEvents::EXCEPTION, then calls on<status>, as on403, or else
+# on<first digit>xx, as on4xx, by a name built at run time. Each such method of a class that
+# descends from the base, through mapped parents, is a subscribed_by edge from the event of that
+# constant. The rule reads the method's name, so it is inferred. A method of that name in a class
+# that does not descend from the base gives nothing, nor does a name such as onward or onJson404.
+# Another core base that keys its subscriber's events takes its own rule here.
+#
+# The edge holds the priority the base keys with static::getPriority(). The base returns 0, as of
+# Drupal core 11.4 (and 10.4 and 11.1 alike), so a class whose line of mapped ancestors declares
+# no getPriority() holds 0. The nearest class of the line that declares one decides: one whose body
+# is return <integer>; holds that integer, and one that computes the value holds no priority.
+
+node_types:
+# A class's own getPriority(), by the class's name, kept so map rules can read its value.
+- name: drupal.priority_override
+  description: "a class's own getPriority(), <class>, read to give its exception handlers their priority"
+  id_namespace: drupal.priority_override
+  internal: true
+
+edge_kinds:
+- kind: priority_declared_by
+  cause: none
+  description: "the class declares that getPriority()"
+  from: drupal.priority_override
+  to: php.class
+- kind: has_literal_priority
+  cause: none
+  description: "a self-link holding the integer that getPriority() returns as written"
+  from: drupal.priority_override
+  to: drupal.priority_override
 
 rules:
+- rule: exception_priority_override
+  reads: file
+  in: [source]
+  match: &priority_override
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bfunction\s+getPriority\s*\(\s*\)'
+  id: {template: '{psr4_class}'}
+  emits: [{node: {type: drupal.priority_override}}]
+  confidence: inferred
+
+- rule: exception_priority_override_class
+  reads: file
+  in: [source]
+  match: *priority_override
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: priority_declared_by, from: this_node, to: {template: '{psr4_class}', types: [php.class]}}}]
+  confidence: inferred
+
+- rule: exception_priority_literal
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bfunction\s+getPriority\s*\(\s*\)\s*(?::\s*\??int\s*)?\{\s*return\s+(?<priority>[+-]?\d+)\s*;\s*\}'
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: has_literal_priority, from: this_node, to: {template: '{psr4_class}', type: drupal.priority_override}, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+# No class of the line declares getPriority(): the base's own value.
 - rule: exception_handler_subscribed_by_base
   reads: map
   match:
     node_type: php.method
-    where: [{id_matches: '^php\.method::(?<class>.+)::on(?:[A-Z][a-z]+)?[1-5]\d\d$'}]
+    where: [{id_matches: '^php\.method::(?<class>.+)::on[1-5](?:\d\d|xx)$'}]
     follow:
     - node: 'php.type::{class}'
     - ancestors: [inherits]
     - edge: inherits
     - id_matches: '^php\.type::Drupal\\Core\\EventSubscriber\\HttpExceptionSubscriberBase$'
-  emits: [{edge: {kind: subscribed_by, from: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION', types: [drupal.event]}, to: this_node}}]
+    unless: [[{node: 'php.type::{class}'}, {ancestors: [inherits]}, {incoming_edge: priority_declared_by}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION', types: [drupal.event]}, to: this_node, attributes: {priority: {template: '0'}}}}]
+  confidence: inferred
+
+# The nearest class of the line that declares getPriority(), the method's own class first, gives
+# its literal; one that computes the value gives no priority capture, so the edge holds none.
+- rule: exception_handler_subscribed_by_override
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<class>.+)::on[1-5](?:\d\d|xx)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - incoming_edge: priority_declared_by
+    - try: [{edge: has_literal_priority}, {edge_attribute: priority}]
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Core\\EventSubscriber\\HttpExceptionSubscriberBase$'
+  emits: [{edge: {kind: subscribed_by, from: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION', types: [drupal.event]}, to: this_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred

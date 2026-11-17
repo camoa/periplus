@@ -248,8 +248,10 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
 A `has_form_handler` or `has_route_provider` edge holds, in the edge attribute `entry`, the key
 under the handler group that names the class, as `edit` or `html`; a class named under two keys
 holds both, under `differs`. A `tagged_as` edge holds its own tag's `applies_to` and `priority`.
-A `subscribed_by` edge from a `getSubscribedEvents()` key holds the listener's `priority` as
-written, as `100` or `self::LATE`, and `0` when none is written, the priority Symfony gives it.
+A `subscribed_by` edge holds the listener's `priority` as written, as `100` or `self::LATE`, and
+`0` when none is written, the priority Symfony gives it: from a `getSubscribedEvents()` key, an
+`#[AsEventListener]` attribute or a `kernel.event_listener` tag. An exception handler holds the
+value `getPriority()` returns, as the next list says.
 
 - `config_provided_by` and `config_provided_by_theme`, from a configuration object to a module
   or a theme: each simple configuration file, one with no top-level `uuid`, names the extension
@@ -361,9 +363,22 @@ written, as `100` or `self::LATE`, and `0` when none is written, the priority Sy
   `dispatched_by_function` in a module file. Each key is read as text, through the spans
   `subscribed_events` and `named_function` and the bindings of `event/use_binding.yaml`, into an
   internal `drupal.event_use` node at its line, and map rules give its edge from the event of the
-  constant's text, else of the constant `<class>::<NAME>`. A method named `on<status>` or
-  `on<Format><status>` of a class that descends from `HttpExceptionSubscriberBase` gets an
-  inferred `subscribed_by` edge from `KernelEvents::EXCEPTION`, read from its name.
+  constant's text, else of the constant `<class>::<NAME>`. Each listener of a list of lists,
+  `X::NAME => [['a', 10], ['b']]`, is read inside the span `listener_list`. A method named
+  `on<status>` or `on<digit>xx` of a class that descends from `HttpExceptionSubscriberBase` gets
+  an inferred `subscribed_by` edge from `KernelEvents::EXCEPTION`, read from its name, holding
+  the priority of the nearest class of its line that declares `getPriority()` with a literal
+  `return`, or core's `0` when none declares it.
+- `subscribed_by` from Symfony's `#[AsEventListener]`, on a method or a class, and from a
+  `kernel.event_listener` tag in a services file (`event/event_listener.yaml`). The event is a
+  class constant, read as a subscriber's key is, a quoted name, or, with none, the class that
+  types the method's first parameter. A name the table `core_event_names` lists, as
+  `kernel.request`, is the event of its core constant, `KernelEvents::REQUEST`, which keeps its
+  constant's name since core is outside the map; any other name is the event of that name. With
+  no method, the name Symfony derives, `on<Event>`, then `__invoke`, then the unresolved derived
+  name; a class-level attribute that names a constant and no method ends at a
+  `drupal.runtime_listener` marked `resolution: runtime`, since only the constant's text names
+  that method. A tag's method is looked up on the service's class and its mapped ancestors.
 - `twig.filter` and `twig.function`, from `new TwigFilter('x')` and `new TwigFunction('x')`,
   written by the short name or as `\Twig\TwigFilter` and `\Twig\TwigFunction`, with or without
   the leading backslash, in a
