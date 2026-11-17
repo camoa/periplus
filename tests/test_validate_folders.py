@@ -187,3 +187,46 @@ def test_two_pinned_siblings_that_give_a_folder_the_same_value_agree(
     for pack in ("t", "u"):
         v_code, v_problems = run(tmp_path, capsys, monkeypatch, "validate", pack)
         assert (v_code, folder_problems(v_problems)) == (0, [])
+
+
+def _named_folder(tmp_path, capsys, monkeypatch, extra: str, depends: str = "[]"):
+    plant(tmp_path, src="./src", in_folder="src")
+    manifest = tmp_path / ".periplus" / "packs" / "t@0.1.0" / "pack.yaml"
+    text = manifest.read_text().replace("depends: []", f"depends: {depends}")
+    manifest.write_text(text + extra)
+    return run(tmp_path, capsys, monkeypatch, "validate", "t")
+
+
+@pytest.mark.parametrize(
+    ("extra", "where", "folder"),
+    [
+        ("folder_candidates:\n  scr: [lib]\n", "folder_candidates", "scr"),
+        ("folder_candidates:\n  src: ['{nope}/src']\n", "folder_candidates", "nope"),
+        ("detect:\n  any_of:\n    - path: '{nope}/a.txt'\n", "the detector path", "nope"),
+    ],
+)
+def test_validate_refuses_a_folder_name_no_pack_it_depends_on_declares(
+    tmp_path, capsys, monkeypatch, extra, where, folder
+):
+    code, problems = _named_folder(tmp_path, capsys, monkeypatch, extra)
+
+    assert code == FOLDER_EXIT
+    assert folder_problems(problems) == [
+        (
+            FOLDER_EXIT,
+            f"t/pack.yaml: {where} names the folder {folder}, which neither t nor a pack it "
+            "depends on declares",
+        )
+    ]
+
+
+def test_validate_takes_a_folder_name_a_dependency_declares(tmp_path, capsys, monkeypatch):
+    extra = "folder_candidates:\n  lib: [src]\ndetect:\n  any_of:\n    - path: '{lib}/a.txt'\n"
+    dependency = tmp_path / ".periplus" / "packs" / "u@0.1.0"
+    dependency.mkdir(parents=True)
+    (dependency / "pack.yaml").write_text(
+        "pack: u\nversion: 0.1.0\ndepends: []\nfolders:\n  lib: ./lib\n"
+    )
+    code, problems = _named_folder(tmp_path, capsys, monkeypatch, extra, depends="[u]")
+
+    assert (code, folder_problems(problems)) == (0, [])

@@ -22,7 +22,7 @@ from periplus.engine.packload import (
     twin_type,
     unexecuted,
 )
-from periplus.engine.select import FileTypes, extended, folder_values, reachable
+from periplus.engine.select import _REFERENCE, FileTypes, extended, folder_values, reachable
 from periplus.engine.source import DATA_READERS
 from periplus.engine.tree import grammar_problems
 from periplus.errors import ExitCode, HarnessError, Problem
@@ -172,6 +172,7 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
         problems.extend(
             _unexecuted_keys(name, MANIFEST_FILENAME, pack.manifest.document, "manifest.")
         )
+        problems.extend(_undeclared_folders(pack, visible, packs))
         seen = set().union(*(attributes[p] for p in visible))
         problems.extend(
             _attribute_writes(name, seen, set().union(*attributes.values()), rule_set, rule_files)
@@ -330,6 +331,44 @@ def _attribute_writes(
                     )
                 )
     return problems
+
+
+def _undeclared_folders(
+    pack: LoadedPack, visible: set[str], packs: Sequence[LoadedPack]
+) -> list[Problem]:
+    """Each folder name the manifest's ``folder_candidates`` or detector paths name, as a key or in
+    braces, that no pack in ``visible``, the pack and those it depends on, declares under
+    ``folders``."""
+    document = pack.manifest.document
+    declared = {
+        str(folder)
+        for other in packs
+        if other.name.pack in visible
+        and isinstance(folders := other.manifest.document.get("folders"), Mapping)
+        for folder in folders
+    }
+    named: list[tuple[str, str]] = []
+    candidates = document.get("folder_candidates")
+    for folder, paths in candidates.items() if isinstance(candidates, Mapping) else ():
+        named.append(("folder_candidates", str(folder)))
+        for path in _strings(paths):
+            named.extend(("folder_candidates", ref) for ref in _REFERENCE.findall(path))
+    detect = document.get("detect")
+    signals = detect.get("any_of") if isinstance(detect, Mapping) else None
+    for signal in signals if isinstance(signals, list) else ():
+        written = signal.get("path") if isinstance(signal, Mapping) else None
+        named.extend(("the detector path", ref) for ref in _REFERENCE.findall(str(written or "")))
+    name = pack.name.pack
+    return [
+        Problem(
+            ExitCode.FOLDER_UNRESOLVED,
+            f"{name}/{MANIFEST_FILENAME}: {where} names the folder {folder}, which neither "
+            f"{name} nor a pack it depends on declares",
+            {"pack": name, "folder": folder},
+        )
+        for where, folder in dict.fromkeys(named)
+        if folder not in declared
+    ]
 
 
 def _documents(pack: LoadedPack) -> list[tuple[str, Mapping[str, Any]]]:

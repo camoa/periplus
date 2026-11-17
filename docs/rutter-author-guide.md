@@ -80,6 +80,10 @@ exists under `folders` in the settings, and prints what it chose. A folder whose
 candidates all miss is printed as `unplaced`. A candidate outside the project is never chosen.
 Only `init` reads this key; `periplus map` reads the settings it wrote.
 
+`periplus validate` refuses, with exit 18, a folder that a `folder_candidates` key, a candidate
+or a detector path names, in braces or as the key, that neither the rutter nor a rutter it
+depends on declares under `folders`.
+
 ## One rule of each shape
 
 A whole-file rule makes one node per file, at line 1. The id comes from a path value, which the
