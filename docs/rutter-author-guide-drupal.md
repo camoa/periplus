@@ -251,12 +251,12 @@ holds both, under `differs`. A `tagged_as` edge holds its own tag's `applies_to`
 A `subscribed_by` edge holds the listener's `priority` as written, as `100` or `self::LATE`, and
 `0` when none is written, the priority Symfony gives it: from a `getSubscribedEvents()` key, an
 `#[AsEventListener]` attribute or a `kernel.event_listener` tag. An exception handler holds the
-value `getPriority()` returns, as the next list says. A tag's or attribute's `dispatcher`, when it
+value `getPriority()` returns, as the next list says, or `computed` when that method computes it. A tag's or attribute's `dispatcher`, when it
 names one, is the edge attribute `dispatcher`, as written; an edge without it is on the main
-`event_dispatcher`. A registration by `->addListener()` or `->addSubscriber()` on an object whose
-type the map does not show holds `receiver: not known to be an event dispatcher`, and one on a
-known event dispatcher `receiver: an event dispatcher`, so an edge two registrations share holds
-each place's value under `differs`.
+`event_dispatcher`. A registration by `->addListener()` or `->addSubscriber()`, and a
+`->dispatch()`, on an object whose type the map does not show holds `receiver: not known to be an
+event dispatcher`, and one on a known event dispatcher `receiver: an event dispatcher`, so an edge
+two calls share holds each place's value under `differs`.
 
 - `config_provided_by` and `config_provided_by_theme`, from a configuration object to a module
   or a theme: each simple configuration file, one with no top-level `uuid`, names the extension
@@ -364,27 +364,46 @@ each place's value under `differs`.
   `*Events`, made by map rules from an internal node per constant and named by the text the
   constant holds, with a `drupal.event_constant` node and a `names_event` edge for each constant
   of that text; `subscribed_by`, from the event to each listener a key of `getSubscribedEvents`
-  names, and `dispatched_by`, to the method around `->dispatch($event, X::NAME)`, or
-  `dispatched_by_function` in a module file. Each key is read as text, through the spans
-  `subscribed_events` and `named_function` and the bindings of `event/use_binding.yaml`, into an
-  internal `drupal.event_use` node at its line, and map rules give its edge from the event of the
-  constant's text, else of the constant `<class>::<NAME>`. A constant read through a class that
+  names, on the class or its nearest mapped ancestor that declares it, else to the unresolved
+  method as written. Each key is read as text, through the spans `subscribed_events` and
+  `named_function` and the bindings of `event/use_binding.yaml`, a grouped `use` among them, into
+  an internal `drupal.event_use` node at its line, and map rules give its edge from the event of
+  the constant's text, else of the constant `<class>::<NAME>`. A constant read through a class that
   inherits it is the declaring class's, found by walking `inherits` and `implements` from the
   class the key names, and a text is read as PHP reads the literal, so `'A\B'` and `'A\\B'` both
-  hold `A\B`. A contributed module's constants are read for their text only, from the folder
-  `contrib_event_source`, when `contrib_module` is on disk. Each listener of a list of lists,
+  hold `A\B`. A contributed module's constants are read for their text only, from a file whose
+  name holds `Event` at any depth of its `src` folder, the folder `contrib_event_source`, when
+  `contrib_module` is on disk. Each listener of a list of lists,
   `X::NAME => [['a', 10], ['b']]`, is read inside the span `listener_list`. A method named
   `on<status>` or `on<digit>xx` of a class that descends from `HttpExceptionSubscriberBase` gets
   an inferred `subscribed_by` edge from `KernelEvents::EXCEPTION`, read from its name, holding
   the priority of the nearest class of its line that declares `getPriority()` with a literal
-  `return`, or core's `0` when none declares it.
+  `return`, `computed` when that one computes it, or core's `0` when none declares it.
+- `dispatched_by`, from an event to the method around a `->dispatch()` call, or
+  `dispatched_by_function` to the function around it (`event/event_dispatch.yaml`). The event is
+  the second argument, read at the call's own level of parentheses through the span `call_paren`,
+  however deep the first argument nests: a constant, read as a subscriber's key is, `parent::NAME`
+  on the class's parent, a quoted name, or a class, `X::class`, `self::class` or `parent::class`.
+  With no second argument, Symfony names the event by the object's class: `new X(...)`, `new self`
+  or `new parent`, a variable a `new X` is assigned to once in the method or function, a
+  parameter typed with a class, or a property of `$this` typed with one or assigned once from such
+  a parameter, as `php_basic` maps them; a typed parameter or property gives its declared class.
+  A name written first, the order of Symfony before 4.3, is read too. A name in a variable or an
+  expression, and an object whose class the map does not show, end at a `drupal.runtime_event`
+  with the runtime mark. The object the call runs on is checked as for `->addListener()`. The
+  method may belong to a class under `src` or to a class kept in a module, install, inc, theme,
+  profile or plain `.php` file, named by the file's namespace.
 - `subscribed_by` from Symfony's `#[AsEventListener]`, on a method or a class, and from a
   `kernel.event_listener` tag in a services file (`event/event_listener.yaml`). The event is a
   class constant, read as a subscriber's key is, a quoted name, or, with none, the class that
   types the method's first parameter, each class of a union of any length, or a class, `X::class`,
   the event of the class's full name, as Symfony names an event dispatched as an object. A tag's
   event written as a container parameter, `'%name%'`, is the value a mapped `parameters` block
-  gives it, else a `drupal.runtime_subscription` with the runtime mark. A name the table
+  gives it, else a `drupal.runtime_subscription` with the runtime mark: Symfony passes the text to
+  the dispatcher's `addListener()` call, which the built container gives the value, and, with no
+  method, derives the method from the text as written, so from the parameter's name. In double
+  quotes, `\\`, `\"` and `\/` read as a backslash, a quote and a slash; a name with any other
+  escape is a runtime registration. A name the table
   `core_event_names` lists, as `kernel.request`, is the event of its core constant,
   `KernelEvents::REQUEST`, which keeps its constant's name since core is outside the map; any
   other name is the event of that name. With no method, the name Symfony derives, `on<Event>`, then
@@ -398,8 +417,11 @@ each place's value under `differs`.
   `AsEventListener, not wired by core`, since Drupal core registers no listener from the attribute.
 - `subscribed_by` and `subscribed_by_function` from a listener registered by a call or by a key the
   subscriber rules do not read (`event/listener_registration.yaml`): `->addListener()`,
-  `->addTag('kernel.event_listener', [...])` in PHP, and a `getSubscribedEvents()` key written as a
-  name or with its namespace; `registers_subscriber` from `->addSubscriber()`. Each is one
+  `->addTag('kernel.event_listener', [...])` in PHP, its event a container parameter read as a
+  tag's is, and a `getSubscribedEvents()` key written as a name or with its namespace;
+  `registers_subscriber` from `->addSubscriber()`. A call in a method of a class kept in a module,
+  install, inc, theme, profile or plain `.php` file is read as one in a class under `src`.
+  `parent::class` is the class the class `extends`, as written there. Each is one
   internal `drupal.event_use` site with edges to its event and its listener's class, joined in the
   map. The map rules read the type of the object a call runs on from the parameter and property
   types `php_basic` maps: an object whose known type is not an event dispatcher gives nothing, and

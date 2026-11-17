@@ -1,171 +1,717 @@
 $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
-# ->dispatch($event, X::NAME): a dispatched_by edge from the event to the method around the call,
-# of the class the file's path names by Drupal's PSR-4 layout, so the rules are inferred. In a
-# module, install, inc, theme or profile file it is a dispatched_by_function edge to the function
-# around the call. A call in a closure counts the named function around it. Each call is an
-# internal drupal.event_use at its line, and X and the event are read as in event_subscriber.yaml:
-# the event of the constant's text when a mapped file declares it with one, on X or the nearest
-# mapped ancestor or interface that declares it, else of the declaring class's constant;
-# X through the file's use statements, as self or static, or in the file's own namespace when a
-# mapped class of that namespace declares the constant. The first argument may hold three levels
-# of parentheses, as new MyEvent(f(g($x))). dispatch($event) with no name, the name written first,
-# a name held in a variable, a call in a plain PHP file outside a src folder, and a call in a
-# method of a class kept in a module file give nothing.
+# ->dispatch(): a dispatched_by edge from the event to the method around the call, or a
+# dispatched_by_function edge to the function around it. The method is one of a class under src,
+# named by Drupal's PSR-4 layout, or of a class a module, install, inc, theme, profile or plain
+# .php file keeps, named by the file's namespace; the function is one of such a file outside a
+# class. A call in a closure counts the named function around it. An .api.php file, a test outside
+# tests/src and any other file give nothing. All inferred.
+#
+# The event, as Symfony names it:
+# - the second argument, read at the call's own level of parentheses however deep the first one
+#   nests (the span call_paren, pack.yaml): a class constant, X::NAME through the file's use
+#   statements, \A\B::NAME or A\B::NAME, self::NAME or static::NAME, a constant of the file's
+#   namespace when a mapped class declares it, each named by the text a mapped file gives the
+#   constant, on X or its nearest mapped ancestor or interface that declares it, else by the
+#   declaring class's constant; parent::NAME the same on the class's parent; a quoted name,
+#   through the table core_event_names for a core name; or a class, X::class, self::class or
+#   parent::class, the event of the class's full name;
+# - with no second argument, the class of the object, as Symfony names it: new X(...) through the
+#   file's use statements or namespace, new self, new static or new parent; a variable of the
+#   method or function a new X assigned once there, or a parameter typed with a class and not
+#   assigned in the body nor named by a closure; or a property of $this typed with a class, or
+#   assigned once from such a parameter. A typed parameter or property gives its declared class:
+#   an object of a subclass passed at run time names its own;
+# - the name written first, the order of Symfony before 4.3, dispatch('name', $event) or
+#   dispatch(X::NAME, $event), read as above; Symfony 5 and later refuse that order.
+# A name held in a variable or written as an expression, an object whose class the map does not
+# show, an anonymous class and parent:: in a class the map does not hold are decided only when the
+# code runs: the edge starts at a drupal.runtime_event <owner>|<expression>~<object>, marked as an
+# unknown boundary.
+#
+# dispatch() is a common method name, so the object the call runs on is read as for addListener
+# (event/listener_registration.yaml): a known type that is not an event dispatcher, PSR-14's
+# among them, gives nothing; a known dispatcher holds receiver: an event dispatcher; and an object
+# of no known type, as a call's result, holds receiver: not known to be an event dispatcher.
+#
+# Each call is an internal drupal.event_use site at its line, <event>|<use>~<object>|<owner>|<key>,
+# the key the call's text from its object, which ties a call's first argument to its second.
+
+node_types:
+- name: drupal.runtime_event
+  description: "an event a ->dispatch() call names only when the code runs, <owner>|<expression>~<object>"
+  parent: drupal.event
+  id_namespace: drupal.runtime_event
+
+edge_kinds:
+- kind: use_typed
+  cause: none
+  description: "a self-link marking a dispatch whose object's class the map shows"
+  from: drupal.event_use
+  to: drupal.event_use
+- kind: use_expression
+  cause: none
+  description: "a self-link on a dispatch's second argument holding it as written, when it is neither a constant, a name nor a class"
+  from: drupal.event_use
+  to: drupal.event_use
+- kind: use_type_ready
+  cause: none
+  description: "a self-link on a dispatch of a variable or property, so its runtime rule reads use_typed one pass later"
+  from: drupal.event_use
+  to: drupal.event_use
 
 rules:
-- rule: event_dispatched_use
+
+# A call's first argument, from its object: a name written first, or the object dispatched.
+- rule: dispatch_first_k
   reads: file
+  line: {capture: call}
   in: [source]
-  match: &event_dispatched_use
+  match: &start
     file: '**'
     filetype: drupal_php_text
-    text: '->dispatch\(\s*(?:[^,()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))+,\s*(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*\)'
-  values:
-    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
-  id: {template: '{key}|dispatched|{psr4_class}::{method}', resolve: [bound_first_segment], separator: '::'}
+    text: '(?=[$-])(?=(?<sig>(?:(?<![\w$>:\\])\$this\s*->\s*\w+\s*|(?<![\w$>:\\])\$\w+\s*)?->\s*dispatch\s*\([^;]{0,240}))(?:(?<![\w$>:\\])(?<rv>\$(?!this\b)\w+)\s*|(?<![\w$>:\\])\$this\s*->\s*(?<rp>\w+)\s*|(?<![\w$>:\\])(?<rt>\$this)\s*)?->\s*(?<call>dispatch)\s*\(\s*(?:(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)|parent::(?<pf>class|[A-Z][A-Z0-9_]*)|(?!parent::)(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class|''(?<en>[^''\\]+)''|"(?<eq>[^"\\$]+)")(?=\s*[,)])|new\s+(?<npar>parent)\b|new\s+(?!(?:class|parent)\b)(?<nc>\\?[A-Za-z_][\w\\]*)(?=\s*[(,)])|(?<ov>\$(?!this\b)\w+)(?=\s*[,)])|\$this\s*->\s*(?<op>\w+)(?=\s*[,)])|(?<oe>(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+?)(?=\s*[,)])|(?<of>[^;]{1,200}?)(?=\s*\)))'
+  values: &start_values
+    fn: &fn {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    in_class: &in_class {from: {enclosing: class_like_body, capture: class}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    fns: &fns {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    # The method around the call, <class>::<method>, of a class under src or kept elsewhere; the
+    # function around it in a file that keeps functions; the owner, either as a node id.
+    m_src: &m_src {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: &m_mod {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: &f_own {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: &meth {template: '{m_src}{m_mod}'}
+    owner: &owner {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    this_class: &this_class {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    here_ns: &here_ns {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    nsv: &nsv {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
+    r_ev: &r_ev {template: '§K{ek}§T{this_class}§O{eo}', normalize: [{replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
+    h_ev: &h_ev {from: {capture: ek}, normalize: [{replace: '^\\.*$', with: ''}]}
+    cls: &cls {template: '§E{ec}§T{this_class}', normalize: [{replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
+    en_all: &en_all {template: '{en}{eq}'}
+    pform: &pform {template: '§{pf}§{npar}', normalize: [{replace: '^§§parent$', with: 'class'}, {replace: '^§class§$', with: 'class'}, {replace: '^§', with: 'c:'}, {replace: '§$', with: ''}]}
+    # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this, x for any
+    # other, as a call's result.
+    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}', normalize: [{replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
+    key: {from: {capture: sig}, normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+    # n# before the key of a name, so no second argument of the call takes it back.
+    named: {template: '§{pf}§{npar}§{key}', normalize: [{replace: '^§§[^§]+§', with: ''}, {replace: '^§[^§]*§§', with: 'n#'}]}
+    unknown: {template: '{oe}{of}', normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+    ncls: {template: '§E{nc}§T{this_class}', normalize: [{replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
+  id: {template: '{r_ev}|disp~{recv}|{owner}|n#{key}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-- rule: event_dispatched_use_listener
+- rule: dispatch_first_k_event
   reads: file
+  line: {capture: call}
   in: [source]
-  match: *event_dispatched_use
-  values:
-    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
-  id: {template: '{key}|dispatched|{psr4_class}::{method}', resolve: [bound_first_segment], separator: '::'}
-  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}}}]
+  match: *start
+  values: *start_values
+  id: {template: '{r_ev}|disp~{recv}|{owner}|n#{key}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{r_ev}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::', types: [drupal.event_text]}}}]
   confidence: inferred
 
-- rule: event_dispatched_use_in_function
+- rule: dispatch_first_q
   reads: file
+  line: {capture: call}
   in: [source]
-  match: &event_dispatched_use_in_function
-    file: '**'
-    filetype: drupal_php_text
-    ending: [module, install, inc, theme, profile]
-    text: '->dispatch\(\s*(?:[^,()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))+,\s*(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*\)'
-  values:
-    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
-    in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    function: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
-  id: {template: '{key}|dispatched_function|{function}', resolve: [bound_first_segment], separator: '::'}
+  match: *start
+  values: *start_values
+  id: {template: '{r_ev}|disp~{recv}|{owner}|n#{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '\'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-- rule: event_dispatched_use_in_function_listener
+- rule: dispatch_first_q_event
   reads: file
+  line: {capture: call}
   in: [source]
-  match: *event_dispatched_use_in_function
-  values:
-    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
-    in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    function: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
-  id: {template: '{key}|dispatched_function|{function}', resolve: [bound_first_segment], separator: '::'}
-  emits: [{edge: {kind: use_names_function, from: this_node, to: {template: '{function}', types: [php.function]}}}]
+  match: *start
+  values: *start_values
+  id: {template: '{r_ev}|disp~{recv}|{owner}|n#{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '\'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{r_ev}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '\', types: [drupal.event_text]}}}]
   confidence: inferred
 
-- rule: event_dispatched_use_own_class
+- rule: dispatch_first_h
   reads: file
+  line: {capture: call}
   in: [source]
-  match: &event_dispatched_use_own_class
-    file: '**'
-    filetype: drupal_php_text
-    text: '->dispatch\(\s*(?:[^,()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))+,\s*(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*\)'
-  values:
-    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
-  id: {template: '{psr4_class}::{constant}|dispatched_here|{psr4_class}::{method}'}
+  match: *start
+  values: *start_values
+  id: {template: '{here_ns}{h_ev}|disp_here~{recv}|{owner}|n#{key}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-- rule: event_dispatched_use_own_class_listener
+- rule: dispatch_first_h_event
   reads: file
+  line: {capture: call}
   in: [source]
-  match: *event_dispatched_use_own_class
-  values:
-    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
-  id: {template: '{psr4_class}::{constant}|dispatched_here|{psr4_class}::{method}'}
-  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}}}]
+  match: *start
+  values: *start_values
+  id: {template: '{here_ns}{h_ev}|disp_here~{recv}|{owner}|n#{key}'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{here_ns}{h_ev}', types: [drupal.event_text]}}}]
   confidence: inferred
 
-- rule: event_dispatch_in_namespace
+- rule: dispatch_first_n
   reads: file
+  line: {capture: call}
   in: [source]
-  match:
-    file: '**'
-    filetype: drupal_php_text
-    text: '->dispatch\(\s*(?:[^,()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))+,\s*(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*)\s*\)'
-  values:
-    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
-  id: {template: '{psr4_namespace}{class}::{constant}|dispatched_here|{psr4_class}::{method}'}
+  match: *start
+  values: *start_values
+  id: {template: '{en_all}|disp~{recv}|{owner}|n#{key}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-- rule: event_dispatched_by_text
-  reads: map
-  match:
-    node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched(?:_here)?\|(?<listener>[^|]+)$'}]
-    follow:
-    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
-    - node: 'drupal.class_constant::{event}'
-    - edge: has_constant_text
-    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
-    - node: 'php.method::{listener}'
-  emits: [{edge: {kind: dispatched_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node}}]
+- rule: dispatch_first_n_event
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{en_all}|disp~{recv}|{owner}|n#{key}'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{en_all}', resolve: [{lookup_last_segment_in: core_event_names}, as_written], separator: ' ', types: [drupal.event]}}}]
   confidence: inferred
 
-# untexted is captured only where no mapped file gives the constant a text.
-- rule: event_dispatched_by_constant
-  reads: map
-  match:
-    node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched\|(?<listener>[^|]+)$'}]
-    follow:
-    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
-    - try: [{node: 'drupal.class_constant::{event}'}, {edge: has_constant_text}]
-    - id_matches: '^(?:drupal\.constant_text::|drupal\.(?:event_use|class_constant)::(?<untexted>))'
-    - node: 'php.method::{listener}'
-  emits: [{edge: {kind: dispatched_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node}}]
+- rule: dispatch_first_c
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{ec}::class|disp~{recv}|{owner}|n#{key}'}
+  emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-- rule: event_dispatched_in_namespace
-  reads: map
-  match:
-    node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched_here\|(?<listener>[^|]+)$'}]
-    follow:
-    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
-    - node: 'drupal.class_constant::{event}'
-    - try: [{edge: has_constant_text}]
-    - id_matches: '^(?:drupal\.constant_text::|drupal\.class_constant::(?<untexted>))'
-    - node: 'php.method::{listener}'
-  emits: [{edge: {kind: dispatched_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node}}]
+- rule: dispatch_first_c_event
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{ec}::class|disp~{recv}|{owner}|n#{key}'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{cls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: nsv}, as_written], separator: '\', types: [drupal.event_text]}}}]
   confidence: inferred
 
-- rule: event_dispatched_by_function_text
-  reads: map
-  match:
-    node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched_function\|(?<listener>[^|]+)$'}]
-    follow:
-    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
-    - node: 'drupal.class_constant::{event}'
-    - edge: has_constant_text
-    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
-    - node: 'php.function::{listener}'
-  emits: [{edge: {kind: dispatched_by_function, from: {template: '{text}', types: [drupal.event]}, to: matched_node}}]
+# parent::NAME or parent::class written first, or new parent dispatched.
+- rule: dispatch_first_parent
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{this_class}::{pform}|disp_parent~{recv}|{owner}|{named}'}
+  emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-- rule: event_dispatched_by_function_constant
+# new X(...) dispatched: the event of X's full name.
+- rule: dispatch_object_new
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{nc}::new|disp~{recv}|{owner}|{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: dispatch_object_new_event
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{nc}::new|disp~{recv}|{owner}|{key}'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{ncls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: nsv}, as_written], separator: '\', types: [drupal.event_text]}}}]
+  confidence: inferred
+
+- rule: dispatch_object_variable
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{ov}|disp_var~{recv}|{owner}|{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: dispatch_object_property
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '$this->{op}|disp_prop~{recv}|{owner}|{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: dispatch_object_runtime
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *start
+  values: *start_values
+  id: {template: '{unknown}|disp_rt~{recv}|{owner}|{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+# A call's second argument: a comma at the call's own level of parentheses, the innermost
+# call_paren span around it being the call's. A call whose first argument is a name gives none.
+- rule: dispatch_second_k
+  reads: file
+  in: [source]
+  match: &second
+    file: '**'
+    filetype: drupal_php_text
+    text: ',\s*(?:(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)|parent::(?<pf>class|[A-Z][A-Z0-9_]*)|(?!parent::)(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class|''(?<en>[^''\\]+)''|"(?<eq>[^"\\$]+)")(?=\s*\)))'
+  values: &second_values
+    fn: *fn
+    in_class: *in_class
+    fns: *fns
+    m_src: *m_src
+    m_mod: *m_mod
+    f_own: *f_own
+    meth: *meth
+    owner: *owner
+    this_class: *this_class
+    here_ns: *here_ns
+    nsv: *nsv
+    r_ev: *r_ev
+    h_ev: *h_ev
+    cls: *cls
+    en_all: *en_all
+    pform: {template: '§{pf}§', normalize: [{replace: '^§class§$', with: 'class'}, {replace: '^§', with: 'c:'}, {replace: '§$', with: ''}]}
+    # The innermost call_paren around the comma, empty unless it is a dispatch call's own, and
+    # empty for a call whose first argument is a name.
+    top: {from: {enclosing: call_paren, capture: k}, join: '§§', normalize: [{replace: '^[\s\S]*§§', with: ''}, {replace: '^\($', with: ''}]}
+    call2: {template: '{top}', normalize: [{replace: '^[\s\S]*?->\s*dispatch\s*\(\s*(?:\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*|''[^'']*''|"[^"]*")\s*[,)][\s\S]*$', with: ''}]}
+    recv: {template: '{call2}', normalize: [{replace: '->\s*dispatch\s*\([\s\S]*$', with: '¤'}, {replace: '\s+', with: ''}, {replace: '^¤$', with: 'x'}, {replace: '¤$', with: ''}, {replace: '^\$this->', with: 'p:'}, {replace: '^\$this$', with: 't'}, {replace: '^\$', with: 'v:'}]}
+    key: {template: '{call2}', normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+  id: {template: '{r_ev}|disp~{recv}|{owner}|n#{key}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: dispatch_second_k_event
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{r_ev}|disp~{recv}|{owner}|n#{key}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{r_ev}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::', types: [drupal.event_text]}}}]
+  confidence: inferred
+
+- rule: dispatch_second_q
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{r_ev}|disp~{recv}|{owner}|n#{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '\'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: dispatch_second_q_event
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{r_ev}|disp~{recv}|{owner}|n#{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '\'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{r_ev}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '\', types: [drupal.event_text]}}}]
+  confidence: inferred
+
+- rule: dispatch_second_h
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{here_ns}{h_ev}|disp_here~{recv}|{owner}|n#{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: dispatch_second_h_event
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{here_ns}{h_ev}|disp_here~{recv}|{owner}|n#{key}'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{here_ns}{h_ev}', types: [drupal.event_text]}}}]
+  confidence: inferred
+
+- rule: dispatch_second_n
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{en_all}|disp~{recv}|{owner}|n#{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: dispatch_second_n_event
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{en_all}|disp~{recv}|{owner}|n#{key}'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{en_all}', resolve: [{lookup_last_segment_in: core_event_names}, as_written], separator: ' ', types: [drupal.event]}}}]
+  confidence: inferred
+
+- rule: dispatch_second_c
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{ec}::class|disp~{recv}|{owner}|n#{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: dispatch_second_c_event
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{ec}::class|disp~{recv}|{owner}|n#{key}'}
+  emits: [{edge: {kind: use_names_event, from: this_node, to: {template: '{cls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: nsv}, as_written], separator: '\', types: [drupal.event_text]}}}]
+  confidence: inferred
+
+- rule: dispatch_second_parent
+  reads: file
+  in: [source]
+  match: *second
+  values: *second_values
+  id: {template: '{this_class}::{pform}|disp_parent~{recv}|{owner}|n#{key}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+# Any second argument: a self-link on a marker keyed by the call's text, which takes the object of
+# the first argument back from naming the event, holding the argument as written when it is
+# neither a constant, a name nor a class, so the map rules give the runtime event. Only the
+# innermost call_paren span is read here, as this pattern meets nearly every last argument of a
+# call.
+- rule: dispatch_second_expression
+  reads: file
+  in: [source]
+  match: &second_any
+    file: '**'
+    filetype: drupal_php_text
+    text: ',\s*(?:(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)|parent::(?<pf>class|[A-Z][A-Z0-9_]*)|(?!parent::)(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class|''(?<en>[^''\\]+)''|"(?<eq>[^"\\$]+)")(?=\s*\))|(?<ex>(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+?)(?=\s*\))|(?<ey>[^;,]{1,200}?)(?=\s*\)))'
+  values: &second_any_values
+    top: {from: {enclosing: call_paren, capture: k}, join: '§§', normalize: [{replace: '^[\s\S]*§§', with: ''}, {replace: '^\($', with: ''}]}
+    call2: {template: '{top}', normalize: [{replace: '^[\s\S]*?->\s*dispatch\s*\(\s*(?:\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*|''[^'']*''|"[^"]*")\s*[,)][\s\S]*$', with: ''}]}
+    key: {template: '{call2}', normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+    unknown: {template: '{ex}{ey}', normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+  id: {template: 'has2|{key}'}
+  emits: [{edge: {kind: use_expression, from: this_node, to: {template: 'has2|{key}', type: drupal.event_use}, attributes: {expression: {template: '{unknown}'}}}}]
+  confidence: inferred
+
+# The map rules: each site's event, named by the text a mapped file gives a constant, from the
+# method or function around the call, with what is known of the object it runs on.
+- rule: dispatched_by_named
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched_function\|(?<listener>[^|]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::[^|]*\|disp~[^|]*\|(?<owner>php\.method::[^|]+)\|(?<rest>.*)$'}]
+    follow: &named_event
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - edge: use_names_event
+    - id_matches: '^drupal\.event::(?<ev>.+)$'
+    - try: [{id_matches: '^drupal\.event::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)$'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
+    - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - node: '{owner}'
+    unless: &has_second [[{node: 'drupal.event_use::has2|{rest}'}]]
+  emits:
+  - &by_unknown {edge: {kind: dispatched_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}
+  - &by_dispatcher {edge: {kind: dispatched_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}
+  confidence: inferred
+
+- rule: dispatched_by_function_named
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::[^|]*\|disp~[^|]*\|(?<owner>php\.function::[^|]+)\|(?<rest>.*)$'}]
+    follow: *named_event
+    unless: *has_second
+  emits:
+  - &fn_unknown {edge: {kind: dispatched_by_function, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}
+  - &fn_dispatcher {edge: {kind: dispatched_by_function, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}
+  confidence: inferred
+
+# A constant of the file's own namespace: only when a mapped class declares it.
+- rule: dispatched_by_here
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::[^|]*\|disp_here~[^|]*\|(?<owner>php\.method::[^|]+)\|(?<rest>.*)$'}]
+    follow: &here_event
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - edge: use_names_event
+    - id_matches: '^drupal\.event::(?<ev>.+)$'
+    - try: [{id_matches: '^drupal\.event::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)$'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
+    - node: 'drupal.class_constant::{ev}'
+    - try: [{edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - node: '{owner}'
+  emits: [*by_unknown, *by_dispatcher]
+  confidence: inferred
+
+- rule: dispatched_by_function_here
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::[^|]*\|disp_here~[^|]*\|(?<owner>php\.function::[^|]+)\|(?<rest>.*)$'}]
+    follow: *here_event
+  emits: [*fn_unknown, *fn_dispatcher]
+  confidence: inferred
+
+# parent::class or new parent: the class's parent, which a class the map holds names by extends.
+- rule: dispatched_by_parent_class
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<child>[^|]+)::class\|disp_parent~[^|]*\|(?<owner>php\.method::[^|]+)\|(?<rest>.*)$'}]
     follow:
-    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
-    - try: [{node: 'drupal.class_constant::{event}'}, {edge: has_constant_text}]
-    - id_matches: '^(?:drupal\.constant_text::|drupal\.(?:event_use|class_constant)::(?<untexted>))'
-    - node: 'php.function::{listener}'
-  emits: [{edge: {kind: dispatched_by_function, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node}}]
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - node: 'php.type::{child}'
+    - edge: inherits
+    - id_matches: '^php\.type::(?<ev>.+)$'
+    - node: '{owner}'
+    unless: *has_second
+  emits: [*by_unknown, *by_dispatcher]
+  confidence: inferred
+
+# parent::NAME: that constant on the parent or its nearest mapped ancestor or interface that
+# declares it, named by its text when a mapped file gives one, else by the declaring constant.
+- rule: dispatched_by_parent_constant
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<child>[^|]+)::c:(?<cn>[A-Z][A-Z0-9_]*)\|disp_parent~[^|]*\|(?<owner>php\.method::[^|]+)\|(?<rest>.*)$'}]
+    follow:
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - node: 'php.type::{child}'
+    - edge: inherits
+    - id_matches: '^php\.type::(?<cd>.+)$'
+    - try: [{ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}]
+    - try: [{node: 'drupal.class_constant::{cd}::{cn}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<text>.+)$'}]
+    - id_matches: '^(?:drupal\.constant_text::|(?<untexted>))'
+    - node: '{owner}'
+    unless: *has_second
+  emits:
+  - {edge: {kind: dispatched_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node, attributes: {receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}
+  - {edge: {kind: dispatched_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node, attributes: {receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}
+  - {edge: {kind: dispatched_by, from: {template: '{cd}::{cn}{untexted}', types: [drupal.event]}, to: matched_node, attributes: {receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}
+  - {edge: {kind: dispatched_by, from: {template: '{cd}::{cn}{untexted}', types: [drupal.event]}, to: matched_node, attributes: {receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}
+  confidence: inferred
+
+# The object's class, with no second argument: a new X assigned once to the variable in the method
+# or function; a parameter typed with a class, not assigned in the body nor named by a closure;
+# a property of $this typed with a class on the class or its nearest ancestor, or assigned once
+# from such a parameter. Each also marks its site use_typed, which the runtime rules read.
+- rule: dispatched_by_local_new
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::\$(?<var>\w+)\|disp_var~[^|]*\|(?<owner>php\.method::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    follow: &local_new
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - node: 'php.local_variable::{holder}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
+    - edge: local_value_typed_as
+    - id_matches: '^php\.local_type::[^:]+::\$\w+::\\?(?<ev>[A-Za-z_][\w\\]*)$'
+    - node: '{owner}'
+    unless: *has_second
+    unless_matched: &another_value [[{node: 'php.local_variable::{holder}::${var}'}, {edge: local_assigned}, {id_matches: '(?s)^php\.local_value::(?!{value}$)'}]]
+  emits: [*by_unknown, *by_dispatcher, &typed {edge: {kind: use_typed, from: this_node, to: this_node}}]
+  confidence: inferred
+
+- rule: dispatched_by_function_local_new
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::\$(?<var>\w+)\|disp_var~[^|]*\|(?<owner>php\.function::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    follow: *local_new
+    unless: *has_second
+    unless_matched: *another_value
+  emits: [*fn_unknown, *fn_dispatcher, *typed]
+  confidence: inferred
+
+- rule: dispatched_by_typed_parameter
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::\$(?<var>\w+)\|disp_var~[^|]*\|(?<owner>php\.method::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    follow: &typed_parameter
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - node: 'php.parameter::{holder}::${var}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::.*::\$\w+::\\?(?<ev>[A-Za-z_][\w\\]*)$'
+    - node: '{owner}'
+    unless: &not_parameter
+    - [{node: 'drupal.event_use::has2|{rest}'}]
+    - [{node: 'php.local_variable::{holder}::${var}'}]
+    - [{node: 'drupal.closure_parameter::{holder}::${var}'}]
+  emits: [*by_unknown, *by_dispatcher, *typed]
+  confidence: inferred
+
+- rule: dispatched_by_function_typed_parameter
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::\$(?<var>\w+)\|disp_var~[^|]*\|(?<owner>php\.function::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    follow: *typed_parameter
+    unless: *not_parameter
+  emits: [*fn_unknown, *fn_dispatcher, *typed]
+  confidence: inferred
+
+- rule: dispatched_by_typed_property
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::\$this->(?<member>\w+)\|disp_prop~[^|]*\|(?<owner>php\.method::(?<class>[^|]+)::\w+)\|(?<rest>.*)$'}]
+    follow:
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.property::{declarer}::${member}'
+    - edge: property_typed_as
+    - id_matches: '^php\.property_type::.*::\$\w+::\\?(?<ev>[A-Za-z_][\w\\]*)$'
+    - node: '{owner}'
+    unless: *has_second
+  emits: [*by_unknown, *by_dispatcher, *typed]
+  confidence: inferred
+
+- rule: dispatched_by_assigned_property
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::\$this->(?<member>\w+)\|disp_prop~[^|]*\|(?<owner>php\.method::(?<class>[^|]+)::\w+)\|(?<rest>.*)$'}]
+    follow:
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.member_assignment::{declarer}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
+    - node: 'php.parameter::{declarer}::{setter}::${parameter}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::.*::\$\w+::\\?(?<ev>[A-Za-z_][\w\\]*)$'
+    - node: '{owner}'
+    unless: *has_second
+    unless_matched:
+    - [{node: 'php.property::{declarer}::${member}'}, {edge: property_typed_as}]
+    - [{node: 'php.member_assignment::{declarer}::$this->{member}'}, {edge: assigned_value}, {id_matches: '^php\.member_assignment_value::[^:]+::(?:(?!{setter}::)[^:]+::\$this->\w+=|[^:]+::\$this->\w+=(?!\${parameter}$))'}]
+  emits: [*by_unknown, *by_dispatcher, *typed]
+  confidence: inferred
+
+# What only the running code names: a name held in a variable or written as an expression, any
+# other object, and a variable or property whose class the rules above do not give. A variable's
+# or property's site is marked use_type_ready in one pass and read in the next, when use_typed
+# shows whether a rule above gave its class.
+- rule: dispatch_type_ready
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::[^|]*\|disp_(?:var|prop)~'}]
+  emits: [{edge: {kind: use_type_ready, from: this_node, to: this_node}}]
+  confidence: inferred
+
+- rule: dispatched_at_runtime
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<expr>[^|]*)\|disp_rt~(?<recv>[^|]*)\|(?<owner>php\.method::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    follow: &runtime_event
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - node: '{owner}'
+    unless: *has_second
+  emits:
+  - &rt_unknown {edge: {kind: dispatched_by, from: {template: '{holder}|{expr}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}
+  - &rt_dispatcher {edge: {kind: dispatched_by, from: {template: '{holder}|{expr}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}
+  confidence: inferred
+
+- rule: dispatched_by_function_at_runtime
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<expr>[^|]*)\|disp_rt~(?<recv>[^|]*)\|(?<owner>php\.function::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    follow: *runtime_event
+    unless: *has_second
+  emits:
+  - &rt_fn_unknown {edge: {kind: dispatched_by_function, from: {template: '{holder}|{expr}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}
+  - &rt_fn_dispatcher {edge: {kind: dispatched_by_function, from: {template: '{holder}|{expr}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}
+  confidence: inferred
+
+# A second argument written as an expression or a variable: read from the site of the first, which
+# knows the object the call runs on and the method or function around it.
+- rule: dispatched_by_expression_at_runtime
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::[^|]*\|disp(?:_rt|_var|_prop|_parent)?~(?<recv>[^|]*)\|(?<owner>php\.method::(?<holder>[^|]+))\|(?<rest>(?!n#).*)$'}]
+    follow: &expression_event
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - node: 'drupal.event_use::has2|{rest}'
+    - edge: use_expression
+    - edge_attribute: expression
+    - node: '{owner}'
+  emits:
+  - {edge: {kind: dispatched_by, from: {template: '{holder}|{expression}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}
+  - {edge: {kind: dispatched_by, from: {template: '{holder}|{expression}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}
+  confidence: inferred
+
+- rule: dispatched_by_function_expression_at_runtime
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::[^|]*\|disp(?:_rt|_var|_prop|_parent)?~(?<recv>[^|]*)\|(?<owner>php\.function::(?<holder>[^|]+))\|(?<rest>(?!n#).*)$'}]
+    follow: *expression_event
+  emits:
+  - {edge: {kind: dispatched_by_function, from: {template: '{holder}|{expression}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}
+  - {edge: {kind: dispatched_by_function, from: {template: '{holder}|{expression}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}
+  confidence: inferred
+
+- rule: dispatched_untyped_at_runtime
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<expr>[^|]*)\|disp_(?:var|prop)~(?<recv>[^|]*)\|(?<owner>php\.method::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    follow: &untyped_event
+    - edge: use_type_ready
+    - try: [{edge: use_on_dispatcher}, {id_matches: '(?<on_dispatcher>)'}]
+    - try: [{edge: use_by_method_name}, {id_matches: '(?<by_name>)'}]
+    - node: '{owner}'
+    unless: &typed_or_second [[{node: 'drupal.event_use::has2|{rest}'}], [{edge: use_typed}]]
+  emits: [*rt_unknown, *rt_dispatcher]
+  confidence: inferred
+
+- rule: dispatched_by_function_untyped_at_runtime
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<expr>[^|]*)\|disp_var~(?<recv>[^|]*)\|(?<owner>php\.function::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    follow: *untyped_event
+    unless: *typed_or_second
+  emits: [*rt_fn_unknown, *rt_fn_dispatcher]
+  confidence: inferred
+
+# parent:: in a class the map holds no parent for.
+- rule: dispatched_by_unknown_parent
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<child>[^|]+)::(?<form>class|c:[A-Z][A-Z0-9_]*)\|disp_parent~(?<recv>[^|]*)\|(?<owner>php\.method::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    follow: *runtime_event
+    unless: [[{node: 'drupal.event_use::has2|{rest}'}], [{node: 'php.type::{child}'}, {edge: inherits}]]
+  emits:
+  - {edge: {kind: dispatched_by, from: {template: '{holder}|parent::{form}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}
+  - {edge: {kind: dispatched_by, from: {template: '{holder}|parent::{form}~{recv}', types: [drupal.runtime_event], on_miss: unknown_boundary}, to: matched_node, attributes: {receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}
   confidence: inferred

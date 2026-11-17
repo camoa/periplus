@@ -28,11 +28,11 @@ node_types:
   description: "a constant that a class, interface or enum declares, as <class>::<NAME>"
   id_namespace: drupal.class_constant
   internal: true
-# A subscription or a dispatch, at the line of its event's key: <event>|<use>|<listener>, the
-# event as <class>::<CONST>. The use is subscribed or dispatched for a class written through a
-# use statement, dispatched_function for a dispatch in a function, and subscribed_here or
-# dispatched_here for a class of the file's own namespace or self:: and static::, which a map rule
-# keeps only when a mapped class declares that constant. A listener attribute or tag
+# A subscription, at the line of its event's key: <event>|<use>|<listener>, the event as
+# <class>::<CONST>. The use is subscribed for a class written through a use statement, and
+# subscribed_here for a class of the file's own namespace or self:: and static::, which a map rule
+# keeps only when a mapped class declares that constant. A ->dispatch() call is
+# <event>|<use>~<object>|<owner>|<key> (event/event_dispatch.yaml). A listener attribute or tag
 # (event/event_listener.yaml) is <owner>|<method>|<use>|<event as written>, the owner a class or a
 # service, the use listens, listens_derived, tagged or tagged_derived, or <owner>|<method>|<use>
 # with listens_typed or tagged_typed when the event comes from the method's parameter type, and
@@ -51,14 +51,14 @@ edge_kinds:
   to: php.method
 - kind: dispatched_by
   cause: to
-  description: "the method dispatches that event, by ->dispatch($event, X::NAME)"
+  description: "the method dispatches that event, by ->dispatch()"
   from: drupal.event
   to: php.method
-# A text rule builds its to end from the kind's types, which must share one id namespace, so a
-# dispatch in a function has its own kind.
+# An end built from the kind's types must share one id namespace, so a dispatch in a function has
+# its own kind.
 - kind: dispatched_by_function
   cause: to
-  description: "the function dispatches that event, by ->dispatch($event, X::NAME) in a module, install, inc, theme or profile file"
+  description: "the function dispatches that event, by ->dispatch() in a file outside src"
   from: drupal.event
   to: php.function
 - kind: names_event
@@ -76,21 +76,17 @@ edge_kinds:
   description: "the constant text could be that event's name; read from const declarations as text, and kept out of the written map"
   from: drupal.constant_text
   to: drupal.event
-# A use's listener, so a listener no mapped file declares stays in the map as a referenced end.
+# A use's listener, so a listener no mapped file declares stays in the map as an end, unresolved
+# for a getSubscribedEvents() key.
 - kind: use_names_listener
   cause: none
-  description: "the subscription or dispatch names that method, the listener or the method that dispatches"
+  description: "the subscription names that method, its listener"
   from: drupal.event_use
   to: php.method
-# A key's priority, on the key itself, for a key of the file's own namespace, whose listener has
-# no use_names_listener edge.
+# A key's priority, on the key itself, which the map rules read when the key's use_names_listener
+# edge is taken back, as for a method a mapped ancestor declares.
 - kind: use_has_priority
   cause: none
   description: "a self-link holding the subscription's priority"
   from: drupal.event_use
   to: drupal.event_use
-- kind: use_names_function
-  cause: none
-  description: "the dispatch sits in that function"
-  from: drupal.event_use
-  to: php.function

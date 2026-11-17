@@ -16,7 +16,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # no mapped file gives the text, a drupal.runtime_listener <service>|<constant> marked as an
 # unknown boundary. An event written as a container parameter, '%name%', is the value a mapped
 # parameters block gives it, as the rules below say. The event is the name as written, in double
-# quotes \\ read as one backslash: one the table core_event_names lists, as kernel.request, is the
+# quotes \\, \" and \/ read as a backslash, a quote and a slash; a double-quoted name with any
+# other escape, as "a\tb", holds a character no event name holds and is a runtime registration of
+# the service, a drupal.runtime_subscription <service>|"<name as written>". One the table
+# core_event_names lists, as kernel.request, is the
 # event of its core constant, as a subscriber's KernelEvents::REQUEST is; any other, as
 # my_module.paid, or a class's full name, as Drupal\my_module\Event\Paid, the name of an event
 # dispatched as an object, is the event of that name, which a mapped constant of that text also
@@ -103,15 +106,17 @@ rules:
   match: &listener_tag
     file: '*.services'
     filetype: drupal_yml_text
-    text: '(?m)(?:^(?<ind>[ \t]*)-(?:[ \t]+(?![ \t])|(?=\n))|(?<=[\[,])[ \t]*(?=\{))(?=(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?name:[ \t]*[''"]?(?<tag>kernel\.event_listener)[''"]?[ \t]*(?:[,}#]|$))(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?event:[ \t]*(?:!php/const[ \t]+(?<event_const>\\?[\w\\]+::[A-Z][A-Z0-9_]*)|[''"]?%(?<event_param>[^%''",}\s#]+)%[''"]?(?=[ \t]*(?:[,}#]|$))|(?<event_quote>[''"]?)(?<event_raw>(?!!)[^''",}\s#]+)))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?method:[ \t]*[''"]?(?<method>\w+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?priority:[ \t]*[''"]?(?<priority>[+-]?[\w:\\]+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?dispatcher:[ \t]*[''"]?(?<dispatcher>[^''",}\s#]+))?)'
+    text: '(?m)(?:^(?<ind>[ \t]*)-(?:[ \t]+(?![ \t])|(?=\n))|(?<=[\[,])[ \t]*(?=\{))(?=(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?name:[ \t]*[''"]?(?<tag>kernel\.event_listener)[''"]?[ \t]*(?:[,}#]|$))(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?event:[ \t]*(?:!php/const[ \t]+(?<event_const>\\?[\w\\]+::[A-Z][A-Z0-9_]*)|[''"]?%(?<event_param>[^%''",}\s#]+)%[''"]?(?=[ \t]*(?:[,}#]|$))|"(?<event_esc>(?:[^"\\\n]|\\[\\"/])*\\[^\\"/\n](?:[^"\\\n]|\\[^\n])*)"(?=[ \t]*(?:[,}#]|$))|"(?<event_dq>(?:[^"\\\n]|\\[\\"/])*\\[\\"/](?:[^"\\\n]|\\[\\"/])*)"(?=[ \t]*(?:[,}#]|$))|(?<event_quote>[''"]?)(?<event_raw>(?!!)[^''",}\s#]+)))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?method:[ \t]*[''"]?(?<method>\w+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?priority:[ \t]*[''"]?(?<priority>[+-]?[\w:\\]+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?dispatcher:[ \t]*[''"]?(?<dispatcher>[^''",}\s#]+))?)'
   values: &tag_values
-    # The event as YAML reads it: in double quotes \\ is one backslash.
-    event: {template: '{event_raw}§{event_quote}', normalize: [{replace: '\\\\(?=[^§]*§"$)', with: '¤'}, {replace: '¤', with: '\'}, {replace: '§[''"]?$', with: ''}]}
+    # The event as YAML reads it: in double quotes \\ is one backslash, and \" and \/ a quote
+    # and a slash. Any other escape gives a character no event name holds, and is read below as a
+    # runtime registration.
+    event: {template: '{event_raw}{event_dq}§{event_quote}§{event_dq}', normalize: [{replace: '\\\\(?=[^§]*§"§$)', with: '¤'}, {replace: '\\\\(?=[^§]*§§.)', with: '¤'}, {replace: '\\"(?=[^§]*§§.)', with: '"'}, {replace: '\\/(?=[^§]*§§.)', with: '/'}, {replace: '¤', with: '\'}, {replace: '§[''"]?§[\s\S]*$', with: ''}]}
     in_services: {from: {enclosing: services_block, capture: mark}}
     service: {from: {enclosing: service_entry, capture: service}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
     no_method: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
-    no_event: {template: '{tag}|{event_raw}{event_const}{event_param}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
+    no_event: {template: '{tag}|{event_raw}{event_dq}{event_esc}{event_const}{event_param}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
     econst: {from: {capture: event_const}, normalize: [{replace: '^\\', with: ''}]}
     disp: {from: {capture: dispatcher}}
     typed_method: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: '__invoke'}, {replace: '^[^|]*\|', with: ''}]}
@@ -150,6 +155,28 @@ rules:
     derived_lower: {template: '{tag}|{event}', normalize: *camelize, case: lower}
   id: {template: '{in_services}|{service}|{method}|tagged|{event}', normalize: [{replace: '^services\|', with: ''}]}
   emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+# A double-quoted event with an escape other than \\, \" and \/, as "a\tb", names an event
+# whose text holds a character no event name holds; the built container alone knows it.
+- rule: listener_tag_escaped
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|"{event_esc}"', normalize: [{replace: '^services\|', with: ''}]}
+  emits:
+  - node: {type: drupal.runtime_subscription}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: listener_tag_escaped_from
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|"{event_esc}"', normalize: [{replace: '^services\|', with: ''}]}
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{service}', types: [drupal.service]}, to: this_node}}]
   confidence: declared
 
 - rule: listener_tag_event
@@ -431,8 +458,11 @@ rules:
 
 # An event written as a container parameter, event: '%my_module.event%', is the text the services
 # file's parameters block gives that parameter, read by the rule below, when one mapped file gives
-# it one literal value; the event is named as a tag's quoted event is, and with no method the method
-# is the one Symfony derives from that text. A parameter no mapped file gives a value, or that two
+# it one literal value; the event is named as a tag's quoted event is. Symfony's
+# RegisterListenersPass reads the tag as written and passes '%name%' on to the dispatcher's
+# addListener call, whose argument the built container replaces with the parameter's value; with
+# no method, the pass derives the method from the text as written, so from the parameter's name,
+# on<Name>, then __invoke. A parameter no mapped file gives a value, or that two
 # give different values, is decided when the container is built: the tag is then a
 # drupal.runtime_subscription <service>|%<parameter>%, marked resolution: runtime, with a
 # registers_listener_at_runtime edge from the service.
@@ -448,8 +478,10 @@ rules:
     # '' is a quote in single quotes, before the first §; \\ a backslash and \" a quote in double
     # quotes, between the two.
     text: {template: '{single}§{double}§{plain}', normalize: [{replace: '''''(?=[^§]*§[^§]*§)', with: ''''}, {replace: '\\\\(?=[^§]*§[^§]*$)', with: '¤'}, {replace: '\\"(?=[^§]*§[^§]*$)', with: '"'}, {replace: '¤', with: '\'}, {replace: '§', with: ''}]}
+    # Symfony derives the method from the tag's text as written, %name%, before the container
+    # gives the parameter its value, so from the parameter's name.
     derived:
-      template: '{text}'
+      template: '{name}'
       normalize:
       - {replace: '(?:^|(?<=[^A-Za-z0-9]))a', with: 'A'}
       - {replace: '(?:^|(?<=[^A-Za-z0-9]))b', with: 'B'}
@@ -903,8 +935,10 @@ rules:
     derived_lower: {template: '{tag}|{text}', normalize: *camelize, case: lower}
     ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
     # An event written as a class, X::class, as written, and the class for the event's end.
-    class_ev: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!(?!parent::)\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class$).*$', with: ''}]}
-    cls: {template: '{tag}|{class_ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '::class$', with: ''}, {replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
+    class_ev: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class$).*$', with: ''}]}
+    # parent::class is the class the attribute's class extends, as written.
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    cls: {template: '{tag}|{class_ev}§P{parent_cls}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '::class(?=§P)', with: ''}, {replace: '^parent§P', with: ''}, {replace: '§P.*$', with: ''}, {replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
   id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: declared

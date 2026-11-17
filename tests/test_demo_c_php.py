@@ -294,3 +294,52 @@ def test_functions_php_reports_as_internal_make_no_node_and_a_declared_function_
     assert functions == ["php.function::App\\caller", "php.function::App\\own"]
     assert _calls(document) == {("php.function::App\\caller", "php.function::App\\own"): [own_call]}
     assert not [row for row in report.skipped if row[2] == "calls_function"], report.skipped
+
+
+GROUPED = """\
+<?php
+namespace App;
+use App\\Lib\\{Util, Other as O, function helper, const LIMIT};
+use function App\\Lib\\{h2, h3};
+class User extends Util {
+  public function run() {
+    Util::make();
+    O::go();
+    helper::x();
+    LIMIT::y();
+    h2::z();
+  }
+}
+"""
+
+GROUPED_LIB = """\
+<?php
+namespace App\\Lib;
+class Util { public static function make() {} }
+class Other { public static function go() {} }
+"""
+
+
+def test_a_grouped_use_binds_each_class_member_and_no_function_or_const(tmp_path: Path) -> None:
+    """use A\\{B, C as D, function f, const X}; binds B and D under the prefix, so B::m() and
+    D::m() and extends B resolve to them; a function or const member, and a grouped use function,
+    bind no class name, so f::m() stays in the file's namespace."""
+    (tmp_path / ".periplus").mkdir()
+    (tmp_path / ".periplus" / "settings.yml").write_text(
+        "periplus_version: 0\npacks:\n  - php_basic@0.2.0\n"
+    )
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "User.php").write_text(GROUPED)
+    (tmp_path / "src" / "Lib.php").write_text(GROUPED_LIB)
+    document, _ = _map(tmp_path)
+    lines = GROUPED.splitlines()
+    run = "php.method::App\\User::run"
+    assert _calls(document) == {
+        (run, "php.method::App\\Lib\\Util::make"): _at(lines, r"\s*Util::make\(\);"),
+        (run, "php.method::App\\Lib\\Other::go"): _at(lines, r"\s*O::go\(\);"),
+        (run, "php.method::App\\helper::x"): _at(lines, r"\s*helper::x\(\);"),
+        (run, "php.method::App\\LIMIT::y"): _at(lines, r"\s*LIMIT::y\(\);"),
+        (run, "php.method::App\\h2::z"): _at(lines, r"\s*h2::z\(\);"),
+    }
+    inherits = {(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "inherits"}
+    assert inherits == {("php.type::App\\User", "php.type::App\\Lib\\Util")}

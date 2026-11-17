@@ -11,7 +11,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # The edge holds the priority the base keys with static::getPriority(). The base returns 0, as of
 # Drupal core 11.4 (and 10.4 and 11.1 alike), so a class whose line of mapped ancestors declares
 # no getPriority() holds 0. The nearest class of the line that declares one decides: one whose body
-# is return <integer>; holds that integer, and one that computes the value holds no priority.
+# is return <integer>; holds that integer, and one that computes the value holds priority: computed.
 
 edge_attributes:
 - name: listens_to
@@ -58,7 +58,7 @@ edge_kinds:
   to: php.class
 - kind: has_literal_priority
   cause: none
-  description: "a self-link holding the integer that getPriority() returns as written"
+  description: "a self-link holding the integer that getPriority() returns as written, or computed when its body computes it"
   from: drupal.priority_override
   to: drupal.priority_override
 
@@ -91,6 +91,19 @@ rules:
     text: '\bfunction\s+getPriority\s*\(\s*\)\s*(?::\s*\??int\s*)?\{\s*return\s+(?<priority>[+-]?\d+)\s*;\s*\}'
   id: {template: '{psr4_class}'}
   emits: [{edge: {kind: has_literal_priority, from: this_node, to: {template: '{psr4_class}', type: drupal.priority_override}, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+# A getPriority() whose body is anything else computes its value when the code runs: its handlers
+# hold priority: computed, so a reader does not take a missing priority for 0.
+- rule: exception_priority_computed
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bfunction\s+getPriority\s*\(\s*\)(?!\s*(?::\s*\??int\s*)?\{\s*return\s+[+-]?\d+\s*;\s*\})'
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: has_literal_priority, from: this_node, to: {template: '{psr4_class}', type: drupal.priority_override}, attributes: {priority: {template: 'computed'}}}}]
   confidence: inferred
 
 # No class of the line declares getPriority(): the value of the core base it extends, 0, -128 for
@@ -138,7 +151,7 @@ rules:
   confidence: inferred
 
 # The nearest class of the line that declares getPriority(), the method's own class first, gives
-# its literal; one that computes the value gives no priority capture, so the edge holds none.
+# its literal, or computed for one that computes the value.
 - rule: exception_handler_subscribed_by_override
   reads: map
   match:
@@ -168,7 +181,7 @@ rules:
 # the class that writes extends <base>, by the base's short name, and the map rules give each class
 # of its line the listener: the method the class or its nearest mapped ancestor declares, else the
 # base's own method, outside the map. A getPriority() priority is read as for the exception handlers
-# above: the nearest literal override, none for a computed one, else the base's value.
+# above: the nearest literal override, computed for a computed one, else the base's value.
 - rule: core_subscriber_base
   reads: file
   in: [source]

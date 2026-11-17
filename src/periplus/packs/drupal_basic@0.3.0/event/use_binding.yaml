@@ -3,7 +3,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # What a PHP file's use statements bind, for the text rules on drupal_php_text that resolve a
 # class written by its short name: use A\B\C; binds C, and use A\B\C as D; binds D. A use at the
 # start of a line only, so a trait's use inside a class body binds nothing. A grouped use,
-# use A\{B, C};, binds nothing, nor does use function or use const.
+# use A\B\{C, D as E};, binds each member joined to the prefix, C to A\B\C and E to A\B\D, read
+# inside the span use_group (pack.yaml). use function and use const bind nothing, nor does a
+# function or const member of a group: these rules resolve class names only.
 
 rules:
 - rule: use_binding
@@ -18,4 +20,20 @@ rules:
   in: [source]
   match: {file: '**', filetype: drupal_php_text, text: '(?m)^use\s+(?<path>[\w\\]+)\s+as\s+(?<short>\w+)\s*;'}
   emits: [{binding: {name: '{short}', target: '{path}'}}]
+  confidence: declared
+
+# A member of a grouped use: the text up to the group's closing brace and semicolon holds no other
+# brace, parenthesis or semicolon; outside a use_group span the name is empty and binds nothing.
+- rule: use_group_binding
+  reads: file
+  in: [source]
+  match: &group_member
+    file: '**'
+    filetype: drupal_php_text
+    text: '[{,]\s*(?!(?:function|const)\s)\\?(?<path>(?:[A-Za-z_]\w*\\)*(?<short>[A-Za-z_]\w*))(?:\s+as\s+(?<alias>[A-Za-z_]\w*))?(?=\s*[,}])(?=[^;{}()]*\}\s*;)'
+  values: &group_values
+    prefix: {from: {enclosing: use_group, capture: prefix}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    bound: {template: '§{prefix}§{short}§{alias}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§[^§]*§(?=.)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '§$', with: ''}]}
+    target: {template: '{prefix}{path}'}
+  emits: [{binding: {name: '{bound}', target: '{target}'}}]
   confidence: declared

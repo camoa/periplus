@@ -17,6 +17,14 @@ rule's normalize step does. A name that is neither refuses each tree rule of the
 resolve a name with `bound_first_segment`, among the grammar's steps or its edges' own, since that
 step alone reads the imports. The refusal is exit 26 and names the imports file.
 
+A grouped import binds each of its members joined to the group's written prefix when `bind`
+holds `prefix_from_group: true`, and `group_ast` names the group's node. Under `php_basic`,
+`use A\B\{C, D as E};` binds `C` to `A\B\C` and `E` to `A\B\D`. A member written `function f` or
+`const X` sets the `use_kind` fact on its own clause, so `skip_when_field_set` binds nothing for
+it, as for a whole `use function` or `use const`: the imports bind type names only.
+`drupal_basic`'s text rules read the same members as text, inside the span `use_group`
+(`event/use_binding.yaml`).
+
 A fact is read on the clause, and on the import's own node when the clause has no such field.
 `bind.unbound_aliases` lists fact texts that bind no name, as `[_]`: a clause whose name comes from
 a fact written so binds nothing, and the sources after it are not tried.

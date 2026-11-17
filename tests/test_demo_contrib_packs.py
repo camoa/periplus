@@ -557,8 +557,8 @@ def test_salesforce_mapping_config_field_plugin_and_event_subscriber(tmp_path: P
         "salesforce.event::SalesforceEvents::PUSH_PARAMS": ("salesforce.event", "referenced"),
         event + "PULL_PRESAVE": ("drupal.event", "referenced"),
         event + "PUSH_PARAMS": ("drupal.event", "referenced"),
-        sub_method + "pullPresave": ("php.method", "referenced"),
-        sub_method + "pushParams": ("php.method", "referenced"),
+        sub_method + "pullPresave": ("php.method", "unresolved"),
+        sub_method + "pushParams": ("php.method", "unresolved"),
     }
     assert nodes(document)[mapping]["attributes"] == {
         "pull_standalone": True,

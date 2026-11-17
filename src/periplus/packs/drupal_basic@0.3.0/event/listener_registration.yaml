@@ -4,18 +4,19 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # into one internal drupal.event_use site, reg|<owner>|<listener>, with three edges the map rules
 # below read: use_has_priority, a self-link holding the priority as written, 0 when none is
 # written; use_names_event, to the event; and use_names_class or use_names_service, to the class
-# or service whose method listens. The owner is the method around the call in a class under src,
-# or the function around it in a module, install, inc, theme or profile file; a call in a plain
-# PHP file outside src, such as a test outside tests/src, or in a method of a class kept in a module
-# file, gives nothing, as a subscriber there does. Each argument, key and value is read whole, so an
-# expression such as 'a' . 'b' or self::PREFIX . '.x' is never cut down to a name.
+# or service whose method listens. The owner is the method around the call, of a class under src
+# named by Drupal's PSR-4 layout or of a class a module, install, inc, theme, profile or plain .php
+# file keeps, named by the file's namespace, or the function around it in such a file; an .api.php
+# file, a test outside tests/src and any other file give nothing. Each argument, key and value is
+# read whole, so an expression such as 'a' . 'b' or self::PREFIX . '.x' is never cut down to a
+# name.
 #
 # The forms:
 # - ->addListener(EVENT, CALLABLE, PRIORITY): the event a class constant, X::NAME
 #   through the file's use statements, \A\B::NAME, self::NAME, a constant of the file's namespace
-#   when a mapped class declares it, a quoted name, or a class, X::class, \A\B::class or
-#   self::class, the event of the class's full name, as Symfony names an event dispatched as an
-#   object; the callable [$this, 'm'], [self::class, 'm'],
+#   when a mapped class declares it, a quoted name, or a class, X::class, \A\B::class,
+#   self::class or parent::class, the class the class extends, the event of the class's full name,
+#   as Symfony names an event dispatched as an object; the callable [$this, 'm'], [self::class, 'm'],
 #   $this->m(...), [Foo::class, 'm'], Foo::m(...) or 'Foo::m', a method of that class or of its
 #   nearest mapped ancestor that declares it, else unresolved on the class; 'name', a function, by a
 #   subscribed_by_function edge; any other callable, a closure, an arrow function or a variable,
@@ -26,26 +27,29 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #   method, the method Symfony derives from the event's text, a constant's when a mapped file gives
 #   it or a class's full name when a file gives it, on<Event>, then __invoke, then the unresolved
 #   derived name; a definition held in a variable, or no method with no such text, ends at a
-#   drupal.runtime_listener. An event written as a container parameter, '%name%', is a runtime
-#   registration. The tag name, which Symfony's RegisterListenersPass
+#   drupal.runtime_listener <owner>|no-method~<class or service as written>, one per class or
+#   service. An event written as a container parameter, '%name%', is the value one mapped
+#   parameters block gives it, as below. The tag name, which Symfony's RegisterListenersPass
 #   reads, marks the call, on whatever object it runs. A 'dispatcher' key is kept in the edge
 #   attribute dispatcher (event/event_listener.yaml).
 # - ->addSubscriber(new Foo()) or ->addSubscriber($this): a registers_subscriber edge to the class,
 #   whose getSubscribedEvents() the subscriber rules read, from an internal site,
 #   sub~<object>|<owner>|<class>.
 # - A getSubscribedEvents() key written as a name, 'kernel.request' => ..., with its namespace,
-#   \A\B::NAME or A\B::NAME, or as a class, X::class => ..., where an array element starts, each listener of a list of lists its
-#   own; the listener is a method of the subscriber's class or a mapped ancestor.
+#   \A\B::NAME or A\B::NAME, or as a class, X::class => ..., parent::class among them, where an
+#   array element starts, each listener of a list of lists its own; the listener is a method of
+#   the subscriber's class or a mapped ancestor.
 #
-# The object an addListener or addSubscriber call runs on is in its site's id: v:<parameter>,
+# The object an addListener, addSubscriber or dispatch call (event/event_dispatch.yaml) runs on is
+# in its site's id: v:<parameter>,
 # p:<property of $this>, t for $this, x for anything else. The map rules read its type from what
 # php_basic maps: a parameter's declared type; a property's, typed, promoted or in a @var docblock,
 # on the class or its nearest ancestor that declares it; the parameter an untyped property is
 # assigned from once; and, for $this, the class. A known type that is not an event dispatcher gives
 # nothing: the site, and its runtime node, are withheld. A dispatcher is Symfony's
 # EventDispatcherInterface of the contracts or the component, Symfony's EventDispatcher, Drupal's
-# ContainerAwareEventDispatcher, or a mapped class or interface that implements or extends one of
-# them. With no type known, as for an untyped parameter, one assigned in the body or declared by a
+# ContainerAwareEventDispatcher, PSR-14's EventDispatcherInterface, which core aliases to the event
+# dispatcher, or a mapped class or interface that implements or extends one of them. With no type known, as for an untyped parameter, one assigned in the body or declared by a
 # closure, an undeclared property or a call's result such as \Drupal::service('event_dispatcher'),
 # the registration stays, and its edge holds receiver: not known to be an event dispatcher; one on
 # a known event dispatcher holds receiver: an event dispatcher, so an edge two registrations share
@@ -104,8 +108,8 @@ edge_kinds:
 
 edge_attributes:
 - name: receiver
-  on: [subscribed_by, subscribed_by_function, registers_subscriber, registers_listener_at_runtime]
-  description: "the object an addListener or addSubscriber call runs on: not known to be an event dispatcher, or an event dispatcher"
+  on: [subscribed_by, subscribed_by_function, registers_subscriber, registers_listener_at_runtime, dispatched_by, dispatched_by_function]
+  description: "the object an addListener, addSubscriber or dispatch call runs on: not known to be an event dispatcher, or an event dispatcher"
 
 rules:
 
@@ -117,28 +121,31 @@ rules:
   match: &listener_added_match
     file: '**'
     filetype: drupal_php_text
-    text: '(?:(?<![\w$>:\\])(?<rv>\$(?!this\b)\w+)|(?<![\w$>:\\])\$this\s*->\s*(?<rp>\w+)|(?<![\w$>:\\])(?<rt>\$this))?\s*->\s*(?<call>addListener)\(\s*(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)|(?!parent::)(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*,)|[''\"](?<en>[^''\"$]+)[''\"]|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*,\s*(?:\[\s*\$this\s*,\s*[''\"](?<a1>\w+)[''\"]\s*\]|\[\s*(?:self|static)::class\s*,\s*[''\"](?<a2>\w+)[''\"]\s*\]|\$this\s*->\s*(?<a3>\w+)\(\s*\.\.\.\s*\)|\[\s*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*,\s*[''\"](?<e1>\w+)[''\"]\s*\]|(?<d2>\\?[A-Za-z_][\w\\]*)::(?<e2>\w+)\(\s*\.\.\.\s*\)|[''\"](?<b1>\\?[A-Za-z_][\w\\]*)::(?<e3>\w+)[''\"]|[''\"](?<f1>\\?[A-Za-z_][\w\\]*)[''\"]|(?<g1>(?:static\s+)?function\s*\([^)]*\)(?:\s*use\s*\([^)]*\))?(?:\s*:\s*\??[\w\\]+)?\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}|(?:static\s+)?fn\s*\([^)]*\)\s*=>(?:[^,()]|\((?:[^()]|\([^()]*\))*\))+|(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*(?:,\s*(?<priority>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))?\s*\)'
+    text: '(?:(?<![\w$>:\\])(?<rv>\$(?!this\b)\w+)|(?<![\w$>:\\])\$this\s*->\s*(?<rp>\w+)|(?<![\w$>:\\])(?<rt>\$this))?\s*->\s*(?<call>addListener)\(\s*(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*,)|[''\"](?<en>[^''\"$]+)[''\"]|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*,\s*(?:\[\s*\$this\s*,\s*[''\"](?<a1>\w+)[''\"]\s*\]|\[\s*(?:self|static)::class\s*,\s*[''\"](?<a2>\w+)[''\"]\s*\]|\$this\s*->\s*(?<a3>\w+)\(\s*\.\.\.\s*\)|\[\s*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*,\s*[''\"](?<e1>\w+)[''\"]\s*\]|(?<d2>\\?[A-Za-z_][\w\\]*)::(?<e2>\w+)\(\s*\.\.\.\s*\)|[''\"](?<b1>\\?[A-Za-z_][\w\\]*)::(?<e3>\w+)[''\"]|[''\"](?<f1>\\?[A-Za-z_][\w\\]*)[''\"]|(?<g1>(?:static\s+)?function\s*\([^)]*\)(?:\s*use\s*\([^)]*\))?(?:\s*:\s*\??[\w\\]+)?\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}|(?:static\s+)?fn\s*\([^)]*\)\s*=>(?:[^,()]|\((?:[^()]|\([^()]*\))*\))+|(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*(?:,\s*(?<priority>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))?\s*\)'
   values: &listener_added_values
-    cls: {template: '{ec}', normalize: [{replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
     # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this, x for any
     # other, as a call's result; xmark, the mark, only for x.
     recv: {template: '§{call}§V{rv}§P{rp}§T{rt}', normalize: [{replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
     xmark: {template: '{recv}', normalize: [{replace: '^x$', with: 'not known to be an event dispatcher'}, {replace: '^(?!not ).*$', with: ''}]}
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
-    r_ev:
-      template: '§K{ek}§O{eo}'
-      normalize:
-      - {replace: '§[KO](?=§|$)', with: ''}
-      - {replace: '^§K', with: ''}
-      - {replace: '^§O(?:self|static)::', with: '@{psr4_class}::'}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
+    r_ev: {template: '§K{ek}§T{this_cls}§O{eo}', normalize: [{replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
     h_ev: {from: {capture: ek}, normalize: [{replace: '^\\.*$', with: ''}]}
     prio: {template: '{call}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
     unknown: {from: {capture: ex}, normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
-    self_class: {template: '{a1}{a2}{a3}', normalize: [{replace: '^.*$', with: '{psr4_class}'}]}
+    self_class: {template: '§{a1}{a2}{a3}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
     pl:
       template: '§C{a1}{a2}{a3}{e1}{e2}{e3}§F{f1}§R{g1}'
       normalize:
@@ -199,7 +206,7 @@ rules:
   in: [source]
   match: *listener_added_match
   values: *listener_added_values
-  id: {template: '{psr4_namespace}{h_ev}|reg_here~{recv}|{owner}|{pl}'}
+  id: {template: '{here_ns}{h_ev}|reg_here~{recv}|{owner}|{pl}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
@@ -209,10 +216,10 @@ rules:
   in: [source]
   match: *listener_added_match
   values: *listener_added_values
-  id: {template: '{psr4_namespace}{h_ev}|reg_here~{recv}|{owner}|{pl}'}
+  id: {template: '{here_ns}{h_ev}|reg_here~{recv}|{owner}|{pl}'}
   emits:
-  - edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_namespace}{h_ev}|reg_here~{recv}|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
-  - edge: {kind: use_names_event, from: this_node, to: {template: '{psr4_namespace}{h_ev}', types: [drupal.event_text]}}
+  - edge: {kind: use_has_priority, from: this_node, to: {template: '{here_ns}{h_ev}|reg_here~{recv}|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
+  - edge: {kind: use_names_event, from: this_node, to: {template: '{here_ns}{h_ev}', types: [drupal.event_text]}}
   - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_class, from: this_node, to: {template: '{b1}', resolve: [{full_if_prefixed: '\'}, as_written], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_class, from: this_node, to: {template: '{self_class}', types: [php.class_like]}}
@@ -292,24 +299,14 @@ rules:
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-- rule: listener_added_runtime_in_method
+- rule: listener_added_runtime_from
   reads: file
   line: {capture: call}
   in: [source]
   match: *listener_added_match
   values: *listener_added_values
   id: {template: '{bare}|{unknown}~{recv}'}
-  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{psr4_class}::{fn}', types: [php.method]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
-  confidence: inferred
-
-- rule: listener_added_runtime_in_function
-  reads: file
-  line: {capture: call}
-  in: [source]
-  match: {<<: *listener_added_match, ending: [module, install, inc, theme, profile]}
-  values: *listener_added_values
-  id: {template: '{bare}|{unknown}~{recv}'}
-  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{fn}', types: [php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
   confidence: inferred
 
 # ->addTag('kernel.event_listener', [...]) on a definition a service provider or a pass names.
@@ -319,34 +316,38 @@ rules:
   match: &listener_tag_added_match
     file: '**'
     filetype: drupal_php_text
-    text: '(?:->\s*register\(\s*[''\"][^''\"]+[''\"]\s*,\s*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*\)|new\s+Definition\(\s*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*\)|->\s*(?:getDefinition|findDefinition)\(\s*[''\"](?<sid>[^''\"]+)[''\"]\s*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*->\s*(?:register|getDefinition|findDefinition|setDefinition)\())(?:\s*->\s*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*->\s*addTag\(\s*[''\"](?<tag>kernel\.event_listener)[''\"]\s*,\s*(?:\[|array\s*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*=>\s*(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?!parent::)(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*=>\s*(?:[''\"](?<e1>\w+)[''\"](?=\s*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*=>\s*(?<priority>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*=>\s*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)'
+    text: '(?:->\s*register\(\s*[''\"][^''\"]+[''\"]\s*,\s*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*\)|new\s+Definition\(\s*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*\)|->\s*(?:getDefinition|findDefinition)\(\s*[''\"](?<sid>[^''\"]+)[''\"]\s*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*->\s*(?:register|getDefinition|findDefinition|setDefinition)\())(?:\s*->\s*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*->\s*addTag\(\s*[''\"](?<tag>kernel\.event_listener)[''\"]\s*,\s*(?:\[|array\s*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*=>\s*(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*[,\]\)])|[''\"]%(?<ep>[^''\"%\s]+)%[''\"](?=\s*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*=>\s*(?:[''\"](?<e1>\w+)[''\"](?=\s*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*=>\s*(?<priority>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*=>\s*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)'
   values: &listener_tag_added_values
-    cls: {template: '{ec}', normalize: [{replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
     disp: {template: '{dispatcher}{dispx}'}
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
-    r_ev:
-      template: '§K{ek}§O{eo}'
-      normalize:
-      - {replace: '§[KO](?=§|$)', with: ''}
-      - {replace: '^§K', with: ''}
-      - {replace: '^§O(?:self|static)::', with: '@{psr4_class}::'}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
+    r_ev: {template: '§K{ek}§T{this_cls}§O{eo}', normalize: [{replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
     h_ev: {from: {capture: ek}, normalize: [{replace: '^\\.*$', with: ''}]}
     prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
     unknown: {template: '§{ex}§{ek}{eo}{ec}{en}§{mx}', normalize: [{replace: '^§§[^§]+§.*$', with: ''}, {replace: '^§§§', with: ''}, {replace: '(?<=.)§.*$', with: ''}, {replace: '^§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
-    no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
+    no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ep}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
     pl:
-      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§Z{tag}'
+      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§W{d1}{d2}{sid}§Z{tag}'
       normalize:
-      - {replace: '§[MXKV](?=§)', with: ''}
+      - {replace: '§[MXKVW](?=§)', with: ''}
       - {replace: '^.*§V', with: 'r:'}
       - {replace: '^§X', with: 'r:'}
       - {replace: '\|', with: '¦'}
-      - {replace: '^§K[^§]*', with: 'r:no-method'}
+      - {replace: '^§K[^§]*§W', with: 'r:no-method~'}
       - {replace: '§K[^§]*', with: ''}
+      - {replace: '§W[^§]*', with: ''}
       - {replace: '§Z.*$', with: ''}
       - {replace: '^§M', with: 'c:'}
       - {replace: '\s+', with: ''}
@@ -397,7 +398,7 @@ rules:
   in: [source]
   match: *listener_tag_added_match
   values: *listener_tag_added_values
-  id: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}'}
+  id: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
@@ -406,13 +407,13 @@ rules:
   in: [source]
   match: *listener_tag_added_match
   values: *listener_tag_added_values
-  id: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}'}
+  id: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}'}
   emits:
-  - edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
-  - edge: {kind: use_names_event, from: this_node, to: {template: '{psr4_namespace}{h_ev}', types: [drupal.event_text]}}
+  - edge: {kind: use_has_priority, from: this_node, to: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
+  - edge: {kind: use_names_event, from: this_node, to: {template: '{here_ns}{h_ev}', types: [drupal.event_text]}}
   - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
-  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
 
 - rule: listener_tag_added_n
@@ -468,34 +469,38 @@ rules:
   match: &listener_tag_added_derived_match
     file: '**'
     filetype: drupal_php_text
-    text: '(?:->\s*register\(\s*[''\"][^''\"]+[''\"]\s*,\s*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*\)|new\s+Definition\(\s*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*\)|->\s*(?:getDefinition|findDefinition)\(\s*[''\"](?<sid>[^''\"]+)[''\"]\s*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*->\s*(?:register|getDefinition|findDefinition|setDefinition)\())(?:\s*->\s*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*->\s*addTag\(\s*[''\"](?<tag>kernel\.event_listener)[''\"]\s*,\s*(?:\[|array\s*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*=>\s*(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?!parent::)(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*=>\s*(?:[''\"](?<e1>\w+)[''\"](?=\s*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*=>\s*(?<priority>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*=>\s*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)'
+    text: '(?:->\s*register\(\s*[''\"][^''\"]+[''\"]\s*,\s*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*\)|new\s+Definition\(\s*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*\)|->\s*(?:getDefinition|findDefinition)\(\s*[''\"](?<sid>[^''\"]+)[''\"]\s*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*->\s*(?:register|getDefinition|findDefinition|setDefinition)\())(?:\s*->\s*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*->\s*addTag\(\s*[''\"](?<tag>kernel\.event_listener)[''\"]\s*,\s*(?:\[|array\s*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*=>\s*(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*[,\]\)])|[''\"]%(?<ep>[^''\"%\s]+)%[''\"](?=\s*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*=>\s*(?:[''\"](?<e1>\w+)[''\"](?=\s*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*=>\s*(?<priority>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*=>\s*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)'
   values: &listener_tag_added_derived_values
-    cls: {template: '{ec}', normalize: [{replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
     disp: {template: '{dispatcher}{dispx}'}
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
-    r_ev:
-      template: '§K{ek}§O{eo}'
-      normalize:
-      - {replace: '§[KO](?=§|$)', with: ''}
-      - {replace: '^§K', with: ''}
-      - {replace: '^§O(?:self|static)::', with: '@{psr4_class}::'}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
+    r_ev: {template: '§K{ek}§T{this_cls}§O{eo}', normalize: [{replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
     h_ev: {from: {capture: ek}, normalize: [{replace: '^\\.*$', with: ''}]}
     prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
     unknown: {template: '§{ex}§{ek}{eo}{ec}{en}§{mx}', normalize: [{replace: '^§§[^§]+§.*$', with: ''}, {replace: '^§§§', with: ''}, {replace: '(?<=.)§.*$', with: ''}, {replace: '^§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
-    no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
+    no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ep}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
     pl_unused:
-      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§Z{tag}'
+      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§W{d1}{d2}{sid}§Z{tag}'
       normalize:
-      - {replace: '§[MXKV](?=§)', with: ''}
+      - {replace: '§[MXKVW](?=§)', with: ''}
       - {replace: '^.*§V', with: 'r:'}
       - {replace: '^§X', with: 'r:'}
       - {replace: '\|', with: '¦'}
-      - {replace: '^§K[^§]*', with: 'r:no-method'}
+      - {replace: '^§K[^§]*§W', with: 'r:no-method~'}
       - {replace: '§K[^§]*', with: ''}
+      - {replace: '§W[^§]*', with: ''}
       - {replace: '§Z.*$', with: ''}
       - {replace: '^§M', with: 'c:'}
       - {replace: '\s+', with: ''}
@@ -540,7 +545,7 @@ rules:
       - {replace: '^§X.*$', with: ''}
       - {replace: '[^A-Za-z0-9]', with: ''}
       - {replace: '^(?=.)', with: 'on'}
-    typed: {template: '§X{dv}{mx}§E{ek}{eo}{ec}{en}{ex}§T{tag}', normalize: [{replace: '^§X§E§T.*$', with: 'typed'}, {replace: '^§X.*$', with: ''}]}
+    typed: {template: '§X{dv}{mx}§E{ek}{eo}{ec}{en}{ep}{ex}§T{tag}', normalize: [{replace: '^§X§E§T.*$', with: 'typed'}, {replace: '^§X.*$', with: ''}]}
     tm: {template: '{tag}|{e1}', normalize: [{replace: '^[^|]*\|$', with: '__invoke'}, {replace: '^[^|]*\|', with: ''}]}
     pl: {template: 'd:{pd}:{pdl}'}
 
@@ -569,34 +574,38 @@ rules:
   match: &listener_tag_added_typed_match
     file: '**'
     filetype: drupal_php_text
-    text: '(?:->\s*register\(\s*[''\"][^''\"]+[''\"]\s*,\s*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*\)|new\s+Definition\(\s*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*\)|->\s*(?:getDefinition|findDefinition)\(\s*[''\"](?<sid>[^''\"]+)[''\"]\s*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*->\s*(?:register|getDefinition|findDefinition|setDefinition)\())(?:\s*->\s*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*->\s*addTag\(\s*[''\"](?<tag>kernel\.event_listener)[''\"]\s*,\s*(?:\[|array\s*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*=>\s*(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?!parent::)(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*=>\s*(?:[''\"](?<e1>\w+)[''\"](?=\s*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*=>\s*(?<priority>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*=>\s*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)'
+    text: '(?:->\s*register\(\s*[''\"][^''\"]+[''\"]\s*,\s*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*\)|new\s+Definition\(\s*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*\)|->\s*(?:getDefinition|findDefinition)\(\s*[''\"](?<sid>[^''\"]+)[''\"]\s*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*->\s*(?:register|getDefinition|findDefinition|setDefinition)\())(?:\s*->\s*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*->\s*addTag\(\s*[''\"](?<tag>kernel\.event_listener)[''\"]\s*,\s*(?:\[|array\s*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*=>\s*(?:(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*[,\]\)])|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*[,\]\)])|[''\"]%(?<ep>[^''\"%\s]+)%[''\"](?=\s*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*=>\s*(?:[''\"](?<e1>\w+)[''\"](?=\s*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*=>\s*(?<priority>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*=>\s*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*[,\]\)])))?)'
   values: &listener_tag_added_typed_values
-    cls: {template: '{ec}', normalize: [{replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
     disp: {template: '{dispatcher}{dispx}'}
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
-    r_ev:
-      template: '§K{ek}§O{eo}'
-      normalize:
-      - {replace: '§[KO](?=§|$)', with: ''}
-      - {replace: '^§K', with: ''}
-      - {replace: '^§O(?:self|static)::', with: '@{psr4_class}::'}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
+    r_ev: {template: '§K{ek}§T{this_cls}§O{eo}', normalize: [{replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
     h_ev: {from: {capture: ek}, normalize: [{replace: '^\\.*$', with: ''}]}
     prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
     unknown: {template: '§{ex}§{ek}{eo}{ec}{en}§{mx}', normalize: [{replace: '^§§[^§]+§.*$', with: ''}, {replace: '^§§§', with: ''}, {replace: '(?<=.)§.*$', with: ''}, {replace: '^§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
-    no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
+    no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ep}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
     pl_unused:
-      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§Z{tag}'
+      template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§W{d1}{d2}{sid}§Z{tag}'
       normalize:
-      - {replace: '§[MXKV](?=§)', with: ''}
+      - {replace: '§[MXKVW](?=§)', with: ''}
       - {replace: '^.*§V', with: 'r:'}
       - {replace: '^§X', with: 'r:'}
       - {replace: '\|', with: '¦'}
-      - {replace: '^§K[^§]*', with: 'r:no-method'}
+      - {replace: '^§K[^§]*§W', with: 'r:no-method~'}
       - {replace: '§K[^§]*', with: ''}
+      - {replace: '§W[^§]*', with: ''}
       - {replace: '§Z.*$', with: ''}
       - {replace: '^§M', with: 'c:'}
       - {replace: '\s+', with: ''}
@@ -641,7 +650,7 @@ rules:
       - {replace: '^§X.*$', with: ''}
       - {replace: '[^A-Za-z0-9]', with: ''}
       - {replace: '^(?=.)', with: 'on'}
-    typed: {template: '§X{dv}{mx}§E{ek}{eo}{ec}{en}{ex}§T{tag}', normalize: [{replace: '^§X§E§T.*$', with: 'typed'}, {replace: '^§X.*$', with: ''}]}
+    typed: {template: '§X{dv}{mx}§E{ek}{eo}{ec}{en}{ep}{ex}§T{tag}', normalize: [{replace: '^§X§E§T.*$', with: 'typed'}, {replace: '^§X.*$', with: ''}]}
     tm: {template: '{tag}|{e1}', normalize: [{replace: '^[^|]*\|$', with: '__invoke'}, {replace: '^[^|]*\|', with: ''}]}
     pl: {template: 't:{tm}'}
 
@@ -673,22 +682,65 @@ rules:
   - attribute: {name: resolution, template: runtime}
   confidence: inferred
 
-- rule: listener_tag_added_runtime_in_method
+- rule: listener_tag_added_runtime_from
   reads: file
   in: [source]
   match: *listener_tag_added_match
   values: *listener_tag_added_values
   id: {template: '{bare}|{unknown}'}
-  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{psr4_class}::{fn}', types: [php.method]}, to: this_node}}]
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node}}]
   confidence: inferred
 
-- rule: listener_tag_added_runtime_in_function
+# An event written as a container parameter, 'event' => '%name%': Symfony's RegisterListenersPass
+# passes the text on to the dispatcher's addListener call and the built container gives that call
+# the parameter's value, so the event is the value one mapped parameters block gives the parameter
+# (event/event_listener.yaml), named as a quoted name is. With no method, Symfony derives it from
+# the text as written, so on<Name> of the parameter's name, then __invoke. A parameter no mapped
+# file gives a value, or that two give different values, is decided when the container is built:
+# a drupal.runtime_subscription <owner>|%<name>%~<class or service>, marked resolution: runtime.
+- rule: listener_tag_added_param
   reads: file
   in: [source]
-  match: {<<: *listener_tag_added_match, ending: [module, install, inc, theme, profile]}
-  values: *listener_tag_added_values
-  id: {template: '{bare}|{unknown}'}
-  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{fn}', types: [php.function]}, to: this_node}}]
+  match: *listener_tag_added_match
+  values: &listener_tag_param_values
+    <<: *listener_tag_added_values
+    pp: {template: '§M{e1}§X{mx}§E{ep}', normalize: [{replace: '^§M§X§E.*$', with: 'd'}, {replace: '^§M§X', with: 'r:'}, {replace: '^§M', with: 'c:'}, {replace: '§[XE].*$', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+    who: {template: '{d1}{d2}{sid}{dv}', normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+  id: {template: '{ep}|reg_param|{owner}|{pp}~{who}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: listener_tag_added_param_edges
+  reads: file
+  in: [source]
+  match: *listener_tag_added_match
+  values: *listener_tag_param_values
+  id: {template: '{ep}|reg_param|{owner}|{pp}~{who}'}
+  emits:
+  - edge: {kind: use_has_priority, from: this_node, to: {template: '{ep}|reg_param|{owner}|{pp}~{who}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
+  - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
+  - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{ep}|reg_param|{owner}|{pp}~{who}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: inferred
+
+- rule: listener_tag_added_param_runtime
+  reads: file
+  in: [source]
+  match: *listener_tag_added_match
+  values: *listener_tag_param_values
+  id: {template: '{bare}|%{ep}%~{who}'}
+  emits:
+  - node: {type: drupal.runtime_subscription}
+  - attribute: {name: resolution, template: runtime}
+  confidence: inferred
+
+- rule: listener_tag_added_param_runtime_from
+  reads: file
+  in: [source]
+  match: *listener_tag_added_match
+  values: *listener_tag_param_values
+  id: {template: '{bare}|%{ep}%~{who}'}
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node}}]
   confidence: inferred
 
 # ->addSubscriber(new X()) or ->addSubscriber($this): the class whose getSubscribedEvents() the
@@ -709,11 +761,19 @@ rules:
     xmark: {template: '{recv}', normalize: [{replace: '^x$', with: 'not known to be an event dispatcher'}, {replace: '^(?!not ).*$', with: ''}]}
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     unknown: {from: {capture: sx}, normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
-    this_class: {from: {capture: st}, normalize: [{replace: '^.*$', with: '{psr4_class}'}]}
+    this_class: {template: '§{st}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
     target: {template: '§{sc}§{st}', normalize: [{replace: '^§§\$this$', with: 'this'}, {replace: '^§(?=[^§])', with: 'c:'}, {replace: '§$', with: ''}, {replace: '^§.*$', with: ''}]}
   id: {template: 'sub~{recv}|{owner}|{target}'}
   emits: [{node: {type: drupal.event_use}}]
@@ -753,24 +813,14 @@ rules:
   - attribute: {name: resolution, template: runtime}
   confidence: inferred
 
-- rule: subscriber_added_runtime_in_method
+- rule: subscriber_added_runtime_from
   reads: file
   line: {capture: call}
   in: [source]
   match: *subscriber_added_match
   values: *subscriber_added_values
   id: {template: '{bare}|{unknown}~{recv}'}
-  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{psr4_class}::{fn}', types: [php.method]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
-  confidence: inferred
-
-- rule: subscriber_added_runtime_in_function
-  reads: file
-  line: {capture: call}
-  in: [source]
-  match: {<<: *subscriber_added_match, ending: [module, install, inc, theme, profile]}
-  values: *subscriber_added_values
-  id: {template: '{bare}|{unknown}~{recv}'}
-  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{fn}', types: [php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
   confidence: inferred
 
 # A getSubscribedEvents() key written as a name, 'kernel.request' => ..., each listener of a list of
@@ -786,11 +836,19 @@ rules:
   values: &key_named_values
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
-    self_class: {template: '{method}', normalize: [{replace: '^.*$', with: '{psr4_class}'}]}
+    self_class: {template: '§{method}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
     pl: {template: 'c:{method}'}
     prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
 
@@ -821,11 +879,19 @@ rules:
   values: &key_named_later_values
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
-    self_class: {template: '{method}', normalize: [{replace: '^.*$', with: '{psr4_class}'}]}
+    self_class: {template: '§{method}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
     pl: {template: 'c:{method}'}
     prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
     en: {from: {enclosing: named_listener_list, capture: name}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
@@ -858,9 +924,17 @@ rules:
   values: &key_qualified_values
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
     r_ev:
       template: '§K{ek}'
@@ -869,7 +943,7 @@ rules:
       - {replace: '^§K', with: ''}
       - {replace: '^§O(?:self|static)::', with: '@{psr4_class}::'}
     h_ev: {from: {capture: ek}, normalize: [{replace: '^\\.*$', with: ''}]}
-    self_class: {template: '{method}', normalize: [{replace: '^.*$', with: '{psr4_class}'}]}
+    self_class: {template: '§{method}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
     pl: {template: 'c:{method}'}
     prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
 
@@ -896,7 +970,7 @@ rules:
   in: [source]
   match: *key_qualified_match
   values: *key_qualified_values
-  id: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
+  id: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
@@ -906,10 +980,10 @@ rules:
   in: [source]
   match: *key_qualified_match
   values: *key_qualified_values
-  id: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
+  id: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
   emits:
-  - edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
-  - edge: {kind: use_names_event, from: this_node, to: {template: '{psr4_namespace}{h_ev}', types: [drupal.event_text]}}
+  - edge: {kind: use_has_priority, from: this_node, to: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
+  - edge: {kind: use_names_event, from: this_node, to: {template: '{here_ns}{h_ev}', types: [drupal.event_text]}}
   - edge: {kind: use_names_class, from: this_node, to: {template: '{self_class}', types: [php.class_like]}}
   confidence: inferred
 
@@ -923,11 +997,19 @@ rules:
   values: &key_qualified_later_values
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
-    self_class: {template: '{method}', normalize: [{replace: '^.*$', with: '{psr4_class}'}]}
+    self_class: {template: '§{method}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
     pl: {template: 'c:{method}'}
     prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
     ek: {from: {enclosing: qualified_listener_list, capture: key}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
@@ -955,7 +1037,7 @@ rules:
   in: [source]
   match: *key_qualified_later_match
   values: *key_qualified_later_values
-  id: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
+  id: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
@@ -964,10 +1046,10 @@ rules:
   in: [source]
   match: *key_qualified_later_match
   values: *key_qualified_later_values
-  id: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
+  id: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
   emits:
-  - edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_namespace}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
-  - edge: {kind: use_names_event, from: this_node, to: {template: '{psr4_namespace}{h_ev}', types: [drupal.event_text]}}
+  - edge: {kind: use_has_priority, from: this_node, to: {template: '{here_ns}{h_ev}|reg_here|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
+  - edge: {kind: use_names_event, from: this_node, to: {template: '{here_ns}{h_ev}', types: [drupal.event_text]}}
   - edge: {kind: use_names_class, from: this_node, to: {template: '{self_class}', types: [php.class_like]}}
   confidence: inferred
 
@@ -980,17 +1062,25 @@ rules:
   match: &key_class_match
     file: '**'
     filetype: drupal_php_text
-    text: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?!parent::)(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''\"](?<method>\w+)[''\"](?=\s*[,\]\);])(?:\s*,\s*(?<priority>[^\]\[''\"=>;,]*?)\s*,?\s*\])?'
+    text: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''\"](?<method>\w+)[''\"](?=\s*[,\]\);])(?:\s*,\s*(?<priority>[^\]\[''\"=>;,]*?)\s*,?\s*\])?'
   values: &key_class_values
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
-    self_class: {template: '{method}', normalize: [{replace: '^.*$', with: '{psr4_class}'}]}
+    self_class: {template: '§{method}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
     pl: {template: 'c:{method}'}
     prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
-    cls: {template: '{ec}', normalize: [{replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
+    cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
   id: {template: '{ec}::class|reg|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
@@ -1019,13 +1109,21 @@ rules:
     ec: {from: {enclosing: class_listener_list, capture: key}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
-    self_class: {template: '{method}', normalize: [{replace: '^.*$', with: '{psr4_class}'}]}
+    self_class: {template: '§{method}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
     pl: {template: 'c:{method}'}
     prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
-    cls: {template: '{ec}', normalize: [{replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
+    cls: {template: '§E{ec}§T{this_cls}§P{parent_cls}', normalize: [{replace: '^§Eparent§T[^§]*§P', with: ''}, {replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§P[\s\S]*$', with: ''}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
   id: {template: '{ec}::class|reg|{owner}|{pl}|{in_subscriber}', normalize: [{replace: '\|function$', with: ''}]}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
@@ -1051,13 +1149,21 @@ rules:
   match: &key_runtime_match
     file: '**'
     filetype: drupal_php_text
-    text: '\$\w+\[\s*(?<k1>(?![''\"][^''\"]*[''\"]\s*\]|\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*\s*\]|(?:self|static)::[A-Z][A-Z0-9_]*\s*\]|(?!parent::)\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class\s*\])[^\]\n]+?)\s*\](?:\s*\[\s*\])?\s*=(?![=>])|[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<k2>(?![\s/#])(?![^=\n]*?\bas\b)(?!(?:''[^'']*''|\"[^\"]*\"|\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)\s*=>)(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|[^=\n,\[\]()''\"])+?)\s*=>|=>\s*(?:\[\s*){0,2}(?<k5>(?!\s|\[|array\s*\(|[''\"]\w+[''\"]\s*[,\]\);])(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|[^=\n,\[\]()''\"])+?)\s*[,\]\);](?!\s*[{:])|\breturn\s+(?<k3>(?!\[|array\s*\(|\$\w+\s*(?:;|\+)|parent::getSubscribedEvents\(\)\s*(?:;|\+)|array_merge\()[^;]+);|\$\w+\s*\+?=\s*(?<k4>(?!\[|array\s*\(|parent::getSubscribedEvents\(\))(?:[\w\\]+::|\$this->|self::|static::)?\w+\((?:[^()]|\([^()]*\))*\))\s*;'
+    text: '\$\w+\[\s*(?<k1>(?![''\"][^''\"]*[''\"]\s*\]|\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*\s*\]|(?:self|static)::[A-Z][A-Z0-9_]*\s*\]|\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class\s*\])[^\]\n]+?)\s*\](?:\s*\[\s*\])?\s*=(?![=>])|[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<k2>(?![\s/#])(?![^=\n]*?\bas\b)(?!(?:''[^'']*''|\"[^\"]*\"|\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)\s*=>)(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|[^=\n,\[\]()''\"])+?)\s*=>|=>\s*(?:\[\s*){0,2}(?<k5>(?!\s|\[|array\s*\(|[''\"]\w+[''\"]\s*[,\]\);])(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|[^=\n,\[\]()''\"])+?)\s*[,\]\);](?!\s*[{:])|\breturn\s+(?<k3>(?!\[|array\s*\(|\$\w+\s*(?:;|\+)|parent::getSubscribedEvents\(\)\s*(?:;|\+)|array_merge\()[^;]+);|\$\w+\s*\+?=\s*(?<k4>(?!\[|array\s*\(|parent::getSubscribedEvents\(\))(?:[\w\\]+::|\$this->|self::|static::)?\w+\((?:[^()]|\([^()]*\))*\))\s*;'
   values: &key_runtime_values
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
-    owner: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: 'php.method::{psr4_class}::'}, {replace: '^§', with: '{procedural_owner}'}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    bare: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: '¤{procedural_owner}'}, {replace: '^[^|]*\|', with: ''}, {replace: '^', with: '§'}, {replace: '^§', with: '{psr4_class}::'}, {replace: '^§(?={procedural_owner}|)', with: ''}, {replace: '^§.*$', with: ''}, {replace: '^.*¤.*$', with: ''}]}
-    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
+    m_mod: {template: '{fns}§{in_class}§{fn}', normalize: [{replace: '^[^§]*§§[\s\S]*$', with: ''}, {replace: '^', with: '¤{procedural_owner}'}, {replace: '^(?!¤)[\s\S]*$', with: ''}, {replace: '^¤php\.function::', with: ''}, {replace: '§(?=[^§]*§)', with: ''}, {replace: '§', with: '::'}]}
+    f_own: {template: '§{in_class}§{fn}', normalize: [{replace: '^§[^§]+§.*$', with: ''}, {replace: '^§§', with: '¤{procedural_owner}'}, {replace: '^¤php\.function::', with: ''}, {replace: '^[§¤].*$', with: ''}]}
+    meth: {template: '{m_src}{m_mod}'}
+    this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
+    owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
+    bare: {template: '{meth}{f_own}'}
+    ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
     unknown: {template: '{k1}{k2}{k3}{k4}{k5}', normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
 
@@ -1067,24 +1173,14 @@ rules:
   - attribute: {name: resolution, template: runtime}
   confidence: inferred
 
-- rule: key_runtime_in_method
+- rule: key_runtime_from
   reads: file
   line: {capture: k2}
   in: [source]
   match: *key_runtime_match
   values: *key_runtime_values
   id: {template: '{in_subscriber}|{bare}|{unknown}', normalize: [{replace: '^function\|', with: ''}]}
-  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{psr4_class}::{fn}', types: [php.method]}, to: this_node}}]
-  confidence: inferred
-
-- rule: key_runtime_in_function
-  reads: file
-  line: {capture: k2}
-  in: [source]
-  match: {<<: *key_runtime_match, ending: [module, install, inc, theme, profile]}
-  values: *key_runtime_values
-  id: {template: '{in_subscriber}|{bare}|{unknown}', normalize: [{replace: '^function\|', with: ''}]}
-  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{fn}', types: [php.function]}, to: this_node}}]
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node}}]
   confidence: inferred
 
 # The object a registration call runs on, as the header says: a known type that is not an event
@@ -1093,7 +1189,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub)~v:(?<var>\w+)\|php\.(?:method|function)::(?<holder>[^|]+)\|(?<rest>.*))$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~v:(?<var>\w+)\|php\.(?:method|function)::(?<holder>[^|]+)\|(?<rest>.*))$'}]
     follow:
     - node: 'php.parameter::{holder}::${var}'
     - edge: parameter_typed_as
@@ -1103,7 +1199,7 @@ rules:
     - [{node: 'php.local_variable::{holder}::${var}'}]
     - [{node: 'drupal.closure_parameter::{holder}::${var}'}]
     unless_matched:
-    - [{node: 'php.parameter::{holder}::${var}'}, {edge: parameter_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]
+    - [{node: 'php.parameter::{holder}::${var}'}, {edge: parameter_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]
   emits: [{withhold: matched_node}]
   confidence: inferred
 
@@ -1111,7 +1207,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
     follow:
     - node: 'php.type::{class}'
     - ancestors: [inherits]
@@ -1121,7 +1217,7 @@ rules:
     - node: 'drupal.event_use::{site}'
     - try: [{node: 'drupal.runtime_subscription::{rest}'}]
     unless_matched:
-    - [{node: 'php.property::{owner}::${member}'}, {edge: property_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]
+    - [{node: 'php.property::{owner}::${member}'}, {edge: property_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]
   emits: [{withhold: matched_node}]
   confidence: inferred
 
@@ -1129,7 +1225,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
     follow:
     - node: 'php.type::{class}'
     - ancestors: [inherits]
@@ -1143,7 +1239,7 @@ rules:
     - node: 'drupal.event_use::{site}'
     - try: [{node: 'drupal.runtime_subscription::{rest}'}]
     unless_matched:
-    - [{node: 'php.parameter::{owner}::{setter}::${parameter}'}, {edge: parameter_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]
+    - [{node: 'php.parameter::{owner}::{setter}::${parameter}'}, {edge: parameter_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]
     - [{node: 'php.property::{owner}::${member}'}, {edge: property_typed_as}]
     - [{node: 'php.member_assignment::{owner}::$this->{member}'}, {edge: assigned_value}, {id_matches: '^php\.member_assignment_value::[^:]+::(?:(?!{setter}::)[^:]+::\$this->\w+=|[^:]+::\$this->\w+=(?!\${parameter}$))'}]
   emits: [{withhold: matched_node}]
@@ -1153,13 +1249,13 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub)~t\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~t\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
     follow:
     - node: 'php.type::{class}'
     - node: 'drupal.event_use::{site}'
     - try: [{node: 'drupal.runtime_subscription::{rest}'}]
     unless_matched:
-    - [{node: 'php.type::{class}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]
+    - [{node: 'php.type::{class}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]
   emits: [{withhold: matched_node}]
   confidence: inferred
 
@@ -1169,8 +1265,8 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub)~v:(?<var>\w+)\|php\.(?:method|function)::(?<holder>[^|]+)\|(?<rest>.*))$'}]
-    follow: [{node: 'php.parameter::{holder}::${var}'}, {edge: parameter_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}, {node: 'drupal.event_use::{site}'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~v:(?<var>\w+)\|php\.(?:method|function)::(?<holder>[^|]+)\|(?<rest>.*))$'}]
+    follow: [{node: 'php.parameter::{holder}::${var}'}, {edge: parameter_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}, {node: 'drupal.event_use::{site}'}]
     unless: *shadowed
   emits: [{edge: {kind: use_on_dispatcher, from: this_node, to: this_node}}]
   confidence: inferred
@@ -1179,8 +1275,8 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
-    follow: [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<owner>.+)$'}, {node: 'php.property::{owner}::${member}'}, {edge: property_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}, {node: 'drupal.event_use::{site}'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
+    follow: [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<owner>.+)$'}, {node: 'php.property::{owner}::${member}'}, {edge: property_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}, {node: 'drupal.event_use::{site}'}]
   emits: [{edge: {kind: use_on_dispatcher, from: this_node, to: this_node}}]
   confidence: inferred
 
@@ -1188,8 +1284,8 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
-    follow: [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<owner>.+)$'}, {node: 'php.property::{owner}::${member}'}, {node: 'php.member_assignment::{owner}::$this->{member}'}, {edge: assigned_value}, {id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'}, {node: 'php.parameter::{owner}::{setter}::${parameter}'}, {edge: parameter_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}, {node: 'drupal.event_use::{site}'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
+    follow: [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<owner>.+)$'}, {node: 'php.property::{owner}::${member}'}, {node: 'php.member_assignment::{owner}::$this->{member}'}, {edge: assigned_value}, {id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'}, {node: 'php.parameter::{owner}::{setter}::${parameter}'}, {edge: parameter_typed_as}, {id_matches: '::\$\w+::\\?(?<rtype>.+)$'}, {try: [{node: 'php.type::{rtype}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}]}, {id_matches: '(?:^php\.type::|::\$\w+::\\?)(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}, {node: 'drupal.event_use::{site}'}]
     unless_matched:
     - [{node: 'php.property::{owner}::${member}'}, {edge: property_typed_as}]
     - [{node: 'php.member_assignment::{owner}::$this->{member}'}, {edge: assigned_value}, {id_matches: '^php\.member_assignment_value::[^:]+::(?:(?!{setter}::)[^:]+::\$this->\w+=|[^:]+::\$this->\w+=(?!\${parameter}$))'}]
@@ -1200,8 +1296,8 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub)~t\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
-    follow: [{node: 'php.type::{class}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher)$'}, {node: 'drupal.event_use::{site}'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?:[^|]*\|)?(?:reg|reg_named|reg_here|rt|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~t\|php\.method::(?<class>[^|]+)::\w+\|(?<rest>.*))$'}]
+    follow: [{node: 'php.type::{class}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?:Symfony\\Component\\EventDispatcher\\EventDispatcherInterface|Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface|Symfony\\Component\\EventDispatcher\\EventDispatcher|Drupal\\Component\\EventDispatcher\\ContainerAwareEventDispatcher|Psr\\EventDispatcher\\EventDispatcherInterface)$'}, {node: 'drupal.event_use::{site}'}]
   emits: [{edge: {kind: use_on_dispatcher, from: this_node, to: this_node}}]
   confidence: inferred
 
@@ -1212,7 +1308,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?:[^|]*\|)?(?:reg|reg_named|reg_here|sub)~x\|'}]
+    where: [{id_matches: '^drupal\.event_use::(?:[^|]*\|)?(?:reg|reg_named|reg_here|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~x\|'}]
   emits: [{edge: {kind: use_by_method_name, from: this_node, to: this_node}}]
   confidence: inferred
 
@@ -1222,7 +1318,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?:[^|]*\|)?(?:reg|reg_named|reg_here|sub)~v:(?<var>\w+)\|php\.(?:method|function)::(?<holder>[^|]+)\|'}]
+    where: [{id_matches: '^drupal\.event_use::(?:[^|]*\|)?(?:reg|reg_named|reg_here|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~v:(?<var>\w+)\|php\.(?:method|function)::(?<holder>[^|]+)\|'}]
     unless: [[{node: 'php.parameter::{holder}::${var}'}, {edge: parameter_typed_as}]]
   emits: [{edge: {kind: use_by_method_name, from: this_node, to: this_node}}]
   confidence: inferred
@@ -1231,7 +1327,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?:[^|]*\|)?(?:reg|reg_named|reg_here|sub)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|'}]
+    where: [{id_matches: '^drupal\.event_use::(?:[^|]*\|)?(?:reg|reg_named|reg_here|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~p:(?<member>\w+)\|php\.method::(?<class>[^|]+)::\w+\|'}]
     unless: &untyped_property
     - [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<owner>.+)$'}, {node: 'php.property::{owner}::${member}'}, {edge: property_typed_as}]
     - [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<owner>.+)$'}, {node: 'php.member_assignment::{owner}::$this->{member}'}, {edge: assigned_value}, {id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'}, {node: 'php.parameter::{owner}::{setter}::${parameter}'}, {edge: parameter_typed_as}]
@@ -1244,7 +1340,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: &shadowed_site '^drupal\.event_use::(?:[^|]*\|)?(?:reg|reg_named|reg_here|sub)~v:(?<var>\w+)\|php\.(?:method|function)::(?<holder>[^|]+)\|'}]
+    where: [{id_matches: &shadowed_site '^drupal\.event_use::(?:[^|]*\|)?(?:reg|reg_named|reg_here|sub|disp|disp_here|disp_parent|disp_var|disp_prop|disp_rt)~v:(?<var>\w+)\|php\.(?:method|function)::(?<holder>[^|]+)\|'}]
     follow: [{node: 'php.local_variable::{holder}::${var}'}]
   emits: [{edge: {kind: use_by_method_name, from: this_node, to: this_node}}]
   confidence: inferred
@@ -1515,7 +1611,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method~[^|]*)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - edge: use_has_priority
@@ -1545,7 +1641,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method~[^|]*)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - edge: use_has_priority
@@ -1576,7 +1672,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method~[^|]*)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - edge: use_has_priority
@@ -1601,7 +1697,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method~[^|]*)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - edge: use_has_priority
@@ -1633,7 +1729,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method~[^|]*)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - edge: use_has_priority
@@ -1666,7 +1762,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method~[^|]*)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - edge: use_has_priority
@@ -1693,7 +1789,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<site>[^|]*\|reg(?:_here)?\|(?<owner>[^|]+)\|r:no-method~[^|]*)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - edge: use_has_priority
@@ -1884,7 +1980,7 @@ rules:
     - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
     - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
     - node: 'drupal.event::{ev}'
-    unless_matched: [[{node: 'drupal.event_use::{site}'}, {id_matches: '\|r:no-method$'}, {node: 'drupal.constant_text::{ev}'}]]
+    unless_matched: [[{node: 'drupal.event_use::{site}'}, {id_matches: '\|r:no-method~[^|]*$'}, {node: 'drupal.constant_text::{ev}'}]]
   emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{bare}|{payload}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}, {edge: {kind: subscribed_by, from: matched_node, to: {template: '{bare}|{payload}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}]
   confidence: inferred
 
@@ -1906,6 +2002,121 @@ rules:
     - node: 'drupal.class_constant::{ev}'
     - try: [{edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
     - node: 'drupal.event::{ev}'
-    unless_matched: [[{node: 'drupal.event_use::{site}'}, {id_matches: '\|r:no-method$'}, {node: 'drupal.constant_text::{ev}'}]]
+    unless_matched: [[{node: 'drupal.event_use::{site}'}, {id_matches: '\|r:no-method~[^|]*$'}, {node: 'drupal.constant_text::{ev}'}]]
   emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{bare}|{payload}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'not known to be an event dispatcher{by_name}'}}}}, {edge: {kind: subscribed_by, from: matched_node, to: {template: '{bare}|{payload}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}, receiver: {template: 'an event dispatcher{on_dispatcher}'}}}}]
+  confidence: inferred
+
+# A PHP tag whose event is a container parameter one mapped file gives one value: the runtime mark
+# is taken back, before the passes, and the listener is the method written, or the one Symfony
+# derives from the parameter's name, on the class or the service's class.
+- rule: added_tag_parameter_given
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<param>[^|]+)\|reg_param\|php\.(?:method|function)::(?<bare>[^|]+)\|[^~]*~(?<who>.*)$'}]
+    follow:
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.runtime_subscription::{bare}|%{param}%~{who}'
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}]]
+  emits: [{withhold: matched_node}]
+  confidence: inferred
+
+- rule: added_tag_parameter_method
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?<param>[^|]+)\|reg_param\|[^|]+\|c:(?<m>\w+)~(?<declarer>.*))$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'drupal.event_use::{site}'}, {edge: use_names_class}, {id_matches: '^php\.type::(?<declarer>.+)$'}]
+    - try: [{node: 'drupal.event_use::{site}'}, {edge: use_names_service}, {ancestors: [extends_service]}, {edge: service_class}, {id_matches: '^php\.type::(?<declarer>.+)$'}]
+    - try: [{node: 'php.type::{declarer}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<declarer>.+)$'}, {node: 'php.method::{declarer}::{m}'}]
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.event::{event}'
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{m}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: added_tag_parameter_derived
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?<param>[^|]+)\|reg_param\|[^|]+\|d~(?<declarer>.*))$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'drupal.event_use::{site}'}, {edge: use_names_class}, {id_matches: '^php\.type::(?<declarer>.+)$'}]
+    - try: [{node: 'drupal.event_use::{site}'}, {edge: use_names_service}, {ancestors: [extends_service]}, {edge: service_class}, {id_matches: '^php\.type::(?<declarer>.+)$'}]
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'php.type::{declarer}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<named>.+)$'
+    - node: 'drupal.method_name::{named}::{lower}'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: added_tag_parameter_invoke
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?<param>[^|]+)\|reg_param\|[^|]+\|d~(?<declarer>.*))$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'drupal.event_use::{site}'}, {edge: use_names_class}, {id_matches: '^php\.type::(?<declarer>.+)$'}]
+    - try: [{node: 'drupal.event_use::{site}'}, {edge: use_names_service}, {ancestors: [extends_service]}, {edge: service_class}, {id_matches: '^php\.type::(?<declarer>.+)$'}]
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'php.type::{declarer}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<named>.+)$'
+    - node: 'drupal.method_name::{named}::__invoke'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}], [{node: 'php.type::{declarer}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: added_tag_parameter_derived_unresolved
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<site>(?<param>[^|]+)\|reg_param\|[^|]+\|d~(?<declarer>.*))$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'drupal.event_use::{site}'}, {edge: use_names_class}, {id_matches: '^php\.type::(?<declarer>.+)$'}]
+    - try: [{node: 'drupal.event_use::{site}'}, {edge: use_names_service}, {ancestors: [extends_service]}, {edge: service_class}, {id_matches: '^php\.type::(?<declarer>.+)$'}]
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.event::{event}'
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}], [{node: 'php.type::{declarer}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}], [{node: 'php.type::{declarer}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::__invoke'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{derived}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
   confidence: inferred

@@ -121,7 +121,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   edge to a drupal.route_alter node marked resolution runtime; each method named on<status> or
 #   on<digit>xx, as on403 or on4xx, of a class that descends from HttpExceptionSubscriberBase, as
 #   an inferred subscribed_by edge from KernelEvents::EXCEPTION holding the priority getPriority()
-#   gives: core's 0, or the integer the nearest class of its line that declares it returns;
+#   gives: core's 0, the integer the nearest class of its line that declares it returns, or
+#   computed when that one computes it;
 # - each constraint plugin's validator class, as a validated_by edge: declared from a validatedBy()
 #   that returns Name::class or the class's full name in single quotes, else inferred from the name
 #   <constraint class>Validator when the map holds it and the constraint class writes no
@@ -141,7 +142,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   gives the constant no text, a constant read through a class that inherits it named as its
 #   declaring class's, and a contributed module's constant read for its text only when the folder
 #   contrib_module is on disk; each key of getSubscribedEvents, written X::NAME, self::NAME,
-#   static::NAME or X::class, as a subscribed_by edge from the event to the listener method, each listener of
+#   static::NAME or X::class, parent::class among them, as a subscribed_by edge from the event to
+#   the listener method, or to the unresolved method as written when no mapped class of its line
+#   declares it, each listener of
 #   a list of lists its own, holding the listener's priority as written in the edge attribute
 #   priority, 0 when none is written, as Symfony runs it; the same edge from each AsEventListener
 #   attribute on a method or a class and each kernel.event_listener tag in a services file, its
@@ -160,12 +163,15 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   dispatcher in the edge attribute dispatcher; an addListener or addSubscriber call on an object
 #   whose known type is not an event dispatcher as nothing, one on an object of no known type with
 #   the edge attribute receiver: not known to be an event dispatcher, and one on a known event
-#   dispatcher with receiver: an event dispatcher; and each
-#   ->dispatch($event, X::NAME) as a dispatched_by edge to the method around it, or a
-#   dispatched_by_function edge to the function around it in a module, install, inc, theme or
-#   profile file, each at the key's line. A key's event is the text its constant holds when a
+#   dispatcher with receiver: an event dispatcher; and each ->dispatch() as a dispatched_by edge to
+#   the method around it, or a dispatched_by_function edge to the function around it, its event
+#   the second argument however deep the first nests, the class of the object dispatched alone,
+#   or the name written first, and a name or object only the running code gives as a
+#   drupal.runtime_event with the runtime mark, each with the same receiver check; a class kept
+#   in a module, install, inc, theme, profile or plain .php file, its methods read as a class's
+#   under src. A key's event is the text its constant holds when a
 #   mapped file declares it, so two constants of one text meet on one event. All inferred: a
-#   method's class is named from the file's path. An event of core, Symfony or a contributed
+#   method's class is named from the file's path, or outside src from the file's namespace. An event of core, Symfony or a contributed
 #   module, such as KernelEvents::REQUEST, keeps its constant's name and ends at a referenced
 #   node;
 # - each new TwigFilter('name') or new TwigFunction('name') in a class that descends from Twig's
@@ -462,17 +468,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the like.
 # - An attribute keeps the value as written, so no_cache: 'TRUE' and no_cache: true give "TRUE"
 #   and true, and is_admin: null gives null.
-# - A dispatch name written with its namespace, \A\B::NAME, as text such as 'kernel.request', or
-#   as a variable gives nothing; a subscriber key so written is read as a registration
-#   (event/listener_registration.yaml). A key or name whose class no use statement
-#   binds joins its event only when a mapped class of the file's namespace or one of its mapped
-#   ancestors declares that constant. A listener the map holds no method for gives no edge. A
-#   priority is kept as written, so self::LATE stays a name, not its number.
-#   dispatch($event)
-#   with no name, the name written first, a first argument four levels of parentheses deep, a
-#   subscriber outside a src folder, a dispatch in a plain PHP file outside a src folder, and a
-#   dispatch or registration in a method of a class kept in a module file give nothing. A grouped
-#   use binds no name for these rules.
+# - A key or name whose class no use statement binds joins its event only when a mapped class of
+#   the file's namespace or one of its mapped ancestors declares that constant. A priority is kept
+#   as written, so self::LATE stays a name, not its number. A dispatch of a typed parameter or
+#   property names the event by the declared class; an object of a subclass names its own when the
+#   code runs. parent::NAME as a getSubscribedEvents() key or a method attribute's event gives
+#   nothing, and in addListener() or addTag() it reads as an expression, a runtime registration;
+#   parent::class in a class-level attribute gives nothing and a skipped row. A test outside
+#   tests/src and an .api.php file give nothing.
 # - Drupal core, as of 11.4, registers no listener from an AsEventListener attribute by itself; its
 #   edge holds what the attribute declares, and its method holds the mark. A name the table
 #   core_event_names does not list, as a contributed module's, is the event of that name, which
@@ -481,8 +484,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   meets the constant, not the text. A dispatcher a tag or an attribute names is kept as written:
 #   the map does not say which service it is. A registration
 #   on an object of no known type rests on the method's name, which its edge's receiver attribute
-#   says. A core subscriber base the rutter does not list reads as a base outside the map. A method
-#   attribute on a base's method is inherited too.
+#   says. The rutter holds the subscriptions of every abstract core subscriber base of Drupal 11.4;
+#   a subclass of a concrete core subscriber other than DefaultExceptionHtmlSubscriber and
+#   CustomPageExceptionHtmlSubscriber reads as a base outside the map. A method attribute on a
+#   base's method is inherited too.
 # - A filter or function name that is not a text literal, and an extension that implements
 #   ExtensionInterface without AbstractExtension, give nothing. A filter or function after a hash
 #   in the same print, as {{ {a: 1}|money }}, gives nothing. A template's use edge sits at the
@@ -637,15 +642,13 @@ folders:
   - "{contrib_theme}/*/*"
   - "{contrib_theme}/*/modules/*"
   # Where a contributed project keeps its event-name constants, read for their names only
-  # (event/event_name.yaml): its src folder and src/Event at any depth, of the project and of each
-  # folder under its modules folder. Not every folder at any depth, which costs a directory listing each.
+  # (event/event_name.yaml): its src folder at any depth, of the project and of each folder under
+  # its modules folder, where a file whose name holds Event is read.
   contrib_event_source:
   - "{contrib_module}/*/src"
-  - "{contrib_module}/*/src/Event"
-  - "{contrib_module}/*/src/Event/**"
+  - "{contrib_module}/*/src/**"
   - "{contrib_module}/*/modules/*/src"
-  - "{contrib_module}/*/modules/*/src/Event"
-  - "{contrib_module}/*/modules/*/src/Event/**"
+  - "{contrib_module}/*/modules/*/src/**"
   # An extension's shipped configuration: config/install and config/optional.
   module_config:
   - "{custom_module}/**/config/install"
@@ -892,10 +895,13 @@ files:
         file_path:
           pattern: '^(?<path>.+)$'
           template: '{path}'
-        # php.function:: for a module, install, inc, theme or profile file, whose functions register
-        # listeners in event/listener_registration.yaml; a plain PHP file outside src has none.
+        # php.function:: for a file Drupal loads whose code is not a class under src: a module,
+        # install, inc, theme or profile file, or a .php file outside src and tests, such as
+        # <module>.post_update.php, but not an .api.php file, which documents and never runs. The
+        # event rules read a dispatch or a registration in its functions, and in the methods of a
+        # class it keeps (event/listener_registration.yaml, event/event_dispatch.yaml).
         procedural_owner:
-          pattern: '\.(?:module|install|inc|theme|profile)$'
+          pattern: '^(?!(?:.*/)?(?:src|tests)/).*(?:\.(?:module|install|inc|theme|profile)|(?<!\.api)\.php)$'
           template: 'php.function::'
         # The namespace of that class, with a backslash after it: Drupal\<module>\A\ for
         # <module>/src/A/B.php.
@@ -960,7 +966,7 @@ files:
       # The same list under a key written as a class, X::class => [[...]], key the class as written.
       # Read by event/listener_registration.yaml.
       - name: class_listener_list
-        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?!parent::)(?<key>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?<key>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
       # The body of a named function or method; function is its name. A closure has no name and
       # opens none, so a match inside one reads the function around it.
@@ -973,10 +979,11 @@ files:
       - name: first_parameter_type
         open: '\bfunction\s+(?<method>\w+)\s*\(\s*(?:#\[[^\]]*\]\s*)*(?:(?:public|protected|private|readonly)\s+)*'
         balance: ['(?!x)x', '[$,)]']
-      # The body of a named class, trait, interface or enum; class is its name. Read by the event
-      # rules, so a method of a class kept in a module file is not read as a function.
+      # The body of a named class, trait, interface or enum; class is its name and parent the class
+      # it extends, as written. Read by the event rules, which name a method of a class kept in a
+      # module file by its class, and read parent::class as that parent.
       - name: class_like_body
-        open: '(?<![\w$>:])(?:class|trait|interface|enum)\s+(?!extends\b|implements\b)(?<class>\w+)[^{;]*'
+        open: '(?<![\w$>:])(?:class|trait|interface|enum)\s+(?!extends\b|implements\b)(?<class>\w+)(?:\s+extends\s+(?<parent>\\?[A-Za-z_][\w\\]*))?[^{;]*'
         balance: ['{', '}']
       # An array literal assigned to a variable, $list = [...]; list is the variable's name.
       - name: array_assigned
@@ -1021,6 +1028,24 @@ files:
       # menu_link/menu_name_compared.yaml.
       - name: switch_body
         open: '\bswitch\s*\((?<subject>[^{;]*)\)\s*'
+        balance: ['{', '}']
+      # Each pair of parentheses, so a rule can tell an argument of a ->dispatch() call from one
+      # nested inside it at any depth: the call's own span opens at its object, k the call from its
+      # object to the first ; and every other ( opens one whose k is that parenthesis. Read by
+      # event/event_dispatch.yaml, the innermost k first.
+      - name: call_paren
+        open: '(?=[$-])(?=(?<k>(?:(?<![\w$>:\\])\$this\s*->\s*\w+\s*|(?<![\w$>:\\])\$\w+\s*)?->\s*dispatch\s*\([^;]{0,240}))(?:(?<![\w$>:\\])\$this\s*->\s*\w+\s*|(?<![\w$>:\\])\$\w+\s*)?->\s*dispatch\s*(?=\()'
+        balance: ['(', ')']
+      - name: call_paren
+        open: '(?<!->dispatch)(?<!->dispatch\s)(?=(?<k>\())'
+        balance: ['(', ')']
+      # The namespace a file declares, ns, to the next namespace statement or the end of its braces.
+      # Read by the event rules for a class kept in a file outside src.
+      - name: php_namespace
+        open: '(?m)^namespace\s+(?<ns>[A-Za-z_][\w\\]*)\s*;'
+        balance: ['(?!x)x', '(?m)^namespace\b']
+      - name: php_namespace
+        open: '(?m)^namespace\s+(?<ns>[A-Za-z_][\w\\]*)\s*(?=\{)'
         balance: ['{', '}']
     # Configuration and the other YAML files read as text, beside the data reading yaml_basic
     # gives them.

@@ -101,8 +101,8 @@ rules:
   emits: [{edge: {kind: derives_listener, from: this_node, to: {template: '{derived}|{lower}', types: [drupal.derived_listener]}}}]
   confidence: inferred
 
-# A contributed module's constants, in a file whose name holds Event under its src or src/Event
-# folder (contrib_event_source, pack.yaml), give their text and the method Symfony derives from it,
+# A contributed module's constants, in a file whose name holds Event at any depth of its src folder
+# (contrib_event_source, pack.yaml), give their text and the method Symfony derives from it,
 # and nothing else: no node of the map, only the internal class constant <class>::<NAME>, its
 # class named by the file's path, so a custom subscriber's key ContribEvents::NAME names the event
 # of that text and meets a listener that names the text. Nothing is read when the folder is absent.
