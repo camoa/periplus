@@ -1,7 +1,7 @@
 $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 
 # The walking-skeleton Drupal pack: every exported or installed configuration file becomes one
-# node. It is renamed to drupal when the reference packs retire.
+# node.
 #
 # What it maps, and what it does not map yet.
 # The basic Drupal pack maps, beside php_basic's classes, functions and methods:
