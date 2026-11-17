@@ -186,11 +186,12 @@ nodes that carry a mark.
 **Edge attributes.** A rutter may write attributes on an edge, such as the key a callable is
 registered under. A row reached by such an edge prints them after the kind, in brackets, by name:
 `registers_element_callback [key: #pre_render]` in `show`, `find`, `neighbors`, `affected`,
-`reach` and the raw walks, and after each name a `slice` link shows. An edge found at several
+`reach` and the raw walks, inside the arrow of a `path` step (`--registers [key: #ajax]-->`),
+and after each name a `slice` link shows. An edge found at several
 places with different values prints each value once, in the order of its places:
 `[key: #process, #pre_render]`; the map and `show --format json` hold which value is at which
 place. The JSON rows carry the edge's attributes as the map holds them, an empty object when it
-has none: `attributes` in `show`, `find`, the raw walks and `slice`, `via_attributes` in the walks
+has none: `attributes` in `show`, `find`, the raw walks, `path` steps and `slice`, `via_attributes` in the walks
 by cause. `diff` names `attributes` among the fields of an edge that changed.
 
 **Supporting code.** A node in supporting code, one whose first file matches a pattern the map

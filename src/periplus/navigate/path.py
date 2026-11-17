@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +12,8 @@ from periplus.navigate.ids import resolve
 from periplus.navigate.listing import (
     NONE,
     Listing,
+    attribute_text,
+    edge_attributes,
     footer,
     kind_warnings,
     mark_text,
@@ -32,7 +34,8 @@ class Step:
 
     ``location`` is where the first such edge is written, or the item reached when it has none,
     and ``source`` the line of code there. ``description`` is the descriptions entry of ``end``.
-    ``start_marks`` and ``end_marks`` hold the mark texts of the two items.
+    ``start_marks`` and ``end_marks`` hold the mark texts of the two items, and ``attributes``
+    the edge's.
     """
 
     start: str
@@ -43,6 +46,7 @@ class Step:
     description: str | None = None
     start_marks: tuple[str, ...] = ()
     end_marks: tuple[str, ...] = ()
+    attributes: Mapping[str, Any] = field(default_factory=dict, hash=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,7 +157,7 @@ def _placed(
     index: MapIndex, step: Step, lines: SourceLines, described: Mapping[str, str]
 ) -> Step:
     """``step`` with the location of the first edge it stands for, the source line there, the
-    description of the item it reaches, and the marks of both items."""
+    description of the item it reaches, the marks of both items and the edge's attributes."""
     edges = index.outgoing(step.start)
     edge = next(e for e in edges if e["kind"] == step.kind and e["to"] == step.end)
     location = where(edge, index.nodes[step.end])
@@ -164,6 +168,7 @@ def _placed(
         description=described.get(step.end),
         start_marks=index.marks(step.start),
         end_marks=index.marks(step.end),
+        attributes=edge_attributes(edge),
     )
 
 
@@ -173,7 +178,7 @@ def _chain_lines(chain: tuple[Step, ...]) -> list[str]:
     lines = []
     for s in chain:
         lines.append(
-            f"    {_escape(s.start)}{mark_text(s.start_marks)} --{_escape(s.kind)}-->"
+            f"    {_escape(s.start)}{mark_text(s.start_marks)} --{_escape(s.kind)}{attribute_text(s.attributes)}-->"
             f" {_escape(s.end)}{mark_text(s.end_marks)}  {_escape(located(s.location))}"
         )
         lines += source_line(s.source)
@@ -205,6 +210,7 @@ def _json_chain(chain: tuple[Step, ...]) -> list[dict[str, Any]]:
         {
             "from": s.start,
             "kind": s.kind,
+            "attributes": dict(s.attributes),
             "to": s.end,
             "from_marks": list(s.start_marks),
             "to_marks": list(s.end_marks),

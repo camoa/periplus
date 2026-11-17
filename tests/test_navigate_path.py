@@ -118,6 +118,7 @@ def test_the_output_is_the_same_every_run(tmp_path: Path) -> None:
     assert json.loads(first)["chains"]["items"][0][0] == {
         "from": "x::a",
         "kind": "calls",
+        "attributes": {},
         "to": "x::b",
         "from_marks": [],
         "to_marks": [],

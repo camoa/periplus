@@ -16,7 +16,7 @@ from typing import Any
 from _navigate import _document, _edge, _node
 from jsonschema import Draft202012Validator
 
-from periplus.navigate import diff, find, sets, show, walk
+from periplus.navigate import diff, find, path, sets, show, walk
 from periplus.navigate import slice as slicing
 
 SCHEMA = (
@@ -153,3 +153,18 @@ def test_diff_names_a_changed_attribute_and_join_counts_the_copies(tmp_path: Pat
     joined = sets.run(tmp_path, {}, "join", [old, new], None)
     assert joined.warnings and "0 things and 1 edge differ" in joined.warnings[0]
     assert sets.run(tmp_path, {}, "common", [old, old], None).warnings == ()
+
+
+def test_path_prints_the_attributes_inside_the_step_arrow(tmp_path: Path) -> None:
+    report = path.run(tmp_path, {}, BUILD, CHECK, (), 0, _map(tmp_path))
+    document = json.loads(path.render_json(report))
+
+    assert _line(path.render_text(report), "-->").startswith(
+        f"    {BUILD} --registers [key: #check, #fix]--> {CHECK}  "
+    )
+    (step,) = document["chains"]["items"][0]
+    assert step["attributes"] == {"key": DIFFERS}
+    assert json.loads(path.render_json(path.run(tmp_path, {}, BUILD, PLAIN, (), 0, _map(tmp_path))))[
+        "chains"
+    ]["items"][0][0]["attributes"] == {}
+    assert _valid(document, "path") == []

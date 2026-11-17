@@ -423,10 +423,11 @@
               "items": {
                 "type": "array",
                 "items": {
-                  "type": "object", "additionalProperties": false, "required": ["from", "kind", "to", "from_marks", "to_marks", "location", "source", "description"],
+                  "type": "object", "additionalProperties": false, "required": ["from", "kind", "attributes", "to", "from_marks", "to_marks", "location", "source", "description"],
                   "properties": {
                     "from": {"type": "string"},
                     "kind": {"type": "string"},
+                    "attributes": {"$ref": "#/$defs/edge_attributes"},
                     "to": {"type": "string"},
                     "from_marks": {"$ref": "#/$defs/marks", "description": "The marks of the step's from node."},
                     "to_marks": {"$ref": "#/$defs/marks", "description": "The marks of the step's to node."},
