@@ -11,7 +11,7 @@ from typing import Any
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import problem_lines
-from periplus.navigate.mapfile import MapIndex, as_json, load_map, reading_fields
+from periplus.navigate.mapfile import MapIndex, as_json, load_map, map_flag, reading_fields
 from periplus.navigate.walk import (
     HUB,
     CauseRow,
@@ -49,6 +49,7 @@ class DepthReport:
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
     piped: bool = False
+    map_path: Path | None = None
 
     @property
     def exit_code(self) -> ExitCode:
@@ -112,6 +113,7 @@ def measure(
         index.declares_causes,
         tuple(notes),
         piped=piped,
+        map_path=map_path,
     )
 
 
@@ -140,6 +142,7 @@ def render_text(report: DepthReport) -> str:
     """One line per direction, then the touching line and the undeclared line when there are any."""
     args, note = start_args(report.starts, report.piped)
     named = " ".join(_escape(s) for s in args)
+    on = _escape(map_flag(report.map_path))
     lines = [head_line("depth", report.starts)]
     if report.starts:
         lines.append(summary("sets off:", report.off, True))
@@ -150,12 +153,12 @@ def render_text(report: DepthReport) -> str:
             verb = "points" if report.pointers == 1 else "point"
             parts.append(
                 f"{amount(report.pointers, 'thing')} {verb} at {'it' if one else 'them'}"
-                f" ({_kinds(report.pointed)}); see periplus affected {named} --touch{note}"
+                f" ({_kinds(report.pointed)}); see periplus affected {named} --touch{on}{note}"
             )
         if report.pointees:
             parts.append(
                 f"{'it points' if one else 'they point'} at {amount(report.pointees, 'thing')}"
-                f" ({_kinds(report.pointing)}); see periplus neighbors {named} --touch{note}"
+                f" ({_kinds(report.pointing)}); see periplus neighbors {named} --touch{on}{note}"
             )
         if parts:
             lines.append(f"{'touching:':<12}" + "; ".join(parts))

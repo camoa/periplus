@@ -46,7 +46,7 @@ def run(
             problem = Problem(ExitCode.OUTPUT_UNWRITABLE, message, {"path": str(target)})
             return ExtractReport(problems=(problem,))
         with reading_fields(start, map_path):
-            index = MapIndex(document)
+            index = MapIndex(document, map_path)
             found, notes = resolve_all(index, ids)
             kept = set(found)
             nodes = [node for node in document["nodes"] if node["id"] in kept]

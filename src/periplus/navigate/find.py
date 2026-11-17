@@ -26,6 +26,7 @@ from periplus.navigate.mapfile import (
     as_json,
     as_text,
     load_document,
+    map_flag,
     reading_fields,
 )
 from periplus.navigate.names import Names
@@ -200,7 +201,8 @@ def _suggestions(index: MapIndex, type_name: str) -> list[str]:
 
 def _unknown(index: MapIndex, type_name: str) -> str:
     """The warning for a type the map does not hold, with the types it may have meant."""
-    warning = f"no type named {type_name!r} is in the map; periplus types lists them"
+    types = f"periplus types{map_flag(index.given)}"
+    warning = f"no type named {type_name!r} is in the map; {types} lists them"
     suggested = _suggestions(index, type_name)
     return f"{warning}; did you mean: {', '.join(suggested)}" if suggested else warning
 
@@ -240,7 +242,7 @@ def run(
         document = load_document(start, env, map_path)[1]
         _, told, problems = read_descriptions(start, map_path)
         with reading_fields(start, map_path):
-            index = MapIndex(document)
+            index = MapIndex(document, map_path)
             lines = SourceLines(start, map_path)
             names = Names(index)
             places = Places(index, names)

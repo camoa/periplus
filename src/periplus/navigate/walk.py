@@ -27,6 +27,7 @@ from periplus.navigate.mapfile import (
     as_json,
     as_text,
     load_map,
+    map_flag,
     reading_fields,
 )
 from periplus.navigate.names import Names
@@ -104,6 +105,7 @@ class WalkReport:
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
     more: tuple[tuple[str, int], ...] = ()
+    map_path: Path | None = None
 
     @property
     def exit_code(self) -> ExitCode:
@@ -256,6 +258,7 @@ def _raw(
         resolved + kind_warnings(kinds, held),
         problems,
         tuple(sorted(more.items())),
+        map_path,
     )
 
 
@@ -285,7 +288,8 @@ def render_text(report: WalkReport | CauseReport) -> str:
         )
         lines += source_line(row.source)
         lines += description_line(row.description)
-    lines += [stand_in_line(node, n) for node, n in report.more]
+    on = _escape(map_flag(report.map_path))
+    lines += [stand_in_line(node, n) + on for node, n in report.more]
     note = footer(report.rows)
     if note:
         lines.append(note)

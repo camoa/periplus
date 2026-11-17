@@ -147,8 +147,9 @@ periplus find login --ids | periplus pieces -
 
 A command a report suggests, such as the one that shows all, names the starts it was given when
 there are three or fewer. When there are more, or they came from standard input, it names `-`
-instead and ends with `(with the same ids piped in)`: pipe in the same ids again. When `slice` was
-given `--map PATH`, each command its report suggests ends with the same `--map PATH`.
+instead and ends with `(with the same ids piped in)`: pipe in the same ids again. When a command
+was given `--map PATH`, each command its report or its messages suggest carries the same
+`--map PATH`.
 
 **`--limit` budgets.** `--limit N` sets how much a text report may hold, and `--limit 0` lifts the
 limit. What `N` counts depends on the command:

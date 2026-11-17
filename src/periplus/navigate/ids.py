@@ -8,7 +8,7 @@ from typing import TextIO
 
 from periplus.errors import Problem
 from periplus.navigate.listing import first_location, place, problem_lines
-from periplus.navigate.mapfile import MapIndex, NodeNotFound, as_text
+from periplus.navigate.mapfile import MapIndex, NodeNotFound, as_text, map_flag
 from periplus.report import _escape
 
 _ESCAPE = re.compile(r"\\(?:(\\)|n|r|t|x([0-9a-f]{2})|u([0-9a-f]{4}))")
@@ -79,9 +79,8 @@ def resolve(index: MapIndex, text: str, close: bool = True) -> tuple[str, tuple[
     try:
         index.node(text)
     except NodeNotFound as error:
-        raise NodeNotFound(
-            str(error), {**error.detail, "lines": f"hint: run periplus find {_escape(text)}"}
-        ) from None
+        hint = f"hint: run periplus find {_escape(text)}{_escape(map_flag(index.given))}"
+        raise NodeNotFound(str(error), {**error.detail, "lines": hint}) from None
     return text, ()
 
 

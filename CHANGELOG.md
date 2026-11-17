@@ -62,6 +62,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - `periplus slice` prints a start given as an id escaped once; before, a backslash in the id printed as four.
+- A command that a navigation report or message suggests carries `--map PATH` when the run was given one: the `see periplus show NAME` line of a raw `neighbors` or `affected` walk, the `touching:` commands of `depth` and `reach`, `periplus find` after an id no node has and in its `hint:` line, `periplus types` after a type `find` does not know, and `periplus check-map` after a damaged map. Before, only `slice` and the `all:` line of a walk did.
 - `periplus slice` prints each word that found a start escaped once, as it prints an id; before, a backslash in the word printed as four.
 - A YAML file with an empty key written once, as `'': value`, is read; before, `periplus map` stopped with exit 20 and said the key was written twice or was not a plain scalar. A key written twice, or one that is a mapping or a list, is still refused, each with its own message.
 - `drupal_basic`'s `config_names_form` ran to every form id a captcha point or `honeypot.settings` named, switched on or not; it now runs only to a form switched on, and the rest have `config_names_form_off`.

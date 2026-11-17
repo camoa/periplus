@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import shlex
 from collections import defaultdict
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -34,6 +35,7 @@ __all__ = [
     "is_whole",
     "load_document",
     "load_map",
+    "map_flag",
     "reading_fields",
 ]
 
@@ -63,8 +65,9 @@ STAND_INS = 8
 class MapIndex:
     """A loaded map with its edges indexed by end and its type hierarchy by parent."""
 
-    def __init__(self, document: Mapping[str, Any]) -> None:
-        """Index ``document``, which has the map outline ``load_map`` checks."""
+    def __init__(self, document: Mapping[str, Any], given: Path | None = None) -> None:
+        """Index ``document``, which has the map outline ``load_map`` checks; ``given`` is the
+        ``--map`` path it was read from, which each command a report suggests carries."""
         self.nodes: dict[str, dict[str, Any]] = {n["id"]: n for n in document["nodes"]}
         self._outgoing: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self._incoming: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -79,6 +82,7 @@ class MapIndex:
             if parent is not None:
                 self._subtypes[parent].append(row["type"])
         self.edges: list[dict[str, Any]] = list(document["edges"])
+        self.given = given
         # The realizing kinds whose from end is the concrete one, those whose to end is, and all.
         self._concrete_from = frozenset(as_text(k) for k in document.get("realizing_kinds", ()))
         self._concrete_to = frozenset(as_text(k) for k in document.get("realizing_to_kinds", ()))
@@ -197,8 +201,9 @@ class MapIndex:
             return found
         close = difflib.get_close_matches(id, sorted(self.nodes), n=5)
         hint = f"; close ids: {', '.join(close)}" if close else ""
+        find = f"periplus find{map_flag(self.given)}"
         raise NodeNotFound(
-            f"no node has the id {id!r}{hint}; periplus find searches the ids",
+            f"no node has the id {id!r}{hint}; {find} searches the ids",
             {"id": id},
         )
 
@@ -229,17 +234,23 @@ def load_document(start: Path, env: Mapping[str, str], map_path: Path | None) ->
 def load_map(start: Path, env: Mapping[str, str], map_path: Path | None) -> MapIndex:
     """Read the map as ``load_document`` does and index it in memory."""
     try:
-        return MapIndex(load_document(start, env, map_path)[1])
+        return MapIndex(load_document(start, env, map_path)[1], map_path)
     except (KeyError, TypeError) as error:
         raise damaged(start, map_path, error) from error
+
+
+def map_flag(map_path: Path | None) -> str:
+    """The `` --map PATH`` a suggested command carries when the run was given one, else empty."""
+    return "" if map_path is None else f" --map {shlex.quote(str(map_path))}"
 
 
 def damaged(start: Path, map_path: Path | None, error: Exception) -> NotAMap:
     """The ``NotAMap`` for a field a navigation command read from a map ``load_map`` accepted."""
     path = _locate(start, map_path)
+    check = f"periplus check-map{map_flag(map_path)}"
     return NotAMap(
         f"{path} is damaged: a node, edge or type_hierarchy row or field is missing or malformed "
-        f"({type(error).__name__}: {error}); run periplus check-map for the exact error",
+        f"({type(error).__name__}: {error}); run {check} for the exact error",
         {"path": str(path)},
     )
 

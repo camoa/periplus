@@ -54,10 +54,12 @@ def test_starts_read_from_standard_input_print_a_dash_however_few(tmp_path: Path
 def test_depth_touching_lines_follow_the_same_rule(tmp_path: Path) -> None:
     lines = depth.render_text(depth.run(tmp_path, {}, FOUR, _write(tmp_path))).splitlines()
     touching = next(line for line in lines if line.startswith("touching:"))
+    on = f"--map {tmp_path / 'map.json'}"
+    piped = f"see periplus affected - --touch {on} (with the same ids piped in)"
 
-    assert touching.endswith("see periplus affected - --touch (with the same ids piped in)")
+    assert touching.endswith(piped)
     one = depth.render_text(depth.run(tmp_path, {}, FOUR[:1], _write(tmp_path), piped=True))
-    assert "see periplus affected - --touch (with the same ids piped in)" in one
+    assert piped in one
 
 
 def test_the_command_line_says_piped_for_dash(

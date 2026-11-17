@@ -317,7 +317,7 @@ def run(
                 problems=(Problem(ExitCode.OUTPUT_UNWRITABLE, message, {"path": str(target)}),)
             )
         with reading_fields(start, map_path):
-            index = MapIndex(document)
+            index = MapIndex(document, map_path)
             resolved = [resolve(index, text) for text in ids]
             begun = {node_id for node_id, _ in resolved}
             begun |= _under(document, prefixes)
@@ -404,7 +404,7 @@ def _piece(
         document = load_document(start, env, map_path)[1]
         described, problems = node_descriptions(start, map_path)
         with reading_fields(start, map_path):
-            index = MapIndex(document)
+            index = MapIndex(document, map_path)
             picked: dict[str, Start] = {}
             warnings: list[str] = []
             rest: list[str] = []

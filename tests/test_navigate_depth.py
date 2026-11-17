@@ -72,6 +72,7 @@ def test_the_touching_line_counts_what_points_at_the_start_by_kind(tmp_path: Pat
 
     assert lines[3] == (
         "touching:   2 things point at it (links_to 2); see periplus affected x::n0 --touch"
+        f" --map {tmp_path / 'map.json'}"
     )
 
 

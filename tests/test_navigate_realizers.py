@@ -150,7 +150,10 @@ def test_the_forms_of_one_node_are_capped_with_a_count_line(tmp_path: Path) -> N
 
     assert len([w for w in WIDES if w in [row.id for row in report.rows.items]]) == 8
     assert WIDES[:8] == [row.id for row in report.rows.items if row.via == WIDE]
-    assert f"  +4 more stand for {WIDE}, past the first 8; see periplus show {WIDE}" in lines
+    assert (
+        f"  +4 more stand for {WIDE}, past the first 8; see periplus show {WIDE}"
+        f" --map {tmp_path / '.periplus' / 'map.json'}"
+    ) in lines
 
 
 def test_a_form_row_names_the_relation(tmp_path: Path) -> None:
