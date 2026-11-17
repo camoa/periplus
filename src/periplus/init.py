@@ -394,14 +394,14 @@ def _placement_line(one: Placement) -> str:
     """One folder's line: kept, written to the settings, or not placed."""
     name = _escape(one.folder)
     if one.path is None:
-        tried = _escape(", ".join((*one.default, *one.candidates)))
+        tried = _escape(", ".join(dict.fromkeys((*one.default, *one.candidates))))
         return (
             f"  unplaced  {name}: none of {tried} exists; declare it under folders in "
             f"{PROJECT_MARKER}/{SETTINGS_FILENAME}"
         )
     if one.kept:
         return f"  folder    {name} = {_escape(one.path)}, the pack's default"
-    return (
-        f"  folder    {name} = {_escape(one.path)}, written to the settings; the default "
-        f"{_escape(', '.join(one.default) or 'none')} does not exist"
-    )
+    written = f"  folder    {name} = {_escape(one.path)}, written to the settings"
+    if not one.default:
+        return f"{written}; it has no default"
+    return f"{written}; the default {_escape(', '.join(one.default))} does not exist"

@@ -177,3 +177,22 @@ def test_the_command_places_the_folders_of_the_packs_it_detected(
     assert status == 0
     assert "  folder    code = app/code, written to the settings;" in printed.getvalue()
     assert _folders(repo) == {"code": "app/code"}
+
+
+def test_init_names_each_candidate_once_and_says_when_a_folder_has_no_default(
+    tmp_path: Path,
+) -> None:
+    manifest = MANIFEST.replace(
+        "  code: [src/code, app/code]\n",
+        "  code: [./lib/code, src/code, src/code]\n  extra: [app/x, app/x]\n",
+    )
+    repo = _repo(tmp_path, "app/x")
+    placed = place_folders(repo, _candidates(tmp_path, manifest), ["thing@0.1.0"])
+
+    rendered = render_text(initialise_project(repo, packs=["thing@0.1.0"], placed=placed))
+
+    assert rendered.endswith(
+        "  unplaced  code: none of ./lib/code, src/code exists; declare it under folders in "
+        ".periplus/settings.yml\n"
+        "  folder    extra = app/x, written to the settings; it has no default\n"
+    )

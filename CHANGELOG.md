@@ -66,6 +66,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `periplus slice` prints each word that found a start escaped once, as it prints an id; before, a backslash in the word printed as four.
 - A YAML file with an empty key written once, as `'': value`, is read; before, `periplus map` stopped with exit 20 and said the key was written twice or was not a plain scalar. A key written twice, or one that is a mapping or a list, is still refused, each with its own message.
 - Two loaded packs, neither depending on the other, that give a folder the same value agree; before, `periplus validate` and `periplus map` stopped with exit 18 and said the folder had different values.
+- `periplus init` names each folder candidate once in its `unplaced` line, and says `it has no default` for a folder it placed that has no default; before, it repeated a candidate two packs listed or the default listed again, and printed `the default none does not exist`.
 - `drupal_basic`'s `config_names_form` ran to every form id a captcha point or `honeypot.settings` named, switched on or not; it now runs only to a form switched on, and the rest have `config_names_form_off`.
 
 ## [0.8.0] - 2026-11-16

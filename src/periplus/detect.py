@@ -108,7 +108,7 @@ class Placement:
 
     ``path`` is the pack's default as written when that exists (``kept`` is true), else the first
     candidate that exists, else ``None``. ``default`` is the folder's values in the packs and
-    ``candidates`` its candidates, both as written.
+    ``candidates`` its candidates, each once, both as written.
     """
 
     folder: str
@@ -159,12 +159,12 @@ def _place(
     overrides: dict[str, str] = {}
     placed = []
     for name in sorted(listed):
-        default, candidates = tuple(settled.get(name) or ()), tuple(listed[name])
+        default, candidates = tuple(settled.get(name) or ()), tuple(dict.fromkeys(listed[name]))
         if default and _found(root, name, packs, overrides):
             placed.append(Placement(name, ", ".join(default), True, default, candidates))
             continue
         path = next(
-            (one for one in listed[name] if _found(root, name, packs, {**overrides, name: one})),
+            (one for one in candidates if _found(root, name, packs, {**overrides, name: one})),
             None,
         )
         if path is not None:
