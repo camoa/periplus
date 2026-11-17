@@ -680,7 +680,7 @@ def _edge(
                 {"kind": kind, "from": source, "to": target},
             )
     places = sorted({(edge.file, edge.line) for edge in group})
-    values: dict[str, list[tuple[tuple[str, int, str, str], str]]] = {}
+    values: dict[str, list[tuple[tuple[str, int, str, str], Any]]] = {}
     sets: dict[tuple[str, str, str], set[str]] = {}
     for e in group:
         row = sets.setdefault((e.pack, e.rule, e.confidence), set())

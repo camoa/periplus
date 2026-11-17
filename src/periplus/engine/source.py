@@ -24,6 +24,7 @@ __all__ = [
     "load_text",
     "plain",
     "resolve_path",
+    "split_item",
 ]
 
 _CORE = "tag:yaml.org,2002:"
@@ -166,6 +167,16 @@ def resolve_path(root: dict[str, Entry], path: str) -> list[Hit]:
             found.extend(_step(hit.value, segment))
         hits = found
     return hits
+
+
+def split_item(path: str) -> tuple[str, str] | None:
+    """The key path cut after its last star segment: the path of the items it reads, and the path
+    inside one item, ``""`` for the item itself; ``None`` when no segment is a star."""
+    segments = path.split(".")
+    if "*" not in segments:
+        return None
+    last = len(segments) - segments[::-1].index("*")
+    return ".".join(segments[:last]), ".".join(segments[last:])
 
 
 def _step(value: Any, segment: str) -> Sequence[Hit]:

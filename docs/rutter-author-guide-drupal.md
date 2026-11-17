@@ -245,6 +245,9 @@ validators (`validated_by`), route access checks (`access_checked_by_service`,
 `access_checked_by`), route alters (`alters_routes`), the views plugins a view uses
 (`view_uses_field_plugin` and its siblings) and `has_attribute`. [Bundled rutters](rutters.md)
 names each rutter's reach, and the head of its `pack.yaml` lists it in full.
+A `has_form_handler` or `has_route_provider` edge holds, in the edge attribute `entry`, the key
+under the handler group that names the class, as `edit` or `html`; a class named under two keys
+holds both, under `differs`. A `tagged_as` edge holds its own tag's `applies_to` and `priority`.
 
 - `config_provided_by` and `config_provided_by_theme`, from a configuration object to a module
   or a theme: each simple configuration file, one with no top-level `uuid`, names the extension

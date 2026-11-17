@@ -5,7 +5,7 @@ from __future__ import annotations
 import posixpath
 import re
 from bisect import bisect_right
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from fnmatch import fnmatchcase
 from functools import partial
@@ -44,6 +44,7 @@ from periplus.engine.source import (
     load_text,
     plain,
     resolve_path,
+    split_item,
 )
 from periplus.engine.tree import (
     Grammar,
@@ -140,8 +141,8 @@ class FoundEdge:
     #: The ends, ``source`` or ``target``, written ``{declared: <type>}``: when no rule finds such
     #: an end, it takes its named type alone, not the kind's.
     declared_ends: tuple[str, ...] = ()
-    #: The name and the filled value of each attribute the rule wrote on the edge at this place.
-    attributes: tuple[tuple[str, str], ...] = ()
+    #: The name and the value of each attribute the rule wrote on the edge at this place.
+    attributes: tuple[tuple[str, Any], ...] = ()
 
 
 def run_file_rules(
@@ -324,7 +325,8 @@ def run_map_rules(
     made before. A fire makes one record at each location of the matched node. An ``unless`` chain
     reads the pass's map too, so an edge a later pass makes does not take back an earlier fire.
     An ``unless_matched`` chain runs from the node ``follow`` reached, with its captures, and when
-    it reaches a node that one result makes nothing.
+    it reaches a node that one result makes nothing. An ``edge_attribute`` step reads the values
+    the file rules wrote on an edge, never a map rule's, so its values are finite too.
     """
     rules = [
         rule
@@ -336,6 +338,8 @@ def run_map_rules(
     found = {node.id for node in nodes}
     ends = [_landed_end(edge, found) for edge in edges]
     known = found | {end for edge in ends for end in (edge.source, edge.target)}
+    # Only the file rules' values: a value a map rule wrote, read back, could grow every pass.
+    held = _edge_values_of(ends)
     made_nodes: list[FoundNode] = []
     made_edges: list[FoundEdge] = []
     seen: set[FoundNode | FoundEdge] = set()
@@ -373,15 +377,16 @@ def run_map_rules(
             for node_id in candidates[rule.matches_type]:
                 values = _captured(rule.where, node_id, dict(rule_set.values))
                 if values is None or any(
-                    _follow(chain, node_id, dict(values), known, out) for chain in rule.unless
+                    _follow(chain, node_id, dict(values), known, out, None, held)
+                    for chain in rule.unless
                 ):
                     continue
                 misses: set[str] = set()
-                followed = _follow(rule.follow, node_id, values, known, out, misses)
+                followed = _follow(rule.follow, node_id, values, known, out, misses, held)
                 missed.update((rule.name, node_id, miss) for miss in misses)
                 for reached, captured in followed:
                     if any(
-                        _follow(chain, reached, dict(captured), known, out)
+                        _follow(chain, reached, dict(captured), known, out, None, held)
                         for chain in rule.unless_matched
                     ):
                         continue
@@ -439,6 +444,7 @@ def withhold_found(
     for edge in ends:
         out.setdefault(("edge", edge.kind, edge.source), set()).add(edge.target)
         out.setdefault(("incoming_edge", edge.kind, edge.target), set()).add(edge.source)
+    held = _edge_values_of(ends)
     taken: set[tuple[str, str, int]] = set()
     fires: dict[tuple[str, str], int] = {}
     for rule in rules:
@@ -447,12 +453,13 @@ def withhold_found(
         for node_id in sorted(set[str]().union(*(by_type[t] for t in allowed))):
             values = _captured(rule.where, node_id, dict(rule_set.values))
             if values is None or any(
-                _follow(chain, node_id, dict(values), known, out) for chain in rule.unless
+                _follow(chain, node_id, dict(values), known, out, None, held)
+                for chain in rule.unless
             ):
                 continue
-            for reached, captured in _follow(rule.follow, node_id, values, known, out):
+            for reached, captured in _follow(rule.follow, node_id, values, known, out, None, held):
                 if any(
-                    _follow(chain, reached, dict(captured), known, out)
+                    _follow(chain, reached, dict(captured), known, out, None, held)
                     for chain in rule.unless_matched
                 ):
                     continue
@@ -567,6 +574,22 @@ def _fills_in_tables(where: Sequence[Condition], fills: Mapping[str, str]) -> bo
     return True
 
 
+#: The texts each edge attribute holds on an edge, by the edge's kind, from and to, and its name.
+_EdgeValues = Mapping[tuple[str, str, str, str], set[str]]
+
+
+def _edge_values_of(edges: Iterable[FoundEdge]) -> dict[tuple[str, str, str, str], set[str]]:
+    """The text of each attribute value the edges hold, by kind, from, to and attribute name; a
+    value with no text is left out."""
+    found: dict[tuple[str, str, str, str], set[str]] = {}
+    for edge in edges:
+        for name, value in edge.attributes:
+            text = _text(value)
+            if text is not None:
+                found.setdefault((edge.kind, edge.source, edge.target, name), set()).add(text)
+    return found
+
+
 def _follow(
     steps: Sequence[tuple[str, Any]],
     at: str,
@@ -574,41 +597,68 @@ def _follow(
     known: set[str],
     out: Mapping[tuple[str, str, str], set[str]],
     misses: set[str] | None = None,
+    held: _EdgeValues | None = None,
+    walked: tuple[str, str, str] | None = None,
 ) -> list[tuple[str, dict[str, str]]]:
     """Each id the steps reach from the id ``at``, in order, with the values its ``id_matches``
     steps captured. ``out`` holds the ids an ``edge`` or ``incoming_edge`` step of a kind reaches
     from an id. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
     ids its kinds reach, breadth first, that give any. A ``try`` step runs its steps and the steps
     after it from ``at``, else the steps after it from ``at`` with the values it had. An
-    ``id_matches`` step fills each ``{name}`` with that value as literal text. ``misses`` collects
-    each id a ``node`` step names that is not known."""
+    ``id_matches`` step fills each ``{name}`` with that value as literal text. An
+    ``edge_attribute`` step runs the steps after it once for each text ``held`` gives that
+    attribute on the edge ``walked``, the kind, from and to of the edge the step before walked,
+    with that text under the attribute's name. ``misses`` collects each id a ``node`` step names
+    that is not known."""
     if not steps:
         return [(at, values)]
     (name, value), rest = steps[0], steps[1:]
     if name == "try":
-        tried = _follow((*value, *rest), at, values, known, out, misses)
-        return tried or _follow(rest, at, values, known, out, misses)
+        tried = _follow((*value, *rest), at, values, known, out, misses, held)
+        return tried or _follow(rest, at, values, known, out, misses, held)
     if name in ("edge", "incoming_edge"):
         return [
             r
             for to in sorted(out.get((name, value, at), ()))
-            for r in _follow(rest, to, values, known, out, misses)
+            for r in _follow(
+                rest,
+                to,
+                values,
+                known,
+                out,
+                misses,
+                held,
+                (value, at, to) if name == "edge" else (value, to, at),
+            )
+        ]
+    if name == "edge_attribute":
+        texts = (held or {}).get((*walked, value), set()) if walked else set()
+        return [
+            r
+            for text in sorted(texts)
+            for r in _follow(rest, at, {**values, value: text}, known, out, misses, held)
         ]
     if name == "node":
         to = _fill(value, values)
         if to is not None and to not in known and misses is not None:
             misses.add(to)
         return (
-            _follow(rest, to, values, known, out, misses) if to is not None and to in known else []
+            _follow(rest, to, values, known, out, misses, held)
+            if to is not None and to in known
+            else []
         )
     if name == "id_matches":
         expression, pattern = value
         filled = filled_pattern(expression, values) if value_names(expression) else pattern
         captured = None if filled is None else _captured((IdMatches(filled),), at, dict(values))
-        return _follow(rest, at, captured, known, out, misses) if captured is not None else []
+        if captured is None:
+            return []
+        return _follow(rest, at, captured, known, out, misses, held)
     level, seen = [at], {at}
     while level:
-        reached = [r for here in level for r in _follow(rest, here, values, known, out, misses)]
+        reached = [
+            r for here in level for r in _follow(rest, here, values, known, out, misses, held)
+        ]
         if reached:
             return reached
         level = sorted(
@@ -1104,7 +1154,7 @@ def _declarations(
                     pack=rule.pack,
                     rule=rule.name,
                     confidence=rule.confidence,
-                    attributes=_read_attributes(rule, values, line),
+                    attributes=_read_attributes(rule.templates, values, line),
                 )
             )
         for spec in rule.edges:
@@ -1174,6 +1224,7 @@ def _declarations(
                 if not ends[-1] and not unwritten:
                     lacking = f"edge {spec.kind}: no value for {end}"
                     skipped.append((file, line, rule.name, lacking))
+            marks = tuple((n, v) for n, v, _ in _read_attributes(spec.attributes, values, line))
             edges.extend(
                 FoundEdge(
                     spec.kind,
@@ -1191,6 +1242,7 @@ def _declarations(
                         for side, named in zip(("source", "target"), spec.declared, strict=True)
                         if named
                     ),
+                    attributes=marks,
                 )
                 for (source, _), (target, at) in product(*ends)
             )
@@ -1311,9 +1363,19 @@ def _attributes(
                     skipped.append((file, line, rule.name, f"edge {spec.kind}: no value for {end}"))
             source, target = ends
             if source and target:
+                args = ((name, argument_of(match, key, grammar)) for name, key in spec.attributes)
+                texts = ((name, _literal(v, grammar, parsed, enclosing)) for name, v in args if v)
                 edges.append(
                     FoundEdge(
-                        spec.kind, source, target, file, line, rule.pack, rule.name, rule.confidence
+                        spec.kind,
+                        source,
+                        target,
+                        file,
+                        line,
+                        rule.pack,
+                        rule.name,
+                        rule.confidence,
+                        attributes=tuple((name, v) for name, v in texts if v is not None),
                     )
                 )
         if (
@@ -1400,6 +1462,7 @@ def _annotations(
                         skipped.append((file, line, rule.name, lacking))
                 source, target = ends
                 if source and target:
+                    keyed = ((n, entries.get(key, (None, 0))[0]) for n, key in spec.attributes)
                     edges.append(
                         FoundEdge(
                             spec.kind,
@@ -1410,6 +1473,7 @@ def _annotations(
                             rule.pack,
                             rule.name,
                             rule.confidence,
+                            attributes=tuple((n, v) for n, v in keyed if v is not None),
                         )
                     )
             if len(nodes) + len(edges) == before and len(skipped) == written:
@@ -1755,13 +1819,14 @@ _ATTRIBUTE_CAP = 300
 
 
 def _read_attributes(
-    rule: Rule, values: Mapping[str, Any], line: int
+    templates: Sequence[tuple[str, str]], values: Mapping[str, Any], line: int
 ) -> tuple[tuple[str, str, int], ...]:
-    """Each attribute of a declaration rule at ``line``. A constant template is kept as written; one
-    naming the id's sources is filled from ``values``, its whitespace runs made single spaces, cut
-    at ``_ATTRIBUTE_CAP`` characters, and left out when that leaves no text."""
+    """Each attribute of a declaration rule, on its node or an edge, at ``line``. A constant
+    template is kept as written; one naming the id's sources is filled from ``values``, its
+    whitespace runs made single spaces, cut at ``_ATTRIBUTE_CAP`` characters, and left out when
+    that leaves no text."""
     read = []
-    for name, template in rule.templates:
+    for name, template in templates:
         if not PLACEHOLDER.search(template):
             read.append((name, template, line))
             continue
@@ -1975,7 +2040,8 @@ def _found(
         if reached and not ends and not filtered:
             row = f"edge {spec.kind}: no value for key {', '.join(sources)}"
             skipped.append((file, line, rule.name, row))
-        edges.extend(_edges(rule, rule_set, spec, file, node_id, ends))
+        for end, at, held in ends:
+            edges.extend(_edges(rule, rule_set, spec, file, node_id, [(end, at)], None, held))
     if stated and len(edges) == before and len(skipped) == written:
         skipped.append((file, line, rule.name, "fired and emitted nothing"))
 
@@ -1988,7 +2054,7 @@ def _edges(
     node_id: str,
     ends: list[tuple[str, int]],
     fallback: str | None = None,
-    written: tuple[tuple[str, str], ...] = (),
+    written: tuple[tuple[str, Any], ...] = (),
     whole: str = "",
 ) -> list[FoundEdge]:
     """One edge per composed end and its line, between it and the fire's own node, or the node of
@@ -2167,7 +2233,9 @@ def _references(
     tables = rule_set.tables.get(rule.pack, {})
     # The name child must be a written name only when an edge's to end reads it.
     reads_name = any(spec.template is None for spec in rule.edges)
-    templated = any(s.template is not None or s.from_template is not None for s in rule.edges)
+    templated = any(
+        s.template is not None or s.from_template is not None or s.attributes for s in rule.edges
+    )
     fired = 0
     for match in parsed.by_type.get(rule.reference, ()):
         if not _fires(rule, match, holders, rule_set, grammar, parsed):
@@ -2270,6 +2338,7 @@ def _references(
                     candidates=candidates,
                     miss_at=miss_at,
                     types_tried=spec.types,
+                    attributes=_filled(spec.attributes, values),
                 )
             )
     return fired
@@ -2396,15 +2465,20 @@ def _text(value: Any) -> str | None:
     return str(value).lower() if isinstance(value, bool) else str(value)
 
 
+#: An end value, the line of the key or item that states it, and the edge's attributes there.
+_End = tuple[str, int, tuple[tuple[str, Any], ...]]
+
+
 def _ends(
     spec: EdgeSpec, data: dict[str, Entry], entry: tuple[str | None, int], paths: Mapping[str, str]
-) -> list[tuple[str, int]]:
-    """Each end value the edge names, with the line of the key or item that states it. A template
-    may also name the file's path values."""
+) -> list[_End]:
+    """Each end value the edge names, with the line of the key or item that states it and the
+    edge's attributes there. A template may also name the file's path values."""
     if spec.parts:
         return _composed(spec, data, entry, paths)
     ends = []
-    for hit in resolve_path(data, spec.key):
+    for hit, item_hit in _paired_hits(data, spec.key):
+        given = _edge_values(spec.attributes, data, item_hit)
         items = hit.value if spec.each and isinstance(hit.value, list) else None
         if spec.each and isinstance(hit.value, dict):
             items = list(hit.value.values())
@@ -2427,20 +2501,55 @@ def _ends(
                     _fill(spec.template, {**paths, **values}) if spec.template is not None else raw
                 )
                 if end is not None:
-                    ends.append((end, item.line))
+                    ends.append((end, item.line, given))
     return ends
+
+
+def _paired_hits(data: dict[str, Entry], path: str) -> list[tuple[Hit, Hit | None]]:
+    """Each place the key path reaches, in ``resolve_path``'s order, with the list item it lies in:
+    the hit of the path cut after its last star, ``None`` when no segment is a star."""
+    split = split_item(path) if path else None
+    if split is None:
+        return [(hit, None) for hit in resolve_path(data, path)]
+    prefix, rest = split
+    return [
+        (hit, item)
+        for item in resolve_path(data, prefix)
+        for hit in (resolve_path(item.value, rest) if rest else [item])
+    ]
+
+
+def _edge_values(
+    attributes: Sequence[tuple[str, str]], data: dict[str, Entry], item: Hit | None
+) -> tuple[tuple[str, Any], ...]:
+    """Each attribute of a data rule's edge whose key path reaches a text, number or true or false
+    value first: a path with a star read inside the list ``item`` of the end, which the rule's
+    check has made the same list, else read in the fire's ``data``."""
+    found = []
+    for name, path in attributes:
+        split = split_item(path)
+        if split is None:
+            hits = resolve_path(data, path)
+        elif item is None:
+            hits = []
+        else:
+            hits = resolve_path(item.value, split[1]) if split[1] else [item]
+        value = plain(hits[0].value) if hits else None
+        if value is not None and not isinstance(value, (dict, list)):
+            found.append((name, value))
+    return tuple(found)
 
 
 def _composed(
     spec: EdgeSpec, data: dict[str, Entry], entry: tuple[str | None, int], paths: Mapping[str, str]
-) -> list[tuple[str, int]]:
+) -> list[_End]:
     """The list form: one template over several key sources, one edge per matched each entry.
 
     An ``entry`` part is the fire's own key, at its line; a whole-file fire has none. With
     ``listed_at``, an end that is not an item of the list at that key path gives no edge.
     """
     fixed: dict[str, str] = {}
-    each: list[Hit] | None = None
+    each: list[tuple[Hit, Hit | None]] | None = None
     line = 0
     for mode, path in spec.parts:
         if mode == "file":
@@ -2451,10 +2560,11 @@ def _composed(
                 return []
             fixed["key"], line = entry[0], line or entry[1]
             continue
-        hits = resolve_path(data, path)
         if mode == "each":
-            each = hits
-        elif hits and _text(hits[0].value) is not None:
+            each = _paired_hits(data, path)
+            continue
+        hits = resolve_path(data, path)
+        if hits and _text(hits[0].value) is not None:
             fixed[path.rsplit(".", 1)[-1]] = str(_text(hits[0].value))
             line = line or hits[0].line
         else:
@@ -2463,7 +2573,7 @@ def _composed(
     if spec.listed_at is not None:
         listed = {_text(item.value) for item in resolve_path(data, f"{spec.listed_at}.*")}
     ends = []
-    for hit in each if each is not None else [Hit(None, line, None)]:
+    for hit, item in each if each is not None else [(Hit(None, line, None), None)]:
         values = {**paths, **fixed}
         if each is not None:
             values["key"] = hit.key if hit.key is not None else str(_text(hit.value))
@@ -2473,7 +2583,7 @@ def _composed(
                 continue
         end = _fill(spec.template, values)
         if end is not None and (listed is None or end in listed):
-            ends.append((end, hit.line))
+            ends.append((end, hit.line, _edge_values(spec.attributes, data, item)))
     return ends
 
 

@@ -91,6 +91,7 @@ rules:
       kind: names_form_handler
       from: enclosing_declaration
       to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+      attributes: {entry: {template: default}}
   confidence: declared
 
 - rule: form_add_handler_from_attribute
@@ -108,6 +109,7 @@ rules:
       kind: names_form_handler
       from: enclosing_declaration
       to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+      attributes: {entry: {template: add}}
   confidence: declared
 
 - rule: form_edit_handler_from_attribute
@@ -125,6 +127,7 @@ rules:
       kind: names_form_handler
       from: enclosing_declaration
       to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+      attributes: {entry: {template: edit}}
   confidence: declared
 
 - rule: form_delete_handler_from_attribute
@@ -142,6 +145,7 @@ rules:
       kind: names_form_handler
       from: enclosing_declaration
       to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+      attributes: {entry: {template: delete}}
   confidence: declared
 
 - rule: route_provider_html_handler_from_attribute
@@ -159,4 +163,5 @@ rules:
       kind: names_route_provider
       from: enclosing_declaration
       to: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.class_ref]}
+      attributes: {entry: {template: html}}
   confidence: declared

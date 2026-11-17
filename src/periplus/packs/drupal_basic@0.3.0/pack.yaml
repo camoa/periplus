@@ -8,7 +8,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - configuration, modules, themes, services with their tags and classes, routes, permissions,
 #   libraries, templates, entity types, bundles, fields, displays, menu links, local tasks, local
 #   actions, contextual links, block placements and the plugin kinds whose folders are named under folders below. A service's
-#   class may be a class or an interface, as for a service a factory builds;
+#   class may be a class or an interface, as for a service a factory builds, and each tagged_as
+#   edge holds its tag's applies_to and priority, as edge attributes;
 # - each bundle under the id <entity type>.<bundle>, as node.article. A bundle config file of a core
 #   prefix declares it with its label, a configured_by edge to that file and a bundle_of edge to
 #   its entity type. A field instance or a display gives a field_of or displays edge to the bundle
@@ -125,7 +126,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   <constraint class>Validator when the map holds it and the constraint class writes no
 #   validatedBy(); each class an entity type's attribute or annotation names under handlers, as a
 #   has_access_handler, has_list_builder, has_view_builder, has_storage_handler, has_form_handler
-#   or has_route_provider edge from the entity type;
+#   or has_route_provider edge from the entity type, a form handler or route provider holding its
+#   key, such as edit or html, in the edge attribute entry;
 # - each PHP attribute, as a has_attribute edge from the class, method, function, property or
 #   parameter it sits on to its class; each attribute class that extends core's attribute Plugin,
 #   and each annotation class that extends core's annotation Plugin, as a drupal.plugin_type node;
@@ -377,7 +379,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   annotation of a plugin class's docblock.
 # - An entity type handler written as text in an attribute, a form operation other than default,
 #   add, edit and delete, a route provider other than html, and a handler set in code, such as by
-#   hook_entity_type_alter, give no edge. The form operation is not recorded on the edge.
+#   hook_entity_type_alter, give no edge.
 # - A route subscriber that extends another of the project's route subscribers, not
 #   RouteSubscriberBase as written, gets no alters_routes edge.
 # - A hook with a variable part keeps that part in its name: mymod_form_user_login_form_alter
@@ -426,10 +428,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the routes of other core modules get none. user.logout.confirm is mapped on the assumption that
 #   the site runs core 10.3 or later, which added it. A page--a--b template whose path parts hold underscores, or name an
 #   argument as %, links to no path.
-# - The applies_to key of a service's access_check tag is kept as the service's applies_to
-#   attribute, not on the tagged_as edge, because an attribute on an edge is accepted and not
-#   executed. applies_to is read on any tag of a service, and a comma-separated list of keys
-#   joins no route.
+# - applies_to is read on any tag of a service, and a comma-separated list of keys joins no
+#   route.
 # - A route parameter that Drupal converts to an entity because its name is an entity type, with
 #   no options.parameters type, gives no loads_entity_type edge, nor does a type other than
 #   entity:<type>, such as entity_revision:<type>.

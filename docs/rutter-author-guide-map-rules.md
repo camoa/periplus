@@ -18,6 +18,11 @@ and an optional `follow`, a list of steps from that node:
 - `incoming_edge: <kind>` walks the other way: it moves to each node an edge of that kind runs
   from, in id order. From a class, `[{incoming_edge: assigned}]` reaches each variable
   assigned from it.
+- `edge_attribute: <name>`, right after an `edge` or `incoming_edge` step, adds the value the
+  edge just walked holds for that edge attribute as the capture `<name>`, one result for each
+  value it holds; an edge without it gives nothing. It reads what file rules wrote, never what a
+  map rule wrote. `[{edge: names_form_handler}, {edge_attribute: entry}]` carries a form
+  handler's operation to the edge the rule makes.
 - `ancestors: [<kind>]` runs the steps after it from the current node, else from the nearest
   node those kinds reach that gives a result: a member found on a class or its nearest ancestor.
 - `node: <template>` moves to the node whose whole id the template gives from the captures.
@@ -221,7 +226,8 @@ found, or on a node whose type is not at or below a type the declaration's `on` 
 nothing; the map report lists it under Matches skipped, so a referenced end never turns into a
 mapped node. Two rules that give one value write it once, each with its row; two that give
 different values write `differs`, even at the same place, and the report lists the node under
-Attributes that differ between files. No `follow` step reads an attribute, so the passes still end.
+Attributes that differ between files. No `follow` step reads a node attribute, and
+`edge_attribute` reads only the values file rules wrote, so the passes still end.
 
 An edge a map rule emits may carry its own `attributes`, filled from the same captures; a map rule
 writes only a declared one, as

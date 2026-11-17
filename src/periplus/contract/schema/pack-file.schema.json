@@ -108,6 +108,7 @@
       "properties": {
         "edge": {"type": "string", "description": "Move to each node an edge of this declared kind runs to from the current node."},
         "incoming_edge": {"type": "string", "description": "Move to each node an edge of this declared kind runs from to the current node, in id order."},
+        "edge_attribute": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Right after an edge or incoming_edge step: the value the edge just walked holds for the edge attribute of this name joins the values under that name, one result for each value it holds; an edge that holds none gives nothing."},
         "ancestors": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "Run the steps after this one from the current node, else from the nearest node reached by edges of these declared kinds, breadth first, that gives a result: a member found on a class or else on its nearest ancestor."},
         "try": {"items": {"type": "object", "minProperties": 1, "maxProperties": 1}, "description": "A list of follow steps of the kinds above, try included. The steps inside and after it run from the current node, and if they reach nothing the later steps run with the captures it had, so a lookup that may fail (a method on an ancestor the map does not hold) leaves the end to on_miss. An id_matches inside a try that reaches a node rebinds its captures. The engine, not this schema, refuses a value that is not a list or an empty list."},
         "node": {"type": "string", "description": "Move to the node whose whole id this template gives, filled from the captures before it; nothing when no rule found such a node or an edge end."},
@@ -1153,7 +1154,7 @@
             },
             "attributes": {
               "type": "object",
-              "description": "Values written on the edge, not on either endpoint, by name. The engine runs a template, on an edge of a text rule or a map rule: filled as an id or edge end template is, from the captures, values and settings values that rule has; a template naming an absent value sets nothing. One edge found at several places keeps each place's value, as a node attribute does. The other ways to give a value are accepted and not executed.",
+              "description": "Values written on the edge, not on either endpoint, by name, in the form the rule kind's node attributes take. A text or map rule fills a template from its captures, values and settings values; a declaration rule a template from the sources its id names; a reference rule a template from enclosing_type, enclosing_method and its name_matches groups; an attribute rule reads from.attribute_argument, an annotation rule from.annotation_key, and a data rule from.key, a key path with a star read inside the list item the edge's end comes from. A value the rule does not find sets nothing. One edge found at several places keeps each place's value, as a node attribute does. literal, pattern and normalize are accepted and not executed.",
               "propertyNames": {
                 "pattern": "^[a-z][a-z0-9_]*$"
               },

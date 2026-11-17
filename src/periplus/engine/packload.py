@@ -10,6 +10,7 @@ from typing import Any
 
 from periplus.engine.pattern import compile_pattern, compile_unfilled, value_names
 from periplus.engine.select import FileTypes, FolderUnresolved, holds_double_star
+from periplus.engine.source import split_item
 from periplus.engine.tree import STEPS, Grammar, ImportRule, Step, _parser
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.manifest import MANIFEST_FILENAME, LoadedPack
@@ -65,7 +66,9 @@ _TABLE_CONDITIONS = ("in_table", "not_in_table")
 _ANCESTRY = frozenset({"within", "not_within"})
 
 #: The steps of a map rule's follow.
-_FOLLOW_STEPS = ("edge", "incoming_edge", "ancestors", "node", "id_matches", "try")
+_FOLLOW_STEPS = (
+    "edge", "incoming_edge", "edge_attribute", "ancestors", "node", "id_matches", "try"
+)
 
 #: Every key path of the two pack schemas that the engine or the pack check executes. ``*`` is one
 #: key or item. A path starts with the document it sits in: ``manifest.`` or ``file.``.
@@ -181,7 +184,11 @@ EXECUTED_KEYS = frozenset(
         *(f"{_RULE}emits.*.{k}" for k in ("attribute.from", "attribute.template", "edge")),
         f"{_RULE}emits.*.attribute.target",
         f"{_RULE}emits.*.edge.kind",
-        *(f"{_RULE}emits.*.edge.attributes{k}" for k in ("", ".*.template")),
+        *(f"{_RULE}emits.*.edge.attributes{k}" for k in ("", ".*.template", ".*.from")),
+        *(
+            f"{_RULE}emits.*.edge.attributes.*.from.{k}"
+            for k in ("key", "attribute_argument", "annotation_key")
+        ),
         f"{_RULE}emits.*.edge.to.from.attribute_argument",
         f"{_RULE}emits.*.edge.to.from.argument",
         *(
@@ -587,7 +594,9 @@ class EdgeSpec:
     declared: tuple[str, str] = ("", "")
     #: A reference rule's from end written as a template, in place of ``enclosing_declaration``.
     from_template: str | None = None
-    #: A text or map rule's edge attributes, each its name and its template.
+    #: The edge's attributes, each its name and its source: a template on a text, map,
+    #: declaration or reference rule; a key path on a data rule; an argument on an attribute rule;
+    #: a key on an annotation rule.
     attributes: tuple[tuple[str, str], ...] = ()
 
 
@@ -1204,6 +1213,8 @@ def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
                 )
             if name == "id_matches":
                 known.update(value[1].groupindex)
+            elif name == "edge_attribute":
+                known.add(value)
             elif name == "try":
                 reason = walk(value, " inside try", known)
                 if reason:
@@ -1822,16 +1833,6 @@ def _build_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]]) -
         if isinstance(emit, Mapping)
     ):
         raise _Unsupported("only a map rule takes attribute.target")
-    if (
-        item.get("reads") != "map"
-        and "text" not in item.get("match", {})
-        and any(
-            isinstance(emit.get("edge"), Mapping) and "attributes" in emit["edge"]
-            for emit in item.get("emits", [])
-            if isinstance(emit, Mapping)
-        )
-    ):
-        raise _Unsupported("only an edge of a text rule or a map rule takes attributes")
     if item.get("reads") == "map":
         return _build_map(pack, item, tables)
     if (
@@ -2227,7 +2228,13 @@ def _build_declaration(
     block = item.get("id", {})
     source = block.get("from") if isinstance(block, Mapping) and "pattern" not in block else None
     listed = [source] if isinstance(source, str) else source if isinstance(source, list) else []
-    read = {_qualified(s) if isinstance(s, Mapping) else s for s in listed} if attributes else set()
+    written = attributes or any(edge.attributes for edge in edges)
+    read = {_qualified(s) if isinstance(s, Mapping) else s for s in listed} if written else set()
+    if any(not set(PLACEHOLDER.findall(t)) <= read for e in edges for _, t in e.attributes):
+        raise _Unsupported(
+            "an edge attribute of a declaration rule is a template naming only the sources of its "
+            "id"
+        )
     if not all(
         isinstance(a, Mapping)
         and set(a) == {"name", "template"}
@@ -2392,6 +2399,8 @@ def _read_follow(steps: list[Mapping[str, Any]]) -> list[tuple[str, Any]]:
     follow: list[tuple[str, Any]] = []
     for step in steps:
         ((name, value),) = step.items()
+        if name == "edge_attribute" and (not follow or follow[-1][0] not in _WALKS):
+            raise _Unsupported("the follow step edge_attribute comes right after an edge step")
         if name == "id_matches":
             value = (value, _regex(value, compile_unfilled))
         elif name == "ancestors":
@@ -2412,6 +2421,9 @@ def _read_follow(steps: list[Mapping[str, Any]]) -> list[tuple[str, Any]]:
         follow.append((name, value))
     return follow
 
+
+#: The follow steps that walk an edge, whose attributes an ``edge_attribute`` step after reads.
+_WALKS = ("edge", "incoming_edge")
 
 #: The ends of a map rule's edge that name a node: the node it matched, and the node its follow
 #: steps reached.
@@ -2463,7 +2475,10 @@ def _read_map_edge(edge: Mapping[str, Any], followed: bool) -> EdgeSpec:
     )
 
 
-def _edge_templates(edge: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+def _edge_templates(
+    edge: Mapping[str, Any],
+    refused: str = "an edge's attributes are not each a name and a template",
+) -> tuple[tuple[str, str], ...]:
     """An edge's attributes, each its name and its template, by name."""
     given = edge.get("attributes", {})
     if not isinstance(given, Mapping) or not all(
@@ -2471,8 +2486,24 @@ def _edge_templates(edge: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
         and isinstance(value["template"], str)
         for name, value in given.items()
     ):
-        raise _Unsupported("an edge's attributes are not each a name and a template")
+        raise _Unsupported(refused)
     return tuple(sorted((name, value["template"]) for name, value in given.items()))
+
+
+def _edge_sources(edge: Mapping[str, Any], key: str, refused: str) -> tuple[tuple[str, str], ...]:
+    """An edge's attributes, each its name and the source ``{from: {<key>: <source>}}`` names, by
+    name."""
+    given = edge.get("attributes", {})
+    read = [
+        (name, _argument(value.get("from"), key) if set(value) == {"from"} else None)
+        for name, value in (given.items() if isinstance(given, Mapping) else [(None, {})])
+        if isinstance(value, Mapping)
+    ]
+    if not isinstance(given, Mapping) or len(read) != len(given) or any(
+        not isinstance(name, str) or source is None for name, source in read
+    ):
+        raise _Unsupported(refused)
+    return tuple(sorted((str(name), str(source)) for name, source in read))
 
 
 def _read_ending(match: Mapping[str, Any]) -> tuple[str, ...]:
@@ -2541,7 +2572,7 @@ def _build_reference(
         argument = _argument(end.get("from"), "argument") if isinstance(end, Mapping) else None
         start = edge.get("from")
         if (
-            set(edge) != {"kind", "from", "to"}
+            set(edge) - {"attributes"} != {"kind", "from", "to"}
             or (start != "enclosing_declaration" and not _template_end(start))
             or not isinstance(end, Mapping)
             or not set(end)
@@ -2571,6 +2602,14 @@ def _build_reference(
                 "enclosing_type, enclosing_method and the named groups of its name_matches "
                 "conditions"
             )
+        refused = (
+            "an edge attribute of a reference rule is a template naming only enclosing_type, "
+            "enclosing_method and the named groups of its name_matches conditions"
+        )
+        attributes = _edge_templates(edge, refused)
+        named = _REFERENCE_VALUES | groups
+        if any(not set(PLACEHOLDER.findall(t)) <= named for _, t in attributes):
+            raise _Unsupported(refused)
         specs.append(
             EdgeSpec(
                 edge["kind"],
@@ -2591,6 +2630,7 @@ def _build_reference(
                 # The one-type form is a list of that one type.
                 types=tuple(end.get("types", ())) or tuple(end.get("type", "").split()),
                 from_template=from_template,
+                attributes=attributes,
             )
         )
     return Rule(
@@ -2654,7 +2694,7 @@ def _build_attribute(pack: str, item: Mapping[str, Any]) -> Rule:
         )
     nodes = node_types(item)
     attributes = [emit["attribute"] for emit in emits if "attribute" in emit]
-    edges = [_read_attribute_edge(emit["edge"]) for emit in emits if "edge" in emit]
+    edges = [_read_attribute_edge(emit["edge"], shape, key) for emit in emits if "edge" in emit]
     if (
         len(nodes) + len(attributes) + len(edges) != len(emits)
         or len(nodes) > 1
@@ -2797,14 +2837,17 @@ def _argument(source: object, key: str = "attribute_argument") -> str | None:
     return str(found) if isinstance(found, (str, int)) and not isinstance(found, bool) else None
 
 
-def _read_attribute_edge(edge: Mapping[str, Any]) -> EdgeSpec:
-    """An edge of an attribute rule: between node ends, or to the id an argument's value names."""
+def _read_attribute_edge(edge: Mapping[str, Any], shape: str, key: str) -> EdgeSpec:
+    """An edge of an attribute or annotation rule: between node ends, or to the id an argument's
+    value names; each of its attributes from one argument or annotation key, ``key``."""
     start, end = edge["from"], edge["to"]
     argument = (
         _argument(end.get("from")) if isinstance(end, Mapping) and set(end) == {"from"} else None
     )
+    refused = f"an edge attribute of an {shape} rule is from one {key}"
+    attributes = _edge_sources(edge, key, refused)
     if (
-        set(edge) != {"kind", "from", "to"}
+        set(edge) - {"attributes"} != {"kind", "from", "to"}
         or not (isinstance(start, str) and start in _ATTRIBUTE_ENDS)
         or (argument is None and not (isinstance(end, str) and end in _ATTRIBUTE_ENDS))
     ):
@@ -2814,9 +2857,20 @@ def _read_attribute_edge(edge: Mapping[str, Any]) -> EdgeSpec:
         )
     if argument is not None:
         return EdgeSpec(
-            edge["kind"], argument, False, None, None, None, (), start, "attribute_argument"
+            edge["kind"],
+            argument,
+            False,
+            None,
+            None,
+            None,
+            (),
+            start,
+            "attribute_argument",
+            attributes=attributes,
         )
-    return EdgeSpec(edge["kind"], "", False, None, None, None, (), start, end)
+    return EdgeSpec(
+        edge["kind"], "", False, None, None, None, (), start, end, attributes=attributes
+    )
 
 
 def _tree_id(block: Mapping[str, Any]) -> str:
@@ -2893,7 +2947,7 @@ def _read_tree_edge(edge: Mapping[str, Any]) -> EdgeSpec:
     if end == {"from": "qualified_name"}:
         finish = "qualified_name"
     if (
-        set(edge) != {"kind", "from", "to"}
+        set(edge) - {"attributes"} != {"kind", "from", "to"}
         or not (declared[0] or isinstance(start, str) and start in _DECLARATION_ENDS)
         or not (declared[1] or finish in {*_DECLARATION_ENDS, "qualified_name"})
     ):
@@ -2902,7 +2956,23 @@ def _read_tree_edge(edge: Mapping[str, Any]) -> EdgeSpec:
             "enclosing_file, enclosing_method or {declared: <type>} to one of them or to "
             "{from: qualified_name}"
         )
-    return EdgeSpec(edge["kind"], "", False, None, None, None, (), start, finish, declared=declared)
+    refused = (
+        "an edge attribute of a declaration rule is a template naming only the sources of its id"
+    )
+    attributes = _edge_templates(edge, refused)
+    return EdgeSpec(
+        edge["kind"],
+        "",
+        False,
+        None,
+        None,
+        None,
+        (),
+        start,
+        finish,
+        declared=declared,
+        attributes=attributes,
+    )
 
 
 def _declared(end: object) -> str:
@@ -3038,10 +3108,42 @@ def _read_edge(edge: object) -> EdgeSpec:
 
 
 def _read_forward(edge: object) -> EdgeSpec:
+    spec = _read_forward_end(edge)
+    given = edge if isinstance(edge, dict) else {}
+    refused = "an edge attribute of a data rule is from one key"
+    return _paired(replace(spec, attributes=_edge_sources(given, "key", refused)))
+
+
+def _paired(spec: EdgeSpec) -> EdgeSpec:
+    """The data rule's edge, refused when an attribute's key path holds a star and does not read
+    inside the list item the end reads: the item of the key path, or of the list form's each
+    part, cut after its last star."""
+    end = spec.key if not spec.parts else next((p for m, p in spec.parts if m == "each"), "")
+    item = split_item(end) if end else None
+    for name, path in spec.attributes:
+        own = split_item(path)
+        if own is None or (item is not None and own[0] == item[0]):
+            continue
+        said = f"the edge attribute {name} reads {path}, "
+        if item is None:
+            said += (
+                f"a key path with a star, and the edge's end {end or 'template'} reads no list "
+                "item to pair it with"
+            )
+        else:
+            said += (
+                f"inside a list item other than the edge end's {item[0]}; a key path with a star "
+                f"must start with {item[0]}"
+            )
+        raise _Unsupported(said)
+    return spec
+
+
+def _read_forward_end(edge: object) -> EdgeSpec:
     end = edge.get("to") if isinstance(edge, dict) else None
     if (
         not isinstance(edge, dict)
-        or set(edge) != {"kind", "from", "to"}
+        or set(edge) - {"attributes"} != {"kind", "from", "to"}
         or not isinstance(edge["kind"], str)
         or edge["from"] != "this_node"
         or not isinstance(end, dict)

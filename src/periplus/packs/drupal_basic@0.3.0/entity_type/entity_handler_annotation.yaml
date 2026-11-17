@@ -47,7 +47,7 @@ rules:
   in: [entity_type_classes]
   match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"form"\s*=\s*\{[^}]*?"default"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
   id: {template: '{psr4_class}'}
-  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}, attributes: {entry: {template: default}}}}]
   confidence: declared
 
 - rule: form_add_handler_from_annotation
@@ -55,7 +55,7 @@ rules:
   in: [entity_type_classes]
   match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"form"\s*=\s*\{[^}]*?"add"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
   id: {template: '{psr4_class}'}
-  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}, attributes: {entry: {template: add}}}}]
   confidence: declared
 
 - rule: form_edit_handler_from_annotation
@@ -63,7 +63,7 @@ rules:
   in: [entity_type_classes]
   match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"form"\s*=\s*\{[^}]*?"edit"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
   id: {template: '{psr4_class}'}
-  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}, attributes: {entry: {template: edit}}}}]
   confidence: declared
 
 - rule: form_delete_handler_from_annotation
@@ -71,7 +71,7 @@ rules:
   in: [entity_type_classes]
   match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"form"\s*=\s*\{[^}]*?"delete"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
   id: {template: '{psr4_class}'}
-  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  emits: [{edge: {kind: names_form_handler, from: this_node, to: {template: '{handler}', type: drupal.class_ref}, attributes: {entry: {template: delete}}}}]
   confidence: declared
 
 - rule: route_provider_html_handler_from_annotation
@@ -79,5 +79,5 @@ rules:
   in: [entity_type_classes]
   match: {file: '*', filetype: drupal_php_text, reads_sections: [block_comment], text: '"route_provider"\s*=\s*\{[^}]*?"html"\s*=\s*"\\?(?<handler>[A-Za-z_][\w\\]*)"'}
   id: {template: '{psr4_class}'}
-  emits: [{edge: {kind: names_route_provider, from: this_node, to: {template: '{handler}', type: drupal.class_ref}}}]
+  emits: [{edge: {kind: names_route_provider, from: this_node, to: {template: '{handler}', type: drupal.class_ref}, attributes: {entry: {template: html}}}}]
   confidence: declared

@@ -7,11 +7,14 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # read each key in the class's file as an internal names_<key> edge from the class to a
 # drupal.class_ref node; the map rules below join the class to its entity type through
 # entity_type_of_class. A handler class outside the mapped code, such as a core route provider,
-# ends at a referenced node. Declared: the entity type's definition names each class.
+# ends at a referenced node. Declared: the entity type's definition names each class. A
+# has_form_handler or has_route_provider edge holds, in the edge attribute entry, the key under
+# handlers.form or handlers.route_provider that names the class: the form operation, such as edit,
+# or the route provider's name, html. A class named under two keys holds both, under differs.
 #
 # Limits:
 # - The form operations read are default, add, edit and delete, and the route provider read is
-#   html; the operation is not recorded on the edge.
+#   html.
 # - A handler set in code, such as by hook_entity_type_alter or by a contributed module that builds
 #   its entity types, gives no edge.
 
@@ -77,6 +80,11 @@ edge_kinds:
   from: drupal.entity_type
   to: php.class
 
+edge_attributes:
+- name: entry
+  on: [names_form_handler, names_route_provider, has_form_handler, has_route_provider]
+  description: "the key under the entity type's handler group that names the class: a form operation, such as default or edit, or a route provider's name, such as html"
+
 rules:
 - rule: entity_type_access_handler
   reads: map
@@ -137,10 +145,11 @@ rules:
     where: [{id_matches: '^php\.type::(?<owner>.+)$'}]
     follow:
     - edge: names_form_handler
+    - edge_attribute: entry
     - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
     - node: 'php.type::{owner}'
     - edge: entity_type_of_class
-  emits: [{edge: {kind: has_form_handler, from: matched_node, to: {template: '{handler}', types: [php.class]}}}]
+  emits: [{edge: {kind: has_form_handler, from: matched_node, to: {template: '{handler}', types: [php.class]}, attributes: {entry: {template: '{entry}'}}}}]
   confidence: declared
 
 - rule: entity_type_route_provider
@@ -150,8 +159,9 @@ rules:
     where: [{id_matches: '^php\.type::(?<owner>.+)$'}]
     follow:
     - edge: names_route_provider
+    - edge_attribute: entry
     - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
     - node: 'php.type::{owner}'
     - edge: entity_type_of_class
-  emits: [{edge: {kind: has_route_provider, from: matched_node, to: {template: '{handler}', types: [php.class]}}}]
+  emits: [{edge: {kind: has_route_provider, from: matched_node, to: {template: '{handler}', types: [php.class]}, attributes: {entry: {template: '{entry}'}}}}]
   confidence: declared

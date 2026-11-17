@@ -312,23 +312,23 @@ def test_an_edge_attribute_from_a_capture_is_accepted_and_not_executed() -> None
     rule = _read_rule("box", item)
     assert not rule.supported
     assert rule.reason.startswith(
-        "the key emits.*.edge.attributes.*.from is accepted and not executed"
+        "the key emits.*.edge.attributes.*.from.capture is accepted and not executed"
     )
 
 
-def test_an_edge_attribute_on_a_data_rule_is_not_executed() -> None:
+def test_a_template_edge_attribute_on_a_data_rule_is_not_executed() -> None:
     item = {
         "rule": "listed",
         "reads": "file",
         "in": ["yard"],
-        "match": {"file": "*.yml", "filetype": "yaml", "each": "units"},
+        "match": {"file": "*.yml", "filetype": "yaml", "each": "units.*"},
         "id": {"template": "{key}"},
         "emits": [
             {
                 "edge": {
                     "kind": "attaches",
                     "from": "this_node",
-                    "to": {"from": "other"},
+                    "to": {"from": {"key": "other"}},
                     "attributes": {"slot": {"template": "{key}"}},
                 }
             }
@@ -337,4 +337,74 @@ def test_an_edge_attribute_on_a_data_rule_is_not_executed() -> None:
     }
     rule = _read_rule("box", item)
     assert not rule.supported
-    assert rule.reason == "only an edge of a text rule or a map rule takes attributes"
+    assert rule.reason == "an edge attribute of a data rule is from one key"
+
+
+#: A map rule that reads the slot off each attaches edge it walks and writes it on its own edge.
+CARRY = r"""- rule: carried
+  reads: map
+  match:
+    node_type: box.unit
+    follow: [{edge: attaches}, {edge_attribute: slot}]
+  emits:
+  - edge:
+      kind: hooks
+      from: this_node
+      to: matched_node
+      attributes: {slot: {template: '{slot}'}}
+  confidence: inferred
+"""
+
+BOTH = DECLARE.replace("on: [hooks]", "on: [attaches, hooks]")
+
+
+def test_a_map_rule_reads_the_attribute_of_the_edge_it_walked(tmp_path: Path) -> None:
+    project(tmp_path, ATTACH + CARRY, yard="unit A\nunit B\nunit C\nhook A #open B\n", declare=BOTH)
+    document = _mapped(tmp_path)
+    assert _edge(document, "hooks")["attributes"] == {"slot": "#open"}
+
+
+def test_each_value_of_the_walked_edge_gives_its_own_result(tmp_path: Path) -> None:
+    yard = "unit A\nunit B\nhook A #open B\nhook A #close B\n"
+    project(tmp_path, ATTACH + CARRY, yard=yard, declare=BOTH)
+    edge = _edge(_mapped(tmp_path), "hooks")
+    # The unit A sits at line 1, so both results write at that place.
+    assert edge["attributes"] == {
+        "slot": {
+            "differs": [
+                {"file": "yard/a.box", "line": 1, "value": "#close"},
+                {"file": "yard/a.box", "line": 1, "value": "#open"},
+            ]
+        }
+    }
+
+
+def test_a_walked_edge_without_the_attribute_gives_nothing(tmp_path: Path) -> None:
+    plain = ATTACH.replace("      attributes: {slot: {template: '{slot}'}}\n", "")
+    project(tmp_path, plain + CARRY, declare=BOTH)
+    assert [e for e in _mapped(tmp_path)["edges"] if e["kind"] == "hooks"] == []
+
+
+def test_edge_attribute_not_right_after_an_edge_step_is_not_executed(tmp_path: Path) -> None:
+    moved = CARRY.replace(
+        "[{edge: attaches}, {edge_attribute: slot}]",
+        "[{edge: attaches}, {id_matches: '.'}, {edge_attribute: slot}]",
+    )
+    project(tmp_path, ATTACH + moved, declare=BOTH)
+    report, _ = map_project(tmp_path)
+    (problem,) = report.problems
+    assert problem.code == ExitCode.RULE_NOT_EXECUTABLE
+    assert problem.message.endswith(
+        "the rule carried cannot be executed: the follow step edge_attribute comes right after "
+        "an edge step"
+    )
+
+
+def test_edge_attribute_reads_no_value_a_map_rule_wrote(tmp_path: Path) -> None:
+    """A map rule's value read back could grow every pass; only the file rules' values are read."""
+    again = CARRY.replace("rule: carried", "rule: again").replace("edge: attaches}", "edge: hooks}")
+    again = again.replace("kind: hooks", "kind: attaches")
+    project(tmp_path, HOOK + again, yard="unit A\nunit B\nhook A #open B\n", declare=BOTH)
+    document = _mapped(tmp_path)
+    assert _edge(document, "hooks")["attributes"] == {"slot": "#open"}
+    assert [e for e in document["edges"] if e["kind"] == "attaches"] == []

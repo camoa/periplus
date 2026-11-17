@@ -517,22 +517,54 @@ schema error, exit 16.
 
 ## Attributes on edges
 
-An edge emit of a text rule or a map rule may carry `attributes`: each a name and a `template`,
-filled as the rule's id or edge end template is, from its captures, values, path values and
-settings values. A template that names an absent value writes nothing. The edge in the map holds
-`attributes` only when a rule wrote one, and the provenance row of each rule that wrote one names
-it under `sets`.
+An edge emit of any rule may carry `attributes`, each a name and where its value comes from. The
+rule kind decides the form, the same one its node attributes take:
+
+| Rule | Form | Filled from |
+|------|------|-------------|
+| text, map | `{template: ...}` | captures, values, path and settings values |
+| declaration | `{template: ...}` | the sources its id names; text alone is kept as written |
+| reference | `{template: ...}` | `enclosing_type`, `enclosing_method`, `name_matches` groups |
+| attribute | `{from: {attribute_argument: <name or position>}}` | that argument's text |
+| annotation | `{from: {annotation_key: <key>}}` | that key's value |
+| data | `{from: {key: <key path>}}` | the first value the path reaches |
 
 ```yaml
+# text: {slot} is a capture of match.text
+- {edge: {kind: attaches, from: this_node, to: {template: '{other}'}, attributes: {slot: {template: '{slot}'}}}}
+# map: {slot} is a capture of where or follow
 - {edge: {kind: hooks, from: matched_node, to: {template: '{other}', type: box.unit}, attributes: {slot: {template: '{slot}'}}}}
+# declaration: the id reads [enclosing_type, declared_name]
+- {edge: {kind: contains, from: enclosing_class, to: this_node, attributes: {called: {template: '{declared_name}'}}}}
+# reference
+- {edge: {kind: calls, from: enclosing_declaration, to: {types: [kit.function]}, attributes: {inside: {template: '{enclosing_method}'}}}}
+# attribute: #[Mark('tick', weight: 'heavy')]
+- {edge: {kind: marks, from: enclosing_method, to: {from: {attribute_argument: '0'}}, attributes: {weight: {from: {attribute_argument: weight}}}}}
+# annotation: @Kit(id = "k1", role = "lead")
+- {edge: {kind: kit_of, from: this_node, to: enclosing_class, attributes: {role: {from: {annotation_key: role}}}}}
+# data: one edge per label, each with its own label's color, and the item's shelf
+- {edge: {kind: labelled, from: this_node, to: {from: {key: labels.*.name}}, attributes: {color: {from: {key: labels.*.color}}, shelf: {from: {key: shelf}}}}}
 ```
 
-One edge is one kind, from and to, found at one place or many. When every place that wrote a value
-gives the same one, the map holds that value. When places, or two rules at one place, give
-different values, it holds `{"differs": [{file, line, value}, ...]}` with each place's value,
-sorted, so a reader sees which value belongs to which line. Every navigation command prints the
-attributes after the edge's kind, as `hooks [slot: #open]`; a value that differs prints each value
-once, `[slot: #open, #close]`. `periplus find` matches an edge by an attribute value.
+A template that names an absent value, an argument or key the match does not give, and a key
+path that reaches nothing, a mapping or a list, write nothing. A data rule pairs each value with
+its own end: a key path with a star is read inside the list item the end comes from, so
+`labels.*.color` gives each `labels.*.name` edge its own label's color, and a key path with no
+star, as `shelf`, is read once for the fire. The item is the end's key path, or the `each` part of
+the list form, cut after its last star; a key path with a star in another list, or on an end that
+reads no list, leaves the rule not executed. `literal`, `pattern` and `normalize` are accepted and
+not executed, on an edge as on a node. A map rule reads the value a file rule wrote on an edge it
+walks with the `edge_attribute` follow step
+([Map rules](rutter-author-guide-map-rules.md)).
+
+The edge in the map holds `attributes` only when a rule wrote one, and the provenance row of each
+rule that wrote one names it under `sets`. One edge is one kind, from and to, found at one place
+or many. When every place that wrote a value gives the same one, the map holds that value. When
+places, or two rules at one place, give different values, it holds
+`{"differs": [{file, line, value}, ...]}` with each place's value, sorted, so a reader sees which
+value belongs to which line. Every navigation command prints the attributes after the edge's
+kind, as `hooks [slot: #open]`; a value that differs prints each value once,
+`[slot: #open, #close]`. `periplus find` matches an edge by an attribute value.
 
 A pack file may declare edge attributes under `edge_attributes`, as `attributes` declares node
 ones; `on` lists edge kinds:
@@ -542,17 +574,16 @@ edge_attributes:
 - {name: slot, on: [hooks], description: the slot as written}
 ```
 
-A map rule writes only a declared edge attribute. A text rule may write one no pack declares; a
+A map rule writes only a declared edge attribute. A file rule may write one no pack declares; a
 rule that writes a declared one is held to it. The check refuses, with exit 19, a map rule that
-writes an edge attribute neither its rutter nor one it depends on declares, and a text rule that
+writes an edge attribute neither its rutter nor one it depends on declares, and a file rule that
 does so when another rutter declares the name; a declared one written on an edge of a kind `on`
 does not list; one name declared with different `on` or description in two places; a kind in `on`
 that neither the rutter nor one it depends on declares; and `type_conflict` or `resolution`,
-declared or written on an edge, which the engine reserves. An edge of any other rule with
-`attributes` is not executed, and so is an attribute given by `from`, `literal`, `pattern` or
-`normalize`. `drupal_basic`'s `form/form_handler.yaml` declares `key` on `registers_form_handler`
-and `registers_element_callback`, so each such edge holds the key the callable is registered
-under, as the code writes it.
+declared or written on an edge, which the engine reserves. `drupal_basic` declares `key` on
+`registers_form_handler` and `registers_element_callback`, the key the callable is registered
+under; `entry` on the entity handler edges, a form operation or a route provider's name; and
+`applies_to` and `priority` on `tagged_as`, each read from its own tag.
 
 ## The grammar's node kinds
 
