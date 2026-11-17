@@ -1308,7 +1308,7 @@ def _why(start: Start) -> str:
     if start.given is not None:
         return f"given as '{start.given}'"
     said = [
-        f"{word!r} in {'attribute ' + (name or '') if matched == 'attribute' else matched}"
+        f"'{word}' in {'attribute ' + (name or '') if matched == 'attribute' else matched}"
         for word, matched, name in start.words
     ]
     return "words: " + ", ".join(said)

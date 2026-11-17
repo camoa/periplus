@@ -92,6 +92,12 @@ def test_a_start_given_by_id_shows_the_id_escaped_once(tmp_path: Path) -> None:
     assert "start run  t.method  (given as 't.method::A\\\\B::run')" in lines
 
 
+def test_a_start_found_by_a_word_shows_the_word_escaped_once(tmp_path: Path) -> None:
+    lines = _lines(tmp_path, "A\\B", limit=None)
+
+    assert "start run  t.method  (words: 'a\\\\b' in id)" in lines
+
+
 def test_the_cut_note_commands_carry_the_map(tmp_path: Path) -> None:
     kept = slicing.BYTE_LIMIT
     slicing.BYTE_LIMIT = 100
