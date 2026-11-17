@@ -40,7 +40,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #
 # A callable held in a variable or written as another expression, as $x['#submit'][] = $handler,
 # '#submit' => array_merge($a, [...]), '#validate' => self::handlers(), a ternary, a constant,
-# [$object, 'm'] or [$this, $method], names no target the map can know. It is a
+# [$object, 'm'] or [$this, $method], names no target the map can know; so does a '::myMethod'
+# where no rule names the form object: in a generic hook_form_alter, in a class that is no form
+# class, or in a form class whose only form ancestor is outside the map. It is a
 # drupal.runtime_form_handler node marked resolution: runtime, at the line, with the
 # registration's edge from the method or function around it, so the element keeps the callable
 # and the map invents no target. An empty list, NULL, TRUE and FALSE give nothing.
@@ -53,9 +55,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # from the id. The method's class is the one the file's path names by Drupal's PSR-4 layout, so
 # the edges are inferred.
 #
-# Missing results: a '::myMethod' in a generic hook_form_alter, in a class that is no form class,
-# or in a form class whose only form ancestor is a contributed module's class outside the map,
-# gives no edge, since the form object is not known.
+# Missing results: none for a callable. A value under one of these keys that names no callable,
+# an empty list, NULL, TRUE or FALSE, gives nothing.
 
 node_types:
 - name: drupal.form_handler_site
@@ -317,6 +318,104 @@ rules:
   emits: *runtime_node
   confidence: declared
 
+# A '::myMethod' callable, alone or as an item of a list, is also a drupal.runtime_form_handler
+# node marked resolution: runtime, as above: the form object it names is known only when the code
+# runs. The withholding rules below take it back wherever a rule above names the form's class or
+# form id, so it stays only where no rule can: in a generic hook_form_alter, in a class that is no
+# form class, or in a form class whose form ancestor is outside the map.
+- rule: runtime_form_object_method_in_method
+  reads: file
+  in: [source]
+  match: &colon_method_match
+    file: '**'
+    filetype: drupal_php_text
+    text: &colon_text '(?:\$\w+(?:\[\s*[''"][\w#-]*[''"]\s*\])*\[\s*[''"](?<k1>#(?:validate|submit|element_validate|process|after_build|pre_render|post_render|entity_builders|date_date_callbacks|date_time_callbacks|file_value_callbacks))[''"]\s*\]\[\s*\]\s*=|\barray_unshift\(\s*\$\w+(?:\[\s*[''"][\w#-]*[''"]\s*\])*\[\s*[''"](?<k2>#(?:validate|submit|element_validate|process|after_build|pre_render|post_render|entity_builders|date_date_callbacks|date_time_callbacks|file_value_callbacks))[''"]\s*\]\s*,|[\[,(\s][''"](?<k3>#(?:value_callback|access_callback))[''"]\s*(?:=>|\]\s*=)|[\[,(\s][''"](?<k4>#ajax)[''"]\s*(?:=>|\]\s*=)\s*(?:\[|array\s*\()(?:[^\[\]()]|\[[^\[\]]*\]|\([^()]*\))*?[''"]callback[''"]\s*=>|\[\s*[''"](?<k5>#ajax)[''"]\s*\]\s*\[\s*[''"]callback[''"]\s*\]\s*=|[\[,(\s][''"](?<k6>#machine_name)[''"]\s*(?:=>|\]\s*=)\s*(?:\[|array\s*\()(?:[^\[\]()]|\[[^\[\]]*\]|\([^()]*\))*?[''"]exists[''"]\s*=>|\[\s*[''"](?<k7>#machine_name)[''"]\s*\]\s*\[\s*[''"]exists[''"]\s*\]\s*=|[\[,(\s][''"](?<k8>#lazy_builder)[''"]\s*(?:=>|\]\s*=)\s*(?:\[|array\s*\())\s*(?<handler>''::\w+''|"::\w+")(?=\s*[,;)\]])'
+  values: *method_values
+  id: &colon_method_id {template: '{psr4_class}::{method}::{key}|{handler}', normalize: [{replace: '\s+', with: ''}, {replace: '"', with: ''''}]}
+  line: {capture: handler}
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_form_object_method_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: *colon_text
+  values: *function_values
+  id: &colon_function_id {template: '{function}::{key}|{handler}', normalize: [{replace: '\s+', with: ''}, {replace: '"', with: ''''}]}
+  line: {capture: handler}
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_form_object_method_item_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: &colon_list_text '[\[,(]\s*(?<handler>''::\w+''|"::\w+")\s*(?=[,\])])'
+  values: *list_method_values
+  id: {template: '{psr4_class}::{method}::{list}|{handler}', normalize: [{replace: '\s+', with: ''}, {replace: '"', with: ''''}]}
+  line: {capture: handler}
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_form_object_method_item_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: *colon_list_text
+  values: *list_function_values
+  id: {template: '{function}::{list}|{handler}', normalize: [{replace: '\s+', with: ''}, {replace: '"', with: ''''}]}
+  line: {capture: handler}
+  emits: *runtime_node
+  confidence: declared
+
+# The '::myMethod' runtime node is taken back, before the passes, where a rule below resolves the
+# callable: in a class with a form_has_id edge, in a class that descends from a core form base or
+# interface, and in a hook form_<id>_alter. Each condition is the one its resolving rule reads.
+- rule: form_object_method_known_by_form_id
+  reads: map
+  match:
+    node_type: drupal.runtime_form_handler
+    where: [{id_matches: '^drupal\.runtime_form_handler::(?<declarer>[^:]+)::\w+::#\w+\|''::\w+''$'}]
+    follow:
+    - node: 'php.type::{declarer}'
+    - edge: form_has_id
+  emits: [{withhold: this_node}]
+  confidence: inferred
+
+- rule: form_object_method_known_by_form_base
+  reads: map
+  match:
+    node_type: drupal.runtime_form_handler
+    where: [{id_matches: '^drupal\.runtime_form_handler::(?<declarer>[^:]+)::\w+::#\w+\|''::\w+''$'}]
+    follow:
+    - node: 'php.type::{declarer}'
+    - ancestors: [inherits, implements]
+    - id_matches: &core_form_bases '^php\.type::Drupal\\Core\\(?:Form\\(?:FormInterface|FormBase|ConfirmFormBase|ConfigFormBase)|Entity\\(?:EntityFormInterface|ContentEntityFormInterface|EntityForm|ContentEntityForm|EntityDeleteForm|ContentEntityDeleteForm|EntityConfirmFormBase|ContentEntityConfirmFormBase|BundleEntityFormBase))$'
+  emits: [{withhold: this_node}]
+  confidence: inferred
+
+- rule: form_object_method_known_by_alter
+  reads: map
+  match:
+    node_type: drupal.runtime_form_handler
+    where: [{id_matches: '^drupal\.runtime_form_handler::(?<site>.+::#\w+\|''::\w+'')$'}]
+    follow:
+    - node: 'drupal.form_handler_site::{site}'
+    - edge: form_handler_site_in
+    - edge: implements_hook
+    - id_matches: '^drupal\.hook::form_\w+_alter$'
+  emits: [{withhold: this_node}]
+  confidence: inferred
+
 # A runtime node's registration, from the method or function its id names: registers_form_handler
 # for #validate and #submit, registers_element_callback for the other keys.
 - rule: runtime_form_handler_registered
@@ -423,7 +522,7 @@ rules:
     follow:
     - node: 'php.type::{declarer}'
     - ancestors: [inherits, implements]
-    - id_matches: '^php\.type::Drupal\\Core\\(?:Form\\(?:FormInterface|FormBase|ConfirmFormBase|ConfigFormBase)|Entity\\(?:EntityFormInterface|ContentEntityFormInterface|EntityForm|ContentEntityForm|EntityDeleteForm|ContentEntityDeleteForm|EntityConfirmFormBase|ContentEntityConfirmFormBase|BundleEntityFormBase))$'
+    - id_matches: *core_form_bases
     - try:
       - node: 'php.type::{declarer}'
       - ancestors: [inherits, mixes_in]

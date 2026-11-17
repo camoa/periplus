@@ -291,6 +291,9 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   class for the service. A `'::method'` in a form class whose `getFormId()` returns no literal
   reaches the class's own method when the class descends from a core form base or interface; in
   an alter of a form id no mapped class returns, it ends at the unresolved `<form id>::<method>`.
+  Anywhere else, as in a generic `hook_form_alter` or a class that is no form class, it ends at a
+  `drupal.runtime_form_handler` node marked resolution `runtime`: a file rule gives that node for
+  every `'::method'`, and a withholding map rule takes it back wherever a rule names the form.
   The site id holds the key, and each map rule's twin for these keys
   reads the rule through a YAML merge. The map rule `form_handler_function_is_no_hook` withholds
   the hook a function's name would give it when it is added under any of these keys.

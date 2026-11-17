@@ -85,7 +85,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   array_unshift or as an item of a list written whole with [...] or array(...), as a
 #   registers_form_handler edge to the function or method it names, a class imported under another
 #   name followed to its class, a function so added giving no hook by its name unless the map names
-#   that hook otherwise, and a handler held in a variable or another expression as an edge to a
+#   that hook otherwise, and a handler held in a variable or another expression, or a '::method'
+#   whose form object no rule names, as an edge to a
 #   drupal.runtime_form_handler node marked resolution runtime; each callable under an element
 #   callback key core calls, such as #process, #pre_render, #value_callback or the callback of
 #   #ajax, the same way, as a registers_element_callback edge (form/form_handler.yaml lists the
