@@ -55,11 +55,11 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.packs import MatchedPack, PackCandidate, PackName
+from periplus.yamlread import load_file
 
 if TYPE_CHECKING:
     from periplus.validate import SchemaError
@@ -162,12 +162,10 @@ class ManifestUnreadable(HarnessError):
 def load_manifest(directory: Traversable) -> PackManifest:
     """Read the ``pack.yaml`` in one pack directory, or raise ``ManifestUnreadable``.
 
-    ``YAML(typ='safe', pure=True)``, the same parser configuration ``settings.py`` uses and for the
-    same three reasons: ``safe`` refuses arbitrary object construction, ``safe`` is YAML 1.2 so a
-    duplicate key is refused rather than silently keeping the last value and a bare ``on`` stays the
-    string it was written as, and ``pure`` pins the pure-Python parser rather than letting an
-    optional C extension decide which one runs — an environment-dependent branch in a tool that
-    promises byte-identical output across machines.
+    ``yamlread.load_file``, the reader ``settings.py`` uses and for the same reasons: ``safe``
+    refuses arbitrary object construction, ``safe`` is YAML 1.2 so a duplicate key is refused
+    rather than silently keeping the last value and a bare ``on`` stays the string it was written
+    as, and ``yamlread`` gives the pure parser's result and message whichever parser reads the text.
 
     ``FileNotFoundError`` is caught before ``OSError``, which it subclasses, because the two have
     different remedies and folding them would print "could not be read" about a file that was never
@@ -179,10 +177,8 @@ def load_manifest(directory: Traversable) -> PackManifest:
     """
     manifest = directory / MANIFEST_FILENAME
     display = str(manifest)
-    yaml = YAML(typ="safe", pure=True)
     try:
-        with manifest.open("r", encoding="utf-8") as stream:
-            document = yaml.load(stream)
+        document = load_file(lambda: manifest.open("r", encoding="utf-8"))
     except FileNotFoundError as error:
         raise ManifestUnreadable(
             f"the pack directory has no {MANIFEST_FILENAME}: {display}",

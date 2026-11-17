@@ -47,7 +47,6 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError, best_match
-from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from periplus.engine.select import folder_problems
@@ -59,6 +58,7 @@ from periplus.preflight import DependencyStatus
 from periplus.report import _escape, _json_problem
 from periplus.resolution import folder_overrides, resolve, settings_values
 from periplus.spec import _unknown_pack, contract_root
+from periplus.yamlread import load_file
 
 __all__ = [
     "MANIFEST_SCHEMA",
@@ -471,8 +471,8 @@ def _load(node: Traversable, problems: list[Problem]) -> tuple[object, bool]:
     document reach the validator, where ``pack-file.schema.json``'s top-level ``"type": "object"``
     already has the answer: ``None is not of type 'object'``.
 
-    ``YAML(typ='safe', pure=True)``, the configuration ``settings.py`` and ``manifest.py`` both
-    use, for the three reasons ``load_manifest`` records. The first of the three is the one that
+    ``yamlread.load_file``, the reader ``settings.py`` and ``manifest.py`` both use, for the
+    reasons ``load_manifest`` records. The first of them is the one that
     matters here, and stated exactly: **a pack is third-party data, and the safe loader refuses a
     tag it does not know where the round-trip loader accepts it as data.** Measured on ruamel
     0.19.1, all three loaders, against ``!!python/object/apply:os.system [...]``:
@@ -514,13 +514,11 @@ def _load(node: Traversable, problems: list[Problem]) -> tuple[object, bool]:
     number for a remedy already written down.
     """
     display = str(node)
-    yaml = YAML(typ="safe", pure=True)
     try:
-        with node.open("r", encoding="utf-8") as stream:
-            # Annotated for the reason `_schema` records: `YAML.load` is declared `Any`, and what
-            # comes back is genuinely unknown -- a mapping, a list, a string or `None`, whatever
-            # the file holds. `object` is the honest type and the validator takes it from here.
-            document: object = yaml.load(stream)
+        # Annotated for the reason `_schema` records: `load_file` is declared `Any`, and what
+        # comes back is genuinely unknown -- a mapping, a list, a string or `None`, whatever the
+        # file holds. `object` is the honest type and the validator takes it from here.
+        document: object = load_file(lambda: node.open("r", encoding="utf-8"))
         return document, True
     except YAMLError as error:
         problems.append(_unreadable(display, "parser", "could not be parsed", error))

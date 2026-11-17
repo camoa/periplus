@@ -108,7 +108,10 @@ def test_runtime_dependencies_are_exactly_the_three_the_design_decided(
         _normalised(dep.split("==")[0].split(">=")[0].split("[")[0]) for dep in declared
     )
     assert pinned
-    assert manifest_names == sorted(_normalised(name) for name in {*REQUIRED, *pinned})
+    # The C parser only makes reading faster; without it ruamel.yaml reads with its pure parser,
+    # so it is declared and not a start-up requirement.
+    speed = {"ruamel.yaml.clib"}
+    assert manifest_names == sorted(_normalised(name) for name in {*REQUIRED, *pinned, *speed})
     assert _normalised("jsonschema") in manifest_names
     assert len(REQUIRED) == 4, (
         f"the design decided four start-up distributions, not {len(REQUIRED)}"
@@ -174,18 +177,19 @@ def test_lockfile_confirms_the_runtime_closure_the_validator_decision_grew() -> 
             "jsonschema",
             "platformdirs",
             "ruamel-yaml",
+            "ruamel-yaml-clib",
             "tree-sitter",
             "tree-sitter-php",
             "tree-sitter-go",
             "tree-sitter-javascript",
         }
 
-    for name in ("platformdirs", "ruamel-yaml"):
+    for name in ("platformdirs", "ruamel-yaml", "ruamel-yaml-clib"):
         for entry in packages[name]:
             transitive = entry.get("dependencies", [])
             assert transitive == [], (
                 f"{name} {entry['version']} now depends on "
-                f"{[d['name'] for d in transitive]}; these two were taken on as zero-transitive "
+                f"{[d['name'] for d in transitive]}; these were taken on as zero-transitive "
                 f"and only jsonschema's closure was accepted, so this is a design question "
                 f"rather than a lockfile update"
             )

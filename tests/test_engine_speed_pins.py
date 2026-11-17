@@ -9,19 +9,22 @@ import sys
 from pathlib import Path
 
 import pytest
-from ruamel.yaml import YAML
 from test_demo_a_support import plant
 
 import periplus.engine.packload as packload_module
 import periplus.engine.rules as rules_module
 import periplus.engine.tree as tree_module
+import periplus.manifest as manifest_module
 import periplus.map as map_module
+import periplus.settings as settings_module
+import periplus.validate as validate_module
 from periplus.engine.emit import EdgeIllegal, build_document
 from periplus.engine.packload import EdgeKind, TypeInfo, unexecuted
 from periplus.engine.rules import FoundEdge, FoundNode
 from periplus.engine.tree import ParsedFile
 from periplus.map import run
 from periplus.preflight import check_runtime_dependencies
+from periplus.yamlread import load_file
 
 TYPES = {
     "t.a": TypeInfo("t.a", "t.a", None, "p"),
@@ -559,13 +562,14 @@ def test_each_yaml_file_of_a_run_is_parsed_once(
     plant(tmp_path, {".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n"})
     plant(tmp_path, {"One.php": THING})
     parsed: list[str] = []
-    real = YAML.load
 
-    def spy(self, stream):
-        parsed.append(str(getattr(stream, "name", stream)))
-        return real(self, stream)
+    def spy(opener):
+        with opener() as stream:
+            parsed.append(str(stream.name))
+        return load_file(opener)
 
-    monkeypatch.setattr(YAML, "load", spy)
+    for module in (settings_module, manifest_module, validate_module):
+        monkeypatch.setattr(module, "load_file", spy)
     report = run(
         start=tmp_path,
         env={"PERIPLUS_CONFIG_DIR": str(tmp_path / "config-dir")},

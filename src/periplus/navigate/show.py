@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
-from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from periplus.errors import ExitCode, HarnessError, Problem
@@ -42,6 +41,7 @@ from periplus.navigate.source import SourceLines, located, source_line, where
 from periplus.report import _escape, _json_problem
 from periplus.settings import find_project_root
 from periplus.skills_install import SKILLS_DIRECTORY
+from periplus.yamlread import load
 
 __all__ = [
     "RENDERERS",
@@ -311,7 +311,7 @@ def _descriptions(map_file: Path) -> tuple[Mapping[str, Any], tuple[Problem, ...
     if not path.is_file():
         return {}, ()
     try:
-        document = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8"))
+        document = load(path.read_text(encoding="utf-8"))
     except (YAMLError, OSError, UnicodeDecodeError) as error:
         detail = {"path": str(path), "detail": str(error)}
         return {}, (Problem(ExitCode.NOT_A_MAP, f"{path} is not readable YAML", detail),)

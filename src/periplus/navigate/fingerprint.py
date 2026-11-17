@@ -25,6 +25,7 @@ from periplus.navigate.nesting import Places, Thing, json_thing, thing, thing_li
 from periplus.navigate.show import read_descriptions
 from periplus.navigate.source import SourceLines
 from periplus.report import _escape, _json_problem
+from periplus.yamlread import load
 
 __all__ = [
     "STALE_RENDERERS",
@@ -149,7 +150,7 @@ def stamp(start: Path, env: Mapping[str, str], every: bool, map_path: Path | Non
     except (YAMLError, UnicodeDecodeError, OSError) as error:
         return StampReport(problems=(_problem(error, path),))
     written = "".join(lines)
-    if YAML(typ="safe", pure=True).load(written) != {**document, "nodes": expected}:
+    if load(written) != {**document, "nodes": expected}:
         message = (
             f"{path}: the fingerprints cannot be set without changing other text; nothing written"
         )

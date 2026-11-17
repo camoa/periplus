@@ -40,7 +40,6 @@ from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
 
 import platformdirs
-from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from periplus.errors import ExitCode, HarnessError
@@ -50,6 +49,7 @@ from periplus.errors import ExitCode, HarnessError
 from periplus.layout import PACKS_DIRECTORY as PACKS_DIRECTORY
 from periplus.layout import PROJECT_MARKER as PROJECT_MARKER
 from periplus.layout import SETTINGS_FILENAME as SETTINGS_FILENAME
+from periplus.yamlread import load_file
 
 __all__ = [
     "MERGE_RULES",
@@ -327,14 +327,13 @@ def _source(kind: Literal["user", "project"], path: Path, root: Path) -> Setting
 def load_settings_document(path: Path) -> Mapping[str, object]:
     """Read one settings file into a mapping, or raise ``SettingsUnreadable``.
 
-    ``YAML(typ='safe', pure=True)``. ``safe`` refuses arbitrary object construction and is YAML 1.2,
-    which is the whole reason ruamel is here rather than PyYAML: verified 2026-08-30 on 0.19.1, a
-    duplicate key raises where PyYAML keeps the last value silently, and ``12:30``, ``on``, ``yes``
-    and ``no`` stay the strings they were written as, where PyYAML makes the first of those the
-    integer 750. ``pure`` pins the pure-Python parser, which ruamel would otherwise swap for the C
-    one whenever the optional ``ruamel.yaml.clib`` extension happens to be importable — an
-    environment-dependent branch in a tool that promises output that is byte-identical
-    across machines.
+    ``yamlread.load_file``, which reads at ``typ='safe'``. ``safe`` refuses arbitrary object
+    construction and is YAML 1.2, which is the whole reason ruamel is here rather than PyYAML:
+    verified 2026-08-30 on 0.19.1, a duplicate key raises where PyYAML keeps the last value
+    silently, and ``12:30``, ``on``, ``yes`` and ``no`` stay the strings they were written as, where
+    PyYAML makes the first of those the integer 750. ``yamlread`` gives the C parser only text it
+    reads as the pure parser does, and gives every error the pure parser's message, so the result
+    does not depend on whether ``ruamel.yaml.clib`` is installed.
 
     One ``except`` covers every parser refusal, because ``DuplicateKeyError``, ``ParserError`` and
     ``ScannerError`` all subclass ``YAMLError``; the parser's own message, marks and all, goes into
@@ -352,10 +351,8 @@ def load_settings_document(path: Path) -> Mapping[str, object]:
     Keys are not checked. A key the settings schema does not name is ignored by the merge without
     comment, whatever its type, because this module validates nothing.
     """
-    yaml = YAML(typ="safe", pure=True)
     try:
-        with path.open("r", encoding="utf-8") as stream:
-            document = yaml.load(stream)
+        document = load_file(lambda: path.open("r", encoding="utf-8"))
     except YAMLError as error:
         raise SettingsUnreadable(
             f"the settings file could not be parsed: {path}",

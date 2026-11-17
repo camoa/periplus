@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 from ruamel.yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 
 from periplus.errors import ExitCode, HarnessError
+from periplus.yamlread import compose
 
 __all__ = [
     "DATA_READERS",
@@ -69,7 +69,7 @@ def load_data(path: Path, name: str) -> dict[str, Entry]:
     constructed, so no tag runs anything.
     """
     try:
-        root = YAML(typ="safe", pure=True).compose(path.read_bytes().decode("utf-8"))
+        root = compose(path.read_bytes().decode("utf-8"))
     except (UnicodeDecodeError, YAMLError) as error:
         raise SourceUnreadable(f"{name} cannot be read: {error}", {"file": name}) from error
     if not isinstance(root, MappingNode):

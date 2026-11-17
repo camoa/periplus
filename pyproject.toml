@@ -46,6 +46,9 @@ version = "0.9.0"
 # happens on an unlucky install.
 dependencies = [
   "ruamel.yaml==0.19.1",
+  # The C parser ruamel.yaml switches to whenever it can import it: same data, a sixth of the time.
+  # CPython only, as ruamel.yaml marks it; without it ruamel.yaml falls back to its pure parser.
+  "ruamel.yaml.clib==0.2.15; platform_python_implementation == 'CPython'",
   "platformdirs==4.11.5",
   "jsonschema==4.26.0",
   # The fourth: the parser runtime. Then the grammars the bundled packs php_basic, go_basic and

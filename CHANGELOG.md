@@ -68,6 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- YAML files are read by ruamel's C parser, from the new dependency `ruamel.yaml.clib` (on CPython), wherever it reads a text as the pure-Python parser does, and by the pure parser everywhere else. Every document, line and error message stays the pure parser's, so maps, reports and exit codes do not change; `periplus validate drupal_basic` starts in about half the time. Without the C parser installed, the pure one reads everything.
 - `drupal_basic` no longer writes `applies_to` on a service node; each `tagged_as` edge holds its own tag's `applies_to` instead. Before, the service held the first tag's value only.
 - `drupal_basic` no longer reads a function that code adds as a form's `#validate` or `#submit` handler as a hook implementation by its name: the map rule `form_handler_function_is_no_hook` withholds that hook, its `implements_hook` edge and any `hook_acts_on_entity_type` edge at the function's place. A hook stays when a Hook attribute names it, it acts on an entity type by its name, or another rule reads it by name (`user_login`, `form_<id>_alter`, `preprocess_<hook>` and the generic `entity_` hooks).
 - `drupal_basic` reads a honeypot `form_settings` key written in quotes, as `'user_login_form': true`.

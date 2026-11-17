@@ -21,6 +21,7 @@ def test_pyproject_lists_xdist_in_dev_extra_and_runs_four_workers_with_durations
 
 RUNTIME_DEPENDENCIES = [
     "ruamel.yaml==0.19.1",
+    "ruamel.yaml.clib==0.2.15; platform_python_implementation == 'CPython'",
     "platformdirs==4.11.5",
     "jsonschema==4.26.0",
     "tree-sitter==0.26.0",
