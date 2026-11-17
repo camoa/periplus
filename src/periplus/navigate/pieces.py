@@ -14,8 +14,7 @@ from periplus.navigate.listing import first_location, marked_text, place, proble
 from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
 from periplus.navigate.names import Names
 from periplus.navigate.source import place_key, places
-from periplus.navigate.walk import amount
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["RENDERERS", "PiecesReport", "Thing", "listed", "render_json", "render_text", "run"]
 

@@ -19,7 +19,7 @@ IN_FULL = "in full, every edge hop by hop, with what is left out, folded or in s
 def test_a_node_with_links_left_unwalked_names_show(tmp_path: Path) -> None:
     lines = _text(_piece(tmp_path, ADD))
 
-    assert "      +1 more links: calls -> 1; see periplus show deep --limit 0" in lines
+    assert "      +1 more link: calls -> 1; see periplus show deep --limit 0" in lines
 
 
 def test_a_node_whose_links_are_cut_short_names_show(tmp_path: Path) -> None:

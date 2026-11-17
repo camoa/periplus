@@ -23,7 +23,7 @@ from periplus.navigate.listing import problem_lines
 from periplus.navigate.mapfile import as_json, load_map
 from periplus.navigate.only import kept
 from periplus.navigate.walk import BUDGET, HUB, CauseReport, head_line, start_args
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["DIRECTIONS", "RENDERERS", "ReachReport", "listed", "render_json", "render_text", "run"]
 
@@ -148,8 +148,8 @@ def render_text(report: ReachReport) -> str:
     if report.only is not None and report.walks:
         reached = len(report.walks[0].walked)
         blocks[-1] += (
-            f"\nonly through the starts: {len(report.only)} of {reached} things set off, tagged"
-            f" [only]; all: {_escape(report.only_command)}"
+            f"\nonly through the starts: {len(report.only)} of {amount(reached, 'thing')} set off,"
+            f" tagged [only]; all: {_escape(report.only_command)}"
         )
     stops = [hubs_.render_text(h).rstrip("\n") if h.hubs else "" for h in report.hubs]
     tail = "\n".join(notes)

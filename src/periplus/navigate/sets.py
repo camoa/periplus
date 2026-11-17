@@ -21,7 +21,7 @@ from periplus.map import write_document
 from periplus.navigate.count import _counted, _most
 from periplus.navigate.listing import problem_lines
 from periplus.navigate.mapfile import as_json, as_text, load_document, reading_fields
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = [
     "RENDERERS",
@@ -222,7 +222,8 @@ def _combine(command: str, maps: Sequence[Loaded]) -> tuple[dict[str, Any], tupl
     if split_nodes or split_edges:
         named = ", ".join(split_nodes[:_NAMED]) or " ".join(split_edges[0])
         warnings = (
-            f"{len(split_nodes)} things and {len(split_edges)} edges differ between the maps, "
+            f"{amount(len(split_nodes), 'thing')} and {amount(len(split_edges), 'edge')} differ "
+            "between the maps, "
             f"as {named}; the result keeps the copy whose JSON sorts first; periplus diff names "
             "the fields",
         )
@@ -291,19 +292,25 @@ def render_text(report: SetReport) -> str:
     the file written."""
     lines = [f"periplus {report.command}"]
     if not report.problems:
-        shown = [f"{_escape(path)} ({n} things, {e} edges)" for path, n, e in report.inputs]
+        shown = [
+            f"{_escape(path)} ({amount(n, 'thing')}, {amount(e, 'edge')})"
+            for path, n, e in report.inputs
+        ]
         given = ", ".join(shown)
         if report.command == "minus":
             given = f"{shown[0]} minus {', '.join(shown[1:])}"
         lines += [
             f"inputs: {given}",
-            f"result: {report.things} things, {report.edges} edges",
+            f"result: {amount(report.things, 'thing')}, {amount(report.edges, 'edge')}",
             f"by type: {_counted(report.by_type)}",
             f"by state: {_counted(report.by_state)}",
             f"edges by kind: {_counted(report.by_kind)}",
         ]
         if report.out is not None:
-            wrote = f"wrote {_escape(report.out)}: {report.things} nodes, {report.edges} edges"
+            wrote = (
+                f"wrote {_escape(report.out)}: {amount(report.things, 'node')}, "
+                f"{amount(report.edges, 'edge')}"
+            )
             lines.append(wrote)
     lines += [f"warning: {_escape(w)}" for w in report.warnings]
     lines += problem_lines(report.problems)

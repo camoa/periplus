@@ -12,7 +12,7 @@ from periplus.navigate.ids import resolve_all
 from periplus.navigate.listing import problem_lines
 from periplus.navigate.mapfile import MapIndex, as_json, load_document, reading_fields
 from periplus.navigate.sets import sub_document
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["RENDERERS", "ExtractReport", "render_json", "render_text", "run"]
 
@@ -64,7 +64,10 @@ def render_text(report: ExtractReport) -> str:
     """The file written and what it holds, then the warnings and problems."""
     lines = ["periplus extract"]
     if report.out is not None:
-        lines.append(f"wrote {_escape(report.out)}: {report.nodes} nodes, {report.edges} edges")
+        lines.append(
+            f"wrote {_escape(report.out)}: {amount(report.nodes, 'node')}, "
+            f"{amount(report.edges, 'edge')}"
+        )
     lines += [f"warning: {_escape(w)}" for w in report.warnings]
     lines += problem_lines(report.problems)
     return "\n".join(lines) + "\n"

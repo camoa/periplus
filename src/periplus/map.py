@@ -41,7 +41,7 @@ from periplus.mapshared import MAP_SCHEMA as MAP_SCHEMA
 from periplus.mapshared import _section as _section
 from periplus.mapshared import first_error
 from periplus.preflight import DependencyStatus
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 from periplus.resolution import folder_overrides, resolve, settings_values
 from periplus.settings import ResolvedSettings
 from periplus.validate import _schema
@@ -383,8 +383,8 @@ def render_text(report: MapReport) -> str:
             f"{'edges':<8}{report.edges}",
             *(
                 [
-                    f"internal: {report.internal.nodes} nodes and {report.internal.edges} edges "
-                    "left out"
+                    f"internal: {amount(report.internal.nodes, 'node')} and "
+                    f"{amount(report.internal.edges, 'edge')} left out"
                 ]
                 if report.internal.nodes or report.internal.edges
                 else []

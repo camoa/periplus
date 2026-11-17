@@ -201,7 +201,7 @@ def test_a_tight_budget_keeps_every_start_and_cuts_near_rows_of_the_largest_piec
         for budget in range(len(slicing.render_text(full)), 200, -10):
             slicing.BYTE_LIMIT = budget
             report = _run(root, "token")
-            if report.cuts and "hop-1 rows left out" in report.cuts[0]:
+            if report.cuts and "hop-1 row" in report.cuts[0]:
                 found = report
                 break
         slicing.BYTE_LIMIT = 300

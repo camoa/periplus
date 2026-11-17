@@ -41,8 +41,7 @@ from periplus.navigate.source import (
     where,
 )
 from periplus.navigate.undescribed import _key as _container
-from periplus.navigate.walk import amount
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = [
     "BUDGET",
@@ -525,7 +524,7 @@ def _edge_rows(edges: Sequence[EdgeMatch]) -> list[str]:
             lines += [line for edge in group for line in _edge_lines(edge)]
             continue
         if len(group) > _FOLDED_ENDS:
-            said = f"{len(group)} edges: {_counted(Counter(e.kind for e in group), 'kinds')}"
+            said = f"{len(group)} edges: {_counted(Counter(e.kind for e in group), 'kind')}"
         else:
             said = "; ".join(
                 f"{_escape(e.kind)} {_escape(e.source_name)} -> {_escape(e.target_name)}"
@@ -537,14 +536,14 @@ def _edge_rows(edges: Sequence[EdgeMatch]) -> list[str]:
 
 def _counted(counts: Counter[Any], noun: str) -> str:
     """The counts, most first, then by name (``None`` as ``(no container)`` last), the first
-    ``_FOOTER_TYPES`` named and the rest counted."""
+    ``_FOOTER_TYPES`` named and the rest counted as more of ``noun``."""
     ranked = sorted(counts.items(), key=lambda p: (-p[1], p[0] is None, p[0] or ""))
     named = ", ".join(
         f"{_escape(k) if k is not None else '(no container)'} {n}"
         for k, n in ranked[:_FOOTER_TYPES]
     )
     more = len(ranked) - _FOOTER_TYPES
-    return named + (f", and {more} more {noun}" if more > 0 else "")
+    return named + (f", and {amount(more, f'more {noun}')}" if more > 0 else "")
 
 
 def _command(report: FindReport, *extra: str) -> str:
@@ -566,10 +565,10 @@ def _head(report: FindReport) -> list[str]:
     lines = [f"periplus find: {things}, {amount(len(report.edges), 'edge')}"]
     main = Counter(row.type for row in rows if row.group == "main")
     rest = Counter(row.type for row in rows if row.group != "main")
-    lines += [f"main by type: {_counted(main, 'types')}"] if main else []
-    lines += [f"not main by type: {_counted(rest, 'types')}"] if rest else []
+    lines += [f"main by type: {_counted(main, 'type')}"] if main else []
+    lines += [f"not main by type: {_counted(rest, 'type')}"] if rest else []
     kinds = Counter(edge.kind for edge in report.edges)
-    return lines + ([f"edges by kind: {_counted(kinds, 'kinds')}"] if kinds else [])
+    return lines + ([f"edges by kind: {_counted(kinds, 'kind')}"] if kinds else [])
 
 
 def _text(report: FindReport, fold: bool, fold_edges: bool, keep: int | None) -> str:
@@ -581,9 +580,9 @@ def _text(report: FindReport, fold: bool, fold_edges: bool, keep: int | None) ->
     listed = main if fold else list(rows)
     head = _head(report)
     if keep is not None and keep < len(listed):
-        noun = "main things" if fold else "things"
+        noun = "main thing" if fold else "thing"
         head.append(
-            f"showing {keep} of {len(listed)} {noun}; all: "
+            f"showing {keep} of {amount(len(listed), noun)}; all: "
             f"{_escape(_command(report, '--limit', '0'))}"
         )
         listed = listed[:keep]
@@ -596,14 +595,14 @@ def _text(report: FindReport, fold: bool, fold_edges: bool, keep: int | None) ->
         containers = Counter((report.containers or {}).get(row.id) for row in rest)
         body += [
             f"not main, not listed: {len(rest)}",
-            f"  by container: {_counted(containers, 'containers')}",
+            f"  by container: {_counted(containers, 'container')}",
             f"  list them: {_escape(_command(report, '--parts'))}",
         ]
     body += [""] if body and report.edges else []
     if report.edges and fold_edges:
         body += [
             f"edges, not listed: {len(report.edges)}",
-            f"  by kind: {_counted(Counter(e.kind for e in report.edges), 'kinds')}",
+            f"  by kind: {_counted(Counter(e.kind for e in report.edges), 'kind')}",
             f"  list them: {_escape(_command(report, '--limit', '0'))}",
         ]
     elif report.edges:

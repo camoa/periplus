@@ -11,8 +11,8 @@ from periplus.navigate.ids import resolve_all
 from periplus.navigate.listing import marked_text, problem_lines
 from periplus.navigate.mapfile import MapIndex, as_json, load_map, reading_fields
 from periplus.navigate.names import Names
-from periplus.navigate.walk import HUB, CauseRow, amount, cause_walk, head_line, marked
-from periplus.report import _escape, _json_problem
+from periplus.navigate.walk import HUB, CauseRow, cause_walk, head_line, marked
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["RENDERERS", "HubsReport", "listed", "render_json", "render_text", "run", "stopped"]
 

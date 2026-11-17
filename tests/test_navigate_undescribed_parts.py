@@ -35,7 +35,7 @@ def test_the_reply_names_each_part_type_with_its_share(tmp_path: Path) -> None:
     lines = undescribed.render_text(undescribed.run(tmp_path, {}, [], "file", _write(tmp_path)))
 
     assert lines.splitlines()[1:4] == [
-        "described 0 of 1 main things; 1 undescribed",
+        "described 0 of 1 main thing; 1 undescribed",
         "left out: 3 parts (t.p 3)",
         "part types: t.p 66%; count them too with --parts-too",
     ]

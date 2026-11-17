@@ -112,7 +112,7 @@ def test_given_ids_count_only_those(
     assert main(["undescribed", "-", "--map", str(path)]) == 0
     assert capsys.readouterr().out.splitlines()[1:3] == [
         "described 1 of 2 main things; 1 undescribed",
-        "left out: 1 parts (t.param 1)",
+        "left out: 1 part (t.param 1)",
     ]
 
 

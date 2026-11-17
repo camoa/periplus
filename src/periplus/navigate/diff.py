@@ -18,7 +18,7 @@ from periplus.navigate.count import _counted, _most
 from periplus.navigate.listing import NONE, Listing, cut, footer, payload, problem_lines
 from periplus.navigate.mapfile import as_json, as_text, reading_fields
 from periplus.navigate.sets import EdgeKey, Loaded, differing, load, one_version
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["CHANGES", "LIMIT", "RENDERERS", "DiffReport", "listed", "render_json", "render_text"]
 
@@ -174,7 +174,8 @@ def render_text(report: DiffReport) -> str:
     lines = ["periplus diff"]
     if not report.problems and report.things is not None and report.edges is not None:
         for name, (path, things, edges) in zip(("old", "new"), report.maps, strict=True):
-            lines.append(f"{name}: {_escape(path)} ({things} things, {edges} edges)")
+            counts = f"{amount(things, 'thing')}, {amount(edges, 'edge')}"
+            lines.append(f"{name}: {_escape(path)} ({counts})")
         lines.append(f"header: {', '.join(report.header) or 'same'}")
         sections: Sequence[tuple[str, Mapping[str, Listing[Any]], Any, str]] = (
             ("things", report.things, report.thing_counts or {}, "type"),
@@ -185,7 +186,7 @@ def render_text(report: DiffReport) -> str:
             lines += [
                 f"  {c} by {by}: "
                 + (
-                    find._counted(Counter(dict(counted[c])), f"{by}s")
+                    find._counted(Counter(dict(counted[c])), by)
                     if report.limit
                     else _counted(counted[c])
                 )

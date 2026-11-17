@@ -117,7 +117,7 @@ def test_extract_reads_ids_from_standard_input(
     monkeypatch.setattr("sys.stdin", io.StringIO("f::a\nf::b\n"))
 
     assert main(["extract", "-", "--out", "out.json", "--map", str(whole)]) == 0
-    assert capsys.readouterr().out.splitlines()[1] == f"wrote {tmp_path}/out.json: 2 nodes, 1 edges"
+    assert capsys.readouterr().out.splitlines()[1] == f"wrote {tmp_path}/out.json: 2 nodes, 1 edge"
 
 
 def test_extract_json_matches_the_navigation_schema(tmp_path: Path) -> None:
@@ -219,7 +219,7 @@ def test_a_thing_whose_copies_differ_is_kept_once_and_counted(tmp_path: Path) ->
     sets.run(tmp_path, {}, "join", [c, d], Path("two.json"))
 
     assert one.things == 1
-    assert one.warnings[0].startswith("1 things and 0 edges differ between the maps, as f::a;")
+    assert one.warnings[0].startswith("1 thing and 0 edges differ between the maps, as f::a;")
     assert (tmp_path / "one.json").read_bytes() == (tmp_path / "two.json").read_bytes()
 
 
@@ -253,7 +253,7 @@ def test_without_out_it_counts_and_writes_nothing(tmp_path: Path) -> None:
 
     assert text.splitlines() == [
         "periplus join",
-        f"inputs: {a} (3 things, 3 edges), {b} (3 things, 1 edges)",
+        f"inputs: {a} (3 things, 3 edges), {b} (3 things, 1 edge)",
         "result: 4 things, 3 edges",
         "by type: t.function 3, t.class 1",
         "by state: mapped 3, referenced 1",

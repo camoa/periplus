@@ -12,7 +12,7 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import problem_lines
 from periplus.navigate.mapfile import NodeNotFound, as_json, as_text, load_map, reading_fields
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["RENDERERS", "CountReport", "render_json", "render_text", "run"]
 
@@ -91,7 +91,7 @@ def render_text(report: CountReport) -> str:
     the ids that name no node."""
     lines = ["periplus count"]
     if not report.problems:
-        head = f"{report.given} ids given: {report.things} things in the map"
+        head = f"{amount(report.given, 'id')} given: {amount(report.things, 'thing')} in the map"
         head += f", {len(report.missing)} not" if report.missing else ""
         head += f"; {report.repeated} repeated" if report.repeated else ""
         head += f"; {report.short} by a short name" if report.short else ""
@@ -105,7 +105,7 @@ def render_text(report: CountReport) -> str:
         if report.missing:
             lines.append("not in the map:")
             lines += [
-                f"  {_escape(text)}" + (f"  (fits {fits} nodes)" if fits else "")
+                f"  {_escape(text)}" + (f"  (fits {amount(fits, 'node')})" if fits else "")
                 for text, fits in report.missing
             ]
     lines += problem_lines(report.problems)

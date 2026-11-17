@@ -11,7 +11,7 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.ids import resolve_all
 from periplus.navigate.listing import problem_lines
 from periplus.navigate.mapfile import as_json, as_text, load_map, reading_fields
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["RENDERERS", "FilesReport", "render_json", "render_text", "run"]
 
@@ -59,7 +59,7 @@ def render_text(report: FilesReport) -> str:
     """``N things in M files``, one row a file, ``count  file``, then ``no location: N``."""
     lines = ["periplus files"]
     if not report.problems:
-        lines.append(f"{report.things} things in {len(report.files)} files")
+        lines.append(f"{amount(report.things, 'thing')} in {amount(len(report.files), 'file')}")
         lines += [f"  {n}  {_escape(file)}" for file, n in report.files]
         lines += [f"no location: {report.unplaced}"] if report.unplaced else []
     lines += [f"warning: {_escape(w)}" for w in report.warnings]

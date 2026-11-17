@@ -21,7 +21,7 @@ from periplus.navigate.listing import (
 from periplus.navigate.mapfile import MapIndex, as_json, as_text, load_map, reading_fields
 from periplus.navigate.show import node_descriptions
 from periplus.navigate.source import SourceLines, description_line, located, source_line, where
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["RENDERERS", "PathReport", "Step", "render_json", "render_text", "run"]
 
@@ -189,7 +189,7 @@ def render_text(report: PathReport) -> str:
         if report.chains.total == 0:
             lines.append("no path")
         else:
-            lines.append(f"{report.chains.total} shortest chains")
+            lines.append(amount(report.chains.total, "shortest chain"))
         for number, chain in enumerate(report.chains.items, 1):
             lines += [f"  chain {number}:", *_chain_lines(chain)]
         note = footer(report.chains)

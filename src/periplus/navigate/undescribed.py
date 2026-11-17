@@ -20,7 +20,7 @@ from periplus.navigate.names import Names
 from periplus.navigate.nesting import Places
 from periplus.navigate.show import read_descriptions
 from periplus.navigate.source import place_key
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["RENDERERS", "UndescribedReport", "listed", "render_json", "render_text", "run"]
 
@@ -136,12 +136,13 @@ def render_text(report: UndescribedReport) -> str:
     if not report.problems:
         bare = report.main - report.described
         lines.append(
-            f"described {report.described} of {report.main} main things; {bare} undescribed"
+            f"described {report.described} of {amount(report.main, 'main thing')};"
+            f" {bare} undescribed"
         )
         left = []
         if report.parts:
             counted = ", ".join(f"{_escape(t)} {n}" for t, n in report.parts)
-            left.append(f"{sum(n for _, n in report.parts)} parts ({counted})")
+            left.append(f"{amount(sum(n for _, n in report.parts), 'part')} ({counted})")
         if report.supporting:
             left.append(f"{report.supporting} in supporting code")
         if report.unplaced:

@@ -15,14 +15,13 @@ from periplus.navigate.mapfile import MapIndex, as_json, load_map, map_flag, rea
 from periplus.navigate.walk import (
     HUB,
     CauseRow,
-    amount,
     cause_walk,
     head_line,
     start_args,
     summary,
     ways,
 )
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = ["RENDERERS", "DepthReport", "measure", "render_json", "render_text", "run"]
 
@@ -135,7 +134,7 @@ def _touch(
 def _kinds(counted: Sequence[tuple[str, int]]) -> str:
     named = ", ".join(f"{_escape(k)} {n}" for k, n in counted[:KINDS_NAMED])
     left = len(counted) - KINDS_NAMED
-    return named + (f", +{left} kinds" if left > 0 else "")
+    return named + (f", +{amount(left, 'kind')}" if left > 0 else "")
 
 
 def render_text(report: DepthReport) -> str:

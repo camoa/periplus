@@ -68,6 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Two loaded packs, neither depending on the other, that give a folder the same value agree; before, `periplus validate` and `periplus map` stopped with exit 18 and said the folder had different values.
 - `periplus init` names each folder candidate once in its `unplaced` line, and says `it has no default` for a folder it placed that has no default; before, it repeated a candidate two packs listed or the default listed again, and printed `the default none does not exist`.
 - `periplus validate` and `periplus map` refuse, with exit 18, a folder that a pack's `folder_candidates` key, a candidate or a detector path names, as the key or in braces, that neither the pack nor a pack it depends on declares under `folders`; before, such a misspelt name was never refused.
+- A count of one prints its noun singular in the text of `neighbors` and `affected` with `--raw`, `path`, `depth`, `reach`, `count`, `files`, `find`, `undescribed`, `slice`, `extract`, `join`, `common`, `minus`, `diff` and the map report, as `1 edge`, `1 thing`, `1 id given` and `and 1 more kind`; before, some printed `1 edges` or `1 things`. The JSON is unchanged.
 - `drupal_basic`'s `config_names_form` ran to every form id a captcha point or `honeypot.settings` named, switched on or not; it now runs only to a form switched on, and the rest have `config_names_form_off`.
 
 ## [0.8.0] - 2026-11-16

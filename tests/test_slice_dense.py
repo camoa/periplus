@@ -185,7 +185,7 @@ def test_an_edge_inside_one_file_prints_once_at_its_from_end(tmp_path: Path) -> 
 def test_a_node_with_links_the_piece_does_not_show_says_how_many(tmp_path: Path) -> None:
     lines = _text(_piece(tmp_path, ADD))
 
-    assert "      +1 more links: calls -> 1; see periplus show deep --limit 0" in lines
+    assert "      +1 more link: calls -> 1; see periplus show deep --limit 0" in lines
 
 
 def test_the_inventory_names_every_node_by_type_rarest_first(tmp_path: Path) -> None:
@@ -237,6 +237,6 @@ def test_the_footer_names_the_kinds_with_most_rows_left_out_and_counts_the_rest(
     lines = _text(report)
 
     assert (
-        "left out by kind: kind7 2, kind1 1, kind2 1, kind3 1, kind4 1, kind5 1, and 1 more kinds"
+        "left out by kind: kind7 2, kind1 1, kind2 1, kind3 1, kind4 1, kind5 1, and 1 more kind"
         in lines
     )

@@ -35,7 +35,7 @@ from periplus.settings import (
     SourceRef,
 )
 
-__all__ = ["RENDERERS", "render_json", "render_text"]
+__all__ = ["RENDERERS", "amount", "render_json", "render_text"]
 
 #: The settings keys, in the order the text form prints them. Written out rather than read off
 #: `ResolvedSettings.__dataclass_fields__`, because the order a person reads is a choice and the
@@ -116,6 +116,11 @@ def _escape(text: str) -> str:
     except UnicodeEncodeError:
         text = text.encode("utf-8", "backslashreplace").decode("utf-8")
     return text
+
+
+def amount(count: int, noun: str) -> str:
+    """``1 thing``, ``2 things``: the count and the noun, with an ``s`` unless the count is one."""
+    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 # ---------------------------------------------------------------------------------------------

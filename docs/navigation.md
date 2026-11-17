@@ -1369,7 +1369,7 @@ reverse query finds none:
 ```console
 $ periplus path python.module::shop.cli python.function::shop.tools.helper
 periplus path python.module::shop.cli python.function::shop.tools.helper
-1 shortest chains
+1 shortest chain
   chain 1:
     python.module::shop.cli --calls--> python.function::shop.tools.helper  shop/cli.py:9
       | helper()
@@ -1616,7 +1616,7 @@ warning: resolved 'helper' to python.function::shop.tools.helper
 ```console
 $ periplus extract python.module::shop.cli greet app --out cli.map.json
 periplus extract
-wrote /path/to/project/cli.map.json: 3 nodes, 1 edges
+wrote /path/to/project/cli.map.json: 3 nodes, 1 edge
 warning: resolved 'greet' to python.function::shop.cli.greet
 warning: resolved 'app' to typer.app::shop.cli.app
 ```
@@ -1627,12 +1627,12 @@ Join them into one map file:
 ```console
 $ periplus join hello.map.json cli.map.json --out both.map.json
 periplus join
-inputs: cli.map.json (3 things, 1 edges), hello.map.json (3 things, 0 edges)
-result: 5 things, 1 edges
+inputs: cli.map.json (3 things, 1 edge), hello.map.json (3 things, 0 edges)
+result: 5 things, 1 edge
 by type: python.function 2, python.module 1, typer.app 1, typer.command 1
 by state: mapped 5
 edges by kind: contains 1
-wrote /path/to/project/both.map.json: 5 nodes, 1 edges
+wrote /path/to/project/both.map.json: 5 nodes, 1 edge
 ```
 
 What the two features share, and what the command has that the module's parts do not:
@@ -1641,8 +1641,8 @@ What the two features share, and what the command has that the module's parts do
 ```console
 $ periplus common hello.map.json cli.map.json
 periplus common
-inputs: cli.map.json (3 things, 1 edges), hello.map.json (3 things, 0 edges)
-result: 1 things, 0 edges
+inputs: cli.map.json (3 things, 1 edge), hello.map.json (3 things, 0 edges)
+result: 1 thing, 0 edges
 by type: python.function 1
 by state: mapped 1
 edges by kind: none
@@ -1662,7 +1662,7 @@ What changes from one to the other:
 ```console
 $ periplus diff cli.map.json hello.map.json
 periplus diff
-old: cli.map.json (3 things, 1 edges)
+old: cli.map.json (3 things, 1 edge)
 new: hello.map.json (3 things, 0 edges)
 header: type_hierarchy
 things: 2 added, 2 removed, 0 changed

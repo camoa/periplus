@@ -200,7 +200,7 @@ def test_an_id_holding_a_line_break_prints_escaped_says_so_and_reads_back(
     assert out == "x::two\\nlines\n"
     assert "1 of them hold a control character and print escaped" in err
     _, again, _ = _run(capsys, "count", "-", "--map", path, stdin=out)
-    assert again.splitlines()[1] == "1 ids given: 1 things in the map"
+    assert again.splitlines()[1] == "1 id given: 1 thing in the map"
 
 
 def test_an_id_holding_a_backslash_prints_as_it_is(

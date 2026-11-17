@@ -40,7 +40,7 @@ from periplus.navigate.source import (
     source_line,
     where,
 )
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = [
     "BUDGET",
@@ -52,7 +52,6 @@ __all__ = [
     "CauseWalk",
     "WalkReport",
     "WalkRow",
-    "amount",
     "cause_report",
     "cause_walk",
     "head_line",
@@ -269,7 +268,7 @@ def render_text(report: WalkReport | CauseReport) -> str:
     verb = "neighbors" if report.direction == "out" else "affected"
     lines = [f"periplus {verb} {_escape(report.start)}" if report.start else f"periplus {verb}"]
     if report.start:
-        lines.append(f"{report.rows.total} items")
+        lines.append(amount(report.rows.total, "item"))
     # An affected row's edge points to the item the walk came from.
     toward = "from" if report.direction == "out" else "to"
     supporting = False
@@ -509,11 +508,6 @@ def head(index: MapIndex, node_id: str) -> CauseRow:
 def marked(index: MapIndex, row: CauseRow) -> CauseRow:
     """``row`` with its node's marks and whether it is supporting code."""
     return replace(row, supporting=index.supporting(row.id) is not None, marks=index.marks(row.id))
-
-
-def amount(count: int, noun: str) -> str:
-    """``1 thing``, ``2 things``."""
-    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 def summary(label: str, rows: Sequence[CauseRow], shares: bool) -> str:

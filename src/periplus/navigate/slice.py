@@ -42,7 +42,7 @@ from periplus.navigate.sets import sub_document
 from periplus.navigate.show import node_descriptions
 from periplus.navigate.source import SourceLines, description_line, source_line, where
 from periplus.navigate.walk import stand_in_line, start_args, walk
-from periplus.report import _escape, _json_problem
+from periplus.report import _escape, _json_problem, amount
 
 __all__ = [
     "DEEP_STARTS",
@@ -636,11 +636,11 @@ def _piece(
                 else:
                     break
                 parts = [] if told else ["legend left out"]
-                parts += [f"{far_cut} rows past hop 1 left out"] if far_cut else []
+                parts += [f"{amount(far_cut, 'row')} past hop 1 left out"] if far_cut else []
                 parts += [] if more else ["the +N more links lines dropped"]
                 parts += [f"at most {cap} names per link"] if cap < LINK_NAMES else []
                 if near_cut:
-                    parts.append(f"{near_cut} hop-1 rows left out, largest piece first")
+                    parts.append(f"{amount(near_cut, 'hop-1 row')} left out, largest piece first")
                 cut_note = f"cut to fit {budget} bytes: {', '.join(parts)}; --limit N prints N rows"
                 on = _on(str(map_path)) if map_path is not None else ""
                 if not told:
@@ -1357,7 +1357,7 @@ def _file_lines(group: FileGroup, under: str, on: str) -> list[str]:
                 for kind, outward, n in subject.unwalked
             )
             lines.append(
-                f"      +{total} more links: {counted};"
+                f"      +{amount(total, 'more link')}: {counted};"
                 f" see periplus show {_escape(subject.short)} --limit 0{_escape(on)}"
             )
         elif subject.cut_links:
@@ -1428,7 +1428,9 @@ def _left_out(report: SliceReport) -> list[str]:
     left = report.left_by_kind or {}
     first = sorted(left, key=lambda k: (-left[k], k))[:FOOTER_KINDS]
     kinds = ", ".join(f"{_escape(k)} {left[k]}" for k in first)
-    kinds += f", and {len(left) - len(first)} more kinds" if len(left) > len(first) else ""
+    kinds += (
+        f", and {amount(len(left) - len(first), 'more kind')}" if len(left) > len(first) else ""
+    )
     here = sorted(report.kinds, key=lambda k: (-left.get(k, 0), k))
     named = ", ".join(_escape(k) for k in here[:FOOTER_KINDS])
     named += f", and {len(here) - FOOTER_KINDS} more" if len(here) > FOOTER_KINDS else ""
@@ -1524,7 +1526,7 @@ def render_text(report: SliceReport) -> str:
         lines += _piece_lines(report, shorts, under)
         if report.inventory:
             count = sum(len(names) for _, names in report.inventory)
-            lines += ["", f"inventory: {count} nodes"]
+            lines += ["", f"inventory: {amount(count, 'node')}"]
             several = len(report.pieces) > 1
             lines += [
                 f"  {_escape(kind)} {len(names)}: "
@@ -1535,7 +1537,10 @@ def render_text(report: SliceReport) -> str:
         lines += [_escape(cut) for cut in report.cuts]
         lines += _legend_lines(report.legend, _on(report.map_path))
     if report.out is not None:
-        lines.append(f"wrote {_escape(report.out)}: {report.nodes} nodes, {report.edges} edges")
+        lines.append(
+            f"wrote {_escape(report.out)}: {amount(report.nodes, 'node')}, "
+            f"{amount(report.edges, 'edge')}"
+        )
     lines += [f"warning: {_escape(w)}" for w in report.warnings]
     lines += problem_lines(report.problems)
     return "\n".join(lines) + "\n"
