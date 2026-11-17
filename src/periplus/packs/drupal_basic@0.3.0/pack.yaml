@@ -978,6 +978,13 @@ files:
       - name: named_function
         open: '\bfunction\s+(?<function>\w+)\s*\([^)]*\)[^{;]*'
         balance: ['{', '}']
+      # The same body, or the body of an anonymous class; scope is function <name> or new class, so
+      # the spans around a match, outermost first, show whether an anonymous class stands between
+      # it and the named function or method that creates the class. Read by the event rules, which
+      # own a call in an anonymous class by that function or method.
+      - name: function_scope
+        open: '\b(?<scope>function\s+\w+(?=\s*\([^)]*\))|new\s+class\b)(?:\s*\([^)]*\))?[^{;]*'
+        balance: ['{', '}']
       # The type of a named function's or method's first parameter, from after its opening
       # parenthesis to the $ of the parameter, the comma or the closing parenthesis; method is the
       # name. Read by event/listener_method.yaml, one class of a union at a time.

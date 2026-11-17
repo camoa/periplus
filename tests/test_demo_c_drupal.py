@@ -7631,6 +7631,154 @@ def test_parent_constant_and_an_unbound_constant_are_read_in_every_registration_
     assert report.skipped == ()
 
 
+PARENT_UNKNOWN = {
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class OrderEvents {
+  const PLACED = 'my_module.placed';
+}
+""",
+    str(MODULE / "src/EventSubscriber/BaseSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+
+class BaseSubscriber extends OrderEvents {
+  const READY = 'my_module.ready';
+}
+""",
+    str(MODULE / "src/EventSubscriber/ParentTrait.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+trait ParentTrait {
+
+  public static function getSubscribedEvents() {
+    return [
+      parent::READY => 'onA',
+      parent::PLACED => [['onB'], ['onC', 2]],
+    ];
+  }
+
+  #[AsEventListener(event: parent::READY)]
+  public function onAttr($event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/Lone.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+#[AsEventListener(event: parent::READY, method: 'onClass')]
+class Lone implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    $events = [
+      parent::READY => 'onA',
+      parent::PLACED => [['onB'], ['onC', 2]],
+    ];
+    $events[parent::DONE][] = ['onD'];
+    return $events;
+  }
+
+  #[AsEventListener(event: parent::PLACED)]
+  public function onAttr($event) {}
+
+  public function onA($event) {}
+
+  public function onB($event) {}
+
+  public function onC($event) {}
+
+  public function onD($event) {}
+
+  public function onClass($event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/Kid.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+#[AsEventListener(event: parent::READY, method: 'onClass')]
+class Kid extends BaseSubscriber implements EventSubscriberInterface {
+
+  use ParentTrait;
+
+  public static function getSubscribedEvents() {
+    return [
+      parent::READY => 'onA',
+      parent::PLACED => [['onB'], ['onC', 2]],
+    ];
+  }
+
+  #[AsEventListener(event: parent::PLACED)]
+  public function onAttr($event) {}
+
+  public function onA($event) {}
+
+  public function onB($event) {}
+
+  public function onC($event) {}
+
+  public function onClass($event) {}
+
+}
+""",
+}
+
+
+def test_parent_constant_in_a_trait_or_a_class_with_no_parent_is_a_runtime_registration(
+    tmp_path: Path,
+) -> None:
+    """parent::NAME as a getSubscribedEvents key, in each key form, or as an AsEventListener event
+    on a method or a class, written in a trait or in a class that extends nothing, is a runtime
+    registration <owner>|parent::NAME, never silence; in a class with a mapped parent it is still
+    that parent's constant."""
+    _plant(tmp_path, PARENT_UNKNOWN)
+    document, report = _map(tmp_path)
+    rt = "registers_listener_at_runtime"
+    trait = "ParentTrait::getSubscribedEvents"
+    lone = "Lone::getSubscribedEvents"
+    assert _registrations(document) == {
+        (rt, trait, trait + "|parent::READY", None),
+        (rt, trait, trait + "|parent::PLACED", None),
+        (rt, "ParentTrait::onAttr", "ParentTrait::onAttr|parent::READY", None),
+        (rt, lone, lone + "|parent::READY", None),
+        (rt, lone, lone + "|parent::PLACED", None),
+        (rt, lone, lone + "|parent::DONE", None),
+        (rt, "Lone::onAttr", "Lone::onAttr|parent::PLACED", None),
+        (rt, "Lone", "Lone|parent::READY", None),
+        ("subscribed_by", "my_module.ready", "Kid::onA", "0"),
+        ("subscribed_by", "my_module.ready", "Kid::onClass", "0"),
+        ("subscribed_by", "my_module.placed", "Kid::onAttr", "0"),
+        ("subscribed_by", "my_module.placed", "Kid::onB", "0"),
+        ("subscribed_by", "my_module.placed", "Kid::onC", "2"),
+    }
+    runtime = {
+        n.get("attributes", {}).get("resolution")
+        for n in document["nodes"]
+        if n["type"] == "drupal.runtime_subscription"
+    }
+    assert runtime == {"runtime"}
+    assert report.skipped == ()
+
+
 def test_a_priority_written_as_a_constant_reads_as_its_integer_else_as_written(
     tmp_path: Path,
 ) -> None:
@@ -7674,3 +7822,239 @@ def test_only_a_string_constant_documented_or_used_names_an_event(tmp_path: Path
         "Event\\FooEvents::A",
     }
     assert report.skipped == ()
+
+
+ANONYMOUS_CLASS = {
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+  const PLACED = 'my_module.placed';
+}
+""",
+    str(MODULE / "src/Event/PaidEvent.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+use Symfony\Contracts\EventDispatcher\Event;
+
+class PaidEvent extends Event {
+}
+""",
+    str(MODULE / "src/Event/LateEvent.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+use Symfony\Contracts\EventDispatcher\Event;
+
+class LateEvent extends Event {
+}
+""",
+    str(MODULE / "src/Service/BaseEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+class BaseEvents {
+  const BASE = 'my_module.base';
+}
+""",
+    str(MODULE / "src/Service/Listener.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+use Drupal\my_module\Event\LateEvent;
+
+class Listener {
+  public function onPlaced() {}
+  public function onBase() {}
+  public function onClass() {}
+  public function onMyModuleDerived() {}
+  public function onTyped(LateEvent $event) {}
+}
+""",
+    str(MODULE / "src/Service/Sub.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+class Sub {
+}
+""",
+    str(MODULE / "src/Service/Outer.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+use Drupal\my_module\Event\LateEvent;
+use Drupal\my_module\Event\OrderEvents;
+use Drupal\my_module\Event\PaidEvent;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+class Outer extends BaseEvents {
+
+  const LOCAL = 'my_module.local';
+
+  const PRIO = 5;
+
+  protected EventDispatcherInterface $dispatcher;
+
+  protected LateEvent $event;
+
+  public function build(EventDispatcherInterface $d, LateEvent $paid, $container) {
+    $event = new LateEvent();
+    return new class($d) extends BaseEvents {
+      public function fire($d, $paid, $event, $container) {
+        $d->dispatch($paid, OrderEvents::PLACED);
+        $d->dispatch($paid, \Drupal\my_module\Event\OrderEvents::PLACED);
+        $d->dispatch($paid, 'my_module.quoted');
+        $d->dispatch(new PaidEvent());
+        $d->dispatch($paid, PaidEvent::class);
+        $d->dispatch($paid, self::LOCAL);
+        $d->dispatch($paid, static::LOCAL);
+        $d->dispatch($paid, parent::BASE);
+        $d->dispatch($paid, self::class);
+        $d->dispatch(new static());
+        $d->dispatch($this);
+        $d->dispatch($this->event);
+        $d->dispatch($event);
+        $d->dispatch($paid);
+        $this->dispatcher->dispatch($paid, OrderEvents::PLACED);
+        $this->dispatch($paid, OrderEvents::PLACED);
+        $d->addListener(OrderEvents::PLACED, [Listener::class, 'onPlaced'], self::PRIO);
+        $d->addListener(self::LOCAL, [Listener::class, 'onPlaced']);
+        $d->addListener(parent::BASE, [Listener::class, 'onBase']);
+        $d->addListener(static::class, [Listener::class, 'onClass']);
+        $d->addListener(OrderEvents::PLACED, [$this, 'on']);
+        $d->addListener(OrderEvents::PLACED, [self::class, 'on']);
+        $d->addListener(OrderEvents::PLACED, $this->on(...));
+        $d->addSubscriber($this);
+        $d->addSubscriber(new Sub());
+        $container->register('my_module.listener', Listener::class)
+          ->addTag('kernel.event_listener', ['event' => OrderEvents::PLACED, 'method' => 'onPlaced',
+            'priority' => self::PRIO]);
+        $container->register('my_module.derived', Listener::class)
+          ->addTag('kernel.event_listener', ['event' => 'my_module.derived',
+            'priority' => self::PRIO]);
+        $container->register('my_module.typed', Listener::class)
+          ->addTag('kernel.event_listener', ['method' => 'onTyped', 'priority' => self::PRIO]);
+        $container->register('my_module.local', Listener::class)
+          ->addTag('kernel.event_listener', ['event' => self::LOCAL, 'method' => 'onPlaced']);
+        $container->register('my_module.base', Listener::class)
+          ->addTag('kernel.event_listener', ['event' => parent::BASE, 'method' => 'onBase']);
+      }
+    };
+  }
+
+}
+""",
+    str(MODULE / "my_module.module"): r"""<?php
+
+use Drupal\my_module\Event\OrderEvents;
+
+function my_module_wire($d) {
+  return new class {
+    public function go($d, $paid) {
+      $d->dispatch($paid, OrderEvents::PLACED);
+      $d->dispatch($paid, self::LOCAL);
+      $d->dispatch($this);
+      $d->addListener(OrderEvents::PLACED, 'my_module_listen');
+      $d->addListener(OrderEvents::PLACED, [$this, 'on']);
+    }
+  };
+}
+
+$top = new class {
+  public function go($d, $paid) {
+    $d->dispatch($paid, OrderEvents::PLACED);
+    $d->addListener(OrderEvents::PLACED, 'my_module_listen');
+  }
+};
+
+function my_module_listen() {}
+""",
+}
+
+# php_basic's rows for an anonymous class that extends a class, and for one outside any function.
+_PHP_ANONYMOUS_CLASS_ROWS = {"inherits_from_base_clause", "php_literal"}
+
+
+def test_a_dispatch_in_an_anonymous_class_starts_at_the_method_or_function_that_creates_it(
+    tmp_path: Path,
+) -> None:
+    """A ->dispatch() in a method of an anonymous class starts at the named method or function
+    that creates the class. A name, a constant through a use or its namespace, X::class and new X
+    name their event; self::, static:: and parent::, self::class, new static, $this, a property, a
+    variable or a parameter, and the object the call runs on, are not read against the method
+    around the class, so they get the runtime mark. A class created outside any function gives
+    nothing."""
+    _plant(tmp_path, ANONYMOUS_CLASS)
+    document, report = _map(tmp_path)
+    build = "Service\\Outer::build"
+    wire = "my_module_wire"
+    assert _dispatched(document) == {
+        ("dispatched_by", "my_module.placed", build, _UNKNOWN),
+        ("dispatched_by", "my_module.quoted", build, _UNKNOWN),
+        ("dispatched_by", "Event\\PaidEvent", build, _UNKNOWN),
+        ("dispatched_by", f"{build}|self::LOCAL~x", build, _UNKNOWN),
+        ("dispatched_by", f"{build}|static::LOCAL~x", build, _UNKNOWN),
+        ("dispatched_by", f"{build}|parent::BASE~x", build, _UNKNOWN),
+        ("dispatched_by", f"{build}|self::class~x", build, _UNKNOWN),
+        ("dispatched_by", f"{build}|newstatic()~x", build, _UNKNOWN),
+        ("dispatched_by", f"{build}|$this~x", build, _UNKNOWN),
+        ("dispatched_by", f"{build}|$this->event~x", build, _UNKNOWN),
+        ("dispatched_by", f"{build}|$event~x", build, _UNKNOWN),
+        ("dispatched_by", f"{build}|$paid~x", build, _UNKNOWN),
+        ("dispatched_by_function", "my_module.placed", wire, _UNKNOWN),
+        ("dispatched_by_function", f"{wire}|self::LOCAL~x", wire, _UNKNOWN),
+        ("dispatched_by_function", f"{wire}|$this~x", wire, _UNKNOWN),
+    }
+    states = {n["state"] for n in document["nodes"] if n["type"] == "drupal.runtime_event"}
+    assert states == {"unknown_boundary"}
+    assert {rule for _, _, rule, _ in report.skipped} <= _PHP_ANONYMOUS_CLASS_ROWS
+
+
+def test_a_registration_in_an_anonymous_class_is_owned_by_the_method_or_function_that_creates_it(
+    tmp_path: Path,
+) -> None:
+    """addListener, addSubscriber and addTag in a method of an anonymous class are owned by the
+    named method or function that creates the class. A constant through a use, a quoted function
+    and new X are read as anywhere; self::, parent::, self::class, $this as an event, a listener or
+    a subscriber, and a priority self::NAME, are not read against the method around the class: the
+    runtime marks, and the priority as written. A class created outside any function gives
+    nothing."""
+    _plant(tmp_path, ANONYMOUS_CLASS)
+    document, report = _map(tmp_path)
+    build = "Service\\Outer::build"
+    rt = "registers_listener_at_runtime"
+    assert _registrations(document) == {
+        ("subscribed_by", "my_module.placed", "Service\\Listener::onPlaced", "self::PRIO"),
+        (
+            "subscribed_by",
+            "my_module.derived",
+            "Service\\Listener::onMyModuleDerived",
+            "self::PRIO",
+        ),
+        ("subscribed_by", "Event\\LateEvent", "Service\\Listener::onTyped", "self::PRIO"),
+        ("subscribed_by", "my_module.placed", f"{build}|[$this,'on']", "0"),
+        ("subscribed_by", "my_module.placed", f"{build}|[self::class,'on']", "0"),
+        ("subscribed_by", "my_module.placed", f"{build}|$this->on(...)", "0"),
+        ("subscribed_by", "my_module.placed", "my_module_wire|[$this,'on']", "0"),
+        ("subscribed_by_function", "my_module.placed", "my_module_listen", "0"),
+        (rt, build, f"{build}|self::LOCAL~x", None),
+        (rt, build, f"{build}|parent::BASE~x", None),
+        (rt, build, f"{build}|static::class~x", None),
+        (rt, build, f"{build}|$this~x", None),
+        (rt, build, f"{build}|self::LOCAL", None),
+        (rt, build, f"{build}|parent::BASE", None),
+        ("registers_subscriber", build, "Service\\Sub", None),
+    }
+    runtime = {
+        n.get("attributes", {}).get("resolution")
+        for n in document["nodes"]
+        if n["type"] == "drupal.runtime_subscription"
+    }
+    assert runtime == {"runtime"}
+    assert {rule for _, _, rule, _ in report.skipped} <= _PHP_ANONYMOUS_CLASS_ROWS

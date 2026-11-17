@@ -46,7 +46,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # through the use statement of A (the _q rules); X::NAME or A\B::NAME that no use statement binds
 # is the constant of the file's own namespace, unresolved when no mapped file declares it;
 # parent::NAME and parent::class read the parent the class extends, for an attribute on a class
-# through the span attributed_class; a priority written as a constant holds the integer a mapped
+# through the span attributed_class; parent::NAME with no written parent, in a trait or a class
+# that extends nothing, is a runtime registration, as an expression is; a priority written as a constant holds the integer a mapped
 # file declares it with (event/event_subscriber.yaml). A dispatcher key stays the service id as
 # written: no edge kind of the pack says a listener is added to another dispatcher.
 #
@@ -974,7 +975,8 @@ rules:
     meth_arg: {template: '{tag}|{method}|{n_method}{p2}', normalize: [{replace: '^[^|]*\|[^|]+\|.*$', with: ''}, {replace: '^[^|]*\|\|\s*', with: ''}, {replace: '\s+$', with: ''}, {replace: '^null$', with: ''}]}
     meth: {template: '{tag}|{meth_arg}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!''\w+''$|"\w+"$).*$', with: ''}, {replace: '^.|.$', with: ''}]}
     meth_expr: {template: '{tag}|{meth_arg}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?:''\w+''|"\w+")$', with: ''}]}
-    ev_expr: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?:''[^'']*''|"[^"]*"|\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)$', with: ''}]}
+    # parent::NAME left in ev has no written parent, in a trait or a class that extends nothing.
+    ev_expr: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?:''[^'']*''|"[^"]*"|(?!parent::[A-Z][A-Z0-9_]*$)\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)$', with: ''}]}
     expr: {template: '§{ev_expr}§{meth_expr}', normalize: [{replace: '^§§', with: ''}, {replace: '§$', with: ''}, {replace: '^§', with: ''}, {replace: '§', with: ','}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
     owner_at: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: '{psr4_class}'}, {replace: '^[^|]*\|', with: '{psr4_class}::'}]}
     listener: {template: '{tag}|{method}{meth}', normalize: [{replace: '^[^|]*\|', with: ''}]}

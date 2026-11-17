@@ -26,7 +26,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # name a constant of the subscriber's own class: the event of that constant, unresolved when no
 # mapped class declares it, and kept only when no use binds X (a use_bound edge from the bound
 # key). parent::NAME is X::NAME with X the class's written parent, read here when the parent is
-# written with no backslash and by event/listener_registration.yaml when it has one. A priority
+# written with no backslash and by event/listener_registration.yaml when it has one; with no
+# written parent, in a trait or a class that extends nothing, it is a runtime registration
+# (event/listener_registration.yaml). A priority
 # written as a constant, self::LATE or X::FIRST, holds the integer a mapped file declares it with
 # (use_priority_constant, event/event.yaml), else stays as written; a comment around it is no part
 # of it. A

@@ -373,7 +373,9 @@ two calls share holds each place's value under `differs`.
   an internal `drupal.event_use` node at its line, and map rules give its edge from the event of
   the constant's text, else of the constant `<class>::<NAME>`. `X::NAME` that no `use` binds is the
   constant of the file's own namespace, as PHP reads it, unresolved when no mapped file declares
-  it, and `parent::NAME` the constant on the class's written parent. A constant read through a class that
+  it, and `parent::NAME` the constant on the class's written parent; with no written parent, in a
+  trait or a class that extends nothing, it is a `drupal.runtime_subscription` with the runtime
+  mark. A constant read through a class that
   inherits it is the declaring class's, found by walking `inherits` and `implements` from the
   class the key names, and a text is read as PHP reads the literal, so `'A\B'` and `'A\\B'` both
   hold `A\B`. A contributed module's constants are read for their text only, from a file whose
@@ -406,7 +408,10 @@ two calls share holds each place's value under `differs`.
   end at a `drupal.runtime_event` with the runtime mark, and so does a call whose arguments are not
   read, `(unread)`, as one with a third argument; a call with no argument gives nothing. The object the call runs on is checked as for `->addListener()`. The
   method may belong to a class under `src` or to a class kept in a module, install, inc, theme,
-  profile or plain `.php` file, named by the file's namespace.
+  profile or plain `.php` file, named by the file's namespace. A call in a method of an anonymous
+  class, which no rule maps, starts at the named method or function that creates the class, read
+  through the span `function_scope`; there `self::`, `static::`, `parent::`, `$this`, a property,
+  a variable and the object the call runs on get the runtime mark.
 - `subscribed_by` from Symfony's `#[AsEventListener]`, on a method or a class, and from a
   `kernel.event_listener` tag in a services file (`event/event_listener.yaml`). The event is a
   class constant, read as a subscriber's key is, a quoted name, or, with none, the class that
@@ -420,7 +425,8 @@ two calls share holds each place's value under `differs`.
   escape is a runtime registration. An attribute is read across lines, its `A\B::NAME` through the
   `use` statement of `A`, and `parent::NAME` in it is
   the constant on the parent the class `extends`, through the span `attributed_class` for an
-  attribute on the class itself. A `dispatcher` key stays the service id as written: the pack has no
+  attribute on the class itself, and a runtime registration in a trait or a class that extends
+  nothing. A `dispatcher` key stays the service id as written: the pack has no
   edge kind for a listener added to another dispatcher, and the text finds that service's node,
   `drupal.service::<id>`, as it stands. A name the table
   `core_event_names` lists, as `kernel.request`, is the event of its core constant,
@@ -439,7 +445,9 @@ two calls share holds each place's value under `differs`.
   `->addTag('kernel.event_listener', [...])` in PHP, its event a container parameter read as a
   tag's is, and a `getSubscribedEvents()` key written as a name or with its namespace;
   `registers_subscriber` from `->addSubscriber()`. A call in a method of a class kept in a module,
-  install, inc, theme, profile or plain `.php` file is read as one in a class under `src`.
+  install, inc, theme, profile or plain `.php` file is read as one in a class under `src`. A call
+  in a method of an anonymous class is owned by the named method or function that creates the
+  class, and its `self::`, `static::`, `parent::` and `$this` forms get the runtime mark.
   `parent::class` is the class the class `extends`, as written there, and `parent::NAME` the
   constant on it. A call is read whatever line breaks and comments stand between its name, its
   parenthesis and its arguments. Each is one

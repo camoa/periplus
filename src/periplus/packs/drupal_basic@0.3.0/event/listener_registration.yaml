@@ -7,7 +7,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # or service whose method listens. The owner is the method around the call, of a class under src
 # named by Drupal's PSR-4 layout or of a class a module, install, inc, theme, profile or plain .php
 # file keeps, named by the file's namespace, or the function around it in such a file; an .api.php
-# file, a test outside tests/src and any other file give nothing. Each argument, key and value is
+# file, a test outside tests/src and any other file give nothing. An addListener, addTag or
+# addSubscriber call in a method of an anonymous class is owned by the named method or function
+# that creates the outermost such class, since no rule maps a method of an anonymous class; one
+# created outside any function gives nothing. Each argument, key and value is
 # read whole, so an expression such as 'a' . 'b' or self::PREFIX . '.x' is never cut down to a
 # name.
 #
@@ -55,19 +58,24 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # EventDispatcherInterface of the contracts or the component, Symfony's EventDispatcher, Drupal's
 # ContainerAwareEventDispatcher, PSR-14's EventDispatcherInterface, which core aliases to the event
 # dispatcher, or a mapped class or interface that implements or extends one of them. With no type known, as for an untyped parameter, one assigned in the body or declared by a
-# closure, an undeclared property or a call's result such as \Drupal::service('event_dispatcher'),
-# the registration stays, and its edge holds receiver: not known to be an event dispatcher; one on
+# closure, an undeclared property, a call's result such as \Drupal::service('event_dispatcher'),
+# or any object in a method of an anonymous class, the registration stays, and its edge holds receiver: not known to be an event dispatcher; one on
 # a known event dispatcher holds receiver: an event dispatcher, so an edge two registrations share
 # holds each place's value under differs. The node sits at the call's line.
 # An event or a listener only the running code names - a variable, an expression, a key or a
-# listener value built in a loop or by a call, a body returning what a helper builds, a subscriber
-# or a definition held in a variable - is a drupal.runtime_subscription <owner>|<expression>, the
+# listener value built in a loop or by a call, a body returning what a helper builds, a key
+# parent::NAME with no written parent, in a trait or a class that extends nothing, a subscriber
+# or a definition held in a variable, and in a method of an anonymous class an event self::NAME,
+# static::NAME, parent::NAME, self::class, static::class or parent::class and a subscriber
+# $this - is a drupal.runtime_subscription <owner>|<expression>, the
 # expression as written without its spaces, and for an addListener or addSubscriber call
 # <owner>|<expression>~<object>, the object as above, so two calls on objects known differently
 # are two nodes, marked resolution: runtime, with
 # a registers_listener_at_runtime edge from the method or function that makes it. The event is named
 # as a subscriber's key names it: by the text a mapped constant holds, a core name through the
-# table core_event_names, else as written.
+# table core_event_names, else as written. In a method of an anonymous class, the callable
+# [$this, 'm'], [self::class, 'm'] or $this->m(...) ends at the drupal.runtime_listener
+# <owner>|<callable>, and a priority self::NAME or static::NAME stays as written.
 
 node_types:
 - name: drupal.runtime_subscription
@@ -126,13 +134,14 @@ rules:
   match: &listener_added_match
     file: '**'
     filetype: drupal_php_text
-    text: '(?=[$-])(?:(?<![\w$>:\\])(?<rv>\$(?!this\b)\w+)|(?<![\w$>:\\])\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<rp>\w+)|(?<![\w$>:\\])(?<rt>\$this))?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<call>addListener)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:parent::(?<epc>[A-Z][A-Z0-9_]*)|(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,)|[''\"](?<en>[^''\"$]+)[''\"]|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:\[\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<a1>\w+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\]|\[\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:self|static)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<a2>\w+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\]|\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<a3>\w+)\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\.\.\.\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|\[\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<e1>\w+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\]|(?<d2>\\?[A-Za-z_][\w\\]*)::(?<e2>\w+)\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\.\.\.\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|[''\"](?<b1>\\?[A-Za-z_][\w\\]*)::(?<e3>\w+)[''\"]|[''\"](?<f1>\\?[A-Za-z_][\w\\]*)[''\"]|(?<g1>(?:static\s+)?function\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\([^)]*\)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*use\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\([^)]*\))?(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\??[\w\\]+)?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}|(?:static\s+)?fn\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\([^)]*\)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>(?:[^,()]|\((?:[^()]|\([^()]*\))*\))+|(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)'
+    text: '(?=[$-])(?:(?<![\w$>:\\])(?<rv>\$(?!this\b)\w+)|(?<![\w$>:\\])\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<rp>\w+)|(?<![\w$>:\\])(?<rt>\$this))?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<call>addListener)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:parent::(?<epc>[A-Z][A-Z0-9_]*)|(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,)|[''\"](?<en>[^''\"$]+)[''\"]|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:(?<cs>\[\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<a1>\w+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\]|\[\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:self|static)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<a2>\w+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\]|\$this\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<a3>\w+)\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\.\.\.\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\))|\[\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<e1>\w+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\]|(?<d2>\\?[A-Za-z_][\w\\]*)::(?<e2>\w+)\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\.\.\.\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|[''\"](?<b1>\\?[A-Za-z_][\w\\]*)::(?<e3>\w+)[''\"]|[''\"](?<f1>\\?[A-Za-z_][\w\\]*)[''\"]|(?<g1>(?:static\s+)?function\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\([^)]*\)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*use\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\([^)]*\))?(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\??[\w\\]+)?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}|(?:static\s+)?fn\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\([^)]*\)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>(?:[^,()]|\((?:[^()]|\([^()]*\))*\))+|(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?))?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)'
   values: &listener_added_values
     # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this, x for any
     # other, as a call's result; xmark, the mark, only for x.
-    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}', normalize: [{replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}‡{anon}', normalize: [{replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
     xmark: {template: '{recv}', normalize: [{replace: '^x$', with: 'not known to be an event dispatcher'}, {replace: '^(?!not ).*$', with: ''}]}
-    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -146,17 +155,21 @@ rules:
     owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
     bare: {template: '{meth}{f_own}'}
     ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
-    ekx: {template: '{call}§{parent_cls}§{ek}§{epc}', normalize: [{replace: '^[^§]*§', with: ''}, {replace: '^[^§]*§§$', with: ''}, {replace: '^[^§]*§(?=[^§])', with: ''}, {replace: '§$', with: ''}, {replace: '§§(?=[A-Z])', with: '::'}, {replace: '^::[\s\S]*$', with: ''}]}
-    r_ev: {template: '{call}§K{ekx}§T{this_cls}§O{eo}', normalize: [{replace: '^[^§]*(?=§K)', with: ''}, {replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
+    ekx: {template: '{call}§{parent_cls}§{ek}§{epc}‡{anon}', normalize: [{replace: '§[^§‡]*‡.+$', with: '§'}, {replace: '‡$', with: ''}, {replace: '^[^§]*§', with: ''}, {replace: '^[^§]*§§$', with: ''}, {replace: '^[^§]*§(?=[^§])', with: ''}, {replace: '§$', with: ''}, {replace: '§§(?=[A-Z])', with: '::'}, {replace: '^::[\s\S]*$', with: ''}]}
+    r_ev: {template: '{call}§K{ekx}§T{this_cls}§O{eo}‡{anon}', normalize: [{replace: '§O[^§‡]*‡.+$', with: '§O'}, {replace: '‡$', with: ''}, {replace: '^[^§]*(?=§K)', with: ''}, {replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
     h_ev: {template: '{ekx}', normalize: [{replace: '^\\.*$', with: ''}]}
     prio: {template: '{call}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
-    pk: {template: '§{this_cls}§{pcref}{pcu}', normalize: [{replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
+    pk: {template: '§{this_cls}§{pcref}{pcu}‡{anon}', normalize: [{replace: '^§[^§]*§(?=[^‡]*‡.)', with: ''}, {replace: '‡[\s\S]*$', with: ''}, {replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
+    ec_ok: {template: '{ec}‡{anon}', normalize: [{replace: '^(?:self|static|parent)‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
     unknown: {from: {capture: ex}, normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
-    self_class: {template: '§{a1}{a2}{a3}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
+    self_class: {template: '§{a1}{a2}{a3}§{this_cls}‡{anon}', normalize: [{replace: '^§[^§]*§[^‡]*‡.+$', with: 'self'}, {replace: '‡$', with: ''}, {replace: '^§[^§]*§', with: ''}]}
+    scoped: {template: '{call}‡{anon}§S{eo}§P{epc}§C{ec}§E', normalize: [{replace: '^[\w.]+‡§[\s\S]*$', with: ''}, {replace: '^[\w.]+‡\w+', with: ''}, {replace: '§C(?!(?:self|static|parent)§E)[^§]*', with: '§C'}, {replace: '§C§E', with: ''}, {replace: '§[SP](?=§|$)', with: ''}, {replace: '§P', with: 'parent::'}, {replace: '§E', with: '::class'}, {replace: '§[SC]', with: ''}]}
     pl:
-      template: '§C{a1}{a2}{a3}{e1}{e2}{e3}§F{f1}§R{g1}'
+      template: '§C{a1}{a2}{a3}{e1}{e2}{e3}§F{f1}§R{g1}‡{anon}§S{cs}'
       normalize:
+      - {replace: '^[\s\S]*‡\w+§S(?=.)', with: '§R'}
+      - {replace: '‡[\s\S]*$', with: ''}
       - {replace: '§[CFR](?=§|$)', with: ''}
       - {replace: '\s+', with: ''}
       - {replace: '\|', with: '¦'}
@@ -275,7 +288,7 @@ rules:
   in: [source]
   match: *listener_added_match
   values: *listener_added_values
-  id: {template: '{ec}::class|reg~{recv}|{owner}|{pl}'}
+  id: {template: '{ec_ok}::class|reg~{recv}|{owner}|{pl}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
@@ -285,11 +298,11 @@ rules:
   in: [source]
   match: *listener_added_match
   values: *listener_added_values
-  id: {template: '{ec}::class|reg~{recv}|{owner}|{pl}'}
+  id: {template: '{ec_ok}::class|reg~{recv}|{owner}|{pl}'}
   emits:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
-  - edge: {kind: use_has_priority, from: this_node, to: {template: '{ec}::class|reg~{recv}|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
+  - edge: {kind: use_has_priority, from: this_node, to: {template: '{ec_ok}::class|reg~{recv}|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
   - edge: {kind: use_names_event, from: this_node, to: {template: '{cls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
   - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_class, from: this_node, to: {template: '{b1}', resolve: [{full_if_prefixed: '\'}, as_written], separator: '\', types: [php.class_like]}}
@@ -328,6 +341,30 @@ rules:
   emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
   confidence: inferred
 
+# In an anonymous class, an event read against the class around the call: self::NAME,
+# static::NAME, parent::NAME, self::class, static::class or parent::class.
+- rule: listener_added_scope_runtime
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *listener_added_match
+  values: *listener_added_values
+  id: {template: '{bare}|{scoped}~{recv}'}
+  emits:
+  - node: {type: drupal.runtime_subscription}
+  - attribute: {name: resolution, template: runtime}
+  confidence: inferred
+
+- rule: listener_added_scope_runtime_from
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *listener_added_match
+  values: *listener_added_values
+  id: {template: '{bare}|{scoped}~{recv}'}
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
+  confidence: inferred
+
 # ->addTag('kernel.event_listener', [...]) on a definition a service provider or a pass names.
 - rule: listener_tag_added_r
   reads: file
@@ -338,7 +375,8 @@ rules:
     text: '(?=[-n$])(?:->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*register\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"][^''\"]+[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|new\s+Definition\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:getDefinition|findDefinition)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<sid>[^''\"]+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:register|getDefinition|findDefinition|setDefinition)\())(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*addTag\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<tag>kernel\.event_listener)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:\[|array\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:parent::(?<epc>[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"]%(?<ep>[^''\"%\s]+)%[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<e1>\w+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)'
   values: &listener_tag_added_values
     disp: {template: '{dispatcher}{dispx}'}
-    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -352,13 +390,15 @@ rules:
     owner: {template: '§{meth}§{f_own}', normalize: [{replace: '^§§$', with: ''}, {replace: '^§§', with: 'php.function::'}, {replace: '^§', with: 'php.method::'}, {replace: '§$', with: ''}]}
     bare: {template: '{meth}{f_own}'}
     ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
-    ekx: {template: '{tag}§{parent_cls}§{ek}§{epc}', normalize: [{replace: '^[^§]*§', with: ''}, {replace: '^[^§]*§§$', with: ''}, {replace: '^[^§]*§(?=[^§])', with: ''}, {replace: '§$', with: ''}, {replace: '§§(?=[A-Z])', with: '::'}, {replace: '^::[\s\S]*$', with: ''}]}
-    r_ev: {template: '{tag}§K{ekx}§T{this_cls}§O{eo}', normalize: [{replace: '^[^§]*(?=§K)', with: ''}, {replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
+    ekx: {template: '{tag}§{parent_cls}§{ek}§{epc}‡{anon}', normalize: [{replace: '§[^§‡]*‡.+$', with: '§'}, {replace: '‡$', with: ''}, {replace: '^[^§]*§', with: ''}, {replace: '^[^§]*§§$', with: ''}, {replace: '^[^§]*§(?=[^§])', with: ''}, {replace: '§$', with: ''}, {replace: '§§(?=[A-Z])', with: '::'}, {replace: '^::[\s\S]*$', with: ''}]}
+    r_ev: {template: '{tag}§K{ekx}§T{this_cls}§O{eo}‡{anon}', normalize: [{replace: '§O[^§‡]*‡.+$', with: '§O'}, {replace: '‡$', with: ''}, {replace: '^[^§]*(?=§K)', with: ''}, {replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
     h_ev: {template: '{ekx}', normalize: [{replace: '^\\.*$', with: ''}]}
     prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
-    pk: {template: '§{this_cls}§{pcref}{pcu}', normalize: [{replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
+    pk: {template: '§{this_cls}§{pcref}{pcu}‡{anon}', normalize: [{replace: '^§[^§]*§(?=[^‡]*‡.)', with: ''}, {replace: '‡[\s\S]*$', with: ''}, {replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
+    ec_ok: {template: '{ec}‡{anon}', normalize: [{replace: '^(?:self|static|parent)‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
     unknown: {template: '§{ex}§{ek}{eo}{ec}{en}§{mx}', normalize: [{replace: '^§§[^§]+§.*$', with: ''}, {replace: '^§§§', with: ''}, {replace: '(?<=.)§.*$', with: ''}, {replace: '^§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+    scoped: {template: '{tag}‡{anon}§S{eo}§P{epc}§C{ec}§E', normalize: [{replace: '^[\w.]+‡§[\s\S]*$', with: ''}, {replace: '^[\w.]+‡\w+', with: ''}, {replace: '§C(?!(?:self|static|parent)§E)[^§]*', with: '§C'}, {replace: '§C§E', with: ''}, {replace: '§[SP](?=§|$)', with: ''}, {replace: '§P', with: 'parent::'}, {replace: '§E', with: '::class'}, {replace: '§[SC]', with: ''}]}
     no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ep}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
     pl:
       template: '§M{e1}§X{mx}§K{ek}{eo}{ec}§V{dv}§W{d1}{d2}{sid}§Z{tag}'
@@ -475,7 +515,7 @@ rules:
   in: [source]
   match: *listener_tag_added_match
   values: *listener_tag_added_values
-  id: {template: '{ec}::class|reg|{owner}|{pl}'}
+  id: {template: '{ec_ok}::class|reg|{owner}|{pl}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
@@ -484,15 +524,15 @@ rules:
   in: [source]
   match: *listener_tag_added_match
   values: *listener_tag_added_values
-  id: {template: '{ec}::class|reg|{owner}|{pl}'}
+  id: {template: '{ec_ok}::class|reg|{owner}|{pl}'}
   emits:
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
-  - edge: {kind: use_has_priority, from: this_node, to: {template: '{ec}::class|reg|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
+  - edge: {kind: use_has_priority, from: this_node, to: {template: '{ec_ok}::class|reg|{owner}|{pl}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}
   - edge: {kind: use_names_event, from: this_node, to: {template: '{cls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
   - edge: {kind: use_names_class, from: this_node, to: {template: '{d1}{d2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [php.class_like]}}
   - edge: {kind: use_names_service, from: this_node, to: {template: '{sid}', types: [drupal.service]}}
-  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{ec}::class|reg|{owner}|{pl}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{ec_ok}::class|reg|{owner}|{pl}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
   confidence: inferred
 
 # A tag with a quoted event and no method: the name Symfony derives, on<Event>, then __invoke.
@@ -505,7 +545,8 @@ rules:
     text: '(?=[-n$])(?:->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*register\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"][^''\"]+[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|new\s+Definition\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:getDefinition|findDefinition)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<sid>[^''\"]+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:register|getDefinition|findDefinition|setDefinition)\())(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*addTag\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<tag>kernel\.event_listener)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:\[|array\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:parent::(?<epc>[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"]%(?<ep>[^''\"%\s]+)%[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<e1>\w+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)'
   values: &listener_tag_added_derived_values
     disp: {template: '{dispatcher}{dispx}'}
-    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -523,7 +564,7 @@ rules:
     r_ev: {template: '{tag}§K{ekx}§T{this_cls}§O{eo}', normalize: [{replace: '^[^§]*(?=§K)', with: ''}, {replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
     h_ev: {template: '{ekx}', normalize: [{replace: '^\\.*$', with: ''}]}
     prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
-    pk: {template: '§{this_cls}§{pcref}{pcu}', normalize: [{replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
+    pk: {template: '§{this_cls}§{pcref}{pcu}‡{anon}', normalize: [{replace: '^§[^§]*§(?=[^‡]*‡.)', with: ''}, {replace: '‡[\s\S]*$', with: ''}, {replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
     unknown: {template: '§{ex}§{ek}{eo}{ec}{en}§{mx}', normalize: [{replace: '^§§[^§]+§.*$', with: ''}, {replace: '^§§§', with: ''}, {replace: '(?<=.)§.*$', with: ''}, {replace: '^§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
     no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ep}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
@@ -615,7 +656,8 @@ rules:
     text: '(?=[-n$])(?:->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*register\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"][^''\"]+[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d1>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|new\s+Definition\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<d2>\\?[A-Za-z_][\w\\]*)::class\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:getDefinition|findDefinition)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<sid>[^''\"]+)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\)|(?<dv>\$\w+(?:->\w+)*)(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:register|getDefinition|findDefinition|setDefinition)\())(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*->\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*addTag\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''\"](?<tag>kernel\.event_listener)[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:\[|array\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\()(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]event[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:parent::(?<epc>[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ek>\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<eo>(?:self|static)::[A-Z][A-Z0-9_]*)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ec>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"]%(?<ep>[^''\"%\s]+)%[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|[''\"](?<en>(?!%[^''\"%]+%[''\"])[^''\"$]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<ex>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]method[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<e1>\w+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<mx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]priority[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])?)(?=(?:(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^()\[\]''\"])*?[''\"]dispatcher[''\"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*=>\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:[''\"](?<dispatcher>[^''\"]+)[''\"](?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])|(?<dispx>(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''\"])+?)(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,\]\)])))?)'
   values: &listener_tag_added_typed_values
     disp: {template: '{dispatcher}{dispx}'}
-    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -633,7 +675,7 @@ rules:
     r_ev: {template: '{tag}§K{ekx}§T{this_cls}§O{eo}', normalize: [{replace: '^[^§]*(?=§K)', with: ''}, {replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
     h_ev: {template: '{ekx}', normalize: [{replace: '^\\.*$', with: ''}]}
     prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
-    pk: {template: '§{this_cls}§{pcref}{pcu}', normalize: [{replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
+    pk: {template: '§{this_cls}§{pcref}{pcu}‡{anon}', normalize: [{replace: '^§[^§]*§(?=[^‡]*‡.)', with: ''}, {replace: '‡[\s\S]*$', with: ''}, {replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
     unknown: {template: '§{ex}§{ek}{eo}{ec}{en}§{mx}', normalize: [{replace: '^§§[^§]+§.*$', with: ''}, {replace: '^§§§', with: ''}, {replace: '(?<=.)§.*$', with: ''}, {replace: '^§', with: ''}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
     no_event: {template: '{tag}|{ek}{eo}{ec}{en}{ep}{ex}', normalize: [{replace: '^[^|]*\|$', with: 'tag-with-no-event'}, {replace: '^[^|]*\|.+$', with: ''}]}
@@ -734,6 +776,27 @@ rules:
   emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node}}]
   confidence: inferred
 
+# In an anonymous class, an event read against the class around the call, as for addListener.
+- rule: listener_tag_added_scope_runtime
+  reads: file
+  in: [source]
+  match: *listener_tag_added_match
+  values: *listener_tag_added_values
+  id: {template: '{bare}|{scoped}'}
+  emits:
+  - node: {type: drupal.runtime_subscription}
+  - attribute: {name: resolution, template: runtime}
+  confidence: inferred
+
+- rule: listener_tag_added_scope_runtime_from
+  reads: file
+  in: [source]
+  match: *listener_tag_added_match
+  values: *listener_tag_added_values
+  id: {template: '{bare}|{scoped}'}
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node}}]
+  confidence: inferred
+
 # An event written as a container parameter, 'event' => '%name%': Symfony's RegisterListenersPass
 # passes the text on to the dispatcher's addListener call and the built container gives that call
 # the parameter's value, so the event is the value one mapped parameters block gives the parameter
@@ -802,9 +865,10 @@ rules:
   values: &subscriber_added_values
     # The object the call runs on: v:<parameter>, p:<property of $this>, t for $this, x for any
     # other, as a call's result; xmark, the mark, only for x.
-    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}', normalize: [{replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
+    anon: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '^(?![\s\S]*\bnew\s+class\b)[\s\S]*$', with: ''}, {replace: '^[\s\S]+$', with: 'anon'}]}
+    recv: {template: '§{call}§V{rv}§P{rp}§T{rt}‡{anon}', normalize: [{replace: '^[\s\S]*‡.+$', with: ''}, {replace: '‡$', with: ''}, {replace: '^§\w+', with: ''}, {replace: '§[VPT](?=§|$)', with: ''}, {replace: '^$', with: 'x'}, {replace: '^§V\$', with: 'v:'}, {replace: '^§P', with: 'p:'}, {replace: '^§T.*$', with: 't'}]}
     xmark: {template: '{recv}', normalize: [{replace: '^x$', with: 'not known to be an event dispatcher'}, {replace: '^(?!not ).*$', with: ''}]}
-    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    fn: {from: {enclosing: function_scope, capture: scope}, join: '|', normalize: [{replace: '(?:^|\|)new\s+class\b[\s\S]*$', with: ''}, {replace: '^[\s\S]*\|', with: ''}, {replace: '^function\s+', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
     fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
     m_src: {template: '§{in_class}§{fn}', normalize: [{replace: '^§§.*$', with: ''}, {replace: '^§[^§]*§', with: '{psr4_class}::'}, {replace: '^§.*$', with: ''}]}
@@ -818,8 +882,9 @@ rules:
     bare: {template: '{meth}{f_own}'}
     ns: {template: '{here_ns}', normalize: [{replace: '\\$', with: ''}]}
     unknown: {from: {capture: sx}, normalize: [{replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+    scoped: {template: '{st}‡{anon}', normalize: [{replace: '^[\s\S]*‡$', with: ''}, {replace: '‡\w+$', with: ''}]}
     this_class: {template: '§{st}§{this_cls}', normalize: [{replace: '^§[^§]*§', with: ''}]}
-    target: {template: '§{sc}§{st}', normalize: [{replace: '^§§\$this$', with: 'this'}, {replace: '^§(?=[^§])', with: 'c:'}, {replace: '§$', with: ''}, {replace: '^§.*$', with: ''}]}
+    target: {template: '§{sc}§{st}‡{anon}', normalize: [{replace: '^§§\$this‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}, {replace: '^§§\$this$', with: 'this'}, {replace: '^§(?=[^§])', with: 'c:'}, {replace: '§$', with: ''}, {replace: '^§.*$', with: ''}]}
   id: {template: 'sub~{recv}|{owner}|{target}'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
@@ -865,6 +930,29 @@ rules:
   match: *subscriber_added_match
   values: *subscriber_added_values
   id: {template: '{bare}|{unknown}~{recv}'}
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
+  confidence: inferred
+
+# In an anonymous class, $this added: the anonymous class, which no rule maps.
+- rule: subscriber_added_scope_runtime
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *subscriber_added_match
+  values: *subscriber_added_values
+  id: {template: '{bare}|{scoped}~{recv}'}
+  emits:
+  - node: {type: drupal.runtime_subscription}
+  - attribute: {name: resolution, template: runtime}
+  confidence: inferred
+
+- rule: subscriber_added_scope_runtime_from
+  reads: file
+  line: {capture: call}
+  in: [source]
+  match: *subscriber_added_match
+  values: *subscriber_added_values
+  id: {template: '{bare}|{scoped}~{recv}'}
   emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node, attributes: {receiver: {template: '{xmark}'}}}}]
   confidence: inferred
 
@@ -1226,7 +1314,7 @@ rules:
   match: &key_runtime_match
     file: '**'
     filetype: drupal_php_text
-    text: '\$\w+\[\s*(?<k1>(?![''\"][^''\"]*[''\"]\s*\]|\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*\s*\]|(?:self|static)::[A-Z][A-Z0-9_]*\s*\]|\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class\s*\])[^\]\n]+?)\s*\](?:\s*\[\s*\])?\s*=(?![=>])|[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<k2>(?![\s/#])(?![^=\n]*?\bas\b)(?!(?:''[^'']*''|\"[^\"]*\"|\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)\s*=>)(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|[^=\n,\[\]()''\"])+?)\s*=>|=>\s*(?:\[\s*){0,2}(?<k5>(?!\s|\[|array\s*\(|[''\"]\w+[''\"]\s*[,\]\);])(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|[^=\n,\[\]()''\"])+?)\s*[,\]\);](?!\s*[{:])|\breturn\s+(?<k3>(?!\[|array\s*\(|\$\w+\s*(?:;|\+)|parent::getSubscribedEvents\(\)\s*(?:;|\+)|array_merge\()[^;]+);|\$\w+\s*\+?=\s*(?<k4>(?!\[|array\s*\(|parent::getSubscribedEvents\(\))(?:[\w\\]+::|\$this->|self::|static::)?\w+\((?:[^()]|\([^()]*\))*\))\s*;'
+    text: '\$\w+\[\s*(?<k1>(?![''\"][^''\"]*[''\"]\s*\]|\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*\s*\]|(?:self|static)::[A-Z][A-Z0-9_]*\s*\]|\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class\s*\])[^\]\n]+?)\s*\](?:\s*\[\s*\])?\s*=(?![=>])|[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<k2>(?![\s/#])(?=(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|[^=\n,\[\]()''\"])+?\s*=>)(?![^=\n]*?\bas\b)(?!(?:''[^'']*''|\"[^\"]*\"|\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)\s*=>)(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|[^=\n,\[\]()''\"])+?)\s*=>|=>\s*(?:\[\s*){0,2}(?<k5>(?!\s|\[|array\s*\(|[''\"]\w+[''\"]\s*[,\]\);])(?:''[^'']*''|\"[^\"]*\"|\((?:[^()]|\([^()]*\))*\)|[^=\n,\[\]()''\"])+?)\s*[,\]\);](?!\s*[{:])|\breturn\s+(?<k3>(?!\[|array\s*\(|\$\w+\s*(?:;|\+)|parent::getSubscribedEvents\(\)\s*(?:;|\+)|array_merge\()[^;]+);|\$\w+\s*\+?=\s*(?<k4>(?!\[|array\s*\(|parent::getSubscribedEvents\(\))(?:[\w\\]+::|\$this->|self::|static::)?\w+\((?:[^()]|\([^()]*\))*\))\s*;'
   values: &key_runtime_values
     fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
@@ -1256,6 +1344,35 @@ rules:
   in: [source]
   match: *key_runtime_match
   values: *key_runtime_values
+  id: {template: '{in_subscriber}|{bare}|{unknown}', normalize: [{replace: '^function\|', with: ''}]}
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node}}]
+  confidence: inferred
+
+# A key parent::NAME => ... with no written parent: in a trait the class that uses it decides the
+# parent, and a class that extends nothing has none.
+- rule: key_parent_runtime
+  reads: file
+  line: {capture: pc}
+  in: [source]
+  match: &key_parent_runtime_match
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])parent::(?<pc>[A-Z][A-Z0-9_]*)\s*=>'
+  values: &key_parent_runtime_values
+    <<: *key_runtime_values
+    unknown: {template: '{parent_cls}§parent::{pc}', normalize: [{replace: '^[^§]+§[\s\S]*$', with: ''}, {replace: '^§', with: ''}]}
+  id: {template: '{in_subscriber}|{bare}|{unknown}', normalize: [{replace: '^function\|', with: ''}]}
+  emits:
+  - node: {type: drupal.runtime_subscription}
+  - attribute: {name: resolution, template: runtime}
+  confidence: inferred
+
+- rule: key_parent_runtime_from
+  reads: file
+  line: {capture: pc}
+  in: [source]
+  match: *key_parent_runtime_match
+  values: *key_parent_runtime_values
   id: {template: '{in_subscriber}|{bare}|{unknown}', normalize: [{replace: '^function\|', with: ''}]}
   emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{bare}', types: [php.method, php.function]}, to: this_node}}]
   confidence: inferred
