@@ -4,4 +4,4 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # Building is not enqueueing, but the build is the only place the type name is written.
 
 edge_kinds:
-- {kind: enqueues_job, from: [php.method, php.function], to: drupal.queue_job_type, description: "The method or function builds a job of that queue job type with Job::create(); building a job is not the same as queueing it"}
+- {kind: enqueues_job, cause: from, from: [php.method, php.function], to: drupal.queue_job_type, description: "The method or function builds a job of that queue job type with Job::create(); building a job is not the same as queueing it"}

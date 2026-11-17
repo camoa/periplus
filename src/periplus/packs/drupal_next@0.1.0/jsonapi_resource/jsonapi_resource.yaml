@@ -8,6 +8,7 @@ node_types:
   id_namespace: drupal_next.jsonapi_resource
 edge_kinds:
 - kind: uses_jsonapi_resource
+  cause: from
   description: "the Next.js module uses that JSON:API resource, named in a next-drupal resource call, a constant or a /jsonapi/ path"
   from: typescript.module
   to: drupal_next.jsonapi_resource

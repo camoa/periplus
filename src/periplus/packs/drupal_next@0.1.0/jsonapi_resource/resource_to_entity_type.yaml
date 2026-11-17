@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: resource_is_entity_type
+  cause: from
   description: "the JSON:API resource belongs to that entity type, matched by the entity part of its name"
   from: drupal_next.jsonapi_resource
   to: drupal.entity_type

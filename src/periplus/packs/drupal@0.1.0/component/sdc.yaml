@@ -11,6 +11,7 @@ node_types:
 edge_kinds:
 
   - kind: renders_component
+    cause: from
     description: "the function renders that component: a JSX tag in TypeScript, or a single-directory component named by #component in a PHP render array"
     from: php.callable
     to:   drupal.sdc_component

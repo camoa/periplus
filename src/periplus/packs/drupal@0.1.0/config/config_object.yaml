@@ -17,10 +17,12 @@ node_types:
   id_namespace: drupal.config
 edge_kinds:
 - kind: config_depends
+  cause: none
   description: "the config file lists that configuration object under its dependencies key"
   from: drupal.config_object
   to: drupal.config_object
 - kind: depends_on_module
+  cause: none
   description: "the module or config file lists that module as a dependency, in its info.yml file or its dependencies key"
   from:
   - drupal.module

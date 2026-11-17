@@ -26,6 +26,7 @@ node_types:
 edge_kinds:
 
   - kind: contains
+    cause: none
     description: "the file, type, function or YAML entry holds that declaration or nested YAML entry directly inside it"
     from: [yaml.file, yaml.mapping_entry]
     to:   yaml.mapping_entry

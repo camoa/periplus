@@ -8,6 +8,7 @@ node_types:
   id_namespace: nextjs.middleware
 edge_kinds:
 - kind: middleware_in_module
+  cause: from
   description: "the middleware's code is in that module"
   from: nextjs.middleware
   to: typescript.module

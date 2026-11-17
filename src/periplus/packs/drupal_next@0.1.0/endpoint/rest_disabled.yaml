@@ -6,6 +6,7 @@ node_types:
   id_namespace: drupal_next.module_absent
 edge_kinds:
 - kind: inert_because
+  cause: none
   description: "the REST resource plugin is never served, because that module, rest, is not enabled in core.extension"
   from: drupal.rest_resource
   to: drupal_next.module_absent

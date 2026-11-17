@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: function_calls_route
+  cause: from
   description: "the function, component or hook fetches that route handler by a URL written in fetch()"
   from: [react.component, react.hook, typescript.function]
   to: nextjs.route_handler

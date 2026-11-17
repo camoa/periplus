@@ -4,4 +4,4 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # from a call, such as $this->entityType->getAdminPermission(), is not read.
 
 edge_kinds:
-- {kind: checks_permission, from: [php.class, php.trait], to: drupal.permission, description: "The class calls hasPermission() with that permission, named in a string literal"}
+- {kind: checks_permission, cause: touch, from: [php.class, php.trait], to: drupal.permission, description: "The class calls hasPermission() with that permission, named in a string literal"}

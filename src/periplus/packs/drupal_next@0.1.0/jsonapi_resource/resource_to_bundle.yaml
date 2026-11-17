@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: resource_is_bundle
+  cause: from
   description: "the JSON:API resource is that Drupal bundle, matched by its entity--bundle name"
   from: drupal_next.jsonapi_resource
   to: drupal.bundle

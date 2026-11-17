@@ -11,10 +11,12 @@ node_types:
   id_namespace: drupal_next.endpoint_method
 edge_kinds:
 - kind: endpoint_method_served_by
+  cause: from
   description: "the endpoint method is served by that Drupal route, whose routing file lists the method"
   from: drupal_next.endpoint_method
   to: drupal.route
 - kind: calls_endpoint_method
+  cause: from
   description: "the Next.js module calls that endpoint with that HTTP method, read from the fetch options; GET when no method is written"
   from: typescript.module
   to: drupal_next.endpoint_method

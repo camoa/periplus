@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: declares_callable
+  cause: none
   description: "the module declares that function, at the top level or nested in another function"
   from: typescript.module
   to: typescript.function

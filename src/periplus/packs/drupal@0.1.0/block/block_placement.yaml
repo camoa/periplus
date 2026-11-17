@@ -22,6 +22,7 @@ node_types:
 edge_kinds:
 
   - kind: places_plugin
+    cause: from
     description: "the block placement places that block plugin, by the plugin id it names"
     from: drupal.block_placement
     to:   drupal.block_plugin

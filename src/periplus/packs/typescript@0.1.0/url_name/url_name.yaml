@@ -9,6 +9,7 @@ node_types:
   id_namespace: typescript.url_name
 edge_kinds:
 - kind: fetches_name
+  cause: from
   description: "the module calls fetch() with that variable or prop as the URL"
   from: typescript.module
   to: typescript.url_name

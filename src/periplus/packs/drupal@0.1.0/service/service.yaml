@@ -11,6 +11,7 @@ node_types:
 edge_kinds:
 
   - kind: resolves_service
+    cause: from
     description: "The code gets that service: a Drupal::service() call, an Autowire attribute on a property, or a promoted constructor parameter's type (inferred)"
     from: [php.callable, drupal.config_object]
     to:   drupal.service

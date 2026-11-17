@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: links_to_page
+  cause: touch
   description: "the module links to that page by a URL written as text in an href, a redirect() call or a router.push, replace or prefetch call"
   from: typescript.module
   to: nextjs.page

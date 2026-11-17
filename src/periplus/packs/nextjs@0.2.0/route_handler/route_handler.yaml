@@ -8,6 +8,7 @@ node_types:
   id_namespace: nextjs.route_handler
 edge_kinds:
 - kind: handler_in_module
+  cause: from
   description: "the route handler's code is in that module"
   from: nextjs.route_handler
   to: typescript.module

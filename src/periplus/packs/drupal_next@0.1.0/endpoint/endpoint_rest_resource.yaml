@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: endpoint_served_by_rest_resource
+  cause: from
   description: "the endpoint is served by that REST resource plugin, whose annotation declares the path as canonical or create"
   from: drupal_next.endpoint
   to: drupal.rest_resource

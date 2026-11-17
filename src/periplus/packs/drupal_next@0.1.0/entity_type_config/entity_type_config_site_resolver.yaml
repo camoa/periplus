@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: next_config_uses_site_resolver
+  cause: from
   description: "the next entity type config names that site resolver plugin"
   from: drupal_next.entity_type_config
   to: drupal_next.site_resolver

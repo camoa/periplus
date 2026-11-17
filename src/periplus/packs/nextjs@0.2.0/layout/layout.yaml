@@ -8,6 +8,7 @@ node_types:
   id_namespace: nextjs.layout
 edge_kinds:
 - kind: layout_in_module
+  cause: from
   description: "the layout's code is in that module"
   from: nextjs.layout
   to: typescript.module

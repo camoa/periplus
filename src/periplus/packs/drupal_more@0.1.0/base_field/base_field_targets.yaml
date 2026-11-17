@@ -4,7 +4,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # stops at the next $fields[ so a setting of a later field is not read.
 
 edge_kinds:
-- {kind: base_field_targets, from: drupal_more.base_field, to: drupal.entity_type, description: "The entity_reference base field points at that entity type, from its target_type setting"}
+- {kind: base_field_targets, cause: none, from: drupal_more.base_field, to: drupal.entity_type, description: "The entity_reference base field points at that entity type, from its target_type setting"}
 
 rules:
 - rule: base_field_targets

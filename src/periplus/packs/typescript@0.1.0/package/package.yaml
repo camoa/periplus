@@ -8,6 +8,7 @@ node_types:
   id_namespace: typescript.package
 edge_kinds:
 - kind: uses_package
+  cause: from
   description: "the module imports from that npm package"
   from: typescript.module
   to: typescript.package

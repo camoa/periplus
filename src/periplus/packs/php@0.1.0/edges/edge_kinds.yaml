@@ -9,6 +9,7 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 edge_kinds:
 
   - kind: contains
+    cause: none
     description: "the file, type, function or YAML entry holds that declaration or nested YAML entry directly inside it"
     from: [php.file, php.file_entry, php.class_like, php.callable]
     to:   [php.class_like, php.callable, php.property, php.class_constant, php.enum_case]
@@ -17,6 +18,7 @@ edge_kinds:
     #      configs, so a method's container was the file rather than its class.
 
   - kind: inherits
+    cause: none
     description: "the class or interface extends that one, as its extends clause names it"
     from: php.class
     to:   php.class
@@ -30,11 +32,13 @@ edge_kinds:
     realizes: true
 
   - kind: mixes_in
+    cause: none
     description: "the class or trait uses that trait with a use statement in its body"
     from: php.class_like
     to:   php.trait
 
   - kind: instantiates
+    cause: from
     description: "the function or method creates an object of that class with new; new self() and new static() name the enclosing class"
     from: php.callable
     to:   php.class
@@ -46,11 +50,13 @@ edge_kinds:
     # have to filter call edges.
 
   - kind: calls
+    cause: from
     description: "the function or method calls that function or method; a call on an object may be inferred from declared types, and in Go the end may be a type converted by name"
     from: php.callable
     to:   php.callable
 
   - kind: indirect_call
+    cause: touch
     description: "the function or method takes that function or method as a first-class callable, f(...), without calling it"
     from: php.callable
     to:   php.callable
@@ -59,11 +65,13 @@ edge_kinds:
 
   # Operational edges. Open in the design, drafted here so the shape can be argued with.
   - kind: reads
+    cause: from
     description: "the function or method accesses that member as $obj->name; the rule matches any such access, an assignment included"
     from: php.callable
     to:   [php.property, php.class_constant, php.enum_case]
 
   - kind: writes
+    cause: from
     description: "the function or method assigns a value to that property"
     from: php.callable
     to:   php.property
@@ -72,6 +80,7 @@ edge_kinds:
     # the value of having the edge at all.
 
   - kind: imports
+    cause: from
     description: "the file or module imports that thing: a PHP use statement names a class, function or constant, a TypeScript import names a module"
     from: php.file
     to:   [php.class_like, php.function, php.class_constant]

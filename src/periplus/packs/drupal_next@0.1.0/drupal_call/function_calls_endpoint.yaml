@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: function_calls_endpoint
+  cause: from
   description: "the function, component or hook calls that Drupal endpoint, by a path after the Drupal base URL or in a drupal client fetch"
   from: [react.component, react.hook, typescript.function]
   to: drupal_next.endpoint

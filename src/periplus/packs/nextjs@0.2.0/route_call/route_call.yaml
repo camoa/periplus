@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: calls_route
+  cause: from
   description: "the module fetches that route handler, by a URL written in fetch() or through a variable or prop that holds the URL"
   from: typescript.module
   to: nextjs.route_handler

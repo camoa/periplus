@@ -5,6 +5,7 @@ node_types:
   id_namespace: speckitty.template
 edge_kinds:
 - kind: has_template
+  cause: none
   from: speckitty.mission
   to: speckitty.template
 rules:

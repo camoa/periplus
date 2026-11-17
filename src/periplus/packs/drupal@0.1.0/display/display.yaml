@@ -26,11 +26,13 @@ node_types:
 edge_kinds:
 
   - kind: displays
+    cause: to
     description: "the form or view display sets how that bundle is edited or rendered, by its entity type and bundle keys"
     from: [drupal.form_display, drupal.view_display]
     to:   drupal.block_type
 
   - kind: shows_field
+    cause: from
     description: "the form or view display shows that field, a key under its content section"
     from: [drupal.form_display, drupal.view_display]
     to:   drupal.field_instance

@@ -8,6 +8,7 @@ node_types:
   id_namespace: nextjs.page
 edge_kinds:
 - kind: page_in_module
+  cause: from
   description: "the page's code is in that module"
   from: nextjs.page
   to: typescript.module

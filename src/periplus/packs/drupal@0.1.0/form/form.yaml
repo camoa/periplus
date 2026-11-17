@@ -48,6 +48,7 @@ node_types:
 edge_kinds:
 
   - kind: edits_entity
+    cause: from
     description: "The entity form edits entities of that entity type; no rule in this pack emits this edge yet"
     from: drupal.entity_form
     to:   drupal.entity_type

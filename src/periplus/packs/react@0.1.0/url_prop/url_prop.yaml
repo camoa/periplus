@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: prop_given_name
+  cause: none
   description: "the prop, one whose name ends in Url, Endpoint or Path, is given the URL that module's variable holds, as in <X fooUrl={var} />"
   from: typescript.url_name
   to: typescript.url_name

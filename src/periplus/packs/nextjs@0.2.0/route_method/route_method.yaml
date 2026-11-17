@@ -8,6 +8,7 @@ node_types:
   id_namespace: nextjs.route_method
 edge_kinds:
 - kind: handles_method
+  cause: from
   description: "the route handler exports that HTTP method as a function, a const or a destructured name"
   from: nextjs.route_handler
   to: nextjs.route_method

@@ -44,6 +44,7 @@ edge_kinds:
     # nothing first-party names it, and that absence is accurate rather than a gap.
 
   - kind: declares
+    cause: none
     description: "The code or config writes that thing into being: a plugin's class or alter hook, a view or menu, or the function that calls ::create() or getFormDisplay() for it"
     from: [php.class, php.callable, drupal.config_object]
     to:   drupal.plugin
@@ -52,11 +53,13 @@ edge_kinds:
     # opposite directions; for block_ways_altered they do not.
 
   - kind: deriver_class
+    cause: from
     description: "The block plugin's Block attribute names that class as its deriver"
     from: drupal.plugin
     to:   php.class
 
   - kind: derived_from
+    cause: from
     description: "The derived block plugin comes from that base plugin, by its <base>:<derivative> id or as a views or menu block"
     from: drupal.plugin
     to:   drupal.plugin

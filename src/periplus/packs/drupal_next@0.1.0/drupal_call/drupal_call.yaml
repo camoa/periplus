@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: calls_endpoint
+  cause: from
   description: "the Next.js module calls that Drupal endpoint: a path after the Drupal base URL, a drupal client fetch, or a next-drupal call such as translatePath"
   from: typescript.module
   to: drupal_next.endpoint

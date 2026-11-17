@@ -4,6 +4,7 @@ $schema: https://periplus.dev/schema/0/pack-file.schema.json
 
 edge_kinds:
 - kind: next_settings_uses_url_generator
+  cause: from
   description: "next.settings picks that preview URL generator plugin for the whole site"
   from: drupal.config_object
   to: drupal_next.preview_url_generator

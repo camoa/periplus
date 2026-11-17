@@ -22,6 +22,7 @@ node_types:
   description: "a name a template writes right after {{, a variable, function or object the pattern cannot tell apart"
 edge_kinds:
 - kind: references
+  cause: touch
   description: "the template names that word right after {{, read by a text pattern rather than a grammar"
   from: twig.template
   to: twig.reference

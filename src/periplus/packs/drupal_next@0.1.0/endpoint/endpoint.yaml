@@ -10,6 +10,7 @@ node_types:
   id_namespace: drupal_next.endpoint
 edge_kinds:
 - kind: endpoint_served_by
+  cause: from
   description: "the endpoint is served by that Drupal route, whose routing file declares the path"
   from: drupal_next.endpoint
   to: drupal.route
