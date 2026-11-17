@@ -280,9 +280,16 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   the map through the internal `drupal.form_handler_site` node. A list may be written `array(...)`,
   and `[Foo::class, 'm']` follows an import under another name through the internal
   `drupal.class_alias` node of the handler's file. A handler held in a variable, as
-  `$form['#submit'][] = $handler`, ends at a `drupal.runtime_form_handler` node marked resolution
-  `runtime`. The map rule `form_handler_function_is_no_hook` withholds the hook a handler
-  function's name would give it.
+  `$form['#submit'][] = $handler`, or written as another expression, as
+  `'#validate' => self::handlers()`, ends at a `drupal.runtime_form_handler` node marked resolution
+  `runtime`. `registers_element_callback` is the same edge for the element callback keys core
+  calls: `#element_validate`, `#process`, `#after_build`, `#pre_render`, `#post_render`,
+  `#entity_builders`, `#date_date_callbacks`, `#date_time_callbacks`, `#file_value_callbacks`,
+  `#value_callback`, `#access_callback`, the `callback` of `#ajax`, the `exists` of
+  `#machine_name` and the first item of `#lazy_builder`; a `'service:method'` callable reaches the
+  method on the service's class. The site id holds the key, and each map rule's twin for these keys
+  reads the rule through a YAML merge. The map rule `form_handler_function_is_no_hook` withholds
+  the hook a function's name would give it when it is added under any of these keys.
 - `hook_acts_on_entity_type`, inferred from a hook named `<extension>_<type>_<operation>`, such as
   `mymod_node_presave`, to the entity type `node`.
 - `drupal.manager_call`, a node for each `getStorage`, `getViewBuilder`, `getListBuilder`,

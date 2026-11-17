@@ -85,8 +85,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   array_unshift or as an item of a list written whole with [...] or array(...), as a
 #   registers_form_handler edge to the function or method it names, a class imported under another
 #   name followed to its class, a function so added giving no hook by its name unless the map names
-#   that hook otherwise, and a handler held in a variable as an edge to a
-#   drupal.runtime_form_handler node marked resolution runtime; with honeypot's protect_all_forms true, a config_names_form edge to
+#   that hook otherwise, and a handler held in a variable or another expression as an edge to a
+#   drupal.runtime_form_handler node marked resolution runtime; each callable under an element
+#   callback key core calls, such as #process, #pre_render, #value_callback or the callback of
+#   #ajax, the same way, as a registers_element_callback edge (form/form_handler.yaml lists the
+#   keys); with honeypot's protect_all_forms true, a config_names_form edge to
 #   each form id a mapped class returns that the file leaves protected, and the setting as the
 #   attribute protect_all_forms; each hook
 #   named <extension>_<type>_<operation>,
@@ -865,14 +868,15 @@ files:
       - name: array_assigned
         open: '\$(?<list>\w+)\s*=\s*(?=\[)'
         balance: ['[', ']']
-      # A list of validate or submit handlers written whole, '#submit' => [...] in an array or
-      # ['#submit'] = [...] assigned; mark is the key. Read by form/form_handler.yaml.
+      # A list of callables written whole under a key whose value is one, '#submit' => [...] or
+      # '#process' => [...] in an array or ['#submit'] = [...] assigned; mark is the key. Read by
+      # form/form_handler.yaml.
       - name: handler_list
-        open: '[\[,(\s][''"](?<mark>#(?:validate|submit))[''"]\s*(?:=>|\]\s*=)\s*(?=\[)'
+        open: '[\[,(\s][''"](?<mark>#(?:validate|submit|element_validate|process|after_build|pre_render|post_render|entity_builders|date_date_callbacks|date_time_callbacks|file_value_callbacks))[''"]\s*(?:=>|\]\s*=)\s*(?=\[)'
         balance: ['[', ']']
       # The same list written array(...).
       - name: handler_list
-        open: '[\[,(\s][''"](?<mark>#(?:validate|submit))[''"]\s*(?:=>|\]\s*=)\s*array\s*(?=\()'
+        open: '[\[,(\s][''"](?<mark>#(?:validate|submit|element_validate|process|after_build|pre_render|post_render|entity_builders|date_date_callbacks|date_time_callbacks|file_value_callbacks))[''"]\s*(?:=>|\]\s*=)\s*array\s*(?=\()'
         balance: ['(', ')']
       # A use statement at the start of a line, to its semicolon, and the braces of a grouped use
       # inside one; prefix is the group's prefix. Read by form/form_handler.yaml for an import under
