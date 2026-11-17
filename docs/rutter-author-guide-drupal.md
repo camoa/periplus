@@ -248,6 +248,8 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
 A `has_form_handler` or `has_route_provider` edge holds, in the edge attribute `entry`, the key
 under the handler group that names the class, as `edit` or `html`; a class named under two keys
 holds both, under `differs`. A `tagged_as` edge holds its own tag's `applies_to` and `priority`.
+A `subscribed_by` edge from a `getSubscribedEvents()` key holds the listener's `priority` as
+written, as `100` or `self::LATE`, and `0` when none is written, the priority Symfony gives it.
 
 - `config_provided_by` and `config_provided_by_theme`, from a configuration object to a module
   or a theme: each simple configuration file, one with no top-level `uuid`, names the extension

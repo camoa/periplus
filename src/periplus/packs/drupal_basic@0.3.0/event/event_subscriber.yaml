@@ -5,7 +5,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # event to that method of the class the file's path names by Drupal's PSR-4 layout, so the rules
 # are inferred and a file outside a src folder gives nothing. Only a key inside the body of
 # getSubscribedEvents counts. The first listener of a key is read; a second, as in
-# X::NAME => [['first', 10], ['second', 0]], gives nothing.
+# X::NAME => [['first', 10], ['second', 0]], gives nothing. Each subscribed_by edge holds the
+# listener's priority as written, 10 or self::LATE, in the edge attribute priority, and 0 when none
+# is written, the priority Symfony gives such a listener, so a reader compares the listeners of
+# one event on one scale. The _listener twin writes it on its use_names_listener edge, a key of
+# the file's own namespace on a use_has_priority self-link, and the map rules read it from there
+# with an edge_attribute step.
 #
 # Each key is an internal drupal.event_use at its line (event/event.yaml), and the map rules make
 # its edge there: from the event of the text the constant holds, when a mapped file declares it
@@ -24,7 +29,7 @@ rules:
   match: &event_subscribed_use
     file: '**'
     filetype: drupal_php_text
-    text: '\b(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"]'
+    text: '\b(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"](?:\s*,\s*(?<priority>[^\]\[''"=>;,]*?)\s*,?\s*\])?'
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
   id:
@@ -41,12 +46,13 @@ rules:
   match: *event_subscribed_use
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+    prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
   id:
     template: '{key}|{in_subscriber}|subscribed|{psr4_class}::{method}'
     resolve: [bound_first_segment]
     separator: '::'
     normalize: [{replace: '\|[^|]*\|subscribed\|', with: '|subscribed|'}]
-  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}}}]
+  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}]
   confidence: inferred
 
 - rule: event_subscribed_use_own_class
@@ -55,7 +61,7 @@ rules:
   match: &event_subscribed_use_own_class
     file: '**'
     filetype: drupal_php_text
-    text: '\b(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"]'
+    text: '\b(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"](?:\s*,\s*(?<priority>[^\]\[''"=>;,]*?)\s*,?\s*\])?'
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
   id:
@@ -70,19 +76,20 @@ rules:
   match: *event_subscribed_use_own_class
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+    prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
   id:
     template: '{in_subscriber}|{psr4_class}::{constant}|subscribed_here|{psr4_class}::{method}'
     normalize: [{replace: '^[^|]*\|', with: ''}]
-  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}}}]
+  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}]
   confidence: inferred
 
 - rule: event_key_in_namespace
   reads: file
   in: [source]
-  match:
+  match: &event_key_in_namespace
     file: '**'
     filetype: drupal_php_text
-    text: '\b(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"]'
+    text: '\b(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"](?:\s*,\s*(?<priority>[^\]\[''"=>;,]*?)\s*,?\s*\])?'
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
   id:
@@ -91,17 +98,34 @@ rules:
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
+# A key of the file's own namespace has no _listener twin, so its listener stays unknown until the
+# map holds it; this self-link carries its priority instead.
+- rule: event_key_in_namespace_priority
+  reads: file
+  in: [source]
+  match: *event_key_in_namespace
+  values:
+    in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+    prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
+  id:
+    template: '{in_subscriber}|{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}'
+    normalize: [{replace: '^[^|]*\|', with: ''}]
+  emits: [{edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}]
+  confidence: inferred
+
 - rule: event_subscribed_by_text
   reads: map
   match:
     node_type: drupal.event_use
     where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|subscribed(?:_here)?\|(?<listener>[^|]+)$'}]
     follow:
+    - try: [{edge: use_names_listener}, {edge_attribute: priority}]
+    - try: [{edge: use_has_priority}, {edge_attribute: priority}]
     - node: 'drupal.class_constant::{event}'
     - edge: has_constant_text
     - id_matches: '^drupal\.constant_text::(?<text>.+)$'
     - node: 'php.method::{listener}'
-  emits: [{edge: {kind: subscribed_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node}}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred
 
 # untexted is captured only where no mapped file gives the constant a text.
@@ -111,10 +135,12 @@ rules:
     node_type: drupal.event_use
     where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|subscribed\|(?<listener>[^|]+)$'}]
     follow:
+    - try: [{edge: use_names_listener}, {edge_attribute: priority}]
+    - node: 'drupal.event_use::{event}|subscribed|{listener}'
     - try: [{node: 'drupal.class_constant::{event}'}, {edge: has_constant_text}]
     - id_matches: '^(?:drupal\.constant_text::|drupal\.event_use::(?<untexted>))'
     - node: 'php.method::{listener}'
-  emits: [{edge: {kind: subscribed_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node}}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred
 
 - rule: event_subscribed_in_namespace
@@ -123,9 +149,11 @@ rules:
     node_type: drupal.event_use
     where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|subscribed_here\|(?<listener>[^|]+)$'}]
     follow:
+    - try: [{edge: use_names_listener}, {edge_attribute: priority}]
+    - try: [{edge: use_has_priority}, {edge_attribute: priority}]
     - node: 'drupal.class_constant::{event}'
     - try: [{edge: has_constant_text}]
     - id_matches: '^(?:drupal\.constant_text::|drupal\.class_constant::(?<untexted>))'
     - node: 'php.method::{listener}'
-  emits: [{edge: {kind: subscribed_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node}}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred

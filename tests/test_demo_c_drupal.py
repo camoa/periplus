@@ -1378,6 +1378,89 @@ def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_t
     assert report.skipped == ()
 
 
+PRIORITIES = {
+    **EVENTS,
+    str(MODULE / "src/EventSubscriber/PrioritySubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvent;
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpKernel\KernelEvents;
+
+class PrioritySubscriber implements EventSubscriberInterface {
+
+  const LATE = -100;
+
+  public static function getSubscribedEvents() {
+    return [
+      OrderEvents::PAID => [['onPaidFirst', -10], ['onPaidSecond', 20]],
+      OrderEvent::PLACED => ['onPlacedLate', self::LATE],
+      LocalEvents::LOCAL => [
+        'onLocalHigh',
+        50,
+      ],
+      KernelEvents::REQUEST => ['onRequestMax', PHP_INT_MAX],
+      OrderEvent::CANCELLED => ['onCancelledPlain'],
+    ];
+  }
+
+  public function helper() {
+    return [OrderEvent::PLACED => ['notAListener', 9]];
+  }
+
+  public function onPaidFirst($event) {
+  }
+
+  public function onPaidSecond($event) {
+  }
+
+  public function onPlacedLate($event) {
+  }
+
+  public function onLocalHigh($event) {
+  }
+
+  public function onRequestMax($event) {
+  }
+
+  public function onCancelledPlain($event) {
+  }
+
+}
+""",
+}
+
+
+def test_a_subscribed_by_edge_holds_the_priority_as_written_and_0_when_none_is(
+    tmp_path: Path,
+) -> None:
+    """Each form of getSubscribedEvents gives its listener's priority: a number, a negative one, a
+    constant, a value on its own line, and 0 when none is written, as Symfony runs it; the first
+    listener of a list of lists holds its own. A key outside getSubscribedEvents gives nothing."""
+    _plant(tmp_path, PRIORITIES)
+    document, _ = _map(tmp_path)
+    own = "Drupal\\my_module\\EventSubscriber\\"
+    found = {
+        e["to"].removeprefix(f"php.method::{own}"): e.get("attributes")
+        for e in document["edges"]
+        if e["kind"] == "subscribed_by"
+    }
+    assert found == {
+        "OrderSubscriber::onCancelled": {"priority": "5"},
+        "OrderSubscriber::onMine": {"priority": "0"},
+        "OrderSubscriber::onPlaced": {"priority": "0"},
+        "OrderSubscriber::onRequest": {"priority": "100"},
+        "OrderSubscriber::onPaid": {"priority": "0"},
+        "OrderSubscriber::onLocal": {"priority": "0"},
+        "PrioritySubscriber::onPaidFirst": {"priority": "-10"},
+        "PrioritySubscriber::onPlacedLate": {"priority": "self::LATE"},
+        "PrioritySubscriber::onLocalHigh": {"priority": "50"},
+        "PrioritySubscriber::onRequestMax": {"priority": "PHP_INT_MAX"},
+        "PrioritySubscriber::onCancelledPlain": {"priority": "0"},
+    }
+
 TWIG_EXTENSIONS = {
     str(MODULE / "src/Twig/ShopExtension.php"): r"""<?php
 

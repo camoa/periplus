@@ -75,6 +75,13 @@ edge_kinds:
   description: "the subscription or dispatch names that method, the listener or the method that dispatches"
   from: drupal.event_use
   to: php.method
+# A key's priority, on the key itself, for a key of the file's own namespace, whose listener has
+# no use_names_listener edge.
+- kind: use_has_priority
+  cause: none
+  description: "a self-link holding the subscription's priority"
+  from: drupal.event_use
+  to: drupal.event_use
 - kind: use_names_function
   cause: none
   description: "the dispatch sits in that function"

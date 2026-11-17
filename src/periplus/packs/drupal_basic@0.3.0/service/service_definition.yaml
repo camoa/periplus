@@ -17,8 +17,8 @@ edge_attributes:
   on: [tagged_as]
   description: "the route requirement key the tag names under applies_to, which an access_check tag's checker answers"
 - name: priority
-  on: [tagged_as]
-  description: "the tag's priority as written, which orders the services a collector takes"
+  on: [tagged_as, subscribed_by, use_names_listener, use_has_priority]
+  description: "the priority as written, which orders what runs: a tag's, among the services a collector takes, or a listener's in getSubscribedEvents(), 0 when none is written"
 
 rules:
 - rule: service_from_services_file

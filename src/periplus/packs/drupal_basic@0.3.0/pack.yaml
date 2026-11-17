@@ -138,7 +138,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   Events, as a drupal.event named by the text the constant holds, with a drupal.event_constant
 #   <class>::<CONST> and its names_event edge to it, or named <class>::<CONST> when the mapped file
 #   gives the constant no text; each key of getSubscribedEvents, written X::NAME, self::NAME or
-#   static::NAME, as a subscribed_by edge from the event to the listener method; and each
+#   static::NAME, as a subscribed_by edge from the event to the listener method, holding the
+#   listener's priority as written in the edge attribute priority, 0 when none is written, as
+#   Symfony runs it; and each
 #   ->dispatch($event, X::NAME) as a dispatched_by edge to the method around it, or a
 #   dispatched_by_function edge to the function around it in a module, install, inc, theme or
 #   profile file, each at the key's line. A key's event is the text its constant holds when a
@@ -332,6 +334,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   template_links_route edge from each template path of that shape.
 # - The subscribed_by edge of an HttpExceptionSubscriberBase descendant reads the method's name
 #   only, not getHandledFormats(), so a method for a format the class does not handle still links.
+#   It holds no priority, which the base class's getPriority() gives at run time.
 #
 # Missing results:
 # - A literal mentions a thing only by its whole id: a name inside another id, such as a view id
@@ -445,7 +448,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   backslash, keys its event by the constant and meets no other constant of that text. A
 #   constant written after a comma with no space, as B in const A = 'a',B = 'b';, gets its event
 #   but no names_event edge to it. A listener the map holds no method for gives no edge. Only the first listener of a key is
-#   read. dispatch($event)
+#   read. A priority is kept as written, so self::LATE stays a name, not its number.
+#   dispatch($event)
 #   with no name, the name written first, a first argument four levels of parentheses deep, a
 #   subscriber outside a src folder, and a dispatch in a plain PHP file outside a src folder give
 #   nothing. A method of a class kept in a module file reads as a function of its name. A grouped

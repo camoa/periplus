@@ -583,7 +583,9 @@ that neither the rutter nor one it depends on declares; and `type_conflict` or `
 declared or written on an edge, which the engine reserves. `drupal_basic` declares `key` on
 `registers_form_handler` and `registers_element_callback`, the key the callable is registered
 under; `entry` on the entity handler edges, a form operation or a route provider's name; and
-`applies_to` and `priority` on `tagged_as`, each read from its own tag.
+`applies_to` and `priority` on `tagged_as`, each read from its own tag, with `priority` also
+on `subscribed_by`, a listener's priority carried from its subscription by an `edge_attribute`
+step.
 
 ## The grammar's node kinds
 
