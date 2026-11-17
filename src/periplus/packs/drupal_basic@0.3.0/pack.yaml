@@ -146,7 +146,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   event a constant, a name, the core constant the table core_event_names gives for a core name,
 #   or the method's parameter type, its method written, or derived as Symfony derives it, or a
 #   drupal.runtime_listener marked resolution runtime when only a constant's text names it
-#   (event/event_listener.yaml); and each
+#   (event/event_listener.yaml), each such method holding listens_by_attribute, marked
+#   [AsEventListener, not wired by core]; the same edge from a key written as a name or with its
+#   namespace, ->addListener(), ->addTag('kernel.event_listener', ...) in PHP and the keys a
+#   subclass inherits from a mapped base or from a core base the rutter holds as data, a function
+#   listener as subscribed_by_function, ->addSubscriber() as registers_subscriber, and what only the
+#   running code names as a drupal.runtime_subscription or drupal.runtime_listener with the runtime
+#   mark, by registers_listener_at_runtime (event/listener_registration.yaml,
+#   event/inherited_subscription.yaml); and each
 #   ->dispatch($event, X::NAME) as a dispatched_by edge to the method around it, or a
 #   dispatched_by_function edge to the function around it in a module, install, inc, theme or
 #   profile file, each at the key's line. A key's event is the text its constant holds when a
@@ -448,8 +455,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the like.
 # - An attribute keeps the value as written, so no_cache: 'TRUE' and no_cache: true give "TRUE"
 #   and true, and is_admin: null gives null.
-# - A subscriber key or dispatch name written with its namespace, \A\B::NAME, as text such as
-#   'kernel.request', or as a variable gives nothing. A key or name whose class no use statement
+# - A dispatch name written with its namespace, \A\B::NAME, as text such as 'kernel.request', or
+#   as a variable gives nothing; a subscriber key so written is read as a registration
+#   (event/listener_registration.yaml). A key or name whose class no use statement
 #   binds joins its event only when a mapped class of the file's namespace declares that
 #   constant. A constant read from a parent of the class the key names, or one whose text holds a
 #   backslash, keys its event by the constant and meets no other constant of that text. A
@@ -462,17 +470,18 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   nothing. A method of a class kept in a module file reads as a function of its name. A grouped
 #   use binds no name for these rules.
 # - Drupal core, as of 11.4, registers no listener from an AsEventListener attribute by itself; its
-#   edge holds what the attribute declares. The attribute is read when it stands alone in its
-#   #[...], with arguments that hold no parentheses; a union type gives its first class only. A
-#   class-level attribute or a tag with no event reads the parameter types the map holds, so a
-#   nullable or union type gives no edge, and a method with two class-typed parameters gives an
-#   event for each. A tag is read in a dash item of a services block, not in tags: [{...}]; its
-#   event written !php/const, its dispatcher, and a parent service's class are not read, so a
-#   child service with no class of its own ends at a method named by its id. A name the table
-#   core_event_names does not list, as a contributed module's, is the event of that name, which
-#   meets a subscriber's constant only when a mapped file gives the constant that text; with core
-#   itself in the map, a core name meets the constant, not the text. A derived on<Event> is
-#   matched with the letter case Symfony writes, though PHP finds a method in any case.
+#   edge holds what the attribute declares, and its method holds the mark. An argument written as
+#   an expression, such as 'a' . 'b', is read up to its first space or comma. A union gives up to
+#   three classes. A name the table core_event_names does not list, as a contributed module's, is
+#   the event of that name, which meets a subscriber's constant only when a mapped file gives the
+#   constant that text; with core itself in the map, a core name meets the constant, not the text.
+#   A tag's dispatcher key is not read, so its edge reads as one on the main dispatcher. An
+#   addListener, addSubscriber or addTag call is read on any object, so a method of that name on
+#   another class reads as a registration. A subclass inherits from its nearest ancestor that keys
+#   events the rules read, so an ancestor between them whose own keys only the running code names
+#   is passed over; own_subscriptions reads getSubscribedEvents() three levels of braces deep, and a
+#   brace in a string there can hide a parent:: call. A core subscriber base the rutter does not
+#   list reads as a base outside the map. A method attribute on a base's method is inherited too.
 # - A filter or function name that is not a text literal, and an extension that implements
 #   ExtensionInterface without AbstractExtension, give nothing. A filter or function after a hash
 #   in the same print, as {{ {a: 1}|money }}, gives nothing. A template's use edge sits at the
@@ -846,7 +855,8 @@ files:
     # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
     # attachment. The sections are the comments and the strings. The spans kept here are attached,
     # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
-    # subscribed_events, listener_list, own_listener_list, named_function, array_assigned,
+    # subscribed_events, listener_list, own_listener_list, named_listener_list,
+    # qualified_listener_list, named_function, array_assigned,
     # in_array_list, alter_list, any_function and switch_body.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
@@ -870,6 +880,11 @@ files:
         file_path:
           pattern: '^(?<path>.+)$'
           template: '{path}'
+        # php.function:: for a module, install, inc, theme or profile file, whose functions register
+        # listeners in event/listener_registration.yaml; a plain PHP file outside src has none.
+        procedural_owner:
+          pattern: '\.(?:module|install|inc|theme|profile)$'
+          template: 'php.function::'
         # The namespace of that class, with a backslash after it: Drupal\<module>\A\ for
         # <module>/src/A/B.php.
         psr4_namespace:
@@ -917,10 +932,18 @@ files:
       # $events[X::NAME] = [[...], ...]: key is X::NAME, class X and constant NAME. The second span
       # is the same key written self::NAME or static::NAME. Read by event/event_subscriber.yaml.
       - name: listener_list
-        open: '\b(?<key>(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*))\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        open: '(?<!\\)\b(?<key>(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*))\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
       - name: own_listener_list
         open: '\b(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
+      # The same list under a key written as a name, 'kernel.request' => [[...]], name the name, or
+      # with its namespace, \A\B::NAME => [[...]], key the key. Read by event/listener_registration.yaml.
+      - name: named_listener_list
+        open: '[\[,(\s][''"](?<name>[^''"$\\\s{}]+)[''"]\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
+      - name: qualified_listener_list
+        open: '(?<![\w\\])(?<key>\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
       # The body of a named function or method; function is its name. A closure has no name and
       # opens none, so a match inside one reads the function around it.

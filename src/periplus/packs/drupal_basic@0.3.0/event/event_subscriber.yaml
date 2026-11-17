@@ -18,8 +18,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # with a text, else from the event of the constant <class>::<NAME>. X is read through the file's
 # use statements (event/use_binding.yaml). A class written with no use is in the file's own
 # namespace and, as self::NAME and static::NAME, which name a constant of the subscriber's own
-# class, gives an edge only when a mapped class declares the constant. A class written with its
-# namespace, \A\B::NAME or A\B::NAME, gives nothing. Each use rule's _listener twin makes the
+# class, gives an edge only when a mapped class declares the constant. A key written with its
+# namespace, \A\B::NAME or A\B::NAME, or as a name, 'kernel.request', is read by
+# event/listener_registration.yaml, and a subclass's inherited keys by
+# event/inherited_subscription.yaml. Each use rule's _listener twin makes the
 # listener a known end, so a listener no mapped file declares ends at a referenced method; a key
 # in the file's own namespace is joined only when the map holds its method.
 
@@ -30,7 +32,7 @@ rules:
   match: &event_subscribed_use
     file: '**'
     filetype: drupal_php_text
-    text: '\b(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"](?:\s*,\s*(?<priority>[^\]\[''"=>;,]*?)\s*,?\s*\])?'
+    text: '(?<!\\)\b(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"](?:\s*,\s*(?<priority>[^\]\[''"=>;,]*?)\s*,?\s*\])?'
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
   id:
@@ -90,7 +92,7 @@ rules:
   match: &event_key_in_namespace
     file: '**'
     filetype: drupal_php_text
-    text: '\b(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"](?:\s*,\s*(?<priority>[^\]\[''"=>;,]*?)\s*,?\s*\])?'
+    text: '(?<!\\)\b(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*(?:\[\s*\]\s*)?=)\s*(?:\[\s*){0,2}[''"](?<method>\w+)[''"](?:\s*,\s*(?<priority>[^\]\[''"=>;,]*?)\s*,?\s*\])?'
   values:
     in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
   id:
@@ -99,8 +101,21 @@ rules:
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
 
-# A key of the file's own namespace has no _listener twin, so its listener stays unknown until the
-# map holds it; this self-link carries its priority instead.
+# A key of the file's own namespace names its listener too, so a subclass reaches the key from the
+# method (event/inherited_subscription.yaml); the self-link below carries its priority.
+- rule: event_key_in_namespace_listener
+  reads: file
+  in: [source]
+  match: *event_key_in_namespace
+  values:
+    in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+    prio: {template: '{method}|{priority}', normalize: [{replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
+  id:
+    template: '{in_subscriber}|{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}'
+    normalize: [{replace: '^[^|]*\|', with: ''}]
+  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}]
+  confidence: inferred
+
 - rule: event_key_in_namespace_priority
   reads: file
   in: [source]
@@ -188,6 +203,18 @@ rules:
     normalize: [{replace: '^[^|]*\|', with: ''}]
   line: {capture: method}
   emits: [{node: {type: drupal.event_use}}]
+  confidence: inferred
+
+- rule: event_key_in_namespace_later_listener
+  reads: file
+  in: [source]
+  match: *later_listener
+  values: *later_values
+  id:
+    template: '{in_subscriber}|{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{method}'
+    normalize: [{replace: '^[^|]*\|', with: ''}]
+  line: {capture: method}
+  emits: [{edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}]
   confidence: inferred
 
 - rule: event_key_in_namespace_later_priority

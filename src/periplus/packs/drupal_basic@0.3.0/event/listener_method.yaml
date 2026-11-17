@@ -1,0 +1,67 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Two facts about each method of a class under src, read as text, that Symfony uses to place a
+# listener and that the listener rules (event/event_listener.yaml) read in the map.
+#
+# A method's name in lower case: PHP finds a method in any letter case, so Symfony's hasMethod()
+# finds onKernelResponse when it derives OnKernelResponse or onkernelresponse. The internal
+# drupal.method_name <class>::<name in lower case> leads to the method as declared.
+#
+# The class that types a method's first parameter: Symfony takes it as the event's name when a
+# listener names no event. ?Foo and Foo|null give Foo; a union gives each of its classes, up to
+# three; a scalar, array, mixed, self, static or untyped first parameter gives none, nor does any
+# later parameter. The class is resolved through the file's use statements, a leading backslash,
+# or the file's namespace, and ends at an internal end of the event of that name.
+
+node_types:
+- name: drupal.method_name
+  description: "a method of a class by its name in lower case, <class>::<name>, as PHP finds a method in any letter case"
+  id_namespace: drupal.method_name
+  internal: true
+# A method as written in a class's file, <class>::<method>; a map rule reaches the mapped method
+# of that id, and one php_basic does not map, as a method of an anonymous class, leaves nothing.
+- name: drupal.method_ref
+  description: "a method as written in its class's file, <class>::<method>"
+  id_namespace: drupal.method_ref
+  internal: true
+
+edge_kinds:
+- kind: method_name_of
+  cause: none
+  description: "the method declared under that name, in its own letter case"
+  from: drupal.method_name
+  to: drupal.method_ref
+- kind: first_parameter_typed_as
+  cause: none
+  description: "a class that types the method's first parameter, as the name of the event it listens to when none is named"
+  from: drupal.method_ref
+  to: drupal.event_text
+
+rules:
+- rule: method_name_in_any_case
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+(?<method>\w+)\s*\('}
+  values:
+    lower: {from: {capture: method}, case: lower}
+  id: {template: '{psr4_class}::{lower}'}
+  line: {capture: method}
+  emits: [{edge: {kind: method_name_of, from: this_node, to: {template: '{psr4_class}::{method}', types: [drupal.method_ref]}}}]
+  confidence: declared
+
+- rule: method_first_parameter_type
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bfunction\s+(?<method>\w+)\s*\(\s*(?:#\[[^\]]*\]\s*)*(?:(?:public|protected|private|readonly)\s+)*\??(?:null\s*\|\s*)?(?<t1>(?!(?:string|int|float|bool|array|callable|iterable|object|mixed|null|void|never|false|true|self|static|parent)\b)\\?[A-Za-z_][\w\\]*)(?:\s*\|\s*(?:null\b|(?<t2>(?!(?:string|int|float|bool|array|callable|iterable|object|mixed|false|true)\b)\\?[A-Za-z_][\w\\]*)))?(?:\s*\|\s*(?:null\b|(?<t3>(?!(?:string|int|float|bool|array|callable|iterable|object|mixed|false|true)\b)\\?[A-Za-z_][\w\\]*)))?\s+&?(?:\.\.\.)?\$'
+  values:
+    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+  id: {template: '{psr4_class}::{method}'}
+  line: {capture: method}
+  emits:
+  - edge: {kind: first_parameter_typed_as, from: this_node, to: {template: '{t1}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
+  - edge: {kind: first_parameter_typed_as, from: this_node, to: {template: '{t2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
+  - edge: {kind: first_parameter_typed_as, from: this_node, to: {template: '{t3}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
+  confidence: declared

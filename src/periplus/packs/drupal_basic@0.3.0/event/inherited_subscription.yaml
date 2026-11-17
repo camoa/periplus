@@ -13,6 +13,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # no getPriority() holds 0. The nearest class of the line that declares one decides: one whose body
 # is return <integer>; holds that integer, and one that computes the value holds no priority.
 
+edge_attributes:
+- name: listens_to
+  on: [inherits_subscription, inherits_subscription_by_priority]
+  description: "the event the core base keys that method to, as its constant"
+
 node_types:
 # A class's own getPriority(), by the class's name, kept so map rules can read its value.
 - name: drupal.priority_override
@@ -20,7 +25,28 @@ node_types:
   id_namespace: drupal.priority_override
   internal: true
 
+# A class that extends a core subscriber base, by its name, with an edge to each listener method
+# the base keys; and a class whose getSubscribedEvents() does not call parent::getSubscribedEvents().
+- name: drupal.base_subscriptions
+  description: "the core subscriber base a class extends, <class>, with the listeners that base keys"
+  id_namespace: drupal.base_subscriptions
+  internal: true
+- name: drupal.own_subscriptions
+  description: "a class whose getSubscribedEvents() keys its events without its parent's, <class>"
+  id_namespace: drupal.own_subscriptions
+  internal: true
+
 edge_kinds:
+- kind: inherits_subscription
+  cause: none
+  description: "the core base keys that method, at a fixed priority, for each class that extends it"
+  from: drupal.base_subscriptions
+  to: php.method
+- kind: inherits_subscription_by_priority
+  cause: none
+  description: "the core base keys that method at static::getPriority(), for each class that extends it"
+  from: drupal.base_subscriptions
+  to: php.method
 - kind: priority_declared_by
   cause: none
   description: "the class declares that getPriority()"
@@ -63,7 +89,8 @@ rules:
   emits: [{edge: {kind: has_literal_priority, from: this_node, to: {template: '{psr4_class}', type: drupal.priority_override}, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred
 
-# No class of the line declares getPriority(): the base's own value.
+# No class of the line declares getPriority(): the value of the core base it extends, 0, -128 for
+# DefaultExceptionHtmlSubscriber and -50 for CustomPageExceptionHtmlSubscriber.
 - rule: exception_handler_subscribed_by_base
   reads: map
   match:
@@ -76,6 +103,34 @@ rules:
     - id_matches: '^php\.type::Drupal\\Core\\EventSubscriber\\HttpExceptionSubscriberBase$'
     unless: [[{node: 'php.type::{class}'}, {ancestors: [inherits]}, {incoming_edge: priority_declared_by}]]
   emits: [{edge: {kind: subscribed_by, from: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION', types: [drupal.event]}, to: this_node, attributes: {priority: {template: '0'}}}}]
+  confidence: inferred
+
+- rule: exception_handler_subscribed_by_base_default_html
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<class>.+)::on[1-5](?:\d\d|xx)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Core\\EventSubscriber\\DefaultExceptionHtmlSubscriber$'
+    unless: [[{node: 'php.type::{class}'}, {ancestors: [inherits]}, {incoming_edge: priority_declared_by}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION', types: [drupal.event]}, to: this_node, attributes: {priority: {template: '-128'}}}}]
+  confidence: inferred
+
+- rule: exception_handler_subscribed_by_base_custom_page
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<class>.+)::on[1-5](?:\d\d|xx)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Core\\EventSubscriber\\CustomPageExceptionHtmlSubscriber$'
+    unless: [[{node: 'php.type::{class}'}, {ancestors: [inherits]}, {incoming_edge: priority_declared_by}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION', types: [drupal.event]}, to: this_node, attributes: {priority: {template: '-50'}}}}]
   confidence: inferred
 
 # The nearest class of the line that declares getPriority(), the method's own class first, gives
@@ -93,6 +148,319 @@ rules:
     - node: 'php.type::{class}'
     - ancestors: [inherits]
     - edge: inherits
-    - id_matches: '^php\.type::Drupal\\Core\\EventSubscriber\\HttpExceptionSubscriberBase$'
+    - id_matches: '^php\.type::Drupal\\Core\\EventSubscriber\\(?:HttpExceptionSubscriberBase|DefaultExceptionHtmlSubscriber|CustomPageExceptionHtmlSubscriber)$'
   emits: [{edge: {kind: subscribed_by, from: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION', types: [drupal.event]}, to: this_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+# A class that extends a core subscriber base inherits that base's keys, which core holds outside
+# the map, so the rutter carries them as data, read from Drupal 11.4 core: RouteSubscriberBase keys
+# RoutingEvents::ALTER to onAlterRoutes at 0, ConfigImportValidateEventSubscriberBase
+# ConfigEvents::IMPORT_VALIDATE to onConfigImporterValidate at 20, ConfigFactoryOverrideBase
+# COLLECTION_INFO to addCollections at 0 and SAVE, DELETE and RENAME to onConfigSave,
+# onConfigDelete and onConfigRename at 20, StaticRouteDiscoveryBase RoutingEvents::STATIC to
+# onRouteBuild at static::getPriority(), and DefaultExceptionHtmlSubscriber (-128) and
+# CustomPageExceptionHtmlSubscriber (-50), through HttpExceptionSubscriberBase, KernelEvents::EXCEPTION
+# to their own on4xx, on401, on403 and on404 handlers at static::getPriority(). A file rule reads
+# the class that writes extends <base>, by the base's short name, and the map rules give each class
+# of its line the listener: the method the class or its nearest mapped ancestor declares, else the
+# base's own method, outside the map. A getPriority() priority is read as for the exception handlers
+# above: the nearest literal override, none for a computed one, else the base's value.
+- rule: core_subscriber_base
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bclass\s+\w+\s+extends\s+\\?(?:[\w\\]*\\)?(?:(?<b_route>RouteSubscriberBase)|(?<b_validate>ConfigImportValidateEventSubscriberBase)|(?<b_override>ConfigFactoryOverrideBase)|(?<b_static>StaticRouteDiscoveryBase)|(?<b_html>DefaultExceptionHtmlSubscriber)|(?<b_page>CustomPageExceptionHtmlSubscriber))\b'
+  values:
+    b_route_0: {from: {capture: b_route}, normalize: [{replace: '^.*$', with: 'Drupal\Core\Routing\RouteSubscriberBase::onAlterRoutes'}]}
+    b_validate_0: {from: {capture: b_validate}, normalize: [{replace: '^.*$', with: 'Drupal\Core\Config\ConfigImportValidateEventSubscriberBase::onConfigImporterValidate'}]}
+    b_override_0: {from: {capture: b_override}, normalize: [{replace: '^.*$', with: 'Drupal\Core\Config\ConfigFactoryOverrideBase::addCollections'}]}
+    b_override_1: {from: {capture: b_override}, normalize: [{replace: '^.*$', with: 'Drupal\Core\Config\ConfigFactoryOverrideBase::onConfigSave'}]}
+    b_override_2: {from: {capture: b_override}, normalize: [{replace: '^.*$', with: 'Drupal\Core\Config\ConfigFactoryOverrideBase::onConfigDelete'}]}
+    b_override_3: {from: {capture: b_override}, normalize: [{replace: '^.*$', with: 'Drupal\Core\Config\ConfigFactoryOverrideBase::onConfigRename'}]}
+    b_static_0: {from: {capture: b_static}, normalize: [{replace: '^.*$', with: 'Drupal\Core\Routing\StaticRouteDiscoveryBase::onRouteBuild'}]}
+    b_html_0: {from: {capture: b_html}, normalize: [{replace: '^.*$', with: 'Drupal\Core\EventSubscriber\DefaultExceptionHtmlSubscriber::on4xx'}]}
+    b_html_1: {from: {capture: b_html}, normalize: [{replace: '^.*$', with: 'Drupal\Core\EventSubscriber\DefaultExceptionHtmlSubscriber::on401'}]}
+    b_html_2: {from: {capture: b_html}, normalize: [{replace: '^.*$', with: 'Drupal\Core\EventSubscriber\DefaultExceptionHtmlSubscriber::on403'}]}
+    b_html_3: {from: {capture: b_html}, normalize: [{replace: '^.*$', with: 'Drupal\Core\EventSubscriber\DefaultExceptionHtmlSubscriber::on404'}]}
+    b_page_0: {from: {capture: b_page}, normalize: [{replace: '^.*$', with: 'Drupal\Core\EventSubscriber\CustomPageExceptionHtmlSubscriber::on403'}]}
+    b_page_1: {from: {capture: b_page}, normalize: [{replace: '^.*$', with: 'Drupal\Core\EventSubscriber\CustomPageExceptionHtmlSubscriber::on404'}]}
+    b_page_2: {from: {capture: b_page}, normalize: [{replace: '^.*$', with: 'Drupal\Core\EventSubscriber\DefaultExceptionHtmlSubscriber::on4xx'}]}
+    b_page_3: {from: {capture: b_page}, normalize: [{replace: '^.*$', with: 'Drupal\Core\EventSubscriber\DefaultExceptionHtmlSubscriber::on401'}]}
+  id: {template: '{psr4_class}'}
+  emits:
+  - edge: {kind: inherits_subscription, from: this_node, to: {template: '{b_route_0}', types: [php.method]}, attributes: {listens_to: {template: 'Drupal\Core\Routing\RoutingEvents::ALTER'}, priority: {template: '0'}}}
+  - edge: {kind: inherits_subscription, from: this_node, to: {template: '{b_validate_0}', types: [php.method]}, attributes: {listens_to: {template: 'Drupal\Core\Config\ConfigEvents::IMPORT_VALIDATE'}, priority: {template: '20'}}}
+  - edge: {kind: inherits_subscription, from: this_node, to: {template: '{b_override_0}', types: [php.method]}, attributes: {listens_to: {template: 'Drupal\Core\Config\ConfigCollectionEvents::COLLECTION_INFO'}, priority: {template: '0'}}}
+  - edge: {kind: inherits_subscription, from: this_node, to: {template: '{b_override_1}', types: [php.method]}, attributes: {listens_to: {template: 'Drupal\Core\Config\ConfigEvents::SAVE'}, priority: {template: '20'}}}
+  - edge: {kind: inherits_subscription, from: this_node, to: {template: '{b_override_2}', types: [php.method]}, attributes: {listens_to: {template: 'Drupal\Core\Config\ConfigEvents::DELETE'}, priority: {template: '20'}}}
+  - edge: {kind: inherits_subscription, from: this_node, to: {template: '{b_override_3}', types: [php.method]}, attributes: {listens_to: {template: 'Drupal\Core\Config\ConfigEvents::RENAME'}, priority: {template: '20'}}}
+  - edge: {kind: inherits_subscription_by_priority, from: this_node, to: {template: '{b_static_0}', types: [php.method]}, attributes: {listens_to: {template: 'Drupal\Core\Routing\RoutingEvents::STATIC'}}}
+  - edge: {kind: inherits_subscription_by_priority, from: this_node, to: {template: '{b_html_0}', types: [php.method]}, attributes: {listens_to: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION'}, priority: {template: '-128'}}}
+  - edge: {kind: inherits_subscription_by_priority, from: this_node, to: {template: '{b_html_1}', types: [php.method]}, attributes: {listens_to: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION'}, priority: {template: '-128'}}}
+  - edge: {kind: inherits_subscription_by_priority, from: this_node, to: {template: '{b_html_2}', types: [php.method]}, attributes: {listens_to: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION'}, priority: {template: '-128'}}}
+  - edge: {kind: inherits_subscription_by_priority, from: this_node, to: {template: '{b_html_3}', types: [php.method]}, attributes: {listens_to: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION'}, priority: {template: '-128'}}}
+  - edge: {kind: inherits_subscription_by_priority, from: this_node, to: {template: '{b_page_0}', types: [php.method]}, attributes: {listens_to: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION'}, priority: {template: '-50'}}}
+  - edge: {kind: inherits_subscription_by_priority, from: this_node, to: {template: '{b_page_1}', types: [php.method]}, attributes: {listens_to: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION'}, priority: {template: '-50'}}}
+  - edge: {kind: inherits_subscription_by_priority, from: this_node, to: {template: '{b_page_2}', types: [php.method]}, attributes: {listens_to: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION'}, priority: {template: '-50'}}}
+  - edge: {kind: inherits_subscription_by_priority, from: this_node, to: {template: '{b_page_3}', types: [php.method]}, attributes: {listens_to: {template: 'Symfony\Component\HttpKernel\KernelEvents::EXCEPTION'}, priority: {template: '-50'}}}
+  confidence: inferred
+
+- rule: core_base_listener_class
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<sub>.+)$'}]
+    follow:
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<anc>.+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription
+    - edge_attribute: listens_to
+    - id_matches: '^php\.method::(?<base>.+)::(?<m>\w+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription
+    - edge_attribute: priority
+    - id_matches: '^php\.method::{base}::{m}$'
+    unless_matched: [[{node: 'php.type::{sub}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{base}$)(?<d>.+)$'}, {node: 'php.method::{d}::{m}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{listens_to}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+- rule: core_base_listener_method
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<cls>.+)::(?<m>addCollections|on401|on403|on404|on4xx|onAlterRoutes|onConfigDelete|onConfigImporterValidate|onConfigRename|onConfigSave|onRouteBuild)$'}]
+    follow:
+    - node: 'php.type::{cls}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<anc>.+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription
+    - edge_attribute: listens_to
+    - id_matches: '::{m}$'
+    - id_matches: '^php\.method::(?<target>.+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription
+    - edge_attribute: priority
+    - id_matches: '^php\.method::{target}$'
+  emits: [{edge: {kind: subscribed_by, from: {template: '{listens_to}', types: [drupal.event]}, to: this_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+- rule: core_base_listener_class_by_priority_default
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<sub>.+)$'}]
+    follow:
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<anc>.+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription_by_priority
+    - edge_attribute: listens_to
+    - id_matches: '^php\.method::(?<base>.+)::(?<m>\w+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription_by_priority
+    - edge_attribute: priority
+    - id_matches: '^php\.method::{base}::{m}$'
+    unless_matched: [[{node: 'php.type::{sub}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{base}$)(?<d>.+)$'}, {node: 'php.method::{d}::{m}'}]]
+    unless: [[{node: 'php.type::{sub}'}, {ancestors: [inherits]}, {incoming_edge: priority_declared_by}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{listens_to}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+- rule: core_base_listener_class_by_priority_override
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<sub>.+)$'}]
+    follow:
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<anc>.+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription_by_priority
+    - edge_attribute: listens_to
+    - id_matches: '^php\.method::(?<base>.+)::(?<m>\w+)$'
+    - node: 'php.type::{sub}'
+    - ancestors: [inherits]
+    - incoming_edge: priority_declared_by
+    - try: [{edge: has_literal_priority}, {edge_attribute: priority}]
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription_by_priority
+    - id_matches: '^php\.method::{base}::{m}$'
+    unless_matched: [[{node: 'php.type::{sub}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{base}$)(?<d>.+)$'}, {node: 'php.method::{d}::{m}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{listens_to}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+- rule: core_base_listener_method_by_priority_default
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<cls>.+)::(?<m>addCollections|on401|on403|on404|on4xx|onAlterRoutes|onConfigDelete|onConfigImporterValidate|onConfigRename|onConfigSave|onRouteBuild)$'}]
+    follow:
+    - node: 'php.type::{cls}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<anc>.+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription_by_priority
+    - edge_attribute: listens_to
+    - id_matches: '::{m}$'
+    - id_matches: '^php\.method::(?<target>.+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription_by_priority
+    - edge_attribute: priority
+    - id_matches: '^php\.method::{target}$'
+    unless: [[{node: 'php.type::{cls}'}, {ancestors: [inherits]}, {incoming_edge: priority_declared_by}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{listens_to}', types: [drupal.event]}, to: this_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+- rule: core_base_listener_method_by_priority_override
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<cls>.+)::(?<m>addCollections|on401|on403|on404|on4xx|onAlterRoutes|onConfigDelete|onConfigImporterValidate|onConfigRename|onConfigSave|onRouteBuild)$'}]
+    follow:
+    - node: 'php.type::{cls}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<anc>.+)$'
+    - node: 'drupal.base_subscriptions::{anc}'
+    - edge: inherits_subscription_by_priority
+    - edge_attribute: listens_to
+    - id_matches: '::{m}$'
+    - node: 'php.type::{cls}'
+    - ancestors: [inherits]
+    - incoming_edge: priority_declared_by
+    - try: [{edge: has_literal_priority}, {edge_attribute: priority}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{listens_to}', types: [drupal.event]}, to: this_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+# A subclass of a mapped subscriber whose getSubscribedEvents() it does not override, or overrides
+# calling parent::getSubscribedEvents(), inherits the nearest mapped ancestor's keys: each from its
+# event, named as that key names it, to the method the subclass or its nearest mapped ancestor
+# declares. own_subscriptions marks a getSubscribedEvents() whose body, three levels of braces deep,
+# never calls the parent's.
+- rule: own_subscriptions
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bfunction\s+getSubscribedEvents\s*\(\s*\)[^{;]*\{(?=(?:(?!parent::getSubscribedEvents)[^{}]|\{(?:(?!parent::getSubscribedEvents)[^{}]|\{(?:(?!parent::getSubscribedEvents)[^{}]|\{[^{}]*\})*\})*\})*\})'
+  id: {template: '{psr4_class}'}
+  emits: [{node: {type: drupal.own_subscriptions}}]
+  confidence: inferred
+
+- rule: inherited_key
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<sub>.+)$'}]
+    follow:
+    - edge: inherits
+    - ancestors: [inherits]
+    - edge: contains
+    - incoming_edge: use_names_listener
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event_use::(?<ev>[^|]+)\|subscribed\|[^|]+::(?<m>\w+)$'
+    - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - node: 'php.type::{sub}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.method::{declarer}::{m}'
+    unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+- rule: inherited_key_here
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<sub>.+)$'}]
+    follow:
+    - edge: inherits
+    - ancestors: [inherits]
+    - edge: contains
+    - incoming_edge: use_names_listener
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event_use::(?<ev>[^|]+)\|subscribed_here\|[^|]+::(?<m>\w+)$'
+    - node: 'drupal.class_constant::{ev}'
+    - try: [{edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - node: 'php.type::{sub}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.method::{declarer}::{m}'
+    unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+- rule: inherited_named_key
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<sub>.+)$'}]
+    follow:
+    - edge: inherits
+    - ancestors: [inherits]
+    - incoming_edge: use_names_class
+    - id_matches: '^drupal\.event_use::[^|]*\|reg(?:_named)?\|php\.method::[^|]+::getSubscribedEvents\|c:(?<m>\w+)$'
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - edge: use_names_event
+    - id_matches: '^drupal\.event::(?<ev>.+)$'
+    - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - node: 'php.type::{sub}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.method::{declarer}::{m}'
+    unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+- rule: inherited_named_key_here
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<sub>.+)$'}]
+    follow:
+    - edge: inherits
+    - ancestors: [inherits]
+    - incoming_edge: use_names_class
+    - id_matches: '^drupal\.event_use::[^|]*\|reg_here\|php\.method::[^|]+::getSubscribedEvents\|c:(?<m>\w+)$'
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - edge: use_names_event
+    - id_matches: '^drupal\.event::(?<ev>.+)$'
+    - node: 'drupal.class_constant::{ev}'
+    - try: [{edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - node: 'php.type::{sub}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.method::{declarer}::{m}'
+    unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
+  confidence: inferred
+
+# A service tagged event_subscriber whose class extends another and neither declares
+# getSubscribedEvents() nor inherits it from a mapped class or a core base the rutter knows: its
+# events come from a base outside the map, so the class registers listeners the map cannot name, ending at a drupal.runtime_subscription
+# marked as an unknown boundary.
+- rule: subscriber_of_unknown_base
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: '^drupal\.service::(?<service>.+)$'}]
+    follow:
+    - edge: tagged_as
+    - id_matches: '^drupal\.service_tag::event_subscriber$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - id_matches: '^php\.type::(?<cls>.+)$'
+    - edge: inherits
+    - node: 'php.type::{cls}'
+    unless_matched:
+    - [{node: 'php.type::{cls}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<d>.+)$'}, {node: 'php.method::{d}::getSubscribedEvents'}]
+    - [{node: 'php.type::{cls}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<d>.+)$'}, {node: 'drupal.base_subscriptions::{d}'}]
+    - [{node: 'php.type::{cls}'}, {ancestors: [inherits]}, {edge: inherits}, {id_matches: '^php\.type::Drupal\\Core\\EventSubscriber\\HttpExceptionSubscriberBase$'}]
+  emits: [{edge: {kind: registers_listener_at_runtime, from: matched_node, to: {template: '{cls}', types: [drupal.runtime_subscription], on_miss: unknown_boundary}}}]
   confidence: inferred

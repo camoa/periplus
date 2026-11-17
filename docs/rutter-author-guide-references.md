@@ -585,7 +585,7 @@ declared or written on an edge, which the engine reserves. `drupal_basic` declar
 under; `entry` on the entity handler edges, a form operation or a route provider's name; and
 `applies_to` and `priority` on `tagged_as`, each read from its own tag, with `priority` also
 on `subscribed_by`, a listener's priority carried from its subscription by an `edge_attribute`
-step.
+step; and `listens_to`, the event a core subscriber base keys to a method, held as data.
 
 ## The grammar's node kinds
 

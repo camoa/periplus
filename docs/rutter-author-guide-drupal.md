@@ -378,7 +378,19 @@ value `getPriority()` returns, as the next list says.
   no method, the name Symfony derives, `on<Event>`, then `__invoke`, then the unresolved derived
   name; a class-level attribute that names a constant and no method ends at a
   `drupal.runtime_listener` marked `resolution: runtime`, since only the constant's text names
-  that method. A tag's method is looked up on the service's class and its mapped ancestors.
+  that method. A tag's method is looked up on the service's class and its mapped ancestors. A
+  method an attribute registers holds `listens_by_attribute`, marked
+  `AsEventListener, not wired by core`, since Drupal core registers no listener from the attribute.
+- `subscribed_by` and `subscribed_by_function` from a listener registered by a call or by a key the
+  subscriber rules do not read (`event/listener_registration.yaml`): `->addListener()`,
+  `->addTag('kernel.event_listener', [...])` in PHP, and a `getSubscribedEvents()` key written as a
+  name or with its namespace; `registers_subscriber` from `->addSubscriber()`. Each is one
+  internal `drupal.event_use` site with edges to its event and its listener's class, joined in the
+  map. A subclass inherits the keys of a mapped base and, from data the rutter holds, of the core
+  bases that key their subclasses' events (`event/inherited_subscription.yaml`). What only the
+  running code names, as a key in a variable or a closure, is a `drupal.runtime_subscription` or a
+  `drupal.runtime_listener` with the runtime mark, by `registers_listener_at_runtime` or
+  `subscribed_by`.
 - `twig.filter` and `twig.function`, from `new TwigFilter('x')` and `new TwigFunction('x')`,
   written by the short name or as `\Twig\TwigFilter` and `\Twig\TwigFunction`, with or without
   the leading backslash, in a
