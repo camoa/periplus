@@ -28,8 +28,11 @@ edge_kinds:
 # installer and update system call; this rule keeps them. Themes name their hook functions the
 # same way. Inferred, because a name is a convention.
 #
-# False results to know about: any prefixed function reads as a hook, such as the form callback
-# mymod_settings_submit, the helper mymod_build_list or mymod_update_NEXT. A file named other than
+# A function that code adds as a form's #validate or #submit handler is not read as a hook, unless
+# the map names that hook otherwise: form/form_handler.yaml withholds it before the map rules run.
+#
+# False results to know about: any other prefixed function reads as a hook, such as a form callback
+# added through a variable, the helper mymod_build_list or mymod_update_NEXT. A file named other than
 # its module gives no hook. A theme file named other than its theme, such as includes/content.theme
 # holding mytheme_ functions, is read by the theme's folder name, by hook_theme_include.yaml. A hook
 # with a variable part keeps it, so mymod_form_user_login_form_alter names the hook

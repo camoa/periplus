@@ -81,8 +81,12 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   node with a form_has_id edge from the class, and each form id a CAPTCHA point or the honeypot
 #   settings switch protection on for, as a config_names_form edge, and each they name and leave
 #   off, as a config_names_form_off edge; each config file's top-level status, as the attribute
-#   status; each #validate or #submit handler a method or function adds with [] = or
-#   array_unshift, as a registers_form_handler edge to the function or method it names; each hook
+#   status; each #validate or #submit handler a method or function adds with [] =, with
+#   array_unshift or as an item of a list written whole, as a registers_form_handler edge to the
+#   function or method it names, a function so added giving no hook by its name unless the map
+#   names that hook otherwise; with honeypot's protect_all_forms true, a config_names_form edge to
+#   each form id a mapped class returns that the file leaves protected, and the setting as the
+#   attribute protect_all_forms; each hook
 #   named <extension>_<type>_<operation>,
 #   as an inferred hook_acts_on_entity_type edge to <type>; each route's path, as a
 #   route_serves_path edge to a drupal.url_path node, and each path Url::fromUserInput or
@@ -207,10 +211,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   path, a route_from_view edge to the view's config object and a shape_of_route edge;
 # - a _custom_access written service:method as an access_checked_by edge to the method on the
 #   service's class or its nearest ancestor (route/route_custom_access_method.yaml);
-# - core's user.login, user.register, user.pass, user.page, user.logout, user.reset,
-#   user.reset.login, user.reset.form, user.cancel_confirm, entity.user.canonical and
+# - core's user.login, user.register, user.pass, user.page, user.logout, user.logout.confirm,
+#   user.reset, user.reset.login, user.reset.form, user.cancel_confirm, entity.user.canonical and
 #   entity.user.edit_form, when core.extension lists the user module, as routes with their paths,
-#   route_uses_form_id edges to the forms four of them build, and the shape of each path with
+#   route_uses_form_id edges to the forms five of them build, and the shape of each path with
 #   placeholders (route/core_user_routes.yaml); and a page--a--b template as a suggests_path edge to /a/b when the map
 #   holds that path;
 # - a variable assigned from getRouteName() and compared with == or === to a quoted route name,
@@ -402,7 +406,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   $route_name, and a variable bound twice in one function give no checks_route edge. A file
 #   that holds two classes with a method of one name reads both as the class its path names.
 # - Only the core user routes listed above get a path, and only from an exported core.extension;
-#   user.logout.confirm, which core added in 10.3, and the routes of other core modules get none. A page--a--b template whose path parts hold underscores, or name an
+#   the routes of other core modules get none. user.logout.confirm is mapped on the assumption that
+#   the site runs core 10.3 or later, which added it. A page--a--b template whose path parts hold underscores, or name an
 #   argument as %, links to no path.
 # - The applies_to key of a service's access_check tag is kept as the service's applies_to
 #   attribute, not on the tagged_as edge, because an attribute on an edge is accepted and not
@@ -852,6 +857,11 @@ files:
       # An array literal assigned to a variable, $list = [...]; list is the variable's name.
       - name: array_assigned
         open: '\$(?<list>\w+)\s*=\s*(?=\[)'
+        balance: ['[', ']']
+      # A list of validate or submit handlers written whole, '#submit' => [...] in an array or
+      # ['#submit'] = [...] assigned; mark is the key. Read by form/form_handler.yaml.
+      - name: handler_list
+        open: '[\[,(\s][''"](?<mark>#(?:validate|submit))[''"]\s*(?:=>|\]\s*=)\s*(?=\[)'
         balance: ['[', ']']
       # The array literal in_array tests a variable against, in_array($v, [...]); var is the
       # variable's name.

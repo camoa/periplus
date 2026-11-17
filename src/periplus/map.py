@@ -24,7 +24,7 @@ import periplus
 from periplus.engine.check import checked
 from periplus.engine.emit import LeftOut, build_document, render
 from periplus.engine.packload import RuleSet
-from periplus.engine.rules import MapPass, run_file_rules, run_map_rules
+from periplus.engine.rules import MapPass, run_file_rules, run_map_rules, withhold_found
 from periplus.engine.select import (
     FileTypes,
     Selection,
@@ -201,6 +201,8 @@ def run(
                 unlisted=tuple(unlisted),
                 empty_packs=empty,
             )
+        found_nodes, found_edges, withheld = withhold_found(rule_set, found_nodes, found_edges)
+        fires.update(withheld)
         map_nodes, map_edges, map_fires, map_passes, unread_by_map = run_map_rules(
             rule_set, found_nodes, found_edges
         )

@@ -173,6 +173,7 @@ EXECUTED_KEYS = frozenset(
         ),
         *(f"{_RULE}id{k}" for k in (*_RESOLVE, *_TABLE_STEPS)),
         *(f"{_RULE}emits.*.binding{k}" for k in ("", ".name", ".target")),
+        f"{_RULE}emits.*.withhold",
         *(f"{_RULE}emits.*.{k}" for k in ("node", "node.type", "attribute", "attribute.name")),
         *(f"{_RULE}emits.*.{k}" for k in ("attribute.from", "attribute.template", "edge")),
         f"{_RULE}emits.*.attribute.target",
@@ -524,6 +525,9 @@ class Rule:
     #: A map rule's attributes, each its name, its template and the node it is written on,
     #: ``this_node`` or ``matched_node``.
     writes: tuple[tuple[str, str, str], ...] = ()
+    #: A map rule that withholds: the node it takes out, ``this_node`` or ``matched_node``; ``""``
+    #: for any other rule.
+    withholds: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -2248,12 +2252,22 @@ def _build_map(pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[
             "conditions"
         )
     follow = _read_follow(match.get("follow", []))
+    withholds = [emit["withhold"] for emit in emits if "withhold" in emit]
+    if withholds and (
+        len(emits) != 1
+        or withholds[0] not in _MAP_ENDS
+        or ("matched_node" in withholds and not follow)
+    ):
+        raise _Unsupported(
+            "a map rule that withholds emits one withhold, this_node or matched_node, and nothing "
+            "else; matched_node needs match.follow"
+        )
     nodes = node_types(item)
     edges = [_read_map_edge(emit["edge"], bool(follow)) for emit in emits if "edge" in emit]
     attributes = [emit["attribute"] for emit in emits if "attribute" in emit]
     block = item.get("id")
     if (
-        len(nodes) + len(edges) + len(attributes) != len(emits)
+        len(nodes) + len(edges) + len(attributes) + len(withholds) != len(emits)
         or len(nodes) > 1
         or any(emit["node"].keys() != {"type"} for emit in emits if "node" in emit)
         or (nodes and (edges or attributes))
@@ -2294,6 +2308,7 @@ def _build_map(pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[
             tuple(_read_follow(chain)) for chain in match.get("unless_matched", [])
         ),
         writes=writes,
+        withholds=withholds[0] if withholds else "",
     )
 
 

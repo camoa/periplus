@@ -11,8 +11,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # user_form. A path with placeholders also gets a shape_of_route edge from its shape, each {x}
 # written as *, as url/path_route.yaml gives a mapped route, so a template's path of that shape
 # links to it. A path with placeholders is the id of a rule of its own, which builds each brace in
-# normalize, since a template reads {x} as a value's name. user.logout.confirm, which core added in 10.3, is left out: core.extension does
-# not say which core release a site runs. Read from core.extension,
+# normalize, since a template reads {x} as a value's name. user.logout.confirm serves
+# /user/logout/confirm and builds the form user_logout_confirm. Core added it in 10.3, and no file
+# this rutter reads says which core release a site runs, so the rutter assumes 10.3 or later; on an
+# older site this route and its two edges are false. Read from core.extension,
 # where the module user is listed when it is installed, so a site with exported configuration gets
 # them whether or not its code links them. The route, the path and the form id end at referenced
 # nodes unless a mapped file declares them, and meet the nodes that links, templates and form
@@ -97,6 +99,22 @@ rules:
       kind: route_serves_path
       from: this_node
       to: {from: {key: module.user}, template: '/user/logout', type: drupal.url_path}
+  confidence: inferred
+
+- rule: core_user_logout_confirm_route
+  reads: file
+  in: [config]
+  match: {file: core.extension, filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^core\.extension$', with: 'user.logout.confirm'}]}
+  emits:
+  - edge:
+      kind: route_serves_path
+      from: this_node
+      to: {from: {key: module.user}, template: '/user/logout/confirm', type: drupal.url_path}
+  - edge:
+      kind: route_uses_form_id
+      from: this_node
+      to: {from: {key: module.user}, template: 'user_logout_confirm', type: drupal.form_id}
   confidence: inferred
 
 - rule: core_user_reset_form_route

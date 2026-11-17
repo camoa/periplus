@@ -223,6 +223,35 @@ mapped node. Two rules that give one value write it once, each with its row; two
 different values write `differs`, even at the same place, and the report lists the node under
 Attributes that differ between files. No `follow` step reads an attribute, so the passes still end.
 
+## Withhold what a file rule found
+
+A name convention can read a thing that other code shows is something else, and a file rule
+cannot see that other code. A map rule whose one emit is `withhold: matched_node` or
+`withhold: this_node` takes such a node back. It runs once, before pass 1, over the map the file
+rules made, and matches, follows and blocks as any map rule does. At each location of the node it
+matched, it takes out every record of the named node, and every file edge there with that node at
+an end. A record of the same node at another location stays, so the node stays in the map while
+one is left. No pass reads what was taken out, and no withholding rule sees what another took out.
+The report counts each rule's fires under `executed`. This rule takes out, at each registered
+function's place, the hook its name gave it:
+
+```yaml
+- rule: hidden
+  reads: map
+  match:
+    node_type: own.fn
+    where: [{id_matches: '^own\.fn::(?<name>\w+)$'}]
+    follow:
+    - node: 'own.reg::{name}'
+    - node: 'own.fn::{name}'
+    - edge: implements
+  emits: [{withhold: matched_node}]
+  confidence: inferred
+```
+
+A rule that withholds emits nothing else, and `matched_node` needs `follow`; either refusal leaves
+the rule not executed. A file rule cannot withhold.
+
 ## Internal node types
 
 A node type marked `internal: true` serves the map rules and stays out of the written map. File

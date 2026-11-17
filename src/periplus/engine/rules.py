@@ -57,7 +57,15 @@ from periplus.engine.tree import (
 )
 from periplus.manifest import LoadedPack
 
-__all__ = ["FoundEdge", "FoundNode", "MapPass", "Skipped", "run_file_rules", "run_map_rules"]
+__all__ = [
+    "FoundEdge",
+    "FoundNode",
+    "MapPass",
+    "Skipped",
+    "run_file_rules",
+    "run_map_rules",
+    "withhold_found",
+]
 
 #: One match that made nothing because its id argument is missing or not a text literal: the file,
 #: the line of the attribute or annotation, the rule and the reason.
@@ -316,7 +324,11 @@ def run_map_rules(
     An ``unless_matched`` chain runs from the node ``follow`` reached, with its captures, and when
     it reaches a node that one result makes nothing.
     """
-    rules = [rule for rule in rule_set.rules if rule.supported and rule.matches_type]
+    rules = [
+        rule
+        for rule in rule_set.rules
+        if rule.supported and rule.matches_type and not rule.withholds
+    ]
     if not rules:
         return [], [], {}, [], []
     found = {node.id for node in nodes}
@@ -396,6 +408,65 @@ def run_map_rules(
             )
         made_nodes.extend(record for record in added if isinstance(record, FoundNode))
         made_edges.extend(record for record in added if isinstance(record, FoundEdge))
+
+
+def withhold_found(
+    rule_set: RuleSet, nodes: Sequence[FoundNode], edges: Sequence[FoundEdge]
+) -> tuple[list[FoundNode], list[FoundEdge], dict[tuple[str, str], int]]:
+    """Run every supported map rule that withholds, once, over what the file rules found, before
+    the passes; return the nodes and edges left, and each such rule's fires.
+
+    A rule matches, follows and blocks as a map rule in a pass does, on the file rules' map. Each
+    result names a node, the matched one or the one ``follow`` reached; at each location of the
+    matched node, every node record of that id and every edge record with that node at an end is
+    taken out. A fire is one result that names a node and location no fire named before. Every
+    rule reads the map as the file rules made it, so no rule sees what another took out.
+    """
+    rules = [rule for rule in rule_set.rules if rule.supported and rule.withholds]
+    if not rules:
+        return list(nodes), list(edges), {}
+    found = {node.id for node in nodes}
+    ends = [_landed_end(edge, found) for edge in edges]
+    known = found | {end for edge in ends for end in (edge.source, edge.target)}
+    places: dict[str, set[tuple[str, int]]] = {}
+    by_type: dict[str, set[str]] = {}
+    for node in nodes:
+        places.setdefault(node.id, set()).add((node.file, node.line))
+        by_type.setdefault(node.type, set()).add(node.id)
+    out: dict[tuple[str, str, str], set[str]] = {}
+    for edge in ends:
+        out.setdefault(("edge", edge.kind, edge.source), set()).add(edge.target)
+        out.setdefault(("incoming_edge", edge.kind, edge.target), set()).add(edge.source)
+    taken: set[tuple[str, str, int]] = set()
+    fires: dict[tuple[str, str], int] = {}
+    for rule in rules:
+        count = 0
+        allowed = (t for t in by_type if _allows(rule_set, t, (rule.matches_type,)))
+        for node_id in sorted(set[str]().union(*(by_type[t] for t in allowed))):
+            values = _captured(rule.where, node_id, dict(rule_set.values))
+            if values is None or any(
+                _follow(chain, node_id, dict(values), known, out) for chain in rule.unless
+            ):
+                continue
+            for reached, captured in _follow(rule.follow, node_id, values, known, out):
+                if any(
+                    _follow(chain, reached, dict(captured), known, out)
+                    for chain in rule.unless_matched
+                ):
+                    continue
+                named = node_id if rule.withholds == "this_node" else reached
+                new = {(named, file, line) for file, line in places[node_id]} - taken
+                taken |= new
+                count += bool(new)
+        fires[(rule.pack, rule.name)] = count
+    kept = [node for node in nodes if (node.id, node.file, node.line) not in taken]
+    left = [
+        edge
+        for edge, landed in zip(edges, ends, strict=True)
+        if (landed.source, edge.file, edge.line) not in taken
+        and (landed.target, edge.file, edge.line) not in taken
+    ]
+    return kept, left, fires
 
 
 _READ_ONLY = "a map rule reads only nodes whose ids the file rules found"

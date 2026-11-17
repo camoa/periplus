@@ -381,7 +381,10 @@
           "then": {
             "required": [
               "in"
-            ]
+            ],
+            "properties": {
+              "emits": {"items": {"not": {"required": ["withhold"]}}}
+            }
           }
         },
         {
@@ -1178,6 +1181,10 @@
             "target": {"type": "string"}
           },
           "description": "A text rule binds a name in its file to a target, each a template over captures, path values and values; an empty or absent one binds nothing. A file's bindings are those of every binding rule on it, in file order, a later binding of a name winning. A rule with a binding emits only bindings and has no id. Bindings serve bound_first_segment and are not written to the map."
+        },
+        "withhold": {
+          "type": "string",
+          "description": "Only on a map rule, as its one emit: this_node or matched_node. Before the passes, what the file rules found of that node at each location of the matched node is taken out, with each file edge there that has it at an end."
         },
         "type": {
           "$ref": "#/$defs/typeName"

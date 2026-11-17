@@ -13,9 +13,25 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # false. A rule's id is the config object's, built from the captures of those spans, so a match
 # outside them names an empty value and makes nothing.
 #
-# Missing results: with protect_all_forms: true, honeypot protects every form outside
-# unprotected_forms, and no edge says so for a form the file does not name. A form_settings key
-# written in quotes is not read.
+# With protect_all_forms: true, honeypot protects every form outside unprotected_forms whose id has
+# no non-letter right before system_, search_ or views_exposed_form_, as honeypot's form alter
+# tests. The file then gives the config object the attribute protect_all_forms, as written, and an
+# internal drupal.protect_all_forms node; a map rule gives config_names_form from honeypot.settings
+# to each form id a mapped class returns that the test lets through and unprotected_forms does not
+# list. That edge sits at the form id's place, where the map holds it. A form id the map only
+# references, such as core's user_login_form, gets no edge; the attribute says the file protects it
+# too. A form_settings key may be written bare or in quotes.
+
+node_types:
+- name: drupal.protect_all_forms
+  description: "internal: a configuration object that switches protection on for every form"
+  id_namespace: drupal.protect_all_forms
+  internal: true
+
+attributes:
+- name: protect_all_forms
+  on: [drupal.config_object]
+  description: "honeypot.settings' protect_all_forms as written: true protects every form outside unprotected_forms"
 
 edge_kinds:
 - kind: config_names_form
@@ -83,7 +99,7 @@ rules:
   match:
     file: honeypot.settings
     filetype: drupal_yml_text
-    text: '(?m)^[ \t]+(?<form>[A-Za-z0-9_]+):[ \t]*true[ \t]*$'
+    text: '(?m)^[ \t]+[''"]?(?<form>[A-Za-z0-9_]+)[''"]?:[ \t]*true[ \t]*$'
   values:
     config: {from: {enclosing: honeypot_form_settings, capture: mark}, normalize: [{replace: '^form_settings$', with: 'honeypot.settings'}]}
   id: {template: '{config}'}
@@ -103,7 +119,7 @@ rules:
   match:
     file: honeypot.settings
     filetype: drupal_yml_text
-    text: '(?m)^[ \t]+(?<form>[A-Za-z0-9_]+):[ \t]*false[ \t]*$'
+    text: '(?m)^[ \t]+[''"]?(?<form>[A-Za-z0-9_]+)[''"]?:[ \t]*false[ \t]*$'
   values:
     owner: {from: {enclosing: honeypot_form_settings, capture: mark}, normalize: [{replace: '^form_settings$', with: 'honeypot'}]}
     name: {from: {enclosing: honeypot_selected_forms, capture: mark}, normalize: [{replace: '^protect_all_forms$', with: 'settings'}]}
@@ -115,3 +131,42 @@ rules:
       from: this_node
       to: {template: '{form}', type: drupal.form_id}
   confidence: declared
+
+# protect_all_forms as written, on the config object.
+- rule: honeypot_protect_all_forms_setting
+  reads: file
+  in: [config, module_config]
+  match:
+    file: honeypot.settings
+    filetype: yaml
+    where:
+    - key: {name: protect_all_forms, not_equals: null}
+  id: {from: file_stem}
+  emits:
+  - node: {type: drupal.config_object}
+  - attribute: {name: protect_all_forms, from: {key: protect_all_forms}}
+  confidence: declared
+
+- rule: honeypot_protects_all_forms
+  reads: file
+  in: [config, module_config]
+  match:
+    file: honeypot.settings
+    filetype: yaml
+    where:
+    - key: {name: protect_all_forms, equals: true}
+  id: {from: file_stem}
+  emits: [{node: {type: drupal.protect_all_forms}}]
+  confidence: declared
+
+# Each form id a mapped class returns, while protect_all_forms is true, unless unprotected_forms
+# lists it or honeypot's test passes it over.
+- rule: honeypot_protects_every_form
+  reads: map
+  match:
+    node_type: drupal.form_id
+    where: [{id_matches: '^drupal\.form_id::(?!.*[^a-zA-Z](?:system|search|views_exposed_form)_)'}]
+    follow: [{node: 'drupal.protect_all_forms::honeypot.settings'}]
+    unless: [[{incoming_edge: config_names_form_off}, {id_matches: '^drupal\.config::honeypot\.settings$'}]]
+  emits: [{edge: {kind: config_names_form, from: {template: 'honeypot.settings', types: [drupal.config_object]}, to: this_node}}]
+  confidence: inferred

@@ -2,18 +2,23 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # A validate or submit handler a form gets from code: $form['#validate'][] = X;,
 # $form['#submit'][] = X;, the same on an element such as $form['actions']['submit']['#submit'][],
-# and array_unshift($form['#validate'], X), on any variable. registers_form_handler runs from the
-# method or function that adds the handler to the function or method X names:
+# array_unshift($form['#validate'], X), on any variable, and each item of a list written whole,
+# '#submit' => [X, Y] in an array or $form['#validate'] = [X, Y]. registers_form_handler runs from
+# the method or function that adds the handler to the function or method X names:
 # - 'my_handler', a function by its name;
 # - '::myMethod', a method of the form object: in a form class, one whose getFormId returns a
 #   literal, that class; in a form alter hook, each class that returns the altered form id;
 # - [$this, 'myMethod'], [static::class, 'myMethod'] or [self::class, 'myMethod'], a method of the
 #   class around the line;
+# - [Foo::class, 'myMethod'], a method of Foo, the name resolved through the file's imports and
+#   namespace;
 # - 'Drupal\my_module\Handlers::check', a static method written whole.
 # A method is looked up on the class and then its ancestors through extends and used traits; one
 # the map does not hold lands unresolved under the class the walk started from, and a function the
 # map does not hold, such as core's, lands unresolved. A walk from a form id reaches the handler
 # through alters_form or form_has_id and contains, then this edge, so no edge runs from the form id.
+# A function added as a handler is not also an implements_hook of the hook its name would give,
+# unless the map can name that hook otherwise (form_handler_function_is_no_hook below).
 #
 # Each registration is read as text, as '#theme' is, into an internal drupal.form_handler_site
 # node, <class>::<method>::<handler> or <function>::<handler>, the handler as written with its
@@ -21,16 +26,19 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # function around it. The map rules below read the handler's shape from the id. The method's class
 # is the one the file's path names by Drupal's PSR-4 layout, so the edges are inferred.
 #
-# Missing results: a handler list written whole, as '#submit' => ['a', '::b'] in an array or
-# $form['#submit'] = [...], a handler held in a variable, [Foo::class, 'm'] with the class
-# imported by a use statement, a handler added to a key other than #validate or #submit, and a
-# '::myMethod' in a form class whose getFormId returns no literal, or in an alter of a base form id
-# no class returns, give no edge.
+# Missing results: a handler held in a variable, a list written with array(), a handler added to
+# a key other than #validate or #submit, a [Bar::class, 'm'] whose Bar is imported under another
+# name, and a '::myMethod' in a form class whose getFormId returns no literal, or in an alter of a
+# base form id no class returns, give no edge.
 
 node_types:
 - name: drupal.form_handler_site
   description: "internal: one validate or submit handler, as written, that one method or function adds to a form"
   id_namespace: drupal.form_handler_site
+  internal: true
+- name: drupal.form_handler_name
+  description: "internal: the name of a function code adds to a form as a validate or submit handler"
+  id_namespace: drupal.form_handler_name
   internal: true
 
 edge_kinds:
@@ -93,6 +101,91 @@ rules:
   id: *function_id
   line: {capture: handler}
   emits: [{edge: {kind: form_handler_site_in, from: this_node, to: {template: '{function}', types: [php.function]}}}]
+  confidence: declared
+
+# Each item of a handler list written whole: '#submit' => [...] in an array, or $form['#validate']
+# = [...]. An item is a quoted handler or a bracketed one, [$this, 'm'] or [Foo::class, 'm'], read
+# whole at the start of the list or after a comma; a quoted key such as '#submit' is no item. The
+# list's own key fills the id's first part, which the first normalize step cuts, so a match outside
+# a list makes nothing.
+- rule: form_handler_list_item_in_method
+  reads: file
+  in: [source]
+  match: &list_method_match
+    file: '**'
+    filetype: drupal_php_text
+    text: &list_text '[\[,]\s*(?<handler>\[[^\[\]\n]*\]|''(?!#)[^''\n]*''|"(?!#)[^"\n]*")\s*(?=[,\]])'
+  values: &list_method_values
+    list: &in_list {from: {enclosing: handler_list, capture: mark}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: &list_method_id {template: '{list}|{psr4_class}::{method}::{handler}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '\s+', with: ''}, {replace: '"', with: ''''}, {replace: '\\\\', with: '\'}]}
+  line: {capture: handler}
+  emits: [{node: {type: drupal.form_handler_site}}]
+  confidence: declared
+
+- rule: form_handler_list_item_in_method_edge
+  reads: file
+  in: [source]
+  match: *list_method_match
+  values: *list_method_values
+  id: *list_method_id
+  line: {capture: handler}
+  emits: [{edge: {kind: form_handler_site_in, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}}}]
+  confidence: inferred
+
+- rule: form_handler_list_item_in_function
+  reads: file
+  in: [source]
+  match: &list_function_match
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: *list_text
+  values: &list_function_values
+    list: *in_list
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: &list_function_id {template: '{list}|{function}::{handler}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '\s+', with: ''}, {replace: '"', with: ''''}, {replace: '\\\\', with: '\'}]}
+  line: {capture: handler}
+  emits: [{node: {type: drupal.form_handler_site}}]
+  confidence: declared
+
+- rule: form_handler_list_item_in_function_edge
+  reads: file
+  in: [source]
+  match: *list_function_match
+  values: *list_function_values
+  id: *list_function_id
+  line: {capture: handler}
+  emits: [{edge: {kind: form_handler_site_in, from: this_node, to: {template: '{function}', types: [php.function]}}}]
+  confidence: declared
+
+# The name of each function added as a handler, 'my_handler' alone or as an item of a list, as an
+# internal drupal.form_handler_name node, which form_handler_function_is_no_hook reads before the
+# map rules run.
+- rule: form_handler_function_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?:\$\w+(?:\[\s*[''"][\w#-]*[''"]\s*\])*\[\s*[''"]#(?:validate|submit)[''"]\s*\]\[\s*\]\s*=|\barray_unshift\(\s*\$\w+(?:\[\s*[''"][\w#-]*[''"]\s*\])*\[\s*[''"]#(?:validate|submit)[''"]\s*\]\s*,)\s*[''"](?<name>[A-Za-z_]\w*)[''"]\s*[;)]'
+  id: {from: {capture: name}}
+  line: {capture: name}
+  emits: [{node: {type: drupal.form_handler_name}}]
+  confidence: declared
+
+- rule: form_handler_list_function_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,]\s*(?:\[[^\[\]\n]*\]|[''"](?<name>[A-Za-z_]\w*)[''"])\s*(?=[,\]])'
+  values:
+    list: *in_list
+  id: {template: '{list}|{name}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  line: {capture: name}
+  emits: [{node: {type: drupal.form_handler_name}}]
   confidence: declared
 
 # 'my_handler': a function by its name.
@@ -176,4 +269,68 @@ rules:
     - node: 'drupal.form_handler_site::{site}'
     - edge: form_handler_site_in
   emits: *method_edge
+  confidence: inferred
+
+# [Foo::class, 'myMethod'], Foo imported, relative to the namespace or written whole: the class
+# whose full name ends in Foo among those the method or function around the handler names as
+# Foo::class, by php_basic's references_class edge, which resolves the name through the file's
+# imports and namespace. A class imported under another name, use A\Foo as Bar with
+# [Bar::class, 'm'], names no class ending in Bar and gives nothing.
+- rule: form_handler_class_method
+  reads: map
+  match:
+    node_type: drupal.form_handler_site
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<class>[^:]+)::(?<method>\w+)::\[(?!(?:static|self)::class,)\\?(?:[A-Za-z_][\w\\]*\\)?(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
+    follow:
+    - node: 'php.method::{class}::{method}'
+    - edge: references_class
+    - id_matches: '^php\.type::(?<declarer>(?:[\w\\]*\\)?{short})$'
+    - try:
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{handler}'
+    - node: 'drupal.form_handler_site::{site}'
+    - edge: form_handler_site_in
+  emits: *method_edge
+  confidence: inferred
+
+- rule: form_handler_class_method_in_function
+  reads: map
+  match:
+    node_type: drupal.form_handler_site
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<function>\w+)::\[(?!(?:static|self)::class,)\\?(?:[A-Za-z_][\w\\]*\\)?(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
+    follow:
+    - node: 'php.function::{function}'
+    - edge: references_class
+    - id_matches: '^php\.type::(?<declarer>(?:[\w\\]*\\)?{short})$'
+    - try:
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{handler}'
+    - node: 'drupal.form_handler_site::{site}'
+    - edge: form_handler_site_in
+  emits: *method_edge
+  confidence: inferred
+
+# A function added as a handler is not a hook implementation by its name alone. Before the map
+# rules run, the hook that hook/hook.yaml gives the function by its name is withheld at the
+# function's place, with the implements_hook and hook_acts_on_entity_type edges there. The hook
+# stays when the map can name it apart from that name: a Hook attribute names it, it acts on an
+# entity type by its name, or another rule of this rutter reads it by name: user_login,
+# form_<id>_alter, preprocess_<hook> and the generic entity_ hooks. Another function that
+# implements the same hook keeps it at its own place.
+- rule: form_handler_function_is_no_hook
+  reads: map
+  match:
+    node_type: php.function
+    where: [{id_matches: '^php\.function::(?<fn>\w+)$'}]
+    follow:
+    - node: 'drupal.form_handler_name::{fn}'
+    - node: 'php.function::{fn}'
+    - edge: implements_hook
+    - id_matches: '^drupal\.hook::(?!user_login$|form_\w+_alter$|preprocess_\w+$|entity_(?:create|presave|insert|update|predelete|delete|load|view|view_alter|build_defaults_alter|prepare_form|access|translation_insert)$)'
+    unless_matched:
+    - [{edge: hook_acts_on_entity_type}]
+    - [{incoming_edge: implements_hook}, {id_matches: '^php\.method::'}]
+  emits: [{withhold: matched_node}]
   confidence: inferred

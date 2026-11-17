@@ -271,10 +271,14 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
 - `drupal.form_id`, a node for each literal a form class's `getFormId()` returns; `form_has_id`,
   from that class to it; `config_names_form`, from a configuration object that switches a form's
   protection on, such as a CAPTCHA point, to its form id, and `config_names_form_off` from one that
-  names the form and leaves it off. Two edges join a configuration file to a form class.
+  names the form and leaves it off. Two edges join a configuration file to a form class. With
+  honeypot's `protect_all_forms: true`, the map rule `honeypot_protects_every_form` gives
+  `config_names_form` to each form id a mapped class returns, less those `unprotected_forms` lists.
 - `registers_form_handler`, inferred, from the method or function that adds a `#validate` or
-  `#submit` handler, as `$form['#submit'][] = '::save'`, to the function or method it names,
-  joined in the map through the internal `drupal.form_handler_site` node.
+  `#submit` handler, as `$form['#submit'][] = '::save'` or each item of
+  `'#submit' => ['::save', 'mymod_extra_submit']`, to the function or method it names, joined in
+  the map through the internal `drupal.form_handler_site` node. The map rule
+  `form_handler_function_is_no_hook` withholds the hook a handler function's name would give it.
 - `hook_acts_on_entity_type`, inferred from a hook named `<extension>_<type>_<operation>`, such as
   `mymod_node_presave`, to the entity type `node`.
 - `drupal.manager_call`, a node for each `getStorage`, `getViewBuilder`, `getListBuilder`,
