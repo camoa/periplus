@@ -18,7 +18,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # parameters block gives it, as the rules below say. The event is the name as written, in double
 # quotes \\, \" and \/ read as a backslash, a quote and a slash; a double-quoted name with any
 # other escape, as "a\tb", holds a character no event name holds and is a runtime registration of
-# the service, a drupal.runtime_subscription <service>|"<name as written>". One the table
+# the service, a drupal.runtime_subscription <service>|"<name as written>"; so is a name, quoted
+# or plain, that goes on past its line, which YAML folds, <service>|<name as written> with each line
+# break and the blanks around it one space. One the table
 # core_event_names lists, as kernel.request, is the
 # event of its core constant, as a subscriber's KernelEvents::REQUEST is; any other, as
 # my_module.paid, or a class's full name, as Drupal\my_module\Event\Paid, the name of an event
@@ -46,8 +48,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # through the use statement of A (the _q rules); X::NAME or A\B::NAME that no use statement binds
 # is the constant of the file's own namespace, unresolved when no mapped file declares it;
 # parent::NAME and parent::class read the parent the class extends, for an attribute on a class
-# through the span attributed_class; parent::NAME with no written parent, in a trait or a class
-# that extends nothing, is a runtime registration, as an expression is; a priority written as a constant holds the integer a mapped
+# through the span attributed_class; parent::NAME or parent::class with no written parent, in a
+# trait or a class that extends nothing, is a runtime registration, as an expression is; a priority written as a constant holds the integer a mapped
 # file declares it with (event/event_subscriber.yaml). A dispatcher key stays the service id as
 # written: no edge kind of the pack says a listener is added to another dispatcher.
 #
@@ -115,19 +117,23 @@ rules:
   match: &listener_tag
     file: '*.services'
     filetype: drupal_yml_text
-    text: '(?m)(?:^(?<ind>[ \t]*)-(?:[ \t]+(?![ \t])|(?=\n))|(?<=[\[,])[ \t]*(?=\{))(?=(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?name:[ \t]*[''"]?(?<tag>kernel\.event_listener)[''"]?[ \t]*(?:[,}#]|$))(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?event:[ \t]*(?:!php/const[ \t]+(?<event_const>\\?[\w\\]+::[A-Z][A-Z0-9_]*)|[''"]?%(?<event_param>[^%''",}\s#]+)%[''"]?(?=[ \t]*(?:[,}#]|$))|"(?<event_esc>(?:[^"\\\n]|\\[\\"/])*\\[^\\"/\n](?:[^"\\\n]|\\[^\n])*)"(?=[ \t]*(?:[,}#]|$))|"(?<event_dq>(?:[^"\\\n]|\\[\\"/])*\\[\\"/](?:[^"\\\n]|\\[\\"/])*)"(?=[ \t]*(?:[,}#]|$))|(?<event_quote>[''"]?)(?<event_raw>(?!!)[^''",}\s#]+)))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?method:[ \t]*[''"]?(?<method>\w+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?priority:[ \t]*[''"]?(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?[+-]?[\w:\\]+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?dispatcher:[ \t]*[''"]?(?<dispatcher>[^''",}\s#]+))?)'
+    text: '(?m)(?:^(?<ind>[ \t]*)-(?:[ \t]+(?![ \t])|(?=\n))|(?<=[\[,])[ \t]*(?=\{))(?=(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?name:[ \t]*[''"]?(?<tag>kernel\.event_listener)[''"]?[ \t]*(?:[,}#]|$))(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?event:[ \t]*(?:!php/const[ \t]+(?<event_const>\\?[\w\\]+::[A-Z][A-Z0-9_]*)|[''"]?%(?<event_param>[^%''",}\s#]+)%[''"]?(?=[ \t]*(?:[,}#]|$))|"(?<event_esc>(?:[^"\\\n]|\\[\\"/])*\\[^\\"/\n](?:[^"\\\n]|\\[^\n])*)"(?=[ \t]*(?:[,}#]|$))|"(?<event_dq>(?:[^"\\\n]|\\[\\"/])*\\[\\"/](?:[^"\\\n]|\\[\\"/])*)"(?=[ \t]*(?:[,}#]|$))|(?<event_wrap>"(?:[^"\\\n]|\\[^\n])*\\?\n(?:[^"\\]|\\[\s\S])*"|''(?:[^''\n]|'''')*\n(?:[^'']|'''')*'')(?=[ \t]*(?:[,}#]|$))|(?<event_pwrap>(?!!)[^''",}\s#]+(?:[ \t]*\n[ \t]+(?![-#}\]\s,])(?![^\s:,#{}\[\]]+:(?:[ \t]|$))[^,}#\n]*)+)(?=[ \t]*(?:[,}#]|$))|(?<event_quote>[''"]?)(?<event_raw>(?!!)[^''",}\s#]+)))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?method:[ \t]*[''"]?(?<method>\w+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?priority:[ \t]*[''"]?(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?[+-]?[\w:\\]+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?dispatcher:[ \t]*[''"]?(?<dispatcher>[^''",}\s#]+))?)'
   values: &tag_values
     # The event as YAML reads it: in double quotes \\ is one backslash, and \" and \/ a quote
     # and a slash. Any other escape gives a character no event name holds, and is read below as a
-    # runtime registration.
-    event: {template: '{event_raw}{event_dq}§{event_quote}§{event_dq}', normalize: [{replace: '\\\\(?=[^§]*§"§$)', with: '¤'}, {replace: '\\\\(?=[^§]*§§.)', with: '¤'}, {replace: '\\"(?=[^§]*§§.)', with: '"'}, {replace: '\\/(?=[^§]*§§.)', with: '/'}, {replace: '¤', with: '\'}, {replace: '§[''"]?§[\s\S]*$', with: ''}]}
+    # runtime registration, as is a quoted or plain event that goes on past its line, which YAML
+    # folds.
+    event: {template: '{event_raw}{event_dq}§{event_quote}§{event_dq}', normalize: [{replace: '\\\\(?=[^§]*§§.)', with: '¤'}, {replace: '\\"(?=[^§]*§§.)', with: '"'}, {replace: '\\/(?=[^§]*§§.)', with: '/'}, {replace: '¤', with: '\'}, {replace: '§[''"]?§[\s\S]*$', with: ''}]}
     in_services: {from: {enclosing: services_block, capture: mark}}
     service: {from: {enclosing: service_entry, capture: service}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
     no_method: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
-    no_event: {template: '{tag}|{event_raw}{event_dq}{event_esc}{event_const}{event_param}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
+    no_event: {template: '{tag}|{event_raw}{event_dq}{event_esc}{event_const}{event_param}{event_wrap}{event_pwrap}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
     econst: {from: {capture: event_const}, normalize: [{replace: '^\\', with: ''}]}
     disp: {from: {capture: dispatcher}}
+    # A double-quoted event with another escape, in its quotes, or an event that goes on past its
+    # line, as written, each line break and the blanks around it one space.
+    rt_event: {template: '{event_esc}§{event_wrap}{event_pwrap}', normalize: [{replace: '^(?=[^§])', with: '"'}, {replace: '§$', with: '"'}, {replace: '^§', with: ''}, {replace: '[ \t]*\n[ \t]*', with: ' '}]}
     typed_method: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: '__invoke'}, {replace: '^[^|]*\|', with: ''}]}
     derived: &derived
       template: '{tag}|{event}'
@@ -167,13 +173,14 @@ rules:
   confidence: declared
 
 # A double-quoted event with an escape other than \\, \" and \/, as "a\tb", names an event
-# whose text holds a character no event name holds; the built container alone knows it.
+# whose text holds a character no event name holds; the built container alone knows it. So does an
+# event written past its line, quoted or plain, which YAML folds.
 - rule: listener_tag_escaped
   reads: file
   in: [module_root]
   match: *listener_tag
   values: *tag_values
-  id: {template: '{in_services}|{service}|"{event_esc}"', normalize: [{replace: '^services\|', with: ''}]}
+  id: {template: '{in_services}|{service}|{rt_event}', normalize: [{replace: '^services\|', with: ''}]}
   emits:
   - node: {type: drupal.runtime_subscription}
   - attribute: {name: resolution, template: runtime}
@@ -184,7 +191,7 @@ rules:
   in: [module_root]
   match: *listener_tag
   values: *tag_values
-  id: {template: '{in_services}|{service}|"{event_esc}"', normalize: [{replace: '^services\|', with: ''}]}
+  id: {template: '{in_services}|{service}|{rt_event}', normalize: [{replace: '^services\|', with: ''}]}
   emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{service}', types: [drupal.service]}, to: this_node}}]
   confidence: declared
 
@@ -962,7 +969,7 @@ rules:
     parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     aparent: {from: {enclosing: attributed_class, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     ev0: {template: '{tag}|{n_event}{p1}', normalize: [{replace: '^[^|]*\|\s*', with: ''}, {replace: '\s+$', with: ''}, {replace: '^null$', with: ''}]}
-    ev: {template: '{tag}|{parent_cls}{aparent}§{ev0}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^[^§]*§(?!parent::[A-Z])', with: ''}, {replace: '^§', with: ''}, {replace: '§parent(?=::)', with: ''}]}
+    ev: {template: '{tag}|{parent_cls}{aparent}§{ev0}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^[^§]*§(?!parent::(?:[A-Z]|class\b))', with: ''}, {replace: '^§', with: ''}, {replace: '§parent(?=::)', with: ''}]}
     key: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*$).*$', with: ''}]}
     class: {template: '{tag}|{key}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '::.*$', with: ''}, {replace: '^\\.*$', with: ''}]}
     constant: {template: '{tag}|{key}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^.*::', with: ''}]}
@@ -975,8 +982,8 @@ rules:
     meth_arg: {template: '{tag}|{method}|{n_method}{p2}', normalize: [{replace: '^[^|]*\|[^|]+\|.*$', with: ''}, {replace: '^[^|]*\|\|\s*', with: ''}, {replace: '\s+$', with: ''}, {replace: '^null$', with: ''}]}
     meth: {template: '{tag}|{meth_arg}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!''\w+''$|"\w+"$).*$', with: ''}, {replace: '^.|.$', with: ''}]}
     meth_expr: {template: '{tag}|{meth_arg}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?:''\w+''|"\w+")$', with: ''}]}
-    # parent::NAME left in ev has no written parent, in a trait or a class that extends nothing.
-    ev_expr: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?:''[^'']*''|"[^"]*"|(?!parent::[A-Z][A-Z0-9_]*$)\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)$', with: ''}]}
+    # parent::NAME or parent::class left in ev has no written parent, in a trait or a class that extends nothing.
+    ev_expr: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?:''[^'']*''|"[^"]*"|(?!parent::(?:[A-Z][A-Z0-9_]*|class)$)\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)$', with: ''}]}
     expr: {template: '§{ev_expr}§{meth_expr}', normalize: [{replace: '^§§', with: ''}, {replace: '§$', with: ''}, {replace: '^§', with: ''}, {replace: '§', with: ','}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
     owner_at: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: '{psr4_class}'}, {replace: '^[^|]*\|', with: '{psr4_class}::'}]}
     listener: {template: '{tag}|{method}{meth}', normalize: [{replace: '^[^|]*\|', with: ''}]}
@@ -990,7 +997,7 @@ rules:
     derived_lower: {template: '{tag}|{text}', normalize: *camelize, case: lower}
     ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
     # An event written as a class, X::class, as written, and the class for the event's end.
-    class_ev: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class$).*$', with: ''}]}
+    class_ev: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class$).*$', with: ''}, {replace: '^parent::class$', with: ''}]}
     # parent::class is the class the attribute's class extends, as written.
     cls: {template: '{tag}|{class_ev}§P{parent_cls}{aparent}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '::class(?=§P)', with: ''}, {replace: '^parent§P', with: ''}, {replace: '§P.*$', with: ''}, {replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
   id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::'}

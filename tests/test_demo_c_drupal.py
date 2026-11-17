@@ -8058,3 +8058,957 @@ def test_a_registration_in_an_anonymous_class_is_owned_by_the_method_or_function
     }
     assert runtime == {"runtime"}
     assert {rule for _, _, rule, _ in report.skipped} <= _PHP_ANONYMOUS_CLASS_ROWS
+
+
+EVENT_FORMS = {
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "my_module.services.yml"): r"""parameters:
+  my_module.param_event: my_module.from_param
+services:
+  my_module.tags:
+    class: Drupal\my_module\Listen\Tagged
+    tags:
+      - { name: kernel.event_listener, event: my_module.flow, method: onFlow }
+      - { name: kernel.event_listener, event: 'my_module.single', method: onSingle, priority: 7 }
+      - { name: kernel.event_listener, event: "my_module.double", method: onDouble, dispatcher:"""
+    r""" my_dispatcher }
+      - { name: kernel.event_listener, event: "my_module\/slashed", method: onSlashed }
+      - { name: kernel.event_listener, event: "my_module\tTabbed", method: onTabbed }
+      - { name: kernel.event_listener, event: kernel.request, method: onRequest }
+      - { name: kernel.event_listener, event: !php/const Drupal\my_module\Event\OrderEvents::PL"""
+    r"""ACED, method: onConst }
+      - { name: kernel.event_listener, event: '%my_module.param_event%', method: onParam }
+      - { name: kernel.event_listener, event: my_module.derived }
+      - { name: kernel.event_listener, method: onTyped }
+      - name: kernel.event_listener
+        event: my_module.block
+        method: onBlock
+      -
+        name: kernel.event_listener
+        method: onDashAlone
+        event: my_module.dash_alone
+      - { name: kernel.event_listener, event: "my_module.wrapped
+          name", method: onWrapped }
+      - { name: kernel.event_listener, event: 'my_module.wrapped
+          single', method: onWrapped }
+      - name: kernel.event_listener
+        event: my_module.plain
+          wrapped
+        method: onWrapped
+      - { name: event_subscriber }
+  my_module.inline:
+    class: Drupal\my_module\Listen\Tagged
+    tags: [{ name: kernel.event_listener, event: my_module.inline_a, method: onInlineA }, { nam"""
+    r"""e: kernel.event_listener, event: my_module.inline_b, method: onInlineB }]
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+  const PLACED = 'my_module.placed';
+  const PAID = 'my_module.paid';
+  const DERIVED_CONST = 'my_module.derived_const';
+}
+""",
+    str(MODULE / "src/Event/PaidEvent.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+use Symfony\Contracts\EventDispatcher\Event;
+
+class PaidEvent extends Event {
+}
+""",
+    str(MODULE / "src/Listen/LocalEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+class LocalEvents {
+  const DONE = 'my_module.done';
+  const READY = 'my_module.ready';
+}
+""",
+    str(MODULE / "src/Listen/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Listen\Event;
+
+class OrderEvents {
+  const PLACED = 'my_module.wrong_placed';
+  const PAID = 'my_module.wrong_paid';
+}
+""",
+    str(MODULE / "src/Listen/Sub/DeepEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Listen\Sub;
+
+class DeepEvents {
+  const DEEP = 'my_module.deep';
+}
+""",
+    str(MODULE / "src/Listen/Tagged.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Drupal\my_module\Event\PaidEvent;
+
+class Tagged {
+  public function onFlow() {}
+  public function onSingle() {}
+  public function onDouble() {}
+  public function onSlashed() {}
+  public function onTabbed() {}
+  public function onRequest() {}
+  public function onConst() {}
+  public function onParam() {}
+  public function onMyModuleDerived() {}
+  public function onTyped(PaidEvent $event) {}
+  public function onBlock() {}
+  public function onDashAlone() {}
+  public function onWrapped() {}
+  public function onInlineA() {}
+  public function onInlineB() {}
+}
+""",
+    str(MODULE / "src/Listen/Keys.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Drupal\my_module\Event;
+use Drupal\my_module\Event\OrderEvents;
+use Drupal\my_module\Event\PaidEvent;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class Keys extends LocalEvents implements EventSubscriberInterface {
+
+  const OWN = 'my_module.own';
+
+  public static function getSubscribedEvents() {
+    $events = [
+      OrderEvents::PLACED => 'kUse',
+      OrderEvents::PAID => ['kPrio', 5],
+      OrderEvents::DERIVED_CONST => [['kListA', 1], ['kListB']],
+      self::OWN => 'kSelf',
+      static::OWN => [['kStaticA'], ['kStaticB', -1]],
+      parent::READY => 'kParent',
+      LocalEvents::DONE => [['kHereA'], ['kHereB']],
+      Sub\DeepEvents::DEEP => [['kQualA'], ['kQualB']],
+      \Drupal\my_module\Event\OrderEvents::PAID => 'kFull',
+      'kernel.request' => 'kNamed',
+      'my_module.named' => [['kNamedA'], ['kNamedB']],
+      PaidEvent::class => [['kClassA'], ['kClassB']],
+      self::class => 'kSelfClass',
+      parent::class => 'kParentClass',
+      Event\OrderEvents::PAID => 'kBoundQual',
+      Event\OrderEvents::PLACED => 'kTwice',
+      Sub\DeepEvents::DEEP => 'kTwice',
+      Event\OrderEvents::PLACED => [['kLaterA'], ['kLaterX']],
+      Sub\DeepEvents::DEEP => [['kLaterB'], ['kLaterX']],
+      'my_module.' . 'joined' => 'kJoined',
+      OrderEvents::PLACED . '.x' => 'kSuffix',
+    ];
+    $events[OrderEvents::PLACED][] = ['kArr'];
+    $events[parent::READY][] = ['kArrParent', 3];
+    $events[self::OWN][] = ['kArrSelf'];
+    $events['my_module.arr'][] = ['kArrNamed'];
+    $events[PaidEvent::class][] = ['kArrClass'];
+    $events[$name] = 'kVar';
+    $events[OrderEvents::PAID] = ['kArrPrio', 2];
+    return $events;
+  }
+
+  public function notKeys() {
+    return [OrderEvents::PLACED => 'kUse', 'my_module.no' => [['kUse'], ['kPrio']]];
+  }
+
+  public function kUse() {}
+  public function kPrio() {}
+  public function kListA() {}
+  public function kListB() {}
+  public function kSelf() {}
+  public function kStaticA() {}
+  public function kStaticB() {}
+  public function kParent() {}
+  public function kHereA() {}
+  public function kHereB() {}
+  public function kQualA() {}
+  public function kQualB() {}
+  public function kFull() {}
+  public function kNamed() {}
+  public function kNamedA() {}
+  public function kNamedB() {}
+  public function kClassA() {}
+  public function kClassB() {}
+  public function kSelfClass() {}
+  public function kParentClass() {}
+  public function kJoined() {}
+  public function kSuffix() {}
+  public function kArr() {}
+  public function kArrParent() {}
+  public function kArrSelf() {}
+  public function kArrNamed() {}
+  public function kArrClass() {}
+  public function kBoundQual() {}
+  public function kTwice() {}
+  public function kLaterA() {}
+  public function kLaterB() {}
+  public function kLaterX() {}
+  public function kArrPrio() {}
+
+}
+""",
+    str(MODULE / "src/Listen/Built.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class Built implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return static::build();
+  }
+
+}
+""",
+    str(MODULE / "src/Listen/KeyChild.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+class KeyChild extends Keys {
+  public function kUse() {}
+  public function kHereA() {}
+  public function kQualB() {}
+  public function kNamed() {}
+  public function kTwice() {}
+}
+""",
+    str(MODULE / "src/Listen/NotFound.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase;
+
+class NotFound extends HttpExceptionSubscriberBase {
+  protected function getHandledFormats() { return ['html']; }
+  public function on404($event) {}
+}
+""",
+    str(MODULE / "src/Listen/Attrs.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Drupal\my_module\Event;
+use Drupal\my_module\Event\OrderEvents;
+use Drupal\my_module\Event\PaidEvent;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: OrderEvents::PLACED, method: 'aClassMethod')]
+#[AsEventListener(event: 'my_module.named')]
+#[AsEventListener(event: 'my_module.other', method: 'aMissing')]
+class Attrs extends LocalEvents {
+
+  const OWN = 'my_module.own';
+
+  #[AsEventListener(event: OrderEvents::PLACED, priority: 3)]
+  public function aUse() {}
+
+  #[AsEventListener('my_module.named', null, 4)]
+  public function aNamed() {}
+
+  #[AsEventListener(event: PaidEvent::class)]
+  public function aClass() {}
+
+  #[AsEventListener]
+  public function aTyped(PaidEvent $event) {}
+
+  #[AsEventListener(event: self::OWN)]
+  public function aSelf() {}
+
+  #[AsEventListener(event: parent::READY)]
+  public function aParent() {}
+
+  #[AsEventListener(event: parent::class)]
+  public function aParentClass() {}
+
+  #[AsEventListener(event: LocalEvents::DONE)]
+  public function aHere() {}
+
+  #[AsEventListener(event: Sub\DeepEvents::DEEP)]
+  public function aQual() {}
+
+  #[AsEventListener(event: Event\OrderEvents::PAID)]
+  public function aBoundQual() {}
+
+  #[AsEventListenerish(event: 'my_module.no')]
+  public function aNo() {}
+
+  #[AsEventListener(event: 'my_module.' . 'x')]
+  public function aExpr() {}
+
+  public function aClassMethod() {}
+
+  public function onMyModuleNamed() {}
+
+}
+""",
+    str(MODULE / "src/Listen/Wiring.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Drupal\my_module\Event;
+use Drupal\my_module\Event\OrderEvents;
+use Drupal\my_module\Event\PaidEvent;
+use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+class Wiring extends LocalEvents {
+
+  const OWN = 'my_module.own';
+
+  const PRIO = 9;
+
+  protected EventDispatcherInterface $dispatcher;
+
+  protected PaidEvent $paid;
+
+  protected $assigned;
+
+  public function __construct(PaidEvent $p) {
+    $this->assigned = $p;
+  }
+
+  public function listen(EventDispatcherInterface $d, $name, $cb) {
+    $d->addListener(OrderEvents::PLACED, [$this, 'wUse'], self::PRIO);
+    $d->addListener(LocalEvents::DONE, [$this, 'wUse']);
+    $d->addListener(Sub\DeepEvents::DEEP, [$this, 'wUse']);
+    $d->addListener(\Drupal\my_module\Event\OrderEvents::PAID, [self::class, 'wSelf']);
+    $d->addListener(self::OWN, $this->wFirst(...));
+    $d->addListener(static::OWN, [Tagged::class, 'onFlow']);
+    $d->addListener(parent::READY, Tagged::onSingle(...));
+    $d->addListener('my_module.quoted', 'Drupal\my_module\Listen\Tagged::onDouble');
+    $d->addListener(PaidEvent::class, 'my_module_listen');
+    $d->addListener(self::class, function ($e) { return $e; });
+    $d->addListener(parent::class, fn($e) => $e);
+    $d->addListener($name, [$this, 'wUse']);
+    $d->addListener('my_module.cb', $cb);
+    $this->dispatcher->addListener(OrderEvents::PAID, [$this, 'wUse']);
+    \Drupal::service('event_dispatcher')->addListener(OrderEvents::PAID, [$this, 'wSelf']);
+    $d->addListener(Event\OrderEvents::PAID, [$this, 'wBound']);
+    $d->addListener(Missing::GONE, [$this, 'wUse']);
+    $d->addListenerLater(OrderEvents::PLACED, [$this, 'wUse']);
+    $d->addSubscriber(new Keys());
+    $d->addSubscriber($this);
+    $d->addSubscriber($cb);
+  }
+
+  public function tags($container, $def) {
+    $container->register('my_module.t1', Tagged::class)
+      ->addTag('kernel.event_listener', ['event' => OrderEvents::PLACED, 'method' => 'onConst']);
+    $container->register('my_module.t2', Tagged::class)->addTag('kernel.event_listener', ['even"""
+    r"""t' => LocalEvents::DONE, 'method' => 'onConst']);
+    (new Definition(Tagged::class))->addTag('kernel.event_listener', ['event' => 'my_module.def"""
+    r"""', 'method' => 'onFlow', 'priority' => self::PRIO]);
+    $container->getDefinition('my_module.tags')->addTag('kernel.event_listener', ['event' => 'm"""
+    r"""y_module.derived']);
+    $container->register('my_module.t3', Tagged::class)->addTag('kernel.event_listener', ['meth"""
+    r"""od' => 'onTyped']);
+    $container->register('my_module.t4', Tagged::class)->addTag('kernel.event_listener', ['even"""
+    r"""t' => '%my_module.param_event%', 'method' => 'onParam']);
+    $container->register('my_module.t5', Tagged::class)->addTag('kernel.event_listener', ['even"""
+    r"""t' => self::OWN, 'method' => 'onSingle']);
+    $container->register('my_module.t6', Tagged::class)->addTag('kernel.event_listener', ['even"""
+    r"""t' => PaidEvent::class, 'method' => 'onTyped']);
+    $container->register('my_module.t8', Tagged::class)->addTag('kernel.event_listener', ['even"""
+    r"""t' => Event\OrderEvents::PAID, 'method' => 'onConst']);
+    $container->register('my_module.t9', Tagged::class)->addTag('other.tag', ['event' => 'my_mo"""
+    r"""dule.no', 'method' => 'onFlow']);
+    $def->addTag('kernel.event_listener', ['event' => 'my_module.var', 'method' => 'onFlow']);
+    $container->register('my_module.t7', Tagged::class)->addTag('kernel.event_listener', ['even"""
+    r"""t' => $name, 'method' => 'onFlow']);
+  }
+
+  public function fire(EventDispatcherInterface $d, PaidEvent $typed, $e, $name) {
+    $d->dispatch($e, OrderEvents::PLACED);
+    $d->dispatch($e, LocalEvents::DONE);
+    $d->dispatch($e, Sub\DeepEvents::DEEP);
+    $d->dispatch($e, \Drupal\my_module\Event\OrderEvents::PAID);
+    $d->dispatch($e, self::OWN);
+    $d->dispatch($e, static::OWN);
+    $d->dispatch($e, parent::READY);
+    $d->dispatch($e, 'my_module.single');
+    $d->dispatch($e, "my_module.double");
+    $d->dispatch($e, PaidEvent::class);
+    $d->dispatch($e, self::class);
+    $d->dispatch($e, parent::class);
+    $d->dispatch($e, $name);
+    $d->dispatch(new PaidEvent());
+    $d->dispatch(new self());
+    $d->dispatch(new static());
+    $d->dispatch(new parent());
+    $local = new PaidEvent();
+    $d->dispatch($local);
+    $d->dispatch($typed);
+    $d->dispatch($this->paid);
+    $d->dispatch($this);
+    $d->dispatch('my_module.first', $e);
+    $d->dispatch($e, 'my_module.third', 'x');
+    $this->dispatcher->dispatch($e, OrderEvents::PAID);
+    \Drupal::service('event_dispatcher')->dispatch($e, OrderEvents::PAID);
+    $d->dispatch($e, Event\OrderEvents::PAID);
+    $d->dispatch($this->assigned);
+    $d->dispatch(new PaidEvent('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"""
+    r"""xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"""
+    r"""xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'), Eve"""
+    r"""nt\OrderEvents::PLACED);
+    $d->dispatch(new PaidEvent('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"""
+    r"""xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"""
+    r"""xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'), Su"""
+    r"""b\DeepEvents::DEEP);
+    $d->dispatch($d->dispatch($e, 'my_module.inner'), 'my_module.outer');
+    dispatch($e, OrderEvents::PLACED);
+    Helper::dispatch($e, OrderEvents::PLACED);
+    $d->dispatch();
+    $d->dispatch(
+      // the event object
+      $e,
+      OrderEvents::PLACED
+    );
+  }
+
+  public function three(EventDispatcherInterface $d) {
+    $d->addListener(OrderEvents::PAID, [$this, 'wThree']);
+    $d->addListener(LocalEvents::READY, [$this, 'wThree']);
+    $d->addListener(Sub\DeepEvents::DEEP, [$this, 'wThree']);
+  }
+
+  public function anon(EventDispatcherInterface $d) {
+    return new class($d, function ($x) { return $x; }, ['a;b' => fn() => 1]) {
+      public function go($d, $e) {
+        $d->dispatch($e, OrderEvents::PAID);
+        $d->dispatch($e, self::OWN);
+        $d->addListener(OrderEvents::PAID, 'my_module_listen');
+        $d->addListener(OrderEvents::PAID, [$this, 'on']);
+        $d->addSubscriber($this);
+      }
+    };
+  }
+
+  public function wUse() {}
+  public function wSelf() {}
+  public function wFirst() {}
+  public function wThree() {}
+  public function wBound() {}
+
+}
+""",
+    str(MODULE / "src/Listen/ParentTrait.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+trait ParentTrait {
+
+  public static function getSubscribedEvents() {
+    $events = [
+      parent::READY => 'tKey',
+      parent::class => 'tKeyClass',
+    ];
+    $events[parent::DONE][] = ['tArr'];
+    $events[parent::class][] = ['tArrClass'];
+    return $events;
+  }
+
+  #[AsEventListener(event: parent::READY)]
+  public function tAttr() {}
+
+  #[AsEventListener(event: parent::class)]
+  public function tAttrClass() {}
+
+  public function tWire($d, $e, $container) {
+    $d->addListener(parent::READY, [$this, 'tAttr']);
+    $d->addListener(parent::class, [$this, 'tAttr']);
+    $container->register('my_module.pt1', self::class)->addTag('kernel.event_listener', ['event"""
+    r"""' => parent::READY, 'method' => 'tAttr']);
+    $container->register('my_module.pt2', self::class)->addTag('kernel.event_listener', ['event"""
+    r"""' => parent::class, 'method' => 'tAttr']);
+    $d->dispatch($e, parent::READY);
+    $d->dispatch($this);
+  }
+
+}
+""",
+    str(MODULE / "src/Listen/Lone.php"): r"""<?php
+
+namespace Drupal\my_module\Listen;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: parent::class, method: 'go')]
+class Lone {
+  public function go() {}
+}
+""",
+    str(MODULE / "my_module.module"): r"""<?php
+
+use Drupal\my_module\Event\OrderEvents;
+
+function my_module_wire($d, $e) {
+  $d->addListener(OrderEvents::PLACED, 'my_module_listen');
+  $d->dispatch($e, OrderEvents::PLACED);
+}
+
+function my_module_listen() {}
+
+class MyModuleHelper {
+  public function go($d, $e) {
+    $d->dispatch($e, OrderEvents::PAID);
+    $d->addListener(OrderEvents::PAID, [$this, 'on']);
+  }
+  public function on() {}
+}
+""",
+}
+
+# Every result EVENT_FORMS gives, (file, line, kind, from, to), each read against its line.
+_EVENT_FORM_RESULTS = [
+    ("Attrs.php", 10, "subscribed_by", "my_module.placed", "Listen\\Attrs::aClassMethod"),
+    ("Attrs.php", 11, "subscribed_by", "my_module.named", "Listen\\Attrs::onMyModuleNamed"),
+    ("Attrs.php", 12, "subscribed_by", "my_module.other", "Listen\\Attrs::aMissing"),
+    ("Attrs.php", 17, "subscribed_by", "my_module.placed", "Listen\\Attrs::aUse"),
+    ("Attrs.php", 20, "subscribed_by", "my_module.named", "Listen\\Attrs::aNamed"),
+    ("Attrs.php", 23, "subscribed_by", "Event\\PaidEvent", "Listen\\Attrs::aClass"),
+    ("Attrs.php", 26, "subscribed_by", "Event\\PaidEvent", "Listen\\Attrs::aTyped"),
+    ("Attrs.php", 29, "subscribed_by", "my_module.own", "Listen\\Attrs::aSelf"),
+    ("Attrs.php", 32, "subscribed_by", "my_module.ready", "Listen\\Attrs::aParent"),
+    ("Attrs.php", 35, "subscribed_by", "Listen\\LocalEvents", "Listen\\Attrs::aParentClass"),
+    ("Attrs.php", 38, "subscribed_by", "my_module.done", "Listen\\Attrs::aHere"),
+    ("Attrs.php", 41, "subscribed_by", "my_module.deep", "Listen\\Attrs::aQual"),
+    ("Attrs.php", 44, "subscribed_by", "my_module.paid", "Listen\\Attrs::aBoundQual"),
+    (
+        "Attrs.php",
+        50,
+        "registers_listener_at_runtime",
+        "Listen\\Attrs::aExpr",
+        "Listen\\Attrs::aExpr|'my_module.'.'x'",
+    ),
+    (
+        "Built.php",
+        10,
+        "registers_listener_at_runtime",
+        "Listen\\Built::getSubscribedEvents",
+        "Listen\\Built::getSubscribedEvents|static::build()",
+    ),
+    ("KeyChild.php", 5, "subscribed_by", "Event\\PaidEvent", "Listen\\Keys::kArrClass"),
+    ("KeyChild.php", 5, "subscribed_by", "Event\\PaidEvent", "Listen\\Keys::kClassA"),
+    ("KeyChild.php", 5, "subscribed_by", "Event\\PaidEvent", "Listen\\Keys::kClassB"),
+    ("KeyChild.php", 5, "subscribed_by", "KernelEvents::REQUEST", "Listen\\KeyChild::kNamed"),
+    ("KeyChild.php", 5, "subscribed_by", "Listen\\Keys", "Listen\\Keys::kSelfClass"),
+    ("KeyChild.php", 5, "subscribed_by", "Listen\\LocalEvents", "Listen\\Keys::kParentClass"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.arr", "Listen\\Keys::kArrNamed"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.deep", "Listen\\KeyChild::kQualB"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.deep", "Listen\\KeyChild::kTwice"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.deep", "Listen\\Keys::kLaterB"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.deep", "Listen\\Keys::kLaterX"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.deep", "Listen\\Keys::kQualA"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.derived_const", "Listen\\Keys::kListA"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.derived_const", "Listen\\Keys::kListB"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.done", "Listen\\KeyChild::kHereA"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.done", "Listen\\Keys::kHereB"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.named", "Listen\\Keys::kNamedA"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.named", "Listen\\Keys::kNamedB"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.own", "Listen\\Keys::kArrSelf"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.own", "Listen\\Keys::kSelf"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.own", "Listen\\Keys::kStaticA"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.own", "Listen\\Keys::kStaticB"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.paid", "Listen\\Keys::kArrPrio"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.paid", "Listen\\Keys::kBoundQual"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.paid", "Listen\\Keys::kFull"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.paid", "Listen\\Keys::kPrio"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.placed", "Listen\\KeyChild::kTwice"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.placed", "Listen\\KeyChild::kUse"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.placed", "Listen\\Keys::kArr"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.placed", "Listen\\Keys::kLaterA"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.placed", "Listen\\Keys::kLaterX"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.ready", "Listen\\Keys::kArrParent"),
+    ("KeyChild.php", 5, "subscribed_by", "my_module.ready", "Listen\\Keys::kParent"),
+    ("Keys.php", 16, "subscribed_by", "my_module.placed", "Listen\\Keys::kUse"),
+    ("Keys.php", 17, "subscribed_by", "my_module.paid", "Listen\\Keys::kPrio"),
+    ("Keys.php", 18, "subscribed_by", "my_module.derived_const", "Listen\\Keys::kListA"),
+    ("Keys.php", 18, "subscribed_by", "my_module.derived_const", "Listen\\Keys::kListB"),
+    ("Keys.php", 19, "subscribed_by", "my_module.own", "Listen\\Keys::kSelf"),
+    ("Keys.php", 20, "subscribed_by", "my_module.own", "Listen\\Keys::kStaticA"),
+    ("Keys.php", 20, "subscribed_by", "my_module.own", "Listen\\Keys::kStaticB"),
+    ("Keys.php", 21, "subscribed_by", "my_module.ready", "Listen\\Keys::kParent"),
+    ("Keys.php", 22, "subscribed_by", "my_module.done", "Listen\\Keys::kHereA"),
+    ("Keys.php", 22, "subscribed_by", "my_module.done", "Listen\\Keys::kHereB"),
+    ("Keys.php", 23, "subscribed_by", "my_module.deep", "Listen\\Keys::kQualA"),
+    ("Keys.php", 23, "subscribed_by", "my_module.deep", "Listen\\Keys::kQualB"),
+    ("Keys.php", 24, "subscribed_by", "my_module.paid", "Listen\\Keys::kFull"),
+    ("Keys.php", 25, "subscribed_by", "KernelEvents::REQUEST", "Listen\\Keys::kNamed"),
+    ("Keys.php", 26, "subscribed_by", "my_module.named", "Listen\\Keys::kNamedA"),
+    ("Keys.php", 26, "subscribed_by", "my_module.named", "Listen\\Keys::kNamedB"),
+    ("Keys.php", 27, "subscribed_by", "Event\\PaidEvent", "Listen\\Keys::kClassA"),
+    ("Keys.php", 27, "subscribed_by", "Event\\PaidEvent", "Listen\\Keys::kClassB"),
+    ("Keys.php", 28, "subscribed_by", "Listen\\Keys", "Listen\\Keys::kSelfClass"),
+    ("Keys.php", 29, "subscribed_by", "Listen\\LocalEvents", "Listen\\Keys::kParentClass"),
+    ("Keys.php", 30, "subscribed_by", "my_module.paid", "Listen\\Keys::kBoundQual"),
+    ("Keys.php", 31, "subscribed_by", "my_module.placed", "Listen\\Keys::kTwice"),
+    ("Keys.php", 32, "subscribed_by", "my_module.deep", "Listen\\Keys::kTwice"),
+    ("Keys.php", 33, "subscribed_by", "my_module.placed", "Listen\\Keys::kLaterA"),
+    ("Keys.php", 33, "subscribed_by", "my_module.placed", "Listen\\Keys::kLaterX"),
+    ("Keys.php", 34, "subscribed_by", "my_module.deep", "Listen\\Keys::kLaterB"),
+    ("Keys.php", 34, "subscribed_by", "my_module.deep", "Listen\\Keys::kLaterX"),
+    (
+        "Keys.php",
+        35,
+        "registers_listener_at_runtime",
+        "Listen\\Keys::getSubscribedEvents",
+        "Listen\\Keys::getSubscribedEvents|'my_module.'.'joined'",
+    ),
+    (
+        "Keys.php",
+        36,
+        "registers_listener_at_runtime",
+        "Listen\\Keys::getSubscribedEvents",
+        "Listen\\Keys::getSubscribedEvents|OrderEvents::PLACED.'.x'",
+    ),
+    ("Keys.php", 38, "subscribed_by", "my_module.placed", "Listen\\Keys::kArr"),
+    ("Keys.php", 39, "subscribed_by", "my_module.ready", "Listen\\Keys::kArrParent"),
+    ("Keys.php", 40, "subscribed_by", "my_module.own", "Listen\\Keys::kArrSelf"),
+    ("Keys.php", 41, "subscribed_by", "my_module.arr", "Listen\\Keys::kArrNamed"),
+    ("Keys.php", 42, "subscribed_by", "Event\\PaidEvent", "Listen\\Keys::kArrClass"),
+    (
+        "Keys.php",
+        43,
+        "registers_listener_at_runtime",
+        "Listen\\Keys::getSubscribedEvents",
+        "Listen\\Keys::getSubscribedEvents|$name",
+    ),
+    ("Keys.php", 44, "subscribed_by", "my_module.paid", "Listen\\Keys::kArrPrio"),
+    ("Lone.php", 7, "registers_listener_at_runtime", "Listen\\Lone", "Listen\\Lone|parent::class"),
+    ("NotFound.php", 9, "subscribed_by", "KernelEvents::EXCEPTION", "Listen\\NotFound::on404"),
+    (
+        "ParentTrait.php",
+        11,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::getSubscribedEvents",
+        "Listen\\ParentTrait::getSubscribedEvents|parent::READY",
+    ),
+    (
+        "ParentTrait.php",
+        12,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::getSubscribedEvents",
+        "Listen\\ParentTrait::getSubscribedEvents|parent::class",
+    ),
+    (
+        "ParentTrait.php",
+        14,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::getSubscribedEvents",
+        "Listen\\ParentTrait::getSubscribedEvents|parent::DONE",
+    ),
+    (
+        "ParentTrait.php",
+        15,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::getSubscribedEvents",
+        "Listen\\ParentTrait::getSubscribedEvents|parent::class",
+    ),
+    (
+        "ParentTrait.php",
+        19,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::tAttr",
+        "Listen\\ParentTrait::tAttr|parent::READY",
+    ),
+    (
+        "ParentTrait.php",
+        22,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::tAttrClass",
+        "Listen\\ParentTrait::tAttrClass|parent::class",
+    ),
+    (
+        "ParentTrait.php",
+        26,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::tWire",
+        "Listen\\ParentTrait::tWire|parent::READY~v:d",
+    ),
+    (
+        "ParentTrait.php",
+        27,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::tWire",
+        "Listen\\ParentTrait::tWire|parent::class~v:d",
+    ),
+    (
+        "ParentTrait.php",
+        28,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::tWire",
+        "Listen\\ParentTrait::tWire|parent::READY",
+    ),
+    (
+        "ParentTrait.php",
+        29,
+        "registers_listener_at_runtime",
+        "Listen\\ParentTrait::tWire",
+        "Listen\\ParentTrait::tWire|parent::class",
+    ),
+    (
+        "ParentTrait.php",
+        30,
+        "dispatched_by",
+        "Listen\\ParentTrait::tWire|parent::READY~v:d",
+        "Listen\\ParentTrait::tWire",
+    ),
+    (
+        "ParentTrait.php",
+        31,
+        "dispatched_by",
+        "Listen\\ParentTrait::tWire|$this~v:d",
+        "Listen\\ParentTrait::tWire",
+    ),
+    ("Wiring.php", 28, "subscribed_by", "my_module.placed", "Listen\\Wiring::wUse"),
+    ("Wiring.php", 29, "subscribed_by", "my_module.done", "Listen\\Wiring::wUse"),
+    ("Wiring.php", 30, "subscribed_by", "my_module.deep", "Listen\\Wiring::wUse"),
+    ("Wiring.php", 31, "subscribed_by", "my_module.paid", "Listen\\Wiring::wSelf"),
+    ("Wiring.php", 32, "subscribed_by", "my_module.own", "Listen\\Wiring::wFirst"),
+    ("Wiring.php", 33, "subscribed_by", "my_module.own", "Listen\\Tagged::onFlow"),
+    ("Wiring.php", 34, "subscribed_by", "my_module.ready", "Listen\\Tagged::onSingle"),
+    ("Wiring.php", 35, "subscribed_by", "my_module.quoted", "Listen\\Tagged::onDouble"),
+    ("Wiring.php", 36, "subscribed_by_function", "Event\\PaidEvent", "my_module_listen"),
+    (
+        "Wiring.php",
+        37,
+        "subscribed_by",
+        "Listen\\Wiring",
+        "Listen\\Wiring::listen|function($e){return$e;}",
+    ),
+    ("Wiring.php", 38, "subscribed_by", "Listen\\LocalEvents", "Listen\\Wiring::listen|fn($e)=>$e"),
+    (
+        "Wiring.php",
+        39,
+        "registers_listener_at_runtime",
+        "Listen\\Wiring::listen",
+        "Listen\\Wiring::listen|$name~v:d",
+    ),
+    ("Wiring.php", 40, "subscribed_by", "my_module.cb", "Listen\\Wiring::listen|$cb"),
+    ("Wiring.php", 41, "subscribed_by", "my_module.paid", "Listen\\Wiring::wUse"),
+    ("Wiring.php", 42, "subscribed_by", "my_module.paid", "Listen\\Wiring::wSelf"),
+    ("Wiring.php", 43, "subscribed_by", "my_module.paid", "Listen\\Wiring::wBound"),
+    ("Wiring.php", 44, "subscribed_by", "Listen\\Missing::GONE", "Listen\\Wiring::wUse"),
+    ("Wiring.php", 46, "registers_subscriber", "Listen\\Wiring::listen", "Listen\\Keys"),
+    ("Wiring.php", 47, "registers_subscriber", "Listen\\Wiring::listen", "Listen\\Wiring"),
+    (
+        "Wiring.php",
+        48,
+        "registers_listener_at_runtime",
+        "Listen\\Wiring::listen",
+        "Listen\\Wiring::listen|$cb~v:d",
+    ),
+    ("Wiring.php", 52, "subscribed_by", "my_module.placed", "Listen\\Tagged::onConst"),
+    ("Wiring.php", 54, "subscribed_by", "my_module.done", "Listen\\Tagged::onConst"),
+    ("Wiring.php", 55, "subscribed_by", "my_module.def", "Listen\\Tagged::onFlow"),
+    ("Wiring.php", 56, "subscribed_by", "my_module.derived", "Listen\\Tagged::onMyModuleDerived"),
+    ("Wiring.php", 57, "subscribed_by", "Event\\PaidEvent", "Listen\\Tagged::onTyped"),
+    ("Wiring.php", 58, "subscribed_by", "my_module.from_param", "Listen\\Tagged::onParam"),
+    ("Wiring.php", 59, "subscribed_by", "my_module.own", "Listen\\Tagged::onSingle"),
+    ("Wiring.php", 60, "subscribed_by", "Event\\PaidEvent", "Listen\\Tagged::onTyped"),
+    ("Wiring.php", 61, "subscribed_by", "my_module.paid", "Listen\\Tagged::onConst"),
+    ("Wiring.php", 63, "subscribed_by", "my_module.var", "Listen\\Wiring::tags|$def"),
+    (
+        "Wiring.php",
+        64,
+        "registers_listener_at_runtime",
+        "Listen\\Wiring::tags",
+        "Listen\\Wiring::tags|$name",
+    ),
+    ("Wiring.php", 68, "dispatched_by", "my_module.placed", "Listen\\Wiring::fire"),
+    ("Wiring.php", 69, "dispatched_by", "my_module.done", "Listen\\Wiring::fire"),
+    ("Wiring.php", 70, "dispatched_by", "my_module.deep", "Listen\\Wiring::fire"),
+    ("Wiring.php", 71, "dispatched_by", "my_module.paid", "Listen\\Wiring::fire"),
+    ("Wiring.php", 72, "dispatched_by", "my_module.own", "Listen\\Wiring::fire"),
+    ("Wiring.php", 73, "dispatched_by", "my_module.own", "Listen\\Wiring::fire"),
+    ("Wiring.php", 74, "dispatched_by", "my_module.ready", "Listen\\Wiring::fire"),
+    ("Wiring.php", 75, "dispatched_by", "my_module.single", "Listen\\Wiring::fire"),
+    ("Wiring.php", 76, "dispatched_by", "my_module.double", "Listen\\Wiring::fire"),
+    ("Wiring.php", 77, "dispatched_by", "Event\\PaidEvent", "Listen\\Wiring::fire"),
+    ("Wiring.php", 78, "dispatched_by", "Listen\\Wiring", "Listen\\Wiring::fire"),
+    ("Wiring.php", 79, "dispatched_by", "Listen\\LocalEvents", "Listen\\Wiring::fire"),
+    ("Wiring.php", 80, "dispatched_by", "Listen\\Wiring::fire|$name~v:d", "Listen\\Wiring::fire"),
+    ("Wiring.php", 81, "dispatched_by", "Event\\PaidEvent", "Listen\\Wiring::fire"),
+    ("Wiring.php", 82, "dispatched_by", "Listen\\Wiring", "Listen\\Wiring::fire"),
+    ("Wiring.php", 83, "dispatched_by", "Listen\\Wiring", "Listen\\Wiring::fire"),
+    ("Wiring.php", 84, "dispatched_by", "Listen\\LocalEvents", "Listen\\Wiring::fire"),
+    ("Wiring.php", 86, "dispatched_by", "Event\\PaidEvent", "Listen\\Wiring::fire"),
+    ("Wiring.php", 87, "dispatched_by", "Event\\PaidEvent", "Listen\\Wiring::fire"),
+    ("Wiring.php", 88, "dispatched_by", "Event\\PaidEvent", "Listen\\Wiring::fire"),
+    ("Wiring.php", 89, "dispatched_by", "Listen\\Wiring", "Listen\\Wiring::fire"),
+    ("Wiring.php", 90, "dispatched_by", "my_module.first", "Listen\\Wiring::fire"),
+    (
+        "Wiring.php",
+        91,
+        "dispatched_by",
+        "Listen\\Wiring::fire|(unread)~v:d",
+        "Listen\\Wiring::fire",
+    ),
+    ("Wiring.php", 92, "dispatched_by", "my_module.paid", "Listen\\Wiring::fire"),
+    ("Wiring.php", 93, "dispatched_by", "my_module.paid", "Listen\\Wiring::fire"),
+    ("Wiring.php", 94, "dispatched_by", "my_module.paid", "Listen\\Wiring::fire"),
+    ("Wiring.php", 95, "dispatched_by", "Event\\PaidEvent", "Listen\\Wiring::fire"),
+    ("Wiring.php", 96, "dispatched_by", "my_module.placed", "Listen\\Wiring::fire"),
+    ("Wiring.php", 97, "dispatched_by", "my_module.deep", "Listen\\Wiring::fire"),
+    ("Wiring.php", 98, "dispatched_by", "my_module.inner", "Listen\\Wiring::fire"),
+    ("Wiring.php", 98, "dispatched_by", "my_module.outer", "Listen\\Wiring::fire"),
+    ("Wiring.php", 102, "dispatched_by", "my_module.placed", "Listen\\Wiring::fire"),
+    ("Wiring.php", 110, "subscribed_by", "my_module.paid", "Listen\\Wiring::wThree"),
+    ("Wiring.php", 111, "subscribed_by", "my_module.ready", "Listen\\Wiring::wThree"),
+    ("Wiring.php", 112, "subscribed_by", "my_module.deep", "Listen\\Wiring::wThree"),
+    ("Wiring.php", 118, "dispatched_by", "my_module.paid", "Listen\\Wiring::anon"),
+    (
+        "Wiring.php",
+        119,
+        "dispatched_by",
+        "Listen\\Wiring::anon|self::OWN~x",
+        "Listen\\Wiring::anon",
+    ),
+    ("Wiring.php", 120, "subscribed_by_function", "my_module.paid", "my_module_listen"),
+    ("Wiring.php", 121, "subscribed_by", "my_module.paid", "Listen\\Wiring::anon|[$this,'on']"),
+    (
+        "Wiring.php",
+        122,
+        "registers_listener_at_runtime",
+        "Listen\\Wiring::anon",
+        "Listen\\Wiring::anon|$this~x",
+    ),
+    ("my_module.module", 6, "subscribed_by_function", "my_module.placed", "my_module_listen"),
+    ("my_module.module", 7, "dispatched_by_function", "my_module.placed", "my_module_wire"),
+    ("my_module.module", 14, "dispatched_by", "my_module.paid", "MyModuleHelper::go"),
+    ("my_module.module", 15, "subscribed_by", "my_module.paid", "MyModuleHelper::on"),
+    ("my_module.services.yml", 7, "subscribed_by", "my_module.flow", "Listen\\Tagged::onFlow"),
+    ("my_module.services.yml", 8, "subscribed_by", "my_module.single", "Listen\\Tagged::onSingle"),
+    ("my_module.services.yml", 9, "subscribed_by", "my_module.double", "Listen\\Tagged::onDouble"),
+    (
+        "my_module.services.yml",
+        10,
+        "subscribed_by",
+        "my_module/slashed",
+        "Listen\\Tagged::onSlashed",
+    ),
+    (
+        "my_module.services.yml",
+        11,
+        "registers_listener_at_runtime",
+        "my_module.tags",
+        'my_module.tags|"my_module\\tTabbed"',
+    ),
+    (
+        "my_module.services.yml",
+        12,
+        "subscribed_by",
+        "KernelEvents::REQUEST",
+        "Listen\\Tagged::onRequest",
+    ),
+    ("my_module.services.yml", 13, "subscribed_by", "my_module.placed", "Listen\\Tagged::onConst"),
+    (
+        "my_module.services.yml",
+        14,
+        "subscribed_by",
+        "my_module.from_param",
+        "Listen\\Tagged::onParam",
+    ),
+    (
+        "my_module.services.yml",
+        15,
+        "subscribed_by",
+        "my_module.derived",
+        "Listen\\Tagged::onMyModuleDerived",
+    ),
+    ("my_module.services.yml", 16, "subscribed_by", "Event\\PaidEvent", "Listen\\Tagged::onTyped"),
+    ("my_module.services.yml", 17, "subscribed_by", "my_module.block", "Listen\\Tagged::onBlock"),
+    (
+        "my_module.services.yml",
+        20,
+        "subscribed_by",
+        "my_module.dash_alone",
+        "Listen\\Tagged::onDashAlone",
+    ),
+    (
+        "my_module.services.yml",
+        24,
+        "registers_listener_at_runtime",
+        "my_module.tags",
+        'my_module.tags|"my_module.wrapped name"',
+    ),
+    (
+        "my_module.services.yml",
+        26,
+        "registers_listener_at_runtime",
+        "my_module.tags",
+        "my_module.tags|'my_module.wrapped single'",
+    ),
+    (
+        "my_module.services.yml",
+        28,
+        "registers_listener_at_runtime",
+        "my_module.tags",
+        "my_module.tags|my_module.plain wrapped",
+    ),
+    (
+        "my_module.services.yml",
+        35,
+        "subscribed_by",
+        "my_module.inline_a",
+        "Listen\\Tagged::onInlineA",
+    ),
+    (
+        "my_module.services.yml",
+        35,
+        "subscribed_by",
+        "my_module.inline_b",
+        "Listen\\Tagged::onInlineB",
+    ),
+]
+
+
+def _event_results(document: dict[str, Any]) -> list[tuple[str, int, str, str, str]]:
+    """Each place of each listener, runtime registration and dispatch edge, as (file name, line,
+    kind, from, to), the module's prefixes cut, sorted; one edge at two places counts twice."""
+    kinds = (*_LISTENER_KINDS, "dispatched_by", "dispatched_by_function")
+    return sorted(
+        (
+            place["file"].rsplit("/", 1)[-1],
+            place["line"],
+            e["kind"],
+            _short(e["from"]),
+            _short(e["to"]),
+        )
+        for e in document["edges"]
+        if e["kind"] in kinds
+        for place in e["locations"]
+    )
+
+
+def test_every_registration_and_dispatch_form_gives_one_result_at_its_line(tmp_path: Path) -> None:
+    """A module that writes every registration and dispatch form the event rules read: keys, lists
+    of lists and $events[...] keys, inherited keys, attributes on a method and on a class, tags in
+    every YAML form, addListener, addSubscriber, addTag and dispatch in every form, an anonymous
+    class whose arguments hold a closure, a trait, a class with no parent and a class in a .module
+    file. Each registration and dispatch gives exactly one result at its line, an edge or a runtime
+    mark, and no other result exists: parent::NAME in a class that extends gives no extra mark,
+    parent::class in a trait or a class with no parent is marked, one callable on one dispatcher
+    for three events keeps three edges, A\\B::NAME with A bound gives no edge of the file's own
+    namespace, and a tag event that goes on past its line is marked, never cut. Look-alikes give
+    nothing."""
+    _plant(tmp_path, EVENT_FORMS)
+    document, report = _map(tmp_path)
+    assert _event_results(document) == _EVENT_FORM_RESULTS
+    assert report.skipped == ()

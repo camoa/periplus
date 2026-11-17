@@ -149,13 +149,15 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   a list of lists its own, holding the listener's priority as written in the edge attribute
 #   priority, 0 when none is written, as Symfony runs it, or the integer a mapped file declares a
 #   constant priority with; X::NAME no use binds is the constant of the file's namespace and
-#   parent::NAME the one on the class's written parent; the same edge from each AsEventListener
+#   parent::NAME the one on the class's written parent, and parent::NAME or parent::class with no
+#   written parent, in any form, a runtime registration; the same edge from each AsEventListener
 #   attribute on a method or a class and each kernel.event_listener tag in a services file, its
 #   event a constant, a name, a class, X::class, the core constant the table core_event_names gives
 #   for a core name, a container parameter a mapped parameters block gives a value, or the method's
 #   parameter type, its method written, or derived as Symfony derives it from the event's text,
 #   or a drupal.runtime_listener marked as an unknown boundary when no mapped file gives that text
-#   (event/event_listener.yaml), each such method holding listens_by_attribute, marked
+#   (event/event_listener.yaml), a tag event written past its line a runtime registration, each
+#   such method holding listens_by_attribute, marked
 #   [AsEventListener, not wired by core]; the same edge from a key written as a name or with its
 #   namespace, ->addListener(), ->addTag('kernel.event_listener', ...) in PHP and the keys a
 #   subclass inherits from a mapped base or from a core base the rutter holds as data, a function
@@ -981,9 +983,12 @@ files:
       # The same body, or the body of an anonymous class; scope is function <name> or new class, so
       # the spans around a match, outermost first, show whether an anonymous class stands between
       # it and the named function or method that creates the class. Read by the event rules, which
-      # own a call in an anonymous class by that function or method.
+      # own a call in an anonymous class by that function or method. The parentheses after the name
+      # or after new class are read balanced, four levels deep, past quoted text on one line, so a
+      # closure or an array among an anonymous class's arguments, with its own braces and
+      # semicolons, is not taken for its body.
       - name: function_scope
-        open: '\b(?<scope>function\s+\w+(?=\s*\([^)]*\))|new\s+class\b)(?:\s*\([^)]*\))?[^{;]*'
+        open: '\b(?<scope>function\s+\w+(?=\s*\([^)]*\))|new\s+class\b)(?:\s*\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"])*\))*\))*\))*\))?[^{;]*'
         balance: ['{', '}']
       # The type of a named function's or method's first parameter, from after its opening
       # parenthesis to the $ of the parameter, the comma or the closing parenthesis; method is the

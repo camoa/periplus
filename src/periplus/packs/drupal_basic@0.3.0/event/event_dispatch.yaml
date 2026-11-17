@@ -113,6 +113,8 @@ rules:
     # The event as a name, from the second argument or the first; each form one capture.
     r_ev: {template: '§K{ek}{ek2}§T{this_class}§O{eo}{eo2}‡{anon}', normalize: [{replace: '§O[^§‡]*‡.+$', with: '§O'}, {replace: '‡$', with: ''}, {replace: '§T[^§]*§O$', with: ''}, {replace: '^§K', with: ''}, {replace: '§O(?:self|static)', with: ''}, {replace: '^§T', with: '@'}, {replace: '^(?![\s\S]*::[A-Z])[\s\S]*$', with: ''}]}
     h_ev: {template: '{ek}{ek2}', normalize: [{replace: '^\\.*$', with: ''}]}
+    # The event as the file's own namespace reads it, so a bound call's marker names no other call.
+    hk: {template: '§{here_ns}{h_ev}'}
     ec_all: {template: '{ec}{ec2}‡{anon}', normalize: [{replace: '^(?:self|static)‡.+$', with: ''}, {replace: '‡[\s\S]*$', with: ''}]}
     cls: {template: '§E{ec}{ec2}§T{this_class}', normalize: [{replace: '^§E(?:self|static)§T', with: '\'}, {replace: '§T[\s\S]*$', with: ''}, {replace: '^§E', with: ''}]}
     en_all: {template: '{en}{eq}{en2}{eq2}'}
@@ -163,7 +165,7 @@ rules:
   id: {template: '{r_ev}|disp~{recv}|{owner}|{key}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
   emits:
   - {edge: {kind: use_names_event, from: this_node, to: {template: '{r_ev}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '::', types: [drupal.event_text]}}}
-  - {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{recv}|{owner}|{key}', type: drupal.event_use}}}
+  - {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{hk}|{recv}|{owner}|{key}', type: drupal.event_use}}}
   confidence: inferred
 
 # A\B::NAME, A through the file's use statements.
@@ -186,7 +188,7 @@ rules:
   id: {template: '{r_ev}|disp~{recv}|{owner}|{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '\'}
   emits:
   - {edge: {kind: use_names_event, from: this_node, to: {template: '{r_ev}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '\', types: [drupal.event_text]}}}
-  - {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{recv}|{owner}|{key}', type: drupal.event_use}}}
+  - {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{hk}|{recv}|{owner}|{key}', type: drupal.event_use}}}
   confidence: inferred
 
 # X::NAME or A\B::NAME as the constant of the file's own namespace, which the map rules keep only
@@ -373,9 +375,9 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::[^|]*\|disp_here~(?<recv>[^|]*)\|(?<owner>php\.method::[^|]+)\|(?<rest>.*)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<hev>[^|]*)\|disp_here~(?<recv>[^|]*)\|(?<owner>php\.method::[^|]+)\|(?<rest>.*)$'}]
     follow: *named_event
-    unless: &bound [[{node: 'drupal.event_use::bound|{recv}|{owner}|{rest}'}]]
+    unless: &bound [[{node: 'drupal.event_use::bound|§{hev}|{recv}|{owner}|{rest}'}]]
   emits: [*by_unknown, *by_dispatcher]
   confidence: inferred
 
@@ -383,7 +385,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::[^|]*\|disp_here~(?<recv>[^|]*)\|(?<owner>php\.function::[^|]+)\|(?<rest>.*)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<hev>[^|]*)\|disp_here~(?<recv>[^|]*)\|(?<owner>php\.function::[^|]+)\|(?<rest>.*)$'}]
     follow: *named_event
     unless: *bound
   emits: [*fn_unknown, *fn_dispatcher]
@@ -613,7 +615,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<child>[^|]+)::(?<form>class|c:[A-Z][A-Z0-9_]*)\|disp_parent~(?<recv>[^|]*)\|(?<owner>php\.method::(?<holder>[^|]+))\|(?<rest>.*)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<child>[^|]+)::(?:c:)?(?<form>class|[A-Z][A-Z0-9_]*)\|disp_parent~(?<recv>[^|]*)\|(?<owner>php\.method::(?<holder>[^|]+))\|(?<rest>.*)$'}]
     follow: *runtime_event
     unless: [[{node: 'php.type::{child}'}, {edge: inherits}]]
   emits:
