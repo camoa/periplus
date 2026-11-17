@@ -4,7 +4,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # into one internal drupal.event_use site, reg|<owner>|<listener>, with three edges the map rules
 # below read: use_has_priority, a self-link holding the priority as written, 0 when none is
 # written; use_names_event, to the event; and use_names_class or use_names_service, to the class
-# or service whose method listens. The owner is the method or function around the call.
+# or service whose method listens. The owner is the method around the call in a class under src,
+# or the function around it in a module, install, inc, theme or profile file; a call in a plain
+# PHP file outside src, such as a test outside tests/src, gives nothing, as a subscriber there does.
 #
 # The forms:
 # - ->addListener(EVENT, CALLABLE, PRIORITY) on any object: the event a class constant, X::NAME
