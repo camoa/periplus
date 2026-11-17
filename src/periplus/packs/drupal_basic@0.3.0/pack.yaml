@@ -82,9 +82,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   settings switch protection on for, as a config_names_form edge, and each they name and leave
 #   off, as a config_names_form_off edge; each config file's top-level status, as the attribute
 #   status; each #validate or #submit handler a method or function adds with [] =, with
-#   array_unshift or as an item of a list written whole, as a registers_form_handler edge to the
-#   function or method it names, a function so added giving no hook by its name unless the map
-#   names that hook otherwise; with honeypot's protect_all_forms true, a config_names_form edge to
+#   array_unshift or as an item of a list written whole with [...] or array(...), as a
+#   registers_form_handler edge to the function or method it names, a class imported under another
+#   name followed to its class, a function so added giving no hook by its name unless the map names
+#   that hook otherwise, and a handler held in a variable as an edge to a
+#   drupal.runtime_form_handler node marked resolution runtime; with honeypot's protect_all_forms true, a config_names_form edge to
 #   each form id a mapped class returns that the file leaves protected, and the setting as the
 #   attribute protect_all_forms; each hook
 #   named <extension>_<type>_<operation>,
@@ -806,6 +808,11 @@ files:
           normalize:
           - {replace: '^Drupal\\tests/', with: 'Drupal\Tests\'}
           - {replace: '/', with: '\'}
+        # The file's path from the project folder, read by form/form_handler.yaml to join a
+        # handler to the imports of its own file.
+        file_path:
+          pattern: '^(?<path>.+)$'
+          template: '{path}'
         # The namespace of that class, with a backslash after it: Drupal\<module>\A\ for
         # <module>/src/A/B.php.
         psr4_namespace:
@@ -863,6 +870,19 @@ files:
       - name: handler_list
         open: '[\[,(\s][''"](?<mark>#(?:validate|submit))[''"]\s*(?:=>|\]\s*=)\s*(?=\[)'
         balance: ['[', ']']
+      # The same list written array(...).
+      - name: handler_list
+        open: '[\[,(\s][''"](?<mark>#(?:validate|submit))[''"]\s*(?:=>|\]\s*=)\s*array\s*(?=\()'
+        balance: ['(', ')']
+      # A use statement at the start of a line, to its semicolon, and the braces of a grouped use
+      # inside one; prefix is the group's prefix. Read by form/form_handler.yaml for an import under
+      # another name. The opening token of use_statement never matches, so its semicolon ends it.
+      - name: use_statement
+        open: '(?m)^(?<mark>use)\s'
+        balance: ['(?!x)x', ';']
+      - name: use_group
+        open: '(?m)^use\s+\\?(?<prefix>[A-Za-z_][\w\\]*\\)(?=\{)'
+        balance: ['{', '}']
       # The array literal in_array tests a variable against, in_array($v, [...]); var is the
       # variable's name.
       - name: in_array_list

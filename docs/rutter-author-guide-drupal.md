@@ -277,8 +277,12 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
 - `registers_form_handler`, inferred, from the method or function that adds a `#validate` or
   `#submit` handler, as `$form['#submit'][] = '::save'` or each item of
   `'#submit' => ['::save', 'mymod_extra_submit']`, to the function or method it names, joined in
-  the map through the internal `drupal.form_handler_site` node. The map rule
-  `form_handler_function_is_no_hook` withholds the hook a handler function's name would give it.
+  the map through the internal `drupal.form_handler_site` node. A list may be written `array(...)`,
+  and `[Foo::class, 'm']` follows an import under another name through the internal
+  `drupal.class_alias` node of the handler's file. A handler held in a variable, as
+  `$form['#submit'][] = $handler`, ends at a `drupal.runtime_form_handler` node marked resolution
+  `runtime`. The map rule `form_handler_function_is_no_hook` withholds the hook a handler
+  function's name would give it.
 - `hook_acts_on_entity_type`, inferred from a hook named `<extension>_<type>_<operation>`, such as
   `mymod_node_presave`, to the entity type `node`.
 - `drupal.manager_call`, a node for each `getStorage`, `getViewBuilder`, `getListBuilder`,
