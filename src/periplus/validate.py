@@ -404,9 +404,13 @@ def pack_files(pack: LoadedPack) -> list[tuple[str, object, bool, tuple[Problem,
     """Each YAML file of the pack as its relative path, its document, whether it could be read,
     and the problems reading it gave, in ``_yaml_files`` order; parsed on the first call for this
     ``LoadedPack`` and read from ``pack.files`` after. A pack always holds its manifest, so an
-    empty ``pack.files`` means unparsed."""
+    empty ``pack.files`` means unparsed. The manifest is the document the pack was made from: a
+    pack is made only from a manifest that parsed to a mapping."""
     if not pack.files:
         for relative, node in _yaml_files(pack.directory):
+            if relative == MANIFEST_FILENAME:
+                pack.files.append((relative, pack.manifest.document, True, ()))
+                continue
             problems: list[Problem] = []
             document, readable = _load(node, problems)
             pack.files.append((relative, document, readable, tuple(problems)))

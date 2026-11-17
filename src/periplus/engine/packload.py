@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from functools import cache
 from types import MappingProxyType
 from typing import Any
 
@@ -250,25 +251,44 @@ def unexecuted(document: object, prefix: str) -> list[str]:
     """The paths of ``UNEXECUTED_KEYS`` that start with ``prefix`` and that the document holds,
     each without the prefix, leaving out a path below another one found. A rule's paths are found
     only under the rule prefix ``file.rules.*.``, since the rule itself is reported."""
-    found = [
-        path.removeprefix(prefix)
-        for path in UNEXECUTED_KEYS
-        if path.startswith(prefix)
-        and (prefix == _RULE or not path.startswith(_RULE))
-        and _holds(document, path.removeprefix(prefix).split("."))
-    ]
+    paths, trie = _unexecuted_trie(prefix)
+    held: set[str] = set()
+    _held(document, trie, held)
+    found = [path for path in paths if path in held]
     return [path for path in found if not any(path.startswith(f"{q}.") for q in found)]
 
 
-def _holds(value: object, segments: Sequence[str]) -> bool:
-    if not segments:
-        return True
-    head, rest = segments[0], segments[1:]
-    if head == "*":
-        children = list(value.values()) if isinstance(value, Mapping) else []
-        children += value if isinstance(value, list) else []
-        return any(_holds(child, rest) for child in children)
-    return isinstance(value, Mapping) and head in value and _holds(value[head], rest)
+@cache
+def _unexecuted_trie(prefix: str) -> tuple[tuple[str, ...], dict[str, Any]]:
+    """The paths of ``UNEXECUTED_KEYS`` that ``unexecuted`` looks for under ``prefix``, without
+    it, and the same paths as a tree of segments, each written ``.<segment>``; the node a path ends
+    at holds the path under ``""``."""
+    paths = tuple(
+        path.removeprefix(prefix)
+        for path in UNEXECUTED_KEYS
+        if path.startswith(prefix) and (prefix == _RULE or not path.startswith(_RULE))
+    )
+    trie: dict[str, Any] = {}
+    for path in paths:
+        node = trie
+        for segment in path.split("."):
+            node = node.setdefault(f".{segment}", {})
+        node[""] = path
+    return paths, trie
+
+
+def _held(value: object, trie: Mapping[str, Any], held: set[str]) -> None:
+    """Add to ``held`` each path of the trie the value holds, ``*`` standing for any entry."""
+    for key, below in trie.items():
+        if key == "":
+            held.add(below)
+        elif key == ".*":
+            children = list(value.values()) if isinstance(value, Mapping) else []
+            children += value if isinstance(value, list) else []
+            for child in children:
+                _held(child, below, held)
+        elif isinstance(value, Mapping) and key[1:] in value:
+            _held(value[key[1:]], below, held)
 
 
 #: The values a reference rule gives its edge ends' templates, beside its name_matches groups.

@@ -5,15 +5,21 @@ which files a rule picks."""
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
+from ruamel.yaml import YAML
 from test_demo_a_support import plant
 
+import periplus.engine.packload as packload_module
+import periplus.engine.rules as rules_module
+import periplus.engine.tree as tree_module
 import periplus.map as map_module
 from periplus.engine.emit import EdgeIllegal, build_document
-from periplus.engine.packload import EdgeKind, TypeInfo
+from periplus.engine.packload import EdgeKind, TypeInfo, unexecuted
 from periplus.engine.rules import FoundEdge, FoundNode
+from periplus.engine.tree import ParsedFile
 from periplus.map import run
 from periplus.preflight import check_runtime_dependencies
 
@@ -359,3 +365,213 @@ def test_each_pack_reads_the_holder_rules_of_its_own_packs(tmp_path: Path) -> No
         ("probe_in_class", "probe.class::App\\Thing"),
         ("side_in_shell", "side.shell::App\\Thing"),
     ]
+
+
+def test_a_reference_rule_s_enclosing_declaration_rules_are_found_once_per_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """php_basic's reference rules each read both files, and look over the rules once."""
+    plant(
+        tmp_path,
+        {
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n",
+            "One.php": THING,
+            "Two.php": THING.replace("Thing", "Other"),
+        },
+    )
+    calls: list[str] = []
+    real = rules_module._enclosers
+
+    def spy(rule, *args):
+        calls.append(rule.name)
+        return real(rule, *args)
+
+    monkeypatch.setattr(rules_module, "_enclosers", spy)
+    report = run(
+        start=tmp_path,
+        env={"PERIPLUS_CONFIG_DIR": str(tmp_path / "config-dir")},
+        dependencies=check_runtime_dependencies(),
+        output=Path("map.json"),
+    )
+    assert report.problems == (), report.problems
+    assert calls
+    assert len(calls) == len(set(calls)), sorted(calls)
+
+
+TWINS = r"""node_types:
+- {name: own.base, id_namespace: own.base}
+- {name: own.twin, id_namespace: own.twin}
+rules:
+- rule: base
+  reads: file
+  in: [yard]
+  match: &same {file: '*', filetype: yard, text: '(?m)^base (?<name>\w+)'}
+  id: {from: {capture: name}}
+  emits: [{node: {type: own.base}}]
+  confidence: declared
+- rule: twin
+  reads: file
+  in: [yard]
+  match: *same
+  id: {from: {capture: name}}
+  emits: [{node: {type: own.twin}}]
+  confidence: declared
+"""
+
+
+def test_text_rules_that_share_a_pattern_search_each_file_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plant(
+        tmp_path,
+        {
+            ".periplus/packs/own@0.0.1/pack.yaml": MANIFEST,
+            ".periplus/packs/own@0.0.1/rules/own.yaml": TWINS,
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [own@0.0.1]\n",
+            "yard/a.yard": "base m\n",
+            "yard/b.yard": "base n\n",
+        },
+    )
+    searched: list[str] = []
+    real = rules_module._outside
+
+    def spy(pattern, text, *args):
+        searched.append(text)
+        return real(pattern, text, *args)
+
+    monkeypatch.setattr(rules_module, "_outside", spy)
+    report = run(
+        start=tmp_path,
+        env={"PERIPLUS_CONFIG_DIR": str(tmp_path / "config-dir")},
+        dependencies=check_runtime_dependencies(),
+        output=Path("map.json"),
+    )
+    assert report.problems == (), report.problems
+    ids = sorted(n["id"] for n in json.loads((tmp_path / "map.json").read_text())["nodes"])
+    assert ids == ["own.base::m", "own.base::n", "own.twin::m", "own.twin::n"]
+    assert sorted(searched) == ["base m\n", "base n\n"]
+
+
+def test_a_document_is_walked_once_for_all_the_unexecuted_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = {"embedded_regions": [{"close": "x"}], "edge_kinds": [{"confidence": "x"}]}
+    walks: list[object] = []
+    real = packload_module._held
+
+    def spy(value, *args):
+        if value is document:
+            walks.append(value)
+        real(value, *args)
+
+    monkeypatch.setattr(packload_module, "_held", spy)
+    assert unexecuted(document, "file.") == ["edge_kinds.*.confidence", "embedded_regions"]
+    assert len(walks) == 1
+
+
+MEMBERS = """\
+<?php
+
+namespace App;
+
+class Many
+{
+    public function a() { $this->b(); }
+    public function b() { $this->c(); }
+    public function c() { $this->a(); }
+}
+"""
+
+
+def test_a_tree_node_s_children_are_scanned_once_for_each_set_of_body_types(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Walks from each call up to the class ask the class body the same question, and the
+    question is answered once."""
+    plant(
+        tmp_path,
+        {
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n",
+            "Many.php": MEMBERS,
+        },
+    )
+    scans: list[int] = []
+    asked: list[tuple[int, frozenset[str]]] = []
+    real_any, real_has = any, ParsedFile.has_child_of
+
+    def counting_any(items):
+        code = getattr(items, "gi_code", None)
+        if code is not None and code.co_qualname.startswith("ParsedFile.has_child_of"):
+            scans.append(1)
+        return real_any(items)
+
+    def spy(self, node, types):
+        asked.append((node.id, types))
+        return real_has(self, node, types)
+
+    monkeypatch.setattr(tree_module, "any", counting_any, raising=False)
+    monkeypatch.setattr(ParsedFile, "has_child_of", spy)
+    report = run(
+        start=tmp_path,
+        env={"PERIPLUS_CONFIG_DIR": str(tmp_path / "config-dir")},
+        dependencies=check_runtime_dependencies(),
+        output=Path("map.json"),
+    )
+    assert report.problems == (), report.problems
+    assert len(asked) > len(set(asked))
+    assert len(scans) == len(set(asked))
+
+
+def test_a_rule_s_packs_are_worked_out_once_whatever_the_number_of_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = rules_module._within
+
+    def counted(files: int) -> int:
+        root = tmp_path / str(files)
+        sources = {f"S{n}.php": THING.replace("Thing", f"Thing{n}") for n in range(files)}
+        plant(root, {".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n"})
+        plant(root, sources)
+        calls: list[str] = []
+
+        def spy(pack, packs):
+            if sys._getframe(1).f_code.co_name == "run_file_rules":
+                calls.append(pack)
+            return real(pack, packs)
+
+        monkeypatch.setattr(rules_module, "_within", spy)
+        report = run(
+            start=root,
+            env={"PERIPLUS_CONFIG_DIR": str(root / "config-dir")},
+            dependencies=check_runtime_dependencies(),
+            output=Path("map.json"),
+        )
+        assert report.problems == (), report.problems
+        return len(calls)
+
+    assert counted(1) == counted(3)
+
+
+def test_each_yaml_file_of_a_run_is_parsed_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The settings, each pack's manifest and each of its rule files: one parse each."""
+    plant(tmp_path, {".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n"})
+    plant(tmp_path, {"One.php": THING})
+    parsed: list[str] = []
+    real = YAML.load
+
+    def spy(self, stream):
+        parsed.append(str(getattr(stream, "name", stream)))
+        return real(self, stream)
+
+    monkeypatch.setattr(YAML, "load", spy)
+    report = run(
+        start=tmp_path,
+        env={"PERIPLUS_CONFIG_DIR": str(tmp_path / "config-dir")},
+        dependencies=check_runtime_dependencies(),
+        output=Path("map.json"),
+    )
+    assert report.problems == (), report.problems
+    assert any(name.endswith("pack.yaml") for name in parsed), parsed
+    assert len(parsed) == len(set(parsed)), sorted(parsed)

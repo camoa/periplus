@@ -200,6 +200,15 @@ class ParsedFile:
     #: The run's class constants with a text value, by the full name of their class and their
     #: name; one mapping shared by every file the run parses.
     constants: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    #: Whether a tree node has a child of one of a set of types, by the node's id and the set.
+    children_of: dict[tuple[int, frozenset[str]], bool] = field(default_factory=dict)
+
+    def has_child_of(self, node: Node, types: frozenset[str]) -> bool:
+        """Whether one of the node's children is of one of the types; found once per node."""
+        key = (node.id, types)
+        if key not in self.children_of:
+            self.children_of[key] = any(child.type in types for child in node.children)
+        return self.children_of[key]
 
     def namespace_at(self, node: Node) -> str:
         """The name of the last namespace declaration that starts before the node, or ``""``."""

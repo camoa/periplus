@@ -192,6 +192,7 @@ def run_file_rules(
     paths: dict[tuple[str, str], dict[str, str]] = {}
     sections: dict[tuple[str, str], list[tuple[str, int, int]]] = {}
     spans: dict[tuple[str, str], list[Span]] = {}
+    matched: dict[tuple[tuple[str, str], str, int, tuple[str, ...]], list[re.Match[str]]] = {}
     bound: dict[str, list[tuple[int, str, str]]] = {}
     read: set[str] = set()
     removed: set[str] = set()
@@ -226,6 +227,8 @@ def run_file_rules(
         info = rule_set.files.get(rule.filetype, FileInfo())
         # Each file's patterns that do not compile once filled, and the fires before the file.
         unfilled: list[tuple[str, list[str], int]] = []
+        enclosing: list[tuple[Rule, bool]] | None = None
+        within = _within(rule.pack, packs)
         timed = f"rule {rule.name} of rutter {rule.pack}"
         for file, stem, _ in _matches(root, rule, *picking):
             watch.begin(timed, file)
@@ -246,16 +249,20 @@ def run_file_rules(
                         partial(_span_begins, watch, file),
                     )
                     watch.begin(timed, file)
+                # Rules that share a pattern, as anchored rules do, search the file once.
+                searched = (own, rule.text.pattern, rule.text.flags, rule.reads_sections)
+                if searched not in matched:
+                    reads = rule.reads_sections
+                    matched[searched] = list(_outside(rule.text, texts[file], sections[own], reads))
                 stemmed = {**paths[own], "file_stem": stem}
                 read_from = (texts[file], stemmed, sections[own], spans[own])
                 made = (nodes, edges, bound.setdefault(file, []), skipped)
-                fired += _texts(rule, rule.text, rule_set, file, read_from, *made)
+                fired += _texts(rule, matched[searched], rule_set, file, read_from, *made)
                 continue
             if rule.declaration or rule.attribute or rule.annotation or rule.reference:
                 grammar = rule_set.grammars[rule.filetype]
                 if file not in trees:
                     trees[file] = parse_file(root / file, grammar, paths[own], constants)
-                within = _within(rule.pack, packs)
                 tree = (grammar, file, trees[file], within)
                 if rule.reference:
                     for other in rule_set.rules:
@@ -263,8 +270,11 @@ def run_file_rules(
                         if other.supported and other.declaration and owner not in selected:
                             hits = _matches(root, other, *picking)
                             selected[owner] = {found[0] for found in hits}
+                    if enclosing is None:
+                        enclosing = _enclosers(rule, rule_set, packs)
+                    found_in = (selected, enclosing, edges, skipped)
                     fired += _references(
-                        rule, rule_set, grammar, file, trees[file], packs, selected, edges, skipped
+                        rule, rule_set, grammar, file, trees[file], packs, *found_in
                     )
                 elif rule.annotation:
                     found = (nodes, edges, skipped)
@@ -765,7 +775,7 @@ def _made(
 
 def _texts(
     rule: Rule,
-    pattern: re.Pattern[str],
+    matches: Sequence[re.Match[str]],
     rule_set: RuleSet,
     file: str,
     read_from: tuple[str, dict[str, str], list[tuple[str, int, int]], list[Span]],
@@ -774,8 +784,8 @@ def _texts(
     bound: list[tuple[int, str, str]],
     skipped: list[Skipped],
 ) -> int:
-    """The node, the edges or the bindings of each match of the rule's pattern, in order; the
-    number of fires.
+    """The node, the edges or the bindings of each of ``matches``, the rule's pattern's matches in
+    the file outside the sections it does not read, in order; the number of fires.
 
     ``bound`` holds the file's bindings, each with the offset it was found at: a binding rule adds
     to it, one fire per binding whose name and target are not empty, and any other rule resolves a
@@ -799,7 +809,7 @@ def _texts(
     names = {name: target for _, name, target in sorted(bound, key=lambda one: one[0])}
     info = rule_set.files.get(rule.filetype, FileInfo())
     tables = rule_set.tables.get(rule.pack, {})
-    for found in _outside(pattern, text, sections, rule.reads_sections):
+    for found in matches:
         captures = found.groupdict()
         taken = {name: value for name, value in captures.items() if value is not None}
         lines = {name: text.count("\n", 0, found.start(name)) + 1 for name in taken}
@@ -1974,7 +1984,7 @@ def _holder_walk(
     rule's body but no rule fires on, an anonymous class, ends the walk, last, with no rules; so
     does the root.
     """
-    bodies = {rule.body_child for rules in holders.values() for rule in rules}
+    bodies = frozenset(rule.body_child for rules in holders.values() for rule in rules)
     passed: list[Node] = []
     parent = node.parent
     while parent is not None:
@@ -1987,7 +1997,7 @@ def _holder_walk(
         first = next(firing, None)
         if first is not None:
             return passed, chain((first,), firing)
-        if any(child.type in bodies for child in parent.children):
+        if parsed.has_child_of(parent, bodies):
             break
         parent = parent.parent
     return passed, iter(())
@@ -2196,6 +2206,27 @@ def _within(pack: str, packs: Sequence[LoadedPack]) -> frozenset[str]:
     return frozenset(seen)
 
 
+def _enclosers(
+    rule: Rule, rule_set: RuleSet, packs: Sequence[LoadedPack]
+) -> list[tuple[Rule, bool]]:
+    """Each declaration rule, in rule order, that can give a reference rule's match its enclosing
+    node, whatever the file, and whether it is of the rule's pack or a pack it depends on."""
+    within = _within(rule.pack, packs)
+    return [
+        (other, other.pack in within)
+        for other in rule_set.rules
+        if other.supported
+        and other.declaration
+        and other.node_type
+        and other.filetype == rule.filetype
+        and (other.pack in within or rule.pack in other.encloses_for)
+        and all(
+            _allows(rule_set, other.node_type, rule_set.edge_kinds[spec.kind].from_types)
+            for spec in rule.edges
+        )
+    ]
+
+
 def _references(
     rule: Rule,
     rule_set: RuleSet,
@@ -2204,6 +2235,7 @@ def _references(
     parsed: ParsedFile,
     packs: Sequence[LoadedPack],
     selected: Mapping[tuple[str, str], set[str]],
+    enclosers: Sequence[tuple[Rule, bool]],
     edges: list[FoundEdge],
     skipped: list[Skipped],
 ) -> int:
@@ -2223,26 +2255,15 @@ def _references(
     missing, empty or not a text literal, or that no step gives a name, makes nothing and is listed
     in ``skipped``. A name child written exactly as one of the rule's ``skip_names``, written name
     or not, or a match failing a ``name_matches`` condition, makes nothing, is not listed and is
-    not a fire. An edge sits at the reference's line.
+    not a fire. An edge sits at the reference's line. ``enclosers`` are the declaration rules that
+    can enclose the reference, as ``_enclosers`` gives them.
     """
     within = _within(rule.pack, packs)
     holders = _holder_rules(rule_set, rule.filetype, within)
     declared: dict[str, list[tuple[Rule, Mapping[str, tuple[Rule, ...]]]]] = {}
     enclosing_rules: dict[str, list[tuple[Rule, Mapping[str, tuple[Rule, ...]]]]] = {}
-    for other in rule_set.rules:
-        own = other.pack in within
-        if (
-            other.supported
-            and other.declaration
-            and other.node_type
-            and other.filetype == rule.filetype
-            and (own or rule.pack in other.encloses_for)
-            and file in selected[(other.pack, other.name)]
-            and all(
-                _allows(rule_set, other.node_type, rule_set.edge_kinds[spec.kind].from_types)
-                for spec in rule.edges
-            )
-        ):
+    for other, own in enclosers:
+        if file in selected[(other.pack, other.name)]:
             if own:
                 declared.setdefault(other.declaration, []).append((other, holders))
             else:
