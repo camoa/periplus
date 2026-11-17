@@ -455,7 +455,8 @@ two calls share holds each place's value under `differs`.
   class, and its `self::`, `static::`, `parent::` and `$this` forms get the runtime mark.
   `parent::class` is the class the class `extends`, as written there, and `parent::NAME` the
   constant on it; in a trait or a class that extends nothing, each is a runtime registration. A
-  tag's definition may be `(new Definition(Foo::class))`, in parentheses. Two registrations of one
+  tag's definition may be `(new Definition(Foo::class))`, in parentheses, and a definition held in
+  a variable, as in `->setDefinition('id', $def)->addTag(...)`, is a runtime listener. Two registrations of one
   callable in one method keep apart by their event, whichever of them a `use` statement binds. A
   call is read whatever line breaks and comments stand between its name, its
   parenthesis and its arguments. Each is one

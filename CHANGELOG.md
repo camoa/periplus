@@ -114,7 +114,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `drupal_basic` could drop the edge of one of two registrations of one callable in one method, on one object, when a `use` statement binds the class of one event and not the other's; each now keeps its edge. An `addListener()` or `addTag()` event `A\B::NAME`, with `A` bound by a `use` statement, also gave a second edge from the constant of the file's own namespace; it now gives the bound one alone.
 - `drupal_basic` gave nothing, or names read against the class around it, for a call in a method of an anonymous class whose arguments hold a closure, an array with a closure, or a `{` or `;` in a string; the class's body is now found past its arguments.
 - `drupal_basic` read a `kernel.event_listener` tag's event that goes on past its line, quoted or plain, by its first line, a wrong name; it is now a runtime registration with the text as written.
-- `drupal_basic` gave nothing for `(new Definition(Foo::class))->addTag('kernel.event_listener', ...)`; the class in parentheses is now read as `new Definition(Foo::class)` is.
+- `drupal_basic` gave nothing for `(new Definition(Foo::class))->addTag('kernel.event_listener', ...)`; the class in parentheses is now read as `new Definition(Foo::class)` is. It gave nothing for `->setDefinition('id', $def)->addTag(...)` either; that is now the runtime listener `$def->addTag(...)` gives.
 - `drupal_basic`'s `config_names_form` ran to every form id a captcha point or `honeypot.settings` named, switched on or not; it now runs only to a form switched on, and the rest have `config_names_form_off`.
 
 ## [0.8.0] - 2026-11-16
