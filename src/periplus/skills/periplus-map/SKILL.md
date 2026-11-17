@@ -23,7 +23,7 @@ description: Answers code questions from a Periplus map, the deterministic graph
 ## The tools
 
 `periplus --help` prints this list; `periplus find --help` prints the options of one command. Every
-option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.8.0/docs/navigation.md).
+option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.9.0/docs/navigation.md).
 
 <!-- periplus-help -->
 ```text

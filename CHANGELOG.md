@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-16
+
 ### Added
 
 - A pack file may declare node attributes under `attributes`: the types a rule may write each on (`on`), whether a container's value reaches its members (`spreads`), and a short `mark` a reader shows. A map rule may write a declared attribute, beside its edges, on the node it matched or, with `target: matched_node`, on the node its follow steps reached; a write changes no type or location, and a target no rule found or of a type `on` does not reach is listed under Matches skipped. A spreading attribute is written on each member of a container through the grouping kinds, and through the further kinds its `spreads_along` lists, each toward the end it names, the nearest container winning, with a provenance row `spread.<name>`. The map header `marks` names the mark of each declared attribute a node holds; maps without one are unchanged. The check refuses, with exit 19, an undeclared attribute a map rule writes, a write on a type `on` does not reach, a type in `on` that neither the pack nor one it depends on declares, one name declared two ways, a `spreads_along` without `spreads: true` or naming a kind neither the pack nor one it depends on declares, and a declaration of `type_conflict` or `resolution`; a mark that is empty, longer than 40 characters, or holds a bracket or a line break is a schema error. Two rules that give one node's attribute different values at the same file and line now both show under `differs`; before, one value was dropped without a word.

@@ -12,7 +12,7 @@
 extra for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.8.0.
+Status: **beta**, version 0.9.0.
 
 </div>
 
@@ -63,7 +63,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.8.0
+uv tool install git+https://github.com/camoa/periplus@v0.9.0
 ```
 
 To install from a local copy of this repository:
@@ -353,6 +353,12 @@ New in this release:
   `map` exits 33 instead of writing an empty map.
 - **find.** It ranks main things first, counts before it lists, keeps to a character budget, and
   finds edges by their description or code line.
+- **slice.** It walks by cause, as `neighbors` and `affected` do, in place of following every
+  edge both ways. `slice --from ID` starts from ids you picked.
+- **Rutters.** `drupal_basic` maps the validate, submit and other callbacks code adds to a form or
+  element, and a map rule can withhold a node a file rule found. Every bundled rutter declares
+  the cause of its edge kinds. Five early rutters that could not make a map are removed:
+  `drupal`, `php`, `go`, `twig` and `yaml`; use the `_basic` rutters.
 
 Map again after upgrading, so the walks can read each edge kind's cause.
 
