@@ -172,8 +172,9 @@ def folder_values(
 
     A pack's values for one folder are kept sorted, so two packs giving one set agree.
 
-    A pack that depends, directly or not, on every other pack giving the folder a value wins. The
-    value used is ``None`` when no pack does: two packs, neither depending on the other, conflict.
+    A pack that depends, directly or not, on every pack giving the folder another value wins, so
+    packs that give one value agree. The value used is ``None`` when no pack wins: two packs that
+    give different values, neither depending on the other, conflict.
     """
     reach = {pack.name.pack: reachable(pack, packs) for pack in packs}
     values: dict[str, dict[tuple[str, ...], set[str]]] = {}
@@ -188,7 +189,7 @@ def folder_values(
         winners = {
             value
             for value, owners in seen.items()
-            if any(givers <= reach[owner] for owner in owners)
+            if any(givers - owners <= reach[owner] for owner in owners)
         }
         settled[name] = winners.pop() if len(winners) == 1 else None
     return values, settled

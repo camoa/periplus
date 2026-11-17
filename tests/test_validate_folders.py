@@ -168,3 +168,22 @@ def test_validate_gives_map_conflict_when_two_pinned_siblings_disagree_on_a_fold
     for pack in ("t", "u"):
         v_code, v_problems = run(tmp_path, capsys, monkeypatch, "validate", pack)
         assert (v_code, folder_problems(v_problems)) == (FOLDER_EXIT, [conflict])
+
+
+def test_two_pinned_siblings_that_give_a_folder_the_same_value_agree(
+    tmp_path, capsys, monkeypatch
+):
+    plant(tmp_path, src="./src", in_folder="src")
+    sibling = tmp_path / ".periplus" / "packs" / "u@0.1.0"
+    sibling.mkdir()
+    (sibling / "pack.yaml").write_text(
+        "pack: u\nversion: 0.1.0\ndepends: []\nfolders:\n  src: ./src\n"
+    )
+    (tmp_path / ".periplus" / "settings.yml").write_text(
+        "periplus_version: 0\npacks:\n  - t@0.1.0\n  - u@0.1.0\n"
+    )
+    m_code, m_problems = run(tmp_path, capsys, monkeypatch, "map")
+    assert (m_code, folder_problems(m_problems)) == (0, [])
+    for pack in ("t", "u"):
+        v_code, v_problems = run(tmp_path, capsys, monkeypatch, "validate", pack)
+        assert (v_code, folder_problems(v_problems)) == (0, [])
