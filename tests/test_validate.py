@@ -10,10 +10,10 @@ string would assert a proxy for a rejection that never happened, so there is no 
 tested is the thing that can fire: the command the workflow runs, against a deliberately broken
 pack, exiting non-zero. The gap between those two is real and stays open.
 
-The broken packs are built from the bundled ``go`` pack's own bytes, copied and renamed, never
-invented. ``go`` because it declares ``depends: []``, so a run against it produces schema findings
-and no dependency-resolution noise; renamed because a second copy under the pack's own name would
-resolve to two directories and report a duplicate before it read a single rule.
+The broken packs are built from the bundled ``go_basic`` rutter's own bytes, copied and renamed,
+never invented. ``go_basic`` because it declares ``depends: []``, so a run against it produces
+schema findings and no dependency-resolution noise; renamed because a second copy under the pack's
+own name would resolve to two directories and report a duplicate before it read a single rule.
 """
 
 from __future__ import annotations
@@ -36,19 +36,14 @@ SCHEMA_DIRECTORY = SRC / "periplus" / "contract" / "schema"
 
 #: The bundled pack the fixtures are cut from, and the name every copy is renamed to. The version
 #: half is kept as it ships, so the copy is the real pack with one word changed.
-SOURCE_PACK = "go@0.0.2"
+SOURCE_PACK = "go_basic@0.0.3"
 FIXTURE_PACK = "gofixture"
-FIXTURE_DIRECTORY = f"{FIXTURE_PACK}@0.0.2"
+FIXTURE_DIRECTORY = f"{FIXTURE_PACK}@0.0.3"
 
 #: The packs the wheel carries, by name, read off the bundled folder.
 BUNDLED_PACK_NAMES = tuple(
     sorted(entry.name.split("@")[0] for entry in BUNDLED_PACKS.iterdir() if entry.is_dir())
 )
-
-#: The five reference packs. They hold rules the engine does not execute, so ``validate`` reports
-#: those; every other bundled pack is a rutter and validates clean.
-REFERENCE_PACK_NAMES = ("drupal", "go", "php", "twig", "yaml")
-RUTTER_NAMES = tuple(name for name in BUNDLED_PACK_NAMES if name not in REFERENCE_PACK_NAMES)
 
 #: A rutter small enough to read, for the one test that names a pack's files.
 CLEAN_RUTTER = "js_basic"
@@ -130,7 +125,7 @@ def _run(args: Sequence[str], *, cwd: Path, config: Path) -> Result:
 
 
 def _copy_pack(destination: Path) -> Path:
-    """The bundled ``go`` pack, copied under a name nothing else on the search path carries.
+    """The bundled ``go_basic`` rutter, copied under a name nothing else on the search path carries.
 
     Only the manifest's ``pack:`` line changes. Every rule file arrives byte for byte, which is
     what makes a break below a break in real shipped content rather than in a file written to fail.
@@ -139,8 +134,10 @@ def _copy_pack(destination: Path) -> Path:
     shutil.copytree(BUNDLED_PACKS / SOURCE_PACK, target)
     manifest = target / "pack.yaml"
     text = manifest.read_text(encoding="utf-8")
-    assert "\npack: go\n" in text, "the bundled go manifest no longer declares `pack: go`"
-    manifest.write_text(text.replace("\npack: go\n", f"\npack: {FIXTURE_PACK}\n"), encoding="utf-8")
+    assert "\npack: go_basic\n" in text, "the bundled manifest no longer declares `pack: go_basic`"
+    manifest.write_text(
+        text.replace("\npack: go_basic\n", f"\npack: {FIXTURE_PACK}\n"), encoding="utf-8"
+    )
     return target
 
 
@@ -150,9 +147,9 @@ def _drop_confidence(pack: Path) -> None:
     ``confidence`` is one of the five keys ``pack-file.schema.json`` requires of a rule, and it
     yields ``$.rules[0]: 'confidence' is a required property``, which names the key and its path.
     """
-    rules = pack / "types" / "find_declarations.yaml"
+    rules = pack / "rules" / "declarations.yaml"
     text = rules.read_text(encoding="utf-8")
-    assert "\n  confidence: declared\n" in text, "the go pack's first rule no longer declares one"
+    assert "\n  confidence: declared\n" in text, "the go_basic first rule no longer declares one"
     rules.write_text(text.replace("\n  confidence: declared\n", "\n", 1), encoding="utf-8")
 
 
@@ -164,10 +161,10 @@ def _break_the_match_branch(pack: Path) -> None:
     valid under any of the given schemas" — no key, no remedy — and carries the ten sub-errors that
     do name keys in ``.context``.
     """
-    rules = pack / "types" / "find_declarations.yaml"
+    rules = pack / "rules" / "declarations.yaml"
     document = _yaml().load(rules.read_text(encoding="utf-8"))
-    assert "declaration" in document["rules"][0]["match"], "the go pack's first rule changed shape"
-    document["rules"][0]["match"] = {"name_child": "package_identifier"}
+    assert "declaration" in document["rules"][0]["match"], "the go_basic first rule changed shape"
+    document["rules"][0]["match"] = {"name_child": "name"}
     with rules.open("w", encoding="utf-8") as handle:
         _yaml().dump(document, handle)
 
@@ -292,7 +289,7 @@ def test_a_missing_required_key_exits_sixteen_naming_the_key_and_its_path(
     payload = json.loads(result.stdout)
     assert [(error["file"], error["pointer"], error["message"]) for error in payload["errors"]] == [
         (
-            "types/find_declarations.yaml",
+            "rules/declarations.yaml",
             "$.rules[0]",
             "'confidence' is a required property",
         )
@@ -358,7 +355,7 @@ def test_the_text_form_names_the_file_the_pointer_and_the_message(project: Proje
     result = _run(["validate", FIXTURE_PACK], cwd=project.root, config=project.config)
 
     assert result.returncode == 16, f"{result.stdout}{result.stderr}"
-    assert "types/find_declarations.yaml" in result.stdout
+    assert "rules/declarations.yaml" in result.stdout
     assert "$.rules[0]" in result.stdout
     assert "'confidence' is a required property" in result.stdout
 
@@ -407,7 +404,7 @@ def test_the_text_form_prints_the_sub_errors_beneath_a_branch_and_not_only_the_b
     The branch line's **message** must not name ``declaration``, which is the negative the whole
     test rests on: the parent genuinely reads "is not valid under any of the given schemas", so if
     that line were enough there would be nothing to render beneath it. The message and
-    not the whole line, because the line also names the file — ``find_declarations.yaml`` carries
+    not the whole line, because the line also names the file — ``declarations.yaml`` carries
     the word, and asserting against the line fails on that.
 
     More than one line must sit beneath it, because a single sub-error cannot show that a
@@ -660,16 +657,14 @@ def test_every_bundled_pack_file_declares_the_schema_it_is_written_against() -> 
     )
 
 
-@pytest.mark.parametrize("pack", RUTTER_NAMES)
+@pytest.mark.parametrize("pack", BUNDLED_PACK_NAMES)
 def test_every_bundled_rutter_validates_against_the_shipped_schemas(
     elsewhere: Project, pack: str
 ) -> None:
     """Every bundled rutter validates, run locally, as a substitute for watching CI reject one.
 
     **Asserted:** the exact command a CI step would run exits 0 for each bundled rutter, on this
-    machine, now. The five reference packs are left out: they hold rules the engine does not
-    execute, so ``validate`` reports problems for them, and
-    ``test_validate_engine_checks.py`` checks those against ``map``.
+    machine, now.
 
     **Not asserted:** that CI rejects a broken pack. Nothing is pushed, and no test in this file can
     observe a workflow run. A test reading a workflow YAML file and asserting it
@@ -735,8 +730,8 @@ def test_a_deliberately_broken_pack_is_rejected_by_the_command_ci_would_run(
     """ "Break one pack and watch it be rejected", with the local run standing in for CI.
 
     The same command as the test above and the opposite verdict, which is the pair that says the
-    check can fire at all. Without this, five packs exiting 0 is equally consistent with a
-    ``validate`` that exits 0 for everything.
+    check can fire at all. Without this, every bundled rutter exiting 0 is equally consistent with
+    a ``validate`` that exits 0 for everything.
     """
     _drop_confidence(_copy_pack(project.packs))
 

@@ -17,8 +17,7 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # gets an implements_method edge. A method or function gets a has_parameter edge to each parameter
 # outside a closure, and a class a declares_property edge to each property a promoted constructor
 # parameter makes. A global written or read through $GLOBALS['name'] is a php.global
-# node, with a writes_global or reads_global edge from the function or method that uses it. It sits
-# beside the reference pack php and does not replace it.
+# node, with a writes_global or reads_global edge from the function or method that uses it.
 #
 # Not mapped yet. A call to a function PHP itself defines, such as strlen() or json_decode(), makes
 # nothing: the rule calls_function lists the 2150 names get_defined_functions()['internal']

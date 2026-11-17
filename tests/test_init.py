@@ -329,8 +329,8 @@ def test_it_prefills_the_packs_it_was_given_into_the_settings_it_writes(tmp_path
     """Init in a matching fixture writes the pack name.
 
     Loaded back rather than searched for as a substring. `packs:` appears in the shipped stub as a
-    commented reference block naming `drupal@0.1.0`, so a test asserting the text is in the file
-    passes against a run that wrote nothing at all -- and against one that wrote a pin inside a
+    commented reference block naming `drupal_basic@0.3.0`, so a test asserting the text is in the
+    file passes against a run that wrote nothing at all -- and against one that wrote a pin inside a
     comment, which is the failure that looks most like success. What
     "writes the pack name" means is that the settings loader reads it back as a declared value, and
     that is the only form of the assertion that can tell the two apart.
@@ -339,7 +339,7 @@ def test_it_prefills_the_packs_it_was_given_into_the_settings_it_writes(tmp_path
     adding to it would satisfy everything above while throwing away the file's other declared key
     and all of its reference prose.
     """
-    report = initialise_project(tmp_path, packs=("drupal@0.1.0", "acme@1.0.0"))
+    report = initialise_project(tmp_path, packs=("drupal_basic@0.3.0", "acme@1.0.0"))
 
     assert report.created is True
     assert report.problems == ()
@@ -348,7 +348,7 @@ def test_it_prefills_the_packs_it_was_given_into_the_settings_it_writes(tmp_path
     document = load_settings_document(_settings(tmp_path))
     packs = document.get("packs")
     assert packs is not None, "the settings file declares no `packs:`, so nothing was prefilled"
-    assert list(packs) == ["drupal@0.1.0", "acme@1.0.0"]
+    assert list(packs) == ["drupal_basic@0.3.0", "acme@1.0.0"]
     assert document.get("periplus_version") == 0
     assert b"\r\n" not in _settings(tmp_path).read_bytes()
 
@@ -385,7 +385,7 @@ def test_what_resolves_is_what_the_settings_file_says_and_not_what_was_detected(
     So this asserts twice against `resolve`, which is the reader every later command goes through.
     First that the prefilled pin arrives carrying the project settings file as its source, and then
     that replacing the pin replaces what resolves. A runtime detector fails the second assertion by
-    handing back drupal again.
+    handing back the detected drupal_basic pin.
 
     The pins are deliberately not installed. `resolve` reports them unmatched, and this test says
     nothing about that: what it is about is which value was read, not whether a directory answers
@@ -394,9 +394,9 @@ def test_what_resolves_is_what_the_settings_file_says_and_not_what_was_detected(
     **The `composer.json` below is the fixture condition the whole test rests on.** Against an
     empty directory a resolution-time detector detects nothing -- so it would have nothing to
     override the edit with, the second assertion would hold, and the test would pass against
-    exactly the defect its docstring names. A root the
-    shipped drupal detector matches is what gives a runtime detector a competing answer to hand
-    back, and it is the only condition under which the failure this test names can occur.
+    exactly the defect its docstring names. A root the shipped drupal_basic detector matches is
+    what gives a runtime detector a competing answer to hand back, and it is the only condition
+    under which the failure this test names can occur.
     """
     config = tmp_path / "userconf"
     config.mkdir()

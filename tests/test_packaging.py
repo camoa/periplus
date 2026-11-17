@@ -96,26 +96,18 @@ def test_runtime_dependencies_are_exactly_the_three_the_design_decided(
     from periplus.preflight import REQUIRED
 
     # The grammar a bundled rutter pins is declared by the package and is not a start-up
-    # requirement. The one exception is the reference pack yaml, whose grammar the package does
-    # not declare; it must still pin one, so the list cannot outlive its reason.
-    undeclared = {"yaml"}
-    pinned, excepted = set(), {}
+    # requirement.
+    pinned: set[str] = set()
     for path in sorted((PROJECT_ROOT / "src" / "periplus" / "packs").glob("*@*/pack.yaml")):
         document = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8"))
         grammar = document.get("grammar")
         if grammar:
-            name = f"{grammar['provider']}-{grammar['language']}"
-            if document["pack"] in undeclared:
-                excepted[document["pack"]] = name
-            else:
-                pinned.add(name)
+            pinned.add(f"{grammar['provider']}-{grammar['language']}")
 
     manifest_names = sorted(
         _normalised(dep.split("==")[0].split(">=")[0].split("[")[0]) for dep in declared
     )
     assert pinned
-    assert set(excepted) == undeclared, excepted
-    assert not {_normalised(name) for name in excepted.values()} & set(manifest_names), excepted
     assert manifest_names == sorted(_normalised(name) for name in {*REQUIRED, *pinned})
     assert _normalised("jsonschema") in manifest_names
     assert len(REQUIRED) == 4, (

@@ -315,27 +315,10 @@ beside `drupal_basic` when the site uses that module.
 
 </details>
 
-<details>
-<summary><strong>Reference packs</strong></summary>
-
-The bundle also holds five older reference packs. They hold vocabulary only and cannot make a map:
-`periplus validate` finds no schema error in them, and reports the same problems `periplus map`
-reports for a project that pins them, such as the rules in them the engine does not execute.
-
-| Pack | Version |
-|---|---|
-| `php` | 0.1.0 |
-| `drupal` | 0.1.0 |
-| `yaml` | 0.0.1 |
-| `twig` | 0.0.1 |
-| `go` | 0.0.2 |
-
-</details>
-
 The bundled rutters are in `src/periplus/packs`. The examples are in
 `examples/second-stack/packs`. The manifest of every rutter in the tables above, except
-`yaml_basic`, `twig_basic`, `typescript`, `react`, `nextjs`, `drupal_more`, `drupal_next`, the
-examples and the reference packs, opens with a list of what it does not map yet.
+`yaml_basic`, `twig_basic`, `typescript`, `react`, `nextjs`, `drupal_more`, `drupal_next` and the
+examples, opens with a list of what it does not map yet.
 
 To map a Go module, run Periplus at the module's root. Give the module
 path in the settings, because Periplus does not read `go.mod`:

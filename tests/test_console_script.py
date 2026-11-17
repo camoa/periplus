@@ -476,9 +476,9 @@ def test_init_prefills_the_pack_it_detected_in_the_directory_it_ran_in(tmp_path:
     assertion in that file would still hold. This is where the two halves are tied together, and it
     is the one assertion that fails if the wiring in ``cli.main`` is missing.
 
-    The fixture is a ``composer.json`` requiring Drupal core, which is what the bundled drupal
+    The fixture is a ``composer.json`` requiring Drupal core, which is what the bundled drupal_basic
     detector matches. The pin is read out of the settings file the command wrote, through the
-    loader, for the reason ``test_init.py`` gives -- the stub already carries ``drupal@0.1.0``
+    loader, for the reason ``test_init.py`` gives -- the stub already carries ``drupal_basic@0.3.0``
     inside a comment, so a substring search passes against a run that detected nothing.
     """
     from periplus.settings import load_settings_document

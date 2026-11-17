@@ -52,18 +52,6 @@ Pin one of these beside `drupal_basic` when the site uses the module.
 |---|---|---|
 | `laravel_basic@0.0.5` | Routes with their prefixes and names, each joined to its controller method, its resource controller or the view it renders. Controllers, models, migrations, Blade views with their includes, extends and component tags, and configuration files with their keys. The views and configuration keys that PHP code names in `view()` and `config()` calls, and that views name in `config()`. It reads the standard Laravel folders. | `php_basic` |
 
-## Reference rutters
-
-These older rutters hold vocabulary only and cannot make a map. The README's reference packs section says what `periplus validate` reports for them. Use the `_basic` rutters above instead.
-
-| Rutter | For | Depends on |
-|---|---|---|
-| `php@0.1.0` | PHP | none |
-| `yaml@0.0.1` | YAML | none |
-| `twig@0.0.1` | Twig | none |
-| `drupal@0.1.0` | Drupal | `php`, `yaml` |
-| `go@0.0.2` | Go | none |
-
 ## Write a new rutter
 
 [Writing a rutter](rutter-author-guide.md) explains the files of a rutter and how to check one.

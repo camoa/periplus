@@ -72,6 +72,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The `periplus-map` skill is rewritten as a short catalogue that asks the map first: what the map is and is not, the command list exactly as `periplus --help` prints it, a few rules (counts before rows, a cut reply is not the whole answer, pass ids with `--ids` and `-`, widen loose words, report where the map and the code disagree) and recommendations marked as such. Code search moved to its reference file `references/code-search.md`. The skill no longer says to search the code first or never to pass `--limit 0`.
 - The `periplus-describe` skill is rewritten the same way: rules for what an entry says (its own code only, no claims about callers or installed state, one or two plain sentences, short edge phrases where something happens), the tools `undescribed`, `in`, `order`, `stamp`, `stale` and `find`, recommendations marked as such, and the file format. It no longer works from a slice per folder.
 
+### Removed
+
+- The five first rutters, which held vocabulary only and could not make a map: `drupal@0.1.0` (use `drupal_basic`), `php@0.1.0` (use `php_basic`), `go@0.0.2` (use `go_basic`), `twig@0.0.1` (use `twig_basic`) and `yaml@0.0.1` (use `yaml_basic`).
+
 ### Fixed
 
 - `periplus slice` prints a start given as an id escaped once; before, a backslash in the id printed as four.

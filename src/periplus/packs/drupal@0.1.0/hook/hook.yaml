@@ -1,9 +1,0 @@
-$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
-
-# drupal pack — declares the hook implementation type.
-
-node_types:
-
-  - name: drupal.hook_implementation
-    description: "A method that carries the Hook attribute; the hook it implements is stored on the node"
-    parent: php.method

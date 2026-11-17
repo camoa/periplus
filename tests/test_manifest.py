@@ -44,7 +44,7 @@ def _pack_root(directory: Path) -> PackRoot:
     """A root record for a directory a test built.
 
     Constructed rather than produced by `resolve_pack_roots`, which would put the bundled root on
-    the search path beside the fixture and let the five shipped packs answer a fixture's `depends`.
+    the search path beside the fixture and let the shipped packs answer a fixture's `depends`.
     Everything below the root is real: `discover_candidates` lists it, parses the names and
     classifies the entries exactly as it does for an installed root.
     """
@@ -95,7 +95,7 @@ def _bundled_pack(entry: str) -> Path:
     return Path(str(directory))
 
 
-def test_the_bundled_drupal_manifest_reads_back_what_the_shipped_file_declares() -> None:
+def test_the_bundled_laravel_manifest_reads_back_what_the_shipped_file_declares() -> None:
     """A real manifest, transcribed from the pack that ships rather than from a fixture.
 
     Two claims in one, because they are the two halves of "reader": the fields this module names
@@ -103,18 +103,21 @@ def test_the_bundled_drupal_manifest_reads_back_what_the_shipped_file_declares()
     consumers this reader exists for — `periplus spec`, framework detection — will read, and a
     reader that parsed a manifest and kept only three keys would pass every other test here.
     """
-    manifest = load_manifest(_bundled_pack("drupal@0.1.0"))
+    manifest = load_manifest(_bundled_pack("laravel_basic@0.0.5"))
 
-    assert manifest.pack == "drupal"
-    assert manifest.version == "0.1.0"
-    assert manifest.depends == ("php", "yaml")
+    assert manifest.pack == "laravel_basic"
+    assert manifest.version == "0.0.5"
+    assert manifest.depends == ("php_basic",)
     assert manifest.document["folders"] == {
-        "config": "./config/sync",
-        "custom_module": "./web/modules/custom",
-        "custom_theme": "./web/themes/custom",
-        "module_config": "{custom_module}/*/config/install",
+        "routes": "./routes",
+        "views_root": "./resources/views",
+        "views": "{views_root}/**",
+        "config_files": "./config",
+        "migrations": "./database/migrations",
+        "controllers": "./app/Http/Controllers/**",
+        "models": "./app/Models/**",
     }
-    assert "boundary" in manifest.document
+    assert "files" in manifest.document
 
 
 def test_a_pack_directory_with_no_manifest_is_refused_rather_than_read_as_empty(
@@ -256,19 +259,26 @@ def test_an_identity_that_is_not_two_strings_is_absent_rather_than_coerced(
 
 
 def test_a_pinned_pack_comes_after_every_pack_it_depends_on() -> None:
-    """The bundled graph, walked: drupal depends on php and yaml, and arrives last.
+    """The bundled graph, walked: drupal_basic depends on php_basic, twig_basic and yaml_basic, and
+    arrives last.
 
     Read off the shipped packs rather than a fixture, so the headline behaviour is proved against
     the only real dependency graph this project has.
     """
-    root = _pack_root(Path(str(importlib.resources.files("periplus") / PACKS_DIRECTORY)))
-    candidates = discover_candidates((root,))
-    matched, _ = match_pins(["drupal@0.1.0"], candidates)
+    bundled = Path(str(importlib.resources.files("periplus") / PACKS_DIRECTORY))
+    (pin,) = [entry.name for entry in bundled.iterdir() if entry.name.startswith("drupal_basic@")]
+    candidates = discover_candidates((_pack_root(bundled),))
+    matched, _ = match_pins([pin], candidates)
 
     order, problems = resolve_pack_order(matched, candidates)
 
     assert problems == ()
-    assert [pack.name.pack for pack in order] == ["php", "yaml", "drupal"]
+    assert [pack.name.pack for pack in order] == [
+        "php_basic",
+        "twig_basic",
+        "yaml_basic",
+        "drupal_basic",
+    ]
 
 
 def test_the_order_does_not_depend_on_the_order_the_inputs_arrive_in(tmp_path: Path) -> None:

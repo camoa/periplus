@@ -173,7 +173,7 @@ class ExitCode(IntEnum):
     #:   problem and returns *before* ``resolve_pack_order`` is called, so a run that produced 15
     #:   walked no dependency graph, and a run that walked one found the pack. The two are
     #:   mutually exclusive by construction, and an earlier version of this docblock justified the
-    #:   member with a run — a misspelled ``drupal`` whose ``yaml`` dependency is also missing —
+    #:   member with a run — a misspelled pack whose dependency is also missing —
     #:   that cannot happen.
     #: * It does co-occur with a settings or pin fault, because ``spec`` resolves the search path
     #:   exactly as ``status`` does and inherits every problem resolution found. A report's status

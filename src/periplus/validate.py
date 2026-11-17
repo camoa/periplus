@@ -350,8 +350,9 @@ def _check_directory(
     deciding the output. Sorting once at the end absorbs both.
 
     Each validator is built once and used for every file it applies to. That is not a saving: a
-    validator built per file would re-resolve the same ``$ref`` graph forty-eight times for
-    ``drupal``, and the reason to say so here is that a reader should not move it back. The result
+    validator built per file would re-resolve the same ``$ref`` graph once per file of a large
+    rutter such as ``drupal_basic``, and the reason to say so here is that a reader should not move
+    it back. The result
     is kept in ``pack.checked``, so a second check of one ``LoadedPack`` in a run validates nothing
     again; the read problems go to ``problems`` on every call.
     """

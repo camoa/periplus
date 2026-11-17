@@ -38,10 +38,10 @@ from periplus.spec import (
 SRC = PROJECT_ROOT / "src"
 SHIPPED_CONTRACT = SRC / "periplus" / "contract"
 
-#: The bundled packs whose manifests declare ``depends: []``: four of the five;
-#: ``drupal`` is the fifth and is the counter-case, not an omission — it declares two dependencies,
-#: so it is the pack whose inherited vocabulary must come back unread rather than empty.
-INDEPENDENT_PACKS = ("go", "php", "twig", "yaml")
+#: Four bundled rutters whose manifests declare ``depends: []``. ``laravel_basic`` is the
+#: counter-case: it declares a dependency, so it is the pack whose inherited vocabulary must come
+#: back unread rather than empty.
+INDEPENDENT_PACKS = ("go_basic", "php_basic", "twig_basic", "yaml_basic")
 
 #: A settings file that will not parse. ``ruamel.yaml`` at ``typ='safe'`` is YAML 1.2 and refuses a
 #: duplicate key where PyYAML would keep the last value, so this is unreadable by construction
@@ -159,7 +159,7 @@ def test_no_pack_named_reads_nothing_outside_the_installed_package(
     (marker / "settings.yml").write_text(UNREADABLE_SETTINGS, encoding="utf-8")
 
     published = spec(start=start, env=env, dependencies=(), requested=None)
-    with_a_pack = spec(start=start, env=env, dependencies=(), requested="php")
+    with_a_pack = spec(start=start, env=env, dependencies=(), requested="php_basic")
 
     assert published.problems == ()
     assert published.exit_code is ExitCode.OK
@@ -178,7 +178,7 @@ def test_a_pack_that_depends_on_nothing_inherits_an_empty_vocabulary_and_exits_z
     An empty inherited vocabulary is an *answer* here rather than a placeholder: a pack whose
     manifest declares no ``depends`` has an empty dependency closure, so the union of what it
     inherits is empty by arithmetic. Nothing has to read a rule file to know that, which is why
-    this case can be answered today and ``drupal`` cannot.
+    this case can be answered today and ``laravel_basic`` cannot.
     """
     start, env = elsewhere
 
@@ -192,7 +192,7 @@ def test_a_pack_that_depends_on_nothing_inherits_an_empty_vocabulary_and_exits_z
 def test_a_pack_that_declares_dependencies_reports_them_and_refuses_to_claim_it_read_them(
     elsewhere: tuple[Path, dict[str, str]],
 ) -> None:
-    """``drupal`` depends on two packs, so its inherited vocabulary is unread rather than empty.
+    """``laravel_basic`` depends on a pack, so its inherited vocabulary is unread rather than empty.
 
     This is the counter-case that keeps the test above honest. Without it, ``_inherited`` could
     return the empty vocabulary unconditionally — a stub that says every pack inherits nothing —
@@ -203,12 +203,12 @@ def test_a_pack_that_declares_dependencies_reports_them_and_refuses_to_claim_it_
     """
     start, env = elsewhere
 
-    report = spec(start=start, env=env, dependencies=(), requested="drupal")
+    report = spec(start=start, env=env, dependencies=(), requested="laravel_basic")
 
     assert report.exit_code is ExitCode.OK, [problem.message for problem in report.problems]
     assert report.pack is not None
-    assert report.pack.depends == ("php", "yaml")
-    assert report.pack.inherits_from == ("php", "yaml")
+    assert report.pack.depends == ("php_basic",)
+    assert report.pack.inherits_from == ("php_basic",)
     assert report.inherited is None, (
         "no reader opens a pack's rule files, so a non-empty dependency closure cannot yet be "
         "resolved into node types and edge kinds, and claiming it is empty would be false"
@@ -336,14 +336,14 @@ def test_the_json_form_carries_the_documents_and_keeps_unread_apart_from_empty(
     """A consumer parsing ``--format json`` reads the documents whole, and can tell the two apart.
 
     ``null`` and an object of empty arrays are different facts and this is where a consumer meets
-    them: ``php`` inherits nothing and says so with a value, ``drupal``'s vocabulary has not been
-    read and says so with an absence. A single shape for both would make a consumer read "unread"
-    as "empty", which is the failure this whole record is arranged to prevent.
+    them: ``php_basic`` inherits nothing and says so with a value, ``laravel_basic``'s vocabulary
+    has not been read and says so with an absence. A single shape for both would make a consumer
+    read "unread" as "empty", which is the failure this whole record is arranged to prevent.
     """
     start, env = elsewhere
 
-    independent = json.loads(render_json(spec(start, env, (), "php")))
-    dependent = json.loads(render_json(spec(start, env, (), "drupal")))
+    independent = json.loads(render_json(spec(start, env, (), "php_basic")))
+    dependent = json.loads(render_json(spec(start, env, (), "laravel_basic")))
 
     assert independent["inherited"] == {"node_types": [], "edge_kinds": []}
     assert dependent["inherited"] is None

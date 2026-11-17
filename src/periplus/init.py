@@ -364,8 +364,8 @@ def render_text(report: InitReport) -> str:
     **One ``detected`` line per detection, and none at all when nothing was detected.** The pin
     alone would be the wrong half to print: a pin that was written into the settings file is
     already visible in that file, and what the file cannot say is *why*. So the line carries the
-    evidence — ``drupal@0.1.0 via composer.json`` — which is the only form in which the prefill is
-    checkable by the person expected to edit it.
+    evidence — ``drupal_basic@0.3.0 via composer.json`` — which is the only form in which the
+    prefill is checkable by the person expected to edit it.
 
     Printed on the created path only. A refused run wrote nothing, so a detection it reports is a
     fact about a file that was not touched, and the one thing that run has to say is which path was

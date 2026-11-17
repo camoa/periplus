@@ -13,11 +13,12 @@ package has never heard of, and one plants a repository full of PHP, YAML and Tw
 the packs owning those languages -- which declare no detector -- fire nothing. An implementation
 that hardcoded a framework table would pass every other test in this file.
 
-Fixture packs are written under `tmp_path`, never edits to the five that ship, for the reason
+Fixture packs are written under `tmp_path`, never edits to the packs that ship, for the reason
 `test_manifest.py` gives: a detector introduced into a bundled pack to suit a test is a change to
-the product, and four other suites read those five packs.
+the product, and other suites read those packs.
 
-`_bundled_pin` reads the shipped directory name off disk rather than spelling `drupal@0.1.0` here.
+`_bundled_pin` reads the shipped directory name off disk rather than spelling `drupal_basic@0.3.0`
+here.
 The version in a directory name is package data, not the code under test, and a test that pins it
 by hand breaks on a version bump for a reason that has nothing to do with detection.
 """
@@ -62,7 +63,7 @@ def _fixture_root(directory: Path) -> PackRoot:
     """A root record for a pack directory a test built.
 
     Constructed rather than produced by `resolve_pack_roots`, which would put the bundled root on
-    the search path beside the fixture and let the five shipped packs answer for a fixture. The
+    the search path beside the fixture and let the shipped packs answer for a fixture. The
     same reason `test_manifest.py` constructs its own.
     """
     return PackRoot(
@@ -273,7 +274,7 @@ def test_a_repository_matching_a_bundled_detector_is_recognised(tmp_path: Path) 
     """Recognition, against the pack that ships and a repository built to match it.
 
     A Drupal repository is one whose `composer.json` requires Drupal core. That sentence is the
-    requirement this assertion comes from, and it is what the bundled drupal detector has to
+    requirement this assertion comes from, and it is what the bundled drupal_basic detector has to
     express -- the string below was not read off an implementation, because there is none.
 
     The pin is read off the shipped directory rather than typed, so a version bump does not fail a
@@ -294,8 +295,9 @@ def test_a_php_repository_that_is_not_drupal_is_recognised_as_nothing(tmp_path: 
 
     This repository is PHP, YAML and Twig throughout, and the install ships a pack for each of the
     three. None of them declares a detector, because "there is PHP here" is not a stack anybody
-    pins -- drupal already reaches php and yaml through `depends`, and pinning a language pack
-    because a file with that extension exists would prefill noise into every settings file.
+    pins -- drupal_basic already reaches php_basic and yaml_basic through `depends`, and pinning
+    a language pack because a file with that extension exists would prefill noise into every
+    settings file.
 
     So the empty result is the assertion, and it is the one an engine with a built-in framework
     table fails. The `composer.json` requires Symfony rather than nothing, which is the case a

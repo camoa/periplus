@@ -379,26 +379,27 @@ def test_three_unmatched_pins_produce_three_problems_in_one_run(tmp_path: Path) 
 
 
 def test_a_pin_matches_its_directory_name_byte_for_byte(tmp_path: Path) -> None:
-    """No case folding and no version comparison. `drupal@0.1.0` matches `drupal@0.1.0` and nothing.
+    """No case folding and no version comparison. `yaml_basic@0.1.0` matches `yaml_basic@0.1.0` and
+    nothing else.
 
     The two ways a lookup gets quietly loosened are a case-insensitive compare and a version
     compare that treats `0.1` and `0.1.0` as one. Both are asserted against here, because either
     would make the harness decide something about pack identity, which is the validator's job.
 
-    The four bundled packs no pin names are not a problem either: a directory under a person's pack
+    The bundled packs no pin names are not a problem either: a directory under a person's pack
     folder is an error only when a pin needs it.
     """
     roots = resolve_pack_roots(None, tmp_path / "nouserconf", None)
     candidates = discover_candidates(roots)
 
-    matched, problems = match_pins(["drupal@0.1.0"], candidates)
-    folded, _ = match_pins(["DRUPAL@0.1.0"], candidates)
-    shortened, _ = match_pins(["drupal@0.1"], candidates)
+    matched, problems = match_pins(["yaml_basic@0.1.0"], candidates)
+    folded, _ = match_pins(["YAML_BASIC@0.1.0"], candidates)
+    shortened, _ = match_pins(["yaml_basic@0.1"], candidates)
 
     assert len(matched) == 1
-    assert matched[0].name == PackName(pack="drupal", version="0.1.0")
+    assert matched[0].name == PackName(pack="yaml_basic", version="0.1.0")
     assert matched[0].root.kind == "bundled"
-    assert matched[0].path.endswith("/periplus/packs/drupal@0.1.0")
+    assert matched[0].path.endswith("/periplus/packs/yaml_basic@0.1.0")
     assert folded == ()
     assert shortened == ()
     assert problems == ()

@@ -18,7 +18,6 @@ from pathlib import Path
 import pytest
 from test_validate import (
     BUNDLED_PACKS,
-    REFERENCE_PACK_NAMES,
     Project,
     _run,
     elsewhere,  # noqa: F401 - fixture
@@ -347,24 +346,3 @@ def _pinned_version(name: str) -> str:
     """The version half of the bundled directory ``<name>@<version>``."""
     (directory,) = [e for e in BUNDLED_PACKS.iterdir() if e.name.startswith(f"{name}@")]
     return directory.name.split("@")[1]
-
-
-@pytest.mark.criterion(id="c5")
-@pytest.mark.parametrize("pack", REFERENCE_PACK_NAMES)
-def test_a_reference_pack_validates_with_the_problems_map_gives_a_project_pinning_it_c5(
-    project: Project,  # noqa: F811
-    pack: str,
-) -> None:
-    (project.root / ".periplus" / "settings.yml").write_text(
-        f"periplus_version: 0\npacks:\n  - {pack}@{_pinned_version(pack)}\n"
-        "values:\n  module: example.com/site\n",
-        encoding="utf-8",
-    )
-    map_status, mapped = _call(["map"], cwd=project.root, config=project.config)
-    status, payload = _call(["validate", pack], cwd=project.root, config=project.config)
-
-    expected = _problems(mapped)
-    assert expected, f"map gave {pack} no problem"
-    assert payload["errors"] == []
-    assert _problems(payload) == expected
-    assert status == map_status
