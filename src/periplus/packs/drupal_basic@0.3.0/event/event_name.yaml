@@ -5,7 +5,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # own line, and the one-step name_child [name] reads the name, which has no field. Two map rules
 # mark as an event constant each constant of a class that descends from Symfony's Event or
 # Drupal's Event, through mapped parents, and each constant of a class whose name ends in Events,
-# as core's KernelEvents names its events. Every constant of such a class reads as an event name.
+# as core's KernelEvents names its events. Of such a class, an event constant holds a text or a
+# string built from one, never an integer, a float, a boolean, null or an array
+# (constant/constant_text.yaml); when the class documents some of its constants with @Event, as
+# core's ConfigEvents does, only those and the ones a dispatch, a key, an attribute or a
+# registration call names (use_names_constant, read from the use's id) are event constants.
 # An event constant whose text constant/constant_text.yaml reads gives the event of that text and
 # a drupal.event_constant that names it; one whose text it does not read gives the event of
 # <class>::<CONST>.
@@ -18,6 +22,16 @@ node_types:
   internal: true
 
 edge_kinds:
+- kind: use_names_constant
+  cause: none
+  description: "the dispatch, key, attribute or registration names that class constant as its event, on the class written or the nearest mapped ancestor that declares it"
+  from: drupal.event_use
+  to: drupal.class_constant
+- kind: documented_as_event
+  cause: none
+  description: "the class constant's docblock holds @Event, so its class documents which of its constants name events"
+  from: drupal.class_constant
+  to: drupal.event_use
 - kind: derives_listener
   cause: none
   description: "a listener of the event this text names, with no method, is that derived method"
@@ -179,6 +193,44 @@ rules:
   emits: [{edge: {kind: derives_listener, from: this_node, to: {template: '{derived}|{lower}', types: [drupal.derived_listener]}}}]
   confidence: inferred
 
+# A constant whose docblock holds @Event, in a class or an interface, as core's ConfigEvents
+# documents each of its event names; the class is marked documented|<class>.
+- rule: event_documented
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '/\*\*(?:[^*@]|\*(?!/)|@(?!Event\b))*@Event\b(?:[^*]|\*(?!/))*\*/\s*(?:(?:final|public|protected|private)\s+)*const\s+(?:[A-Za-z_\\?|]+\s+)?(?<constant>[A-Z][A-Z0-9_]*)\s*='
+  values:
+    in_class: {from: {enclosing: class_like_body, capture: class}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    fns: {from: {enclosing: php_namespace, capture: ns}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '(?<=.)$', with: '\'}]}
+    cls: {template: '{fns}{in_class}'}
+  line: {capture: constant}
+  id: {template: '{cls}::{constant}'}
+  emits: [{edge: {kind: documented_as_event, from: this_node, to: {template: 'documented|{cls}', type: drupal.event_use}}}]
+  confidence: inferred
+
+# An event constant holds a text or a string built from one, never an integer, a float, a boolean,
+# null or an array. Of a class that documents none of its constants with @Event, each such constant
+# is one; of a class that documents some, those it documents and those a dispatch, a subscriber key,
+# a listener attribute, an addListener or an addTag call names.
+# The class constant a dispatch, a subscriber key, a listener attribute, an addListener or an
+# addTag call names as its event, read from the use's id.
+- rule: use_names_constant
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<cc>[^|:]+(?:::[^|:]+)*?)::(?<cn>[A-Z][A-Z0-9_]*)\|(?:disp|disp_here|reg|reg_here|subscribed|subscribed_here)[~|]'}]
+    follow:
+    - node: 'php.type::{cc}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<cd>.+)$'
+    - node: 'drupal.class_constant::{cd}::{cn}'
+  emits: [{edge: {kind: use_names_constant, from: this_node, to: matched_node}}]
+  confidence: inferred
+
 - rule: event_constant_of_event_class
   reads: map
   match:
@@ -188,6 +240,35 @@ rules:
     - node: 'php.type::{class}'
     - ancestors: [inherits]
     - id_matches: '^php\.type::(?:Symfony\\Contracts|Drupal\\Component)\\EventDispatcher\\Event$'
+    unless: [[{edge: has_constant_int}], [{edge: has_other_value}], [{node: 'drupal.event_use::documented|{class}'}]]
+  emits: [{edge: {kind: is_event_constant, from: this_node, to: this_node}}]
+  confidence: inferred
+
+- rule: event_constant_of_event_class_documented
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow:
+    - edge: documented_as_event
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?:Symfony\\Contracts|Drupal\\Component)\\EventDispatcher\\Event$'
+    unless: [[{edge: has_constant_int}], [{edge: has_other_value}]]
+  emits: [{edge: {kind: is_event_constant, from: this_node, to: this_node}}]
+  confidence: inferred
+
+- rule: event_constant_of_event_class_used
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow:
+    - incoming_edge: use_names_constant
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?:Symfony\\Contracts|Drupal\\Component)\\EventDispatcher\\Event$'
+    unless: [[{edge: has_constant_int}], [{edge: has_other_value}]]
   emits: [{edge: {kind: is_event_constant, from: this_node, to: this_node}}]
   confidence: inferred
 
@@ -196,6 +277,27 @@ rules:
   match:
     node_type: drupal.class_constant
     where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]*Events)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    unless: [[{edge: has_constant_int}], [{edge: has_other_value}], [{node: 'drupal.event_use::documented|{class}'}]]
+  emits: [{edge: {kind: is_event_constant, from: this_node, to: this_node}}]
+  confidence: inferred
+
+- rule: event_constant_of_events_class_documented
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]*Events)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow: [{edge: documented_as_event}]
+    unless: [[{edge: has_constant_int}], [{edge: has_other_value}]]
+  emits: [{edge: {kind: is_event_constant, from: this_node, to: this_node}}]
+  confidence: inferred
+
+- rule: event_constant_of_events_class_used
+  reads: map
+  match:
+    node_type: drupal.class_constant
+    where: [{id_matches: '^drupal\.class_constant::(?<class>[^:]*Events)::(?<constant>[A-Z][A-Z0-9_]*)$'}]
+    follow: [{incoming_edge: use_names_constant}]
+    unless: [[{edge: has_constant_int}], [{edge: has_other_value}]]
   emits: [{edge: {kind: is_event_constant, from: this_node, to: this_node}}]
   confidence: inferred
 

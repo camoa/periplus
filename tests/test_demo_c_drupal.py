@@ -1353,15 +1353,16 @@ def test_an_event_is_subscribed_by_the_methods_its_keys_name_and_dispatched_by_t
     }
     request = "drupal.event::Symfony\\Component\\HttpKernel\\KernelEvents::REQUEST"
     text = "event_subscribed_by_text"
+    here = "event_subscribed_by_text_here"
     sent = "dispatched_by_named"
     by_constant = "event_subscribed_by_constant"
     assert found == {
         ("subscribed_by", cancelled, sub + "onCancelled", 15, text, "inferred"),
-        ("subscribed_by", "drupal.event::my_module.mine", sub + "onMine", 16, text, "inferred"),
+        ("subscribed_by", "drupal.event::my_module.mine", sub + "onMine", 16, here, "inferred"),
         ("subscribed_by", "drupal.event::my_module.placed", sub + "onPlaced", 18, text, "inferred"),
         ("subscribed_by", request, sub + "onRequest", 19, by_constant, "inferred"),
         ("subscribed_by", "drupal.event::my_module.paid", sub + "onPaid", 20, text, "inferred"),
-        ("subscribed_by", "drupal.event::my_module.local", sub + "onLocal", 21, text, "inferred"),
+        ("subscribed_by", "drupal.event::my_module.local", sub + "onLocal", 21, here, "inferred"),
         ("dispatched_by", "drupal.event::my_module.placed", notify, 14, sent, "inferred"),
         ("dispatched_by", "drupal.event::my_module.paid", notify, 15, sent, "inferred"),
         ("dispatched_by", "drupal.event::my_module.sent", notify, 16, sent, "inferred"),
@@ -1437,7 +1438,8 @@ def test_a_subscribed_by_edge_holds_the_priority_as_written_and_0_when_none_is(
     tmp_path: Path,
 ) -> None:
     """Each form of getSubscribedEvents gives its listener's priority: a number, a negative one, a
-    constant, a value on its own line, and 0 when none is written, as Symfony runs it; each
+    constant, as the integer a mapped file declares it with, a value on its own line, and 0 when
+    none is written, as Symfony runs it; each
     listener of a list of lists holds its own. A key outside getSubscribedEvents gives nothing."""
     _plant(tmp_path, PRIORITIES)
     document, _ = _map(tmp_path)
@@ -1456,7 +1458,7 @@ def test_a_subscribed_by_edge_holds_the_priority_as_written_and_0_when_none_is(
         "OrderSubscriber::onLocal": {"priority": "0"},
         "PrioritySubscriber::onPaidFirst": {"priority": "-10"},
         "PrioritySubscriber::onPaidSecond": {"priority": "20"},
-        "PrioritySubscriber::onPlacedLate": {"priority": "self::LATE"},
+        "PrioritySubscriber::onPlacedLate": {"priority": "-100"},
         "PrioritySubscriber::onLocalHigh": {"priority": "50"},
         "PrioritySubscriber::onRequestMax": {"priority": "PHP_INT_MAX"},
         "PrioritySubscriber::onCancelledPlain": {"priority": "0"},
@@ -7013,5 +7015,629 @@ def test_a_computed_get_priority_gives_its_handlers_priority_computed(tmp_path: 
         ),
         ("KernelEvents::EXCEPTION", "Computed::on403", "computed"),
         ("KernelEvents::EXCEPTION", "Literal::on404", "-7"),
+    }
+    assert report.skipped == ()
+
+
+DISPATCH_WHOLE = {
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+  const PLACED = 'my_module.placed';
+  const PAID = 'my_module.paid';
+  const SENT = 'my_module.sent';
+}
+""",
+    str(MODULE / "src/Event/PaidEvent.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+use Symfony\Contracts\EventDispatcher\Event;
+
+class PaidEvent extends Event {
+}
+""",
+    str(MODULE / "src/Service/Shop.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+use Drupal\my_module\Event\OrderEvents;
+use Drupal\my_module\Event\PaidEvent;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+class Shop {
+
+  public function a(EventDispatcherInterface $d, PaidEvent $event) {
+    $d->dispatch
+      ($event, OrderEvents::PLACED);
+    $d->dispatch(
+      $event,
+      OrderEvents::PAID
+    );
+    $d->dispatch /* why */ (
+      // the event
+      $event, /* the name */
+      OrderEvents::SENT // last
+    );
+    $d->dispatch(new PaidEvent(f(g(h($event)))), 'my_module.deep');
+    $d->dispatch(new PaidEvent($d->dispatch($event, OrderEvents::PAID)), OrderEvents::SENT);
+    $d->dispatch(new PaidEvent(dispatch($a, 'x.y')), 'my_module.outer');
+    $d->dispatch(new PaidEvent(Foo::dispatch($a, 'x.z')), 'my_module.outer2');
+    $d->dispatch();
+    $d->dispatch($event, OrderEvents::PAID, TRUE);
+  }
+
+}
+""",
+}
+
+
+DISPATCH_DECLARED = {
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "src/Event/FireTrait.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+trait FireTrait {
+
+  public function fireAgain(EventDispatcherInterface $d) {
+    $d->dispatch($this);
+  }
+
+}
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+  const PLACED = 'my_module.placed';
+}
+""",
+    str(MODULE / "src/Event/PaidEvent.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+use Symfony\Contracts\EventDispatcher\Event;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+class PaidEvent extends Event {
+
+  public function fire(EventDispatcherInterface $d) {
+    $d->dispatch($this);
+  }
+
+}
+""",
+    str(MODULE / "src/Service/Local.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+final class LocalEvents {
+  const DONE = 'my_module.done';
+}
+""",
+    str(MODULE / "src/Service/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+final class OrderEvents {
+  const PLACED = 'wrong.placed';
+}
+""",
+    str(MODULE / "src/Service/Shop.php"): r"""<?php
+
+namespace Drupal\my_module\Service;
+
+use Drupal\my_module\Event\PaidEvent;
+use Drupal\my_module\Event\OrderEvents as OrderEvents;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+class Shop {
+
+  protected PaidEvent $paid;
+
+  public function a(EventDispatcherInterface $d, PaidEvent $event, $x) {
+    $d->dispatch($event);
+    $d->dispatch($this->paid);
+    $d->dispatch($x, OrderEvents::PLACED);
+    $d->dispatch($x, LocalEvents::DONE);
+    $d->dispatch($x, MissingEvents::GONE);
+    $d->dispatch($x, Sub\DeepEvents::DEEP);
+    $d->dispatch(new PaidEvent());
+  }
+
+}
+""",
+}
+
+
+REGISTRATION_WHOLE = {
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+  const PLACED = 'my_module.placed';
+  const PAID = 'my_module.paid';
+  const SENT = 'my_module.sent';
+}
+""",
+    str(MODULE / "src/EventSubscriber/Wiring.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+class Wiring {
+
+  public function wire(EventDispatcherInterface $d, ContainerBuilder $c) {
+    $d->addListener
+      (OrderEvents::PLACED, [$this, 'onA'], 10);
+    $d->addListener(
+      // the event
+      OrderEvents::PAID, /* the listener */
+      [$this, 'onA'],
+      20
+    );
+    $d->addSubscriber
+      (new Wiring());
+    $d->addSubscriber( /* x */ new Wiring() );
+    $c->register('w', Wiring::class)
+      ->addTag
+      ('kernel.event_listener', ['event' => OrderEvents::SENT, 'method' => 'onA']);
+    $c->register('w2', Wiring::class)->addTag(
+      'kernel.event_listener', // tag
+      [
+        'event' => 'my_module.tagged', // ev
+        'method' => 'onA',
+      ]
+    );
+  }
+
+  #[AsEventListener(
+    event: OrderEvents::PLACED, // e
+    priority: 5,
+  )]
+  public function onA($event) {}
+
+  #[AsEventListener
+    (event: 'my_module.attr2')]
+  public function onB($event) {}
+
+  public static function getSubscribedEvents() {
+    return [
+      OrderEvents::SENT => 'onA',
+      OrderEvents::PLACED => [
+        'onB', // m
+        7,
+      ],
+    ];
+  }
+
+}
+""",
+}
+
+
+PARENT_AND_UNBOUND = {
+    str(MODULE / "src/Other/OtherSub.php"): r"""<?php
+
+namespace Drupal\my_module\Other;
+
+use Drupal\my_module\EventSubscriber\BaseSubscriber;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class OtherSub extends BaseSubscriber implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return [parent::READY => 'onOther'];
+  }
+
+  public function onOther($event) {}
+
+}
+""",
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class OrderEvents {
+  const PLACED = 'my_module.placed';
+}
+""",
+    str(MODULE / "src/EventSubscriber/BaseSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+
+class BaseSubscriber extends OrderEvents {
+  const READY = 'my_module.ready';
+}
+""",
+    str(MODULE / "src/EventSubscriber/LocalEvents.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+final class LocalEvents {
+  const DONE = 'my_module.done';
+}
+""",
+    str(MODULE / "src/EventSubscriber/Sub.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+
+#[AsEventListener(event: parent::READY, method: 'onClass')]
+class Sub extends BaseSubscriber implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return [
+      parent::READY => 'onA',
+      parent::PLACED => ['onB', 5],
+      MissingEvents::GONE => 'onA',
+      LocalEvents::DONE => 'onB',
+    ];
+  }
+
+  #[AsEventListener(event: parent::PLACED)]
+  public function onA($event) {}
+
+  #[AsEventListener(event: MissingEvents::ATTR)]
+  public function onB($event) {}
+
+  public function onClass($event) {}
+
+  public function wire(EventDispatcherInterface $d, ContainerBuilder $c) {
+    $d->addListener(parent::READY, [$this, 'onA']);
+    $d->addListener(MissingEvents::ADDED, [$this, 'onA']);
+    $c->register('s', Sub::class)
+      ->addTag('kernel.event_listener', ['event' => parent::PLACED, 'method' => 'onB']);
+    $c->register('s2', Sub::class)
+      ->addTag('kernel.event_listener', ['event' => MissingEvents::TAGGED, 'method' => 'onB']);
+  }
+
+}
+""",
+}
+
+
+PRIORITY_CONSTANTS = {
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+  const PLACED = 'my_module.placed';
+  const PAID = 'my_module.paid';
+  const SENT = 'my_module.sent';
+}
+""",
+    str(MODULE / "src/Event/Priorities.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class Priorities {
+  const FIRST = 100;
+}
+""",
+    str(MODULE / "src/EventSubscriber/Child.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class Child extends Sub {
+}
+""",
+    str(MODULE / "src/EventSubscriber/Sub.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+use Drupal\my_module\Event\Priorities;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+
+class Sub implements EventSubscriberInterface {
+
+  const LATE = -10;
+  const NAMED = 'x';
+
+  public static function getSubscribedEvents() {
+    return [
+      OrderEvents::PLACED => [
+        ['onA', self::LATE],
+        ['onB', Priorities::FIRST],
+        ['onC', self::NAMED],
+        ['onD', Missing::P],
+        ['onE', self::LATE + 1],
+      ],
+    ];
+  }
+
+  #[AsEventListener(event: OrderEvents::PAID, priority: self::LATE)]
+  public function onA($event) {}
+
+  public function onB($event) {}
+  public function onC($event) {}
+  public function onD($event) {}
+  public function onE($event) {}
+
+  public function wire(EventDispatcherInterface $d, ContainerBuilder $c) {
+    $d->addListener(OrderEvents::SENT, [$this, 'onB'], Priorities::FIRST);
+    $c->register('s', Sub::class)->addTag('kernel.event_listener', [
+      'event' => OrderEvents::SENT,
+      'method' => 'onC',
+      'priority' => self::LATE,
+    ]);
+  }
+
+}
+""",
+}
+
+
+EVENT_CONSTANTS = {
+    str(MODULE / "my_module.info.yml"): r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    str(MODULE / "src/Event/BarEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class BarEvents {
+
+  /**
+   * Fired when a bar opens.
+   *
+   * @Event
+   */
+  const OPENED = 'bar.opened';
+
+  const PREFIX = 'bar';
+
+  const CLOSED = 'bar.closed';
+
+  const SENT = 'bar.sent';
+
+}
+""",
+    str(MODULE / "src/Event/FooEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class FooEvents {
+  const A = 'foo.a';
+  const MAX = 10;
+  const MIN = -1;
+  const RATIO = 0.5;
+  const LIST = ['x'];
+  const FLAG = TRUE;
+  const NOTHING = NULL;
+  const BUILT = self::A . '.built';
+}
+""",
+    str(MODULE / "src/EventSubscriber/BarSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\BarEvents;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+class BarSubscriber implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return [BarEvents::CLOSED => 'onClosed'];
+  }
+
+  public function onClosed($event) {}
+
+  public function send(EventDispatcherInterface $d, $e) {
+    $d->dispatch($e, BarEvents::SENT);
+  }
+
+}
+""",
+}
+
+
+def _lines(document: dict[str, Any], kinds: tuple[str, ...]) -> dict[tuple[str, str], list[int]]:
+    """Each edge of the kinds as (from, to), the module's prefixes cut, with its sorted lines."""
+    return {
+        (_short(e["from"]), _short(e["to"])): sorted(place["line"] for place in e["locations"])
+        for e in document["edges"]
+        if e["kind"] in kinds
+    }
+
+
+def _event_from(document: dict[str, Any]) -> dict[tuple[str, str], Any]:
+    """Each dispatch edge's event_from as (from, to), the module's prefixes cut: the value, or the
+    sorted (line, value) pairs of one that differs between places."""
+    found: dict[tuple[str, str], Any] = {}
+    for e in document["edges"]:
+        value = e.get("attributes", {}).get("event_from")
+        if e["kind"] == "dispatched_by" and value is not None:
+            if isinstance(value, dict):
+                value = tuple(sorted((p["line"], p["value"]) for p in value["differs"]))
+            found[(_short(e["from"]), _short(e["to"]))] = value
+    return found
+
+
+def test_a_dispatch_is_read_whole_at_its_line_whatever_its_line_breaks_comments_and_nesting(
+    tmp_path: Path,
+) -> None:
+    """A ->dispatch() call written across lines, with comments between its parts, or nested in
+    another's arguments names the event of its own second argument, at the line of ->dispatch. A
+    dispatch() function or a static dispatch nested in the arguments and a call with no argument
+    give nothing; a third argument leaves the arguments unread, with the runtime mark."""
+    _plant(tmp_path, DISPATCH_WHOLE)
+    document, report = _map(tmp_path)
+    shop = "Service\\Shop::a"
+    assert _lines(document, ("dispatched_by",)) == {
+        ("my_module.placed", shop): [12],
+        ("my_module.paid", shop): [14, 24],
+        ("my_module.sent", shop): [18, 24],
+        ("my_module.deep", shop): [23],
+        ("my_module.outer", shop): [25],
+        ("my_module.outer2", shop): [26],
+        (f"{shop}|(unread)~v:d", shop): [28],
+    }
+    assert report.skipped == ()
+
+
+def test_this_and_a_typed_object_dispatch_their_declared_class_marked_as_such(
+    tmp_path: Path,
+) -> None:
+    """$this dispatched in a class is the event of that class, and in a trait the runtime mark; a
+    typed parameter or property gives its declared class; each such edge holds event_from: declared
+    type, and one a new X shares holds written class at that place. X::NAME that no use statement
+    binds is the constant of the file's own namespace, unresolved when no mapped file declares it;
+    a bound X is never read in the namespace, even where the namespace has a class X."""
+    _plant(tmp_path, DISPATCH_DECLARED)
+    document, report = _map(tmp_path)
+    shop = "Service\\Shop::a"
+    paid = "Event\\PaidEvent"
+    trait = "Event\\FireTrait::fireAgain"
+    assert _dispatched(document) == {
+        ("dispatched_by", paid, "Event\\PaidEvent::fire", _ON),
+        ("dispatched_by", paid, shop, _ON),
+        ("dispatched_by", "Service\\MissingEvents::GONE", shop, _ON),
+        ("dispatched_by", "Service\\Sub\\DeepEvents::DEEP", shop, _ON),
+        ("dispatched_by", "my_module.done", shop, _ON),
+        ("dispatched_by", "my_module.placed", shop, _ON),
+        ("dispatched_by", "Event\\FireTrait::fireAgain|$this~v:d", trait, _ON),
+    }
+    assert _event_from(document) == {
+        (paid, "Event\\PaidEvent::fire"): "declared type",
+        (paid, shop): ((14, "declared type"), (15, "declared type"), (20, "written class")),
+    }
+    assert report.skipped == ()
+
+
+def test_a_registration_call_or_attribute_is_read_whole_whatever_its_line_breaks_and_comments(
+    tmp_path: Path,
+) -> None:
+    """addListener, addSubscriber and addTag with ( on the next line or comments between their
+    arguments, an AsEventListener attribute written across lines, and a key's priority after a
+    comment each give their listener and priority, never a runtime mark of the comment."""
+    _plant(tmp_path, REGISTRATION_WHOLE)
+    document, report = _map(tmp_path)
+    assert _subscribed(document) == {
+        ("my_module.attr2", "Wiring::onB", "0"),
+        ("my_module.paid", "Wiring::onA", "20"),
+        ("my_module.placed", "Wiring::onA", ("10", "5")),
+        ("my_module.placed", "Wiring::onB", "7"),
+        ("my_module.sent", "Wiring::onA", "0"),
+        ("my_module.tagged", "Wiring::onA", "0"),
+    }
+    assert _lines(document, ("registers_subscriber",)) == {
+        ("Wiring::wire", "Wiring"): [21, 23],
+    }
+    assert not [n for n in document["nodes"] if n["type"] == "drupal.runtime_subscription"]
+    assert report.skipped == ()
+
+
+def test_parent_constant_and_an_unbound_constant_are_read_in_every_registration_form(
+    tmp_path: Path,
+) -> None:
+    """parent::NAME as a getSubscribedEvents key, a method's or a class's AsEventListener event,
+    an addListener event or an addTag event is the constant on the class's written parent or its
+    ancestors, the parent read through a use statement or the file's namespace; X::NAME that no
+    use statement binds is the constant of the file's own namespace, unresolved when no mapped
+    file declares it."""
+    _plant(tmp_path, PARENT_AND_UNBOUND)
+    document, report = _map(tmp_path)
+    here = "Drupal\\my_module\\EventSubscriber\\MissingEvents::"
+    assert _subscribed(document) == {
+        (here + "ADDED", "Sub::onA", "0"),
+        (here + "ATTR", "Sub::onB", "0"),
+        (here + "GONE", "Sub::onA", "0"),
+        (here + "TAGGED", "Sub::onB", "0"),
+        ("my_module.done", "Sub::onB", "0"),
+        ("my_module.placed", "Sub::onA", "0"),
+        ("my_module.placed", "Sub::onB", ("0", "5")),
+        ("my_module.ready", "Sub::onA", "0"),
+        ("my_module.ready", "Sub::onClass", "0"),
+        ("my_module.ready", "Drupal\\my_module\\Other\\OtherSub::onOther", "0"),
+    }
+    assert not [n for n in document["nodes"] if n["type"] == "drupal.runtime_subscription"]
+    assert report.skipped == ()
+
+
+def test_a_priority_written_as_a_constant_reads_as_its_integer_else_as_written(
+    tmp_path: Path,
+) -> None:
+    """A priority written self::LATE or X::FIRST, in a key, a list of lists, an attribute, an
+    addListener or an addTag call and through a subclass, is the integer a mapped file declares the
+    constant with; a text constant, an unmapped one and an expression stay as written."""
+    _plant(tmp_path, PRIORITY_CONSTANTS)
+    document, report = _map(tmp_path)
+    assert _subscribed(document) == {
+        ("my_module.paid", "Sub::onA", "-10"),
+        ("my_module.placed", "Sub::onA", "-10"),
+        ("my_module.placed", "Sub::onB", "100"),
+        ("my_module.placed", "Sub::onC", "self::NAMED"),
+        ("my_module.placed", "Sub::onD", "Missing::P"),
+        ("my_module.placed", "Sub::onE", "self::LATE + 1"),
+        ("my_module.sent", "Sub::onB", "100"),
+        ("my_module.sent", "Sub::onC", "-10"),
+    }
+    assert report.skipped == ()
+
+
+def test_only_a_string_constant_documented_or_used_names_an_event(tmp_path: Path) -> None:
+    """An integer, a float, a boolean, null or an array constant of an Events class names no event;
+    a text or a string built from one does. Of a class that documents some constants with @Event,
+    those and the ones a key or a dispatch names are events, and another text is not."""
+    _plant(tmp_path, EVENT_CONSTANTS)
+    document, report = _map(tmp_path)
+    events = {_short(n["id"]) for n in document["nodes"] if n["type"] == "drupal.event"}
+    assert events == {
+        "Event\\FooEvents::BUILT",
+        "bar.closed",
+        "bar.opened",
+        "bar.sent",
+        "foo.a",
+    }
+    constants = {_short(n["id"]) for n in document["nodes"] if n["type"] == "drupal.event_constant"}
+    assert constants == {
+        "Event\\BarEvents::CLOSED",
+        "Event\\BarEvents::OPENED",
+        "Event\\BarEvents::SENT",
+        "Event\\FooEvents::A",
     }
     assert report.skipped == ()

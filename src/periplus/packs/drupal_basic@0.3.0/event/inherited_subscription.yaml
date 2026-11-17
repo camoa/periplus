@@ -404,6 +404,7 @@ rules:
     - edge: contains
     - incoming_edge: use_names_listener
     - edge_attribute: priority
+    - id_matches: '^(?<use_id>[\s\S]+)$'
     - id_matches: '^drupal\.event_use::(?<ev>[^|]+)\|subscribed\|[^|]+::(?<m>\w+)$'
     - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
     - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
@@ -411,6 +412,8 @@ rules:
     - ancestors: [inherits]
     - id_matches: '^php\.type::(?<declarer>.+)$'
     - node: 'php.method::{declarer}::{m}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
     unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
     unless_matched: [[{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
   emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
@@ -428,16 +431,18 @@ rules:
     - edge: contains
     - incoming_edge: use_names_listener
     - edge_attribute: priority
-    - id_matches: '^drupal\.event_use::(?<ev>[^|]+)\|subscribed_here\|[^|]+::(?<m>\w+)$'
+    - id_matches: '^(?<use_id>[\s\S]+)$'
+    - id_matches: '^drupal\.event_use::(?<ev>[^|]*?(?<cx>[A-Za-z_]\w*)::(?<cn0>[A-Z][A-Z0-9_]*))\|subscribed_here\|(?<lst>[^|]+::(?<m>\w+))$'
     - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
-    - node: 'drupal.class_constant::{ev}'
-    - try: [{edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
     - node: 'php.type::{sub}'
     - ancestors: [inherits]
     - id_matches: '^php\.type::(?<declarer>.+)$'
     - node: 'php.method::{declarer}::{m}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
     unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
-    unless_matched: [[{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
+    unless_matched: [[{node: 'drupal.event_use::bound|{cx}::{cn0}|{lst}'}], [{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
   emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred
 
@@ -454,6 +459,7 @@ rules:
     - id_matches: '^drupal\.event_use::[^|]*\|reg(?:_named)?\|php\.method::[^|]+::getSubscribedEvents\|c:(?<m>\w+)$'
     - edge: use_has_priority
     - edge_attribute: priority
+    - id_matches: '^(?<use_id>[\s\S]+)$'
     - edge: use_names_event
     - id_matches: '^drupal\.event::(?<ev>.+)$'
     - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
@@ -462,6 +468,8 @@ rules:
     - ancestors: [inherits]
     - id_matches: '^php\.type::(?<declarer>.+)$'
     - node: 'php.method::{declarer}::{m}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
     unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
     unless_matched: [[{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
   emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
@@ -477,20 +485,22 @@ rules:
     - ancestors: [inherits]
     - id_matches: '^php\.type::(?<keyer>.+)$'
     - incoming_edge: use_names_class
-    - id_matches: '^drupal\.event_use::[^|]*\|reg_here\|php\.method::[^|]+::getSubscribedEvents\|c:(?<m>\w+)$'
+    - id_matches: '^drupal\.event_use::[^|]*\|reg_here\|(?<kowner>php\.method::[^|]+::getSubscribedEvents)\|c:(?<m>\w+)$'
     - edge: use_has_priority
     - edge_attribute: priority
+    - id_matches: '^(?<use_id>[\s\S]+)$'
     - edge: use_names_event
     - id_matches: '^drupal\.event::(?<ev>.+)$'
     - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
-    - node: 'drupal.class_constant::{ev}'
-    - try: [{edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
+    - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
     - node: 'php.type::{sub}'
     - ancestors: [inherits]
     - id_matches: '^php\.type::(?<declarer>.+)$'
     - node: 'php.method::{declarer}::{m}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
     unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
-    unless_matched: [[{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
+    unless_matched: [[{node: 'drupal.event_use::bound|reg|{kowner}|c:{m}'}], [{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
   emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred
 

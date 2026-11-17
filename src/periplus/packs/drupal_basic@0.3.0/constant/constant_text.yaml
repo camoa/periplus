@@ -10,7 +10,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # the value PHP gives the literal: in single quotes \\ is one backslash and \' a quote, and any
 # other backslash stays, so 'A\B' and 'A\\B' both hold A\B; in double quotes \\ is one
 # backslash and \" a quote. A double-quoted text holding $, or a backslash that starts another
-# escape there, as \n, and an empty text give nothing.
+# escape there, as \n, and an empty text give nothing. A decimal integer, with an optional minus,
+# is a drupal.constant_int by has_constant_int; a float, a boolean, null or an array is marked by
+# has_other_value. The event rules read both (event/).
 
 node_types:
 - name: drupal.constant_text
@@ -18,7 +20,27 @@ node_types:
   id_namespace: drupal.constant_text
   internal: true
 
+- name: drupal.constant_int
+  description: "the integer a class constant is declared with, as -10 in const LATE = -10"
+  id_namespace: drupal.constant_int
+  internal: true
+
+- name: drupal.constant_value
+  description: "a value a class constant is declared with that is no text: a float, a boolean, null or an array"
+  id_namespace: drupal.constant_value
+  internal: true
+
 edge_kinds:
+- kind: has_other_value
+  cause: none
+  description: "the class constant is declared with a float, a boolean, null or an array"
+  from: drupal.class_constant
+  to: drupal.constant_value
+- kind: has_constant_int
+  cause: none
+  description: "the class constant is declared with that integer"
+  from: drupal.class_constant
+  to: drupal.constant_int
 - kind: has_constant_text
   cause: none
   description: "the class constant is declared with that text"
@@ -54,6 +76,103 @@ rules:
   emits:
   - edge:
       kind: has_constant_text
+      from: {declared: drupal.class_constant}
+      to: this_node
+  confidence: declared
+
+# The integer a class constant is declared with, const LATE = -10;, as an internal
+# drupal.constant_int node joined by has_constant_int, so a priority written as a constant reads as
+# its number (event/). A decimal literal only, with an optional minus.
+- rule: constant_int
+  reads: file
+  in: [source]
+  match:
+    declaration: const_element
+    name_child: [integer]
+    filetype: php
+    where: [{name_matches: {child: integer, pattern: '^\d+$'}}]
+  id: {from: declared_name}
+  emits:
+  - edge:
+      kind: has_constant_int
+      from: {declared: drupal.class_constant}
+      to: this_node
+  confidence: declared
+
+- rule: constant_int_negative
+  reads: file
+  in: [source]
+  match:
+    declaration: const_element
+    name_child: [unary_op_expression]
+    filetype: php
+    where: [{name_matches: {child: unary_op_expression, pattern: '^-\s*\d+$'}}]
+  id: {from: declared_name, normalize: [{replace: '\s+', with: ''}]}
+  emits:
+  - edge:
+      kind: has_constant_int
+      from: {declared: drupal.class_constant}
+      to: this_node
+  confidence: declared
+
+# A float, a boolean, null or an array, so the event rules keep such a constant out of the event names
+# (event/event_name.yaml).
+- rule: constant_float
+  reads: file
+  in: [source]
+  match:
+    declaration: const_element
+    name_child: [float]
+    filetype: php
+  id: {from: declared_name, pattern: '^(?<v>[\s\S]+)$', template: 'float'}
+  emits:
+  - edge:
+      kind: has_other_value
+      from: {declared: drupal.class_constant}
+      to: this_node
+  confidence: declared
+
+- rule: constant_boolean
+  reads: file
+  in: [source]
+  match:
+    declaration: const_element
+    name_child: [boolean]
+    filetype: php
+  id: {from: declared_name, pattern: '^(?<v>[\s\S]+)$', template: 'boolean'}
+  emits:
+  - edge:
+      kind: has_other_value
+      from: {declared: drupal.class_constant}
+      to: this_node
+  confidence: declared
+
+- rule: constant_null
+  reads: file
+  in: [source]
+  match:
+    declaration: const_element
+    name_child: ['null']
+    filetype: php
+  id: {from: declared_name, pattern: '^(?<v>[\s\S]+)$', template: 'null'}
+  emits:
+  - edge:
+      kind: has_other_value
+      from: {declared: drupal.class_constant}
+      to: this_node
+  confidence: declared
+
+- rule: constant_array
+  reads: file
+  in: [source]
+  match:
+    declaration: const_element
+    name_child: [array_creation_expression]
+    filetype: php
+  id: {from: declared_name, pattern: '^(?<v>[\s\S]+)$', template: 'array'}
+  emits:
+  - edge:
+      kind: has_other_value
       from: {declared: drupal.class_constant}
       to: this_node
   confidence: declared

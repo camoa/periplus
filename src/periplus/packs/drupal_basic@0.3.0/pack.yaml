@@ -136,8 +136,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   each class that carries that attribute, or opens its docblock with that annotation, as a
 #   plugin_of_type edge; and a manager constructor that passes the attribute class fifth to
 #   parent::__construct, as a manages_plugin_type edge;
-# - each constant of a class that descends from Symfony's or Drupal's Event, or whose name ends in
-#   Events, as a drupal.event named by the text the constant holds, with a drupal.event_constant
+# - each event constant of a class that descends from Symfony's or Drupal's Event, or whose name
+#   ends in Events, a text or a string built from one, all of them or, of a class that documents
+#   some with @Event, those and the ones a dispatch, key, attribute or call names, as a drupal.event named by the text the constant holds, with a drupal.event_constant
 #   <class>::<CONST> and its names_event edge to it, or named <class>::<CONST> when the mapped file
 #   gives the constant no text, a constant read through a class that inherits it named as its
 #   declaring class's, and a contributed module's constant read for its text only when the folder
@@ -146,7 +147,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   the listener method, or to the unresolved method as written when no mapped class of its line
 #   declares it, each listener of
 #   a list of lists its own, holding the listener's priority as written in the edge attribute
-#   priority, 0 when none is written, as Symfony runs it; the same edge from each AsEventListener
+#   priority, 0 when none is written, as Symfony runs it, or the integer a mapped file declares a
+#   constant priority with; X::NAME no use binds is the constant of the file's namespace and
+#   parent::NAME the one on the class's written parent; the same edge from each AsEventListener
 #   attribute on a method or a class and each kernel.event_listener tag in a services file, its
 #   event a constant, a name, a class, X::class, the core constant the table core_event_names gives
 #   for a core name, a container parameter a mapped parameters block gives a value, or the method's
@@ -164,8 +167,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   whose known type is not an event dispatcher as nothing, one on an object of no known type with
 #   the edge attribute receiver: not known to be an event dispatcher, and one on a known event
 #   dispatcher with receiver: an event dispatcher; and each ->dispatch() as a dispatched_by edge to
-#   the method around it, or a dispatched_by_function edge to the function around it, its event
-#   the second argument however deep the first nests, the class of the object dispatched alone,
+#   the method around it, or a dispatched_by_function edge to the function around it, at the line
+#   of ->dispatch, the call read whole across lines and comments, its event the second argument
+#   however deep the first nests, the class of the object dispatched alone, $this's among them, a
+#   declared class holding event_from: declared type,
 #   or the name written first, and a name or object only the running code gives as a
 #   drupal.runtime_event with the runtime mark, each with the same receiver check; a class kept
 #   in a module, install, inc, theme, profile or plain .php file, its methods read as a class's
@@ -331,8 +336,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   does, and not at an unresolved one.
 # - A $container or $this->container that is not Drupal's service container gives a false
 #   service, and a false calls edge for a method called on it.
-# - Every constant of an Event class or an *Events class reads as an event name, so one that holds
-#   something else is a false event.
+# - A text constant of an Event class or an *Events class that documents none of its constants
+#   with @Event reads as an event name, so one that holds another text is a false event.
 # - The object of ->get('x'), ->set('x') and ->hasField('x') is read only to leave out a config
 #   factory or a config object: $form_state->get('x'), $request->get('x'), a config object held in
 #   a variable of another name, as $settings->get('x'), and a name given as a class constant on a
@@ -872,7 +877,7 @@ files:
     # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
     # subscribed_events, listener_list, own_listener_list, named_listener_list,
     # qualified_listener_list, class_listener_list, named_function, first_parameter_type, class_like_body,
-    # array_assigned, in_array_list, alter_list, any_function and switch_body.
+    # attributed_class, array_assigned, in_array_list, alter_list, any_function and switch_body.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
       reader: text
@@ -979,12 +984,18 @@ files:
       - name: first_parameter_type
         open: '\bfunction\s+(?<method>\w+)\s*\(\s*(?:#\[[^\]]*\]\s*)*(?:(?:public|protected|private|readonly)\s+)*'
         balance: ['(?!x)x', '[$,)]']
-      # The body of a named class, trait, interface or enum; class is its name and parent the class
-      # it extends, as written. Read by the event rules, which name a method of a class kept in a
+      # The body of a named class, trait, interface or enum; class is its name, kind which of the
+      # four it is, and parent the class it extends, as written. Read by the event rules, which name a method of a class kept in a
       # module file by its class, and read parent::class as that parent.
       - name: class_like_body
-        open: '(?<![\w$>:])(?:class|trait|interface|enum)\s+(?!extends\b|implements\b)(?<class>\w+)(?:\s+extends\s+(?<parent>\\?[A-Za-z_][\w\\]*))?[^{;]*'
+        open: '(?<![\w$>:])(?<kind>class|trait|interface|enum)\s+(?!extends\b|implements\b)(?<class>\w+)(?:\s+extends\s+(?<parent>\\?[A-Za-z_][\w\\]*))?[^{;]*'
         balance: ['{', '}']
+      # An attribute written on a named class, from its #[ to its ], with the attributes after it;
+      # parent is the class the class extends, as written. Read by event/event_listener.yaml, which
+      # reads parent:: in an attribute on the class as that parent.
+      - name: attributed_class
+        open: '(?=#\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:#\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*)*(?:(?:final|abstract|readonly)\s+)*class\s+\w+\s+extends\s+(?<parent>\\?[A-Za-z_][\w\\]*))'
+        balance: ['[', ']']
       # An array literal assigned to a variable, $list = [...]; list is the variable's name.
       - name: array_assigned
         open: '\$(?<list>\w+)\s*=\s*(?=\[)'
@@ -1029,16 +1040,6 @@ files:
       - name: switch_body
         open: '\bswitch\s*\((?<subject>[^{;]*)\)\s*'
         balance: ['{', '}']
-      # Each pair of parentheses, so a rule can tell an argument of a ->dispatch() call from one
-      # nested inside it at any depth: the call's own span opens at its object, k the call from its
-      # object to the first ; and every other ( opens one whose k is that parenthesis. Read by
-      # event/event_dispatch.yaml, the innermost k first.
-      - name: call_paren
-        open: '(?=[$-])(?=(?<k>(?:(?<![\w$>:\\])\$this\s*->\s*\w+\s*|(?<![\w$>:\\])\$\w+\s*)?->\s*dispatch\s*\([^;]{0,240}))(?:(?<![\w$>:\\])\$this\s*->\s*\w+\s*|(?<![\w$>:\\])\$\w+\s*)?->\s*dispatch\s*(?=\()'
-        balance: ['(', ')']
-      - name: call_paren
-        open: '(?<!->dispatch)(?<!->dispatch\s)(?=(?<k>\())'
-        balance: ['(', ')']
       # The namespace a file declares, ns, to the next namespace statement or the end of its braces.
       # Read by the event rules for a class kept in a file outside src.
       - name: php_namespace

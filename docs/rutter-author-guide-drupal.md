@@ -360,15 +360,20 @@ two calls share holds each place's value under `differs`.
   two static calls, inferred for `$this->redirect`. A route name that is not a text literal goes
   under skipped, a call in a trait or an enum links from its method, and
   `$other->redirect('x')` links nothing.
-- `drupal.event`, a node for each constant of a class that descends from `Event` or is named
-  `*Events`, made by map rules from an internal node per constant and named by the text the
-  constant holds, with a `drupal.event_constant` node and a `names_event` edge for each constant
+- `drupal.event`, a node for each event constant of a class that descends from `Event` or is
+  named `*Events`, made by map rules from an internal node per constant and named by the text the
+  constant holds. An event constant holds a text or a string built from one, never an integer, a
+  float, a boolean, null or an array; of a class that documents some of its constants with
+  `@Event`, only those and the ones a dispatch, a key, an attribute or a registration call names
+  are events, with a `drupal.event_constant` node and a `names_event` edge for each constant
   of that text; `subscribed_by`, from the event to each listener a key of `getSubscribedEvents`
   names, on the class or its nearest mapped ancestor that declares it, else to the unresolved
   method as written. Each key is read as text, through the spans `subscribed_events` and
   `named_function` and the bindings of `event/use_binding.yaml`, a grouped `use` among them, into
   an internal `drupal.event_use` node at its line, and map rules give its edge from the event of
-  the constant's text, else of the constant `<class>::<NAME>`. A constant read through a class that
+  the constant's text, else of the constant `<class>::<NAME>`. `X::NAME` that no `use` binds is the
+  constant of the file's own namespace, as PHP reads it, unresolved when no mapped file declares
+  it, and `parent::NAME` the constant on the class's written parent. A constant read through a class that
   inherits it is the declaring class's, found by walking `inherits` and `implements` from the
   class the key names, and a text is read as PHP reads the literal, so `'A\B'` and `'A\\B'` both
   hold `A\B`. A contributed module's constants are read for their text only, from a file whose
@@ -378,19 +383,28 @@ two calls share holds each place's value under `differs`.
   `on<status>` or `on<digit>xx` of a class that descends from `HttpExceptionSubscriberBase` gets
   an inferred `subscribed_by` edge from `KernelEvents::EXCEPTION`, read from its name, holding
   the priority of the nearest class of its line that declares `getPriority()` with a literal
-  `return`, `computed` when that one computes it, or core's `0` when none declares it.
+  `return`, `computed` when that one computes it, or core's `0` when none declares it. A priority
+  written as a constant, `self::LATE` or `X::FIRST`, holds the integer a mapped file declares the
+  constant with, found on the class or its ancestors through the internal `use_priority_constant`
+  edge, and stays as written when no mapped file gives one an integer.
 - `dispatched_by`, from an event to the method around a `->dispatch()` call, or
   `dispatched_by_function` to the function around it (`event/event_dispatch.yaml`). The event is
-  the second argument, read at the call's own level of parentheses through the span `call_paren`,
-  however deep the first argument nests: a constant, read as a subscriber's key is, `parent::NAME`
-  on the class's parent, a quoted name, or a class, `X::class`, `self::class` or `parent::class`.
-  With no second argument, Symfony names the event by the object's class: `new X(...)`, `new self`
-  or `new parent`, a variable a `new X` is assigned to once in the method or function, a
-  parameter typed with a class, or a property of `$this` typed with one or assigned once from such
-  a parameter, as `php_basic` maps them; a typed parameter or property gives its declared class.
-  A name written first, the order of Symfony before 4.3, is read too. A name in a variable or an
-  expression, and an object whose class the map does not show, end at a `drupal.runtime_event`
-  with the runtime mark. The object the call runs on is checked as for `->addListener()`. The
+  the second argument: the call is read whole from `->dispatch` to its closing parenthesis, each
+  argument at the call's own level of brackets up to six levels deep, whatever line breaks and
+  comments stand between its parts, and a call nested in another's arguments is read on its own;
+  the edge sits at the line of `->dispatch`. The event is a constant, read as a subscriber's key
+  is, `parent::NAME` on the class's parent, a quoted name, or a class, `X::class`, `self::class` or
+  `parent::class`. With no second argument, Symfony names the event by the object's class:
+  `new X(...)`, `new self` or `new parent`, a variable a `new X` is assigned to once in the method
+  or function, a parameter typed with a class, a property of `$this` typed with one or assigned
+  once from such a parameter, as `php_basic` maps them, or `$this`, the class the call is written
+  in. A typed parameter or property and `$this` give the declared class, and their edge holds
+  `event_from: declared type`, since an object of a subclass names its own class when the code
+  runs; a `new X` or `X::class` holds `event_from: written class`, so an edge both give holds
+  `differs`. A name written first, the order of Symfony before 4.3, is read too. A name in a
+  variable or an expression, an object whose class the map does not show and `$this` in a trait
+  end at a `drupal.runtime_event` with the runtime mark, and so does a call whose arguments are not
+  read, `(unread)`, as one with a third argument; a call with no argument gives nothing. The object the call runs on is checked as for `->addListener()`. The
   method may belong to a class under `src` or to a class kept in a module, install, inc, theme,
   profile or plain `.php` file, named by the file's namespace.
 - `subscribed_by` from Symfony's `#[AsEventListener]`, on a method or a class, and from a
@@ -403,7 +417,11 @@ two calls share holds each place's value under `differs`.
   the dispatcher's `addListener()` call, which the built container gives the value, and, with no
   method, derives the method from the text as written, so from the parameter's name. In double
   quotes, `\\`, `\"` and `\/` read as a backslash, a quote and a slash; a name with any other
-  escape is a runtime registration. A name the table
+  escape is a runtime registration. An attribute is read across lines, and `parent::NAME` in it is
+  the constant on the parent the class `extends`, through the span `attributed_class` for an
+  attribute on the class itself. A `dispatcher` key stays the service id as written: the pack has no
+  edge kind for a listener added to another dispatcher, and the text finds that service's node,
+  `drupal.service::<id>`, as it stands. A name the table
   `core_event_names` lists, as `kernel.request`, is the event of its core constant,
   `KernelEvents::REQUEST`, which keeps its constant's name since core is outside the map; any
   other name is the event of that name. With no method, the name Symfony derives, `on<Event>`, then
@@ -421,7 +439,9 @@ two calls share holds each place's value under `differs`.
   tag's is, and a `getSubscribedEvents()` key written as a name or with its namespace;
   `registers_subscriber` from `->addSubscriber()`. A call in a method of a class kept in a module,
   install, inc, theme, profile or plain `.php` file is read as one in a class under `src`.
-  `parent::class` is the class the class `extends`, as written there. Each is one
+  `parent::class` is the class the class `extends`, as written there, and `parent::NAME` the
+  constant on it. A call is read whatever line breaks and comments stand between its name, its
+  parenthesis and its arguments. Each is one
   internal `drupal.event_use` site with edges to its event and its listener's class, joined in the
   map. The map rules read the type of the object a call runs on from the parameter and property
   types `php_basic` maps: an object whose known type is not an event dispatcher gives nothing, and

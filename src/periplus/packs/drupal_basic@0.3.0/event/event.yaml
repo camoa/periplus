@@ -31,7 +31,7 @@ node_types:
 # A subscription, at the line of its event's key: <event>|<use>|<listener>, the event as
 # <class>::<CONST>. The use is subscribed for a class written through a use statement, and
 # subscribed_here for a class of the file's own namespace or self:: and static::, which a map rule
-# keeps only when a mapped class declares that constant. A ->dispatch() call is
+# keeps when no use statement binds the class. A ->dispatch() call is
 # <event>|<use>~<object>|<owner>|<key> (event/event_dispatch.yaml). A listener attribute or tag
 # (event/event_listener.yaml) is <owner>|<method>|<use>|<event as written>, the owner a class or a
 # service, the use listens, listens_derived, tagged or tagged_derived, or <owner>|<method>|<use>
@@ -90,3 +90,10 @@ edge_kinds:
   description: "a self-link holding the subscription's priority"
   from: drupal.event_use
   to: drupal.event_use
+# A priority written as a constant, self::LATE or X::PRIORITY, joined to that constant so the map
+# rules read the integer a mapped file declares it with (constant/constant_text.yaml).
+- kind: use_priority_constant
+  cause: none
+  description: "the use's priority is written as that class constant"
+  from: drupal.event_use
+  to: drupal.class_constant
