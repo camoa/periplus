@@ -254,7 +254,9 @@ A `subscribed_by` edge holds the listener's `priority` as written, as `100` or `
 value `getPriority()` returns, as the next list says. A tag's or attribute's `dispatcher`, when it
 names one, is the edge attribute `dispatcher`, as written; an edge without it is on the main
 `event_dispatcher`. A registration by `->addListener()` or `->addSubscriber()` on an object whose
-type the map does not show holds `receiver: not known to be an event dispatcher`.
+type the map does not show holds `receiver: not known to be an event dispatcher`, and one on a
+known event dispatcher `receiver: an event dispatcher`, so an edge two registrations share holds
+each place's value under `differs`.
 
 - `config_provided_by` and `config_provided_by_theme`, from a configuration object to a module
   or a theme: each simple configuration file, one with no top-level `uuid`, names the extension
@@ -366,7 +368,11 @@ type the map does not show holds `receiver: not known to be an event dispatcher`
   `dispatched_by_function` in a module file. Each key is read as text, through the spans
   `subscribed_events` and `named_function` and the bindings of `event/use_binding.yaml`, into an
   internal `drupal.event_use` node at its line, and map rules give its edge from the event of the
-  constant's text, else of the constant `<class>::<NAME>`. Each listener of a list of lists,
+  constant's text, else of the constant `<class>::<NAME>`. A constant read through a class that
+  inherits it is the declaring class's, found by walking `inherits` and `implements` from the
+  class the key names, and a text is read as PHP reads the literal, so `'A\B'` and `'A\\B'` both
+  hold `A\B`. A contributed module's constants are read for their text only, from the folder
+  `contrib_event_source`, when `contrib_module` is on disk. Each listener of a list of lists,
   `X::NAME => [['a', 10], ['b']]`, is read inside the span `listener_list`. A method named
   `on<status>` or `on<digit>xx` of a class that descends from `HttpExceptionSubscriberBase` gets
   an inferred `subscribed_by` edge from `KernelEvents::EXCEPTION`, read from its name, holding
@@ -375,13 +381,19 @@ type the map does not show holds `receiver: not known to be an event dispatcher`
 - `subscribed_by` from Symfony's `#[AsEventListener]`, on a method or a class, and from a
   `kernel.event_listener` tag in a services file (`event/event_listener.yaml`). The event is a
   class constant, read as a subscriber's key is, a quoted name, or, with none, the class that
-  types the method's first parameter, each class of a union of any length. A name the table
+  types the method's first parameter, each class of a union of any length, or a class, `X::class`,
+  the event of the class's full name, as Symfony names an event dispatched as an object. A tag's
+  event written as a container parameter, `'%name%'`, is the value a mapped `parameters` block
+  gives it, else a `drupal.runtime_subscription` with the runtime mark. A name the table
   `core_event_names` lists, as `kernel.request`, is the event of its core constant,
   `KernelEvents::REQUEST`, which keeps its constant's name since core is outside the map; any
-  other name is the event of that name. With no method, the name Symfony derives, `on<Event>`, then `__invoke`, then the unresolved derived
-  name; a class-level attribute that names a constant and no method ends at a
-  `drupal.runtime_listener` marked `resolution: runtime`, since only the constant's text names
-  that method. A tag's method is looked up on the service's class and its mapped ancestors. A
+  other name is the event of that name. With no method, the name Symfony derives, `on<Event>`, then
+  `__invoke`, then the unresolved derived name; for a constant or a class, the name is derived
+  from the constant's text or the class's full name, which a file rule reads beside each constant
+  and class (`event/event_name.yaml`) into an internal `drupal.derived_listener`, since a map rule
+  cannot reshape text; when no mapped file gives that text, the edge ends at a
+  `drupal.runtime_listener` marked as an unknown boundary. A tag's method is looked up on the
+  service's class and its mapped ancestors. A
   method an attribute registers holds `listens_by_attribute`, marked
   `AsEventListener, not wired by core`, since Drupal core registers no listener from the attribute.
 - `subscribed_by` and `subscribed_by_function` from a listener registered by a call or by a key the

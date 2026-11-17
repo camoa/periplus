@@ -4,8 +4,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # as drupal.event::mymod.order_placed, whenever a mapped file declares that constant with a text.
 # Each such constant of an event class is a drupal.event_constant, <class>::<CONST>, with a
 # names_event edge to the event, so two constants that hold one text name one event. An event
-# whose constant's text is not in the mapped code, as core's, Symfony's or a contributed
-# module's KernelEvents::REQUEST, is named by its constant, fully qualified, and stays referenced.
+# whose constant's text is not in the mapped code, as core's or Symfony's KernelEvents::REQUEST, or
+# a contributed module's when its code is not on disk in contrib_module, is named by its constant,
+# fully qualified, and stays referenced. An event dispatched as an object is named by its class's
+# full name, as drupal.event::Drupal\my_module\Event\Paid.
 # A subscriber method subscribes to an event and a method dispatches it.
 
 node_types:

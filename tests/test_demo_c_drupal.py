@@ -1749,7 +1749,6 @@ class OwnConstantListener {
 }
 
 
-
 TAG_LISTENERS = {
     str(MODULE / "my_module.info.yml"): r"""name: My module
 type: module
@@ -1890,7 +1889,6 @@ class KeyListener {
 }
 """,
 }
-
 
 
 EXCEPTION_PRIORITIES = {
@@ -2088,11 +2086,12 @@ def test_an_as_event_listener_attribute_subscribes_its_method_as_symfony_reads_i
 ) -> None:
     """On a method: the event by constant, by quoted name or by the first parameter's type, the
     priority by name. On a class: the method argument, else on<Event> for a quoted event, then
-    __invoke, then the unresolved derived name; a constant event with no method ends at a
-    listener marked resolution runtime; no event reads the first parameter's type, each class of a
-    union and never a second parameter; a derived name meets its method in any letter case. An
-    attribute in a group and arguments holding parentheses are read. Each listener method carries
-    the mark listens_by_attribute. A comment, an attribute of another name and Hook give nothing."""
+    __invoke, then the unresolved derived name, for a constant event derived from the text a
+    mapped file gives it, the runtime listener taken back; no event reads the first parameter's
+    type, each class of a union and never a second parameter; a derived name meets its method in
+    any letter case. An attribute in a group and arguments holding parentheses are read. Each
+    listener method carries the mark listens_by_attribute. A comment, an attribute of another name
+    and Hook give nothing."""
     _plant(tmp_path, ATTRIBUTE_LISTENERS)
     document, report = _map(tmp_path)
     assert _subscribed(document) == {
@@ -2109,14 +2108,14 @@ def test_an_as_event_listener_attribute_subscribes_its_method_as_symfony_reads_i
         ("KernelEvents::TERMINATE", "ClassListener::onKernelTerminate", "0"),
         ("my_module.case_test", "CaseListener::onmymodulecasetest", "0"),
         ("my_module.custom_thing", "ClassListener::__invoke", "2"),
-        ("my_module.done", "OwnConstantListener|self::DONE", "-1"),
+        ("my_module.done", "OwnConstantListener::__invoke", "-1"),
         ("my_module.grouped", "MoreListener::onGrouped", "0"),
         ("my_module.local", "MethodListener::onLocal", "4"),
-        ("my_module.local", "OwnConstantListener|LocalEvents::LOCAL", "0"),
+        ("my_module.local", "OwnConstantListener::__invoke", "0"),
         ("my_module.lost", "LostListener::onMyModuleLost", "0"),
         ("my_module.mine_attr", "MethodListener::onMine", "0"),
         ("my_module.one", "MoreListener::onBoth", "0"),
-        ("my_module.paid", "ClassListener|OrderEvents::PAID", "0"),
+        ("my_module.paid", "ClassListener::__invoke", "0"),
         ("my_module.paid", "MethodListener::onPaid", "20"),
         ("my_module.paid", "MethodListener::onPaidByName", "0"),
         ("my_module.paid", "MoreListener::onParen", "(self::BASE + 1)"),
@@ -2124,11 +2123,9 @@ def test_an_as_event_listener_attribute_subscribes_its_method_as_symfony_reads_i
     }
     nodes = {n["id"]: n for n in document["nodes"]}
     own = "php.method::Drupal\\my_module\\EventSubscriber\\"
-    runtime = nodes[own + "ClassListener|OrderEvents::PAID"]
-    assert (runtime["type"], runtime["attributes"]) == (
-        "drupal.runtime_listener",
-        {"resolution": "runtime", "listens_by_attribute": "AsEventListener"},
-    )
+    assert own + "ClassListener|OrderEvents::PAID" not in nodes
+    invoked = nodes[own + "ClassListener::__invoke"]["attributes"]
+    assert invoked["listens_by_attribute"] == "AsEventListener"
     marked = {
         n["id"].removeprefix(own)
         for n in document["nodes"]
@@ -2150,7 +2147,8 @@ def test_a_kernel_event_listener_tag_subscribes_the_service_class_method(tmp_pat
     method on the class or a mapped ancestor, else unresolved, its priority, on<Event> or
     __invoke with no method, and the parameter's type with no event. An inline list of tags and an
     event written !php/const are read; a child service takes its parent's class; a constant event
-    with no method ends at a runtime listener. A tag of another name gives nothing."""
+    with no method gets the method derived from its text, unresolved when undeclared. A tag of
+    another name gives nothing."""
     _plant(tmp_path, TAG_LISTENERS)
     document, report = _map(tmp_path)
     assert _subscribed(document) == {
@@ -2165,12 +2163,8 @@ def test_a_kernel_event_listener_tag_subscribes_the_service_class_method(tmp_pat
         ("KernelEvents::VIEW", "Drupal\\Core\\EventSubscriber\\SomeCoreListener::onView", "0"),
         ("KernelEvents::VIEW", "FlowListener::onMissing", "0"),
         ("my_module.lost", "KeyListener::onMyModuleLost", "0"),
+        ("my_module.paid", "FlowListener::onMyModulePaid", "0"),
         ("my_module.paid", "FlowListener::onPaid", ("0", "4")),
-        (
-            "my_module.paid",
-            "my_module.const_listener|Drupal\\my_module\\Event\\OrderEvents::PAID",
-            "0",
-        ),
         ("my_module.thing", "InvokeOnly::__invoke", "0"),
     }
     assert report.skipped == ()
@@ -2194,7 +2188,6 @@ def test_an_inherited_exception_handler_holds_the_priority_get_priority_gives(
         ("KernelEvents::EXCEPTION", "PlainExceptionSubscriber::on403", "0"),
     }
     assert report.skipped == ()
-
 
 
 KEY_LISTENERS = {
@@ -2294,7 +2287,6 @@ class LoopSubscriber implements EventSubscriberInterface {
 }
 """,
 }
-
 
 
 INHERITED_LISTENERS = {
@@ -2510,7 +2502,6 @@ class OverridingSubscriber extends BaseSubscriber {
 }
 """,
 }
-
 
 
 ADDED_LISTENERS = {
@@ -2796,8 +2787,18 @@ def test_a_listener_added_in_php_subscribes_its_callable_or_is_marked(tmp_path: 
     provider = "MyModuleServiceProvider::register"
     assert _registrations(document) == {
         ("registers_listener_at_runtime", provider, provider + "|$this->name", None),
-        ("registers_listener_at_runtime", "Wiring::wire", "Wiring::wire|$eventName", None),
-        ("registers_listener_at_runtime", "Wiring::wire", "Wiring::wire|$this->subscriber", None),
+        (
+            "registers_listener_at_runtime",
+            "Wiring::wire",
+            "Wiring::wire|$eventName~v:dispatcher",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "Wiring::wire",
+            "Wiring::wire|$this->subscriber~v:dispatcher",
+            None,
+        ),
         ("registers_subscriber", "Wiring::wire", "KeyedSubscriber", None),
         ("subscribed_by", "Event\\ViewEvent", "AddedListener::onTyped", "0"),
         (
@@ -3559,7 +3560,7 @@ def test_an_argument_written_as_an_expression_is_a_runtime_registration_never_a_
         (
             "registers_listener_at_runtime",
             "ExprCalls::wire",
-            "ExprCalls::wire|'kernel.'.'request'",
+            "ExprCalls::wire|'kernel.'.'request'~v:dispatcher",
             None,
         ),
         (
@@ -3571,13 +3572,13 @@ def test_an_argument_written_as_an_expression_is_a_runtime_registration_never_a_
         (
             "registers_listener_at_runtime",
             "ExprCalls::wire",
-            "ExprCalls::wire|TRUE?'kernel.view':'kernel.request'",
+            "ExprCalls::wire|TRUE?'kernel.view':'kernel.request'~v:dispatcher",
             None,
         ),
         (
             "registers_listener_at_runtime",
             "ExprCalls::wire",
-            "ExprCalls::wire|self::PREFIX.'.saved'",
+            "ExprCalls::wire|self::PREFIX.'.saved'~v:dispatcher",
             None,
         ),
         (
@@ -3646,8 +3647,8 @@ def test_an_argument_written_as_an_expression_is_a_runtime_registration_never_a_
         ("subscribed_by", "KernelEvents::TERMINATE", "ExprAttributes::onLiteral", "-10"),
         ("subscribed_by", "KernelEvents::TERMINATE", "ExprCalls::onA", "self::BASE + 1"),
         ("subscribed_by", "KernelEvents::VIEW", "ExprCalls::wire|'ExprCalls::'.'onA'", "0"),
-        ("subscribed_by", "my_module.paid", "ExprCalls::wire|[$this,'on'.'A']", "0"),
         ("subscribed_by", "my_module.paid", "ExprAttributes::onConstant", "0"),
+        ("subscribed_by", "my_module.paid", "ExprCalls::wire|[$this,'on'.'A']", "0"),
         ("subscribed_by", "my_module.paid", "ExprSubscriber::onConstant", "0"),
     }
     assert report.skipped == ()
@@ -3761,7 +3762,15 @@ def test_a_registration_call_reads_the_type_of_the_object_it_runs_on(tmp_path: P
         (
             "registers_listener_at_runtime",
             "Wiring::wire",
-            "Wiring::wire|$this->name",
+            "Wiring::wire|$this->name~v:dispatcher",
+            None,
+            None,
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "Wiring::wire",
+            "Wiring::wire|$this->name~v:untyped",
             None,
             None,
             "not known to be an event dispatcher",
@@ -3769,12 +3778,19 @@ def test_a_registration_call_reads_the_type_of_the_object_it_runs_on(tmp_path: P
         (
             "registers_listener_at_runtime",
             "Wiring::wire",
-            "Wiring::wire|$this->subscriber",
+            "Wiring::wire|$this->subscriber~v:untyped",
             None,
             None,
             "not known to be an event dispatcher",
         ),
-        ("registers_subscriber", "Wiring::wire", "KeyedSubscriber", None, None, None),
+        (
+            "registers_subscriber",
+            "Wiring::wire",
+            "KeyedSubscriber",
+            None,
+            None,
+            "an event dispatcher",
+        ),
         (
             "registers_subscriber",
             "Wiring::wire",
@@ -3800,9 +3816,23 @@ def test_a_registration_call_reads_the_type_of_the_object_it_runs_on(tmp_path: P
             "not known to be an event dispatcher",
         ),
         ("subscribed_by", "KernelEvents::REQUEST", "KeyedSubscriber::onRequest", "0", None, None),
-        ("subscribed_by", "KernelEvents::REQUEST", "More::onAssigned", "0", None, None),
-        ("subscribed_by", "KernelEvents::REQUEST", "More::onDoc", "0", None, None),
-        ("subscribed_by", "KernelEvents::REQUEST", "MyDispatcher::onSelf", "0", None, None),
+        (
+            "subscribed_by",
+            "KernelEvents::REQUEST",
+            "More::onAssigned",
+            "0",
+            None,
+            "an event dispatcher",
+        ),
+        ("subscribed_by", "KernelEvents::REQUEST", "More::onDoc", "0", None, "an event dispatcher"),
+        (
+            "subscribed_by",
+            "KernelEvents::REQUEST",
+            "MyDispatcher::onSelf",
+            "0",
+            None,
+            "an event dispatcher",
+        ),
         (
             "subscribed_by",
             "KernelEvents::REQUEST",
@@ -3819,7 +3849,14 @@ def test_a_registration_call_reads_the_type_of_the_object_it_runs_on(tmp_path: P
             None,
             "not known to be an event dispatcher",
         ),
-        ("subscribed_by", "KernelEvents::REQUEST", "Wiring::onTypedProperty", "10", None, None),
+        (
+            "subscribed_by",
+            "KernelEvents::REQUEST",
+            "Wiring::onTypedProperty",
+            "10",
+            None,
+            "an event dispatcher",
+        ),
         (
             "subscribed_by",
             "KernelEvents::TERMINATE",
@@ -3828,8 +3865,15 @@ def test_a_registration_call_reads_the_type_of_the_object_it_runs_on(tmp_path: P
             None,
             "not known to be an event dispatcher",
         ),
-        ("subscribed_by", "KernelEvents::VIEW", "More::onMine", "0", None, None),
-        ("subscribed_by", "KernelEvents::VIEW", "More::onNullable", "0", None, None),
+        ("subscribed_by", "KernelEvents::VIEW", "More::onMine", "0", None, "an event dispatcher"),
+        (
+            "subscribed_by",
+            "KernelEvents::VIEW",
+            "More::onNullable",
+            "0",
+            None,
+            "an event dispatcher",
+        ),
         (
             "subscribed_by",
             "KernelEvents::VIEW",
@@ -3838,8 +3882,22 @@ def test_a_registration_call_reads_the_type_of_the_object_it_runs_on(tmp_path: P
             None,
             "not known to be an event dispatcher",
         ),
-        ("subscribed_by", "KernelEvents::VIEW", "Wiring::onTypedParameter", "0", None, None),
-        ("subscribed_by_function", "KernelEvents::REQUEST", "my_module_on_typed", "0", None, None),
+        (
+            "subscribed_by",
+            "KernelEvents::VIEW",
+            "Wiring::onTypedParameter",
+            "0",
+            None,
+            "an event dispatcher",
+        ),
+        (
+            "subscribed_by_function",
+            "KernelEvents::REQUEST",
+            "my_module_on_typed",
+            "0",
+            None,
+            "an event dispatcher",
+        ),
         (
             "subscribed_by_function",
             "KernelEvents::REQUEST",
@@ -5056,11 +5114,7 @@ def test_a_field_name_read_on_a_config_object_links_to_no_field(tmp_path: Path) 
     )
     document, _ = _map(tmp_path)
     storage = "drupal.config::field.storage."
-    found = {
-        (e["from"], e["to"])
-        for e in document["edges"]
-        if e["kind"] == "accesses_field"
-    }
+    found = {(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "accesses_field"}
     read = "php.method::Drupal\\my_module\\Reader::read"
     assert found == {
         (read, storage + "node.field_color"),
@@ -5215,3 +5269,957 @@ def test_a_name_given_as_a_constant_of_an_interface_or_a_parent_links_to_its_tar
             "inferred",
         ),
     }
+
+
+# --- event rules: parameters, classes, inherited and contrib constants, derived methods ---
+
+PARAMETER_EVENTS = {
+    "web/modules/custom/my_module/my_module.info.yml": r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    "web/modules/custom/my_module/my_module.services.yml": r"""parameters:
+  my_module.paid_event: my_module.paid
+  my_module.shipped_event: 'my_module.shipped'
+  my_module.request_event: "kernel.request"
+  my_module.twice: my_module.first
+  my_module.list: [a, b]
+  my_module.nested: '%other.param%'
+services:
+  my_module.param_listener:
+    class: Drupal\my_module\EventSubscriber\ParamListener
+    tags:
+      - { name: kernel.event_listener, event: '%my_module.paid_event%', method: onPaid,"""
+    r""" priority: 4 }
+      - { name: kernel.event_listener, event: '%my_module.shipped_event%' }
+      - { name: kernel.event_listener, event: "%my_module.request_event%" }
+      - { name: kernel.event_listener, event: '%my_module.unknown%', method: onAnything }
+      - { name: kernel.event_listener, event: '%my_module.twice%', method: onAnything }
+      - { name: kernel.event_listener, event: '%my_module.list%', method: onAnything }
+      - { name: kernel.event_listener, event: '%my_module.nested%', method: onAnything }
+      - { name: kernel.event_listener, event: '%my_module.unknown%' }
+  my_module.no_class:
+    tags:
+      - { name: kernel.event_listener, event: '%my_module.paid_event%', method: onPaid }
+  my_module.not_param:
+    class: Drupal\my_module\EventSubscriber\ParamListener
+    arguments: ['%my_module.paid_event%']
+    tags:
+      - { name: kernel.event_listener, event: my_module.paid, method: onPaid }
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/ParamListener.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class ParamListener {
+
+  public function onPaid() {}
+
+  public function onMyModuleShipped() {}
+
+  public function onKernelRequest() {}
+
+  public function onAnything() {}
+
+}
+""",
+    "web/modules/custom/other/other.info.yml": r"""name: Other
+type: module
+core_version_requirement: ^11
+""",
+    "web/modules/custom/other/other.services.yml": r"""parameters:
+  my_module.twice: other.second
+services:
+  other.thing:
+    class: Drupal\other\Thing
+""",
+}
+
+
+def test_a_tag_event_written_as_a_parameter_is_its_mapped_value_else_a_runtime_mark(
+    tmp_path: Path,
+) -> None:
+    """A tag's event written '%name%' is the value one mapped parameters block gives it, read as the
+    tag's quoted event is, its method derived when none is written; a parameter no file gives a
+    literal value, two files give different values, or whose value names another parameter is a
+    runtime registration from the service. An argument naming a parameter gives nothing."""
+    _plant(tmp_path, PARAMETER_EVENTS)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        (
+            "registers_listener_at_runtime",
+            "my_module.param_listener",
+            "my_module.param_listener|%my_module.list%",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "my_module.param_listener",
+            "my_module.param_listener|%my_module.nested%",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "my_module.param_listener",
+            "my_module.param_listener|%my_module.twice%",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "my_module.param_listener",
+            "my_module.param_listener|%my_module.unknown%",
+            None,
+        ),
+        ("subscribed_by", "KernelEvents::REQUEST", "ParamListener::onKernelRequest", "0"),
+        ("subscribed_by", "my_module.paid", "ParamListener::onPaid", ("0", "4")),
+        ("subscribed_by", "my_module.paid", "my_module.no_class::onPaid", "0"),
+        ("subscribed_by", "my_module.shipped", "ParamListener::onMyModuleShipped", "0"),
+    }
+    runtime = {
+        n["id"]: n.get("attributes", {}).get("resolution")
+        for n in document["nodes"]
+        if n["type"] == "drupal.runtime_subscription"
+    }
+    assert runtime == {
+        f"drupal.runtime_subscription::my_module.param_listener|%my_module.{name}%": "runtime"
+        for name in ("list", "nested", "twice", "unknown")
+    }
+    assert report.skipped == ()
+
+
+CLASS_EVENTS = {
+    "web/modules/custom/my_module/my_module.info.yml": r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    "web/modules/custom/my_module/my_module.services.yml": r"""services:
+  my_module.class_string:
+    class: Drupal\my_module\EventSubscriber\AttributeListener
+    tags:
+      - { name: kernel.event_listener, event: Drupal\my_module\Event\PaidEvent, method: typed }
+      - { name: kernel.event_listener, event: 'Drupal\my_module\Event\PaidEvent' }
+""",
+    "web/modules/custom/my_module/src/Event/PaidEvent.php": r"""<?php
+
+namespace Drupal\my_module\Event;
+
+use Symfony\Contracts\EventDispatcher\Event;
+
+class PaidEvent extends Event {
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/AttributeListener.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\PaidEvent;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+
+#[AsEventListener(event: PaidEvent::class)]
+#[AsEventListener(RequestEvent::class)]
+#[AsEventListener(event: \Drupal\other\Event\GoneEvent::class)]
+class AttributeListener {
+
+  public function onDrupalMyModuleEventPaidEvent() {}
+
+  #[AsEventListener(event: PaidEvent::class, priority: 3)]
+  public function typed(PaidEvent $event) {}
+
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/ClassSubscriber.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\PaidEvent;
+use Drupal\other\Event\ShippedEvent as Shipped;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+
+class ClassSubscriber implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    $events[PaidEvent::class] = ['onPaid', 20];
+    $events[Shipped::class][] = ['onShipped'];
+    $events[LocalEvent::class] = 'onLocal';
+    return $events + [
+      \Drupal\other\Event\FullEvent::class => 'onFull',
+      self::class => 'onSelf',
+      RequestEvent::class => [['onRequestFirst', 5], ['onRequestSecond']],
+    ];
+  }
+
+  public function onPaid(PaidEvent $event) {}
+  public function onShipped() {}
+  public function onLocal() {}
+  public function onFull() {}
+  public function onSelf() {}
+  public function onRequestFirst() {}
+  public function onRequestSecond() {}
+
+  public function register($dispatcher) {
+    $dispatcher->addListener(PaidEvent::class, [$this, 'onPaid']);
+    $other = [PaidEvent::class => 'notASubscription'];
+    $this->map = [PaidEvent::class, 'onPaid'];
+  }
+
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/InvokeListener.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\PaidEvent;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(PaidEvent::class)]
+class InvokeListener {
+
+  public function __invoke(PaidEvent $event) {}
+
+}
+""",
+    "web/modules/custom/my_module/src/MyModuleServiceProvider.php": r"""<?php
+
+namespace Drupal\my_module;
+
+use Drupal\Core\DependencyInjection\ContainerBuilder;
+use Drupal\Core\DependencyInjection\ServiceProviderBase;
+use Drupal\my_module\Event\PaidEvent;
+use Drupal\my_module\EventSubscriber\AttributeListener;
+
+class MyModuleServiceProvider extends ServiceProviderBase {
+
+  public function alter(ContainerBuilder $container) {
+    $container->register('my_module.class_tag',"""
+    r""" AttributeListener::class)->addTag('kernel.event_listener', ['event' =>"""
+    r""" PaidEvent::class, 'method' => 'typed']);
+    $container->register('my_module.class_tag_derived',"""
+    r""" AttributeListener::class)->addTag('kernel.event_listener', ['event' => PaidEvent::class]);
+    $container->register('my_module.parent',"""
+    r""" AttributeListener::class)->addTag('kernel.event_listener', ['event' => parent::class,"""
+    r""" 'method' => 'typed']);
+  }
+
+}
+""",
+}
+
+
+def test_an_event_written_as_a_class_is_the_event_of_its_full_name(tmp_path: Path) -> None:
+    """X::class names the event of the class's full name, through a use statement, an alias, the
+    namespace or self, in a key, a list of lists, $events[X::class], an attribute, addListener and
+    addTag, the node a typed listener reaches; with no method, on<Event> derived from the full
+    name, then __invoke, then the unresolved derived name. A tag's class name is that event too.
+    parent::class is a runtime registration; X::class as a plain array value gives nothing."""
+    _plant(tmp_path, CLASS_EVENTS)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        (
+            "registers_listener_at_runtime",
+            "MyModuleServiceProvider::alter",
+            "MyModuleServiceProvider::alter|parent::class",
+            None,
+        ),
+        ("subscribed_by", "ClassSubscriber", "ClassSubscriber::onSelf", "0"),
+        ("subscribed_by", "Drupal\\other\\Event\\FullEvent", "ClassSubscriber::onFull", "0"),
+        (
+            "subscribed_by",
+            "Drupal\\other\\Event\\GoneEvent",
+            "AttributeListener::onDrupalOtherEventGoneEvent",
+            "0",
+        ),
+        ("subscribed_by", "Drupal\\other\\Event\\ShippedEvent", "ClassSubscriber::onShipped", "0"),
+        (
+            "subscribed_by",
+            "Event\\PaidEvent",
+            "AttributeListener::onDrupalMyModuleEventPaidEvent",
+            "0",
+        ),
+        ("subscribed_by", "Event\\PaidEvent", "AttributeListener::typed", ("0", "0", "3")),
+        ("subscribed_by", "Event\\PaidEvent", "ClassSubscriber::onPaid", ("0", "20")),
+        ("subscribed_by", "Event\\PaidEvent", "InvokeListener::__invoke", "0"),
+        (
+            "subscribed_by",
+            "Event\\RequestEvent",
+            "AttributeListener::onSymfonyComponentHttpKernelEventRequestEvent",
+            "0",
+        ),
+        ("subscribed_by", "Event\\RequestEvent", "ClassSubscriber::onRequestFirst", "5"),
+        ("subscribed_by", "Event\\RequestEvent", "ClassSubscriber::onRequestSecond", "0"),
+        ("subscribed_by", "LocalEvent", "ClassSubscriber::onLocal", "0"),
+    }
+
+
+DASH_ALONE_TAGS = {
+    "web/modules/custom/my_module/my_module.info.yml": r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    "web/modules/custom/my_module/my_module.services.yml": r"""services:
+  my_module.dash_alone:
+    class: Drupal\my_module\EventSubscriber\TagListener
+    tags:
+      -
+        name: kernel.event_listener
+        event: kernel.request
+        method: onRequest
+        priority: 7
+      -
+        event: my_module.paid
+        name: kernel.event_listener
+        method: onPaid
+      -
+        name: kernel.event_listener
+        event: kernel.response
+  my_module.dash_alone_other:
+    class: Drupal\my_module\EventSubscriber\TagListener
+    tags:
+      -
+        name: event_subscriber
+      -
+        name: kernel.event_listener_x
+        event: kernel.terminate
+        method: onTerminate
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/TagListener.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class TagListener {
+
+  public function onRequest() {}
+  public function onPaid() {}
+  public function onKernelResponse() {}
+  public function onTerminate() {}
+
+}
+""",
+}
+
+
+def test_a_tag_item_whose_dash_stands_alone_on_its_line_is_read(tmp_path: Path) -> None:
+    """A tag item whose dash stands alone on its line, its keys on the lines below, is read as any
+    block item; another tag name gives nothing."""
+    _plant(tmp_path, DASH_ALONE_TAGS)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        ("subscribed_by", "KernelEvents::REQUEST", "TagListener::onRequest", "7"),
+        ("subscribed_by", "KernelEvents::RESPONSE", "TagListener::onKernelResponse", "0"),
+        ("subscribed_by", "my_module.paid", "TagListener::onPaid", "0"),
+    }
+    assert report.skipped == ()
+
+
+SHARED_REGISTRATIONS = {
+    "web/modules/custom/my_module/my_module.info.yml": r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/Registrar.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Psr\Log\LoggerInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+class Registrar {
+
+  protected EventDispatcherInterface $dispatcher;
+
+  public function register($untyped, LoggerInterface $logger, string $event) {
+    $untyped->addListener('my_module.paid', [$this, 'onPaid']);
+    $this->dispatcher->addListener('my_module.paid', [$this, 'onPaid']);
+    $logger->addListener($event, [$this, 'onPaid']);
+    $this->dispatcher->addListener($event, [$this, 'onPaid']);
+    \Drupal::service('event_dispatcher')->addListener($event, [$this, 'onPaid']);
+    $logger->addSubscriber($this->subscriber);
+    $this->dispatcher->addSubscriber($this->subscriber);
+  }
+
+  public function onPaid() {}
+
+}
+""",
+}
+
+
+def test_registrations_on_objects_known_differently_keep_each_place_s_receiver(
+    tmp_path: Path,
+) -> None:
+    """Two registrations of one event and listener in one method, on objects known differently,
+    share one subscribed_by edge whose receiver differs by place; a runtime registration is one
+    node per object its call runs on, and the one on an object known not to be a dispatcher is
+    taken back alone."""
+    _plant(tmp_path, SHARED_REGISTRATIONS)
+    document, report = _map(tmp_path)
+    path = "web/modules/custom/my_module/src/EventSubscriber/Registrar.php"
+    assert _registrations(document) == {
+        (
+            "registers_listener_at_runtime",
+            "Registrar::register",
+            "Registrar::register|$event~p:dispatcher",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "Registrar::register",
+            "Registrar::register|$event~x",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "Registrar::register",
+            "Registrar::register|$this->subscriber~p:dispatcher",
+            None,
+        ),
+        ("subscribed_by", "my_module.paid", "Registrar::onPaid", "0"),
+    }
+    edge = next(
+        e
+        for e in document["edges"]
+        if e["kind"] == "subscribed_by" and e["to"].endswith("Registrar::onPaid")
+    )
+    assert edge["attributes"]["receiver"] == {
+        "differs": [
+            {"file": path, "line": 13, "value": "not known to be an event dispatcher"},
+            {"file": path, "line": 14, "value": "an event dispatcher"},
+        ]
+    }
+    assert report.skipped == ()
+
+
+INHERITED_CONSTANTS = {
+    "web/modules/custom/my_module/my_module.info.yml": r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    "web/modules/custom/my_module/my_module.services.yml": r"""services:
+  my_module.classed:
+    class: Drupal\my_module\EventSubscriber\ShopSubscriber
+    tags:
+      - { name: kernel.event_listener, event: 'Drupal\my_module\Event\ClassedEvent', method:"""
+    r""" onClassed }
+      - { name: kernel.event_listener, event: "Drupal\\my_module\\Event\\EscapedEvent", method:"""
+    r""" onEscaped }
+""",
+    "web/modules/custom/my_module/src/Event/BaseEvents.php": r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class BaseEvents {
+
+  const PAID = 'my_module.paid';
+
+  const BUILT = self::PREFIX . 'built';
+
+  const CLASSED = 'Drupal\my_module\Event\ClassedEvent';
+
+  const ESCAPED = 'Drupal\\my_module\\Event\\EscapedEvent';
+
+  const DOUBLED = "Drupal\\my_module\\Event\\DoubledEvent";
+
+  const NEWLINE = "Drupal\node\Event";
+
+}
+""",
+    "web/modules/custom/my_module/src/Event/OtherEvents.php": r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class OtherEvents extends ShopEvents {
+
+  const PAID = 'my_module.other_paid';
+
+}
+""",
+    "web/modules/custom/my_module/src/Event/ShopEvents.php": r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class ShopEvents extends BaseEvents {
+
+  const OWN = 'my_module.own';
+
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/ShopSubscriber.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\BaseEvents;
+use Drupal\my_module\Event\OtherEvents;
+use Drupal\my_module\Event\ShopEvents;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class ShopSubscriber implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return [
+      ShopEvents::PAID => 'onPaid',
+      BaseEvents::PAID => 'onBasePaid',
+      OtherEvents::PAID => 'onOtherPaid',
+      ShopEvents::BUILT => 'onBuilt',
+      BaseEvents::BUILT => 'onBaseBuilt',
+      ShopEvents::CLASSED => 'onClassed',
+      ShopEvents::ESCAPED => 'onEscaped',
+      ShopEvents::DOUBLED => 'onDoubled',
+      ShopEvents::NEWLINE => 'onNewline',
+      'my_module.paid' => 'onNamedPaid',
+    ];
+  }
+
+  public function onPaid() {}
+  public function onBasePaid() {}
+  public function onOtherPaid() {}
+  public function onBuilt() {}
+  public function onBaseBuilt() {}
+  public function onClassed() {}
+  public function onEscaped() {}
+  public function onDoubled() {}
+  public function onNewline() {}
+  public function onNamedPaid() {}
+
+}
+""",
+}
+
+
+def test_a_constant_read_through_a_child_or_holding_a_backslash_meets_its_event(
+    tmp_path: Path,
+) -> None:
+    """Child::NAME, with NAME declared on a parent, names the parent's event: its text, or the
+    parent's constant when it has none; an override of the child's own wins. A text holding a
+    backslash is read as PHP reads the literal, in single or double quotes, so it meets a tag's
+    class name; a double-quoted text with another escape keeps the constant."""
+    _plant(tmp_path, INHERITED_CONSTANTS)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        ("subscribed_by", "Event\\BaseEvents::BUILT", "ShopSubscriber::onBaseBuilt", "0"),
+        ("subscribed_by", "Event\\BaseEvents::BUILT", "ShopSubscriber::onBuilt", "0"),
+        ("subscribed_by", "Event\\BaseEvents::NEWLINE", "ShopSubscriber::onNewline", "0"),
+        ("subscribed_by", "Event\\ClassedEvent", "ShopSubscriber::onClassed", "0"),
+        ("subscribed_by", "Event\\DoubledEvent", "ShopSubscriber::onDoubled", "0"),
+        ("subscribed_by", "Event\\EscapedEvent", "ShopSubscriber::onEscaped", "0"),
+        ("subscribed_by", "my_module.other_paid", "ShopSubscriber::onOtherPaid", "0"),
+        ("subscribed_by", "my_module.paid", "ShopSubscriber::onBasePaid", "0"),
+        ("subscribed_by", "my_module.paid", "ShopSubscriber::onNamedPaid", "0"),
+        ("subscribed_by", "my_module.paid", "ShopSubscriber::onPaid", "0"),
+    }
+    names = {
+        (e["from"].split("::", 1)[1], e["to"])
+        for e in document["edges"]
+        if e["kind"] == "names_event"
+    }
+    assert (
+        "Drupal\\my_module\\Event\\BaseEvents::ESCAPED",
+        "drupal.event::Drupal\\my_module\\Event\\EscapedEvent",
+    ) in names
+    assert (
+        "Drupal\\my_module\\Event\\BaseEvents::DOUBLED",
+        "drupal.event::Drupal\\my_module\\Event\\DoubledEvent",
+    ) in names
+    assert report.skipped == ()
+
+
+LATER_CONSTANTS = {
+    "web/modules/custom/my_module/my_module.info.yml": r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    "web/modules/custom/my_module/src/Event/OrderEvents.php": r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+
+  const PLACED = 'my_module.placed',PAID = 'my_module.paid';
+
+  const SHIPPED = 'my_module.shipped', CLOSED = 'my_module.closed';
+
+  public const OPENED='my_module.opened',HELD="my_module.held",KEPT='my_module.kept';
+
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/OrderSubscriber.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class OrderSubscriber implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return [
+      OrderEvents::PLACED => 'onPlaced',
+      OrderEvents::PAID => 'onPaid',
+      OrderEvents::CLOSED => 'onClosed',
+      OrderEvents::HELD => 'onHeld',
+      OrderEvents::KEPT => 'onKept',
+      'my_module.second' => 'onSecond',
+    ];
+  }
+
+  public function onPlaced() {}
+  public function onPaid() {}
+  public function onClosed() {}
+  public function onHeld() {}
+  public function onKept() {}
+  public function onSecond() {}
+
+}
+""",
+    "web/modules/custom/my_module/src/Settings.php": r"""<?php
+
+namespace Drupal\my_module;
+
+final class Settings {
+
+  const FIRST = 'my_module.first',SECOND = 'my_module.second';
+
+}
+""",
+}
+
+
+def test_each_constant_of_one_const_statement_names_its_event(tmp_path: Path) -> None:
+    """const A = 'a',B = 'b'; with or without spaces after the comma gives each constant its
+    names_event edge; a class that is no event class gives none."""
+    _plant(tmp_path, LATER_CONSTANTS)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        ("subscribed_by", "my_module.closed", "OrderSubscriber::onClosed", "0"),
+        ("subscribed_by", "my_module.held", "OrderSubscriber::onHeld", "0"),
+        ("subscribed_by", "my_module.kept", "OrderSubscriber::onKept", "0"),
+        ("subscribed_by", "my_module.paid", "OrderSubscriber::onPaid", "0"),
+        ("subscribed_by", "my_module.placed", "OrderSubscriber::onPlaced", "0"),
+        ("subscribed_by", "my_module.second", "OrderSubscriber::onSecond", "0"),
+    }
+    names = {e["from"].rsplit("::", 1)[1] for e in document["edges"] if e["kind"] == "names_event"}
+    assert names == {"CLOSED", "HELD", "KEPT", "OPENED", "PAID", "PLACED", "SHIPPED"}
+    assert report.skipped == ()
+
+
+DERIVED_FROM_TEXT = {
+    "web/modules/custom/my_module/my_module.info.yml": r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    "web/modules/custom/my_module/my_module.services.yml": r"""services:
+  my_module.tagged:
+    class: Drupal\my_module\EventSubscriber\TagListener
+    tags:
+      - { name: kernel.event_listener, event: !php/const Drupal\my_module\Event\ShopEvents::PAID }
+      - { name: kernel.event_listener, event: !php/const Drupal\my_module\Event\MoreEvents::LOST }
+      - { name: kernel.event_listener, event: !php/const Drupal\my_module\Event\ShopEvents::BUILT }
+      - { name: kernel.event_listener, event: !php/const"""
+    r""" Symfony\Component\HttpKernel\KernelEvents::REQUEST }
+  my_module.no_class:
+    tags:
+      - { name: kernel.event_listener, event: !php/const Drupal\my_module\Event\ShopEvents::PAID }
+""",
+    "web/modules/custom/my_module/src/Event/MoreEvents.php": r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class MoreEvents extends ShopEvents {
+}
+""",
+    "web/modules/custom/my_module/src/Event/ShopEvents.php": r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class ShopEvents {
+
+  const PAID = 'my_module.paid';
+
+  const SHIPPED = 'my_module.order_shipped';
+
+  const LOST = 'my_module.lost';
+
+  const BUILT = self::PREFIX . 'built';
+
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/LostListener.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\ShopEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\HttpKernel\KernelEvents;
+
+#[AsEventListener(event: ShopEvents::LOST)]
+#[AsEventListener(event: KernelEvents::REQUEST)]
+#[AsEventListener(event: ShopEvents::BUILT)]
+#[AsEventListener(event: ShopEvents::PAID, method: 'named')]
+class LostListener {
+
+  public function named() {}
+
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/PaidListener.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\ShopEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: ShopEvents::PAID)]
+class PaidListener {
+
+  public function ONMYMODULEPAID() {}
+
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/ShippedListener.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\MoreEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(MoreEvents::SHIPPED, priority: 5)]
+class ShippedListener {
+
+  public function __invoke() {}
+
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/TagListener.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class TagListener {
+
+  public function onMyModulePaid() {}
+
+  public function onMyModuleOrderShipped() {}
+
+}
+""",
+    "web/modules/custom/my_module/src/MyModuleServiceProvider.php": r"""<?php
+
+namespace Drupal\my_module;
+
+use Drupal\Core\DependencyInjection\ContainerBuilder;
+use Drupal\Core\DependencyInjection\ServiceProviderBase;
+use Drupal\my_module\Event\ShopEvents;
+use Drupal\my_module\EventSubscriber\TagListener;
+
+class MyModuleServiceProvider extends ServiceProviderBase {
+
+  public function alter(ContainerBuilder $container) {
+    $container->register('my_module.reg', TagListener::class)->addTag('kernel.event_listener',"""
+    r""" ['event' => ShopEvents::SHIPPED, 'priority' => 3]);
+    $container->getDefinition('my_module.tagged')->addTag('kernel.event_listener', ['event' =>"""
+    r""" ShopEvents::LOST]);
+    $container->getDefinition('other.service')->addTag('kernel.event_listener', ['event' =>"""
+    r""" ShopEvents::PAID]);
+    $container->getDefinition('my_module.tagged')->addTag('kernel.event_listener', ['event' =>"""
+    r""" ShopEvents::BUILT]);
+  }
+
+}
+""",
+}
+
+
+def test_a_constant_event_with_no_method_gets_the_method_derived_from_its_text(
+    tmp_path: Path,
+) -> None:
+    """A class-level attribute, a services tag and a PHP tag naming a constant and no method get
+    on<Event> derived from the constant's text, also through a child class, then __invoke, then
+    the unresolved derived name, on the service id when the map holds no class; the runtime
+    listener stays only where no mapped file gives the text."""
+    _plant(tmp_path, DERIVED_FROM_TEXT)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        ("subscribed_by", "Event\\ShopEvents::BUILT", "LostListener|ShopEvents::BUILT", "0"),
+        (
+            "subscribed_by",
+            "Event\\ShopEvents::BUILT",
+            "MyModuleServiceProvider::alter|no-method",
+            "0",
+        ),
+        (
+            "subscribed_by",
+            "Event\\ShopEvents::BUILT",
+            "my_module.tagged|Event\\ShopEvents::BUILT",
+            "0",
+        ),
+        ("subscribed_by", "KernelEvents::REQUEST", "LostListener|KernelEvents::REQUEST", "0"),
+        ("subscribed_by", "KernelEvents::REQUEST", "my_module.tagged|KernelEvents::REQUEST", "0"),
+        ("subscribed_by", "my_module.lost", "LostListener::onMyModuleLost", "0"),
+        ("subscribed_by", "my_module.lost", "TagListener::onMyModuleLost", "0"),
+        ("subscribed_by", "my_module.order_shipped", "ShippedListener::__invoke", "5"),
+        ("subscribed_by", "my_module.order_shipped", "TagListener::onMyModuleOrderShipped", "3"),
+        ("subscribed_by", "my_module.paid", "LostListener::named", "0"),
+        ("subscribed_by", "my_module.paid", "PaidListener::ONMYMODULEPAID", "0"),
+        ("subscribed_by", "my_module.paid", "TagListener::onMyModulePaid", "0"),
+        ("subscribed_by", "my_module.paid", "my_module.no_class::onMyModulePaid", "0"),
+        ("subscribed_by", "my_module.paid", "other.service::onMyModulePaid", "0"),
+    }
+    runtime = {n["id"] for n in document["nodes"] if n["type"] == "drupal.runtime_listener"}
+    assert runtime == {
+        "php.method::Drupal\\my_module\\EventSubscriber\\LostListener|KernelEvents::REQUEST",
+        "php.method::Drupal\\my_module\\EventSubscriber\\LostListener|ShopEvents::BUILT",
+        "php.method::Drupal\\my_module\\MyModuleServiceProvider::alter|no-method",
+        "php.method::my_module.tagged|Drupal\\my_module\\Event\\ShopEvents::BUILT",
+        "php.method::my_module.tagged|Symfony\\Component\\HttpKernel\\KernelEvents::REQUEST",
+    }
+    assert report.skipped == ()
+
+
+CONTRIB_CONSTANTS = {
+    "web/modules/contrib/contrib_mod/modules/sub_mod/src/SubEvents.php": r"""<?php
+
+namespace Drupal\sub_mod;
+
+interface SubEvents {
+
+  const DONE = 'sub_mod.done';
+
+}
+""",
+    "web/modules/contrib/contrib_mod/src/Event/ContribEvents.php": r"""<?php
+
+namespace Drupal\contrib_mod\Event;
+
+final class ContribEvents {
+
+  const PLACED = 'contrib_mod.placed';
+
+  const SHIPPED = 'contrib_mod.shipped',CLOSED = 'contrib_mod.closed';
+
+}
+""",
+    "web/modules/contrib/contrib_mod/src/Event/Deep/DeepEvents.php": r"""<?php
+
+namespace Drupal\contrib_mod\Event\Deep;
+
+final class DeepEvents {
+
+  const DEEP = 'contrib_mod.deep';
+
+}
+""",
+    "web/modules/contrib/contrib_mod/src/Settings.php": r"""<?php
+
+namespace Drupal\contrib_mod;
+
+final class Settings {
+
+  const NAME = 'contrib_mod.settings';
+
+}
+""",
+    "web/modules/custom/my_module/my_module.info.yml": r"""name: My module
+type: module
+core_version_requirement: ^11
+""",
+    "web/modules/custom/my_module/my_module.services.yml": r"""services:
+  my_module.placed_tag:
+    class: Drupal\my_module\EventSubscriber\ContribSubscriber
+    tags:
+      - { name: kernel.event_listener, event: contrib_mod.placed, method: onPlaced }
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/ContribSubscriber.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\contrib_mod\Event\ContribEvents;
+use Drupal\contrib_mod\Event\Deep\DeepEvents;
+use Drupal\contrib_mod\Settings;
+use Drupal\sub_mod\SubEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class ContribSubscriber implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return [
+      ContribEvents::PLACED => 'onPlaced',
+      ContribEvents::CLOSED => 'onClosed',
+      DeepEvents::DEEP => 'onDeep',
+      SubEvents::DONE => 'onDone',
+      Settings::NAME => 'onSettings',
+      ContribEvents::MISSING => 'onMissing',
+    ];
+  }
+
+  public function onPlaced() {}
+  public function onClosed() {}
+  public function onDeep() {}
+  public function onDone() {}
+  public function onSettings() {}
+  public function onMissing() {}
+
+}
+""",
+    "web/modules/custom/my_module/src/EventSubscriber/ShippedListener.php": r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\contrib_mod\Event\ContribEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: ContribEvents::SHIPPED)]
+class ShippedListener {
+
+  public function onContribModShipped() {}
+
+}
+""",
+}
+
+
+def test_a_contrib_constant_on_disk_names_the_event_of_its_text_and_nothing_else(
+    tmp_path: Path,
+) -> None:
+    """A contributed module's constant in a file named *Event* under src or src/Event, at any depth
+    of src/Event and in a submodule, gives its text to a custom key, which meets a tag of that
+    text, and to a derived method; it makes no node of its own. A file of another name, and a
+    constant no file declares, keep the constant."""
+    _plant(tmp_path, CONTRIB_CONSTANTS)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        (
+            "subscribed_by",
+            "Drupal\\contrib_mod\\Event\\ContribEvents::MISSING",
+            "ContribSubscriber::onMissing",
+            "0",
+        ),
+        (
+            "subscribed_by",
+            "Drupal\\contrib_mod\\Settings::NAME",
+            "ContribSubscriber::onSettings",
+            "0",
+        ),
+        ("subscribed_by", "contrib_mod.closed", "ContribSubscriber::onClosed", "0"),
+        ("subscribed_by", "contrib_mod.deep", "ContribSubscriber::onDeep", "0"),
+        ("subscribed_by", "contrib_mod.placed", "ContribSubscriber::onPlaced", "0"),
+        ("subscribed_by", "contrib_mod.shipped", "ShippedListener::onContribModShipped", "0"),
+        ("subscribed_by", "sub_mod.done", "ContribSubscriber::onDone", "0"),
+    }
+    contrib = {
+        n["id"] for n in document["nodes"] if "contrib_mod\\" in n["id"] or "sub_mod\\" in n["id"]
+    }
+    assert contrib == {
+        "drupal.event::Drupal\\contrib_mod\\Event\\ContribEvents::MISSING",
+        "drupal.event::Drupal\\contrib_mod\\Settings::NAME",
+    }
+    gone = {k: v for k, v in CONTRIB_CONSTANTS.items() if "/contrib/" not in k}
+    (tmp_path / "absent").mkdir()
+    _plant(tmp_path / "absent", gone)
+    absent, _ = _map(tmp_path / "absent")
+    assert (
+        "subscribed_by",
+        "Drupal\\contrib_mod\\Event\\ContribEvents::PLACED",
+        "ContribSubscriber::onPlaced",
+        "0",
+    ) in _registrations(absent)
+    assert report.skipped == ()

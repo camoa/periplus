@@ -6,8 +6,11 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # const_element, so const A = 'a', B = 'b'; gives the text of A and of B, and its from end is the
 # class constant event/event_name.yaml declares at the same element. The map rules that read a
 # name given as self::X or static::X, in queue_worker/, role/ and config/, walk from the class to
-# its parents and interfaces and read the text of the nearest one that declares X. A text holding
-# a backslash, a double-quoted text holding $, and an empty text give nothing.
+# its parents and interfaces and read the text of the nearest one that declares X. The text is
+# the value PHP gives the literal: in single quotes \\ is one backslash and \' a quote, and any
+# other backslash stays, so 'A\B' and 'A\\B' both hold A\B; in double quotes \\ is one
+# backslash and \" a quote. A double-quoted text holding $, or a backslash that starts another
+# escape there, as \n, and an empty text give nothing.
 
 node_types:
 - name: drupal.constant_text
@@ -28,10 +31,10 @@ rules:
   in: [source]
   match:
     declaration: const_element
-    name_child: [string, string_content]
+    name_child: [string]
     filetype: php
-    where: [{name_matches: {child: string, pattern: '^''[^''\\]*''$'}}]
-  id: {from: declared_name}
+    where: [{name_matches: {child: string, pattern: '^''(?:[^''\\]|\\.)+''$'}}]
+  id: {from: declared_name, pattern: '^''(?<text>.+)''$', template: '{text}', normalize: [{replace: '\\\\', with: '¤'}, {replace: '\\''', with: ''''}, {replace: '¤', with: '\'}]}
   emits:
   - edge:
       kind: has_constant_text
@@ -44,10 +47,10 @@ rules:
   in: [source]
   match:
     declaration: const_element
-    name_child: [encapsed_string, string_content]
+    name_child: [encapsed_string]
     filetype: php
-    where: [{name_matches: {child: encapsed_string, pattern: '^"[^"\\$]*"$'}}]
-  id: {from: declared_name}
+    where: [{name_matches: {child: encapsed_string, pattern: '^"(?:[^"\\$]|\\[\\"]|\\(?![ntrvef0-7$"\\]|x[0-9A-Fa-f]|u\{))+"$'}}]
+  id: {from: declared_name, pattern: '^"(?<text>.+)"$', template: '{text}', normalize: [{replace: '\\\\', with: '¤'}, {replace: '\\"', with: '"'}, {replace: '¤', with: '\'}]}
   emits:
   - edge:
       kind: has_constant_text

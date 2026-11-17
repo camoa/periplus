@@ -5,7 +5,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # module, install, inc, theme or profile file it is a dispatched_by_function edge to the function
 # around the call. A call in a closure counts the named function around it. Each call is an
 # internal drupal.event_use at its line, and X and the event are read as in event_subscriber.yaml:
-# the event of the constant's text when a mapped file declares it with one, else of the constant;
+# the event of the constant's text when a mapped file declares it with one, on X or the nearest
+# mapped ancestor or interface that declares it, else of the declaring class's constant;
 # X through the file's use statements, as self or static, or in the file's own namespace when a
 # mapped class of that namespace declares the constant. The first argument may hold three levels
 # of parentheses, as new MyEvent(f(g($x))). dispatch($event) with no name, the name written first,
@@ -104,8 +105,9 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|dispatched(?:_here)?\|(?<listener>[^|]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched(?:_here)?\|(?<listener>[^|]+)$'}]
     follow:
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
     - node: 'drupal.class_constant::{event}'
     - edge: has_constant_text
     - id_matches: '^drupal\.constant_text::(?<text>.+)$'
@@ -118,10 +120,11 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|dispatched\|(?<listener>[^|]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched\|(?<listener>[^|]+)$'}]
     follow:
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
     - try: [{node: 'drupal.class_constant::{event}'}, {edge: has_constant_text}]
-    - id_matches: '^(?:drupal\.constant_text::|drupal\.event_use::(?<untexted>))'
+    - id_matches: '^(?:drupal\.constant_text::|drupal\.(?:event_use|class_constant)::(?<untexted>))'
     - node: 'php.method::{listener}'
   emits: [{edge: {kind: dispatched_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node}}]
   confidence: inferred
@@ -130,8 +133,9 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|dispatched_here\|(?<listener>[^|]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched_here\|(?<listener>[^|]+)$'}]
     follow:
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
     - node: 'drupal.class_constant::{event}'
     - try: [{edge: has_constant_text}]
     - id_matches: '^(?:drupal\.constant_text::|drupal\.class_constant::(?<untexted>))'
@@ -143,8 +147,9 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|dispatched_function\|(?<listener>[^|]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched_function\|(?<listener>[^|]+)$'}]
     follow:
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
     - node: 'drupal.class_constant::{event}'
     - edge: has_constant_text
     - id_matches: '^drupal\.constant_text::(?<text>.+)$'
@@ -156,10 +161,11 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|dispatched_function\|(?<listener>[^|]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|dispatched_function\|(?<listener>[^|]+)$'}]
     follow:
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
     - try: [{node: 'drupal.class_constant::{event}'}, {edge: has_constant_text}]
-    - id_matches: '^(?:drupal\.constant_text::|drupal\.event_use::(?<untexted>))'
+    - id_matches: '^(?:drupal\.constant_text::|drupal\.(?:event_use|class_constant)::(?<untexted>))'
     - node: 'php.function::{listener}'
   emits: [{edge: {kind: dispatched_by_function, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node}}]
   confidence: inferred

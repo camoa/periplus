@@ -138,14 +138,17 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - each constant of a class that descends from Symfony's or Drupal's Event, or whose name ends in
 #   Events, as a drupal.event named by the text the constant holds, with a drupal.event_constant
 #   <class>::<CONST> and its names_event edge to it, or named <class>::<CONST> when the mapped file
-#   gives the constant no text; each key of getSubscribedEvents, written X::NAME, self::NAME or
-#   static::NAME, as a subscribed_by edge from the event to the listener method, each listener of
+#   gives the constant no text, a constant read through a class that inherits it named as its
+#   declaring class's, and a contributed module's constant read for its text only when the folder
+#   contrib_module is on disk; each key of getSubscribedEvents, written X::NAME, self::NAME,
+#   static::NAME or X::class, as a subscribed_by edge from the event to the listener method, each listener of
 #   a list of lists its own, holding the listener's priority as written in the edge attribute
 #   priority, 0 when none is written, as Symfony runs it; the same edge from each AsEventListener
 #   attribute on a method or a class and each kernel.event_listener tag in a services file, its
-#   event a constant, a name, the core constant the table core_event_names gives for a core name,
-#   or the method's parameter type, its method written, or derived as Symfony derives it, or a
-#   drupal.runtime_listener marked resolution runtime when only a constant's text names it
+#   event a constant, a name, a class, X::class, the core constant the table core_event_names gives
+#   for a core name, a container parameter a mapped parameters block gives a value, or the method's
+#   parameter type, its method written, or derived as Symfony derives it from the event's text,
+#   or a drupal.runtime_listener marked as an unknown boundary when no mapped file gives that text
 #   (event/event_listener.yaml), each such method holding listens_by_attribute, marked
 #   [AsEventListener, not wired by core]; the same edge from a key written as a name or with its
 #   namespace, ->addListener(), ->addTag('kernel.event_listener', ...) in PHP and the keys a
@@ -155,8 +158,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   drupal.runtime_listener with the runtime mark, by registers_listener_at_runtime
 #   (event/listener_registration.yaml, event/inherited_subscription.yaml); a tag's or attribute's
 #   dispatcher in the edge attribute dispatcher; an addListener or addSubscriber call on an object
-#   whose known type is not an event dispatcher as nothing, and one on an object of no known type
-#   with the edge attribute receiver: not known to be an event dispatcher; and each
+#   whose known type is not an event dispatcher as nothing, one on an object of no known type with
+#   the edge attribute receiver: not known to be an event dispatcher, and one on a known event
+#   dispatcher with receiver: an event dispatcher; and each
 #   ->dispatch($event, X::NAME) as a dispatched_by edge to the method around it, or a
 #   dispatched_by_function edge to the function around it in a module, install, inc, theme or
 #   profile file, each at the key's line. A key's event is the text its constant holds when a
@@ -461,11 +465,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - A dispatch name written with its namespace, \A\B::NAME, as text such as 'kernel.request', or
 #   as a variable gives nothing; a subscriber key so written is read as a registration
 #   (event/listener_registration.yaml). A key or name whose class no use statement
-#   binds joins its event only when a mapped class of the file's namespace declares that
-#   constant. A constant read from a parent of the class the key names, or one whose text holds a
-#   backslash, keys its event by the constant and meets no other constant of that text. A
-#   constant written after a comma with no space, as B in const A = 'a',B = 'b';, gets its event
-#   but no names_event edge to it. A listener the map holds no method for gives no edge. A
+#   binds joins its event only when a mapped class of the file's namespace or one of its mapped
+#   ancestors declares that constant. A listener the map holds no method for gives no edge. A
 #   priority is kept as written, so self::LATE stays a name, not its number.
 #   dispatch($event)
 #   with no name, the name written first, a first argument four levels of parentheses deep, a
@@ -475,9 +476,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 # - Drupal core, as of 11.4, registers no listener from an AsEventListener attribute by itself; its
 #   edge holds what the attribute declares, and its method holds the mark. A name the table
 #   core_event_names does not list, as a contributed module's, is the event of that name, which
-#   meets a subscriber's constant only when a mapped file gives the constant that text; with core
-#   itself in the map, a core name meets the constant, not the text. A dispatcher a tag or an
-#   attribute names is kept as written: the map does not say which service it is. A registration
+#   meets a subscriber's constant when a mapped file, or a contributed module's file under
+#   contrib_event_source, gives the constant that text; with core itself in the map, a core name
+#   meets the constant, not the text. A dispatcher a tag or an attribute names is kept as written:
+#   the map does not say which service it is. A registration
 #   on an object of no known type rests on the method's name, which its edge's receiver attribute
 #   says. A core subscriber base the rutter does not list reads as a base outside the map. A method
 #   attribute on a base's method is inherited too.
@@ -620,7 +622,8 @@ folders:
   custom_module: ./web/modules/custom
   custom_theme: ./web/themes/custom
   # Contributed modules and themes, read only for the hook names their *.api.php files define
-  # (hook/hook_known.yaml). A project with no such folder on disk gets nothing from it.
+  # (hook/hook_known.yaml) and the event names their constants hold (event/event_name.yaml). A
+  # project with no such folder on disk gets nothing from it.
   contrib_module: ./web/modules/contrib
   contrib_theme: ./web/themes/contrib
   # Where a contributed project keeps its *.api.php files: its own folder, a folder directly
@@ -633,6 +636,16 @@ folders:
   - "{contrib_theme}/*"
   - "{contrib_theme}/*/*"
   - "{contrib_theme}/*/modules/*"
+  # Where a contributed project keeps its event-name constants, read for their names only
+  # (event/event_name.yaml): its src folder and src/Event at any depth, of the project and of each
+  # folder under its modules folder. Not every folder at any depth, which costs a directory listing each.
+  contrib_event_source:
+  - "{contrib_module}/*/src"
+  - "{contrib_module}/*/src/Event"
+  - "{contrib_module}/*/src/Event/**"
+  - "{contrib_module}/*/modules/*/src"
+  - "{contrib_module}/*/modules/*/src/Event"
+  - "{contrib_module}/*/modules/*/src/Event/**"
   # An extension's shipped configuration: config/install and config/optional.
   module_config:
   - "{custom_module}/**/config/install"
@@ -855,7 +868,7 @@ files:
     # attachment. The sections are the comments and the strings. The spans kept here are attached,
     # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
     # subscribed_events, listener_list, own_listener_list, named_listener_list,
-    # qualified_listener_list, named_function, first_parameter_type, class_like_body,
+    # qualified_listener_list, class_listener_list, named_function, first_parameter_type, class_like_body,
     # array_assigned, in_array_list, alter_list, any_function and switch_body.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
@@ -944,6 +957,11 @@ files:
       - name: qualified_listener_list
         open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?<key>\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
+      # The same list under a key written as a class, X::class => [[...]], key the class as written.
+      # Read by event/listener_registration.yaml.
+      - name: class_listener_list
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?!parent::)(?<key>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
       # The body of a named function or method; function is its name. A closure has no name and
       # opens none, so a match inside one reads the function around it.
       - name: named_function
@@ -1024,6 +1042,11 @@ files:
       # keys of a parameters block are outside it. The opener never matches; only the end counts.
       - name: services_block
         open: '(?m)^(?<mark>services):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^[A-Za-z_]']
+      # The parameters block of a services file, to the next top-level key; read by
+      # event/event_listener.yaml for a tag's event written as a parameter.
+      - name: parameters_block
+        open: '(?m)^(?<mark>parameters):[ \t]*$'
         balance: ['(?!x)x', '(?m)^[A-Za-z_]']
       # One service of a services block, from its key to the next line indented two spaces or
       # less that is no comment; service is the key. Read by event/event_listener_tag.yaml.

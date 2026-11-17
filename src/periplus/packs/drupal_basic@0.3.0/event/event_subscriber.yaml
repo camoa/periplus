@@ -17,11 +17,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 #
 # Each key is an internal drupal.event_use at its line (event/event.yaml), and the map rules make
 # its edge there: from the event of the text the constant holds, when a mapped file declares it
-# with a text, else from the event of the constant <class>::<NAME>. X is read through the file's
+# with a text, on X or the nearest mapped ancestor or interface of X that declares it, else from
+# the event of the constant <class>::<NAME> of the class that declares it. X is read through the file's
 # use statements (event/use_binding.yaml). A class written with no use is in the file's own
 # namespace and, as self::NAME and static::NAME, which name a constant of the subscriber's own
 # class, gives an edge only when a mapped class declares the constant. A key written with its
-# namespace, \A\B::NAME or A\B::NAME, or as a name, 'kernel.request', is read by
+# namespace, \A\B::NAME or A\B::NAME, as a name, 'kernel.request', or as a class, X::class, is
+# read by
 # event/listener_registration.yaml, and a subclass's inherited keys by
 # event/inherited_subscription.yaml. Each use rule's _listener twin makes the
 # listener a known end, so a listener no mapped file declares ends at a referenced method; a key
@@ -242,11 +244,12 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|subscribed(?:_here)?\|(?<listener>[^|]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed(?:_here)?\|(?<listener>[^|]+)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - try: [{edge: use_names_listener}, {edge_attribute: priority}]
     - try: [{edge: use_has_priority}, {edge_attribute: priority}]
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
     - node: 'drupal.class_constant::{event}'
     - edge: has_constant_text
     - id_matches: '^drupal\.constant_text::(?<text>.+)$'
@@ -259,13 +262,14 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|subscribed\|(?<listener>[^|]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed\|(?<listener>[^|]+)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - try: [{edge: use_names_listener}, {edge_attribute: priority}]
     - node: 'drupal.event_use::{event}|subscribed|{listener}'
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
     - try: [{node: 'drupal.class_constant::{event}'}, {edge: has_constant_text}]
-    - id_matches: '^(?:drupal\.constant_text::|drupal\.event_use::(?<untexted>))'
+    - id_matches: '^(?:drupal\.constant_text::|drupal\.(?:event_use|class_constant)::(?<untexted>))'
     - node: 'php.method::{listener}'
   emits: [{edge: {kind: subscribed_by, from: {template: '{event}{untexted}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
   confidence: inferred
@@ -274,11 +278,12 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>[^|]+)\|subscribed_here\|(?<listener>[^|]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_here\|(?<listener>[^|]+)$'}]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - try: [{edge: use_names_listener}, {edge_attribute: priority}]
     - try: [{edge: use_has_priority}, {edge_attribute: priority}]
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
     - node: 'drupal.class_constant::{event}'
     - try: [{edge: has_constant_text}]
     - id_matches: '^(?:drupal\.constant_text::|drupal\.class_constant::(?<untexted>))'

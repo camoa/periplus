@@ -392,6 +392,7 @@ rules:
     - incoming_edge: use_names_listener
     - edge_attribute: priority
     - id_matches: '^drupal\.event_use::(?<ev>[^|]+)\|subscribed\|[^|]+::(?<m>\w+)$'
+    - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
     - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
     - node: 'php.type::{sub}'
     - ancestors: [inherits]
@@ -415,6 +416,7 @@ rules:
     - incoming_edge: use_names_listener
     - edge_attribute: priority
     - id_matches: '^drupal\.event_use::(?<ev>[^|]+)\|subscribed_here\|[^|]+::(?<m>\w+)$'
+    - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
     - node: 'drupal.class_constant::{ev}'
     - try: [{edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
     - node: 'php.type::{sub}'
@@ -441,6 +443,7 @@ rules:
     - edge_attribute: priority
     - edge: use_names_event
     - id_matches: '^drupal\.event::(?<ev>.+)$'
+    - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
     - try: [{node: 'drupal.class_constant::{ev}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
     - node: 'php.type::{sub}'
     - ancestors: [inherits]
@@ -466,6 +469,7 @@ rules:
     - edge_attribute: priority
     - edge: use_names_event
     - id_matches: '^drupal\.event::(?<ev>.+)$'
+    - try: [{id_matches: '^drupal\.event(?:_use)?::(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*)(?:\||$)'}, {node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<ev>.+)$'}]
     - node: 'drupal.class_constant::{ev}'
     - try: [{edge: has_constant_text}, {id_matches: '^drupal\.constant_text::(?<ev>.+)$'}]
     - node: 'php.type::{sub}'

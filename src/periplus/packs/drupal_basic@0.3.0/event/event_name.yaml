@@ -10,6 +10,20 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # a drupal.event_constant that names it; one whose text it does not read gives the event of
 # <class>::<CONST>.
 
+node_types:
+# The method name Symfony derives from an event's text, <on<Event>>|<the same in lower case>.
+- name: drupal.derived_listener
+  description: "the listener method name Symfony derives from an event's text, <name>|<name in lower case>"
+  id_namespace: drupal.derived_listener
+  internal: true
+
+edge_kinds:
+- kind: derives_listener
+  cause: none
+  description: "a listener of the event this text names, with no method, is that derived method"
+  from: drupal.constant_text
+  to: drupal.derived_listener
+
 rules:
 - rule: class_constant
   reads: file
@@ -21,17 +35,148 @@ rules:
 
 # Each text a constant holds, as the end drupal.event::<text>, so a map rule can reach the event
 # of that text; constant_text_may_name_event's edge itself stays out of the map. A name after a
-# comma or a space is read too, so const A = 'a', B = 'b'; gives both texts; a text read that no
-# event constant holds reaches nothing. Without a space after the comma, B is not read here.
+# comma or a space is read too, so const A = 'a', B = 'b'; and const A = 'a',B = 'b'; give both
+# texts: the comma or semicolon after a text is looked at, not taken. A text is read as PHP reads
+# the literal, as constant/constant_text.yaml says, so 'A\B' and 'A\\B' both give A\B. A text read
+# that no event constant holds reaches nothing.
 - rule: constant_text_may_name_event
+  reads: file
+  in: [source]
+  match: &constant_text_match
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?:\bconst\s+(?:\w+\s+)?|[,\s]\s*)(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?:''(?<single_text>(?:[^''\\]|\\.)+)''|"(?<double_text>(?:[^"\\$]|\\[\\"]|\\(?![ntrvef0-7$"\\]|x[0-9A-Fa-f]|u\{))+)")(?=\s*[;,])'
+  values: &constant_text_values
+    # \' is a quote in the single-quoted text, before §D; \" one in the double-quoted, after it.
+    text: {template: '§S{single_text}§D{double_text}', normalize: [{replace: '\\\\', with: '¤'}, {replace: '\\''(?=[^§]*§D)', with: ''''}, {replace: '\\"(?![^§]*§D)', with: '"'}, {replace: '¤', with: '\'}, {replace: '^§S|§D', with: ''}]}
+  id: {template: '{text}'}
+  emits: [{edge: {kind: text_may_name_event, from: this_node, to: {template: '{text}', types: [drupal.event_text]}}}]
+  confidence: inferred
+
+# The method Symfony names for a listener that names this text as its event and no method:
+# on<Event>, each letter at the start or after a character other than a letter or a digit made
+# upper case and those characters dropped, as onKernelResponse for kernel.response, with that
+# name in lower case, as PHP finds a method in any letter case. The listener rules read it in the
+# map from a constant's text, where the listener holds only the constant (event/event_listener.yaml,
+# event/listener_registration.yaml).
+- rule: constant_text_derives_listener
+  reads: file
+  in: [source]
+  match: *constant_text_match
+  values:
+    <<: *constant_text_values
+    derived:
+      template: '{text}'
+      normalize: &derive
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))a', with: 'A'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))b', with: 'B'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))c', with: 'C'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))d', with: 'D'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))e', with: 'E'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))f', with: 'F'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))g', with: 'G'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))h', with: 'H'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))i', with: 'I'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))j', with: 'J'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))k', with: 'K'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))l', with: 'L'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))m', with: 'M'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))n', with: 'N'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))o', with: 'O'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))p', with: 'P'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))q', with: 'Q'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))r', with: 'R'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))s', with: 'S'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))t', with: 'T'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))u', with: 'U'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))v', with: 'V'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))w', with: 'W'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))x', with: 'X'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))y', with: 'Y'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))z', with: 'Z'}
+      - {replace: '[^A-Za-z0-9]', with: ''}
+      - {replace: '^', with: 'on'}
+    lower: {template: '{derived}', case: lower}
+  id: {template: '{text}'}
+  emits: [{edge: {kind: derives_listener, from: this_node, to: {template: '{derived}|{lower}', types: [drupal.derived_listener]}}}]
+  confidence: inferred
+
+# A contributed module's constants, in a file whose name holds Event under its src or src/Event
+# folder (contrib_event_source, pack.yaml), give their text and the method Symfony derives from it,
+# and nothing else: no node of the map, only the internal class constant <class>::<NAME>, its
+# class named by the file's path, so a custom subscriber's key ContribEvents::NAME names the event
+# of that text and meets a listener that names the text. Nothing is read when the folder is absent.
+- rule: contrib_constant_text
+  reads: file
+  in: [contrib_event_source]
+  match: &contrib_constant_match
+    file: '*Event*'
+    filetype: drupal_php_text
+    ending: php
+    text: '(?:\bconst\s+(?:\w+\s+)?|[,\s]\s*)(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?:''(?<single_text>(?:[^''\\]|\\.)+)''|"(?<double_text>(?:[^"\\$]|\\[\\"]|\\(?![ntrvef0-7$"\\]|x[0-9A-Fa-f]|u\{))+)")(?=\s*[;,])'
+  values: *constant_text_values
+  id: {template: '{text}'}
+  emits: [{edge: {kind: has_constant_text, from: {template: '{psr4_class}::{constant}', types: [drupal.class_constant]}, to: this_node}}]
+  confidence: inferred
+
+- rule: contrib_constant_derives_listener
+  reads: file
+  in: [contrib_event_source]
+  match: *contrib_constant_match
+  values:
+    <<: *constant_text_values
+    derived: {template: '{text}', normalize: *derive}
+    lower: {template: '{derived}', case: lower}
+  id: {template: '{text}'}
+  emits: [{edge: {kind: derives_listener, from: this_node, to: {template: '{derived}|{lower}', types: [drupal.derived_listener]}}}]
+  confidence: inferred
+
+# An event dispatched as an object is named by its class, so a listener that names X::class and no
+# method has the method Symfony derives from the class's full name, as onDrupalMyModuleEventPaid
+# for Drupal\my_module\Event\Paid. The full name is read where a file gives it: a class a file
+# under src declares, by Drupal's PSR-4 layout; a class a use statement imports; and \A\B::class
+# written with its namespace. Each is the same internal drupal.constant_text <full name> a constant
+# of that text gives, so the listener rules read one derived name either way.
+- rule: class_name_derives_listener
   reads: file
   in: [source]
   match:
     file: '**'
     filetype: drupal_php_text
-    text: '(?:\bconst\s+(?:\w+\s+)?|[,\s]\s*)(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?:''(?<single_text>[^''\\]*)''|"(?<double_text>[^"\\$]*)")\s*[;,]'
-  id: {template: '{single_text}{double_text}'}
-  emits: [{edge: {kind: text_may_name_event, from: this_node, to: {template: '{single_text}{double_text}', types: [drupal.event_text]}}}]
+    text: '(?m)^(?:(?:final|abstract|readonly)\s+)*(?<declared>class)\s+\w+'
+  values:
+    derived: {template: '{psr4_class}', normalize: *derive}
+    lower: {template: '{derived}', case: lower}
+  id: {template: '{psr4_class}'}
+  emits: [{edge: {kind: derives_listener, from: this_node, to: {template: '{derived}|{lower}', types: [drupal.derived_listener]}}}]
+  confidence: inferred
+
+- rule: imported_class_derives_listener
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?m)^use\s+\\?(?<path>(?:[A-Za-z_]\w*\\)+[A-Za-z_]\w*)(?:\s+as\s+\w+)?\s*;'
+  values:
+    derived: {template: '{path}', normalize: *derive}
+    lower: {template: '{derived}', case: lower}
+  id: {template: '{path}'}
+  emits: [{edge: {kind: derives_listener, from: this_node, to: {template: '{derived}|{lower}', types: [drupal.derived_listener]}}}]
+  confidence: inferred
+
+- rule: written_class_derives_listener
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?<![\w\\])\\(?<path>[A-Za-z_]\w*(?:\\[A-Za-z_]\w*)+)::class\b'
+  values:
+    derived: {template: '{path}', normalize: *derive}
+    lower: {template: '{derived}', case: lower}
+  id: {template: '{path}'}
+  emits: [{edge: {kind: derives_listener, from: this_node, to: {template: '{derived}|{lower}', types: [drupal.derived_listener]}}}]
   confidence: inferred
 
 - rule: event_constant_of_event_class
