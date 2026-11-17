@@ -55,7 +55,6 @@ from periplus.navigate.source import SourceLines, description_line, source_line
 from periplus.navigate.walk import (
     HUB,
     NO_CAUSES,
-    PIPED,
     CauseRow,
     cause_report,
     start_args,
@@ -93,6 +92,12 @@ WEIGHT_PLACES = 6
 MIN_WORD = 3
 #: The most things past the starts a printed slice shows, unless ``limit`` says otherwise.
 ROW_LIMIT = 50
+#: The things past the starts the byte aim never cuts, so a slice of many starts still shows what
+#: its walks reached.
+ROW_FLOOR = 10
+#: The start lines a printed slice shows in full; the rest are counted, with the command that
+#: lists them.
+START_LINES = 4
 #: The hops each walk by cause goes, unless ``depth`` says otherwise. On a real map a start's walk
 #: off held 15% of its things within 2 hops and 40% within 3, so 2 keeps one start's slice near the
 #: byte aim and leaves the rest to ``--depth``.
@@ -272,7 +277,7 @@ class SliceReport:
     notes: tuple[str, ...] = ()
     members: tuple[Members, ...] = ()
     walks: tuple[Walked, ...] = ()
-    walk_note: str = ""
+    listing: str = ""
     files: tuple[FileGroup, ...] = ()
     inventory: tuple[tuple[str, tuple[tuple[str, int], ...]], ...] = ()
     shorts: Mapping[str, str] | None = None
@@ -548,22 +553,25 @@ def _piece(
         members.append(Members(container, len(holding.members), holding.by_type, tuple(rows)))
     walk_from = list(roots)
     on = map_flag(map_path)
-    if len(walk_from) == len(order):
-        note = PIPED if piped else f" (pipe in the {len(order)} starts above)"
-    else:
-        note = f" (pipe in the {len(walk_from)} ids it walks from: the starts and their members)"
-    named, walk_note = start_args([names.short(i) for i in walk_from], piped, note)
+    listing = _starts_command(given, searching, prefixes, types, most, support, piped) + on
+    named, _ = start_args([names.short(i) for i in walk_from], piped)
     reached, walks, walked = _walk(start, index, walk_from, roots, walking, map_path, named)
     if isinstance(reached, tuple):
         return SliceReport(printed=True, problems=reached)
     warnings += walked
     raw_note = f" (for each of the {len(walk_from)} ids it walks from)"
+    piped_note = " (with the same ids piped into the first command)" if piped else ""
+
+    def runnable(command: str, raw: bool) -> str:
+        """``command`` with the map, after the command that lists its ids when it reads ``-``."""
+        if raw:
+            return command + on + raw_note
+        if named == ["-"]:
+            return f"{listing} | {command}{on}{piped_note}"
+        return command + on
+
     walks = [
-        replace(
-            w,
-            command=w.command + on + (raw_note if w.raw else walk_note),
-            whole=w.whole + on + (raw_note if w.raw else walk_note),
-        )
+        replace(w, command=runnable(w.command, w.raw), whole=runnable(w.whole, w.raw))
         for w in walks
     ]
     held = list(dict.fromkeys([*walk_from, *(r.id for r in reached)]))
@@ -632,7 +640,7 @@ def _piece(
             notes=tuple(notes),
             members=shown_members,
             walks=tuple(walks),
-            walk_note=walk_note,
+            listing=listing,
             files=files,
             inventory=inventory,
             shorts=shorts,
@@ -648,25 +656,29 @@ def _piece(
         )
 
     taking = min(len(rows), limit) if limit else len(rows)
-    cap, more, told, cut = LINK_NAMES, True, True, 0
+    floor = min(taking, ROW_FLOOR)
+    cap, more, told, cut, over = LINK_NAMES, True, True, 0, False
     report = assemble(taking, cap, more, (), told)
     budget = BYTE_LIMIT if budgeted else 0
-    while budget and len(render_text(report).encode()) > budget:
+    while budget and not over and len(render_text(report).encode()) > budget:
         if told and report.legend:
             told = False
         elif more:
             more = False
         elif cap > 1:
             cap //= 2
-        elif taking:
+        elif taking > floor:
             taking -= 1
             cut += 1
         else:
-            break
+            over = True
         parts = [] if told else ["legend left out"]
         parts += [] if more else ["the +N more links lines dropped"]
         parts += [f"at most {cap} names per link"] if cap < LINK_NAMES else []
         parts += [f"{amount(cut, 'thing')} left out, farthest hop first"] if cut else []
+        parts += (
+            [f"the first {amount(taking, 'thing')} past the starts kept over it"] if over else []
+        )
         cut_note = f"cut to fit {budget} bytes: {', '.join(parts)}; --limit N prints N things"
         if not told:
             cut_note += f"; what a kind means: periplus legend --kind K{on}"
@@ -674,6 +686,26 @@ def _piece(
             cut_note += f"; a node's links in full: periplus show NAME --limit 0{on}"
         report = assemble(taking, cap, more, (cut_note,), told)
     return report
+
+
+def _starts_command(
+    given: Collection[str],
+    searching: bool,
+    prefixes: Collection[str],
+    types: Collection[str],
+    most: int,
+    support: bool,
+    piped: bool,
+) -> str:
+    """The ``slice --depth 0 --ids`` command that prints this slice's starts and their members,
+    without the map."""
+    words = ["periplus", "slice"]
+    words += [*given] if searching else ["--from", *(["-"] if piped else given)]
+    words += [f for prefix in prefixes for f in ("--path", prefix)]
+    words += [f for kind in types for f in ("--type", kind)]
+    words += ["--starts", str(most)] if most != START_LIMIT else []
+    words += ["--support"] if support else []
+    return " ".join(shlex.quote(word) for word in [*words, "--depth", "0", "--ids"])
 
 
 def _filled(
@@ -735,7 +767,8 @@ def _walk(
             warnings += report.warnings
             last = max((r.hop for r in report.walked), default=0)
             hops = last if walking.depth is None else min(walking.depth, last)
-            inside = [r for r in report.walked if r.hop <= hops] + list(report.touching)
+            inside = [r for r in report.walked if r.hop <= hops]
+            inside += list(report.touching) if walking.depth != 0 else []
             for r in sorted(inside, key=lambda r: (r.hop, r.touch, r.id)):
                 root = roots.setdefault(r.id, roots[r.via])
                 if r.id not in seen:
@@ -768,7 +801,7 @@ def _walk(
             )
         else:
             levels = len(index.nodes) if walking.depth is None else walking.depth
-            for item in walk_from:
+            for item in walk_from if levels else ():
                 raw = walk(index, item, "out" if toward == "off" else "in", levels, walking.kinds)
                 for w in raw:
                     root = roots.setdefault(w.id, roots.get(w.via, roots[item]))
@@ -1287,7 +1320,13 @@ def _walk_lines(report: SliceReport) -> list[str]:
             continue
         line = summary(label, walked.rows, False)
         if walked.held < len(walked.rows):
-            hops = "hop 1" if report.depth == 1 else f"hops 1-{report.depth}"
+            hops = (
+                "no hop"
+                if report.depth == 0
+                else "hop 1"
+                if report.depth == 1
+                else (f"hops 1-{report.depth}")
+            )
             line += f"; this slice holds {hops}: {walked.held}; all: {_escape(walked.whole)}"
         lines.append(line)
     undeclared = sorted({k for w in report.walks for k in w.undeclared})
@@ -1365,11 +1404,16 @@ def render_text(report: SliceReport) -> str:
         lines += [_escape(note) for note in report.notes]
         if not report.starts:
             lines.append("no matches")
-        for start in report.starts:
+        for start in report.starts[:START_LINES]:
             short = _escape(shorts.get(start.row.id, start.row.id))
             lines.append(
                 f"start {short}  {_escape(start.row.type)}  ({_escape(_why(start))})"
                 f"{mark_text(start.row.marks)}"
+            )
+        if len(report.starts) > START_LINES:
+            lines.append(
+                f"+{amount(len(report.starts) - START_LINES, 'more start')}; the starts and their"
+                f" members: {_escape(report.listing)}"
             )
         if report.unpicked:
             words = ", ".join(_escape(w) for w in report.words)

@@ -243,3 +243,67 @@ def test_the_cli_default_depth_is_the_slice_default() -> None:
     from periplus import cli
 
     assert cli.SLICE_DEPTH == slicing.PRINT_DEPTH
+
+
+def test_depth_0_lists_the_starts_and_their_members_alone(tmp_path: Path) -> None:
+    site = _site(tmp_path)
+
+    assert _slice(site, MOD, C, depth=0, touch=True).held == (MOD, C, A, F)
+    assert _slice(site, MOD, depth=0).rows.items == (
+        *(r for m in _slice(site, MOD, depth=0).members for r in m.rows),
+    )
+
+
+def _many(deep: Path) -> Path:
+    """Twelve things named token in files of their own, each with a long description and
+    calling five helpers, in a map at ``deep``."""
+    tokens = [f"t.function::app.token{k:02}" for k in range(12)]
+    files = {t: f"src/token{k:02}.php" for k, t in enumerate(tokens)}
+    calls = [(t, f"t.function::app.help{k:02}_{n}") for k, t in enumerate(tokens) for n in range(5)]
+    document = {
+        "periplus_map_version": 0,
+        "packs": [{"pack": "own", "version": "0.1.0"}],
+        "roots": ["."],
+        "cause_from_kinds": ["calls"],
+        "nodes": sorted(
+            [
+                *(_node(t, "t.function", line=1, file=files[t]) for t in tokens),
+                *(_node(h, "t.function", line=3, file=f"src/{h[-4:]}.php") for _, h in calls),
+            ],
+            key=lambda n: n["id"],
+        ),
+        "edges": [_edge("calls", t, h, 2, file=files[t]) for t, h in calls],
+    }
+    deep.parent.mkdir(parents=True)
+    deep.write_text(json.dumps(document), encoding="utf-8")
+    text = "Takes a token and checks it. " * 15
+    entries = "".join(
+        f"  {t}:\n    text: {text}\n    file: {files[t]}\n    line: 1\n" for t in tokens
+    )
+    (deep.parent / "descriptions.yaml").write_text(f"nodes:\n{entries}", encoding="utf-8")
+    return deep
+
+
+def test_a_slice_of_many_starts_and_a_long_map_path_still_prints_walk_rows(
+    tmp_path: Path,
+) -> None:
+    deep = _many(tmp_path.joinpath(*["folder" * 40] * 5, "map.json"))
+    report = slicing.run(tmp_path, {}, ["token"], (), map_path=deep)
+    lines = slicing.render_text(report).splitlines()
+
+    assert len(report.starts) == 12
+    assert len(report.rows.items) >= slicing.ROW_FLOOR
+    assert {r.walk for r in report.rows.items} == {"off"}
+    assert sum(line.startswith("start ") for line in lines) == slicing.START_LINES
+    (counted,) = [line for line in lines if line.startswith("+8 more starts;")]
+    command = counted.split("members: ", 1)[1]
+    assert command == f"periplus slice token --depth 0 --ids --map {deep}"
+
+    printed = io.StringIO()
+    with (
+        contextlib.chdir(tmp_path),
+        contextlib.redirect_stdout(printed),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
+        main(command.split()[1:])
+    assert printed.getvalue().splitlines() == [s.row.id for s in report.starts]

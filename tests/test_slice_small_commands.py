@@ -54,7 +54,7 @@ def test_the_in_full_commands_print_every_thing_the_cap_left_out(tmp_path: Path)
     assert set(cut.held) == printed
 
 
-def test_more_than_three_starts_name_dash_and_say_which_ids(tmp_path: Path) -> None:
+def test_more_than_three_starts_pipe_in_the_command_that_lists_them(tmp_path: Path) -> None:
     report = slicing.run(
         _site(tmp_path),
         {},
@@ -72,11 +72,12 @@ def test_more_than_three_starts_name_dash_and_say_which_ids(tmp_path: Path) -> N
 
     at = lines.index(IN_FULL)
     assert lines[at + 1] == (
-        "  sets off: periplus neighbors - --depth 2 --limit 0 (pipe in the 4 starts above)"
+        f"  sets off: periplus slice --from {ADD} {TOTAL} {SEND} {DEEP} --depth 0 --ids"
+        " | periplus neighbors - --depth 2 --limit 0"
     )
 
 
-def test_starts_read_from_standard_input_say_the_same_ids(
+def test_starts_read_from_standard_input_pipe_them_into_the_first_command(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     site = _site(tmp_path)
@@ -85,9 +86,10 @@ def test_starts_read_from_standard_input_say_the_same_ids(
 
     assert main(["slice", "--from", "-", "--limit", "2"]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert "  sets off: periplus neighbors - --depth 2 --limit 0 (with the same ids piped in)" in (
-        lines
-    )
+    assert (
+        "  sets off: periplus slice --from - --depth 0 --ids | periplus neighbors - --depth 2"
+        " --limit 0 (with the same ids piped into the first command)"
+    ) in lines
 
 
 def test_from_starts_at_the_ids_alone_and_searches_no_words(tmp_path: Path) -> None:

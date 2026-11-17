@@ -711,6 +711,8 @@ legend of the kinds met and an inventory.
 `neighbors --ids` and `affected --ids` list from the starts and members at the same depth, each
 once. So `periplus slice --from X --ids` gives the same set as `periplus members X --ids` together
 with `periplus neighbors` and `periplus affected` on X and those members, `--depth 2 --ids`.
+`--depth 0` walks nothing, so `--depth 0 --ids` prints the starts and their members alone: the ids
+the walks start from.
 
 **Starts.** An argument that names a node, by id or short name, starts there. Any other text is
 searched as a whole and word by word, each as `find` searches one word. A word is a run of
@@ -746,8 +748,8 @@ are things of the slice at hop 0, and the walks start from them too. Only direct
 as for `members`.
 
 **The walks.** `--direction off` walks only what the starts and members set off, `by` only what
-sets them off; `both`, the default, walks both. `--depth N` sets the hops each walk goes, and
-`--depth all` walks to the end. It defaults to 2: a walk by cause often goes past 10 hops, and
+sets them off; `both`, the default, walks both. `--depth N` sets the hops each walk goes, `--depth
+0` none, and `--depth all` walks to the end. It defaults to 2: a walk by cause often goes past 10 hops, and
 most of what one start sets off lies past hop 2, so 2 keeps a slice from one start near its 8 KB
 aim. `periplus depth` says how far each walk goes before you ask for more. `--kind`, `--hub`,
 `--through` and `--touch` work as in `neighbors`, for both walks. `--direction out` and `in`, the
@@ -765,9 +767,11 @@ On a map with no cause list, such as one written before 0.9, each walk is the ra
 line then reads `sets off:   4 things by the raw walk, as the map lists no cause; each: periplus
 neighbors ID --raw --depth 2 --limit 0 (for each of the 2 ids it walks from)`.
 
-**The content.** The output names each thing by its short name. It lists each start first, on one
-line: its short name, its type, and why it was picked (`given as 'helper'`, or each word and where
-it matched), then its marks. Then `paths under: DIR/` names once the longest folder that holds
+**The content.** The output names each thing by its short name. It lists the first 4 starts, each
+on one line: its short name, its type, and why it was picked (`given as 'helper'`, or each word and
+where it matched), then its marks. More starts are counted in one line that names the command
+listing them all, with their members: `+8 more starts; the starts and their members: periplus
+slice 'user login' --depth 0 --ids`. Each start still prints under its file below. Then `paths under: DIR/` names once the longest folder that holds
 every printed file, and each file prints below it: `cli.py` under `paths under: shop/` is
 `shop/cli.py`.
 
@@ -811,8 +815,10 @@ from supporting code only when an argument names it, or when every node the word
 **The budget.** Without `--limit`, the text shows at most 50 things past the starts and aims at 8
 KB. Over the aim it lowers detail first: it leaves out the legend, then the `more links` lines,
 then halves the names per link down to 1. Then it leaves out things, the farthest hop first; at
-one hop, the walk off before the walk by, then by id. It never leaves out a start's own line or the
-inventory, and says what it did in a line `cut to fit 8192 bytes: ...; --limit N prints N things`.
+one hop, the walk off before the walk by, then by id. It keeps the first 10 things past the starts
+even over the aim, so a slice of many starts still shows what its walks reached, and then says
+`the first 10 things past the starts kept over it`. It never leaves out a start or the inventory,
+and says what it did in a line `cut to fit 8192 bytes: ...; --limit N prints N things`.
 That line adds `what a kind means: periplus legend --kind K` when it left out the legend, and `a
 node's links in full: periplus show NAME --limit 0` when it dropped the `more links` lines or names
 per link. `--limit N` shows at most `N` things past the starts (`0` for all), with no byte aim, in
@@ -830,9 +836,14 @@ in full, each part this slice holds:
   set off by: periplus affected helper --depth 2 --limit 0
 ```
 
-With more than three ids to walk from, or ids read from standard input, these commands name `-`
-and say which ids to pipe in: `(pipe in the 4 starts above)`, `(pipe in the 12 ids it walks from:
-the starts and their members)`, or `(with the same ids piped in)`.
+With more than three ids to walk from, or ids read from standard input, each of these commands
+reads `-` from the `slice --depth 0 --ids` command that lists those ids, so the line runs as
+printed: `periplus slice 'user login' --depth 0 --ids | periplus neighbors - --depth 2 --limit 0`.
+When the starts came from standard input, it ends `(with the same ids piped into the first
+command)`.
+
+Every command the slice suggests carries `--map PATH` when it was given one, as the commands
+`reach` and the walks suggest do, so each runs as printed.
 
 `--format json` prints the same slice with full ids and full paths: `starts` (each as `find` prints
 a row, with `given`, `words` and `piece`), `pieces` (each with `piece`, `starts`, `things` and
@@ -1043,7 +1054,7 @@ In JSON: `command`, `found`, `entries`, `fresh`, `changed`, `gone`, `unreadable`
 | Code | Meaning |
 |---|---|
 | 0 | The report printed. An empty result is still 0. |
-| 2 | A bad option, such as `--depth 0`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, `slice` with no start, `slice --direction out` or `in`, `slice --ids` with `--out`, `slice --from` with `WORDS`, `at` with no line number of 1 or more, or `diff --change` without `--ids`. `join`, `common` or `minus` with one map, or `join`, `common`, `minus` or `diff` with maps of different versions. A walk on a map with no cause list from several `ID`s. |
+| 2 | A bad option, such as `--depth 0` outside `slice`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, `slice` with no start, `slice --direction out` or `in`, `slice --ids` with `--out`, `slice --from` with `WORDS`, `at` with no line number of 1 or more, or `diff --change` without `--ids`. `join`, `common` or `minus` with one map, or `join`, `common`, `minus` or `diff` with maps of different versions. A walk on a map with no cause list from several `ID`s. |
 | 17 | The map file that `slice --out`, `extract`, `join`, `common` or `minus` would write does not pass the map schema, because a map it was made from does not. Nothing is written. Run `periplus check-map` on that map. |
 | 27 | `slice --out` or `extract --out` names the map being read, `--out` of `join`, `common` or `minus` names one of its inputs, or the file cannot be written; or `stamp` cannot write the descriptions file. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |

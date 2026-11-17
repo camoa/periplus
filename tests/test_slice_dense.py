@@ -17,6 +17,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from _navigate import _edge, _node
 
 from periplus.navigate import slice as slicing
@@ -202,7 +203,10 @@ def test_the_inventory_names_every_node_by_type_rarest_first(tmp_path: Path) -> 
     ]
 
 
-def test_the_default_piece_fits_the_byte_budget_and_says_what_it_cut(tmp_path: Path) -> None:
+def test_the_default_piece_fits_the_byte_budget_and_says_what_it_cut(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(slicing, "ROW_FLOOR", 0)
     slicing.BYTE_LIMIT, kept = 1000, slicing.BYTE_LIMIT
     try:
         report = _piece(tmp_path / "a", ADD)

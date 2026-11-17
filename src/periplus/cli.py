@@ -869,7 +869,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=_depth,
         default=SLICE_DEPTH,
         metavar="N",
-        help=f"the hops each walk goes, 1 or more, or all (default: {SLICE_DEPTH})",
+        help=f"the hops each walk goes, 0 or more, or all; 0 keeps the starts and their members "
+        f"(default: {SLICE_DEPTH})",
     )
     cut.add_argument(
         "--kind",
@@ -1224,8 +1225,10 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
     if (getattr(args, "limit", 0) or 0) < 0:
         parser.error("--limit must be 0 or more")
     # None is --depth all.
-    if (depth := getattr(args, "depth", 1)) is not None and depth < 1:
-        parser.error("--depth must be 1 or more")
+    # slice takes --depth 0: its starts and their members alone.
+    least = 0 if args.command == "slice" else 1
+    if (depth := getattr(args, "depth", 1)) is not None and depth < least:
+        parser.error(f"--depth must be {least} or more")
     if (starts := getattr(args, "starts", 1)) is not None and starts < 1:
         parser.error("--starts must be 1 or more")
 
