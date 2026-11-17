@@ -417,7 +417,8 @@ two calls share holds each place's value under `differs`.
   the dispatcher's `addListener()` call, which the built container gives the value, and, with no
   method, derives the method from the text as written, so from the parameter's name. In double
   quotes, `\\`, `\"` and `\/` read as a backslash, a quote and a slash; a name with any other
-  escape is a runtime registration. An attribute is read across lines, and `parent::NAME` in it is
+  escape is a runtime registration. An attribute is read across lines, its `A\B::NAME` through the
+  `use` statement of `A`, and `parent::NAME` in it is
   the constant on the parent the class `extends`, through the span `attributed_class` for an
   attribute on the class itself. A `dispatcher` key stays the service id as written: the pack has no
   edge kind for a listener added to another dispatcher, and the text finds that service's node,

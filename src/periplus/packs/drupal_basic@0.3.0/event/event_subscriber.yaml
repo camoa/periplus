@@ -261,9 +261,12 @@ rules:
     meth: {template: '{m_src}{m_mod}'}
     this_cls: {template: '{meth}', normalize: [{replace: '::\w+$', with: ''}]}
     here_ns: {template: '§{fns}', normalize: [{replace: '^§.*$', with: '{psr4_namespace}'}, {replace: '^§', with: ''}]}
-    key: {from: {enclosing: listener_list, capture: key}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
-    class: {from: {enclosing: listener_list, capture: class}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    wkey: {from: {enclosing: listener_list, capture: key}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    wclass: {from: {enclosing: listener_list, capture: class}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     constant: {from: {enclosing: listener_list, capture: constant}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    key: {template: '{parent_cls}§{wkey}', normalize: [{replace: '^[^§]*§(?!parent::)', with: ''}, {replace: '^[^§]*\\[^§]*§parent::[\s\S]*$', with: ''}, {replace: '^§parent::[\s\S]*$', with: ''}, {replace: '§parent(?=::)', with: ''}]}
+    class: {template: '{parent_cls}§{wclass}', normalize: [{replace: '^[^§]*§(?!parent$)', with: ''}, {replace: '^[^§]*\\[^§]*§parent$', with: ''}, {replace: '^§parent$', with: ''}, {replace: '§parent$', with: ''}]}
     own: {from: {enclosing: own_listener_list, capture: constant}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
     prio: {template: '{method}|{priority}', normalize: [{replace: '//[^\n]*|/\*(?:[^*]|\*(?!/))*\*/|#[^\n]*', with: ''}, {replace: '\|\s+', with: '|'}, {replace: '\s+$', with: ''}, {replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
     pk: {template: '§{this_cls}§{pcref}{pcu}', normalize: [{replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
@@ -389,8 +392,8 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]*?(?<cx>[A-Za-z_]\w*))::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_here\|(?<listener>(?<lc>[^|]+)::(?<lm>\w+))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
-    unless: &key_bound [[{node: 'drupal.event_use::bound|{cx}::{cn}|{listener}'}]]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>(?<ns>(?:[^|\\]*\\)*?)(?<wr>[^|]*?))::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_here\|(?<listener>(?<lc>(?P=ns)[^|\\]+)::(?<lm>\w+))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: &key_bound [[{node: 'drupal.event_use::bound|{wr}::{cn}|{listener}'}]]
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
     - try: [{edge: use_names_listener}, {edge_attribute: priority}]
@@ -431,7 +434,7 @@ rules:
   reads: map
   match:
     node_type: drupal.event_use
-    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]*?(?<cx>[A-Za-z_]\w*))::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_here\|(?<listener>(?<lc>[^|]+)::(?<lm>\w+))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>(?<ns>(?:[^|\\]*\\)*?)(?<wr>[^|]*?))::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_here\|(?<listener>(?<lc>(?P=ns)[^|\\]+)::(?<lm>\w+))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
     unless: *key_bound
     follow:
     - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]

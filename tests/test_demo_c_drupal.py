@@ -7239,6 +7239,32 @@ class Wiring {
 
 
 PARENT_AND_UNBOUND = {
+    str(MODULE / "src/EventSubscriber/QualifiedSub.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class QualifiedSub extends Event\OrderEvents implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return [
+      Event\OrderEvents::PLACED => 'onA',
+      parent::PLACED => [['onB'], ['onC']],
+    ];
+  }
+
+  #[AsEventListener(event: Event\OrderEvents::PLACED, priority: 2)]
+  public function onA($event) {}
+
+  public function onB($event) {}
+
+  public function onC($event) {}
+
+}
+""",
     str(MODULE / "src/Other/OtherSub.php"): r"""<?php
 
 namespace Drupal\my_module\Other;
@@ -7249,10 +7275,12 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 class OtherSub extends BaseSubscriber implements EventSubscriberInterface {
 
   public static function getSubscribedEvents() {
-    return [parent::READY => 'onOther'];
+    return [parent::READY => [['onOther'], ['onOther2', 3]]];
   }
 
   public function onOther($event) {}
+
+  public function onOther2($event) {}
 
 }
 """,
@@ -7576,9 +7604,10 @@ def test_parent_constant_and_an_unbound_constant_are_read_in_every_registration_
 ) -> None:
     """parent::NAME as a getSubscribedEvents key, a method's or a class's AsEventListener event,
     an addListener event or an addTag event is the constant on the class's written parent or its
-    ancestors, the parent read through a use statement or the file's namespace; X::NAME that no
-    use statement binds is the constant of the file's own namespace, unresolved when no mapped
-    file declares it."""
+    ancestors, the parent read through a use statement or the file's namespace, for every listener
+    of a list of lists; X::NAME or A\\B::NAME that no use statement binds is the constant of the
+    file's own namespace, unresolved when no mapped file declares it, and A\\B::NAME with A bound
+    is never read there."""
     _plant(tmp_path, PARENT_AND_UNBOUND)
     document, report = _map(tmp_path)
     here = "Drupal\\my_module\\EventSubscriber\\MissingEvents::"
@@ -7593,6 +7622,10 @@ def test_parent_constant_and_an_unbound_constant_are_read_in_every_registration_
         ("my_module.ready", "Sub::onA", "0"),
         ("my_module.ready", "Sub::onClass", "0"),
         ("my_module.ready", "Drupal\\my_module\\Other\\OtherSub::onOther", "0"),
+        ("my_module.ready", "Drupal\\my_module\\Other\\OtherSub::onOther2", "3"),
+        ("my_module.placed", "QualifiedSub::onA", ("0", "2")),
+        ("my_module.placed", "QualifiedSub::onB", "0"),
+        ("my_module.placed", "QualifiedSub::onC", "0"),
     }
     assert not [n for n in document["nodes"] if n["type"] == "drupal.runtime_subscription"]
     assert report.skipped == ()

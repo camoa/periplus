@@ -42,12 +42,13 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # listener map rule carries it to the subscribed_by edge as the edge attribute dispatcher, as
 # written; a tag without the key writes none, so an edge without it is on the main dispatcher.
 
-# An AsEventListener attribute is read across lines and comments. Its event X::NAME that no use
-# statement binds is the constant of the file's own namespace, unresolved when no mapped file
-# declares it; parent::NAME and parent::class read the parent the class extends, for an attribute
-# on a class through the span attributed_class; a priority written as a constant holds the integer
-# a mapped file declares it with (event/event_subscriber.yaml). A dispatcher key stays the service
-# id as written: no edge kind of the pack says a listener is added to another dispatcher.
+# An AsEventListener attribute is read across lines and comments. Its event A\B::NAME is read
+# through the use statement of A (the _q rules); X::NAME or A\B::NAME that no use statement binds
+# is the constant of the file's own namespace, unresolved when no mapped file declares it;
+# parent::NAME and parent::class read the parent the class extends, for an attribute on a class
+# through the span attributed_class; a priority written as a constant holds the integer a mapped
+# file declares it with (event/event_subscriber.yaml). A dispatcher key stays the service id as
+# written: no edge kind of the pack says a listener is added to another dispatcher.
 #
 # A method an AsEventListener attribute registers holds listens_by_attribute: AsEventListener,
 # printed [AsEventListener, not wired by core]. Drupal core, as of 11.4, registers no listener from
@@ -994,6 +995,15 @@ rules:
   emits: [{node: {type: drupal.event_use}}]
   confidence: declared
 
+- rule: listener_attribute_use_q
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [bound_first_segment], separator: '\'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
 - rule: listener_attribute_use_listener
   reads: file
   in: [source]
@@ -1001,6 +1011,15 @@ rules:
   values: *attribute_values
   id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
   emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{key}|{psr4_class}::{listener}', type: drupal.event_use}}}, {edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{listener}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+- rule: listener_attribute_use_listener_q
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [bound_first_segment], separator: '\'}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{key}|{psr4_class}::{listener}', type: drupal.event_use}}}, {edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{listener}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [bound_first_segment], separator: '\', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
   confidence: declared
 
 - rule: listener_attribute_own_class
@@ -1259,6 +1278,15 @@ rules:
   emits: [{node: {type: drupal.event_use}}]
   confidence: declared
 
+- rule: listener_attribute_runtime_use_q
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|{no_method}|subscribed_runtime|{psr4_class}|{key}', resolve: [bound_first_segment], separator: '\', normalize: [{replace: '\|none\|', with: '|'}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
 - rule: listener_attribute_runtime_use_priority
   reads: file
   in: [source]
@@ -1266,6 +1294,15 @@ rules:
   values: *attribute_values
   id: {template: '{key}|{no_method}|subscribed_runtime|{psr4_class}|{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::', normalize: [{replace: '\|none\|', with: '|'}]}
   emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{key}|{psr4_class}|_here', type: drupal.event_use}}}, {edge: {kind: use_has_priority, from: this_node, to: {template: '{key}|subscribed_runtime|{psr4_class}|{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{key}|subscribed_runtime|{psr4_class}|{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+- rule: listener_attribute_runtime_use_priority_q
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|{no_method}|subscribed_runtime|{psr4_class}|{key}', resolve: [bound_first_segment], separator: '\', normalize: [{replace: '\|none\|', with: '|'}]}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{key}|{psr4_class}|_here', type: drupal.event_use}}}, {edge: {kind: use_has_priority, from: this_node, to: {template: '{key}|subscribed_runtime|{psr4_class}|{key}', resolve: [bound_first_segment], separator: '\', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{key}|subscribed_runtime|{psr4_class}|{key}', resolve: [bound_first_segment], separator: '\', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
   confidence: declared
 
 - rule: listener_attribute_runtime_own

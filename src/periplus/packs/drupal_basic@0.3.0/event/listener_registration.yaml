@@ -1075,7 +1075,8 @@ rules:
     prio: {template: '{method}|{priority}', normalize: [{replace: '//[^\n]*|/\*(?:[^*]|\*(?!/))*\*/|#[^\n]*', with: ''}, {replace: '\|\s+', with: '|'}, {replace: '\s+$', with: ''}, {replace: '^\w+\|$', with: '0'}, {replace: '^\w+\|', with: ''}]}
     pk: {template: '§{this_cls}§{pcref}{pcu}', normalize: [{replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
     ph: {template: '§{here_ns}§{pcu}', normalize: [{replace: '§', with: ''}]}
-    ek: {from: {enclosing: qualified_listener_list, capture: key}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    wek: {from: {enclosing: qualified_listener_list, capture: key}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    ek: {template: '{parent_cls}§{wek}', normalize: [{replace: '^[^§]*§(?!parent::)', with: ''}, {replace: '^(?![^§]*\\)[^§]*§parent::[\s\S]*$', with: ''}, {replace: '§parent(?=::)', with: ''}]}
     r_ev: {template: '{ek}'}
     h_ev: {template: '{ek}', normalize: [{replace: '^\\.*$', with: ''}]}
 
@@ -1090,6 +1091,7 @@ rules:
   values: *key_qualified_later_values
   id: {template: '{r_ev}|reg|{owner}|{pl}|{in_subscriber}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '\', normalize: [{replace: '\|function$', with: ''}]}
   emits:
+  - {edge: {kind: use_bound, from: this_node, to: {template: 'bound|reg|{owner}|{pl}', type: drupal.event_use}}}
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
   - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
   - edge: {kind: use_has_priority, from: this_node, to: {template: '{r_ev}|reg|{owner}|{pl}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment], separator: '\', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}

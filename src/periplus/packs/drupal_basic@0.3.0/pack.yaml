@@ -955,7 +955,7 @@ files:
       # $events[X::NAME] = [[...], ...]: key is X::NAME, class X and constant NAME. The second span
       # is the same key written self::NAME or static::NAME. Read by event/event_subscriber.yaml.
       - name: listener_list
-        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<!\\)\b(?<key>(?<class>[A-Z]\w*)::(?<constant>[A-Z][A-Z0-9_]*))\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<!\\)\b(?<key>(?<class>[A-Z]\w*|parent)::(?<constant>[A-Z][A-Z0-9_]*))\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
       - name: own_listener_list
         open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?:self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
@@ -966,7 +966,7 @@ files:
         open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*[''"](?<name>[^''"$\\\s{}]+)[''"]\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
       - name: qualified_listener_list
-        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?<key>\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?<key>\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*::[A-Z][A-Z0-9_]*|parent::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
       # The same list under a key written as a class, X::class => [[...]], key the class as written.
       # Read by event/listener_registration.yaml.
