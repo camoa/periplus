@@ -200,8 +200,10 @@ none of its files. No map is written, and a map already at the path is left as i
 
 Text heading: Packs that selected no file, printed first and only when a row exists. Each row is
 a pinned rutter whose file rules selected no file. It names each folder those rules reach that
-names no other folder, with its value and how many folders it found, or `no such folder`. A rutter
-that matches nothing in this project is not an error, so the run goes on. When the rutter should
+names no other folder, with its value and how many folders it found, or `no such folder`. When a
+folder is missing, the row ends by saying where to declare it; when every folder was found, it
+says they hold no file the rutter's rules read. A rutter that matches nothing in this project is
+not an error, so the run goes on. When the rutter should
 have found files, declare the folder it names under `folders` in the settings, and run the map
 again.
 

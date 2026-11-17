@@ -345,6 +345,18 @@ def _failed(problems: Sequence[Problem]) -> MapReport:
     )
 
 
+def _empty_pack_advice(pack: str, bases: Sequence[tuple[str, str, int]]) -> str:
+    """What to do about a pack that selected no file: a missing folder may be declared elsewhere;
+    when every folder was found, the pack simply reads nothing they hold."""
+    if all(n for _, _, n in bases):
+        holds = "it holds" if len(bases) == 1 else "they hold"
+        return f"; {holds} no file the rules of {_escape(pack)} read"
+    return (
+        "; if the code is elsewhere, declare the folder under folders in "
+        f"{PROJECT_MARKER}/{SETTINGS_FILENAME}"
+    )
+
+
 def render_text(report: MapReport) -> str:
     """The report as lines a person reads. Every outside string goes through ``_escape``. Packs
     that selected no file come first, and only when there are some."""
@@ -359,8 +371,7 @@ def render_text(report: MapReport) -> str:
                     + (f"{n} folder{'' if n == 1 else 's'} found" if n else "no such folder")
                     for name, value, n in bases
                 )
-                + "; if the code is elsewhere, declare the folder under folders in "
-                f"{PROJECT_MARKER}/{SETTINGS_FILENAME}"
+                + _empty_pack_advice(pack, bases)
                 for pack, bases in report.empty_packs
             ],
         )

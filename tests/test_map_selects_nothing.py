@@ -113,6 +113,17 @@ def test_the_empty_pack_warning_is_printed_above_the_map_section(tmp_path: Path)
     ) in text
 
 
+def test_a_found_folder_with_no_file_the_pack_reads_is_not_called_elsewhere(tmp_path: Path) -> None:
+    _two_packs(tmp_path, {"lib/one.note": "a: 1\n", "src/readme.txt": "x\n"})
+
+    text = render_text(_map(tmp_path))
+
+    assert (
+        "  beta: base = ./src, 1 folder found; it holds no file the rules of beta read\n"
+    ) in text
+    assert "elsewhere" not in text
+
+
 def test_the_whole_run_message_says_nothing_was_selected_and_no_map_written(
     tmp_path: Path,
 ) -> None:
