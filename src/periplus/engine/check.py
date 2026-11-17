@@ -127,6 +127,12 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
         name: {a for _, document in documents[name] for a in _declared(document, "attributes")}
         for name in documents
     }
+    edge_attributes = {
+        name: {
+            a for _, document in documents[name] for a in _declared(document, "edge_attributes")
+        }
+        for name in documents
+    }
     rule_files = {
         (owner, str(rule.get("rule"))): file
         for owner, found in documents.items()
@@ -148,12 +154,24 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
             problems.extend(
                 Problem(
                     ExitCode.PACK_RULES_UNREADABLE,
-                    f"{name}/{file}: the attribute {reserved} is declared, and the name is "
+                    f"{name}/{file}: the {noun} {reserved} is declared, and the name is "
                     "reserved for the engine",
                     {"pack": name, "file": file, "attribute": reserved},
                 )
-                for reserved in _declared(document, "attributes")
+                for section, noun in (("attributes", "attribute"), ("edge_attributes", _EDGE))
+                for reserved in _declared(document, section)
                 if reserved in _RESERVED
+            )
+            problems.extend(
+                Problem(
+                    ExitCode.PACK_RULES_UNREADABLE,
+                    f"{name}/{file}: the edge attribute {entry.get('name')} lists {on} in on, "
+                    f"which neither {name} nor a pack it depends on declares",
+                    {"pack": name, "file": file, "attribute": entry.get("name"), "kind": on},
+                )
+                for entry in _entries(document, "edge_attributes")
+                for on in _strings(entry.get("on"))
+                if on not in known_kinds
             )
             problems.extend(
                 Problem(
@@ -176,6 +194,15 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
         seen = set().union(*(attributes[p] for p in visible))
         problems.extend(
             _attribute_writes(name, seen, set().union(*attributes.values()), rule_set, rule_files)
+        )
+        problems.extend(
+            _edge_attribute_writes(
+                name,
+                set().union(*(edge_attributes[p] for p in visible)),
+                set().union(*edge_attributes.values()),
+                rule_set,
+                rule_files,
+            )
         )
         abstract = {
             str(entry.get("name"))
@@ -285,6 +312,43 @@ def _spreads_along(
 
 #: The attributes the engine gives their meaning, which no pack declares.
 _RESERVED = (TYPE_CONFLICT, "resolution")
+_EDGE = "edge attribute"
+
+
+def _edge_attribute_writes(
+    pack: str,
+    visible: set[str],
+    declared: set[str],
+    rule_set: RuleSet,
+    rule_files: Mapping[tuple[str, str], str],
+) -> list[Problem]:
+    """Each edge attribute a supported rule of the pack writes that is reserved, or that
+    ``visible``, the names the pack and the packs it depends on declare, lacks: every one a map
+    rule writes, and one a text rule writes that some pack ``declared``. And each declared one it
+    writes on an edge of a kind the declaration's ``on`` does not list."""
+    problems: list[Problem] = []
+    for rule in rule_set.rules:
+        if rule.pack != pack or not rule.supported:
+            continue
+        where = f"{pack}/{rule_files.get((pack, rule.name), rule.name)}"
+        for spec in rule.edges:
+            for name, _ in spec.attributes:
+                said = f"{where}: the rule {rule.name} writes the {_EDGE} {name}"
+                if name in _RESERVED:
+                    said += ", and the name is reserved for the engine"
+                elif name not in visible and (rule.matches_type or name in declared):
+                    said += f", which neither {pack} nor a pack it depends on declares"
+                elif name in visible and spec.kind not in rule_set.edge_attributes[name].on:
+                    on = ", ".join(rule_set.edge_attributes[name].on)
+                    said += (
+                        f" on {spec.kind}, which the declaration of {name} does not list in on: "
+                        f"{on}"
+                    )
+                else:
+                    continue
+                detail = {"pack": pack, "rule": rule.name, "attribute": name}
+                problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, said, detail))
+    return problems
 
 
 def _attribute_writes(

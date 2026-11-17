@@ -515,6 +515,45 @@ a kind in `spreads_along` that neither the rutter nor one it depends on declares
 of `type_conflict` or `resolution`, which the engine reserves. A mark that breaks its limits is a
 schema error, exit 16.
 
+## Attributes on edges
+
+An edge emit of a text rule or a map rule may carry `attributes`: each a name and a `template`,
+filled as the rule's id or edge end template is, from its captures, values, path values and
+settings values. A template that names an absent value writes nothing. The edge in the map holds
+`attributes` only when a rule wrote one, and the provenance row of each rule that wrote one names
+it under `sets`.
+
+```yaml
+- {edge: {kind: hooks, from: matched_node, to: {template: '{other}', type: box.unit}, attributes: {slot: {template: '{slot}'}}}}
+```
+
+One edge is one kind, from and to, found at one place or many. When every place that wrote a value
+gives the same one, the map holds that value. When places, or two rules at one place, give
+different values, it holds `{"differs": [{file, line, value}, ...]}` with each place's value,
+sorted, so a reader sees which value belongs to which line. Every navigation command prints the
+attributes after the edge's kind, as `hooks [slot: #open]`; a value that differs prints each value
+once, `[slot: #open, #close]`. `periplus find` matches an edge by an attribute value.
+
+A pack file may declare edge attributes under `edge_attributes`, as `attributes` declares node
+ones; `on` lists edge kinds:
+
+```yaml
+edge_attributes:
+- {name: slot, on: [hooks], description: the slot as written}
+```
+
+A map rule writes only a declared edge attribute. A text rule may write one no pack declares; a
+rule that writes a declared one is held to it. The check refuses, with exit 19, a map rule that
+writes an edge attribute neither its rutter nor one it depends on declares, and a text rule that
+does so when another rutter declares the name; a declared one written on an edge of a kind `on`
+does not list; one name declared with different `on` or description in two places; a kind in `on`
+that neither the rutter nor one it depends on declares; and `type_conflict` or `resolution`,
+declared or written on an edge, which the engine reserves. An edge of any other rule with
+`attributes` is not executed, and so is an attribute given by `from`, `literal`, `pattern` or
+`normalize`. `drupal_basic`'s `form/form_handler.yaml` declares `key` on `registers_form_handler`
+and `registers_element_callback`, so each such edge holds the key the callable is registered
+under, as the code writes it.
+
 ## The grammar's node kinds
 
 No page lists a grammar's node types and fields. Print the tree of a sample file with the
@@ -755,8 +794,7 @@ file.recommendations.*: text topic
 file.resolution: detect_references_independently_of_imports match never_match_by
     on_multiple_definitions on_zero_definitions scope
 file.rules.*.emits.*: role type
-file.rules.*.emits.*.edge: attributes
-file.rules.*.emits.*.edge.attributes.*: from literal normalize pattern template
+file.rules.*.emits.*.edge.attributes.*: from literal normalize pattern
 file.rules.*.emits.*.edge.attributes.*.from: annotation_key argument argument_class argument_key
     array_key_class attribute_argument capture each each_key incoming_edges key literal qualified value
 file.rules.*.emits.*.edge.attributes.*.normalize.*: replace with

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Generic, Never, TypeVar
@@ -12,7 +13,9 @@ from periplus.report import _escape
 __all__ = [
     "NONE",
     "Listing",
+    "attribute_text",
     "cut",
+    "edge_attributes",
     "first_location",
     "footer",
     "kind_warnings",
@@ -51,6 +54,28 @@ def first_location(item: Mapping[str, Any]) -> Mapping[str, Any] | None:
 def place(location: Mapping[str, Any]) -> str:
     """A location as ``file:line``."""
     return f"{location['file']}:{location['line']}"
+
+
+def edge_attributes(edge: Mapping[str, Any]) -> dict[str, Any]:
+    """The attributes the edge holds, by name; empty when it holds none."""
+    held = edge.get("attributes")
+    return dict(held) if isinstance(held, Mapping) else {}
+
+
+def attribute_text(attributes: Mapping[str, Any]) -> str:
+    """An edge's attributes as a row prints them after its kind: `` [name: value]`` each, by
+    name. A value that differs by place prints each value once, in the order of its places."""
+    shown = []
+    for name, value in sorted(attributes.items()):
+        if isinstance(value, Mapping) and set(value) == {"differs"} and isinstance(
+            value["differs"], list
+        ):
+            items = [e.get("value") if isinstance(e, Mapping) else e for e in value["differs"]]
+        else:
+            items = [value]
+        texts = [i if isinstance(i, str) else json.dumps(i, sort_keys=True) for i in items]
+        shown.append(f" [{_escape(name)}: {_escape(', '.join(dict.fromkeys(texts)))}]")
+    return "".join(shown)
 
 
 def mark_text(marks: Sequence[str]) -> str:

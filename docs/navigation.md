@@ -36,7 +36,7 @@ you want several answers about the same items at once.
 
 | Command | Question it answers |
 |---|---|
-| `periplus find [TEXT]` | Which things hold these words in their id, attributes or description, and which edges in their description or code line? |
+| `periplus find [TEXT]` | Which things hold these words in their id, attributes or description, and which edges in their description, attributes or code line? |
 | `periplus show ID...` | What is each of these nodes, and which edges leave and arrive at it? |
 | `periplus neighbors ID...` | What do these items set off, hop by hop? |
 | `periplus affected ID...` | What sets these items off, hop by hop? |
@@ -182,6 +182,16 @@ mark the rutter spreads holds for everything inside the thing: a function in a m
 installed prints `[not installed]` too. A map with no `marks` header prints no marks. The JSON
 rows carry `marks`, a list that is empty when the node has none. `find --mark TEXT` keeps the
 nodes that carry a mark.
+
+**Edge attributes.** A rutter may write attributes on an edge, such as the key a callable is
+registered under. A row reached by such an edge prints them after the kind, in brackets, by name:
+`registers_element_callback [key: #pre_render]` in `show`, `find`, `neighbors`, `affected`,
+`reach` and the raw walks, and after each name a `slice` link shows. An edge found at several
+places with different values prints each value once, in the order of its places:
+`[key: #process, #pre_render]`; the map and `show --format json` hold which value is at which
+place. The JSON rows carry the edge's attributes as the map holds them, an empty object when it
+has none: `attributes` in `show`, `find`, the raw walks and `slice`, `via_attributes` in the walks
+by cause. `diff` names `attributes` among the fields of an edge that changed.
 
 **Supporting code.** A node in supporting code, one whose first file matches a pattern the map
 lists under `supporting_paths`, such as a test, ends its row with `[supporting code]`. The JSON
@@ -405,10 +415,13 @@ things that are not main, and `--type T` lists those types; neither folds its ro
 `--ids` prints every id whatever the budget, and the JSON lists every match.
 
 **Edges.** After the things, under `edges:`, come the edges that hold the words, each with its
-kind, the short names of its two ends, its place and why it matched. An edge matches in three ways:
+kind and attributes, the short names of its two ends, its place and why it matched. An edge
+matches in four ways:
 
 - `[description]`: its entry in the descriptions file holds the words. The entry is under `edges`,
   keyed by `from`, `kind` and `to`, as the map writes them; see the `periplus-describe` skill.
+- `[attribute NAME]`: the value of its attribute `NAME` holds the words, as
+  `periplus find "#pre_render"` finds every edge registered under that key.
 - `[source]`: the code line at one of its places holds the words. This finds a name that is
   only in a line of code, such as a string passed to a call. `--no-source` turns it off.
 - `[kind]`: the meaning of its kind, as `periplus legend` prints it, holds the words. A common word
@@ -444,9 +457,9 @@ edges:
       | $this->audit->record('blocked_admin');
 ```
 
-The words must all be in one place: the description, or the code line, or the meaning. An edge
-whose description matches comes first, then those whose code line does, then those whose kind
-does; then by place, kind and ends. An edge is kept when one of its ends fits `--type`, `--path`
+The words must all be in one place: the description, or one attribute value, or the code line,
+or the meaning. An edge whose description matches comes first, then those whose attribute does,
+then those whose code line does, then those whose kind does; then by place, kind and ends. An edge is kept when one of its ends fits `--type`, `--path`
 and `--mark`. `--no-edges` leaves the edges out. `--ids` prints the ids of the things, then both
 ends of each edge, each id once. A `TEXT` left out matches no edge.
 
@@ -462,8 +475,8 @@ warning that names the marks the map holds.
 
 The JSON report is never cut: `items` holds every match, so `shown` equals `total`. It adds
 `by_type`, every match counted by type, and `edges`, each with `kind`, `from`, `to`, `location`,
-`source`, `matched` (`description`, `source` or `kind`) and `description` (the entry's text, or
-null). Each item has `location`, `source`, `matched` (`id`, `attribute` or `description`),
+`source`, `matched` (`description`, `attribute`, `source` or `kind`), `matched_attribute` (the
+attribute's name, or null), `attributes` and `description` (the entry's text, or null). Each item has `location`, `source`, `matched` (`id`, `attribute` or `description`),
 `matched_attribute` (the attribute's name, or null), `description`, `supporting`, `marks`, a list
 of the node's mark texts, empty when it has none, and `group` (`main`, `part`, `unplaced` or
 `supporting`).

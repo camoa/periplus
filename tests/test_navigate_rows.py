@@ -122,6 +122,7 @@ PINNED: dict[str, str] = {
   "rows": {
     "items": [
       {
+        "attributes": {},
         "depth": 1,
         "description": null,
         "id": "php.method::B::run",
@@ -136,6 +137,7 @@ PINNED: dict[str, str] = {
         "via": "php.method::A::go"
       },
       {
+        "attributes": {},
         "depth": 1,
         "description": null,
         "id": "php.method::C::run",
@@ -167,6 +169,7 @@ PINNED: dict[str, str] = {
   "rows": {
     "items": [
       {
+        "attributes": {},
         "depth": 1,
         "description": null,
         "id": "php.method::B::run",
@@ -181,6 +184,7 @@ PINNED: dict[str, str] = {
         "via": "php.method::A::go"
       },
       {
+        "attributes": {},
         "depth": 1,
         "description": null,
         "id": "php.type::A",
@@ -215,6 +219,7 @@ PINNED: dict[str, str] = {
   "incoming": {
     "items": [
       {
+        "attributes": {},
         "confidences": [
           "inferred"
         ],
@@ -239,6 +244,7 @@ PINNED: dict[str, str] = {
         "supporting": false
       },
       {
+        "attributes": {},
         "confidences": [
           "inferred"
         ],
@@ -277,6 +283,7 @@ PINNED: dict[str, str] = {
   "outgoing": {
     "items": [
       {
+        "attributes": {},
         "confidences": [
           "declared",
           "inferred"
@@ -303,6 +310,7 @@ PINNED: dict[str, str] = {
         "supporting": false
       },
       {
+        "attributes": {},
         "confidences": [
           "inferred"
         ],

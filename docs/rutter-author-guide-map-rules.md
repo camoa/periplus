@@ -223,6 +223,10 @@ mapped node. Two rules that give one value write it once, each with its row; two
 different values write `differs`, even at the same place, and the report lists the node under
 Attributes that differ between files. No `follow` step reads an attribute, so the passes still end.
 
+An edge a map rule emits may carry its own `attributes`, filled from the same captures; a map rule
+writes only a declared one, as
+[Attributes on edges](rutter-author-guide-references.md#attributes-on-edges) says.
+
 ## Withhold what a file rule found
 
 A name convention can read a thing that other code shows is something else, and a file rule

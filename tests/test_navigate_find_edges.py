@@ -108,6 +108,8 @@ def test_json_carries_the_edges_and_matches_the_schema(tmp_path: Path) -> None:
             "location": "shop/Login.php:9",
             "source": "$this->audit->record($name);",
             "matched": "description",
+            "matched_attribute": None,
+            "attributes": {},
             "description": "Records the failed attempt for the lockout count.",
         }
     ]

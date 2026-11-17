@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -20,7 +20,9 @@ from periplus.navigate.ids import resolve
 from periplus.navigate.listing import (
     NONE,
     Listing,
+    attribute_text,
     cut,
+    edge_attributes,
     footer,
     mark_text,
     payload,
@@ -89,8 +91,8 @@ class EdgeRow:
     """One edge at the shown node: its kind, the other end, where it is, and why it is there.
 
     ``location`` is the edge's first location, or the other end's when the edge has none, and
-    ``source`` the line of code there. ``supporting`` marks an other end in supporting code, and
-    ``other_marks`` holds the other end's mark texts.
+    ``source`` the line of code there. ``supporting`` marks an other end in supporting code,
+    ``other_marks`` holds the other end's mark texts, and ``attributes`` the edge's own.
     """
 
     kind: str
@@ -106,6 +108,7 @@ class EdgeRow:
     source: str | None = None
     supporting: bool = False
     other_marks: tuple[str, ...] = ()
+    attributes: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +181,7 @@ def _rows(
                 where(edge, other),
                 supporting=index.supporting(edge[end]) is not None,
                 other_marks=index.marks(edge[end]),
+                attributes=edge_attributes(edge),
             )
         )
     return sorted(rows, key=lambda r: (r.supporting, r.kind, r.other, _first(r.locations)))
@@ -381,6 +385,7 @@ def _json_row(row: EdgeRow) -> dict[str, Any]:
         "other_type": row.other_type,
         "other_state": row.other_state,
         "other_marks": list(row.other_marks),
+        "attributes": dict(row.attributes),
         "locations": [_json_location(loc) for loc in row.locations],
         "occurrences": row.occurrences,
         "confidences": list(row.confidences),
@@ -412,7 +417,8 @@ def _edge_lines(listing: Listing[EdgeRow]) -> list[str]:
             f"    {_escape(row.other)}  {_escape(row.other_type)}"
             f"  {_escape(row.other_state)}"
             f"  {_escape(where)}{count}  {confidences}"
-            f"  {_escape(', '.join(row.rules))}{mark_text(row.other_marks)}"
+            f"  {_escape(', '.join(row.rules))}{attribute_text(row.attributes)}"
+            f"{mark_text(row.other_marks)}"
         )
         lines += source_line(row.source)
         if row.description is not None:

@@ -90,7 +90,8 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   drupal.runtime_form_handler node marked resolution runtime; each callable under an element
 #   callback key core calls, such as #process, #pre_render, #value_callback or the callback of
 #   #ajax, the same way, as a registers_element_callback edge (form/form_handler.yaml lists the
-#   keys), a 'service:method' callable whose service the map holds no class for, or a '::method'
+#   keys; each such edge and each registers_form_handler edge holds its key in the attribute key),
+#   a 'service:method' callable whose service the map holds no class for, or a '::method'
 #   in an alter of a form id no mapped class returns, ending at an unresolved method named by the
 #   service id or the form id; with honeypot's protect_all_forms true, a config_names_form edge to
 #   each form id a mapped class returns that the file leaves protected, and the setting as the

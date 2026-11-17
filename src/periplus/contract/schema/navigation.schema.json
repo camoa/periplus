@@ -179,17 +179,19 @@
           "type": "object", "additionalProperties": {"type": "integer", "minimum": 1}
         },
         "edges": {
-          "description": "The matching edges, by reason (description, source, kind), then place, kind and ends.",
+          "description": "The matching edges, by reason (description, attribute, source, kind), then place, kind and ends.",
           "type": "array",
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["kind", "from", "to", "location", "source", "matched", "description"],
+            "type": "object", "additionalProperties": false, "required": ["kind", "from", "to", "location", "source", "matched", "matched_attribute", "attributes", "description"],
             "properties": {
               "kind": {"type": "string"},
               "from": {"type": "string"},
               "to": {"type": "string"},
               "location": {"$ref": "#/$defs/place"},
               "source": {"$ref": "#/$defs/source"},
-              "matched": {"description": "description when its descriptions.yaml entry holds the words, source when the code line at one of its places does (with --source), kind when its kind's legend meaning does (with --kinds, or when no thing matched).", "enum": ["description", "source", "kind"]},
+              "matched": {"description": "description when its descriptions.yaml entry holds the words, attribute when one of its attribute values does, source when the code line at one of its places does (with --source), kind when its kind's legend meaning does (with --kinds, or when no thing matched).", "enum": ["description", "attribute", "source", "kind"]},
+              "matched_attribute": {"description": "The name of the attribute whose value held the words when matched is attribute, else null.", "type": ["string", "null"]},
+              "attributes": {"$ref": "#/$defs/edge_attributes"},
               "description": {"description": "The edge's descriptions.yaml text, or null when it has none.", "type": ["string", "null"]}
             }
           }
@@ -202,11 +204,16 @@
       }
     },
 
+    "edge_attributes": {
+      "description": "The attributes of the edge, as the map holds them: by name, a value, or {differs: [{file, line, value}, ...]} when its places give different values; empty when it has none.",
+      "type": "object"
+    },
     "edge_row": {
       "type": "object", "additionalProperties": false,
-      "required": ["kind", "other", "other_type", "other_state", "other_marks", "locations", "occurrences", "confidences", "rules", "description", "location", "source", "supporting"],
+      "required": ["kind", "other", "other_type", "other_state", "other_marks", "attributes", "locations", "occurrences", "confidences", "rules", "description", "location", "source", "supporting"],
       "properties": {
         "kind": {"type": "string"},
+        "attributes": {"$ref": "#/$defs/edge_attributes"},
         "other": {"type": "string"},
         "supporting": {"description": "true when the other end is in supporting code, by the map's supporting_paths; such rows come after the rest.", "type": "boolean"},
         "other_type": {"type": "string"},
@@ -266,13 +273,14 @@
               "type": "array",
               "items": {
                 "type": "object", "additionalProperties": false,
-                "required": ["id", "type", "state", "depth", "kind", "via", "location", "source", "description", "stands_for", "supporting", "marks"],
+                "required": ["id", "type", "state", "depth", "kind", "attributes", "via", "location", "source", "description", "stands_for", "supporting", "marks"],
                 "properties": {
                   "id": {"type": "string"},
                   "type": {"type": "string"},
                   "state": {"type": "string"},
                   "depth": {"description": "Hops from the start; 0 for a node that stands for the start.", "type": "integer", "minimum": 0},
                   "kind": {"type": "string"},
+                  "attributes": {"$ref": "#/$defs/edge_attributes"},
                   "via": {"type": "string"},
                   "supporting": {"description": "true when the item is in supporting code, by the map's supporting_paths; such rows come after the rest.", "type": "boolean"},
                   "marks": {"$ref": "#/$defs/marks"},
@@ -314,13 +322,14 @@
     },
     "cause_row": {
       "type": "object", "additionalProperties": false,
-      "required": ["hop", "id", "type", "state", "via_kind", "via_direction", "from", "file", "line", "marks", "supporting", "hub", "touch"],
+      "required": ["hop", "id", "type", "state", "via_kind", "via_attributes", "via_direction", "from", "file", "line", "marks", "supporting", "hub", "touch"],
       "properties": {
         "hop": {"description": "Hops from the starts; a touching row is one hop past the row it hangs from.", "type": "integer", "minimum": 1},
         "id": {"type": "string"},
         "type": {"type": "string"},
         "state": {"type": "string"},
         "via_kind": {"description": "The kind of the edge that reached it.", "type": "string"},
+        "via_attributes": {"$ref": "#/$defs/edge_attributes"},
         "via_direction": {"description": "forward when that edge was followed from its from end, backward from its to end.", "enum": ["forward", "backward"]},
         "from": {"description": "The node it was reached from.", "type": "string"},
         "file": {"description": "Where that edge is written, else the node's first location; null when neither has one.", "type": ["string", "null"]},
@@ -559,13 +568,14 @@
     "slice_row": {
       "description": "One thing of a slice past the starts: a member of a container start, or a thing a walk reached.",
       "type": "object", "additionalProperties": false,
-      "required": ["start", "hop", "from", "kind", "direction", "walk", "id", "type", "state", "marks", "location", "source", "description", "hub", "touch", "piece"],
+      "required": ["start", "hop", "from", "kind", "attributes", "direction", "walk", "id", "type", "state", "marks", "location", "source", "description", "hub", "touch", "piece"],
       "properties": {
         "piece": {"$ref": "#/$defs/piece_number"},
         "start": {"description": "The start whose walk, or whose members, hold this thing.", "type": "string"},
         "hop": {"description": "Hops from the starts and their members; 0 for a member.", "type": "integer", "minimum": 0},
         "from": {"description": "The thing it was reached from: the container for a member.", "type": "string"},
         "kind": {"type": "string"},
+        "attributes": {"$ref": "#/$defs/edge_attributes"},
         "direction": {"description": "out when the edge runs from the from thing to id, in when it runs from id to the from thing.", "enum": ["out", "in"]},
         "walk": {"description": "The part that found it: off as neighbors, by as affected, or members.", "enum": ["off", "by", "members"]},
         "id": {"type": "string"},

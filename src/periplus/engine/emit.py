@@ -634,7 +634,9 @@ def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> di
             for (p, r, c), names in sorted(named.items())
         ],
     }
-    attributes = {name: _attribute(contributions) for name, contributions in values.items()}
+    attributes = {
+        name: _attribute(contributions.items()) for name, contributions in values.items()
+    }
     if conflict:
         attributes[TYPE_CONFLICT] = conflict
     if attributes:
@@ -642,10 +644,10 @@ def _merge_node(group: Sequence[FoundNode], types: Mapping[str, TypeInfo]) -> di
     return result
 
 
-def _attribute(contributions: Mapping[tuple[str, int, str, str], Any]) -> Any:
+def _attribute(contributions: Iterable[tuple[tuple[str, int, str, str], Any]]) -> Any:
     """The value when every contribution agrees; otherwise every contribution, none winning, in
-    file, line, pack and rule order, one entry per place and value."""
-    ordered = sorted(contributions.items(), key=lambda item: item[0])
+    file, line, pack, rule and value order, one entry per place and value."""
+    ordered = sorted(contributions, key=lambda item: (item[0], json.dumps(item[1], sort_keys=True)))
     if len({json.dumps(value, sort_keys=True) for _, value in ordered}) == 1:
         return ordered[0][1]
     entries: list[dict[str, Any]] = []
@@ -678,17 +680,27 @@ def _edge(
                 {"kind": kind, "from": source, "to": target},
             )
     places = sorted({(edge.file, edge.line) for edge in group})
-    return {
+    values: dict[str, list[tuple[tuple[str, int, str, str], str]]] = {}
+    sets: dict[tuple[str, str, str], set[str]] = {}
+    for e in group:
+        row = sets.setdefault((e.pack, e.rule, e.confidence), set())
+        for name, value in e.attributes:
+            values.setdefault(name, []).append(((e.file, e.line, e.pack, e.rule), value))
+            row.add(name)
+    written: dict[str, Any] = {
         "kind": kind,
         "from": source,
         "to": target,
         "occurrences": len(places),
         "locations": [{"file": f, "line": n} for f, n in places],
         "provenance": [
-            {"pack": p, "rule": r, "confidence": c}
-            for p, r, c in sorted({(e.pack, e.rule, e.confidence) for e in group})
+            {"pack": p, "rule": r, "confidence": c, **({"sets": sorted(names)} if names else {})}
+            for (p, r, c), names in sorted(sets.items())
         ],
     }
+    if values:
+        written["attributes"] = {name: _attribute(values[name]) for name in sorted(values)}
+    return written
 
 
 def hierarchy(

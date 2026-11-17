@@ -196,7 +196,10 @@
           "type": "array", "items": {"$ref": "#/$defs/location"},
           "description": "Where the RELATIONSHIP is written — the extends clause, the call site — which is often nowhere near either endpoint."
         },
-        "attributes": {"type": "object"},
+        "attributes": {
+          "type": "object",
+          "description": "Values the rules that found the edge wrote on it, by name, such as the key a callable is registered under. Written only when a rule wrote one. A value is the one every place that set it agrees on, or, when places or rules give different values, {\"differs\": [{file, line, value}, ...]} with each place's value, sorted; the provenance row of each rule that set one names it under sets."
+        },
         "provenance": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/provenance"}}
       }
     },

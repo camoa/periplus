@@ -6,7 +6,7 @@ from __future__ import annotations
 import shlex
 from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from itertools import groupby
 from pathlib import Path
 from typing import Any
@@ -15,7 +15,9 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.navigate.listing import (
     NONE,
     Listing,
+    attribute_text,
     cut,
+    edge_attributes,
     first_location,
     mark_text,
     payload,
@@ -74,7 +76,7 @@ _SUGGESTED = 5
 #: location, and things in supporting code; ``Places.why_not_main`` names all but ``main``.
 _GROUPS = ("main", "part", "unplaced", "supporting")
 #: Why an edge matched, in print order.
-_REASONS = ("description", "source", "kind")
+_REASONS = ("description", "attribute", "source", "kind")
 #: The rank of a word a thing does not hold, past every rank ``search`` gives.
 _MISSING = 7
 
@@ -106,7 +108,8 @@ class FindRow:
 @dataclass(frozen=True, slots=True)
 class EdgeMatch:
     """One matching edge: its kind, its ends with their short names, its place, why it matched
-    (one of ``_REASONS``), its descriptions entry's text and the code line at its place."""
+    (one of ``_REASONS``), its descriptions entry's text and the code line at its place, and its
+    attributes, with the name of the one that matched."""
 
     kind: str
     source: str
@@ -117,6 +120,8 @@ class EdgeMatch:
     matched: str
     description: str | None = None
     code: str | None = None
+    attributes: Mapping[str, Any] = field(default_factory=dict)
+    matched_attribute: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,9 +359,10 @@ def _edges(
     source: bool,
     lines: SourceLines,
 ) -> tuple[EdgeMatch, ...]:
-    """The edges with an end ``kept`` keeps whose description, code line (unless ``source`` is
-    off) or kind meaning (each kind in ``meanings``) holds the words; by reason, place, kind and
-    ends."""
+    """The edges with an end ``kept`` keeps whose description, attribute value, code line (unless
+    ``source`` is off) or kind meaning (each kind in ``meanings``) holds the words; by reason,
+    place, kind and ends. An attribute value is a string, a string list item, or a string a place
+    of a ``differs`` value gives."""
     hold = any if any_word else all
 
     def holds(text: str) -> bool:
@@ -372,8 +378,12 @@ def _edges(
         key = (edge["from"], edge["kind"], edge["to"])
         entry = entries.get(key)
         at = where(edge, index.nodes[edge["from"]])
+        attributes = edge_attributes(edge)
+        named = _edge_attribute(attributes, holds)
         if entry is not None and holds(entry):
             matched = "description"
+        elif named is not None:
+            matched = "attribute"
         elif source and (line := _code(edge, lines, holds)) is not None:
             matched, at = "source", line
         elif edge["kind"] in kinds:
@@ -391,12 +401,26 @@ def _edges(
                 matched,
                 entry,
                 lines.at(at),
+                attributes,
+                named if matched == "attribute" else None,
             )
         )
     found.sort(
         key=lambda e: (_REASONS.index(e.matched), place_key(e.location), e.kind, e.source, e.target)
     )
     return tuple(found)
+
+
+def _edge_attribute(attributes: Mapping[str, Any], holds: Callable[[str], bool]) -> str | None:
+    """The name of the first attribute, by name, one of whose string values holds the words."""
+    for name, value in sorted(attributes.items()):
+        if isinstance(value, Mapping) and isinstance(value.get("differs"), list):
+            items = [e.get("value") for e in value["differs"] if isinstance(e, Mapping)]
+        else:
+            items = value if isinstance(value, list) else [value]
+        if any(isinstance(item, str) and holds(item) for item in items):
+            return name
+    return None
 
 
 def _code(edge: Mapping[str, Any], lines: SourceLines, holds: Callable[[str], bool]) -> str | None:
@@ -504,9 +528,11 @@ def row_lines(row: FindRow) -> list[str]:
 def _edge_lines(edge: EdgeMatch) -> list[str]:
     """One edge as text: kind, both ends' short names, place and why, then its code line and
     description."""
+    why = f"attribute {_escape(edge.matched_attribute or '')}" if edge.matched_attribute else ""
     lines = [
-        f"  {_escape(edge.kind)}  {_escape(edge.source_name)} -> {_escape(edge.target_name)}"
-        f"  {_escape(edge.location or 'no location')}  [{edge.matched}]"
+        f"  {_escape(edge.kind)}{attribute_text(edge.attributes)}  {_escape(edge.source_name)} -> "
+        f"{_escape(edge.target_name)}  {_escape(edge.location or 'no location')}"
+        f"  [{why or edge.matched}]"
     ]
     return lines + source_line(edge.code) + description_line(edge.description)
 
@@ -527,7 +553,8 @@ def _edge_rows(edges: Sequence[EdgeMatch]) -> list[str]:
             said = f"{len(group)} edges: {_counted(Counter(e.kind for e in group), 'kind')}"
         else:
             said = "; ".join(
-                f"{_escape(e.kind)} {_escape(e.source_name)} -> {_escape(e.target_name)}"
+                f"{_escape(e.kind)}{attribute_text(e.attributes)} {_escape(e.source_name)} -> "
+                f"{_escape(e.target_name)}"
                 for e in group
             )
         lines += [f"  {_escape(at)}  [source]  {said}", *source_line(group[0].code)]
@@ -657,6 +684,8 @@ def _json_edge(edge: EdgeMatch) -> dict[str, Any]:
         "location": edge.location,
         "source": edge.code,
         "matched": edge.matched,
+        "matched_attribute": edge.matched_attribute,
+        "attributes": dict(edge.attributes),
         "description": edge.description,
     }
 

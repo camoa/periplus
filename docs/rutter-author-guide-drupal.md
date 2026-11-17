@@ -295,7 +295,9 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   `drupal.runtime_form_handler` node marked resolution `runtime`: a file rule gives that node for
   every `'::method'`, and a withholding map rule takes it back wherever a rule names the form.
   The site id holds the key, and each map rule's twin for these keys
-  reads the rule through a YAML merge. The map rule `form_handler_function_is_no_hook` withholds
+  reads the rule through a YAML merge. Both edges hold the key in the edge attribute `key`, as the
+  code writes it (`#submit`, `#process`, `#ajax` for its callback); an edge registered under two
+  keys at two places holds each key at its place. The map rule `form_handler_function_is_no_hook` withholds
   the hook a function's name would give it when it is added under any of these keys.
 - `hook_acts_on_entity_type`, inferred from a hook named `<extension>_<type>_<operation>`, such as
   `mymod_node_presave`, to the entity type `node`.

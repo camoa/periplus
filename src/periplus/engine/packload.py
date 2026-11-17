@@ -23,6 +23,7 @@ __all__ = [
     "Condition",
     "EXECUTED_KEYS",
     "UNEXECUTED_KEYS",
+    "EdgeAttribute",
     "EdgeKind",
     "EdgeSpec",
     "FileInfo",
@@ -113,6 +114,7 @@ EXECUTED_KEYS = frozenset(
         "file.edge_kinds.*.description",
         *(f"file.attributes{k}" for k in ("", ".*.name", ".*.on", ".*.description")),
         *(f"file.attributes{k}" for k in (".*.spreads", ".*.mark")),
+        *(f"file.edge_attributes{k}" for k in ("", ".*.name", ".*.on", ".*.description")),
         *(f"file.attributes.*.spreads_along{k}" for k in ("", ".*.kind", ".*.to")),
         *(
             f"file.node_types{k}"
@@ -178,6 +180,7 @@ EXECUTED_KEYS = frozenset(
         *(f"{_RULE}emits.*.{k}" for k in ("attribute.from", "attribute.template", "edge")),
         f"{_RULE}emits.*.attribute.target",
         f"{_RULE}emits.*.edge.kind",
+        *(f"{_RULE}emits.*.edge.attributes{k}" for k in ("", ".*.template")),
         f"{_RULE}emits.*.edge.to.from.attribute_argument",
         f"{_RULE}emits.*.edge.to.from.argument",
         *(
@@ -583,6 +586,8 @@ class EdgeSpec:
     declared: tuple[str, str] = ("", "")
     #: A reference rule's from end written as a template, in place of ``enclosing_declaration``.
     from_template: str | None = None
+    #: A text or map rule's edge attributes, each its name and its template.
+    attributes: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -620,6 +625,18 @@ class Attribute:
 
 
 @dataclass(frozen=True, slots=True)
+class EdgeAttribute:
+    """One declared edge attribute: the edge kinds a rule may write it on and its text; and the
+    pack and file that declared it first."""
+
+    name: str
+    on: tuple[str, ...]
+    description: str = ""
+    pack: str = field(default="", compare=False)
+    file: str = field(default="", compare=False)
+
+
+@dataclass(frozen=True, slots=True)
 class BoundaryEntry:
     """One name a boundary group lists: the pack and group that list it, the group's node type,
     the type that classifies a first-party descendant of it or ``None``, and the edge kinds that
@@ -640,7 +657,8 @@ class RuleSet:
     ``values`` holds the project's settings values, which every template may name.
     ``tables`` holds, for each pack, the tables its table steps may name.
     ``boundary`` holds, by node id, each listing of a name by a boundary group of a loaded pack,
-    sorted by pack and group. ``attributes`` holds each declared attribute by name.
+    sorted by pack and group. ``attributes`` holds each declared attribute by name, and
+    ``edge_attributes`` each declared edge attribute.
     """
 
     rules: tuple[Rule, ...]
@@ -653,6 +671,7 @@ class RuleSet:
     tables: Mapping[str, Mapping[str, Mapping[str, str]]] = field(default_factory=dict)
     boundary: Mapping[str, tuple[BoundaryEntry, ...]] = field(default_factory=dict)
     attributes: Mapping[str, Attribute] = field(default_factory=dict)
+    edge_attributes: Mapping[str, EdgeAttribute] = field(default_factory=dict)
 
 
 def load_rules(
@@ -675,6 +694,7 @@ def load_rules(
     types: dict[str, TypeInfo] = {}
     kinds: dict[str, EdgeKind] = {}
     attributes: dict[str, Attribute] = {}
+    edge_attributes: dict[str, EdgeAttribute] = {}
     conflicts: list[Problem] = []
     declared_at: dict[str, tuple[str, str]] = {}
     rules: list[Rule] = []
@@ -698,6 +718,13 @@ def load_rules(
             )
             _read_attributes(
                 pack.name.pack, relative, document.get("attributes"), attributes, conflicts
+            )
+            _read_edge_attributes(
+                pack.name.pack,
+                relative,
+                document.get("edge_attributes"),
+                edge_attributes,
+                conflicts,
             )
             imports.setdefault(pack.name.pack, []).extend(
                 (f"{pack.name.pack}/{relative}", entry) for entry in document.get("imports", [])
@@ -790,6 +817,7 @@ def load_rules(
         tables=tables,
         boundary=boundary,
         attributes=attributes,
+        edge_attributes=edge_attributes,
     )
 
 
@@ -1108,6 +1136,7 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
     templates = [rule.id_template, *(v.template or "" for v in rule.values)]
     if rule.text is not None:
         templates += [t for _, t in rule.templates] + [e.template or "" for e in rule.edges]
+        templates += [t for e in rule.edges for _, t in e.attributes]
         templates += [t for binding in rule.bindings for t in binding]
     names = {name for template in templates for name in PLACEHOLDER.findall(template)}
     if names - known:
@@ -1200,6 +1229,7 @@ def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
     if reason:
         return replace(rule, supported=False, reason=reason)
     templates = [rule.id_template, *(edge.template or "" for edge in rule.edges)]
+    templates += [t for edge in rule.edges for _, t in edge.attributes]
     missing = sorted({name for t in templates for name in PLACEHOLDER.findall(t)} - known)
     if missing:
         reason = f"a template names {', '.join(missing)}, which no id_matches of the rule captures"
@@ -1707,6 +1737,38 @@ def _read_attributes(
             )
 
 
+def _read_edge_attributes(
+    pack: str,
+    file: str,
+    declared: object,
+    attributes: dict[str, EdgeAttribute],
+    conflicts: list[Problem],
+) -> None:
+    """Each edge attribute the file declares into ``attributes``; one declared again with other
+    kinds, or another text, into ``conflicts``. The schema has checked the shape."""
+    for entry in declared if isinstance(declared, list) else []:
+        attribute = EdgeAttribute(
+            name=entry["name"],
+            on=tuple(sorted(entry["on"])),
+            description=entry.get("description", ""),
+            pack=pack,
+            file=file,
+        )
+        known = attributes.setdefault(attribute.name, attribute)
+        # A declaration without a text agrees with one that has it; the text is kept.
+        if not known.description:
+            known = attributes[attribute.name] = replace(known, description=attribute.description)
+        if known != replace(attribute, description=attribute.description or known.description):
+            conflicts.append(
+                Problem(
+                    ExitCode.PACK_RULES_UNREADABLE,
+                    f"the edge attribute {attribute.name} is declared with different kinds or "
+                    f"description in {pack}/{file}, after {known.pack}/{known.file}",
+                    {"attribute": attribute.name, "pack": pack, "file": file},
+                )
+            )
+
+
 def _read_types(pack: str, declared: object, types: dict[str, TypeInfo]) -> None:
     for entry in declared if isinstance(declared, list) else []:
         name = entry.get("name") if isinstance(entry, Mapping) else None
@@ -1759,6 +1821,16 @@ def _build_rule(pack: str, item: Any, tables: Mapping[str, Mapping[str, str]]) -
         if isinstance(emit, Mapping)
     ):
         raise _Unsupported("only a map rule takes attribute.target")
+    if (
+        item.get("reads") != "map"
+        and "text" not in item.get("match", {})
+        and any(
+            isinstance(emit.get("edge"), Mapping) and "attributes" in emit["edge"]
+            for emit in item.get("emits", [])
+            if isinstance(emit, Mapping)
+        )
+    ):
+        raise _Unsupported("only an edge of a text rule or a map rule takes attributes")
     if item.get("reads") == "map":
         return _build_map(pack, item, tables)
     if (
@@ -1926,7 +1998,7 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
         flipped = edge.get("to") == "this_node" != edge.get("from")
         end = edge.get("from") if flipped else edge.get("to")
         if (
-            set(edge) != {"kind", "from", "to"}
+            set(edge) - {"attributes"} != {"kind", "from", "to"}
             or "this_node" not in (edge.get("from"), edge.get("to"))
             or not isinstance(end, Mapping)
             or not set(end)
@@ -1962,6 +2034,7 @@ def _build_text(pack: str, item: Mapping[str, Any], tables: frozenset[str]) -> R
                 fallback=_read_fallback(end, tables),
                 miss_fallback=_read_miss_name(end),
                 types=tuple(end.get("types", ())),
+                attributes=_edge_templates(edge),
             )
         )
     captures += [value.capture for value in read_values if value.capture]
@@ -2350,7 +2423,7 @@ def _read_map_edge(edge: Mapping[str, Any], followed: bool) -> EdgeSpec:
     composed = [e for e in (start, end) if isinstance(e, Mapping)]
     named = [e for e in (start, end) if isinstance(e, str) and e in _MAP_ENDS]
     if (
-        set(edge) != {"kind", "from", "to"}
+        set(edge) - {"attributes"} != {"kind", "from", "to"}
         or len(named) + len(composed) != 2
         or len(composed) > 1
         or ("matched_node" in named and not followed)
@@ -2366,8 +2439,10 @@ def _read_map_edge(edge: Mapping[str, Any], followed: bool) -> EdgeSpec:
             "or a template with type or types, on_miss and boundary; matched_node needs "
             "match.follow"
         )
+    attributes = _edge_templates(edge)
     if not composed:
-        return EdgeSpec(edge["kind"], "", False, None, None, None, (), str(start), str(end))
+        ends = (str(start), str(end))
+        return EdgeSpec(edge["kind"], "", False, None, None, None, (), *ends, attributes=attributes)
     part, flipped = composed[0], isinstance(start, Mapping)
     return EdgeSpec(
         edge["kind"],
@@ -2383,7 +2458,20 @@ def _read_map_edge(edge: Mapping[str, Any], followed: bool) -> EdgeSpec:
         on_miss=part.get("on_miss", ""),
         into=_read_into(part),
         types=tuple(part.get("types", ())),
+        attributes=attributes,
     )
+
+
+def _edge_templates(edge: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+    """An edge's attributes, each its name and its template, by name."""
+    given = edge.get("attributes", {})
+    if not isinstance(given, Mapping) or not all(
+        isinstance(name, str) and isinstance(value, Mapping) and set(value) == {"template"}
+        and isinstance(value["template"], str)
+        for name, value in given.items()
+    ):
+        raise _Unsupported("an edge's attributes are not each a name and a template")
+    return tuple(sorted((name, value["template"]) for name, value in given.items()))
 
 
 def _read_ending(match: Mapping[str, Any]) -> tuple[str, ...]:

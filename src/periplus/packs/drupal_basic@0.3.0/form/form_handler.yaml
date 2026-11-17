@@ -2,7 +2,10 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 
 # The callables a form or a render element names under a key Drupal runs: #validate and #submit,
 # the form's handlers, give registers_form_handler; the element callbacks give
-# registers_element_callback. Both run from the method or function that writes the key. The keys
+# registers_element_callback. Both run from the method or function that writes the key, and each
+# edge holds that key in its attribute key, as the code writes it: #submit, #process, #ajax for
+# the callback of #ajax, #machine_name for its exists, #lazy_builder; one edge registered under
+# two keys at two places holds each key at its place. The keys
 # are those core 11.1 calls, read in its Form, Render, Entity and Datetime folders under
 # core/lib/Drupal/Core and in the file module's ManagedFile element:
 # - a list of callables: #validate, #submit, #element_validate, #process, #after_build,
@@ -100,6 +103,11 @@ edge_kinds:
   description: "step to a registration edge: the callable is written in that file"
   from: drupal.form_handler_site
   to: drupal.source_file
+
+edge_attributes:
+- name: key
+  on: [registers_form_handler, registers_element_callback]
+  description: "the key the callable is registered under, as the code writes it, such as #submit, #process or #ajax"
 
 rules:
 # The registration sites. A single registration: $x['#validate'][] = X;, array_unshift($x['#submit'],
@@ -422,16 +430,16 @@ rules:
   reads: map
   match:
     node_type: drupal.runtime_form_handler
-    where: [{id_matches: '^drupal\.runtime_form_handler::(?<owner>[^#]+)::#(?:validate|submit)\|'}]
-  emits: [{edge: {kind: registers_form_handler, from: {template: '{owner}', types: [php.method, php.function]}, to: this_node}}]
+    where: [{id_matches: '^drupal\.runtime_form_handler::(?<owner>[^#]+)::(?<key>#(?:validate|submit))\|'}]
+  emits: [{edge: {kind: registers_form_handler, from: {template: '{owner}', types: [php.method, php.function]}, to: this_node, attributes: {key: {template: '{key}'}}}}]
   confidence: declared
 
 - rule: runtime_element_callback_registered
   reads: map
   match:
     node_type: drupal.runtime_form_handler
-    where: [{id_matches: '^drupal\.runtime_form_handler::(?<owner>[^#]+)::#(?!validate\||submit\|)\w+\|'}]
-  emits: [{edge: {kind: registers_element_callback, from: {template: '{owner}', types: [php.method, php.function]}, to: this_node}}]
+    where: [{id_matches: '^drupal\.runtime_form_handler::(?<owner>[^#]+)::(?<key>#(?!validate\||submit\|)\w+)\|'}]
+  emits: [{edge: {kind: registers_element_callback, from: {template: '{owner}', types: [php.method, php.function]}, to: this_node, attributes: {key: {template: '{key}'}}}}]
   confidence: declared
 
 # The handler's shape is read from the site id; the key part, #<key>|, comes before it. Each rule
@@ -445,17 +453,17 @@ rules:
   reads: map
   match: &m_fn
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::.+::#\w+\|''(?<handler>[A-Za-z_]\w*)''$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::.+::(?<key>#\w+)\|''(?<handler>[A-Za-z_]\w*)''$'}]
     follow:
     - edge: form_handler_site_in
     unless: &element_keys [[{id_matches: '::#(?!validate\||submit\|)\w+\|'}]]
-  emits: &function_edge [{edge: {kind: registers_form_handler, from: matched_node, to: {template: '{handler}', types: [php.function], on_miss: unresolved}}}]
+  emits: &function_edge [{edge: {kind: registers_form_handler, from: matched_node, to: {template: '{handler}', types: [php.function], on_miss: unresolved}, attributes: {key: {template: '{key}'}}}}]
   confidence: inferred
 
 - <<: *r_fn
   rule: element_callback_function
   match: {<<: *m_fn, unless: &form_keys [[{id_matches: '::#(?:validate|submit)\|'}]]}
-  emits: [{edge: {kind: registers_element_callback, from: matched_node, to: {template: '{handler}', types: [php.function], on_miss: unresolved}}}]
+  emits: [{edge: {kind: registers_element_callback, from: matched_node, to: {template: '{handler}', types: [php.function], on_miss: unresolved}, attributes: {key: {template: '{key}'}}}}]
 
 # '::myMethod' in a form class: the class's own form object.
 - &r_form_method
@@ -463,7 +471,7 @@ rules:
   reads: map
   match: &m_form_method
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<declarer>[^:]+)::\w+::#\w+\|''::(?<handler>\w+)'')$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<declarer>[^:]+)::\w+::(?<key>#\w+)\|''::(?<handler>\w+)'')$'}]
     follow:
     - node: 'php.type::{declarer}'
     - edge: form_has_id
@@ -475,13 +483,13 @@ rules:
     - node: 'drupal.form_handler_site::{site}'
     - edge: form_handler_site_in
     unless: *element_keys
-  emits: &method_edge [{edge: {kind: registers_form_handler, from: matched_node, to: {template: '{declarer}::{handler}', types: [php.method], on_miss: unresolved}}}]
+  emits: &method_edge [{edge: {kind: registers_form_handler, from: matched_node, to: {template: '{declarer}::{handler}', types: [php.method], on_miss: unresolved}, attributes: {key: {template: '{key}'}}}}]
   confidence: inferred
 
 - <<: *r_form_method
   rule: element_callback_form_method
   match: {<<: *m_form_method, unless: *form_keys}
-  emits: &element_method_edge [{edge: {kind: registers_element_callback, from: matched_node, to: {template: '{declarer}::{handler}', types: [php.method], on_miss: unresolved}}}]
+  emits: &element_method_edge [{edge: {kind: registers_element_callback, from: matched_node, to: {template: '{declarer}::{handler}', types: [php.method], on_miss: unresolved}, attributes: {key: {template: '{key}'}}}}]
 
 # '::myMethod' in a form alter: each class that returns the altered form id.
 - &r_altered
@@ -489,7 +497,7 @@ rules:
   reads: map
   match: &m_altered
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::#\w+\|''::(?<handler>\w+)'')$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::(?<key>#\w+)\|''::(?<handler>\w+)'')$'}]
     follow:
     - edge: form_handler_site_in
     - edge: alters_form
@@ -518,7 +526,7 @@ rules:
   reads: map
   match: &m_form_class
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<declarer>[^:]+)::\w+::#\w+\|''::(?<handler>\w+)'')$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<declarer>[^:]+)::\w+::(?<key>#\w+)\|''::(?<handler>\w+)'')$'}]
     follow:
     - node: 'php.type::{declarer}'
     - ancestors: [inherits, implements]
@@ -548,7 +556,7 @@ rules:
   reads: map
   match: &m_outside_form
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::#\w+\|''::(?<handler>\w+)'')$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::(?<key>#\w+)\|''::(?<handler>\w+)'')$'}]
     follow:
     - edge: form_handler_site_in
     - edge: implements_hook
@@ -571,7 +579,7 @@ rules:
   reads: map
   match: &m_own
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<declarer>[^:]+)::\w+::#\w+\|\[(?:\$this|static::class|self::class),''(?<handler>\w+)''\])$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<declarer>[^:]+)::\w+::(?<key>#\w+)\|\[(?:\$this|static::class|self::class),''(?<handler>\w+)''\])$'}]
     follow:
     - try:
       - node: 'php.type::{declarer}'
@@ -595,7 +603,7 @@ rules:
   reads: map
   match: &m_static
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::#\w+\|''\\?(?<declarer>[A-Za-z_][\w\\]*)::(?<handler>\w+)'')$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::(?<key>#\w+)\|''\\?(?<declarer>[A-Za-z_][\w\\]*)::(?<handler>\w+)'')$'}]
     follow:
     - try:
       - node: 'php.type::{declarer}'
@@ -619,7 +627,7 @@ rules:
   reads: map
   match: &m_quoted
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::#\w+\|\[''\\?(?<declarer>[A-Za-z_][\w\\]*)'',''(?<handler>\w+)''\])$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::(?<key>#\w+)\|\[''\\?(?<declarer>[A-Za-z_][\w\\]*)'',''(?<handler>\w+)''\])$'}]
     follow:
     - try:
       - node: 'php.type::{declarer}'
@@ -646,7 +654,7 @@ rules:
   reads: map
   match: &m_service
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::#\w+\|''(?<declarer>(?<service>[A-Za-z_][\w.]*)):(?<handler>\w+)'')$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::(?<key>#\w+)\|''(?<declarer>(?<service>[A-Za-z_][\w.]*)):(?<handler>\w+)'')$'}]
     follow:
     - try:
       - node: 'drupal.service::{service}'
@@ -677,7 +685,7 @@ rules:
   reads: map
   match: &m_class
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<class>[^:]+)::(?<method>\w+)::#\w+\|\[(?!(?:static|self)::class,)\\?(?:[A-Za-z_][\w\\]*\\)?(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<class>[^:]+)::(?<method>\w+)::(?<key>#\w+)\|\[(?!(?:static|self)::class,)\\?(?:[A-Za-z_][\w\\]*\\)?(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
     follow:
     - node: 'php.method::{class}::{method}'
     - edge: references_class
@@ -702,7 +710,7 @@ rules:
   reads: map
   match: &m_class_fn
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<function>\w+)::#\w+\|\[(?!(?:static|self)::class,)\\?(?:[A-Za-z_][\w\\]*\\)?(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<function>\w+)::(?<key>#\w+)\|\[(?!(?:static|self)::class,)\\?(?:[A-Za-z_][\w\\]*\\)?(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
     follow:
     - node: 'php.function::{function}'
     - edge: references_class
@@ -729,7 +737,7 @@ rules:
   reads: map
   match: &m_alias
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<class>[^:]+)::(?<method>\w+)::#\w+\|\[(?!(?:static|self)::class,)(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<class>[^:]+)::(?<method>\w+)::(?<key>#\w+)\|\[(?!(?:static|self)::class,)(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
     follow:
     - edge: form_handler_site_file
     - id_matches: '^drupal\.source_file::(?<file>.+)$'
@@ -758,7 +766,7 @@ rules:
   reads: map
   match: &m_alias_fn
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<function>\w+)::#\w+\|\[(?!(?:static|self)::class,)(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<function>\w+)::(?<key>#\w+)\|\[(?!(?:static|self)::class,)(?<short>[A-Za-z_]\w*)::class,''(?<handler>\w+)''\])$'}]
     follow:
     - edge: form_handler_site_file
     - id_matches: '^drupal\.source_file::(?<file>.+)$'

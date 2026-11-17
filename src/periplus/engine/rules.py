@@ -140,6 +140,8 @@ class FoundEdge:
     #: The ends, ``source`` or ``target``, written ``{declared: <type>}``: when no rule finds such
     #: an end, it takes its named type alone, not the kind's.
     declared_ends: tuple[str, ...] = ()
+    #: The name and the filled value of each attribute the rule wrote on the edge at this place.
+    attributes: tuple[tuple[str, str], ...] = ()
 
 
 def run_file_rules(
@@ -643,18 +645,28 @@ def _made(
     ends = {"this_node": this, "matched_node": reached}
     made: list[FoundNode | FoundEdge] = []
     for spec in rule.edges:
+        written = _filled(spec.attributes, values)
         if spec.template is None:
             source, target = ends[spec.start], ends[spec.finish]
             made.append(
                 FoundEdge(
-                    spec.kind, source, target, file, line, rule.pack, rule.name, rule.confidence
+                    spec.kind,
+                    source,
+                    target,
+                    file,
+                    line,
+                    rule.pack,
+                    rule.name,
+                    rule.confidence,
+                    attributes=written,
                 )
             )
             continue
         composed = _fill(spec.template, values)
         if composed is not None:
             whole = ends[spec.start or spec.finish]
-            made.extend(_edges(rule, rule_set, spec, file, "", [(composed, line)], whole=whole))
+            ends_at = [(composed, line)]
+            made.extend(_edges(rule, rule_set, spec, file, "", ends_at, None, written, whole))
     for name, template, target in rule.writes:
         value = _fill(template, values)
         if value is None:
@@ -819,8 +831,9 @@ def _texts(
                 skipped.append((file, line, rule.name, f"edge {spec.kind}: {reason}"))
                 continue
             at = lines[spec.key] if spec.key else line
+            given = _filled(spec.attributes, present, captures)
             edges.extend(
-                _edges(rule, rule_set, spec, file, node_id, [(end, at)], fallback=fallback)
+                _edges(rule, rule_set, spec, file, node_id, [(end, at)], fallback, given)
             )
         if (
             len(nodes) + len(edges) == before
@@ -1974,11 +1987,12 @@ def _edges(
     file: str,
     node_id: str,
     ends: list[tuple[str, int]],
-    whole: str = "",
     fallback: str | None = None,
+    written: tuple[tuple[str, str], ...] = (),
+    whole: str = "",
 ) -> list[FoundEdge]:
     """One edge per composed end and its line, between it and the fire's own node, or the node of
-    the id ``whole`` when it is given.
+    the id ``whole`` when it is given, each with the attributes ``written``.
 
     The composed end is the from end when the spec's ``start`` is ``""``. An end that is not a
     full id takes the id namespace of its ``type``, else the one of the kind's types at its side,
@@ -2027,9 +2041,23 @@ def _edges(
                 candidates=candidates,
                 miss_at=miss_at,
                 types_tried=spec.types,
+                attributes=written,
             )
         )
     return found
+
+
+def _filled(
+    templates: Sequence[tuple[str, str]],
+    values: Mapping[str, str],
+    captures: Mapping[str, str | None] | None = None,
+) -> tuple[tuple[str, str], ...]:
+    """Each attribute whose template ``_fill`` fills, with its value."""
+    return tuple(
+        (name, value)
+        for name, template in templates
+        if (value := _fill(template, values, captures)) is not None
+    )
 
 
 def _candidates(

@@ -17,7 +17,7 @@ import re
 import shlex
 from collections import Counter
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -31,6 +31,8 @@ from periplus.navigate.ids import resolve
 from periplus.navigate.listing import (
     NONE,
     Listing,
+    attribute_text,
+    edge_attributes,
     first_location,
     footer,
     mark_text,
@@ -141,6 +143,7 @@ class PieceRow:
     ``walk`` names the part that found it: ``off`` (as ``neighbors``), ``by`` (as ``affected``)
     or ``members``. ``outward`` is true when the edge runs from ``parent`` to ``id``. ``hub`` is
     the fan of a thing the walk did not go on from; ``touch`` marks a thing only pointed at.
+    ``attributes`` are the edge's.
     """
 
     start: str
@@ -158,6 +161,7 @@ class PieceRow:
     marks: tuple[str, ...] = ()
     hub: int | None = None
     touch: bool = False
+    attributes: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,7 +197,8 @@ class Link:
     ``owners`` are far ends folded into their owner, with a count; ``more`` counts the mapped far
     ends past the names shown; ``outside`` names the first far ends not mapped, of
     ``outside_count``. ``realized`` marks far ends at the concrete end of a realizing kind: the
-    forms of this node.
+    forms of this node. ``tags`` and ``outside_tags`` hold, for each of ``names`` and
+    ``outside``, the attributes of its edge as a row prints them.
     """
 
     kind: str
@@ -204,6 +209,8 @@ class Link:
     outside: tuple[str, ...]
     outside_count: int
     realized: bool = False
+    tags: tuple[str, ...] = ()
+    outside_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -787,6 +794,7 @@ def _walk(
                             r.location,
                             hub=r.hub,
                             touch=r.touch,
+                            attributes=r.attributes,
                         )
                     )
             walks.append(
@@ -819,6 +827,7 @@ def _walk(
                                 w.state,
                                 toward,
                                 w.location,
+                                attributes=w.attributes,
                             )
                         )
             raw_command = _command(verb, ["ID"], walking.depth, walking, raw=True)
@@ -884,7 +893,9 @@ def _layout(
     named: dict[str, str] = {}
     owner = names.owner
 
-    def link(kind: str, outward: bool, ends: list[str], here: str) -> Link:
+    def link(
+        kind: str, outward: bool, ends: list[str], here: str, said: Mapping[str, str]
+    ) -> Link:
         mapped = [e for e in ends if index.nodes[e]["state"] == "mapped"]
         outside = sorted(
             (e for e in ends if e not in mapped), key=lambda e: names.short(e).casefold()
@@ -908,6 +919,8 @@ def _layout(
             tuple(names.short(e) for e in outside[:OUTSIDE_NAMES]),
             len(outside),
             index.realized(kind, outward),
+            tuple(said.get(e, "") for e in loose[:cap]),
+            tuple(said.get(e, "") for e in outside[:OUTSIDE_NAMES]),
         )
 
     found: list[tuple[str | None, Subject]] = []
@@ -918,6 +931,7 @@ def _layout(
         named.setdefault(node_id, node_id)
         loc = first_location(node)
         ends: dict[tuple[str, bool], list[str]] = {}
+        said: dict[tuple[str, bool], dict[str, str]] = {}
         unwalked: Counter[tuple[str, bool]] = Counter()
         for outward, edges in ((True, index.outgoing(node_id)), (False, index.incoming(node_id))):
             for edge in edges:
@@ -932,10 +946,12 @@ def _layout(
                     same = there is not None and loc is not None and there["file"] == loc["file"]
                     if not (same and not outward and index.nodes[far]["state"] == "mapped"):
                         ends.setdefault((kind, outward), []).append(far)
+                        text = attribute_text(edge_attributes(edge))
+                        said.setdefault((kind, outward), {})[far] = text
                 else:
                     unwalked[(kind, outward)] += 1
         links = tuple(
-            link(k, o, sorted(set(v)), node_id)
+            link(k, o, sorted(set(v)), node_id, said[(k, o)])
             for (k, o), v in sorted(ends.items(), key=lambda p: (p[0][0], not p[0][1]))
         )
         found.append(
@@ -1206,11 +1222,18 @@ def _why(start: Start) -> str:
     return "words: " + ", ".join(said)
 
 
+def _tags(link: Link, outside: bool = False) -> tuple[str, ...]:
+    """The attribute text of each name the link shows, or of each outside name; none given, none
+    printed."""
+    names, tags = (link.outside, link.outside_tags) if outside else (link.names, link.tags)
+    return tags or ("",) * len(names)
+
+
 def _clause(link: Link) -> str:
     """One link as ``kind -> a, b, Owner (3) (+2 more) (+1 outside the project: x)``."""
     arrow = "->" if link.outward else "<-"
     parts = [f"{_escape(name)} ({count})" for name, count in link.owners]
-    parts += [_escape(name) for name in link.names]
+    parts += [_escape(name) + tag for name, tag in zip(link.names, _tags(link), strict=True)]
     head = (
         f"realized by ({_escape(link.kind)}) ->"
         if link.realized
@@ -1219,7 +1242,10 @@ def _clause(link: Link) -> str:
     text = f"{head} {', '.join(parts)}".rstrip()
     text += f" (+{link.more} more)" if link.more else ""
     if link.outside_count:
-        listed = ", ".join(_escape(name) for name in link.outside)
+        listed = ", ".join(
+            _escape(name) + tag
+            for name, tag in zip(link.outside, _tags(link, outside=True), strict=True)
+        )
         text += f" (+{link.outside_count} outside the project: {listed})"
     return text
 
@@ -1472,6 +1498,7 @@ def _json_row(row: PieceRow, piece_of: Mapping[str, int]) -> dict[str, Any]:
         "hop": row.hop,
         "from": row.parent,
         "kind": row.kind,
+        "attributes": dict(row.attributes),
         "direction": "out" if row.outward else "in",
         "walk": row.walk,
         "id": row.id,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import shlex
 from collections import Counter, defaultdict
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +14,9 @@ from periplus.navigate.ids import resolve
 from periplus.navigate.listing import (
     NONE,
     Listing,
+    attribute_text,
     cut,
+    edge_attributes,
     footer,
     kind_warnings,
     mark_text,
@@ -75,7 +77,8 @@ class WalkRow:
     and ``source`` the line of code there. ``description`` is the item's descriptions entry.
     ``stands_for`` marks an item added because it stands for ``via`` across a realizing edge,
     at ``via``'s depth: a form of a declaration, or with ``in`` the declaration of a form.
-    ``supporting`` marks an item in supporting code, and ``marks`` holds its mark texts.
+    ``supporting`` marks an item in supporting code, ``marks`` holds its mark texts, and
+    ``attributes`` those of the edge that reached it.
     """
 
     id: str
@@ -90,6 +93,7 @@ class WalkRow:
     stands_for: bool = False
     supporting: bool = False
     marks: tuple[str, ...] = ()
+    attributes: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +159,7 @@ def walk(
                     via,
                     where(edge, node),
                     stands_for=True,
+                    attributes=edge_attributes(edge),
                 )
             )
         return added
@@ -186,6 +191,7 @@ def walk(
                         as_text(edge["kind"]),
                         as_text(edge["from" if end == "to" else "to"]),
                         where(edge, node),
+                        attributes=edge_attributes(edge),
                     )
                 )
                 if edge["kind"] not in index.realizing:
@@ -275,10 +281,11 @@ def render_text(report: WalkReport | CauseReport) -> str:
         if row.supporting and not supporting:
             supporting = True
             lines.append("  in supporting code:")
-        how = f"via {_escape(row.kind)} {toward} {_escape(row.via)}"
+        said = attribute_text(row.attributes)
+        how = f"via {_escape(row.kind)}{said} {toward} {_escape(row.via)}"
         if row.stands_for:
             relation = "realized by" if report.direction == "in" else "realizes"
-            how = f"{relation} {_escape(row.via)} by {_escape(row.kind)}"
+            how = f"{relation} {_escape(row.via)} by {_escape(row.kind)}{said}"
         lines.append(
             f"  {row.depth}  {_escape(row.id)}  {_escape(row.type)}"
             f"  {_escape(row.state)}  {how}  {_escape(located(row.location))}"
@@ -312,6 +319,7 @@ def _json_row(row: WalkRow) -> dict[str, Any]:
         "state": row.state,
         "depth": row.depth,
         "kind": row.kind,
+        "attributes": dict(row.attributes),
         "via": row.via,
         "location": row.location,
         "source": row.source,
@@ -363,7 +371,8 @@ class CauseRow:
     ``location`` is where that edge is written, else the thing's own place. ``hub`` is the fan
     of a thing the walk listed and did not walk from. ``touch`` marks a thing a reached node only
     points at, one hop out. A start is a row at hop 0 with the kind ``start``. ``only`` marks a
-    thing ``periplus only`` returns, which ``periplus reach`` tags.
+    thing ``periplus only`` returns, which ``periplus reach`` tags. ``attributes`` are those of
+    the edge that reached it.
     """
 
     hop: int
@@ -379,6 +388,7 @@ class CauseRow:
     supporting: bool = False
     marks: tuple[str, ...] = ()
     only: bool = False
+    attributes: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -472,6 +482,7 @@ def cause_walk(
                         item,
                         where(edge, node),
                         fan if stop else None,
+                        attributes=edge_attributes(edge),
                     )
                 )
                 if not stop:
@@ -701,21 +712,24 @@ def _touching(
                 at.id,
                 where(edge, node),
                 touch=True,
+                attributes=edge_attributes(edge),
             )
             found.append(marked(index, row))
     return tuple(found)
 
 
 def _row_text(row: CauseRow, name: str, place: str) -> str:
-    """A tree row: indent by hop, name, type, state, kind (``(rev)`` when followed backward),
-    place, marks, then ``[supporting code]``, ``[hub: ...]`` or ``[touch]``."""
+    """A tree row: indent by hop, name, type, state, kind (``(rev)`` when followed backward) and
+    the edge's attributes, place, marks, then ``[supporting code]``, ``[hub: ...]`` or
+    ``[touch]``."""
     tail = "  [supporting code]" if row.supporting else ""
     tail += f"  [hub: {row.hub} links not walked]" if row.hub is not None else ""
     tail += "  [touch]" if row.touch else ""
     tail += "  [only]" if row.only else ""
     return (
         f"{'  ' * row.hop}{_escape(name)}  {_escape(row.type)}  {_escape(row.state)}"
-        f"  {_escape(row.kind)}{' (rev)' if row.backward else ''}  {_escape(place)}"
+        f"  {_escape(row.kind)}{' (rev)' if row.backward else ''}{attribute_text(row.attributes)}"
+        f"  {_escape(place)}"
         f"{mark_text(row.marks)}{tail}"
     )
 
@@ -798,6 +812,7 @@ def _cause_json_row(row: CauseRow) -> dict[str, Any]:
         "type": row.type,
         "state": row.state,
         "via_kind": row.kind,
+        "via_attributes": dict(row.attributes),
         "via_direction": "backward" if row.backward else "forward",
         "from": row.via,
         "file": file if row.location else None,

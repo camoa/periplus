@@ -228,7 +228,9 @@ which no mapped file declares.
    "searched_for": "my_module_format", "types_tried": ["php.function"]}}
 ```
 
-Each edge has `from`, `to`, `kind`, its locations, an `occurrences` count and its provenance.
+Each edge has `from`, `to`, `kind`, its locations, an `occurrences` count and its provenance, and
+`attributes` when a rule wrote some, such as the key a form callback is registered under; an edge
+found at several places with different values keeps each place's value.
 
 - A call whose target is built at run time, such as `$this->$name()`, is a call-site node, as
   `php.call_site`, whose `attributes` hold `resolution: runtime`. The map keeps the call and draws
