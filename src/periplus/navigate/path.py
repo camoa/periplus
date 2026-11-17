@@ -178,7 +178,8 @@ def _chain_lines(chain: tuple[Step, ...]) -> list[str]:
     lines = []
     for s in chain:
         lines.append(
-            f"    {_escape(s.start)}{mark_text(s.start_marks)} --{_escape(s.kind)}{attribute_text(s.attributes)}-->"
+            f"    {_escape(s.start)}{mark_text(s.start_marks)}"
+            f" --{_escape(s.kind)}{attribute_text(s.attributes)}-->"
             f" {_escape(s.end)}{mark_text(s.end_marks)}  {_escape(located(s.location))}"
         )
         lines += source_line(s.source)

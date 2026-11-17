@@ -164,7 +164,6 @@ def test_path_prints_the_attributes_inside_the_step_arrow(tmp_path: Path) -> Non
     )
     (step,) = document["chains"]["items"][0]
     assert step["attributes"] == {"key": DIFFERS}
-    assert json.loads(path.render_json(path.run(tmp_path, {}, BUILD, PLAIN, (), 0, _map(tmp_path))))[
-        "chains"
-    ]["items"][0][0]["attributes"] == {}
+    plain = path.run(tmp_path, {}, BUILD, PLAIN, (), 0, _map(tmp_path))
+    assert json.loads(path.render_json(plain))["chains"]["items"][0][0]["attributes"] == {}
     assert _valid(document, "path") == []

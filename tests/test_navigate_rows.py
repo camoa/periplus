@@ -366,6 +366,7 @@ PINNED: dict[str, str] = {
     "items": [
       [
         {
+          "attributes": {},
           "description": null,
           "from": "php.method::A::go",
           "from_marks": [],
