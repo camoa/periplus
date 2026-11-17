@@ -26,6 +26,7 @@ from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.map import write_document
 from periplus.navigate import find
 from periplus.navigate import grouping as grouping_
+from periplus.navigate import members as members_
 from periplus.navigate.ids import resolve
 from periplus.navigate.listing import (
     NONE,
@@ -46,7 +47,6 @@ from periplus.navigate.mapfile import (
     map_flag,
     reading_fields,
 )
-from periplus.navigate.members import _held
 from periplus.navigate.names import Names
 from periplus.navigate.reach import DIRECTIONS
 from periplus.navigate.sets import sub_document
@@ -526,7 +526,7 @@ def _piece(
     for container in order:
         if not any(edge["kind"] in index.grouping for edge in index.incoming(container)):
             continue
-        holding = _held(index, names, container, only)
+        holding = members_.held(index, names, container, only)
         rows = []
         for member in holding.members:
             roots.setdefault(member.id, container)

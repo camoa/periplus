@@ -23,6 +23,7 @@ __all__ = [
     "Held",
     "Member",
     "MembersReport",
+    "held",
     "listed",
     "render_json",
     "render_text",
@@ -86,13 +87,15 @@ def run(
             containers, notes = resolve_all(index, ids)
             wanted, _, said = find.narrowing(index, types, ())
             names = Names(index)
-            held = tuple(_held(index, names, c, wanted) for c in containers)
+            found = tuple(held(index, names, c, wanted) for c in containers)
     except HarnessError as error:
         return MembersReport(problems=(error.problem(),))
-    return MembersReport(held, (*notes, *said))
+    return MembersReport(found, (*notes, *said))
 
 
-def _held(index: MapIndex, names: Names, container: str, wanted: set[str] | None) -> Held:
+def held(index: MapIndex, names: Names, container: str, wanted: set[str] | None) -> Held:
+    """The members of ``container``, each once, as ``members`` lists them; ``wanted`` keeps
+    those types (``None``: all)."""
     first: dict[str, Member] = {}
     for edge, member in members(index, container, index.grouping, wanted):
         if member not in first:
