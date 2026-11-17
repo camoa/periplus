@@ -73,6 +73,7 @@ EXECUTED_KEYS = frozenset(
     {
         *(f"manifest.{k}" for k in ("pack", "version", "depends", "folders", "identity")),
         "manifest.folder_candidates",
+        "manifest.optional_folders",
         "manifest.tables",
         "manifest.add_table_rows",
         "manifest.values",

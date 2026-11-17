@@ -400,9 +400,9 @@ def _attribute_writes(
 def _undeclared_folders(
     pack: LoadedPack, visible: set[str], packs: Sequence[LoadedPack]
 ) -> list[Problem]:
-    """Each folder name the manifest's ``folder_candidates`` or detector paths name, as a key or in
-    braces, that no pack in ``visible``, the pack and those it depends on, declares under
-    ``folders``."""
+    """Each folder name the manifest's ``folder_candidates``, ``optional_folders`` or detector paths
+    name, as a key, an item or in braces, that no pack in ``visible``, the pack and those it
+    depends on, declares under ``folders``."""
     document = pack.manifest.document
     declared = {
         str(folder)
@@ -417,6 +417,8 @@ def _undeclared_folders(
         named.append(("folder_candidates", str(folder)))
         for path in _strings(paths):
             named.extend(("folder_candidates", ref) for ref in _REFERENCE.findall(path))
+    optional = document.get("optional_folders")
+    named.extend(("optional_folders", str(folder)) for folder in _strings(optional))
     detect = document.get("detect")
     signals = detect.get("any_of") if isinstance(detect, Mapping) else None
     for signal in signals if isinstance(signals, list) else ():

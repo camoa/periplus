@@ -391,10 +391,12 @@ def render_text(report: InitReport) -> str:
 
 
 def _placement_line(one: Placement) -> str:
-    """One folder's line: kept, written to the settings, or not placed."""
+    """One folder's line: kept, written to the settings, not placed, or optional and absent."""
     name = _escape(one.folder)
     if one.path is None:
         tried = _escape(", ".join(dict.fromkeys((*one.default, *one.candidates))))
+        if one.optional:
+            return f"  optional  {name}: none of {tried} exists; the pack needs none"
         return (
             f"  unplaced  {name}: none of {tried} exists; declare it under folders in "
             f"{PROJECT_MARKER}/{SETTINGS_FILENAME}"

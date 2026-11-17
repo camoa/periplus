@@ -196,3 +196,34 @@ def test_init_names_each_candidate_once_and_says_when_a_folder_has_no_default(
         ".periplus/settings.yml\n"
         "  folder    extra = app/x, written to the settings; it has no default\n"
     )
+
+
+def test_the_schema_admits_a_list_of_optional_folder_names() -> None:
+    schema = json.loads(SCHEMA.read_text())
+    valid = {"pack": "thing", "version": "0.1.0", "optional_folders": ["code"]}
+    invalid = {"pack": "thing", "version": "0.1.0", "optional_folders": "code"}
+
+    assert list(Draft202012Validator(schema).iter_errors(valid)) == []
+    assert list(Draft202012Validator(schema).iter_errors(invalid)) != []
+
+
+def test_an_optional_folder_found_nowhere_is_placed_as_optional(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, "elsewhere")
+    manifest = MANIFEST + "optional_folders: [code]\n"
+
+    placed = place_folders(repo, _candidates(tmp_path, manifest), ["thing@0.1.0"])
+
+    assert placed == (
+        Placement("code", None, False, ("./lib/code",), ("src/code", "app/code"), True),
+    )
+
+
+def test_init_prints_one_calm_line_for_an_absent_optional_folder(tmp_path: Path) -> None:
+    placed = (Placement("code", None, False, ("./lib/code",), ("src/code",), True),)
+
+    rendered = render_text(initialise_project(tmp_path, packs=["thing@0.1.0"], placed=placed))
+
+    assert rendered.endswith(
+        "  optional  code: none of ./lib/code, src/code exists; the pack needs none\n"
+    )
+    assert _folders(tmp_path) == {}

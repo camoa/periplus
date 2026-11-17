@@ -39,11 +39,13 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   same way: mytheme_preprocess_node in mytheme/preprocess/node.preprocess.inc or in
 #   mytheme/includes/content.theme implements preprocess_node. A hook found by a
 #   function's name has confidence inferred. It is known when the table hook_names below lists
-#   it (core's hooks, and a contributed module's that its rutter adds), when it fits a placeholder
-#   form of core, when a custom or contributed *.api.php file defines it, when custom code invokes
-#   it by a quoted name, or when a Hook attribute names it. Any other such hook, and each function
-#   that implements it by its name, gets the attribute hook_known: no, printed as
-#   [hook by name only] (hook/hook_known.yaml);
+#   it (core's hooks, and a tool's that its rutter adds), when it fits a placeholder form of core,
+#   when a custom or contributed *.api.php file defines it, by name or as a placeholder pattern,
+#   when custom code invokes or alters it by a quoted name, or when a Hook attribute names it.
+#   Contributed modules and themes are read from the optional folders contrib_module and
+#   contrib_theme, for those hook names only. Any other such hook, and each function that
+#   implements it by its name, gets the attribute hook_known: no, printed as [hook by name only]
+#   (hook/hook_known.yaml);
 # - a route's methods, its requirements _access, _format, _user_is_logged_in, _csrf_token,
 #   _entity_access and _custom_access, and its options no_cache and _admin_route, as attributes
 #   holding the value as written; each role its _role names, as a requires_role or accepts_role
@@ -282,9 +284,11 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   cookie_delete, mass_update, set_edit_access and translate_access end at the referenced entity
 #   types cookie, mass, set_edit and translate.
 # - A helper whose name fits a placeholder form of core, such as mymod_preprocess_x or
-#   mymod_form_x_alter, or whose rest is a known hook's name, reads as a known hook. A hook a
-#   contributed module defines reads as [hook by name only] when the module is not on disk under
-#   contrib_module and no loaded rutter adds it to hook_names.
+#   mymod_form_x_alter, or whose rest is a known hook's name, reads as a known hook.
+# - A contributed module's hook is known only when the module's code is on disk in the folder
+#   contrib_module or contrib_theme. Without it, the hook's implementations carry
+#   [hook by name only]. That is the map saying what the code on disk shows, not a gap; no table
+#   row stands in for a contributed module.
 # - The prefix is the file name, not an installed module's name. If Drupal core were inside the
 #   mapped folders, its files such as form.inc would give false hooks, such as select_options from
 #   form_select_options.
@@ -575,15 +579,29 @@ folder_candidates:
   custom_module: [docroot/modules/custom, modules/custom]
   custom_theme: [docroot/themes/custom, themes/custom]
   contrib_module: [docroot/modules/contrib, modules/contrib]
+  contrib_theme: [docroot/themes/contrib, themes/contrib]
+
+# Contributed code is read for hook names only, and a project may keep none of it on disk.
+optional_folders: [contrib_module, contrib_theme]
 
 folders:
   config:        ./config/sync
   custom_module: ./web/modules/custom
   custom_theme: ./web/themes/custom
-  # Contributed modules, read only for the hook names their *.api.php files define
+  # Contributed modules and themes, read only for the hook names their *.api.php files define
   # (hook/hook_known.yaml). A project with no such folder on disk gets nothing from it.
   contrib_module: ./web/modules/contrib
-  contrib_source: "{contrib_module}/**"
+  contrib_theme: ./web/themes/contrib
+  # Where a contributed project keeps its *.api.php files: its own folder, a folder directly
+  # inside it, as a submodule, and each folder under its modules folder. Not every folder at any
+  # depth, which costs a directory listing each.
+  contrib_source:
+  - "{contrib_module}/*"
+  - "{contrib_module}/*/*"
+  - "{contrib_module}/*/modules/*"
+  - "{contrib_theme}/*"
+  - "{contrib_theme}/*/*"
+  - "{contrib_theme}/*/modules/*"
   # An extension's shipped configuration: config/install and config/optional.
   module_config:
   - "{custom_module}/**/config/install"
@@ -805,8 +823,8 @@ files:
     # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
     # attachment. The sections are the comments and the strings. The spans kept here are attached,
     # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
-    # subscribed_events, named_function, array_assigned, in_array_list, any_function and
-    # switch_body.
+    # subscribed_events, named_function, array_assigned, in_array_list, alter_list, any_function
+    # and switch_body.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
       reader: text
@@ -904,6 +922,12 @@ files:
       # variable's name.
       - name: in_array_list
         open: '(?<![!\w])in_array\(\s*\$(?<var>\w+)\s*,\s*(?=\[)'
+        balance: ['[', ']']
+      # The list of hook types an alter call is given, ->alter(['a', 'b'], ...), and the same list
+      # after alterForTheme's or alterDeprecated's first argument, or given to drupal_alter; mark is
+      # the call. Read by hook/hook_known.yaml.
+      - name: alter_list
+        open: '(?<mark>->\s*alter\(|->\s*(?:alterForTheme|alterDeprecated)\(\s*(?:''[^'']*''|"[^"]*"|[^,()''"]+),|\bdrupal_alter\()\s*(?=\[)'
         balance: ['[', ']']
       # The body of a named function, a method or a closure; function is function <name>, or
       # function alone for a closure, so a match inside a closure reads the closure.

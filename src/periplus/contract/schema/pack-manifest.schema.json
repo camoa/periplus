@@ -203,6 +203,13 @@
       "description": "Other places a repository keeps a folder, in order, written as folder values are. When the folder's own value resolves to no directory, `periplus init` writes the first candidate that does under `folders` in the settings it creates, and a detector signal that names the folder reads it there. A candidate outside the repository is never chosen."
     },
 
+    "optional_folders": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+      "uniqueItems": true,
+      "description": "Folders the pack declares that a repository may lack, such as one holding outside code read for names only. A listed folder that finds no directory is empty: `periplus init` says so in one line and asks for nothing, and `periplus map` leaves it out of a pack's row under Packs that selected no file. Each must be declared under `folders` by the pack or one it depends on."
+    },
+
     "identity": {
       "type": "object",
       "additionalProperties": true,

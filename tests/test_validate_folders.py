@@ -202,6 +202,7 @@ def _named_folder(tmp_path, capsys, monkeypatch, extra: str, depends: str = "[]"
     [
         ("folder_candidates:\n  scr: [lib]\n", "folder_candidates", "scr"),
         ("folder_candidates:\n  src: ['{nope}/src']\n", "folder_candidates", "nope"),
+        ("optional_folders: [extra]\n", "optional_folders", "extra"),
         ("detect:\n  any_of:\n    - path: '{nope}/a.txt'\n", "the detector path", "nope"),
     ],
 )

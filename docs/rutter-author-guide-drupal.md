@@ -305,13 +305,16 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   hook a function's name gives is known when the table `hook_names` lists it, every hook of
   core's `*.api.php` files; when it fits one of core's placeholder forms, such as
   `form_FORM_ID_alter`, with `ENTITY_TYPE` bound to an entity type the table `entity_type_ids`
-  lists or the map holds; when a custom or contributed `*.api.php` file defines it; when custom
-  code invokes it by a quoted name; or when a Hook attribute names it. Contributed modules are
-  read from the folder `contrib_module`, for those hook names only. Any other hook keeps its
-  `implements_hook` edge, and the map rules `hook_by_name_only` and
-  `function_implements_hook_by_name_only` write `hook_known: no` on the hook and on each function
-  that implements it by name. A rutter for a contributed module adds that module's hooks to
-  `hook_names` under `add_table_rows`, as `drush_basic` adds `deploy_NAME`.
+  lists or the map holds; when a custom or contributed `*.api.php` file defines it, a name with a
+  placeholder in capitals, such as `hook_mymodule_TYPE_alter`, read as a pattern; when custom
+  code invokes or alters it by a quoted name, the deprecated and Drupal 7 forms included; or when
+  a Hook attribute names it. Contributed modules and themes are read from the optional folders
+  `contrib_module` and `contrib_theme`, for those hook names only, so a contributed module's hook
+  is known only when its code is on disk there. Any other hook keeps its `implements_hook` edge,
+  and the map rules `hook_by_name_only` and `function_implements_hook_by_name_only` write
+  `hook_known: no` on the hook and on each function that implements it by name. A rutter for a
+  tool whose hooks no project keeps on disk adds them to `hook_names` under `add_table_rows`, as
+  `drush_basic` adds `deploy_NAME`.
 - `drupal.manager_call`, a node for each `getStorage`, `getViewBuilder`, `getListBuilder`,
   `getFormObject` or `getAccessControlHandler` call on a property of `$this`, whose id carries the
   call's argument text, as `Drupal\mymod\Typed::run::$this->etm->getStorage('node')`;

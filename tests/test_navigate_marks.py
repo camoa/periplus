@@ -244,6 +244,7 @@ def test_a_function_in_a_drupal_module_core_extension_does_not_list_carries_the_
     assert report.problems == () and report.map_path is not None, report.problems
     index = MapIndex(json.loads(Path(report.map_path).read_text(encoding="utf-8")))
 
-    assert index.marks("php.function::stock_run") == ("not installed",)
-    assert index.marks("php.function::shop_run") == ()
+    # run is no hook any source names, so both helpers also carry hook_known's mark.
+    assert index.marks("php.function::stock_run") == ("hook by name only", "not installed")
+    assert index.marks("php.function::shop_run") == ("hook by name only",)
     assert index.marks("php.method::Drupal\\stock\\Crate::open") == ("not installed",)

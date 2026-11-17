@@ -43,7 +43,13 @@ from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from periplus.engine.select import FolderUnresolved, folder_values, resolve_folders, resolve_value
+from periplus.engine.select import (
+    FolderUnresolved,
+    folder_values,
+    optional_folders,
+    resolve_folders,
+    resolve_value,
+)
 from periplus.engine.source import SourceUnreadable
 from periplus.manifest import LoadedPack, ManifestUnreadable, load_manifest, resolve_pack_order
 from periplus.packs import MatchedPack, PackCandidate
@@ -108,7 +114,8 @@ class Placement:
 
     ``path`` is the pack's default as written when that exists (``kept`` is true), else the first
     candidate that exists, else ``None``. ``default`` is the folder's values in the packs and
-    ``candidates`` its candidates, each once, both as written.
+    ``candidates`` its candidates, each once, both as written. ``optional`` is true when a pack
+    lists the folder under ``optional_folders``, so a repository may lack it.
     """
 
     folder: str
@@ -116,6 +123,7 @@ class Placement:
     kept: bool
     default: tuple[str, ...]
     candidates: tuple[str, ...]
+    optional: bool = False
 
 
 def place_folders(
@@ -156,12 +164,14 @@ def _place(
         for name, paths in block.items() if isinstance(block, Mapping) else ():
             if isinstance(paths, list):
                 listed.setdefault(str(name), []).extend(p for p in paths if isinstance(p, str))
+    optional = optional_folders(packs)
     overrides: dict[str, str] = {}
     placed = []
     for name in sorted(listed):
         default, candidates = tuple(settled.get(name) or ()), tuple(dict.fromkeys(listed[name]))
+        absent = name in optional
         if default and _found(root, name, packs, overrides):
-            placed.append(Placement(name, ", ".join(default), True, default, candidates))
+            placed.append(Placement(name, ", ".join(default), True, default, candidates, absent))
             continue
         path = next(
             (one for one in candidates if _found(root, name, packs, {**overrides, name: one})),
@@ -169,7 +179,7 @@ def _place(
         )
         if path is not None:
             overrides[name] = path
-        placed.append(Placement(name, path, False, default, candidates))
+        placed.append(Placement(name, path, False, default, candidates, absent))
     return tuple(placed), overrides
 
 

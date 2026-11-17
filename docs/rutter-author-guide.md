@@ -80,9 +80,15 @@ exists under `folders` in the settings, and prints what it chose. A folder whose
 candidates all miss is printed as `unplaced`. A candidate outside the project is never chosen.
 Only `init` reads this key; `periplus map` reads the settings it wrote.
 
-`periplus validate` refuses, with exit 18, a folder that a `folder_candidates` key, a candidate
-or a detector path names, in braces or as the key, that neither the rutter nor a rutter it
-depends on declares under `folders`.
+`optional_folders` lists folders a project may lack, such as one holding outside code read for
+names only: `optional_folders: [contrib_module, contrib_theme]` in `drupal_basic`. Such a folder
+that `init` finds nowhere is printed as `optional`, with no advice to declare it. `periplus map`
+reads it as empty and leaves it out of a rutter's row under Packs that selected no file; a rutter
+whose rules reach only absent optional folders gets no row.
+
+`periplus validate` refuses, with exit 18, a folder that a `folder_candidates` key, a candidate,
+an `optional_folders` item or a detector path names, in braces or as the key, that neither the
+rutter nor a rutter it depends on declares under `folders`.
 
 ## One rule of each shape
 

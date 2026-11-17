@@ -141,8 +141,11 @@ def test_the_bundled_packs_detect_a_docroot_site_and_place_its_folders(tmp_path:
         ("salesforce_basic", "config/default/core.extension.yml"),
         ("salesforce_eca_basic", "config/default/core.extension.yml"),
     ]
-    assert [(one.folder, one.path) for one in placed] == [
-        ("config", "config/default"),
-        ("custom_module", "docroot/modules/custom"),
-        ("custom_theme", "docroot/themes/custom"),
+    # The contributed folders are optional: absent here, placed nowhere, and not asked for.
+    assert [(one.folder, one.path, one.optional) for one in placed] == [
+        ("config", "config/default", False),
+        ("contrib_module", None, True),
+        ("contrib_theme", None, True),
+        ("custom_module", "docroot/modules/custom", False),
+        ("custom_theme", "docroot/themes/custom", False),
     ]

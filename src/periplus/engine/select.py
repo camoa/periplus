@@ -29,6 +29,7 @@ __all__ = [
     "folder_problems",
     "folder_values",
     "holds_double_star",
+    "optional_folders",
     "reachable",
     "resolve_folders",
     "resolve_value",
@@ -193,6 +194,17 @@ def folder_values(
         }
         settled[name] = winners.pop() if len(winners) == 1 else None
     return values, settled
+
+
+def optional_folders(packs: Sequence[LoadedPack]) -> frozenset[str]:
+    """The folder names any of the packs lists under ``optional_folders``: a repository may lack
+    them, and one that finds no directory is empty, with no advice to declare it."""
+    return frozenset(
+        str(name)
+        for pack in packs
+        if isinstance(listed := pack.manifest.document.get("optional_folders"), list)
+        for name in listed
+    )
 
 
 def _patterns(

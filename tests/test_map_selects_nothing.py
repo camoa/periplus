@@ -158,3 +158,39 @@ def test_a_run_that_selects_no_file_still_lists_the_files_no_rule_read(tmp_path:
 
     assert report.exit_code == ExitCode.NOTHING_SELECTED
     assert report.unread == ("lib/one.txt",)
+
+
+def _optional_pack(root: Path, rules: dict[str, str]) -> None:
+    """`gamma` reads `base` and the optional `side`; neither is on disk; `alpha` reads `lib`."""
+    rutter(root, "alpha", _manifest("alpha", "  lib: ./lib\n"), _rules("alpha", "lib"))
+    manifest = _manifest("gamma", "  base: ./src\n  side: ./side\n") + "optional_folders: [side]\n"
+    rutter(root, "gamma", manifest, rules)
+    plant(
+        root,
+        {
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [alpha@0.0.1, gamma@0.0.1]\n",
+            "lib/one.note": "a: 1\n",
+        },
+    )
+
+
+def test_an_absent_optional_folder_is_left_out_of_the_empty_pack_row(tmp_path: Path) -> None:
+    side = (
+        "rules:\n- rule: side_item\n  reads: file\n  in: [side]\n"
+        "  match: {file: '*', filetype: note}\n  id: {template: '{file_stem}'}\n"
+        "  emits: [{node: {type: gamma.item}}]\n  confidence: declared\n"
+    )
+    _optional_pack(tmp_path, {**_rules("gamma", "base"), "side.yaml": side})
+
+    report = _map(tmp_path)
+
+    assert report.empty_packs == (("gamma", (("base", "./src", 0),)),)
+
+
+def test_a_pack_that_reads_only_an_absent_optional_folder_is_not_listed(tmp_path: Path) -> None:
+    _optional_pack(tmp_path, _rules("gamma", "side"))
+
+    report = _map(tmp_path)
+
+    assert report.exit_code == ExitCode.OK
+    assert report.empty_packs == ()

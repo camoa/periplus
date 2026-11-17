@@ -31,6 +31,7 @@ from periplus.engine.select import (
     base_folders,
     files_in,
     folder_problems,
+    optional_folders,
     resolve_folders,
 )
 from periplus.errors import ExitCode, HarnessError, Problem
@@ -284,8 +285,10 @@ def _empty_packs(
 ) -> tuple[tuple[str, tuple[tuple[str, str, int], ...]], ...]:
     """Each pinned pack with file rules none of whose rules selected a file, with the base folders
     those rules reach. A file is a rule's when it sits directly in one of the rule's directories
-    and a type of the rule's file type claims it, as ``select_files`` decides."""
+    and a type of the rule's file type claims it, as ``select_files`` decides. An optional folder
+    that finds no directory is left out of the row, and a pack left with none is not listed."""
     types = FileTypes.build(packs, selection.extensions)
+    optional = optional_folders(packs)
     found = []
     for pack in sorted(pinned):
         rules = [r for r in rule_set.rules if r.pack == pack and r.supported and not r.matches_type]
@@ -298,7 +301,13 @@ def _empty_packs(
             continue
         bases = base_folders(sorted({n for rule in rules for n in rule.folders}), packs, overrides)
         resolved = resolve_folders([name for name, _ in bases], packs, overrides, root, selection)
-        found.append((pack, tuple((name, value, len(resolved[name])) for name, value in bases)))
+        listed = tuple(
+            (name, value, len(resolved[name]))
+            for name, value in bases
+            if resolved[name] or name not in optional
+        )
+        if listed:
+            found.append((pack, listed))
     return tuple(found)
 
 
