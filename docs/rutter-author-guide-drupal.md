@@ -251,7 +251,10 @@ holds both, under `differs`. A `tagged_as` edge holds its own tag's `applies_to`
 A `subscribed_by` edge holds the listener's `priority` as written, as `100` or `self::LATE`, and
 `0` when none is written, the priority Symfony gives it: from a `getSubscribedEvents()` key, an
 `#[AsEventListener]` attribute or a `kernel.event_listener` tag. An exception handler holds the
-value `getPriority()` returns, as the next list says.
+value `getPriority()` returns, as the next list says. A tag's or attribute's `dispatcher`, when it
+names one, is the edge attribute `dispatcher`, as written; an edge without it is on the main
+`event_dispatcher`. A registration by `->addListener()` or `->addSubscriber()` on an object whose
+type the map does not show holds `receiver: not known to be an event dispatcher`.
 
 - `config_provided_by` and `config_provided_by_theme`, from a configuration object to a module
   or a theme: each simple configuration file, one with no top-level `uuid`, names the extension
@@ -372,10 +375,10 @@ value `getPriority()` returns, as the next list says.
 - `subscribed_by` from Symfony's `#[AsEventListener]`, on a method or a class, and from a
   `kernel.event_listener` tag in a services file (`event/event_listener.yaml`). The event is a
   class constant, read as a subscriber's key is, a quoted name, or, with none, the class that
-  types the method's first parameter. A name the table `core_event_names` lists, as
-  `kernel.request`, is the event of its core constant, `KernelEvents::REQUEST`, which keeps its
-  constant's name since core is outside the map; any other name is the event of that name. With
-  no method, the name Symfony derives, `on<Event>`, then `__invoke`, then the unresolved derived
+  types the method's first parameter, each class of a union of any length. A name the table
+  `core_event_names` lists, as `kernel.request`, is the event of its core constant,
+  `KernelEvents::REQUEST`, which keeps its constant's name since core is outside the map; any
+  other name is the event of that name. With no method, the name Symfony derives, `on<Event>`, then `__invoke`, then the unresolved derived
   name; a class-level attribute that names a constant and no method ends at a
   `drupal.runtime_listener` marked `resolution: runtime`, since only the constant's text names
   that method. A tag's method is looked up on the service's class and its mapped ancestors. A
@@ -386,11 +389,16 @@ value `getPriority()` returns, as the next list says.
   `->addTag('kernel.event_listener', [...])` in PHP, and a `getSubscribedEvents()` key written as a
   name or with its namespace; `registers_subscriber` from `->addSubscriber()`. Each is one
   internal `drupal.event_use` site with edges to its event and its listener's class, joined in the
-  map. A subclass inherits the keys of a mapped base and, from data the rutter holds, of the core
-  bases that key their subclasses' events (`event/inherited_subscription.yaml`). What only the
-  running code names, as a key in a variable or a closure, is a `drupal.runtime_subscription` or a
-  `drupal.runtime_listener` with the runtime mark, by `registers_listener_at_runtime` or
-  `subscribed_by`.
+  map. The map rules read the type of the object a call runs on from the parameter and property
+  types `php_basic` maps: an object whose known type is not an event dispatcher gives nothing, and
+  one of no known type, as a call's result, keeps the edge with the `receiver` attribute. A
+  subclass inherits the keys of a mapped base and, from data the rutter holds, of the core bases
+  that key their subclasses' events (`event/inherited_subscription.yaml`), unless a class between
+  them overrides `getSubscribedEvents()` without the parent's. What only the running code names, as
+  a key in a variable, a closure, or an argument, key or value written as an expression such as
+  `'a' . 'b'`, is a `drupal.runtime_subscription` or a `drupal.runtime_listener` with the runtime
+  mark, by `registers_listener_at_runtime` or `subscribed_by`; an expression is never cut down to
+  a name.
 - `twig.filter` and `twig.function`, from `new TwigFilter('x')` and `new TwigFunction('x')`,
   written by the short name or as `\Twig\TwigFilter` and `\Twig\TwigFunction`, with or without
   the leading backslash, in a

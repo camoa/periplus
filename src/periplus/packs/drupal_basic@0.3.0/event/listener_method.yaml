@@ -8,10 +8,12 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # drupal.method_name <class>::<name in lower case> leads to the method as declared.
 #
 # The class that types a method's first parameter: Symfony takes it as the event's name when a
-# listener names no event. ?Foo and Foo|null give Foo; a union gives each of its classes, up to
-# three; a scalar, array, mixed, self, static or untyped first parameter gives none, nor does any
-# later parameter. The class is resolved through the file's use statements, a leading backslash,
-# or the file's namespace, and ends at an internal end of the event of that name.
+# listener names no event. ?Foo and Foo|null give Foo; a union gives each of its classes, read one
+# at a time inside the span first_parameter_type (pack.yaml), so a union of any length counts; a
+# class of an intersection, a scalar, array, mixed, self, static or untyped first parameter gives
+# none, nor does any later parameter. The class is resolved through the file's use statements, a
+# leading backslash, or the file's namespace, and ends at an internal end of the event of that
+# name.
 
 node_types:
 - name: drupal.method_name
@@ -55,13 +57,11 @@ rules:
   match:
     file: '**'
     filetype: drupal_php_text
-    text: '\bfunction\s+(?<method>\w+)\s*\(\s*(?:#\[[^\]]*\]\s*)*(?:(?:public|protected|private|readonly)\s+)*\??(?:null\s*\|\s*)?(?<t1>(?!(?:string|int|float|bool|array|callable|iterable|object|mixed|null|void|never|false|true|self|static|parent)\b)\\?[A-Za-z_][\w\\]*)(?:\s*\|\s*(?:null\b|(?<t2>(?!(?:string|int|float|bool|array|callable|iterable|object|mixed|false|true)\b)\\?[A-Za-z_][\w\\]*)))?(?:\s*\|\s*(?:null\b|(?<t3>(?!(?:string|int|float|bool|array|callable|iterable|object|mixed|false|true)\b)\\?[A-Za-z_][\w\\]*)))?\s+&?(?:\.\.\.)?\$'
+    text: '(?<![\w\\$&])(?<!&\s)(?!(?:string|int|float|bool|array|callable|iterable|object|mixed|null|void|never|false|true|self|static|parent)\b)(?<type>\\?[A-Za-z_][\w\\]*)(?=\s*(?:\||&?\s*(?:\.\.\.)?\$))'
   values:
+    method: {from: {enclosing: first_parameter_type, capture: method}}
     ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
   id: {template: '{psr4_class}::{method}'}
-  line: {capture: method}
   emits:
-  - edge: {kind: first_parameter_typed_as, from: this_node, to: {template: '{t1}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
-  - edge: {kind: first_parameter_typed_as, from: this_node, to: {template: '{t2}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
-  - edge: {kind: first_parameter_typed_as, from: this_node, to: {template: '{t3}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
+  - edge: {kind: first_parameter_typed_as, from: this_node, to: {template: '{type}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}}
   confidence: declared

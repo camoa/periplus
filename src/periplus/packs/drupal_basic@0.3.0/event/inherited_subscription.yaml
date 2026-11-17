@@ -31,6 +31,10 @@ node_types:
   description: "the core subscriber base a class extends, <class>, with the listeners that base keys"
   id_namespace: drupal.base_subscriptions
   internal: true
+- name: drupal.parent_subscriptions
+  description: "a class whose getSubscribedEvents() calls parent::getSubscribedEvents(), by the class"
+  id_namespace: drupal.parent_subscriptions
+  internal: true
 - name: drupal.own_subscriptions
   description: "a class whose getSubscribedEvents() keys its events without its parent's, <class>"
   id_namespace: drupal.own_subscriptions
@@ -337,17 +341,42 @@ rules:
 # A subclass of a mapped subscriber whose getSubscribedEvents() it does not override, or overrides
 # calling parent::getSubscribedEvents(), inherits the nearest mapped ancestor's keys: each from its
 # event, named as that key names it, to the method the subclass or its nearest mapped ancestor
-# declares. own_subscriptions marks a getSubscribedEvents() whose body, three levels of braces deep,
-# never calls the parent's.
+# declares. own_subscriptions marks a getSubscribedEvents() whose body never calls the parent's. A
+# mapped ancestor between the subclass and the one whose keys it reads stops the inheritance when it
+# overrides getSubscribedEvents() without the parent's.
 - rule: own_subscriptions
   reads: file
   in: [source]
   match:
     file: '**'
     filetype: drupal_php_text
-    text: '\bfunction\s+getSubscribedEvents\s*\(\s*\)[^{;]*\{(?=(?:(?!parent::getSubscribedEvents)[^{}]|\{(?:(?!parent::getSubscribedEvents)[^{}]|\{(?:(?!parent::getSubscribedEvents)[^{}]|\{[^{}]*\})*\})*\})*\})'
+    text: '\bfunction\s+getSubscribedEvents\s*\(\s*\)[^{;]*\{'
   id: {template: '{psr4_class}'}
   emits: [{node: {type: drupal.own_subscriptions}}]
+  confidence: inferred
+
+# parent::getSubscribedEvents() inside the body, read in the span subscribed_events, which counts
+# braces at any depth and skips strings and comments.
+- rule: parent_subscriptions
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bparent::getSubscribedEvents\s*\('
+  values:
+    in_subscriber: {from: {enclosing: subscribed_events, capture: mark}}
+  id: {template: '{in_subscriber}|{psr4_class}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{node: {type: drupal.parent_subscriptions}}]
+  confidence: inferred
+
+- rule: own_subscriptions_with_parent
+  reads: map
+  match:
+    node_type: drupal.own_subscriptions
+    where: [{id_matches: '^drupal\.own_subscriptions::(?<cls>.+)$'}]
+    follow: [{node: 'drupal.parent_subscriptions::{cls}'}]
+  emits: [{withhold: this_node}]
   confidence: inferred
 
 - rule: inherited_key
@@ -358,6 +387,7 @@ rules:
     follow:
     - edge: inherits
     - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<keyer>.+)$'
     - edge: contains
     - incoming_edge: use_names_listener
     - edge_attribute: priority
@@ -368,6 +398,7 @@ rules:
     - id_matches: '^php\.type::(?<declarer>.+)$'
     - node: 'php.method::{declarer}::{m}'
     unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
+    unless_matched: [[{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
   emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred
 
@@ -379,6 +410,7 @@ rules:
     follow:
     - edge: inherits
     - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<keyer>.+)$'
     - edge: contains
     - incoming_edge: use_names_listener
     - edge_attribute: priority
@@ -390,6 +422,7 @@ rules:
     - id_matches: '^php\.type::(?<declarer>.+)$'
     - node: 'php.method::{declarer}::{m}'
     unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
+    unless_matched: [[{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
   emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred
 
@@ -401,6 +434,7 @@ rules:
     follow:
     - edge: inherits
     - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<keyer>.+)$'
     - incoming_edge: use_names_class
     - id_matches: '^drupal\.event_use::[^|]*\|reg(?:_named)?\|php\.method::[^|]+::getSubscribedEvents\|c:(?<m>\w+)$'
     - edge: use_has_priority
@@ -413,6 +447,7 @@ rules:
     - id_matches: '^php\.type::(?<declarer>.+)$'
     - node: 'php.method::{declarer}::{m}'
     unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
+    unless_matched: [[{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
   emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred
 
@@ -424,6 +459,7 @@ rules:
     follow:
     - edge: inherits
     - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<keyer>.+)$'
     - incoming_edge: use_names_class
     - id_matches: '^drupal\.event_use::[^|]*\|reg_here\|php\.method::[^|]+::getSubscribedEvents\|c:(?<m>\w+)$'
     - edge: use_has_priority
@@ -437,6 +473,7 @@ rules:
     - id_matches: '^php\.type::(?<declarer>.+)$'
     - node: 'php.method::{declarer}::{m}'
     unless: [[{node: 'drupal.own_subscriptions::{sub}'}]]
+    unless_matched: [[{node: 'php.type::{sub}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?!{keyer}$)(?<mid>.+)$'}, {node: 'drupal.own_subscriptions::{mid}'}, {node: 'php.type::{mid}'}, {edge: inherits}, {ancestors: [inherits]}, {id_matches: '^php\.type::{keyer}$'}]]
   emits: [{edge: {kind: subscribed_by, from: {template: '{ev}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}}}}]
   confidence: inferred
 

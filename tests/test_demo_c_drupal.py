@@ -2029,32 +2029,34 @@ def _priority(edge: dict[str, Any]) -> Any:
     return value
 
 
-def _registrations(document: dict[str, Any]) -> set[tuple[str, str, str, Any]]:
-    """Each listener edge and runtime registration as (kind, from, to, priority), the module's
-    prefixes cut."""
-    cut = (
+_LISTENER_KINDS = (
+    "subscribed_by",
+    "subscribed_by_function",
+    "registers_listener_at_runtime",
+    "registers_subscriber",
+    "alters_routes",
+)
+
+
+def _short(node: str) -> str:
+    """The node's name after its namespace, the module's prefixes cut."""
+    name = node.split("::", 1)[1]
+    for prefix in (
         "Symfony\\Component\\HttpKernel\\",
         "Drupal\\my_module\\EventSubscriber\\",
         "Drupal\\my_module\\",
-    )
-    kinds = (
-        "subscribed_by",
-        "subscribed_by_function",
-        "registers_listener_at_runtime",
-        "registers_subscriber",
-        "alters_routes",
-    )
+    ):
+        name = name.replace(prefix, "")
+    return name
 
-    def short(node: str) -> str:
-        name = node.split("::", 1)[1]
-        for prefix in cut:
-            name = name.replace(prefix, "")
-        return name
 
+def _registrations(document: dict[str, Any]) -> set[tuple[str, str, str, Any]]:
+    """Each listener edge and runtime registration as (kind, from, to, priority), the module's
+    prefixes cut."""
     return {
-        (e["kind"], short(e["from"]), short(e["to"]), _priority(e))
+        (e["kind"], _short(e["from"]), _short(e["to"]), _priority(e))
         for e in document["edges"]
-        if e["kind"] in kinds
+        if e["kind"] in _LISTENER_KINDS
     }
 
 
@@ -2817,6 +2819,1070 @@ def test_a_listener_added_in_php_subscribes_its_callable_or_is_marked(tmp_path: 
         ("subscribed_by_function", "KernelEvents::REQUEST", "my_module_on_request", "0"),
         ("subscribed_by_function", "KernelEvents::TERMINATE", "my_module_terminate", "0"),
     }
+    assert report.skipped == ()
+
+
+EXPRESSION_LISTENERS = {
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+  const PAID = 'my_module.paid';
+  const PREFIX = 'my_module';
+}
+""",
+    str(MODULE / "src/EventSubscriber/ExprAttributes.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: 'kernel.' . 'view', method: 'onClassConcat')]
+#[AsEventListener('kernel.request', 'on' . 'Request')]
+#[AsEventListener(event: 'kernel.finish_request', method: 'onFinish', priority: """
+    r"""self::BASE + 1)]
+class ExprAttributes {
+
+  const PREFIX = 'my_module';
+  const BASE = 5;
+
+  #[AsEventListener(event: self::PREFIX . '.saved')]
+  public function onOwn($e) {}
+
+  #[AsEventListener('kernel.' . 'response')]
+  public function onPositional($e) {}
+
+  #[AsEventListener(event: OrderEvents::PAID . '.late', priority: 3)]
+  public function onConstConcat($e) {}
+
+  #[AsEventListener(event: TRUE ? 'kernel.view' : 'kernel.request')]
+  public function onTernary($e) {}
+
+  #[AsEventListener(event: 'kernel.terminate', priority: -10)]
+  public function onLiteral($e) {}
+
+  #[AsEventListener(event: OrderEvents::PAID)]
+  public function onConstant($e) {}
+
+  public function onClassConcat($e) {}
+  public function onRequest($e) {}
+  public function onFinish($e) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/ExprCalls.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
+class ExprCalls {
+
+  const PREFIX = 'my_module';
+
+  public function wire(EventDispatcherInterface $dispatcher, ContainerBuilder $c"""
+    r"""ontainer) {
+    $dispatcher->addListener('kernel.' . 'request', [$this, 'onA']);
+    $dispatcher->addListener(self::PREFIX . '.saved', [$this, 'onA']);
+    $dispatcher->addListener(OrderEvents::PAID, [$this, 'on' . 'A']);
+    $dispatcher->addListener('kernel.view', 'Drupal\my_module\EventSubscriber\Ex"""
+    r"""prCalls::' . 'onA');
+    $dispatcher->addListener(TRUE ? 'kernel.view' : 'kernel.request', [$this, 'onA']);
+    $dispatcher->addListener('kernel.terminate', [$this, 'onA'], self::BASE + 1);
+    $container->register('my_module.expr', ExprCalls::class)
+      ->addTag('kernel.event_listener', ['event' => 'kernel.' . 'response', 'met"""
+    r"""hod' => 'onA']);
+    $container->register('my_module.expr2', ExprCalls::class)
+      ->addTag('kernel.event_listener', ['event' => 'kernel.exception', 'method'"""
+    r""" => 'on' . 'A']);
+    $container->register('my_module.expr3', ExprCalls::class)
+      ->addTag('kernel.event_listener', ['event' => self::PREFIX . '.x', 'method"""
+    r"""' => 'onA']);
+    $container->register('my_module.expr4', ExprCalls::class)
+      ->addTag('kernel.event_listener', ['event' => strtolower('KERNEL.VIEW'), '"""
+    r"""method' => 'onA', 'priority' => max(1, 2)]);
+    $container->register('my_module.lit', ExprCalls::class)
+      ->addTag('kernel.event_listener', ['event' => 'kernel.controller', 'method"""
+    r"""' => 'onA', 'priority' => 4]);
+  }
+
+  public function onA($e) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/ExprSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class ExprSubscriber implements EventSubscriberInterface {
+
+  const PREFIX = 'my_module';
+
+  public static function getSubscribedEvents() {
+    return [
+      'kernel.' . 'request' => 'onConcat',
+      self::PREFIX . '.saved' => 'onOwnPrefix',
+      'pre.' . OrderEvents::PAID => 'onPreConstant',
+      OrderEvents::PREFIX . '.x' => ['onList', 5],
+      TRUE ? 'kernel.view' : 'kernel.response' => 'onTernary',
+      strtolower('KERNEL.TERMINATE') => 'onCall',
+      // A literal key after a comment.
+      'kernel.exception' => 'onLiteral',
+      OrderEvents::PAID => 'onConstant',
+      'a.' . 'b' => [['onFirst', 1], ['onSecond']],
+    ];
+  }
+
+  public function onConcat($e) {}
+  public function onOwnPrefix($e) {}
+  public function onPreConstant($e) {}
+  public function onList($e) {}
+  public function onTernary($e) {}
+  public function onCall($e) {}
+  public function onLiteral($e) {}
+  public function onConstant($e) {}
+  public function onFirst($e) {}
+  public function onSecond($e) {}
+
+}
+""",
+}
+
+UNION_LISTENERS = {
+    str(MODULE / "my_module.services.yml"): r"""services:
+  my_module.tagged_union:
+    class: Drupal\my_module\EventSubscriber\TaggedUnion
+    tags:
+      - { name: kernel.event_listener }
+""",
+    str(MODULE / "src/Event/EventA.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class EventA extends \Symfony\Contracts\EventDispatcher\Event {}
+""",
+    str(MODULE / "src/Event/EventB.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class EventB extends \Symfony\Contracts\EventDispatcher\Event {}
+""",
+    str(MODULE / "src/Event/EventC.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class EventC extends \Symfony\Contracts\EventDispatcher\Event {}
+""",
+    str(MODULE / "src/Event/EventD.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class EventD extends \Symfony\Contracts\EventDispatcher\Event {}
+""",
+    str(MODULE / "src/Event/EventE.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class EventE extends \Symfony\Contracts\EventDispatcher\Event {}
+""",
+    str(MODULE / "src/Event/EventF.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class EventF extends \Symfony\Contracts\EventDispatcher\Event {}
+""",
+    str(MODULE / "src/EventSubscriber/TaggedUnion.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\EventA;
+use Drupal\my_module\Event\EventB;
+use Drupal\my_module\Event\EventC;
+use Drupal\my_module\Event\EventD;
+
+class TaggedUnion {
+
+  public function __invoke(EventA|EventB|EventC|EventD $event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/UnionListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\EventA;
+use Drupal\my_module\Event\EventB;
+use Drupal\my_module\Event\EventC;
+use Drupal\my_module\Event\EventD;
+use Drupal\my_module\Event\EventE;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+class UnionListener {
+
+  #[AsEventListener]
+  public function onFive(EventA|EventB|EventC|EventD|EventE $event, EventD $late"""
+    r"""r): void {}
+
+  #[AsEventListener(priority: 4)]
+  public function onNullable(?EventA $event) {}
+
+  #[AsEventListener]
+  public function onWithNull(EventB | null | EventC $event) {}
+
+  #[AsEventListener]
+  public function onSecondOnly(string $name, EventE|EventD $event) {}
+
+  #[AsEventListener]
+  public function onScalarUnion(string|int $x) {}
+
+  #[AsEventListener]
+  public function onIntersection(EventA&EventB $x) {}
+
+  #[AsEventListener]
+  public function onFull(\Drupal\my_module\Event\EventF|EventA $event) {}
+
+  public function notAListener(EventA|EventB|EventC|EventD $event) {}
+
+}
+""",
+}
+
+DISPATCHER_LISTENERS = {
+    str(MODULE / "my_module.services.yml"): r"""services:
+  my_module.flow:
+    class: Drupal\my_module\EventSubscriber\TagListener
+    tags:
+      - { name: kernel.event_listener, event: kernel.request, method: onFlow, di"""
+    r"""spatcher: my_module.dispatcher }
+      - { name: kernel.event_listener, event: kernel.response, method: onMain }
+      - { name: kernel.event_listener, event: kernel.view, method: onLookAlike, """
+    r"""my_dispatcher: other }
+  my_module.block:
+    class: Drupal\my_module\EventSubscriber\TagListener
+    tags:
+      - name: kernel.event_listener
+        event: kernel.terminate
+        dispatcher: 'my_module.dispatcher'
+        priority: 5
+  my_module.inline:
+    class: Drupal\my_module\EventSubscriber\TagListener
+    tags: [{ name: kernel.event_listener, event: kernel.exception, method: onInl"""
+    r"""ine, dispatcher: inline.dispatcher }]
+  my_module.typed:
+    class: Drupal\my_module\EventSubscriber\TagListener
+    tags:
+      - { name: kernel.event_listener, method: onTyped, dispatcher: typed.dispatcher }
+  my_module.const:
+    class: Drupal\my_module\EventSubscriber\TagListener
+    tags:
+      - { name: kernel.event_listener, event: !php/const Drupal\my_module\Event"""
+    r"""\OrderEvents::PAID, method: onConst, dispatcher: const.dispatcher }
+""",
+    str(MODULE / "src/Event/EventA.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+class EventA extends \Symfony\Contracts\EventDispatcher\Event {}
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+  const PAID = 'my_module.paid';
+  const PREFIX = 'my_module';
+}
+""",
+    str(MODULE / "src/EventSubscriber/AttrListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+class AttrListener {
+
+  #[AsEventListener(event: 'kernel.request', dispatcher: 'attr.dispatcher')]
+  public function onNamed($e) {}
+
+  #[AsEventListener('kernel.response', null, 3, 'positional.dispatcher')]
+  public function onPositional($e) {}
+
+  #[AsEventListener('kernel.view')]
+  public function onMain($e) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/TagListener.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\EventA;
+
+class TagListener {
+
+  public function onFlow($e) {}
+  public function onMain($e) {}
+  public function onLookAlike($e) {}
+  public function onKernelTerminate($e) {}
+  public function onInline($e) {}
+  public function onTyped(EventA $e) {}
+  public function onConst($e) {}
+
+}
+""",
+    str(MODULE / "src/MyModuleServiceProvider.php"): r"""<?php
+
+namespace Drupal\my_module;
+
+use Drupal\Core\DependencyInjection\ContainerBuilder;
+use Drupal\Core\DependencyInjection\ServiceProviderBase;
+use Drupal\my_module\EventSubscriber\TagListener;
+
+class MyModuleServiceProvider extends ServiceProviderBase {
+
+  public function register(ContainerBuilder $container) {
+    $container->register('my_module.php_tag', TagListener::class)
+      ->addTag('kernel.event_listener', ['event' => 'kernel.request', 'method' ="""
+    r"""> 'onMain', 'dispatcher' => 'php.dispatcher']);
+    $container->register('my_module.php_main', TagListener::class)
+      ->addTag('kernel.event_listener', ['event' => 'kernel.controller', 'method"""
+    r"""' => 'onMain']);
+    $container->register('my_module.php_expr', TagListener::class)
+      ->addTag('kernel.event_listener', ['event' => 'kernel.finish_request', 'me"""
+    r"""thod' => 'onMain', 'dispatcher' => $this->dispatcherId]);
+  }
+
+}
+""",
+}
+
+RECEIVER_LISTENERS = {
+    str(MODULE / "my_module.module"): r"""<?php
+
+use Drupal\my_module\Registry;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
+function my_module_wire(EventDispatcherInterface $d, Registry $r, $other) {
+  $d->addListener('kernel.request', 'my_module_on_typed');
+  $r->addListener('kernel.request', 'my_module_on_registry');
+  $other->addListener('kernel.request', 'my_module_on_untyped');
+}
+
+function my_module_on_typed($e) {}
+function my_module_on_registry($e) {}
+function my_module_on_untyped($e) {}
+""",
+    str(MODULE / "src/EventSubscriber/KeyedSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class KeyedSubscriber implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return ['kernel.request' => 'onRequest'];
+  }
+
+  public function onRequest($event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/More.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\MyDispatcher;
+use Drupal\my_module\Registry;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
+class More {
+
+  /**
+   * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
+   */
+  protected $docDispatcher;
+
+  /**
+   * @var \Drupal\my_module\Registry
+   */
+  protected $docRegistry;
+
+  protected $assigned;
+
+  protected $assignedRegistry;
+
+  public function __construct(EventDispatcherInterface $event_dispatcher, Regist"""
+    r"""ry $registry) {
+    $this->assigned = $event_dispatcher;
+    $this->assignedRegistry = $registry;
+  }
+
+  public function wire(?EventDispatcherInterface $nullable, MyDispatcher $mine) {
+    $this->docDispatcher->addListener('kernel.request', [$this, 'onDoc']);
+    $this->docRegistry->addListener('kernel.request', [$this, 'onDocRegistry']);
+    $this->assigned->addListener('kernel.request', [$this, 'onAssigned']);
+    $this->assignedRegistry->addListener('kernel.request', [$this, 'onAssignedRe"""
+    r"""gistry']);
+    $nullable->addListener('kernel.view', [$this, 'onNullable']);
+    $mine->addListener('kernel.view', [$this, 'onMine']);
+    $this->undeclared->addListener('kernel.view', [$this, 'onUndeclared']);
+  }
+
+  public function onDoc($e) {}
+  public function onDocRegistry($e) {}
+  public function onAssigned($e) {}
+  public function onAssignedRegistry($e) {}
+  public function onNullable($e) {}
+  public function onMine($e) {}
+  public function onUndeclared($e) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/Shadowed.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Registry;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
+class Shadowed {
+
+  public function closure(Registry $d) {
+    $wire = function ($d) {
+      $d->addListener('kernel.request', [$this, 'onClosure']);
+    };
+  }
+
+  public function reassigned(EventDispatcherInterface $d) {
+    $d = $this->other();
+    $d->addListener('kernel.request', [$this, 'onReassigned']);
+  }
+
+  public function onClosure($e) {}
+  public function onReassigned($e) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/Wiring.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Drupal\my_module\Registry;
+
+class Wiring {
+
+  protected EventDispatcherInterface $dispatcher;
+
+  public function __construct(protected Registry $registry, EventDispatcherInter"""
+    r"""face $events) {
+    $this->dispatcher = $events;
+  }
+
+  public function wire(EventDispatcherInterface $dispatcher, Registry $reg, $untyped) {
+    $this->dispatcher->addListener('kernel.request', [$this, 'onTypedProperty'], 10);
+    $this->registry->addListener('kernel.request', [$this, 'onOtherProperty']);
+    $dispatcher->addListener('kernel.view', [$this, 'onTypedParameter']);
+    $reg->addListener('kernel.view', [$this, 'onOtherParameter']);
+    $untyped->addListener('kernel.finish_request', [$this, 'onUntyped']);
+    $this->getDispatcher()->addListener('kernel.terminate', [$this, 'onCallResult']);
+    \Drupal::service('event_dispatcher')
+      ->addListener('kernel.exception', [$this, 'onService']);
+    $reg->addListener($this->name, [$this, 'onOtherParameter']);
+    $untyped->addListener($this->name, [$this, 'onUntyped']);
+    $dispatcher->addListener($this->name, [$this, 'onTypedParameter']);
+    $reg->addSubscriber(new KeyedSubscriber());
+    $dispatcher->addSubscriber(new KeyedSubscriber());
+    $untyped->addSubscriber($this);
+    $reg->addSubscriber($this->subscriber);
+    $untyped->addSubscriber($this->subscriber);
+  }
+
+  public function onTypedProperty($event) {}
+  public function onOtherProperty($event) {}
+  public function onTypedParameter($event) {}
+  public function onOtherParameter($event) {}
+  public function onUntyped($event) {}
+  public function onCallResult($event) {}
+  public function onService($event) {}
+
+  public static function getSubscribedEvents() {
+    return [];
+  }
+
+}
+""",
+    str(MODULE / "src/MyDispatcher.php"): r"""<?php
+
+namespace Drupal\my_module;
+
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
+class MyDispatcher implements EventDispatcherInterface {
+
+  public function boot() {
+    $this->addListener('kernel.request', [$this, 'onSelf']);
+  }
+
+  public function onSelf($e) {}
+
+}
+""",
+    str(MODULE / "src/Registry.php"): r"""<?php
+
+namespace Drupal\my_module;
+
+class Registry {
+
+  public function addListener($a, $b) {}
+
+  public function boot() {
+    $this->addListener('kernel.request', [$this, 'onSelf']);
+  }
+
+  public function onSelf($e) {}
+
+}
+""",
+}
+
+OVERRIDE_LISTENERS = {
+    str(MODULE / "my_module.module"): r"""<?php
+
+use Drupal\my_module\Event\OrderEvents;
+
+function my_module_fire($dispatcher, $event) {
+  $dispatcher->dispatch($event, OrderEvents::PAID);
+  $dispatcher->addListener('kernel.request', 'my_module_listen');
+}
+
+class MyModuleHelper {
+
+  public function fire($dispatcher, $event) {
+    $dispatcher->dispatch($event, OrderEvents::PAID);
+    $dispatcher->addListener('kernel.request', 'my_module_listen');
+    $dispatcher->addSubscriber(new \Drupal\my_module\EventSubscriber\BaseSubscriber());
+  }
+
+}
+
+function my_module_listen($e) {}
+""",
+    str(MODULE / "src/Event/OrderEvents.php"): r"""<?php
+
+namespace Drupal\my_module\Event;
+
+final class OrderEvents {
+  const PAID = 'my_module.paid';
+  const PREFIX = 'my_module';
+}
+""",
+    str(MODULE / "src/EventSubscriber/BaseSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+use Drupal\my_module\Event\OrderEvents;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class BaseSubscriber implements EventSubscriberInterface {
+
+  public static function getSubscribedEvents() {
+    return [OrderEvents::PAID => 'onPaid'];
+  }
+
+  public function onPaid($event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/BraceInString.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class BraceInString extends BaseSubscriber {
+
+  public static function getSubscribedEvents() {
+    $label = '}';
+    return parent::getSubscribedEvents();
+  }
+
+  public function onPaid($event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/ChildOfMerging.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class ChildOfMerging extends MergingMiddle {
+
+  public function onPaid($event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/ChildOfMiddle.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class ChildOfMiddle extends MiddleSubscriber {
+
+  public function onPaid($event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/DeepOverride.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class DeepOverride extends BaseSubscriber {
+
+  public static function getSubscribedEvents() {
+    $events = [];
+    if (TRUE) {
+      foreach ([1] as $a) {
+        if ($a) {
+          while (FALSE) {
+            $events = [];
+          }
+        }
+      }
+    }
+    return $events;
+  }
+
+  public function onPaid($event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/MergingMiddle.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class MergingMiddle extends BaseSubscriber {
+
+  public static function getSubscribedEvents() {
+    $events = parent::getSubscribedEvents();
+    foreach (static::NAMES as $name) {
+      $events[$name][] = ['onAny'];
+    }
+    return $events;
+  }
+
+  public function onAny($event) {}
+
+}
+""",
+    str(MODULE / "src/EventSubscriber/MiddleSubscriber.php"): r"""<?php
+
+namespace Drupal\my_module\EventSubscriber;
+
+class MiddleSubscriber extends BaseSubscriber {
+
+  public static function getSubscribedEvents() {
+    $events = [];
+    foreach (static::NAMES as $name) {
+      $events[$name][] = ['onAny'];
+    }
+    return $events;
+  }
+
+  public function onAny($event) {}
+
+}
+""",
+}
+
+
+def _marked(document: dict[str, Any]) -> set[tuple[str, str, str, Any, Any, Any]]:
+    """Each listener edge as _registrations gives it, with its dispatcher and receiver."""
+    return {
+        (*row, attributes.get("dispatcher"), attributes.get("receiver"))
+        for row, attributes in (
+            (
+                (e["kind"], _short(e["from"]), _short(e["to"]), _priority(e)),
+                e.get("attributes", {}),
+            )
+            for e in document["edges"]
+            if e["kind"] in _LISTENER_KINDS
+        )
+    }
+
+
+def test_an_argument_written_as_an_expression_is_a_runtime_registration_never_a_cut_name(
+    tmp_path: Path,
+) -> None:
+    """A key, a listener value, an addListener event or callable, an addTag value and an
+    AsEventListener argument written as an expression are runtime registrations with the
+    expression in the id, never the name before the expression's first space; literals,
+    constants and constant priorities keep their edges."""
+    _plant(tmp_path, EXPRESSION_LISTENERS)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        (
+            "registers_listener_at_runtime",
+            "ExprAttributes",
+            "ExprAttributes|'kernel.'.'view'",
+            None,
+        ),
+        ("registers_listener_at_runtime", "ExprAttributes", "ExprAttributes|'on'.'Request'", None),
+        (
+            "registers_listener_at_runtime",
+            "ExprAttributes::onConstConcat",
+            "ExprAttributes::onConstConcat|OrderEvents::PAID.'.late'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprAttributes::onOwn",
+            "ExprAttributes::onOwn|self::PREFIX.'.saved'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprAttributes::onPositional",
+            "ExprAttributes::onPositional|'kernel.'.'response'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprAttributes::onTernary",
+            "ExprAttributes::onTernary|TRUE?'kernel.view':'kernel.request'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprCalls::wire",
+            "ExprCalls::wire|'kernel.'.'request'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprCalls::wire",
+            "ExprCalls::wire|'kernel.'.'response'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprCalls::wire",
+            "ExprCalls::wire|TRUE?'kernel.view':'kernel.request'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprCalls::wire",
+            "ExprCalls::wire|self::PREFIX.'.saved'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprCalls::wire",
+            "ExprCalls::wire|self::PREFIX.'.x'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprCalls::wire",
+            "ExprCalls::wire|strtolower('KERNEL.VIEW')",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprSubscriber::getSubscribedEvents",
+            "ExprSubscriber::getSubscribedEvents|'a.'.'b'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprSubscriber::getSubscribedEvents",
+            "ExprSubscriber::getSubscribedEvents|'kernel.'.'request'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprSubscriber::getSubscribedEvents",
+            "ExprSubscriber::getSubscribedEvents|'pre.'.OrderEvents::PAID",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprSubscriber::getSubscribedEvents",
+            "ExprSubscriber::getSubscribedEvents|OrderEvents::PREFIX.'.x'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprSubscriber::getSubscribedEvents",
+            "ExprSubscriber::getSubscribedEvents|TRUE?'kernel.view':'kernel.response'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprSubscriber::getSubscribedEvents",
+            "ExprSubscriber::getSubscribedEvents|self::PREFIX.'.saved'",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "ExprSubscriber::getSubscribedEvents",
+            "ExprSubscriber::getSubscribedEvents|strtolower('KERNEL.TERMINATE')",
+            None,
+        ),
+        ("subscribed_by", "KernelEvents::CONTROLLER", "ExprCalls::onA", "4"),
+        ("subscribed_by", "KernelEvents::EXCEPTION", "ExprCalls::wire|'on'.'A'", "0"),
+        ("subscribed_by", "KernelEvents::EXCEPTION", "ExprSubscriber::onLiteral", "0"),
+        (
+            "subscribed_by",
+            "KernelEvents::FINISH_REQUEST",
+            "ExprAttributes::onFinish",
+            "self::BASE + 1",
+        ),
+        ("subscribed_by", "KernelEvents::TERMINATE", "ExprAttributes::onLiteral", "-10"),
+        ("subscribed_by", "KernelEvents::TERMINATE", "ExprCalls::onA", "self::BASE + 1"),
+        ("subscribed_by", "KernelEvents::VIEW", "ExprCalls::wire|'ExprCalls::'.'onA'", "0"),
+        ("subscribed_by", "my_module.paid", "ExprCalls::wire|[$this,'on'.'A']", "0"),
+        ("subscribed_by", "my_module.paid", "ExprAttributes::onConstant", "0"),
+        ("subscribed_by", "my_module.paid", "ExprSubscriber::onConstant", "0"),
+    }
+    assert report.skipped == ()
+
+
+def test_a_union_of_any_length_gives_each_class_as_the_event(tmp_path: Path) -> None:
+    """With no event, each class of the first parameter's union is an event, five as one; a
+    nullable class is one, an intersection, a scalar union and a later parameter give none."""
+    _plant(tmp_path, UNION_LISTENERS)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        ("subscribed_by", "Event\\EventA", "TaggedUnion::__invoke", "0"),
+        ("subscribed_by", "Event\\EventA", "UnionListener::onFive", "0"),
+        ("subscribed_by", "Event\\EventA", "UnionListener::onFull", "0"),
+        ("subscribed_by", "Event\\EventA", "UnionListener::onNullable", "4"),
+        ("subscribed_by", "Event\\EventB", "TaggedUnion::__invoke", "0"),
+        ("subscribed_by", "Event\\EventB", "UnionListener::onFive", "0"),
+        ("subscribed_by", "Event\\EventB", "UnionListener::onWithNull", "0"),
+        ("subscribed_by", "Event\\EventC", "TaggedUnion::__invoke", "0"),
+        ("subscribed_by", "Event\\EventC", "UnionListener::onFive", "0"),
+        ("subscribed_by", "Event\\EventC", "UnionListener::onWithNull", "0"),
+        ("subscribed_by", "Event\\EventD", "TaggedUnion::__invoke", "0"),
+        ("subscribed_by", "Event\\EventD", "UnionListener::onFive", "0"),
+        ("subscribed_by", "Event\\EventE", "UnionListener::onFive", "0"),
+        ("subscribed_by", "Event\\EventF", "UnionListener::onFull", "0"),
+    }
+    assert report.skipped == ()
+
+
+def test_a_dispatcher_a_listener_tag_or_attribute_names_is_on_its_edge(tmp_path: Path) -> None:
+    """A dispatcher key of a tag in each services form and in PHP, and an attribute's named or
+    fourth argument, is the edge attribute dispatcher; a tag or attribute without one, and a
+    key named like it, write none."""
+    _plant(tmp_path, DISPATCHER_LISTENERS)
+    document, report = _map(tmp_path)
+    assert _marked(document) == {
+        ("subscribed_by", "Event\\EventA", "TagListener::onTyped", "0", "typed.dispatcher", None),
+        ("subscribed_by", "KernelEvents::CONTROLLER", "TagListener::onMain", "0", None, None),
+        (
+            "subscribed_by",
+            "KernelEvents::EXCEPTION",
+            "TagListener::onInline",
+            "0",
+            "inline.dispatcher",
+            None,
+        ),
+        (
+            "subscribed_by",
+            "KernelEvents::FINISH_REQUEST",
+            "TagListener::onMain",
+            "0",
+            "$this->dispatcherId",
+            None,
+        ),
+        (
+            "subscribed_by",
+            "KernelEvents::REQUEST",
+            "AttrListener::onNamed",
+            "0",
+            "attr.dispatcher",
+            None,
+        ),
+        (
+            "subscribed_by",
+            "KernelEvents::REQUEST",
+            "TagListener::onFlow",
+            "0",
+            "my_module.dispatcher",
+            None,
+        ),
+        (
+            "subscribed_by",
+            "KernelEvents::REQUEST",
+            "TagListener::onMain",
+            "0",
+            "php.dispatcher",
+            None,
+        ),
+        (
+            "subscribed_by",
+            "KernelEvents::RESPONSE",
+            "AttrListener::onPositional",
+            "3",
+            "positional.dispatcher",
+            None,
+        ),
+        ("subscribed_by", "KernelEvents::RESPONSE", "TagListener::onMain", "0", None, None),
+        (
+            "subscribed_by",
+            "KernelEvents::TERMINATE",
+            "TagListener::onKernelTerminate",
+            "5",
+            "my_module.dispatcher",
+            None,
+        ),
+        ("subscribed_by", "KernelEvents::VIEW", "AttrListener::onMain", "0", None, None),
+        ("subscribed_by", "KernelEvents::VIEW", "TagListener::onLookAlike", "0", None, None),
+        ("subscribed_by", "my_module.paid", "TagListener::onConst", "0", "const.dispatcher", None),
+    }
+    assert report.skipped == ()
+
+
+def test_a_registration_call_reads_the_type_of_the_object_it_runs_on(tmp_path: Path) -> None:
+    """addListener and addSubscriber on a parameter, a property or $this typed as an event
+    dispatcher, or a mapped class that implements one, register plainly; on a known type that
+    is not a dispatcher they give nothing, runtime registrations included; on an object of no
+    known type, a call's result or a shadowed parameter they hold the receiver mark."""
+    _plant(tmp_path, RECEIVER_LISTENERS)
+    document, report = _map(tmp_path)
+    assert _marked(document) == {
+        (
+            "registers_listener_at_runtime",
+            "Wiring::wire",
+            "Wiring::wire|$this->name",
+            None,
+            None,
+            "not known to be an event dispatcher",
+        ),
+        (
+            "registers_listener_at_runtime",
+            "Wiring::wire",
+            "Wiring::wire|$this->subscriber",
+            None,
+            None,
+            "not known to be an event dispatcher",
+        ),
+        ("registers_subscriber", "Wiring::wire", "KeyedSubscriber", None, None, None),
+        (
+            "registers_subscriber",
+            "Wiring::wire",
+            "Wiring",
+            None,
+            None,
+            "not known to be an event dispatcher",
+        ),
+        (
+            "subscribed_by",
+            "KernelEvents::EXCEPTION",
+            "Wiring::onService",
+            "0",
+            None,
+            "not known to be an event dispatcher",
+        ),
+        (
+            "subscribed_by",
+            "KernelEvents::FINISH_REQUEST",
+            "Wiring::onUntyped",
+            "0",
+            None,
+            "not known to be an event dispatcher",
+        ),
+        ("subscribed_by", "KernelEvents::REQUEST", "KeyedSubscriber::onRequest", "0", None, None),
+        ("subscribed_by", "KernelEvents::REQUEST", "More::onAssigned", "0", None, None),
+        ("subscribed_by", "KernelEvents::REQUEST", "More::onDoc", "0", None, None),
+        ("subscribed_by", "KernelEvents::REQUEST", "MyDispatcher::onSelf", "0", None, None),
+        (
+            "subscribed_by",
+            "KernelEvents::REQUEST",
+            "Shadowed::onClosure",
+            "0",
+            None,
+            "not known to be an event dispatcher",
+        ),
+        (
+            "subscribed_by",
+            "KernelEvents::REQUEST",
+            "Shadowed::onReassigned",
+            "0",
+            None,
+            "not known to be an event dispatcher",
+        ),
+        ("subscribed_by", "KernelEvents::REQUEST", "Wiring::onTypedProperty", "10", None, None),
+        (
+            "subscribed_by",
+            "KernelEvents::TERMINATE",
+            "Wiring::onCallResult",
+            "0",
+            None,
+            "not known to be an event dispatcher",
+        ),
+        ("subscribed_by", "KernelEvents::VIEW", "More::onMine", "0", None, None),
+        ("subscribed_by", "KernelEvents::VIEW", "More::onNullable", "0", None, None),
+        (
+            "subscribed_by",
+            "KernelEvents::VIEW",
+            "More::onUndeclared",
+            "0",
+            None,
+            "not known to be an event dispatcher",
+        ),
+        ("subscribed_by", "KernelEvents::VIEW", "Wiring::onTypedParameter", "0", None, None),
+        ("subscribed_by_function", "KernelEvents::REQUEST", "my_module_on_typed", "0", None, None),
+        (
+            "subscribed_by_function",
+            "KernelEvents::REQUEST",
+            "my_module_on_untyped",
+            "0",
+            None,
+            "not known to be an event dispatcher",
+        ),
+    }
+    assert report.skipped == ()
+
+
+def test_a_class_between_that_overrides_stops_inheritance_and_a_module_class_is_no_function(
+    tmp_path: Path,
+) -> None:
+    """A subclass inherits no key past a class between that overrides getSubscribedEvents()
+    without the parent's, however deep its braces; a parent:: call after a brace in a string
+    still inherits. A dispatch or registration in a method of a class in a module file gives
+    nothing."""
+    _plant(tmp_path, OVERRIDE_LISTENERS)
+    document, report = _map(tmp_path)
+    assert _registrations(document) == {
+        (
+            "registers_listener_at_runtime",
+            "MergingMiddle::getSubscribedEvents",
+            "MergingMiddle::getSubscribedEvents|$name",
+            None,
+        ),
+        (
+            "registers_listener_at_runtime",
+            "MiddleSubscriber::getSubscribedEvents",
+            "MiddleSubscriber::getSubscribedEvents|$name",
+            None,
+        ),
+        ("subscribed_by", "my_module.paid", "BaseSubscriber::onPaid", "0"),
+        ("subscribed_by", "my_module.paid", "BraceInString::onPaid", "0"),
+        ("subscribed_by", "my_module.paid", "ChildOfMerging::onPaid", "0"),
+        ("subscribed_by_function", "KernelEvents::REQUEST", "my_module_listen", "0"),
+    }
+    dispatched = {
+        (e["from"], e["to"]) for e in document["edges"] if e["kind"] == "dispatched_by_function"
+    }
+    assert dispatched == {("drupal.event::my_module.paid", "php.function::my_module_fire")}
     assert report.skipped == ()
 
 

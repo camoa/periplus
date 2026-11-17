@@ -582,10 +582,13 @@ does not list; one name declared with different `on` or description in two place
 that neither the rutter nor one it depends on declares; and `type_conflict` or `resolution`,
 declared or written on an edge, which the engine reserves. `drupal_basic` declares `key` on
 `registers_form_handler` and `registers_element_callback`, the key the callable is registered
-under; `entry` on the entity handler edges, a form operation or a route provider's name; and
+under; `entry` on the entity handler edges, a form operation or a route provider's name;
 `applies_to` and `priority` on `tagged_as`, each read from its own tag, with `priority` also
 on `subscribed_by`, a listener's priority carried from its subscription by an `edge_attribute`
-step; and `listens_to`, the event a core subscriber base keys to a method, held as data.
+step; `listens_to`, the event a core subscriber base keys to a method, held as data; `dispatcher`,
+on `subscribed_by` and `subscribed_by_function`, the dispatcher a listener tag or attribute names;
+and `receiver`, on the listener registration edges, written when a call runs on an object of no
+known type.
 
 ## The grammar's node kinds
 

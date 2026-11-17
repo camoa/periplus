@@ -9,8 +9,8 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # X through the file's use statements, as self or static, or in the file's own namespace when a
 # mapped class of that namespace declares the constant. The first argument may hold three levels
 # of parentheses, as new MyEvent(f(g($x))). dispatch($event) with no name, the name written first,
-# a name held in a variable, and a call in a plain PHP file outside a src folder give nothing. A
-# method of a class kept in a module file reads as a function of the method's name.
+# a name held in a variable, a call in a plain PHP file outside a src folder, and a call in a
+# method of a class kept in a module file give nothing.
 
 rules:
 - rule: event_dispatched_use
@@ -45,7 +45,9 @@ rules:
     ending: [module, install, inc, theme, profile]
     text: '->dispatch\(\s*(?:[^,()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))+,\s*(?<key>[A-Z]\w*::[A-Z][A-Z0-9_]*)\s*\)'
   values:
-    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
+    function: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
   id: {template: '{key}|dispatched_function|{function}', resolve: [bound_first_segment], separator: '::'}
   emits: [{node: {type: drupal.event_use}}]
   confidence: inferred
@@ -55,7 +57,9 @@ rules:
   in: [source]
   match: *event_dispatched_use_in_function
   values:
-    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    fn: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    in_class: {from: {enclosing: class_like_body, capture: class}, join: ','}
+    function: {template: '{in_class}|{fn}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
   id: {template: '{key}|dispatched_function|{function}', resolve: [bound_first_segment], separator: '::'}
   emits: [{edge: {kind: use_names_function, from: this_node, to: {template: '{function}', types: [php.function]}}}]
   confidence: inferred
