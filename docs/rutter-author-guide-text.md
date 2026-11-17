@@ -249,3 +249,18 @@ only when it has none of them and its key path reached a value that gives no end
 mapping. A data rule leaves `fired and emitted nothing` only when a key path of its edges reached
 a value and it made no edge and left no edge's row. A binding rule never leaves either row, since
 it makes no node or edge.
+
+## A rule that runs long
+
+`periplus map` names on standard error a rule or span that has spent more than 10 seconds on one
+file, while it still runs, and gives its time when it ends:
+
+```
+periplus map: slow: rule <rule> of rutter <rutter> on <file>: 10.00 s so far, still running
+periplus map: slow: rule <rule> of rutter <rutter> on <file>: took 312.45 s
+```
+
+The cause is a pattern that backtracks: a quantifier inside a quantifier, as `(?:\w+\s?)+$`, or
+optional groups that can match the same text before a greedy tail. On a line that almost matches,
+such a pattern tries every way to split it. Remove the nesting or anchor the pattern on a literal,
+and map again. `--slow-after SECONDS` changes the limit; the map and the report do not change.

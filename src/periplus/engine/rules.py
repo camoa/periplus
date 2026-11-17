@@ -36,6 +36,7 @@ from periplus.engine.packload import (
 from periplus.engine.pattern import compile_pattern, compile_unfilled, filled_pattern, value_names
 from periplus.engine.pattern import reshape as _reshape
 from periplus.engine.select import FileTypes, Selection, select_files
+from periplus.engine.slow import SlowWatch
 from periplus.engine.source import (
     DATA_READERS,
     SHORT_FORM_FORMAT,
@@ -151,6 +152,7 @@ def run_file_rules(
     packs: Sequence[LoadedPack],
     folders: Mapping[str, tuple[str, ...]],
     selection: Selection,
+    watch: SlowWatch,
 ) -> tuple[
     list[FoundNode],
     list[FoundEdge],
@@ -178,6 +180,8 @@ def run_file_rules(
     A fire of a rule other than a binding rule that makes no node and no edge is listed in the
     skipped matches as ``fired and emitted nothing``, unless it listed an edge that lacks a value
     or every source it names is absent.
+
+    ``watch`` times each rule on each file, and a file's sections and each of its spans apart.
     """
     nodes: list[FoundNode] = []
     edges: list[FoundEdge] = []
@@ -222,7 +226,9 @@ def run_file_rules(
         info = rule_set.files.get(rule.filetype, FileInfo())
         # Each file's patterns that do not compile once filled, and the fires before the file.
         unfilled: list[tuple[str, list[str], int]] = []
+        timed = f"rule {rule.name} of rutter {rule.pack}"
         for file, stem, _ in _matches(root, rule, *picking):
+            watch.begin(timed, file)
             own = (file, rule.filetype)
             if own not in paths:
                 paths[own] = {**rule_set.values, **_path_values(file, info, rule_set, folders)}
@@ -231,8 +237,15 @@ def run_file_rules(
                 if file not in texts:
                     texts[file] = load_text(root / file, file)
                 if own not in sections:
+                    watch.begin(f"the sections of file type {rule.filetype}", file)
                     sections[own] = _sections(texts[file], info.sections)
-                    spans[own] = _spans(texts[file], info.spans, sections[own])
+                    spans[own] = _spans(
+                        texts[file],
+                        info.spans,
+                        sections[own],
+                        partial(_span_begins, watch, file),
+                    )
+                    watch.begin(timed, file)
                 stemmed = {**paths[own], "file_stem": stem}
                 read_from = (texts[file], stemmed, sections[own], spans[own])
                 made = (nodes, edges, bound.setdefault(file, []), skipped)
@@ -290,6 +303,7 @@ def run_file_rules(
                 fire = (key, line)
                 lists = (nodes, edges, skipped)
                 _found(rule, rule_set, file, node_id, fire, scope, *lists, paths[own])
+        watch.end()
         # A step runs only where the rule fires, so a file it fired nothing on lists no row.
         ends = [start for _, _, start in unfilled[1:]] + [fired] if unfilled else []
         for (file, patterns, start), end in zip(unfilled, ends, strict=True):
@@ -961,20 +975,26 @@ def _closing(close: str, opened: re.Match[str]) -> re.Pattern[str]:
     return compile_pattern(PLACEHOLDER.sub(lambda p: captured.get(p.group(1), p.group(0)), close))
 
 
+def _span_begins(watch: SlowWatch, file: str, pack: str, name: str) -> None:
+    watch.begin(f"span {name} of rutter {pack}", file)
+
+
 def _spans(
     text: str,
-    declared: Sequence[tuple[str, re.Pattern[str], re.Pattern[str], re.Pattern[str]]],
+    declared: Sequence[tuple[str, str, re.Pattern[str], re.Pattern[str], re.Pattern[str]]],
     sections: list[tuple[str, int, int]],
+    starting: Callable[[str, str], None],
 ) -> list[Span]:
     """Each span of the text, sorted by start: one per match of its opening outside the sections.
 
     From the end of the opening, each opening and closing token outside the sections counts one up
     and one down; the span ends after the closing token that brings the count to zero or below, or
-    at the end of the text.
+    at the end of the text. ``starting`` is told each span's pack and name before it is read.
     """
     starts = [begin for _, begin, _ in sections]
     found: list[Span] = []
-    for name, opening, up, down in declared:
+    for pack, name, opening, up, down in declared:
+        starting(pack, name)
         for match in _outside(opening, text, sections, ()):
             depth, end = 0, len(text)
             for token, step in _tokens(text, match.end(), up, down, (sections, starts)):

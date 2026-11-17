@@ -534,7 +534,9 @@ def _spans_of(
     declared = [("comment", compile_pattern("<!--"), "-->")] if comment else []
     up, down = _balance(balance)
     sections = _sections(text, declared)
-    spans = _spans(text, [("x", compile_pattern(opening), up, down)], sections)
+    spans = _spans(
+        text, [("p", "x", compile_pattern(opening), up, down)], sections, lambda _, __: None
+    )
     return [(begin, end) for _, begin, end, _ in spans]
 
 

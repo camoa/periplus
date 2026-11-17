@@ -413,13 +413,14 @@ class FileInfo:
     """What a declared file type says about its files: the values its path gives, and its
     sections, each a name, an opening pattern and a closing template; and the resolution steps,
     with their separator, an edge end of a text rule takes when it declares none. Last its spans,
-    each a name, an opening pattern, and the opening and closing tokens it balances."""
+    each the pack that declares it, a name, an opening pattern, and the opening and closing tokens
+    it balances."""
 
     path_values: tuple[Value, ...] = ()
     sections: tuple[tuple[str, re.Pattern[str], str], ...] = ()
     resolve: tuple[Step, ...] = ()
     separator: str = ""
-    spans: tuple[tuple[str, re.Pattern[str], re.Pattern[str], re.Pattern[str]], ...] = ()
+    spans: tuple[tuple[str, str, re.Pattern[str], re.Pattern[str], re.Pattern[str]], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1026,7 +1027,7 @@ def _file_info(packs: Sequence[LoadedPack]) -> dict[str, FileInfo]:
                 )
                 steps = _read_steps(spec.get("resolve", []))
                 spans = tuple(
-                    (str(s["name"]), _regex(s["open"]), *_balance(s["balance"]))
+                    (pack.name.pack, str(s["name"]), _regex(s["open"]), *_balance(s["balance"]))
                     for s in spec.get("spans", [])
                 )
                 for value in values:
@@ -1179,7 +1180,9 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
         missing = ", ".join(sorted(set(rule.reads_sections) - sections))
         reason = f"match.reads_sections names {missing}, which its file type does not declare"
         return replace(rule, supported=False, reason=reason)
-    captured = {(name, group) for name, opening, _, _ in info.spans for group in opening.groupindex}
+    captured = {
+        (name, group) for _, name, opening, _, _ in info.spans for group in opening.groupindex
+    }
     for value in rule.values:
         if value.enclosing is not None and value.enclosing not in captured:
             span, capture = value.enclosing

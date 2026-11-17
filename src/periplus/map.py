@@ -34,6 +34,7 @@ from periplus.engine.select import (
     optional_folders,
     resolve_folders,
 )
+from periplus.engine.slow import DEFAULT_SLOW_AFTER, SlowWatch
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER, SETTINGS_FILENAME
 from periplus.manifest import LoadedPack, resolve_pack_order
@@ -116,13 +117,15 @@ def run(
     dependencies: tuple[DependencyStatus, ...],
     settings_path: Path | None = None,
     output: Path | None = None,
+    slow_after: float = DEFAULT_SLOW_AFTER,
 ) -> MapReport:
     """Resolve the project, run its rules, validate the document and write it.
 
     A problem the resolution already carries ends the run with its code before any file is
     selected. A project with no settings file is ``NO_SETTINGS``. A pack that fails its schema
     does not hide the problems of the packs that do not depend on it. Nothing is written on any
-    failure.
+    failure. A rule or span that runs longer than ``slow_after`` seconds on one file is named on
+    standard error, and never in the report.
     """
     resolution = resolve(
         start=start, env=env, dependencies=dependencies, settings_path=settings_path
@@ -180,9 +183,9 @@ def run(
         folders = resolve_folders(
             sorted({*wanted, *relative} - {""}), packs, overrides, root, selection
         )
-        found_nodes, found_edges, fires, opened, read, removed, broken, skipped = run_file_rules(
-            root, rule_set, packs, folders, selection
-        )
+        with SlowWatch(slow_after) as watch:
+            found = run_file_rules(root, rule_set, packs, folders, selection, watch)
+        found_nodes, found_edges, fires, opened, read, removed, broken, skipped = found
         pinned = {matched.name.pack for matched in resolution.packs}
         empty = _empty_packs(root, rule_set, packs, pinned, folders, read, overrides, selection)
         directories = sorted({path for name in wanted for path in folders[name]})

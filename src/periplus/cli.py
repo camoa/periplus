@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import periplus
+from periplus.engine.slow import DEFAULT_SLOW_AFTER
 from periplus.errors import ExitCode
 from periplus.preflight import check_runtime_dependencies
 
@@ -119,6 +120,20 @@ def _place(text: str) -> tuple[str, int]:
     if not file or not line.isdecimal() or int(line) < 1:
         raise argparse.ArgumentTypeError(f"{text!r} is not FILE:LINE with a line of 1 or more")
     return file, int(line)
+
+
+def _seconds(text: str) -> float:
+    """A ``--slow-after`` of ``map``: seconds above 0, and at most a day, since the timer it sets
+    overflows on a far larger number."""
+    try:
+        seconds = float(text)
+    except ValueError:
+        seconds = 0.0
+    if not 0 < seconds <= 86400:
+        raise argparse.ArgumentTypeError(
+            f"{text!r} is not a number of seconds above 0 and at most 86400"
+        )
+    return seconds
 
 
 def add_hub(parser: argparse.ArgumentParser) -> None:
@@ -327,6 +342,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PATH",
         help="where to write the map (default: .periplus/map.json under the project root)",
+    )
+    extract.add_argument(
+        "--slow-after",
+        type=_seconds,
+        default=DEFAULT_SLOW_AFTER,
+        metavar="SECONDS",
+        help="name on standard error a rule or span that runs longer than this on one file "
+        f"(default: {DEFAULT_SLOW_AFTER:g})",
     )
     types = subcommands.add_parser(
         "types",
@@ -1205,6 +1228,7 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
             dependencies=dependencies,
             settings_path=args.settings,
             output=args.output,
+            slow_after=args.slow_after,
         )
         sys.stdout.write(MAP_RENDERERS[args.format](written))
         return written.exit_code

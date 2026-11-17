@@ -343,6 +343,15 @@ lists the nodes a candidate type names.
 Text: the `path` row under Map. Where the map was written, or `null` when a problem stopped the
 run. Read the map with the navigation commands in [docs/navigation.md](navigation.md).
 
+### Slow rules, on standard error
+
+Not part of the report. A rule or span that spends more than 10 seconds on one file is named on
+standard error as it runs, `periplus map: slow: rule <rule> of rutter <rutter> on <file>: 10.00 s
+so far, still running`, and again with its time when it ends. Timings differ between machines, so
+they stay out of the report and the map. A line almost always means a pattern that backtracks;
+[the text rules page](rutter-author-guide-text.md#a-rule-that-runs-long) says how to find it.
+`--slow-after SECONDS` changes the limit.
+
 ## Read the map
 
 The setting `greetBanner` is one node. The `.module` file provides it and the behavior reads it.
