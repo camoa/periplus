@@ -1,0 +1,103 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Whether a hook found by a function's name is known to exist. hook.yaml and
+# hook_theme_include.yaml read a hook from any function whose name starts with its extension's
+# name, so a helper such as mymodule_build_list reads as a hook build_list. The link stays, since
+# the hook may be a contributed module's, and these rules tell it apart. A hook is known when:
+# - the table hook_names in pack.yaml lists it: every hook_NAME of Drupal core's *.api.php files,
+#   and the rows a loaded rutter adds for its contributed module or tool;
+# - its name fits a placeholder form of core: form_FORM_ID_alter, preprocess_HOOK and the others
+#   in the pattern below, each placeholder any word; or <type>_<operation> of a hook_ENTITY_TYPE_
+#   form, where <type> is an entity type the table entity_type_ids lists, or one the map holds
+#   with a class, a bundle or a field storage, as an ECK type from its exported configuration.
+#   block_view is left out: core's block view builder runs block_view_alter, not block_view;
+# - a custom module's or theme's *.api.php file defines hook_NAME;
+# - a contributed module's *.api.php file in the folder contrib_module defines hook_NAME. Only
+#   the names are read; no other contributed code is mapped, and an absent folder gives nothing;
+# - custom code invokes it by a quoted name: invokeAll('NAME'), invokeAllWith('NAME'),
+#   invoke($module, 'NAME'), or alter('NAME'), which gives NAME_alter, written after ->;
+# - a method implements it by a Hook attribute.
+# A hook none of these names gets hook_known: no, and so does each function that implements it
+# by its name. Both rows print [hook by name only]. Inferred: the sources name hooks that exist,
+# and a missing name proves nothing. A file rule cannot see the map, so implements_hook keeps the
+# confidence inferred either way, and the mark carries the difference.
+#
+# False results to know about: a placeholder takes any word, so a helper named form_x_alter,
+# preprocess_x or query_x_alter reads as known. A hook a contributed module defines that no
+# loaded rutter lists, and whose module is not on disk, reads as name only. A custom *.api.php
+# hook with a placeholder, such as hook_mymodule_TYPE_alter, names only that written form. A hook
+# name built from a variable or a constant, alter() given a list of names, and the Deprecated
+# forms of invokeAll, invoke and alter name no hook.
+
+node_types:
+- name: drupal.hook_name
+  id_namespace: drupal.hook_name
+  internal: true
+  description: "internal: a hook name an *.api.php file defines or custom code invokes, kept so a map rule can tell a known hook from a name match"
+
+attributes:
+- name: hook_known
+  on: [drupal.hook, php.function]
+  mark: hook by name only
+  description: "no on a hook found only by a function's name that no core table, api file, invocation or Hook attribute names, and on each function that implements it by its name"
+
+rules:
+- rule: hook_defined_in_api_file
+  reads: file
+  in: [source, contrib_source]
+  match: {file: '*.api', filetype: drupal_php_text, ending: php, text: '(?m)^function\s+hook_(?<hook>\w+)\s*\('}
+  id: {template: '{hook}'}
+  line: {capture: hook}
+  emits: [{node: {type: drupal.hook_name}}]
+  confidence: declared
+
+- rule: hook_invoked_by_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->\s*(?:invokeAll(?:With)?\(|invoke\(\s*[^,()]+,)\s*[''"](?<hook>\w+)[''"]'
+  id: {template: '{hook}'}
+  line: {capture: hook}
+  emits: [{node: {type: drupal.hook_name}}]
+  confidence: declared
+
+- rule: hook_alter_invoked_by_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->\s*alter\(\s*[''"](?<type>\w+)[''"]'
+  id: {template: '{type}_alter'}
+  line: {capture: type}
+  emits: [{node: {type: drupal.hook_name}}]
+  confidence: declared
+
+- rule: hook_by_name_only
+  reads: map
+  match: &name_only
+    node_type: drupal.hook
+    where:
+    - id_matches: '^drupal\.hook::(?!(?:block_build_\w+_alter|block_view_\w+_alter|entity_query_\w+_alter|entity_query_tag__\w+__\w+_alter|entity_query_tag__\w+_alter|field_widget_complete_\w+_form_alter|field_widget_single_element_\w+_form_alter|form_\w+_alter|jsonapi_\w+_filter_access|language_fallback_candidates_\w+_alter|migrate_\w+_prepare_row|plugin_filter_\w+__\w+_alter|plugin_filter_\w+_alter|preprocess_\w+|query_\w+_alter|theme_suggestions_\w+|theme_suggestions_\w+_alter)$)(?<hook>(?:(?!block_view$)(?=(?<etype>\w+?)_(?:access|build_defaults_alter|create|create_access|delete|duplicate|field_values_init|form_mode_alter|insert|load|predelete|prepare_form|presave|revision_create|revision_delete|storage_load|translation_create|translation_delete|translation_insert|update|view|view_alter|view_mode_alter)$)|)\w+)$'
+    - not_in_table: {table: hook_names, capture: hook}
+    - not_in_table: {table: entity_type_ids, capture: etype}
+    unless:
+    - [{node: 'drupal.hook_name::{hook}'}]
+    - [{node: 'drupal.entity_type::{etype}'}, {edge: entity_class}]
+    - [{node: 'drupal.entity_type::{etype}'}, {incoming_edge: bundle_of}]
+    - [{node: 'drupal.entity_type::{etype}'}, {incoming_edge: storage_of}]
+    - [{incoming_edge: implements_hook}, {id_matches: '^php\.method::'}]
+  emits:
+  - attribute: {name: hook_known, template: 'no'}
+  confidence: inferred
+
+- rule: function_implements_hook_by_name_only
+  reads: map
+  match:
+    <<: *name_only
+    follow: [{incoming_edge: implements_hook}, {id_matches: '^php\.function::'}]
+  emits:
+  - attribute: {name: hook_known, template: 'no', target: matched_node}
+  confidence: inferred

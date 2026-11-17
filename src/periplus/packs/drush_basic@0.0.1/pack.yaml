@@ -21,6 +21,13 @@ pack: drush_basic
 version: 0.0.1
 depends: [drupal_basic, php_basic]
 
+add_table_rows:
+  # The hook Drush defines in its drush.api.php, which Drush's deploy:hook command runs from a
+  # module's .deploy.php file, read by drupal_basic's hook/hook_known.yaml.
+  drupal_basic:
+    hook_names:
+      deploy_NAME: deploy_NAME
+
 # Detected when a custom module registers Drush commands, or keeps command classes where
 # Drush looks for them.
 detect:

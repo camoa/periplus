@@ -139,6 +139,18 @@ def test_a_procedural_hook_is_mapped_by_its_function_name_and_implements_it(
             if text.startswith(f"function {function}(")
         )
         expected[hook] = (path, line, ("inferred",))
+    # No core table, api file or invocation names these two, so hook_by_name_only marks each.
+    for hook in ("settings_submit", "deploy_NAME"):
+        expected[hook] = (*expected[hook][:2], ("inferred", "inferred"))
+    marked = sorted(
+        node["id"] for node in document["nodes"] if node.get("attributes", {}).get("hook_known")
+    )
+    assert marked == [
+        "drupal.hook::deploy_NAME",
+        "drupal.hook::settings_submit",
+        "php.function::mymod_deploy_seed",
+        "php.function::mymod_settings_submit",
+    ]
     hooks = {
         node["id"].removeprefix("drupal.hook::"): (
             place["file"],

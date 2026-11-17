@@ -432,7 +432,7 @@ $ periplus map
 periplus map
 
 Packs that selected no file:
-  drupal_basic: config = ./config/sync, no such folder; custom_module = ./web/modules/custom, 1 folder found; custom_theme = ./web/themes/custom, no such folder; if the code is elsewhere, declare the folder under folders in .periplus/settings.yml
+  drupal_basic: config = ./config/sync, no such folder; contrib_module = ./web/modules/contrib, no such folder; custom_module = ./web/modules/custom, 1 folder found; custom_theme = ./web/themes/custom, no such folder; if the code is elsewhere, declare the folder under folders in .periplus/settings.yml
 
 Map:
   path    /path/to/project/.periplus/map.json

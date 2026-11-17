@@ -38,7 +38,12 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   folder, whose name starts with that folder's name and an underscore, implements a hook the
 #   same way: mytheme_preprocess_node in mytheme/preprocess/node.preprocess.inc or in
 #   mytheme/includes/content.theme implements preprocess_node. A hook found by a
-#   function's name has confidence inferred;
+#   function's name has confidence inferred. It is known when the table hook_names below lists
+#   it (core's hooks, and a contributed module's that its rutter adds), when it fits a placeholder
+#   form of core, when a custom or contributed *.api.php file defines it, when custom code invokes
+#   it by a quoted name, or when a Hook attribute names it. Any other such hook, and each function
+#   that implements it by its name, gets the attribute hook_known: no, printed as
+#   [hook by name only] (hook/hook_known.yaml);
 # - a route's methods, its requirements _access, _format, _user_is_logged_in, _csrf_token,
 #   _entity_access and _custom_access, and its options no_cache and _admin_route, as attributes
 #   holding the value as written; each role its _role names, as a requires_role or accepts_role
@@ -276,11 +281,10 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   edge whether or not <type> is an entity type. On Drupal core, helpers read as the hooks
 #   cookie_delete, mass_update, set_edit_access and translate_access end at the referenced entity
 #   types cookie, mass, set_edit and translate.
-# - Any function whose name starts with the first part of the file name reads as a hook: the form
-#   callback mymod_settings_submit reads as the hook settings_submit, even when a
-#   registers_form_handler edge reaches it, the helper mymod_build_list
-#   as build_list, and mymod_update_NEXT as update_NEXT. The same holds for a theme's inc file
-#   and the theme folder's name.
+# - A helper whose name fits a placeholder form of core, such as mymod_preprocess_x or
+#   mymod_form_x_alter, or whose rest is a known hook's name, reads as a known hook. A hook a
+#   contributed module defines reads as [hook by name only] when the module is not on disk under
+#   contrib_module and no loaded rutter adds it to hook_names.
 # - The prefix is the file name, not an installed module's name. If Drupal core were inside the
 #   mapped folders, its files such as form.inc would give false hooks, such as select_options from
 #   form_select_options.
@@ -570,11 +574,16 @@ folder_candidates:
   config: [config/default]
   custom_module: [docroot/modules/custom, modules/custom]
   custom_theme: [docroot/themes/custom, themes/custom]
+  contrib_module: [docroot/modules/contrib, modules/contrib]
 
 folders:
   config:        ./config/sync
   custom_module: ./web/modules/custom
   custom_theme: ./web/themes/custom
+  # Contributed modules, read only for the hook names their *.api.php files define
+  # (hook/hook_known.yaml). A project with no such folder on disk gets nothing from it.
+  contrib_module: ./web/modules/contrib
+  contrib_source: "{contrib_module}/**"
   # An extension's shipped configuration: config/install and config/optional.
   module_config:
   - "{custom_module}/**/config/install"
@@ -1063,6 +1072,234 @@ tables:
     taxonomy_term: entity.taxonomy_term
     user: entity.user
 
+  # Every hook Drupal core documents, read by hook/hook_known.yaml: each function hook_NAME in
+  # core's *.api.php files outside tests folders, as NAME, from cores 10.5.8, 11.1.2 and 11.4.10
+  # taken together, so a hook 11 removed, such as file_validate, stays. A placeholder form, such as
+  # form_FORM_ID_alter, is listed as core writes it; hook_known.yaml's pattern repeats those forms
+  # with each placeholder as any word. To regenerate, run in a core checkout:
+  #   find . -name '*.api.php' -not -path '*/tests/*' | xargs grep -hoE '^function hook_\w+\(' \
+  #     | sed -E 's/^function hook_//; s/\($//' | sort -u
+  # A contributed module's rutter adds its module's hooks under add_table_rows.
+  hook_names: {ENTITY_TYPE_access: ENTITY_TYPE_access,
+    ENTITY_TYPE_build_defaults_alter: ENTITY_TYPE_build_defaults_alter,
+    ENTITY_TYPE_create: ENTITY_TYPE_create, ENTITY_TYPE_create_access: ENTITY_TYPE_create_access,
+    ENTITY_TYPE_delete: ENTITY_TYPE_delete, ENTITY_TYPE_duplicate: ENTITY_TYPE_duplicate,
+    ENTITY_TYPE_field_values_init: ENTITY_TYPE_field_values_init,
+    ENTITY_TYPE_form_mode_alter: ENTITY_TYPE_form_mode_alter,
+    ENTITY_TYPE_insert: ENTITY_TYPE_insert, ENTITY_TYPE_load: ENTITY_TYPE_load,
+    ENTITY_TYPE_predelete: ENTITY_TYPE_predelete,
+    ENTITY_TYPE_prepare_form: ENTITY_TYPE_prepare_form, ENTITY_TYPE_presave: ENTITY_TYPE_presave,
+    ENTITY_TYPE_revision_create: ENTITY_TYPE_revision_create,
+    ENTITY_TYPE_revision_delete: ENTITY_TYPE_revision_delete,
+    ENTITY_TYPE_storage_load: ENTITY_TYPE_storage_load,
+    ENTITY_TYPE_translation_create: ENTITY_TYPE_translation_create,
+    ENTITY_TYPE_translation_delete: ENTITY_TYPE_translation_delete,
+    ENTITY_TYPE_translation_insert: ENTITY_TYPE_translation_insert,
+    ENTITY_TYPE_update: ENTITY_TYPE_update, ENTITY_TYPE_view: ENTITY_TYPE_view,
+    ENTITY_TYPE_view_alter: ENTITY_TYPE_view_alter,
+    ENTITY_TYPE_view_mode_alter: ENTITY_TYPE_view_mode_alter, ajax_render_alter: ajax_render_alter,
+    archiver_info_alter: archiver_info_alter, batch_alter: batch_alter, block_access: block_access,
+    block_alter: block_alter, block_build_BASE_BLOCK_ID_alter: block_build_BASE_BLOCK_ID_alter,
+    block_build_alter: block_build_alter,
+    block_view_BASE_BLOCK_ID_alter: block_view_BASE_BLOCK_ID_alter,
+    block_view_alter: block_view_alter, cache_flush: cache_flush,
+    ckeditor4to5upgrade_plugin_info_alter: ckeditor4to5upgrade_plugin_info_alter,
+    ckeditor5_plugin_info_alter: ckeditor5_plugin_info_alter,
+    comment_links_alter: comment_links_alter, condition_info_alter: condition_info_alter,
+    config_action_alter: config_action_alter, config_import_steps_alter: config_import_steps_alter,
+    config_schema_info_alter: config_schema_info_alter,
+    config_translation_info: config_translation_info,
+    config_translation_info_alter: config_translation_info_alter,
+    contextual_links_alter: contextual_links_alter,
+    contextual_links_plugins_alter: contextual_links_plugins_alter,
+    contextual_links_view_alter: contextual_links_view_alter, countries_alter: countries_alter,
+    cron: cron, css_alter: css_alter, data_type_info_alter: data_type_info_alter,
+    default_admin_content_form_ignore_form_ids: default_admin_content_form_ignore_form_ids,
+    default_admin_content_form_routes: default_admin_content_form_routes,
+    default_admin_content_form_routes_alter: default_admin_content_form_routes_alter,
+    display_variant_plugin_alter: display_variant_plugin_alter,
+    editor_info_alter: editor_info_alter, editor_js_settings_alter: editor_js_settings_alter,
+    editor_xss_filter_alter: editor_xss_filter_alter, element_info_alter: element_info_alter,
+    element_plugin_alter: element_plugin_alter, entity_access: entity_access,
+    entity_base_field_info: entity_base_field_info,
+    entity_base_field_info_alter: entity_base_field_info_alter,
+    entity_build_defaults_alter: entity_build_defaults_alter,
+    entity_bundle_create: entity_bundle_create, entity_bundle_delete: entity_bundle_delete,
+    entity_bundle_field_info: entity_bundle_field_info,
+    entity_bundle_field_info_alter: entity_bundle_field_info_alter,
+    entity_bundle_info: entity_bundle_info, entity_bundle_info_alter: entity_bundle_info_alter,
+    entity_create: entity_create, entity_create_access: entity_create_access,
+    entity_delete: entity_delete, entity_display_build_alter: entity_display_build_alter,
+    entity_duplicate: entity_duplicate, entity_extra_field_info: entity_extra_field_info,
+    entity_extra_field_info_alter: entity_extra_field_info_alter,
+    entity_field_access: entity_field_access, entity_field_access_alter: entity_field_access_alter,
+    entity_field_storage_info: entity_field_storage_info,
+    entity_field_storage_info_alter: entity_field_storage_info_alter,
+    entity_field_values_init: entity_field_values_init,
+    entity_form_display_alter: entity_form_display_alter,
+    entity_form_mode_alter: entity_form_mode_alter, entity_insert: entity_insert,
+    entity_load: entity_load, entity_operation: entity_operation,
+    entity_operation_alter: entity_operation_alter, entity_predelete: entity_predelete,
+    entity_preload: entity_preload, entity_prepare_form: entity_prepare_form,
+    entity_prepare_view: entity_prepare_view, entity_presave: entity_presave,
+    entity_query_ENTITY_TYPE_alter: entity_query_ENTITY_TYPE_alter,
+    entity_query_alter: entity_query_alter,
+    entity_query_tag__ENTITY_TYPE__TAG_alter: entity_query_tag__ENTITY_TYPE__TAG_alter,
+    entity_query_tag__TAG_alter: entity_query_tag__TAG_alter,
+    entity_reference_selection_alter: entity_reference_selection_alter,
+    entity_revision_create: entity_revision_create, entity_revision_delete: entity_revision_delete,
+    entity_storage_load: entity_storage_load, entity_translation_create: entity_translation_create,
+    entity_translation_delete: entity_translation_delete,
+    entity_translation_insert: entity_translation_insert, entity_type_alter: entity_type_alter,
+    entity_type_build: entity_type_build, entity_update: entity_update, entity_view: entity_view,
+    entity_view_alter: entity_view_alter, entity_view_display_alter: entity_view_display_alter,
+    entity_view_mode_alter: entity_view_mode_alter,
+    entity_view_mode_info_alter: entity_view_mode_info_alter, extension: extension,
+    field_formatter_info_alter: field_formatter_info_alter,
+    field_formatter_settings_summary_alter: field_formatter_settings_summary_alter,
+    field_formatter_third_party_settings_form: field_formatter_third_party_settings_form,
+    field_info_alter: field_info_alter,
+    field_info_entity_type_ui_definitions_alter: field_info_entity_type_ui_definitions_alter,
+    field_info_max_weight: field_info_max_weight, field_purge_field: field_purge_field,
+    field_purge_field_storage: field_purge_field_storage,
+    field_storage_config_update_forbid: field_storage_config_update_forbid,
+    field_type_category_info_alter: field_type_category_info_alter,
+    field_ui_preconfigured_options_alter: field_ui_preconfigured_options_alter,
+    field_views_data: field_views_data, field_views_data_alter: field_views_data_alter,
+    field_views_data_views_data_alter: field_views_data_views_data_alter,
+    field_widget_complete_WIDGET_TYPE_form_alter: field_widget_complete_WIDGET_TYPE_form_alter,
+    field_widget_complete_form_alter: field_widget_complete_form_alter,
+    field_widget_info_alter: field_widget_info_alter,
+    field_widget_settings_summary_alter: field_widget_settings_summary_alter,
+    field_widget_single_element_WIDGET_TYPE_form_alter: field_widget_single_element_WIDGET_TYPE_form_alter,
+    field_widget_single_element_form_alter: field_widget_single_element_form_alter,
+    field_widget_third_party_settings_form: field_widget_third_party_settings_form,
+    file_copy: file_copy, file_download: file_download,
+    file_mimetype_mapping_alter: file_mimetype_mapping_alter, file_move: file_move,
+    file_url_alter: file_url_alter, file_validate: file_validate,
+    filetransfer_info: filetransfer_info, filetransfer_info_alter: filetransfer_info_alter,
+    filter_format_disable: filter_format_disable, filter_info_alter: filter_info_alter,
+    filter_secure_image_alter: filter_secure_image_alter,
+    form_BASE_FORM_ID_alter: form_BASE_FORM_ID_alter, form_FORM_ID_alter: form_FORM_ID_alter,
+    form_alter: form_alter, form_system_theme_settings_alter: form_system_theme_settings_alter,
+    help: help, help_section_info_alter: help_section_info_alter,
+    help_topics_info_alter: help_topics_info_alter, hook_info: hook_info,
+    icon_pack_alter: icon_pack_alter, image_effect_info_alter: image_effect_info_alter,
+    image_style_flush: image_style_flush, install: install, install_tasks: install_tasks,
+    install_tasks_alter: install_tasks_alter, js_alter: js_alter,
+    js_settings_alter: js_settings_alter, js_settings_build: js_settings_build,
+    jsonapi_ENTITY_TYPE_filter_access: jsonapi_ENTITY_TYPE_filter_access,
+    jsonapi_entity_field_filter_access: jsonapi_entity_field_filter_access,
+    jsonapi_entity_filter_access: jsonapi_entity_filter_access,
+    language_fallback_candidates_OPERATION_alter: language_fallback_candidates_OPERATION_alter,
+    language_fallback_candidates_alter: language_fallback_candidates_alter,
+    language_negotiation_info_alter: language_negotiation_info_alter,
+    language_switch_links_alter: language_switch_links_alter,
+    language_types_info: language_types_info, language_types_info_alter: language_types_info_alter,
+    layout_alter: layout_alter, library_info_alter: library_info_alter,
+    library_info_build: library_info_build, link_alter: link_alter,
+    local_tasks_alter: local_tasks_alter,
+    locale_translation_projects_alter: locale_translation_projects_alter, mail: mail,
+    mail_alter: mail_alter, mail_backend_info_alter: mail_backend_info_alter,
+    media_source_info_alter: media_source_info_alter,
+    menu_links_discovered_alter: menu_links_discovered_alter,
+    menu_local_actions_alter: menu_local_actions_alter,
+    menu_local_tasks_alter: menu_local_tasks_alter,
+    migrate_MIGRATION_ID_prepare_row: migrate_MIGRATION_ID_prepare_row,
+    migrate_prepare_row: migrate_prepare_row, migration_plugins_alter: migration_plugins_alter,
+    module_implements_alter: module_implements_alter, module_preinstall: module_preinstall,
+    module_preuninstall: module_preuninstall, modules_installed: modules_installed,
+    modules_uninstalled: modules_uninstalled, navigation_content_top: navigation_content_top,
+    navigation_content_top_alter: navigation_content_top_alter,
+    navigation_defaults: navigation_defaults,
+    navigation_menu_link_tree_alter: navigation_menu_link_tree_alter,
+    node_access_records: node_access_records, node_access_records_alter: node_access_records_alter,
+    node_grants: node_grants, node_grants_alter: node_grants_alter,
+    node_links_alter: node_links_alter, node_search_ranking: node_search_ranking,
+    node_search_result: node_search_result, node_update_index: node_update_index,
+    oembed_resource_url_alter: oembed_resource_url_alter, options_list_alter: options_list_alter,
+    page_attachments: page_attachments, page_attachments_alter: page_attachments_alter,
+    page_bottom: page_bottom, page_top: page_top,
+    plugin_filter_TYPE__CONSUMER_alter: plugin_filter_TYPE__CONSUMER_alter,
+    plugin_filter_TYPE_alter: plugin_filter_TYPE_alter, post_update_NAME: post_update_NAME,
+    preprocess: preprocess, preprocess_HOOK: preprocess_HOOK, query_TAG_alter: query_TAG_alter,
+    query_alter: query_alter, queue_info_alter: queue_info_alter, ranking: ranking,
+    rebuild: rebuild, removed_post_updates: removed_post_updates, render_template: render_template,
+    requirements: requirements, requirements_alter: requirements_alter,
+    rest_resource_alter: rest_resource_alter, runtime_requirements: runtime_requirements,
+    runtime_requirements_alter: runtime_requirements_alter, schema: schema,
+    search_plugin_alter: search_plugin_alter, search_preprocess: search_preprocess,
+    shortcut_default_set: shortcut_default_set, system_breadcrumb_alter: system_breadcrumb_alter,
+    system_info_alter: system_info_alter, system_themes_page_alter: system_themes_page_alter,
+    template_preprocess_default_variables_alter: template_preprocess_default_variables_alter,
+    theme: theme, theme_registry_alter: theme_registry_alter,
+    theme_suggestions_HOOK: theme_suggestions_HOOK,
+    theme_suggestions_HOOK_alter: theme_suggestions_HOOK_alter,
+    theme_suggestions_alter: theme_suggestions_alter, themes_installed: themes_installed,
+    themes_uninstalled: themes_uninstalled, token_info: token_info,
+    token_info_alter: token_info_alter, tokens: tokens, tokens_alter: tokens_alter,
+    toolbar: toolbar, toolbar_alter: toolbar_alter, tour_tips_alter: tour_tips_alter,
+    tour_tips_info_alter: tour_tips_info_alter,
+    transliteration_overrides_alter: transliteration_overrides_alter, uninstall: uninstall,
+    update_N: update_N, update_dependencies: update_dependencies,
+    update_last_removed: update_last_removed, update_projects_alter: update_projects_alter,
+    update_requirements: update_requirements, update_requirements_alter: update_requirements_alter,
+    update_status_alter: update_status_alter, updater_info: updater_info,
+    updater_info_alter: updater_info_alter, user_cancel: user_cancel,
+    user_cancel_methods_alter: user_cancel_methods_alter,
+    user_format_name_alter: user_format_name_alter, user_login: user_login,
+    user_logout: user_logout, validation_constraint_alter: validation_constraint_alter,
+    verify_update_archive: verify_update_archive, views_analyze: views_analyze,
+    views_data: views_data, views_data_alter: views_data_alter,
+    views_form_substitutions: views_form_substitutions,
+    views_invalidate_cache: views_invalidate_cache,
+    views_plugins_access_alter: views_plugins_access_alter,
+    views_plugins_area_alter: views_plugins_area_alter,
+    views_plugins_argument_alter: views_plugins_argument_alter,
+    views_plugins_argument_default_alter: views_plugins_argument_default_alter,
+    views_plugins_argument_validator_alter: views_plugins_argument_validator_alter,
+    views_plugins_cache_alter: views_plugins_cache_alter,
+    views_plugins_display_alter: views_plugins_display_alter,
+    views_plugins_display_extenders_alter: views_plugins_display_extenders_alter,
+    views_plugins_exposed_form_alter: views_plugins_exposed_form_alter,
+    views_plugins_field_alter: views_plugins_field_alter,
+    views_plugins_filter_alter: views_plugins_filter_alter,
+    views_plugins_join_alter: views_plugins_join_alter,
+    views_plugins_pager_alter: views_plugins_pager_alter,
+    views_plugins_query_alter: views_plugins_query_alter,
+    views_plugins_relationship_alter: views_plugins_relationship_alter,
+    views_plugins_row_alter: views_plugins_row_alter,
+    views_plugins_sort_alter: views_plugins_sort_alter,
+    views_plugins_style_alter: views_plugins_style_alter,
+    views_plugins_wizard_alter: views_plugins_wizard_alter, views_post_build: views_post_build,
+    views_post_execute: views_post_execute, views_post_render: views_post_render,
+    views_pre_build: views_pre_build, views_pre_execute: views_pre_execute,
+    views_pre_render: views_pre_render, views_pre_view: views_pre_view,
+    views_preview_info_alter: views_preview_info_alter, views_query_alter: views_query_alter,
+    views_query_substitutions: views_query_substitutions,
+    views_ui_display_tab_alter: views_ui_display_tab_alter,
+    views_ui_display_top_alter: views_ui_display_top_alter,
+    views_ui_display_top_links_alter: views_ui_display_top_links_alter}
+  # Each entity type id core declares by a ContentEntityType or ConfigEntityType attribute or
+  # annotation, in the same three cores, read by hook/hook_known.yaml to bind the ENTITY_TYPE of a
+  # hook_ENTITY_TYPE_ form. A contributed module's rutter adds its entity types under
+  # add_table_rows.
+  entity_type_ids: {action: action, base_field_override: base_field_override, block: block,
+    block_content: block_content, block_content_type: block_content_type, comment: comment,
+    comment_type: comment_type, configurable_language: configurable_language,
+    contact_form: contact_form, contact_message: contact_message,
+    content_moderation_state: content_moderation_state, date_format: date_format, editor: editor,
+    entity_form_display: entity_form_display, entity_form_mode: entity_form_mode,
+    entity_view_display: entity_view_display, entity_view_mode: entity_view_mode,
+    field_config: field_config, field_storage_config: field_storage_config, file: file,
+    filter_format: filter_format, image_style: image_style,
+    language_content_settings: language_content_settings, media: media, media_type: media_type,
+    menu: menu, menu_link_content: menu_link_content, node: node, node_type: node_type,
+    path_alias: path_alias, responsive_image_style: responsive_image_style,
+    rest_resource_config: rest_resource_config, search_page: search_page, shortcut: shortcut,
+    shortcut_set: shortcut_set, taxonomy_term: taxonomy_term,
+    taxonomy_vocabulary: taxonomy_vocabulary, tour: tour, user: user, user_role: user_role,
+    view: view, workflow: workflow, workspace: workspace}
 # The core and Symfony classes and interfaces that the custom code builds on and the map never
 # reads. Each one an inherits or implements edge reaches becomes a boundary node this pack draws,
 # with no location. A custom class that descends from a name with a type takes that type: those

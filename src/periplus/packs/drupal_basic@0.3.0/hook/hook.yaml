@@ -31,9 +31,13 @@ edge_kinds:
 # A function that code adds as a form's #validate or #submit handler is not read as a hook, unless
 # the map names that hook otherwise: form/form_handler.yaml withholds it before the map rules run.
 #
-# False results to know about: any other prefixed function reads as a hook, such as a form callback
-# added through a variable, the helper mymod_build_list or mymod_update_NEXT. A file named other than
-# its module gives no hook. A theme file named other than its theme, such as includes/content.theme
+# Any other prefixed function reads as a hook too, such as a form callback added through a
+# variable, the helper mymod_build_list or mymod_update_NEXT. The link stays, and
+# hook_known.yaml marks the hook and the function [hook by name only] when no table of known
+# hooks, api file, invocation or Hook attribute names that hook. A hook those sources name is
+# known and carries no mark.
+#
+# False results to know about: a file named other than its module gives no hook. A theme file named other than its theme, such as includes/content.theme
 # holding mytheme_ functions, is read by the theme's folder name, by hook_theme_include.yaml. A hook
 # with a variable part keeps it, so mymod_form_user_login_form_alter names the hook
 # form_user_login_form_alter. A function in a file of another ending leaves two skipped rows.
