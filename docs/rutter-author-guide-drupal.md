@@ -287,7 +287,11 @@ names each rutter's reach, and the head of its `pack.yaml` lists it in full.
   `#entity_builders`, `#date_date_callbacks`, `#date_time_callbacks`, `#file_value_callbacks`,
   `#value_callback`, `#access_callback`, the `callback` of `#ajax`, the `exists` of
   `#machine_name` and the first item of `#lazy_builder`; a `'service:method'` callable reaches the
-  method on the service's class. The site id holds the key, and each map rule's twin for these keys
+  method on the service's class, and the unresolved `<service>::<method>` when the map holds no
+  class for the service. A `'::method'` in a form class whose `getFormId()` returns no literal
+  reaches the class's own method when the class descends from a core form base or interface; in
+  an alter of a form id no mapped class returns, it ends at the unresolved `<form id>::<method>`.
+  The site id holds the key, and each map rule's twin for these keys
   reads the rule through a YAML merge. The map rule `form_handler_function_is_no_hook` withholds
   the hook a function's name would give it when it is added under any of these keys.
 - `hook_acts_on_entity_type`, inferred from a hook named `<extension>_<type>_<operation>`, such as

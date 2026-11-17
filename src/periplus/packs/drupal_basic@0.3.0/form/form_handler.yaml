@@ -19,14 +19,17 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # The edge runs to the function or method X names:
 # - 'my_handler', a function by its name;
 # - '::myMethod', a method of the form object: in a form class, one whose getFormId returns a
-#   literal, that class; in a form alter hook, each class that returns the altered form id;
+#   literal or one that descends from a core form base or interface, that class; in a form alter
+#   hook, each class that returns the altered form id, and when no mapped class returns it, such
+#   as a core form's or a base form id, the unresolved <form id>::myMethod;
 # - [$this, 'myMethod'], [static::class, 'myMethod'] or [self::class, 'myMethod'], a method of the
 #   class around the line;
 # - [Foo::class, 'myMethod'], a method of Foo, the name resolved through the file's imports and
 #   namespace, an import under another name (use A\Baz as Foo) too;
 # - 'Drupal\my_module\Handlers::check' or ['Drupal\my_module\Handlers', 'check'], a method of a
 #   class written whole;
-# - 'my_module.builder:build', a method of the class of a service the map holds.
+# - 'my_module.builder:build', a method of the class of a service the map holds; for a service
+#   the map holds no class for, such as core's, the unresolved <service>::build.
 # A callable written array(...) is read as [...] is. A method is looked up on the class and then
 # its ancestors through extends and used traits; one the map does not hold lands unresolved under
 # the class the walk started from, and a function the map does not hold, such as core's, lands
@@ -50,9 +53,9 @@ $schema: "https://periplus.dev/schema/0/pack-file.schema.json"
 # from the id. The method's class is the one the file's path names by Drupal's PSR-4 layout, so
 # the edges are inferred.
 #
-# Missing results: a 'service:method' callable whose service the map does not hold gives no edge,
-# since its class is outside the map; and a '::myMethod' in a form class whose getFormId returns
-# no literal, or in an alter of a base form id no class returns, gives none.
+# Missing results: a '::myMethod' in a generic hook_form_alter, in a class that is no form class,
+# or in a form class whose only form ancestor is a contributed module's class outside the map,
+# gives no edge, since the form object is not known.
 
 node_types:
 - name: drupal.form_handler_site
@@ -408,6 +411,61 @@ rules:
   match: {<<: *m_altered, unless: *form_keys}
   emits: *element_method_edge
 
+# '::myMethod' in a form class whose getFormId returns no literal, such as an entity form or one
+# that returns a constant: the class around the line, when it or an ancestor extends or implements
+# a core form base or interface. A class with a form_has_id edge is left to the rule above.
+- &r_form_class
+  rule: form_handler_form_class_method
+  reads: map
+  match: &m_form_class
+    node_type: drupal.form_handler_site
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>(?<declarer>[^:]+)::\w+::#\w+\|''::(?<handler>\w+)'')$'}]
+    follow:
+    - node: 'php.type::{declarer}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::Drupal\\Core\\(?:Form\\(?:FormInterface|FormBase|ConfirmFormBase|ConfigFormBase)|Entity\\(?:EntityFormInterface|ContentEntityFormInterface|EntityForm|ContentEntityForm|EntityDeleteForm|ContentEntityDeleteForm|EntityConfirmFormBase|ContentEntityConfirmFormBase|BundleEntityFormBase))$'
+    - try:
+      - node: 'php.type::{declarer}'
+      - ancestors: [inherits, mixes_in]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{handler}'
+    - node: 'drupal.form_handler_site::{site}'
+    - edge: form_handler_site_in
+    unless: [[{node: 'php.type::{declarer}'}, {edge: form_has_id}], [{id_matches: '::#(?!validate\||submit\|)\w+\|'}]]
+  emits: *method_edge
+  confidence: inferred
+
+- <<: *r_form_class
+  rule: element_callback_form_class_method
+  match: {<<: *m_form_class, unless: [[{node: 'php.type::{declarer}'}, {edge: form_has_id}], [{id_matches: '::#(?:validate|submit)\|'}]]}
+  emits: *element_method_edge
+
+# '::myMethod' in a form alter whose form id no mapped class returns, such as a core form's or a
+# base form id: a method of a form class outside the map, the unresolved <form id>::<method>. The
+# form id is read from the hook form_<id>_alter, since the alters_form edge to a form id no rule
+# found is composed by a map rule, which no map rule reads.
+- &r_outside_form
+  rule: form_handler_outside_form_method
+  reads: map
+  match: &m_outside_form
+    node_type: drupal.form_handler_site
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::#\w+\|''::(?<handler>\w+)'')$'}]
+    follow:
+    - edge: form_handler_site_in
+    - edge: implements_hook
+    - id_matches: '^drupal\.hook::form_(?<declarer>\w+)_alter$'
+    - node: 'drupal.form_handler_site::{site}'
+    - edge: form_handler_site_in
+    unless_matched: [[{node: 'drupal.form_id::{declarer}'}, {incoming_edge: form_has_id}]]
+    unless: *element_keys
+  emits: *method_edge
+  confidence: inferred
+
+- <<: *r_outside_form
+  rule: element_callback_outside_form_method
+  match: {<<: *m_outside_form, unless: *form_keys}
+  emits: *element_method_edge
+
 # [$this, 'myMethod'], [static::class, 'myMethod'] or [self::class, 'myMethod'].
 - &r_own
   rule: form_handler_own_method
@@ -482,22 +540,24 @@ rules:
 
 # 'my_module.builder:build', a method of a service, as Drupal's callable resolver reads it: the
 # method on the class the services file gives the service, or on its nearest ancestor. A service
-# the map does not hold, such as core's, gives no edge: its class is outside the map.
+# the map holds no class for, such as core's or a contributed module's, lands at the unresolved
+# <service>::<method>, the service id standing where the class would.
 - &r_service
   rule: form_handler_service_method
   reads: map
   match: &m_service
     node_type: drupal.form_handler_site
-    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::#\w+\|''(?<service>[A-Za-z_][\w.]*):(?<handler>\w+)'')$'}]
+    where: [{id_matches: '^drupal\.form_handler_site::(?<site>.+::#\w+\|''(?<declarer>(?<service>[A-Za-z_][\w.]*)):(?<handler>\w+)'')$'}]
     follow:
-    - node: 'drupal.service::{service}'
-    - edge: service_class
-    - id_matches: '^php\.type::(?<declarer>.+)$'
     - try:
-      - node: 'php.type::{declarer}'
-      - ancestors: [inherits, mixes_in]
+      - node: 'drupal.service::{service}'
+      - edge: service_class
       - id_matches: '^php\.type::(?<declarer>.+)$'
-      - node: 'php.method::{declarer}::{handler}'
+      - try:
+        - node: 'php.type::{declarer}'
+        - ancestors: [inherits, mixes_in]
+        - id_matches: '^php\.type::(?<declarer>.+)$'
+        - node: 'php.method::{declarer}::{handler}'
     - node: 'drupal.form_handler_site::{site}'
     - edge: form_handler_site_in
     unless: *element_keys
