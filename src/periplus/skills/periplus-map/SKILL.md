@@ -23,7 +23,7 @@ description: Answers code questions from a Periplus map, the deterministic graph
 ## The tools
 
 `periplus --help` prints this list; `periplus find --help` prints the options of one command. Every
-option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.9.0/docs/navigation.md).
+option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.9.1/docs/navigation.md).
 
 <!-- periplus-help -->
 ```text
@@ -108,6 +108,20 @@ periplus find invoice --ids | periplus count -
 - When the map and the code disagree, say so. It is a map gap worth reporting; the periplus-gaps
   skill records one.
 
+## Words the commands use
+
+- A walk by cause follows the kinds where one thing sets off another. `periplus legend` prints
+  each kind's cause: `from`, the from end sets off the to end, as a call; `to`, the to end sets
+  off the from end, as a hook runs its function; `none`, structure, never followed; `touch`,
+  points at a thing without running it, not followed unless you pass `--touch`.
+- A hub is a thing with more links to follow than `--hub N`, 40 by default. A walk lists it and
+  stops there; `--through ID` walks on from one. Only the links the walk follows in its
+  direction count, and a start is never a hub, so no hubs does not mean no shared code.
+- `periplus only` lists what nothing outside the ids sets off: what would go unused without
+  them. That is not the list of what belongs to a feature. Give it a feature's own things: a
+  shared thing among the ids brings in all that it sets off.
+- `periplus slice` walks out from its starts. `periplus extract` takes exactly the ids given.
+
 ## Recommendations
 
 These are ways that tend to work, not required steps.
@@ -116,6 +130,13 @@ These are ways that tend to work, not required steps.
   things it names.
 - Let the tool combine sets. `periplus extract` writes ids to a map file, and `periplus join`,
   `periplus common` and `periplus minus` combine map files. This beats reasoning over long lists.
+  Each such file is a map, the same as a slice file: any command reads it with `--map`.
+- To test the edge of a set, list what touches it with `periplus neighbors` and
+  `periplus affected`, extract that, and take the set out with `periplus minus`. Run
+  `periplus count` and `periplus hubs` on what is left to see what matters.
+- When `periplus pieces` splits a set that should be one flow, the map may lack a link there.
+- When `periplus find` matches many things, count them first, then narrow with `--type` or
+  `--path`.
 - `periplus show` on a main thing prints every link kind in and out. Read the kinds before you
   say a link is missing.
 - From a code-search hit, `periplus at FILE:12` gets back to the map: the thing at that line and

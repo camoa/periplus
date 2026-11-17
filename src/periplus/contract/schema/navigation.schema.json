@@ -210,7 +210,7 @@
     },
     "edge_row": {
       "type": "object", "additionalProperties": false,
-      "required": ["kind", "other", "other_type", "other_state", "other_marks", "attributes", "locations", "occurrences", "confidences", "rules", "description", "location", "source", "supporting"],
+      "required": ["kind", "other", "other_type", "other_state", "other_marks", "attributes", "locations", "occurrences", "confidences", "rules", "description", "other_description", "location", "source", "supporting"],
       "properties": {
         "kind": {"type": "string"},
         "attributes": {"$ref": "#/$defs/edge_attributes"},
@@ -224,6 +224,7 @@
         "confidences": {"type": "array", "items": {"enum": ["declared", "inferred", "mentioned"]}},
         "rules": {"type": "array", "items": {"type": "string"}},
         "description": {"$ref": "#/$defs/description"},
+        "other_description": {"description": "The entry of the thing at the other end in the descriptions file, or null when it has none.", "$ref": "#/$defs/description"},
         "location": {"$ref": "#/$defs/place"},
         "source": {"$ref": "#/$defs/source"}
       }

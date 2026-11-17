@@ -1,6 +1,6 @@
 ---
 name: periplus-describe
-description: Writes what the main things of a Periplus map do into .periplus/descriptions.yaml, each from its own code, so periplus find reaches them by plain words. Use when the user says describe this feature, this folder or this project, document these nodes, explain what this part of the map does, or fill the descriptions before a change, and when a slice file made with periplus slice is the working set.
+description: Writes what the main things of a Periplus map do into .periplus/descriptions.yaml, each from its own code, so periplus find reaches them by plain words. Use when the user says describe this feature, this folder or this project, document these nodes, explain what this part of the map does, or fill the descriptions before a change, and when a map file made with periplus slice, extract, join, common or minus is the working set.
 ---
 
 # Describe the things of a Periplus map
@@ -24,9 +24,15 @@ them after `#`, so a plain-word question reaches a thing whose id lacks those wo
   node's code is open.
 - Keep an entry that exists, unless `periplus stale` lists it; then read the code again and
   rewrite it.
+- An entry with no fingerprint was never checked against its code. `periplus stale` counts these
+  as not stamped and does not list them. Read the code again and rewrite such an entry too.
+- `periplus stamp` stamps every entry that has no fingerprint, in or out of your working set.
+  Run it only when each of those was read against its code, or it marks an unread entry as fresh.
+- A thing with several locations, such as a hook that several modules implement, is described
+  from the code at its own locations, not from other files.
 - Skip a thing with no location, or whose line holds nothing that fits it, and report it. When
   several lines in one file miss, the map is stale: tell the person to run `periplus map`.
-- Write only the descriptions file. Never edit the map or a slice.
+- Write only the descriptions file. Never edit the map or a map file made from it.
 
 Good: `Sends the payment reminder email to a customer whose invoice is overdue.`
 
@@ -38,13 +44,16 @@ about other code).
 - `periplus undescribed` counts the main things with no entry, by file; `--ids` lists them.
 - `periplus in FILE --ids` lists the ids of what the map holds in a file, in line order.
 - `periplus order` puts a set in order, each thing after what it calls or uses.
+- `periplus show ID` prints, under each link, the entry of the thing at the other end: what each
+  thing it calls does, once that thing is described.
 - `periplus stamp` writes a fingerprint of each entry's code into the entry.
 - `periplus stale` lists the entries whose code changed since the stamp, and those whose node is
   gone.
 - `periplus find` with an entry's words checks that the entry is reachable.
 
-Each takes `--map PATH`, so a slice file works as the map. Options and output are in
-[Navigation](https://github.com/camoa/periplus/blob/v0.9.0/docs/navigation.md#undescribed).
+Each takes `--map PATH`, so a file written by `periplus slice`, `extract`, `join`, `common` or
+`minus` works as the map. Options and output are in
+[Navigation](https://github.com/camoa/periplus/blob/v0.9.1/docs/navigation.md#undescribed).
 
 ## Recommendations
 
@@ -59,6 +68,24 @@ These are ways that tend to work, not required steps.
 periplus in src/Mail/Reminder.php --ids | periplus order - --ids
 ```
 
+- To describe a flow, start at its entrance, a thing that `periplus depth` says nothing sets
+  off. Take what it sets off, in order, and stop when none is left undescribed:
+
+```
+periplus neighbors ENTRANCE --depth all --ids | periplus order - --ids
+periplus neighbors ENTRANCE --depth all --ids | periplus undescribed -
+```
+
+- For each thing, read `periplus show ID` before its code. The entries under its links say what
+  the things it calls do. Put what you learn about a step in the link's entry, not in the node's.
+- An entry is a hint, and the code decides. When the code you read contradicts an entry, of this
+  thing or of one it links to, rewrite that entry.
+- To see how much of one file is described, in the whole map or in a working set:
+
+```
+periplus in FILE --ids | periplus undescribed -
+```
+
 - A cheaper model can write the entries, with a stronger model reading a small sample of each
   batch against the code.
 - Run `periplus stamp` after writing.
@@ -70,7 +97,7 @@ Two top-level keys. `nodes` maps a node id to its entry. `edges` is a list of en
 carries `text`, and `file` and `line`: where you read the code. `fingerprint` is written by
 `periplus stamp`; do not write it by hand. Keep `nodes` sorted by id and `edges` by `from`,
 `kind`, `to`, so a new pass adds lines without moving old ones. The exact shape is in
-[the descriptions schema](https://github.com/camoa/periplus/blob/v0.9.0/src/periplus/skills/periplus-map/references/descriptions.schema.json).
+[the descriptions schema](https://github.com/camoa/periplus/blob/v0.9.1/src/periplus/skills/periplus-map/references/descriptions.schema.json).
 
 <!-- example descriptions: .periplus/descriptions.yaml -->
 ```yaml

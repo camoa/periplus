@@ -12,7 +12,7 @@
 extra for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.9.0.
+Status: **beta**, version 0.9.1.
 
 </div>
 
@@ -63,7 +63,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.9.0
+uv tool install git+https://github.com/camoa/periplus@v0.9.1
 ```
 
 To install from a local copy of this repository:
@@ -339,30 +339,13 @@ set `views_root` under `folders`; a template is named by its path below `views_r
 
 New in this release:
 
-- **Marks.** A rutter can declare attributes with a short mark, such as `[not installed]`. Every
-  row that names a marked thing prints its mark, and `find --mark` selects by it.
-- **Cause.** Each edge kind says which end sets off the other. `neighbors` lists what an item sets
-  off and `affected` what sets it off, hop by hop, and stop at hubs.
-- **Depth and reach.** `depth` says how far those walks go before you list them. `reach` prints
-  `depth`, both walks, `only` and `hubs` in one reply, within a character budget.
-- **Sets and pipes.** `only`, `hubs`, `members`, `pieces` and `count` work on a set of ids.
-  `--ids` prints ids, and `-` reads them, so one command feeds the next. Map files combine with
-  `extract`, `join`, `common`, `minus` and `diff`.
-- **Description tools.** `in` and `at` go from a file or a line to the map. `undescribed` counts
-  what is left to describe, `order` puts it in reading order, and `stamp` and `stale` keep the
-  descriptions in step with the code.
-- **First run.** `init` finds the project's folders and pins each bundled rutter it detects.
-  `map` exits 33 instead of writing an empty map.
-- **find.** It ranks main things first, counts before it lists, keeps to a character budget, and
-  finds edges by their description or code line.
-- **slice.** It walks by cause, as `neighbors` and `affected` do, in place of following every
-  edge both ways. `slice --from ID` starts from ids you picked.
-- **Rutters.** `drupal_basic` maps the validate, submit and other callbacks code adds to a form or
-  element, and a map rule can withhold a node a file rule found. Every bundled rutter declares
-  the cause of its edge kinds. Five early rutters that could not make a map are removed:
-  `drupal`, `php`, `go`, `twig` and `yaml`; use the `_basic` rutters.
+- **show.** Under each edge row, `show` prints the description of the thing at the other end, so
+  one reply says what each linked thing does.
+- **Skills.** The map skill says what a walk by cause follows, and what a hub and `only` mean. The
+  describe skill covers entries with no fingerprint and describing along a flow.
 
-Map again after upgrading, so the walks can read each edge kind's cause.
+Release 0.9.0 added marks, walks by cause, sets of ids and the description tools; the
+[changelog](CHANGELOG.md) lists them. Run `periplus skills install` after upgrading.
 
 ## Write a rutter
 

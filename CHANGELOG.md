@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-17
+
+### Added
+
+- `periplus show` prints the entry of the thing at the other end of each edge row, as `other description:`, and as `other_description` in JSON, so one reply says what each linked thing does.
+
+### Changed
+
+- The `periplus-map` skill says what a walk by cause follows, what a hub and `periplus only` mean, how `slice` differs from `extract`, and that a file from `extract`, `join`, `common` or `minus` is a map file. The `periplus-describe` skill covers entries with no fingerprint, what `periplus stamp` marks, things with several locations, and describing along a flow.
+
 ## [0.9.0] - 2026-11-17
 
 ### Added

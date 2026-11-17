@@ -521,7 +521,9 @@ outside the project has no section.
 by walking up from the folder of the `--map` file, or of the default map when no `--map` is given.
 When no project is found, it reads the `descriptions.yaml` beside the map file. It prints the node's
 entry as `description: <text> (<file>:<line>)`, or `description: none` when the node has none. An
-edge with an entry gets the same line, indented, under its row. JSON puts the entry, or `null`, in
+edge with an entry gets the same line, indented, under its row. When the thing at the other end
+of a row has an entry, `other description: <text> (<file>:<line>)` follows, so one reply says what
+each linked thing does; in JSON the row holds it, or `null`, in `other_description`. JSON puts the entry, or `null`, in
 a `description` key. A descriptions file that is not YAML, or not the shape the `periplus-map`
 skill's `descriptions.schema.json` states, is a problem with exit 30, and `show` still prints the
 node and its edges.

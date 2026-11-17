@@ -138,3 +138,43 @@ def test_show_reports_a_bad_descriptions_file_as_a_problem_c7(
     assert code == NOT_A_MAP
     assert "php::A" in text
     assert "description: none" in text
+
+
+WITH_B = DESCRIPTIONS.replace(
+    "edges:", "  php::B:\n    text: Saves the thing.\n    file: src/b.php\n    line: 9\nedges:"
+)
+OTHER_LINE = "other description: Saves the thing. (src/b.php:9)"
+
+
+def test_show_prints_the_entry_of_the_thing_at_the_other_end_of_a_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _write_map(tmp_path)
+    (tmp_path / ".periplus" / "descriptions.yaml").write_text(WITH_B)
+
+    code, text = _run(capsys, A, path, "text")
+    assert code == 0
+    lines = [ln.strip() for ln in text.splitlines()]
+    edge_row = next(i for i, ln in enumerate(lines) if ln.startswith(B))
+    assert lines[edge_row + 1 : edge_row + 3] == [EDGE_LINE, OTHER_LINE]
+
+    _, out = _run(capsys, A, path, "json")
+    row = json.loads(out)["outgoing"]["items"][0]
+    assert row["other_description"] == {"text": "Saves the thing.", "file": "src/b.php", "line": 9}
+
+    _, text = _run(capsys, B, path, "text")
+    lines = [ln.strip() for ln in text.splitlines()]
+    assert "other description: Loads the thing. (src/a.php:3)" in lines
+
+
+def test_show_prints_no_other_line_for_an_end_without_an_entry(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _write_map(tmp_path)
+    (tmp_path / ".periplus" / "descriptions.yaml").write_text(DESCRIPTIONS)
+
+    _, text = _run(capsys, A, path, "text")
+    assert "other description:" not in text
+
+    _, out = _run(capsys, A, path, "json")
+    assert json.loads(out)["outgoing"]["items"][0]["other_description"] is None

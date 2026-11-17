@@ -93,6 +93,7 @@ class EdgeRow:
     ``location`` is the edge's first location, or the other end's when the edge has none, and
     ``source`` the line of code there. ``supporting`` marks an other end in supporting code,
     ``other_marks`` holds the other end's mark texts, and ``attributes`` the edge's own.
+    ``other_description`` is the other end's entry in the descriptions file, when it has one.
     """
 
     kind: str
@@ -109,6 +110,7 @@ class EdgeRow:
     supporting: bool = False
     other_marks: tuple[str, ...] = ()
     attributes: Mapping[str, Any] = field(default_factory=dict)
+    other_description: Description | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +159,7 @@ def _rows(
     edges: list[dict[str, Any]],
     end: str,
     described: Mapping[tuple[str, str, str], Description],
+    entries: Mapping[str, Any],
 ) -> list[EdgeRow]:
     """Edge rows sorted by kind, then other-end id, then first location; those whose other end is
     supporting code after the rest."""
@@ -182,6 +185,7 @@ def _rows(
                 supporting=index.supporting(edge[end]) is not None,
                 other_marks=index.marks(edge[end]),
                 attributes=edge_attributes(edge),
+                other_description=_entry(entries[edge[end]]) if edge[end] in entries else None,
             )
         )
     return sorted(rows, key=lambda r: (r.supporting, r.kind, r.other, _first(r.locations)))
@@ -284,8 +288,12 @@ def _one(
                 locations=tuple(_placed(node["locations"])),
                 provenance=tuple(node["provenance"]),
                 description=_entry(nodes[node_id]) if node_id in nodes else None,
-                outgoing=_shown(_rows(index, index.outgoing(node_id), "to", edges), limit, lines),
-                incoming=_shown(_rows(index, index.incoming(node_id), "from", edges), limit, lines),
+                outgoing=_shown(
+                    _rows(index, index.outgoing(node_id), "to", edges, nodes), limit, lines
+                ),
+                incoming=_shown(
+                    _rows(index, index.incoming(node_id), "from", edges, nodes), limit, lines
+                ),
                 forms=forms,
                 more_forms=more_forms,
                 warnings=resolved,
@@ -391,6 +399,7 @@ def _json_row(row: EdgeRow) -> dict[str, Any]:
         "confidences": list(row.confidences),
         "rules": list(row.rules),
         "description": _json_description(row.description),
+        "other_description": _json_description(row.other_description),
         "location": row.location,
         "source": row.source,
         "supporting": row.supporting,
@@ -423,6 +432,8 @@ def _edge_lines(listing: Listing[EdgeRow]) -> list[str]:
         lines += source_line(row.source)
         if row.description is not None:
             lines.append(f"      description: {_described(row.description)}")
+        if row.other_description is not None:
+            lines.append(f"      other description: {_described(row.other_description)}")
     note = footer(listing)
     return lines + ([f"  {note}"] if note else []) or ["  none"]
 
