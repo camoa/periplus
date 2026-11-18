@@ -1,29 +1,41 @@
 ---
 name: periplus-map
-description: Answers code questions from a Periplus map, the deterministic graph of a codebase in .periplus/map.json, and records what a node or edge does in the descriptions file beside it. Use when a project has a .periplus/map.json and the user asks what calls or uses this, who uses this service, what breaks if this changes, where something is defined, how A reaches B, which subscribers listen to an event, what makes up a feature, or which files take part in a feature. Ask the map first; read code to confirm a line or where the map has no answer.
+description: Answers code questions from a Periplus map, the deterministic graph of a codebase in .periplus/map.json, and saves the set of things that take part in a feature as a map file. Use when a project has a .periplus/map.json and the user asks what calls or uses this, who uses this service, what breaks if this changes, where something is defined, how A reaches B, which subscribers listen to an event, what makes up a feature, everything that takes part in X, which files take part in a feature, or for an inventory of an area such as login or invoicing. Ask the map first; read code to confirm a line or where the map has no answer.
 ---
 
 # Answer code questions from a Periplus map
 
-## What the map is
+Using the map means following its nodes and edges to find everything that is connected and still
+related to the topic. Words only find where to start. "Still related" is also when to stop: walk
+until what you reach is no longer about the topic. That judgement is yours.
 
-- A graph of the code's things and the links between them, each at a file and line. Rules make
-  it, so the same code gives the same map, byte for byte.
-- It holds what its rules find, nothing more. A thing missing from the map is a missing rule, not
-  proof that the code lacks it.
-- `[marks]` on a row, such as `[not installed]`, are facts about that thing. A mark the rutter
-  spreads holds for everything inside the thing too.
-- Each row has a state. `mapped`: found in the project, with a location. `boundary`: outside the
-  project, and a rule says what it is. `referenced`: named by a link, defined elsewhere.
-  `unresolved`: a rule looked for the target by name and found none; the link and its line are
-  real. `unknown_boundary`: picked at run time, or outside with no rule; read the code there.
-- What a thing does lives in `.periplus/descriptions.yaml`, beside the map. Rows print it after
-  `#`, and `find` searches it.
+Know which kind of work you are doing. A **lookup** asks one question about one thing: who calls
+this, where is that defined. A **set** asks for everything that takes part in something: a
+feature, a flow, an area. The product of set work is a slice. Before set work, read
+references/find-a-feature.md: what the work holds, a worked example, and how to keep calls few.
+
+## Words
+
+- A **walk by cause** follows the kinds where one thing sets off another: the walk off lists
+  what a thing sets off, the walk by what sets it off. `periplus legend` prints each kind's
+  cause; `none` (structure) and `touch` (points, runs nothing) are not walked.
+- A **hub** has more links to follow than `--hub N`, 40 by default. A walk lists it and stops.
+  It is often shared code: walk on with `--through ID` only when it belongs to the topic.
+- A **start** is where your words land. An **entrance** is a thing nothing in the map sets off,
+  as `periplus depth` shows. The periplus-describe skill means the same.
+- A **slice** is a map file that `periplus slice --out FILE`, `periplus extract`,
+  `periplus join`, `periplus common` or `periplus minus` writes. Commands read it with `--map`.
+- The **rim** of a set is what lies one hop from it, either way, and is not in it.
+- Row states: `mapped`, here with a location; `boundary`, outside, a rule says what it is;
+  `referenced`, named by a link, defined elsewhere; `unresolved`, no target by that name, but the
+  link and line are real; `unknown_boundary`, picked at run time or outside with no rule: read
+  the code. `[marks]`, such as `[not installed]`, are facts about a thing. `#` starts its
+  description.
 
 ## The tools
 
-`periplus --help` prints this list; `periplus find --help` prints the options of one command. Every
-option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.9.1/docs/navigation.md).
+`periplus --help` prints this list; `periplus find --help` prints one command's options. Every
+option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.9.2/docs/navigation.md).
 
 <!-- periplus-help -->
 ```text
@@ -78,72 +90,71 @@ descriptions:
   stale        list the node entries whose code changed or whose node is gone
 
 Shared options, where a command has them: --ids prints only full ids, one a line; - in place
-of the ids reads them from standard input; --format json prints JSON; --limit 0 lifts a
-budget; --map PATH reads another map or a slice file. periplus COMMAND --help prints the
-options of one command.
+of the ids reads them from standard input; --format json prints JSON; --map PATH reads
+another map or a slice file. --limit 0 lifts the budget of find, show, neighbors, affected,
+path, reach, slice and diff; the other commands print every row and take no --limit.
+periplus COMMAND --help prints the options of one command.
 ```
+
+The commands are small; you combine them. By job:
+- **Find starts:** `periplus find` (`--type`, `--path`, `--mark`, `--any`), `periplus at`,
+  `periplus in`, `periplus members`, and `affected --depth all` from what the topic does.
+- **Bound and plan:** cheap facts, the same each run, to decide what to read and how to slice.
+  `depth` says how far each walk goes, both ways, and where hubs stop it; `hubs` names them.
+  `count` and `files` say how big a set is and what it holds; `pieces`, one flow or several.
+  `neighbors` lists what a start sets off, `affected` what sets it off, `reach` both. Before a
+  slice, they should say roughly how big it will be and whether it leaves the topic; a refused or
+  oversized slice means a planning question was skipped. references/find-a-feature.md shows how
+  to read each reply. Leave counting and walking to the commands; spend your effort on meaning:
+  which words, what is still related, what is in or out.
+- **Save and combine:** `periplus slice --out FILE`, `extract`, `join`, `common`, `minus`.
+- **Inspect one thing:** `periplus show`, `periplus path`.
+
+Defaults that bound a result:
+- `slice` from words takes at most 12 starts (`--starts`), favouring two of one type, and walks
+  2 hops each way (`--depth`). It prints 50 things past the starts; with `--out` it holds at
+  most 500, and over that writes nothing and exits 32.
+- `neighbors` and `affected` walk 1 hop unless given `--depth`; `reach` and `hubs` walk all.
+- `--limit` counts characters in `find` (12,000), `neighbors`, `affected` and `reach` (20,000),
+  rows in `show` (50) and chains in `path` (10). `--ids` is never cut.
 
 ## Rules
 
-- Ask the map first. It holds links that no text search finds: the method behind a route, the
-  class behind a service, the template a hook renders, what calls what.
-- Counts are cheap. Ask `periplus depth`, `periplus count`, or read the first lines of
-  `periplus find`, before you pull rows.
-- A cut reply names the command that prints the rest. A cut reply is not the whole answer: never
-  say nothing else touches a thing from one.
-- Pass ids between periplus commands with `--ids` and `-`. Do not copy ids by hand; long ids get
-  mangled. Pipe a periplus command only into another periplus command; `head` or `grep` drop
-  rows without a word:
+- Ask the map first: it holds links no text search finds. A thing missing from it is a missing
+  rule, not proof the code lacks it.
+- Set work always goes through a slice. Ask the user whether a saved slice for it exists, and
+  read it with `--map FILE`. If none does, make one with `periplus slice --out FILE`. The tool
+  names no folder for slices: put it beside the map and tell the user where.
+- Before you say a set is complete: it is saved as a slice; it was walked from its entrances
+  until what the walk reached was no longer about the topic; and its rim was read, with a
+  stated reason for each thing left out.
+- Read periplus output whole, or narrow it with periplus: `periplus find WORDS --limit 1` for
+  the counts, `--type`, `--path`, `--ids` piped into `periplus count -`, slices. Never cut it
+  with `grep`, `head`, `awk`, `cut` or a script, JSON included: they drop rows without a word.
+- A cut reply names the command for the rest. It never shows that nothing else is there.
+- Widen loose words yourself (login: authentication, sign in, session); drop what does not fit.
+- Run from the folder that holds `.periplus/`, and run `periplus map` only when asked. A short
+  name that fits several things exits 31 and lists their ids; paste one as printed.
+- When the map and the code disagree, say so. It is a map gap; the periplus-gaps skill records it.
+
+## Ways that tend to work
+
+- A lookup: `periplus find` on the words, then `periplus reach` or `periplus show`.
+- One slice need not hold it all. When the start count, the depth or the 500 cap gets in the
+  way, make partial slices, one per entrance or part, and join them into one file:
 
 ```
-periplus find invoice --ids | periplus count -
+periplus slice --from ENTRANCE --direction off --depth 4 --out login-form.map.json
+periplus join login-form.map.json login-reset.map.json --out login.map.json
 ```
 
-- Widen loose words yourself. The user's word may not be the code's word: for login, also search
-  authentication, sign in, session. Search each.
-- Paste names as printed. A short name that fits several things exits 31 and lists their ids; run
-  again with one of them.
-- Run commands from the project root, the folder that holds `.periplus/`.
-- Do not run `periplus map` unless the user asks. The map is already built.
-- When the map and the code disagree, say so. It is a map gap worth reporting; the periplus-gaps
-  skill records one.
+- Read the rim, then decide what belongs. `periplus extract` and `periplus minus` take things out:
 
-## Words the commands use
+```
+periplus find --map login.map.json --ids | periplus reach - --depth 1 --ids | periplus extract - --out rim.map.json
+periplus minus rim.map.json login.map.json
+```
 
-- A walk by cause follows the kinds where one thing sets off another. `periplus legend` prints
-  each kind's cause: `from`, the from end sets off the to end, as a call; `to`, the to end sets
-  off the from end, as a hook runs its function; `none`, structure, never followed; `touch`,
-  points at a thing without running it, not followed unless you pass `--touch`.
-- A hub is a thing with more links to follow than `--hub N`, 40 by default. A walk lists it and
-  stops there; `--through ID` walks on from one. Only the links the walk follows in its
-  direction count, and a start is never a hub, so no hubs does not mean no shared code.
-- `periplus only` lists what nothing outside the ids sets off: what would go unused without
-  them. That is not the list of what belongs to a feature. Give it a feature's own things: a
-  shared thing among the ids brings in all that it sets off.
-- `periplus slice` walks out from its starts. `periplus extract` takes exactly the ids given.
-
-## Recommendations
-
-These are ways that tend to work, not required steps.
-
-- Start with `periplus find` on the question's words, then `periplus reach` on the few main
-  things it names.
-- Let the tool combine sets. `periplus extract` writes ids to a map file, and `periplus join`,
-  `periplus common` and `periplus minus` combine map files. This beats reasoning over long lists.
-  Each such file is a map, the same as a slice file: any command reads it with `--map`.
-- To test the edge of a set, list what touches it with `periplus neighbors` and
-  `periplus affected`, extract that, and take the set out with `periplus minus`. Run
-  `periplus count` and `periplus hubs` on what is left to see what matters.
-- When `periplus pieces` splits a set that should be one flow, the map may lack a link there.
-- When `periplus find` matches many things, count them first, then narrow with `--type` or
-  `--path`.
-- `periplus show` on a main thing prints every link kind in and out. Read the kinds before you
-  say a link is missing.
-- From a code-search hit, `periplus at FILE:12` gets back to the map: the thing at that line and
-  what holds it.
-- Read the source line under a row first. Open the file only when the answer needs more.
-- When you read the code of a thing that has no description, add its entry; the
-  periplus-describe skill says how.
-
-When the map has no answer, or to confirm a line, search the code:
-see references/code-search.md.
+- A set that should be one flow but falls into pieces may lack a start, or a link in the map.
+- The periplus-describe skill describes a thing whose code you read, and a saved set (`--map`).
+- When the map has no answer, or to confirm a line, see references/code-search.md.

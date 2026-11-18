@@ -53,7 +53,7 @@ about other code).
 
 Each takes `--map PATH`, so a file written by `periplus slice`, `extract`, `join`, `common` or
 `minus` works as the map. Options and output are in
-[Navigation](https://github.com/camoa/periplus/blob/v0.9.1/docs/navigation.md#undescribed).
+[Navigation](https://github.com/camoa/periplus/blob/v0.9.2/docs/navigation.md#undescribed).
 
 ## Recommendations
 
@@ -97,7 +97,7 @@ Two top-level keys. `nodes` maps a node id to its entry. `edges` is a list of en
 carries `text`, and `file` and `line`: where you read the code. `fingerprint` is written by
 `periplus stamp`; do not write it by hand. Keep `nodes` sorted by id and `edges` by `from`,
 `kind`, `to`, so a new pass adds lines without moving old ones. The exact shape is in
-[the descriptions schema](https://github.com/camoa/periplus/blob/v0.9.1/src/periplus/skills/periplus-map/references/descriptions.schema.json).
+[the descriptions schema](https://github.com/camoa/periplus/blob/v0.9.2/src/periplus/skills/periplus-map/references/descriptions.schema.json).
 
 <!-- example descriptions: .periplus/descriptions.yaml -->
 ```yaml

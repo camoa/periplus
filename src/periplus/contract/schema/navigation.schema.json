@@ -382,6 +382,14 @@
         "hubs": {"type": "array", "items": {"$ref": "#/$defs/hub"}}
       }
     },
+    "depth_alone": {
+      "type": "object", "additionalProperties": false, "required": ["hops", "things", "hubs"],
+      "properties": {
+        "hops": {"description": "Hops until the walk reaches nothing new.", "type": "integer", "minimum": 0},
+        "things": {"type": "integer", "minimum": 0},
+        "hubs": {"type": "array", "items": {"$ref": "#/$defs/hub"}}
+      }
+    },
     "touching_count": {
       "type": "object", "additionalProperties": false, "required": ["things", "kinds"],
       "properties": {
@@ -392,11 +400,23 @@
     "depth": {
       "description": "periplus depth: both walks by cause from the starts, to the end.",
       "type": "object", "additionalProperties": false,
-      "required": ["starts", "sets_off", "set_off_by", "touching", "undeclared", "declares_causes", "warnings", "problems"],
+      "required": ["starts", "sets_off", "set_off_by", "each_start", "touching", "undeclared", "declares_causes", "warnings", "problems"],
       "properties": {
         "starts": {"type": "array", "items": {"type": "string"}},
         "sets_off": {"$ref": "#/$defs/depth_direction"},
         "set_off_by": {"$ref": "#/$defs/depth_direction"},
+        "each_start": {
+          "description": "Both walks from each start alone, in the order given.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "sets_off", "set_off_by"],
+            "properties": {
+              "id": {"type": "string"},
+              "sets_off": {"$ref": "#/$defs/depth_alone"},
+              "set_off_by": {"$ref": "#/$defs/depth_alone"}
+            }
+          }
+        },
         "touching": {
           "type": "object", "additionalProperties": false, "required": ["point_at_starts", "starts_point_at"],
           "properties": {

@@ -32,13 +32,15 @@ KINDS_NAMED = 3
 @dataclass(frozen=True, slots=True)
 class DepthReport:
     """Both walks by cause from ``starts``: what they set off (``off``) and what sets them off
-    (``by``), each row to the end; the touching edges at the starts, as (kind, edges) arriving
+    (``by``), each row to the end; the same two walks from each start alone (``alone``), in the
+    order given; the touching edges at the starts, as (kind, edges) arriving
     (``pointed``, from ``pointers`` things) and leaving (``pointing``, to ``pointees`` things);
     the kinds walked undeclared; and whether the map lists any cause."""
 
     starts: tuple[str, ...] = ()
     off: tuple[CauseRow, ...] = ()
     by: tuple[CauseRow, ...] = ()
+    alone: tuple[tuple[str, tuple[CauseRow, ...], tuple[CauseRow, ...]], ...] = ()
     pointed: tuple[tuple[str, int], ...] = ()
     pointers: int = 0
     pointing: tuple[tuple[str, int], ...] = ()
@@ -96,6 +98,19 @@ def measure(
             starts = list(dict.fromkeys(starts))
             off = cause_walk(index, starts, "off", (), hub, passes)
             by = cause_walk(index, starts, "by", (), hub, passes)
+            # One start alone is the whole walk; it is not walked twice.
+            alone = (
+                [(starts[0], off.rows, by.rows)]
+                if len(starts) == 1
+                else [
+                    (
+                        item,
+                        cause_walk(index, [item], "off", (), hub, passes).rows,
+                        cause_walk(index, [item], "by", (), hub, passes).rows,
+                    )
+                    for item in starts
+                ]
+            )
             pointed, pointers = _touch(index, starts, False)
             pointing, pointees = _touch(index, starts, True)
     except HarnessError as error:
@@ -104,6 +119,7 @@ def measure(
         tuple(starts),
         off.rows,
         by.rows,
+        tuple(alone),
         pointed,
         pointers,
         pointing,
@@ -137,8 +153,18 @@ def _kinds(counted: Sequence[tuple[str, int]]) -> str:
     return named + (f", +{amount(left, 'kind')}" if left > 0 else "")
 
 
+def _alone(label: str, rows: Sequence[CauseRow]) -> str:
+    last = max((r.hop for r in rows), default=0)
+    hubs = sum(r.hub is not None for r in rows)
+    return (
+        f"{label} {amount(last, 'hop')}, {amount(len(rows), 'thing')},"
+        f" {amount(hubs, 'hub')} stopped"
+    )
+
+
 def render_text(report: DepthReport) -> str:
-    """One line per direction, then the touching line and the undeclared line when there are any."""
+    """One line per direction; with several starts a row per start walked alone; then the touching
+    line and the undeclared line when there are any."""
     args, note = start_args(report.starts, report.piped)
     named = " ".join(_escape(s) for s in args)
     on = _escape(map_flag(report.map_path))
@@ -147,6 +173,13 @@ def render_text(report: DepthReport) -> str:
         lines.append(summary("sets off:", report.off, True))
         lines.append(summary("set off by:", report.by, True))
         one = len(report.starts) == 1
+        if not one:
+            width = max(len(_escape(item)) for item, _, _ in report.alone)
+            lines.append("each start alone:")
+            lines += [
+                f"  {_escape(item):<{width}}  {_alone('sets off', off)}; {_alone('set off by', by)}"
+                for item, off, by in report.alone
+            ]
         parts = []
         if report.pointers:
             verb = "points" if report.pointers == 1 else "point"
@@ -190,6 +223,16 @@ def render_json(report: DepthReport) -> str:
             "starts": list(report.starts),
             "sets_off": _direction(report.off),
             "set_off_by": _direction(report.by),
+            "each_start": [
+                {
+                    "id": item,
+                    **{
+                        key: {k: v for k, v in _direction(rows).items() if k != "per_hop"}
+                        for key, rows in (("sets_off", off), ("set_off_by", by))
+                    },
+                }
+                for item, off, by in report.alone
+            ],
             "touching": {
                 "point_at_starts": {"things": report.pointers, "kinds": dict(report.pointed)},
                 "starts_point_at": {"things": report.pointees, "kinds": dict(report.pointing)},

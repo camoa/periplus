@@ -184,9 +184,10 @@ CATALOGUE: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 CONVENTIONS = (
     "Shared options, where a command has them: --ids prints only full ids, one a line; - in place\n"
-    "of the ids reads them from standard input; --format json prints JSON; --limit 0 lifts a\n"
-    "budget; --map PATH reads another map or a slice file. periplus COMMAND --help prints the\n"
-    "options of one command."
+    "of the ids reads them from standard input; --format json prints JSON; --map PATH reads\n"
+    "another map or a slice file. --limit 0 lifts the budget of find, show, neighbors, affected,\n"
+    "path, reach, slice and diff; the other commands print every row and take no --limit.\n"
+    "periplus COMMAND --help prints the options of one command."
 )
 
 
@@ -513,8 +514,13 @@ def build_parser() -> argparse.ArgumentParser:
         "depth",
         help="say how far the walks from an item go, both ways, and where hubs stop them",
         description="Walk by cause from ID both ways to the end and print, per direction, the "
-        "hops, the things reached, the share within 2, 3 and 5 hops and the hubs stopped at, and "
-        "stop.",
+        "hops, the things reached, the share within 2, 3 and 5 hops and the hubs stopped at; with "
+        "several IDs, add one row per ID walked alone, and stop. Run it to pick a --depth for "
+        "neighbors and affected before you list anything. The hops are how far the walk goes "
+        "before it reaches nothing new; when most things lie within 2 or 3 hops, a short --depth "
+        "gets nearly all of them. A hub stopped means the walk was cut at shared code, and "
+        "--through ID walks on from it. A large set off by means much depends on the IDs. With "
+        "several IDs, the rows show which ID drives the walk.",
     )
     depth.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
     add_hub(depth)
@@ -638,7 +644,10 @@ def build_parser() -> argparse.ArgumentParser:
         "hubs",
         help="list the hubs the walk by cause from the ids stops at",
         description="Walk by cause from the IDs and list each hub it stops at: name, type, hop "
-        "and fan, and stop.",
+        "and fan, and stop. Run it to see where shared code cut the walk before you list "
+        "neighbors or affected. The walk does not go past a hub, so what lies behind one is "
+        "missing from the walk; give the hub to --through, here or in neighbors, when that part "
+        "matters.",
     )
     hubs.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
     hubs.add_argument(
@@ -692,7 +701,10 @@ def build_parser() -> argparse.ArgumentParser:
         "pieces",
         help="split ids into the groups that edges among them join",
         description="Split the things the IDs name into pieces, two in one piece when an edge "
-        "of any kind joins them directly or through others of the IDs, and stop.",
+        "of any kind joins them directly or through others of the IDs, and stop. Run it to see "
+        "whether a set is one joined part or several before you read its rows. Several pieces "
+        "mean parts that no edge within the set joins; read each piece on its own, or ask why a "
+        "small piece is in the set.",
     )
     pieces.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
     add_ids(pieces)
@@ -702,7 +714,9 @@ def build_parser() -> argparse.ArgumentParser:
         "count",
         help="count the things ids name, by type and state, and the edges among them",
         description="Count the things the IDs name by type and by state, the edges among them by "
-        "kind, and list the IDs that name no node, and stop.",
+        "kind, and list the IDs that name no node, and stop. Run it to see how large a set is and "
+        "what it is made of before you list its rows. An ID under not in the map names no node, "
+        "or is a short name that fits several, so fix it before you walk from it.",
     )
     count.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
     add_map(count, "the map file to read")
@@ -738,7 +752,9 @@ def build_parser() -> argparse.ArgumentParser:
     holding = subcommands.add_parser(
         "files",
         help="list the files that hold a set of things, most first",
-        description="Count the things the IDs name by file, most first, and stop.",
+        description="Count the things the IDs name by file, most first, and stop. Run it to "
+        "see which files to open before you read code. The top files hold the most of the set, "
+        "so read those first; no location counts the things the map places in no file.",
     )
     holding.add_argument("id", metavar="ID", nargs="+", help=IDS_HELP)
     add_map(holding, "the map file to read")

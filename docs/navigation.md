@@ -295,14 +295,26 @@ sets off:    10 hops, 128 things; 8% within 2, 21% within 3, 57% within 5; 0 hub
 set off by:   2 hops, 2 things; 0 hubs stopped
 ```
 
-A share is left out when the walk ends at or before its hop. A `touching:` line follows when edges
+A share is left out when the walk ends at or before its hop. With several `ID`s the two lines walk
+from all of them together, and an `each start alone:` block follows: one row a start, in the order
+given, with the hops and things each direction reaches from that start alone and the hubs it stopped
+at, so you can see which start drives the long walk:
+
+```
+each start alone:
+  x::a  sets off 9 hops, 120 things, 0 hubs stopped; set off by 1 hop, 1 thing, 0 hubs stopped
+  x::b  sets off 2 hops, 5 things, 1 hub stopped; set off by 2 hops, 2 things, 0 hubs stopped
+```
+
+With one `ID` there is no block. A `touching:` line follows when edges
 of a `touch` kind point at the `ID`s or leave them: how many things, the kinds with their edge
 counts (three named, the rest counted), and the command that lists them, `see periplus affected
 ID --touch`. A last line names the
 kinds the walk followed undeclared, or says the map declares no cause directions. `--hub` and
 `--through` work as in [the walk by cause](#the-walk-by-cause). In JSON, `sets_off` and `set_off_by` each hold `hops`,
 `things`, `per_hop` (the things each hop reached, from hop 1) and `hubs` (`id`, `hop`, `fan`);
-`touching` holds `point_at_starts` and `starts_point_at`, each with `things` and `kinds`; and
+`each_start` holds one entry a start, with one entry for a single `ID` too: `id`, and `sets_off` and
+`set_off_by` each with `hops`, `things` and `hubs`; `touching` holds `point_at_starts` and `starts_point_at`, each with `things` and `kinds`; and
 `undeclared` and `declares_causes`.
 
 ### count

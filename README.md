@@ -12,7 +12,7 @@
 extra for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.9.1.
+Status: **beta**, version 0.9.2.
 
 </div>
 
@@ -63,7 +63,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.9.1
+uv tool install git+https://github.com/camoa/periplus@v0.9.2
 ```
 
 To install from a local copy of this repository:
@@ -339,10 +339,12 @@ set `views_root` under `folders`; a template is named by its path below `views_r
 
 New in this release:
 
-- **show.** Under each edge row, `show` prints the description of the thing at the other end, so
-  one reply says what each linked thing does.
-- **Skills.** The map skill says what a walk by cause follows, and what a hub and `only` mean. The
-  describe skill covers entries with no fingerprint and describing along a flow.
+- **depth.** Given several ids, `depth` adds a row for each id walked alone, so you can see which
+  start drives a long walk. `reach` shows the same rows.
+- **Help.** The help of `depth`, `count`, `pieces`, `files` and `hubs` says what each answer is
+  for and how to read it, and `periplus --help` names the commands that take `--limit`.
+- **Skills.** The map skill is rewritten around a lookup and a set. A new reference file tells
+  how to find everything that takes part in a feature and save it as one slice.
 
 Release 0.9.0 added marks, walks by cause, sets of ids and the description tools; the
 [changelog](CHANGELOG.md) lists them. Run `periplus skills install` after upgrading.

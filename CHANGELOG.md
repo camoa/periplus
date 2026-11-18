@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-18
+
+### Added
+
+- The `periplus-map` skill has a reference file, `references/find-a-feature.md`. It tells how to find everything that takes part in a feature: widening the words with few calls, walking back to the entrances, also from what the feature does, planning with the cheap commands and reading their answers, partial slices joined into one, hubs, and what touches the set from outside, its rim.
+
+### Changed
+
+- `periplus depth` given several ids prints, after the two total lines, an `each start alone:` block with one row per id, in the order given: the hops, things and hubs stopped each way from that id alone. In JSON, `each_start` holds the same, with one entry for a single id too. Given one id, the text prints as before. `periplus reach` shows the same block in its `depth` part.
+- The help of `depth`, `count`, `pieces`, `files` and `hubs` says what each answer is for and how to read it.
+- The help text of `periplus --help` names the commands that take `--limit`: `find`, `show`, `neighbors`, `affected`, `path`, `reach`, `slice` and `diff`. It says the other commands print every row and take no `--limit`.
+- The `periplus-map` skill is rewritten around two kinds of work, a lookup and a set. It says that using the map means following nodes and edges to everything connected and still related, that set work goes through a saved slice, what a finished set holds, which defaults limit a result, and that the cheap commands are for planning a walk. Its commands are grouped by job.
+
 ## [0.9.1] - 2026-11-17
 
 ### Added

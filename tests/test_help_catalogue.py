@@ -61,6 +61,17 @@ def test_the_help_ends_with_the_shared_conventions() -> None:
         assert convention in tail, convention
 
 
+def test_the_help_names_exactly_the_commands_that_take_a_limit() -> None:
+    parser = build_parser()
+    commands = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
+    takes = {n for n, sub in commands.choices.items() if "--limit" in sub._option_string_actions}
+    tail = " ".join(parser.format_help().rstrip("\n").split("\n\n")[-1].split())
+    named = re.search(r"--limit 0 lifts the budget of (.+?);", tail)
+    assert named is not None
+    assert set(re.findall(r"[a-z-]+", named.group(1))) - {"and"} == takes
+    assert "take no --limit" in tail
+
+
 def test_the_help_text_does_not_depend_on_the_terminal_width(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

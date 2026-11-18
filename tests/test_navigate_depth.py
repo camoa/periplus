@@ -101,6 +101,66 @@ def test_several_starts_are_one_set(tmp_path: Path) -> None:
     assert lines[1].startswith("sets off:     3 hops, 5 things;")
 
 
+def test_one_start_prints_the_two_lines_alone(tmp_path: Path) -> None:
+    report = depth.run(tmp_path, {}, ["x::n0"], _write(tmp_path))
+
+    assert depth.render_text(report) == (
+        "periplus depth x::n0\n"
+        "sets off:     6 hops, 6 things; 33% within 2, 50% within 3, 83% within 5; 0 hubs stopped\n"
+        "set off by:   1 hop, 1 thing; 0 hubs stopped\n"
+    )
+
+
+def test_several_starts_add_a_row_per_start_alone_in_the_order_given(tmp_path: Path) -> None:
+    edges = [*CHAIN, ("links_to", "x::l1", "x::n0", 1)]
+    lines = _lines(tmp_path, "x::n3", "x::n0", edges=edges)
+
+    assert lines[1].startswith("sets off:     3 hops, 5 things;")
+    assert lines[2] == "set off by:   2 hops, 3 things; 0 hubs stopped"
+    assert lines[3:6] == [
+        "each start alone:",
+        "  x::n3  sets off 3 hops, 3 things, 0 hubs stopped;"
+        " set off by 4 hops, 4 things, 0 hubs stopped",
+        "  x::n0  sets off 6 hops, 6 things, 0 hubs stopped;"
+        " set off by 1 hop, 1 thing, 0 hubs stopped",
+    ]
+    assert lines[6].startswith("touching:")
+
+
+def test_a_row_counts_the_hubs_that_start_stopped_at(tmp_path: Path) -> None:
+    edges = [("calls", "x::a", f"x::h{n}", 1) for n in range(4)]
+    edges += [("calls", f"x::h{n}", f"x::h{n}::{m}", 2) for n in range(4) for m in range(3)]
+    edges += [("calls", "x::b", "x::c", 3)]
+    lines = _lines(tmp_path, "x::a", "x::b", edges=edges, hub=2)
+
+    assert lines[4].startswith("  x::a  sets off 1 hop, 4 things, 4 hubs stopped;")
+    assert lines[5].startswith("  x::b  sets off 1 hop, 1 thing, 0 hubs stopped;")
+
+
+def test_the_json_holds_each_start_alone_for_one_start_or_several(tmp_path: Path) -> None:
+    path = _write(tmp_path)
+    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    validator = Draft202012Validator({**schema, "anyOf": [{"$ref": "#/$defs/depth"}]})
+    one = json.loads(depth.render_json(depth.run(tmp_path, {}, ["x::n0"], path)))
+    two = json.loads(depth.render_json(depth.run(tmp_path, {}, ["x::n3", "x::n0"], path)))
+
+    assert one["each_start"] == [
+        {
+            "id": "x::n0",
+            "sets_off": {"hops": 6, "things": 6, "hubs": []},
+            "set_off_by": {"hops": 1, "things": 1, "hubs": []},
+        }
+    ]
+    assert [(s["id"], s["set_off_by"]["hops"]) for s in two["each_start"]] == [
+        ("x::n3", 4),
+        ("x::n0", 1),
+    ]
+    assert list(validator.iter_errors(one)) == []
+    assert list(validator.iter_errors(two)) == []
+    del one["each_start"]
+    assert list(validator.iter_errors(one)) != []
+
+
 def test_the_json_counts_each_hop_and_matches_the_schema(tmp_path: Path) -> None:
     report = depth.run(tmp_path, {}, ["x::n0"], _write(tmp_path))
     document = json.loads(depth.render_json(report))
