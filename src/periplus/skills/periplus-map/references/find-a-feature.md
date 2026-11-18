@@ -46,8 +46,8 @@ here most lies within 3, so `--depth 3` gets nearly all, and the tail can be jud
 times a share is roughly the slice at that depth, so the 500 cap shows before you hit it. A hub
 stopped means the walk was cut at shared code; see Hubs below. A large "set off by" means much
 depends on the thing: it is shared, and walking back from it pulls in other features. With
-several ids, `depth` reports the total, and newer versions add a row per start. A total hides
-which start drives the walk, so when the starts differ, ask per entrance. Then list the walk you
+several ids, `depth` reports the total, then a row for each start walked alone. A total hides
+which start drives the walk; the rows show it, so give `depth` the entrances together. Then list the walk you
 mean to save, and ask about its ids:
 
 ```

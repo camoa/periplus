@@ -346,8 +346,8 @@ New in this release:
 - **Skills.** The map skill is rewritten around a lookup and a set. A new reference file tells
   how to find everything that takes part in a feature and save it as one slice.
 
-Release 0.9.0 added marks, walks by cause, sets of ids and the description tools; the
-[changelog](CHANGELOG.md) lists them. Run `periplus skills install` after upgrading.
+Release 0.9.1 made `show` print the description of each linked thing. Release 0.9.0 added marks,
+walks by cause, sets of ids and the description tools. The [changelog](CHANGELOG.md) lists them. Run `periplus skills install` after upgrading.
 
 ## Write a rutter
 
