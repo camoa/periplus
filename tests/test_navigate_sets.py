@@ -151,6 +151,16 @@ def test_join_holds_the_things_and_edges_of_any_input(tmp_path: Path) -> None:
     )
 
 
+def test_join_out_creates_the_missing_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a, b = _two(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["join", str(a), str(b), "--out", "a/b/x.map.json"]) == 0
+    assert _map_errors(tmp_path / "a" / "b" / "x.map.json") == []
+
+
 def test_common_holds_the_things_and_edges_of_every_input(tmp_path: Path) -> None:
     a, b = _two(tmp_path)
 

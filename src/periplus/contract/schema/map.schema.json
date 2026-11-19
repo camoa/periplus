@@ -74,6 +74,12 @@
       "description": "The path patterns of supporting code, as tests, that the packs and the settings name, sorted. A node whose first location's file matches one is supporting code. Written only when there is one, so a map without one is unchanged."
     },
 
+    "part_types": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 50, "maximum": 100},
+      "description": "The part types periplus map found over the whole map, keys sorted, each with its share in percent, rounded down: of the type's mapped, located nodes, those that nest inside another node by id and hold none. A type is a part type when that share is over half, as a parameter or a call site, read as part of what holds it. A map file made from the map carries the whole map's list, so a command reading that file sorts main things and parts as the whole map does. periplus map always writes it, empty when there is none; a map without it is counted over its own nodes."
+    },
+
     "marks": {
       "type": "object", "minProperties": 1,
       "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},

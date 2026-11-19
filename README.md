@@ -12,7 +12,7 @@
 extra for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.9.2.
+Status: **beta**, version 0.10.0.
 
 </div>
 
@@ -63,7 +63,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.9.2
+uv tool install git+https://github.com/camoa/periplus@v0.10.0
 ```
 
 To install from a local copy of this repository:
@@ -177,6 +177,9 @@ periplus show ID
 
 [Read the map](#read-the-map) lists the commands that read the map, grouped by what they are for.
 
+An AI agent tends to skip the map and search by words. [Using the map with an AI
+agent](docs/using-the-map-with-an-agent.md) gives requests to copy that make it use the map.
+
 ## Why Periplus
 
 **The map is one file you commit, it is the same on every run, and nothing serves it.**
@@ -192,6 +195,9 @@ kinds of tool that page describes.
 | What it needs to run | The command line | The tool | A database, a server or a viewer | A model |
 | A new stack | A new rutter, with no engine change | Code in the tool | Code in the tool | A new prompt |
 
+[`docs/evals.md`](docs/evals.md) sets out how Periplus is evaluated and holds the numbers of the
+runs so far.
+
 ## What the map holds
 
 The map is one JSON file. It holds the nodes, the edges, counts by type and by kind, the packs
@@ -202,7 +208,9 @@ it carries those one-line texts under `legend`, as `edge_kinds` and `node_types`
 text, keys sorted; a map whose rutters describe none has no `legend`. It lists each edge kind it
 holds under its cause, the end that sets off the other: `cause_from_kinds`, `cause_to_kinds`,
 `cause_none_kinds` or `cause_touch_kinds`; a kind in none of them is undeclared. When a node holds
-an attribute its rutter gives a mark, `marks` names the mark of each such attribute. Each node has an `id`, a `type`, a `state` and its `locations`
+an attribute its rutter gives a mark, `marks` names the mark of each such attribute.
+`part_types` names each type whose things are mostly parts of what holds them, as parameters,
+with its share in percent, counted over the whole map; a slice carries it. Each node has an `id`, a `type`, a `state` and its `locations`
 (file and line). Its `provenance` names the pack, the rule and the rule's declared confidence: `declared`,
 `inferred` or `mentioned`, strongest first. Rules that reach one node or edge at different
 confidences each keep their own row.
@@ -339,15 +347,20 @@ set `views_root` under `folders`; a template is named by its path below `views_r
 
 New in this release:
 
-- **depth.** Given several ids, `depth` adds a row for each id walked alone, so you can see which
-  start drives a long walk. `reach` shows the same rows.
-- **Help.** The help of `depth`, `count`, `pieces`, `files` and `hubs` says what each answer is
-  for and how to read it, and `periplus --help` names the commands that take `--limit`.
-- **Skills.** The map skill is rewritten around a lookup and a set. A new reference file tells
-  how to find everything that takes part in a feature and save it as one slice.
+- **Entrances.** `depth --entrances` lists which of the given ids are entrances: they set
+  something off and nothing sets them off. `--ids` prints only those ids.
+- **Part types in the map.** `periplus map` writes the part types into the map header. A slice
+  or another saved piece keeps them, so `find` and `undescribed` sort it as the whole map does.
+  Rebuild a map to gain the field.
+- **Skills.** The describe skill sets out the work as a walk from the entrances of the set.
+- **Fixes.** `slice --from A --from B` now keeps both ids. `--out` creates missing folders.
+- **Docs.** Two new pages: [using the map with an AI agent](docs/using-the-map-with-an-agent.md)
+  and [how Periplus is evaluated](docs/evals.md).
 
-Release 0.9.1 made `show` print the description of each linked thing. Release 0.9.0 added marks,
-walks by cause, sets of ids and the description tools. The [changelog](CHANGELOG.md) lists them. Run `periplus skills install` after upgrading.
+Release 0.9.2 made `depth` report each start alone and rewrote the map skill. Release 0.9.1 made
+`show` print the description of each linked thing. Release 0.9.0 added marks, walks by cause, sets
+of ids and the description tools. The [changelog](CHANGELOG.md) lists them. Run
+`periplus skills install` after upgrading.
 
 ## Write a rutter
 

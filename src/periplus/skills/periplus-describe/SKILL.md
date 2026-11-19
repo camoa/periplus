@@ -13,6 +13,8 @@ them after `#`, so a plain-word question reaches a thing whose id lacks those wo
 
 - Write from the thing's own code only. Open its file at its line and read the whole body. Never
   write from the name alone, and never generate entries by script.
+- A class is described after its methods, from its own header and their entries. Each method
+  has its own entry, so the class entry says what the class is for.
 - Make no claim about the rest of the codebase: no callers, no "only", "unused" or "never
   called", no installed or on/off state. Marks and config values carry those. An entry that
   speaks only of its own code stays true until that code changes, so `periplus stale` can find
@@ -21,7 +23,8 @@ them after `#`, so a plain-word question reaches a thing whose id lacks those wo
   business term, the effect a user sees. Never restate the id, the type or the source line.
 - Edge entries are short phrases, only for links where something happens, such as a call, a use,
   an alter, a redirect, a read or a write. Say what happens, by its meaning. Write them while the
-  node's code is open.
+  node's code is open. They carry no fingerprint, and `periplus stale` does not list them: when
+  you rewrite a node's entry, read its edge entries again.
 - Keep an entry that exists, unless `periplus stale` lists it; then read the code again and
   rewrite it.
 - An entry with no fingerprint was never checked against its code. `periplus stale` counts these
@@ -39,6 +42,48 @@ Good: `Sends the payment reminder email to a customer whose invoice is overdue.`
 Bad: `The ReminderMailer class.` (restates the id), `Called only by the nightly job.` (a claim
 about other code).
 
+## How the work goes
+
+The words are those of the periplus-map skill. An **entrance** sets something off, and nothing in
+the map sets it off. A **walk** follows what a thing sets off. A **slice** is a saved map file. A
+slice read with `--map` is the map.
+
+1. Know the working set: the map, or a slice read with `--map SLICE`. Give every command the
+   same `--map`, so the walk stays inside the set. Keep the slice in the project's `.periplus`
+   folder: a command given `--map` looks for the descriptions file from the slice's folder up.
+2. Find its entrances. Give `periplus depth --entrances` all the set's ids; it lists the
+   entrances. With `--map`, only links inside the set count. An id with nothing either way is a
+   separate piece, left for step 6.
+3. Take one entrance at a time and what it sets off in the set, callees before callers, as
+   `periplus order` puts them. You then know what each call does when you read the caller.
+4. Describe each file when the walk first reaches it: all of the set's undescribed things in that
+   file, while it is open. Before each thing's code, read `periplus show ID`: the entries under
+   its links say what the things it calls do. When a thing in the open file calls one that
+   has no entry yet, describe that one first, then come back.
+5. Write each entry into `.periplus/descriptions.yaml` as soon as it is written, so
+   `periplus show` prints it for the next thing. An entry held back to the end helps no caller.
+6. Then the things of the set that no entrance reaches, such as config, templates and separate
+   pieces, file by file. `periplus undescribed` names what is left.
+7. Have a sample read against the code, then run `periplus stamp`.
+
+```
+periplus find --map SLICE --ids | periplus depth --map SLICE - --entrances
+periplus neighbors --map SLICE ENTRANCE --depth all --ids | periplus order --map SLICE - --ids
+periplus in --map SLICE FILE --ids | periplus undescribed --map SLICE - --ids
+periplus slice --map SLICE --from ENTRANCE --direction off --depth all --out FLOW-A.map.json
+periplus common FLOW-A.map.json FLOW-B.map.json
+```
+
+When several writers share the work:
+- Split by entrance or flow, not by a list of files.
+- Things that several flows reach, such as a shared service, are written and saved first, so
+  every writer reads them through `periplus show`. Save one slice per entrance;
+  `periplus common` lists what two of them share.
+- A writer's entries reach the descriptions file before any writer starts on things that call
+  them. Two writers editing the file at once can lose each other's entries.
+- A cheaper model can write. Before the stamp, a stronger model reads some entries of every
+  batch or flow against the code.
+
 ## Tools
 
 - `periplus undescribed` counts the main things with no entry, by file; `--ids` lists them.
@@ -53,31 +98,11 @@ about other code).
 
 Each takes `--map PATH`, so a file written by `periplus slice`, `extract`, `join`, `common` or
 `minus` works as the map. Options and output are in
-[Navigation](https://github.com/camoa/periplus/blob/v0.9.2/docs/navigation.md#undescribed).
+[Navigation](https://github.com/camoa/periplus/blob/v0.10.0/docs/navigation.md#undescribed).
 
-## Recommendations
+## Tips
 
-These are ways that tend to work, not required steps.
-
-- Work file by file: `periplus undescribed` names the files, `periplus in FILE --ids` the things
-  in one.
-- Describe callees before callers, so you know what each call does when you read the caller.
-  Pipe a set into `periplus order` to get that order:
-
-```
-periplus in src/Mail/Reminder.php --ids | periplus order - --ids
-```
-
-- To describe a flow, start at its entrance, a thing that `periplus depth` says nothing sets
-  off. Take what it sets off, in order, and stop when none is left undescribed:
-
-```
-periplus neighbors ENTRANCE --depth all --ids | periplus order - --ids
-periplus neighbors ENTRANCE --depth all --ids | periplus undescribed -
-```
-
-- For each thing, read `periplus show ID` before its code. The entries under its links say what
-  the things it calls do. Put what you learn about a step in the link's entry, not in the node's.
+- Put what you learn about a step in the link's entry, not in the node's.
 - An entry is a hint, and the code decides. When the code you read contradicts an entry, of this
   thing or of one it links to, rewrite that entry.
 - To see how much of one file is described, in the whole map or in a working set:
@@ -86,10 +111,6 @@ periplus neighbors ENTRANCE --depth all --ids | periplus undescribed -
 periplus in FILE --ids | periplus undescribed -
 ```
 
-- A cheaper model can write the entries, with a stronger model reading a small sample of each
-  batch against the code.
-- Run `periplus stamp` after writing.
-
 ## The file
 
 Two top-level keys. `nodes` maps a node id to its entry. `edges` is a list of entries, each with
@@ -97,7 +118,13 @@ Two top-level keys. `nodes` maps a node id to its entry. `edges` is a list of en
 carries `text`, and `file` and `line`: where you read the code. `fingerprint` is written by
 `periplus stamp`; do not write it by hand. Keep `nodes` sorted by id and `edges` by `from`,
 `kind`, `to`, so a new pass adds lines without moving old ones. The exact shape is in
-[the descriptions schema](https://github.com/camoa/periplus/blob/v0.9.2/src/periplus/skills/periplus-map/references/descriptions.schema.json).
+[the descriptions schema](https://github.com/camoa/periplus/blob/v0.10.0/src/periplus/skills/periplus-map/references/descriptions.schema.json).
+
+- Quote a `text` that holds `: ` or ` #`; unquoted, YAML misreads it.
+- Write ids with single backslashes, as `--ids` prints them. Text rows and raw JSON print each
+  backslash twice.
+- Copy an edge entry's `from`, `kind` and `to` from the map, as `periplus show` on the node lists
+  the link. Never guess them from the meaning.
 
 <!-- example descriptions: .periplus/descriptions.yaml -->
 ```yaml

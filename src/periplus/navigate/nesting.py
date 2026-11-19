@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from periplus.navigate.listing import first_location, marked_text, place
-from periplus.navigate.mapfile import MapIndex, as_text
+from periplus.navigate.mapfile import MapIndex, as_text, is_whole
 from periplus.navigate.names import Names
 from periplus.report import _escape
 
@@ -62,7 +62,6 @@ class Places:
         self._files: dict[str, list[tuple[int, str]]] | None = None
         self._outward: dict[str, tuple[str, ...]] = {}
         self._parts: dict[str, int] | None = None
-        self._leaves: dict[str, int] = {}
 
     def in_file(self, file: str) -> list[tuple[int, str]]:
         """Each node located in ``file`` as (its smallest line there, id), by line, then id."""
@@ -102,11 +101,17 @@ class Places:
         return self._outward[node_id]
 
     def part_types(self) -> dict[str, int]:
-        """The part types and how many mapped, located nodes each has.
+        """The part types, each with its share in percent, rounded down: of its mapped, located
+        nodes, those that nest inside another node and hold none.
 
-        A type is a part type when more than half of its mapped, located nodes nest inside
-        another node and hold none: a parameter or a call site, read as part of what holds it.
+        A type is a part type when that share is over half: a parameter or a call site, read as
+        part of what holds it. A map's stored ``part_types`` answer; a map without them is
+        counted over its own nodes.
         """
+        if self._parts is None and self.index.part_types is not None:
+            self._parts = {as_text(t): share for t, share in self.index.part_types.items()}
+            if not all(is_whole(share) and 50 <= share <= 100 for share in self._parts.values()):
+                raise TypeError(f"part_types needs whole percents from 50 to 100: {self._parts!r}")
         if self._parts is None:
             held = Counter(
                 h for i in self.index.nodes if (h := self.names.holder(as_text(i))) is not None
@@ -119,14 +124,14 @@ class Places:
                 total[node["type"]] += 1
                 if not held[node_id] and self.names.holder(node_id) is not None:
                     leaves[node["type"]] += 1
-            self._parts = {t: n for t, n in sorted(total.items()) if 2 * leaves[t] > n}
-            self._leaves = {t: leaves[t] for t in self._parts}
+            self._parts = {
+                t: 100 * leaves[t] // n for t, n in sorted(total.items()) if 2 * leaves[t] > n
+            }
         return self._parts
 
     def part_share(self, type_name: str) -> int:
-        """The percent, rounded down, of a part type's mapped, located nodes that nest inside
-        another node and hold none: the share ``part_types`` found over half."""
-        return 100 * self._leaves[type_name] // self.part_types()[type_name]
+        """A part type's share, as ``part_types`` gives it."""
+        return self.part_types()[type_name]
 
     def why_not_main(self, node_id: str) -> str | None:
         """``None`` for a main thing; else why not: ``unplaced`` (not mapped, or no location),

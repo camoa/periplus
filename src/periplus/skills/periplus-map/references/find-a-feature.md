@@ -15,11 +15,13 @@ Drop what the words bring that is not the feature.
 
 ## Back to the entrances
 
-A start is often in the middle of a flow. The set is found by walking out from its entrances: the
-things nothing in the map sets off, such as a route or a hook the framework runs.
+A start is often in the middle of a flow. The set is found by walking out from its entrances. An
+entrance, such as a route or a hook the framework runs, sets something off, and nothing in the map
+sets it off. A slice read with `--map` is the map.
 `periplus affected START --depth all` shows what sets the start off, hop by hop; the things at the
-far end of each chain are the entrances. `periplus depth X` confirms one: nothing on its walk by.
-No command lists entrances alone. Stop going back once a chain leaves the feature.
+far end of each chain are the entrances. `periplus depth X` confirms one: something on its walk off, nothing on its walk by.
+`periplus depth IDS --entrances` lists which of many ids are entrances. Stop going back once a
+chain leaves the feature.
 
 Words find what is named after the feature. But a feature is what it does to the system, and some
 of its entrances carry other names. Name its few defining actions: for registration, what creates

@@ -98,6 +98,9 @@ class MapIndex:
             (as_text(p), _glob(as_text(p))) for p in document.get("supporting_paths", ())
         ]
         self._support: dict[str, str | None] = {}
+        #: Each part type ``periplus map`` found over the whole map, with its share in percent;
+        #: ``None`` for a map written before the list, whose part types are counted over itself.
+        self.part_types: Mapping[str, int] | None = document.get("part_types")
         #: The mark text of each attribute name the map's ``marks`` header names.
         self.mark_texts: dict[str, str] = {
             as_text(name): as_text(text) for name, text in document.get("marks", {}).items()

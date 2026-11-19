@@ -137,6 +137,24 @@ def test_the_cli_ids_print_what_the_report_holds(tmp_path: Path) -> None:
     assert printed.getvalue().splitlines() == list(_slice(site, F, depth=None).held)
 
 
+def test_a_repeated_from_adds_its_ids_to_the_earlier_ones(tmp_path: Path) -> None:
+    site = _site(tmp_path)
+
+    def printed(*args: str) -> list[str]:
+        out = io.StringIO()
+        with (
+            contextlib.chdir(site),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            assert main(["slice", *args, "--depth", "1", "--ids"]) == 0
+        return out.getvalue().splitlines()
+
+    together = printed("--from", H, X)
+    assert {H, J, X, C} <= set(together)
+    assert printed("--from", H, "--from", X) == together
+
+
 def test_a_hub_stops_the_walk_and_through_walks_it(tmp_path: Path) -> None:
     site = _site(tmp_path)
     stopped = _slice(site, F, depth=None, hub=2)

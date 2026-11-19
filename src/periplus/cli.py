@@ -526,6 +526,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_hub(depth)
     add_map(depth, "the map file to read")
     depth.add_argument(
+        "--entrances",
+        action="store_true",
+        help="print only the IDs that set something off and that nothing sets off, the entrances "
+        "of a set, and count the IDs with nothing either way",
+    )
+    add_ids(depth)
+    depth.add_argument(
         "--format",
         # A literal for the reason `types`' is; a test asserts it equals `tuple(depth.RENDERERS)`.
         choices=("text", "json"),
@@ -851,11 +858,12 @@ def build_parser() -> argparse.ArgumentParser:
     cut.add_argument(
         "--from",
         dest="start",
+        action="extend",
         nargs="+",
         default=None,
         metavar="ID",
         help="start from these ids alone and search no words; - reads ids from standard input, "
-        "one a line",
+        "one a line; repeat to add more",
     )
     cut.add_argument(
         "--path",
@@ -1345,8 +1353,11 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "depth":
         from periplus.navigate.depth import RENDERERS as DEPTH_RENDERERS
+        from periplus.navigate.depth import listed as depth_listed
         from periplus.navigate.depth import run as run_depth
 
+        if args.ids and not args.entrances:
+            parser.error("--ids prints the entrances; give --entrances too")
         measured = run_depth(
             start=Path.cwd(),
             env=os.environ,
@@ -1355,9 +1366,9 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
             hub=HUB if args.hub is None else args.hub,
             through=args.through,
             piped=args.piped,
+            entrances=args.entrances,
         )
-        sys.stdout.write(DEPTH_RENDERERS[args.format](measured))
-        return measured.exit_code
+        return _emit(args, DEPTH_RENDERERS, measured, depth_listed)
 
     if args.command == "reach":
         from periplus.navigate.reach import RENDERERS as REACH_RENDERERS

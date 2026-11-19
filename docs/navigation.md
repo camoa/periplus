@@ -85,8 +85,8 @@ Six commands write a file: `stamp` writes the descriptions file; `extract` write
 under the project root, found by walking up from the working directory. A slice or any other map
 file that `slice --out`, `extract`, `join`, `common` or `minus` writes is a map too: every
 command that takes `--map` reads it. `join`, `common`, `minus` and `diff` take map files as
-their arguments instead. Do not give `--out` the path of the map you read: the new file would
-replace it.
+their arguments instead. `--out` creates the missing folders of its path. Do not give `--out` the
+path of the map you read: the new file would replace it.
 
 **JSON.** Every command takes `--format text|json` to pick the report (default `text`), except
 `export`. The JSON report has sorted keys and is described by the shipped
@@ -130,6 +130,7 @@ line, and nothing else:
 - `neighbors` and `affected`: the starts, then every thing within `--depth`, and with `--touch`
   the touching things;
 - `pieces`: a blank line between two pieces;
+- `depth --entrances`: the entrances;
 - `diff`: the things added, removed and changed;
 - `only`, `hubs`, `members`, `in`, `at`, `undescribed`, `stale`, `order`, `join`, `common` and
   `minus`: the things of the result.
@@ -284,6 +285,7 @@ the map's `legend`, which `periplus map` writes from the packs.
 
 ```
 periplus depth ID... [--hub N] [--through ID]... [--map PATH] [--format text|json]
+periplus depth ID... --entrances [--ids] [--hub N] [--through ID]... [--map PATH] [--format text|json]
 ```
 
 Says, in a few lines, how far the walk by cause goes from the `ID`s each way, so you can pick a
@@ -316,6 +318,25 @@ kinds the walk followed undeclared, or says the map declares no cause directions
 `each_start` holds one entry a start, with one entry for a single `ID` too: `id`, and `sets_off` and
 `set_off_by` each with `hops`, `things` and `hubs`; `touching` holds `point_at_starts` and `starts_point_at`, each with `things` and `kinds`; and
 `undeclared` and `declares_causes`.
+
+`--entrances` answers which of the `ID`s are entrances: an `ID` that sets something off and that
+nothing sets off, walked alone as in the `each start alone:` rows. Give it every id of a set, such
+as a slice file read with `--map`, to find where the set starts; the walk stays in that file, so a
+thing set off only from outside the file is an entrance there. It prints a count line, one row per
+entrance in the row form above, and a line counting the `ID`s with nothing either way, separate
+pieces, three named and the rest counted:
+
+```
+2 of 5 ids are entrances
+  x::e1  sets off 2 hops, 2 things, 0 hubs stopped; set off by 0 hops, 0 things, 0 hubs stopped
+  x::e2  sets off 2 hops, 2 things, 0 hubs stopped; set off by 0 hops, 0 things, 0 hubs stopped
+1 separate piece, nothing either way: x::s
+```
+
+With `--ids` it prints only the entrance ids, one a line, and the count to standard error; `--ids`
+needs `--entrances`. In JSON the report is as without it, plus `entrances` and `separate_pieces`,
+each a list of ids in the order given. `each_start` holds only the entrances and the separate
+pieces, since only they are walked alone.
 
 ### count
 
@@ -767,7 +788,8 @@ them: `+N more nodes match the words: periplus find WORD --limit 0 for each of: 
 from any with periplus slice --from ID`.
 
 `--from ID...` starts from those ids alone, and searches no word: pick the starts with `find` and
-give them here, or `-` to read them from standard input. An id that names no node exits 31.
+give them here, or `-` to read them from standard input; a repeated `--from` adds its ids. An id
+that names no node exits 31.
 `--from` takes no `WORDS` with it.
 
 **Members.** A start that is a container prints `members of NAME: N (type n, ...); all: periplus
@@ -938,7 +960,9 @@ says so; without it nothing is written. `--ids` prints the result's ids instead.
 - **Header.** `minus` keeps the first map's header. `join` and `common` merge the inputs':
   `packs`, `roots` and the kind lists hold each item of every input once, sorted; `generated_by`
   and `settings` hold each input's value once, sorted and joined with `; `, so a result of two
-  builds says `periplus 0.8.0; periplus 0.9.0`; `marks` and `legend` are merged by key. The
+  builds says `periplus 0.8.0; periplus 0.9.0`; `marks`, `legend` and `part_types` are merged by
+  key, so a part type of any input is one of the result, with the share whose JSON sorts first;
+  an input without `part_types` adds none. The
   counts, the type hierarchy and the legend are then made from what the result holds, as
   `extract` makes them. The file does not record the command or the input files, so the same
   inputs give the same bytes from any folder.
@@ -1009,10 +1033,17 @@ what the `periplus-describe` skill describes, and the rule uses the map alone:
   things nest inside another node by their id, as `at` reads nesting, and have no node nesting
   inside them: a parameter or a call site, read as part of the method that holds it.
 
+`periplus map` counts the part types once, over the whole map, and writes them in the map's
+`part_types` header. A file that `slice --out`, `extract`, `join`, `common` or `minus` writes
+carries that list, so a slice that keeps methods without their parameters still counts the methods
+as main things. A map file without the list, written by an older Periplus, is counted over its own
+things.
+
 A `left out:` line counts the rest: the parts by type, the things in supporting code, and those not
 mapped or with no location. A `part types:` line then names each part type met, with its share:
-the percent, rounded down, of its mapped, located things in the whole map that nest inside another
-thing and hold none. Over 50 makes a part type, so a share near 50 is a close call. `--parts-too`
+the percent, rounded down, of its mapped, located things that nest inside another thing and hold
+none, counted as the part types are. Over 50 makes a part type, so a share near 50 is a close
+call. `--parts-too`
 counts the things of part types as main things; the line then ends `counted as main things
 (--parts-too)`. Then the undescribed things are counted by file (the default), by type
 (`--by type`) or by container (`--by container`): the first grouping container of the thing or of
@@ -1082,9 +1113,9 @@ In JSON: `command`, `found`, `entries`, `fresh`, `changed`, `gone`, `unreadable`
 | Code | Meaning |
 |---|---|
 | 0 | The report printed. An empty result is still 0. |
-| 2 | A bad option, such as `--depth 0` outside `slice`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, `slice` with no start, `slice --direction out` or `in`, `slice --ids` with `--out`, `slice --from` with `WORDS`, `at` with no line number of 1 or more, or `diff --change` without `--ids`. `join`, `common` or `minus` with one map, or `join`, `common`, `minus` or `diff` with maps of different versions. A walk on a map with no cause list from several `ID`s. |
+| 2 | A bad option, such as `--depth 0` outside `slice`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, `slice` with no start, `slice --direction out` or `in`, `slice --ids` with `--out`, `slice --from` with `WORDS`, `depth --ids` without `--entrances`, `at` with no line number of 1 or more, or `diff --change` without `--ids`. `join`, `common` or `minus` with one map, or `join`, `common`, `minus` or `diff` with maps of different versions. A walk on a map with no cause list from several `ID`s. |
 | 17 | The map file that `slice --out`, `extract`, `join`, `common` or `minus` would write does not pass the map schema, because a map it was made from does not. Nothing is written. Run `periplus check-map` on that map. |
-| 27 | `slice --out` or `extract --out` names the map being read, `--out` of `join`, `common` or `minus` names one of its inputs, or the file cannot be written; or `stamp` cannot write the descriptions file. |
+| 27 | `slice --out` or `extract --out` names the map being read, `--out` of `join`, `common` or `minus` names one of its inputs, or the file cannot be written even after its missing folders are created; or `stamp` cannot write the descriptions file. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
 | 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. Also a descriptions file a command reads that is not YAML or does not match the descriptions schema, or one `stamp` cannot change without changing other text. |
 | 31 | An id names no node in the map, or a short name fits more than one node; or `slice --out` has no start, as when its words match nothing. |

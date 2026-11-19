@@ -417,6 +417,8 @@
             }
           }
         },
+        "entrances": {"description": "With --entrances: the starts that set something off and that nothing sets off, alone, in the order given.", "type": "array", "items": {"type": "string"}},
+        "separate_pieces": {"description": "With --entrances: the starts that set nothing off and that nothing sets off, in the order given.", "type": "array", "items": {"type": "string"}},
         "touching": {
           "type": "object", "additionalProperties": false, "required": ["point_at_starts", "starts_point_at"],
           "properties": {

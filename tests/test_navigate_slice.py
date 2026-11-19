@@ -341,4 +341,5 @@ def test_the_map_file_is_unchanged_by_the_shared_counts_and_write_functions_wo1(
             },
         },
         "supporting_paths": ["**/tests/**"],
+        "part_types": {"php.method": 100},
     }

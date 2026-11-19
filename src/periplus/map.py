@@ -42,6 +42,9 @@ from periplus.mapshared import _DEFAULT_MAP as _DEFAULT_MAP
 from periplus.mapshared import MAP_SCHEMA as MAP_SCHEMA
 from periplus.mapshared import _section as _section
 from periplus.mapshared import first_error
+from periplus.navigate.mapfile import MapIndex
+from periplus.navigate.names import Names
+from periplus.navigate.nesting import Places
 from periplus.preflight import DependencyStatus
 from periplus.report import _escape, _json_problem, amount
 from periplus.resolution import folder_overrides, resolve, settings_values
@@ -52,15 +55,19 @@ __all__ = ["RENDERERS", "MapReport", "render_json", "render_text", "run", "write
 
 
 def write_document(document: Mapping[str, object], target: Path) -> tuple[Problem, ...]:
-    """Check ``document`` against the map schema and write it; the problems found, if any."""
+    """Check ``document`` against the map schema and write it, making the missing folders of
+    ``target``'s path; the problems found, if any."""
     invalid = first_error(Draft202012Validator(_schema(MAP_SCHEMA)).iter_errors(document))
     if invalid is not None:
         message = f"the map does not match its schema: {invalid.message}"
         return (Problem(ExitCode.MAP_INVALID, message, {}),)
     try:
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(render(document).encode("utf-8"))
     except OSError as error:
-        message = f"the map cannot be written to {target}: {error.strerror or error}"
+        blocked = next((p for p in target.parents if p.exists() and not p.is_dir()), None)
+        reason = f"{blocked} is not a folder" if blocked else error.strerror or error
+        message = f"the map cannot be written to {target}: {reason}"
         return (Problem(ExitCode.OUTPUT_UNWRITABLE, message, {"path": str(target)}),)
     return ()
 
@@ -239,6 +246,8 @@ def run(
         )
         detail = {"problem": "UNDECLARED_ID_NAMESPACE", "id": undeclared[0]}
         return _failed([Problem(ExitCode.MAP_INVALID, message, detail)])
+    whole = MapIndex(document)
+    document["part_types"] = Places(whole, Names(whole)).part_types()
     target = start / output if output is not None else root / PROJECT_MARKER / _DEFAULT_MAP
     unwritten = write_document(document, target)
     if unwritten:

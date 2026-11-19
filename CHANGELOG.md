@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-18
+
+### Added
+
+- `periplus depth IDS --entrances` lists which of the given ids are entrances. An entrance sets something off, and nothing sets it off. It also counts the ids with nothing either way, the separate pieces. In JSON, `entrances` and `separate_pieces` hold them. With `--ids`, it prints only the entrance ids.
+- `periplus map` writes the part types into the map header as `part_types`, each with its share in percent. They are counted once, over the whole map. A file made by `slice`, `extract`, `join`, `common` or `minus` carries the field, and `find` and `undescribed` read it. A map file without the field is counted over itself, as before. Rebuild a map to gain it.
+- Two docs pages. `docs/using-the-map-with-an-agent.md` shows how to word a request so an AI agent uses the map. `docs/evals.md` sets out how Periplus is evaluated.
+
+### Changed
+
+- The `periplus-describe` skill sets out the work as a walk from the entrances of the set. The `periplus-map` skill and its reference file `find-a-feature.md` use one meaning of "entrance".
+- `--out FILE`, and `periplus map --output`, create the missing folders of the path.
+
+### Fixed
+
+- `periplus slice --from A --from B` kept only B. A repeated `--from` now adds its ids.
+- On a saved piece of a map that kept a container and its members but not the members' parts, `find` and `undescribed` counted the members as parts.
+
 ## [0.9.2] - 2026-11-18
 
 ### Added

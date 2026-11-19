@@ -21,8 +21,9 @@ references/find-a-feature.md: what the work holds, a worked example, and how to 
   cause; `none` (structure) and `touch` (points, runs nothing) are not walked.
 - A **hub** has more links to follow than `--hub N`, 40 by default. A walk lists it and stops.
   It is often shared code: walk on with `--through ID` only when it belongs to the topic.
-- A **start** is where your words land. An **entrance** is a thing nothing in the map sets off,
-  as `periplus depth` shows. The periplus-describe skill means the same.
+- A **start** is where your words land. An **entrance** sets something off, and nothing in the
+  map sets it off. A slice read with `--map` is the map. `periplus depth IDS --entrances` lists
+  the entrances among many ids. The periplus-describe skill means the same.
 - A **slice** is a map file that `periplus slice --out FILE`, `periplus extract`,
   `periplus join`, `periplus common` or `periplus minus` writes. Commands read it with `--map`.
 - The **rim** of a set is what lies one hop from it, either way, and is not in it.
@@ -35,7 +36,7 @@ references/find-a-feature.md: what the work holds, a worked example, and how to 
 ## The tools
 
 `periplus --help` prints this list; `periplus find --help` prints one command's options. Every
-option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.9.2/docs/navigation.md).
+option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.10.0/docs/navigation.md).
 
 <!-- periplus-help -->
 ```text

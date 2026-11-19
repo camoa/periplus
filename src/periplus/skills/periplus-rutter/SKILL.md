@@ -18,17 +18,17 @@ description: Writes or changes a Periplus rutter, the pack of data that tells Pe
 This skill gives the steps. Each rule shape, and what the format cannot say, is in the rutter
 author guides; read the section the step names instead of guessing a key:
 
-- [Rutter author guide](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide.md): the files of a rutter, one rule of each shape, how to check a rutter.
-- [Rutter author guide: text](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-text.md): text spans, nested regions of a text file.
-- [Rutter author guide: abilities](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-abilities.md): a call's class and method in one rule, id patterns.
-- [Rutter author guide: references](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-references.md): reference rules on a parse tree, and the keys the engine does not run.
-- [Rutter author guide: imports](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-imports.md): imports and bindings.
-- [Rutter author guide: map rules](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-map-rules.md): map rules, which join what earlier passes found. Its follow steps are `edge`, `incoming_edge` (an edge walked from its target back to its sources), `ancestors`, `node`, `id_matches` (a `{name}` in its pattern is filled with that capture as literal text) and `try`: the steps inside a `try` and after it run from the current node, and if they reach nothing the later steps run with the captures it had, so a lookup that may fail (a method on an ancestor the map does not hold) leaves the end to `on_miss`. `match.unless` holds chains of the same steps, such as `unless: [[{node: 'my_module.again::{name}'}]]`, each run from the matched node with the captures of `where`; when any chain reaches a node, the rule makes nothing for that node. `match.unless_matched` holds chains run from the node `follow` reached, with the captures `follow` made, such as `unless_matched: [[{node: 'my_module.stop::{class}'}]]`; one that reaches a node blocks only that result. A chain sees only what the map held when the pass began.
-- [Rutter author guide: Drupal](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-drupal.md): the PHP and Drupal rutters, read as worked examples.
+- [Rutter author guide](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide.md): the files of a rutter, one rule of each shape, how to check a rutter.
+- [Rutter author guide: text](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-text.md): text spans, nested regions of a text file.
+- [Rutter author guide: abilities](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-abilities.md): a call's class and method in one rule, id patterns.
+- [Rutter author guide: references](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-references.md): reference rules on a parse tree, and the keys the engine does not run.
+- [Rutter author guide: imports](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-imports.md): imports and bindings.
+- [Rutter author guide: map rules](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-map-rules.md): map rules, which join what earlier passes found. Its follow steps are `edge`, `incoming_edge` (an edge walked from its target back to its sources), `ancestors`, `node`, `id_matches` (a `{name}` in its pattern is filled with that capture as literal text) and `try`: the steps inside a `try` and after it run from the current node, and if they reach nothing the later steps run with the captures it had, so a lookup that may fail (a method on an ancestor the map does not hold) leaves the end to `on_miss`. `match.unless` holds chains of the same steps, such as `unless: [[{node: 'my_module.again::{name}'}]]`, each run from the matched node with the captures of `where`; when any chain reaches a node, the rule makes nothing for that node. `match.unless_matched` holds chains run from the node `follow` reached, with the captures `follow` made, such as `unless_matched: [[{node: 'my_module.stop::{class}'}]]`; one that reaches a node blocks only that result. A chain sees only what the map held when the pass began.
+- [Rutter author guide: Drupal](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-drupal.md): the PHP and Drupal rutters, read as worked examples.
 
-[Bundled rutters](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutters.md) lists every rutter that ships with Periplus.
+[Bundled rutters](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutters.md) lists every rutter that ships with Periplus.
 
-The [README](https://github.com/camoa/periplus/blob/v0.9.2/README.md) section "Write a rutter" and [CONTRIBUTING](https://github.com/camoa/periplus/blob/v0.9.2/CONTRIBUTING.md) give the loop: write the rutter in the
+The [README](https://github.com/camoa/periplus/blob/v0.10.0/README.md) section "Write a rutter" and [CONTRIBUTING](https://github.com/camoa/periplus/blob/v0.10.0/CONTRIBUTING.md) give the loop: write the rutter in the
 project's own `.periplus/packs` first, and map that project until the map holds what the code holds.
 
 ## Write a rule
@@ -54,7 +54,7 @@ rutter, and the framework rutter shares into the language rutter's lists through
 rule is small, covers one case, and adds to the others.
 
 The example adds a rule file to `python_text` in a project that already holds the
-[second-stack example](https://github.com/camoa/periplus/blob/v0.9.2/examples/second-stack) rutters. A module-level name in capitals is a constant only by convention,
+[second-stack example](https://github.com/camoa/periplus/blob/v0.10.0/examples/second-stack) rutters. A module-level name in capitals is a constant only by convention,
 so the rule is `inferred`:
 
 <!-- example write-rule: .periplus/packs/python_text@0.1.0/rules/constants.yaml -->
@@ -94,8 +94,8 @@ mark, an end with `on_miss: unresolved` or a referenced node: never silence, and
 target. An end that leaves the mapped code takes `on_miss: unknown_boundary`; a rule that knows what
 it reaches writes `boundary: {into: {template, type}, kind}` on the same end, into a type declared
 `boundary: true`. Mark the node's type `internal: true`, so the written map leaves it out; the detail is in
-[Internal node types](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-map-rules.md#internal-node-types), and the pattern in
-[Join an internal node to its real target](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-map-rules.md#join-an-internal-node-to-its-real-target).
+[Internal node types](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-map-rules.md#internal-node-types), and the pattern in
+[Join an internal node to its real target](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-map-rules.md#join-an-internal-node-to-its-real-target).
 
 Copy from the bundled rule files `role/role_call.yaml` of `drupal_basic`, a role-name hub joined to
 the role's configuration; `member/member_call.yaml` of `js_basic`, a member call joined to the
@@ -112,37 +112,37 @@ Each key below has its detail in the guide section linked:
 - `add_table_rows` in `pack.yaml` adds rows to a table a rutter this one depends on owns, and the
   owner's rules read them. Use it in place of copying the owner's rule. Inside a project,
   `periplus validate` reports rows that two pinned rutters add in conflict
-  ([Adding rows to a table another rutter owns](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-references.md#adding-rows-to-a-table-another-rutter-owns)).
+  ([Adding rows to a table another rutter owns](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-references.md#adding-rows-to-a-table-another-rutter-owns)).
 - An item of `skip_names` may be `{table: <name>}`, which skips the table's keys too. The skip
   list is checked before the test that the name is written, so a keyword such as `self` can be
-  skipped ([Tree references](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-references.md)).
+  skipped ([Tree references](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-references.md)).
 - The `where` conditions `in_table: <table>` and `not_in_table: <table>` pass over a name that is
   not, or is, a key of the table; `{table: <table>, capture: <name>}` tests a named capture
   instead. Two small rules then split one shape
-  ([Tree references](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-references.md#a-name-tested-against-a-table-in_table-and-not_in_table)).
+  ([Tree references](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-references.md#a-name-tested-against-a-table-in_table-and-not_in_table)).
   `{table: <table>, fill: enclosing_type}` tests the enclosing type's full name, and with `pattern` and `capture` a capture of it.
 - `name_matches: {child: <node type>, nth: 2, pattern: <regex>}` tests the second child of that node
   type, counted from 1, where a plain `child` reads the first. Use it when two children share a
   type and have no field name
-  ([Tree references](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-references.md)).
+  ([Tree references](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-references.md)).
 - The `where` conditions `within: [<node type>, ...]` and `not_within: [<node type>, ...]` on a
   declaration rule pass a match only when one, or none, of the tree nodes from it up to its
   nearest holder, that holder included, has one of the types. Two rules then split a call in a
   method's body from one in a closure inside it
-  ([The method around a match](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-abilities.md#a-field-resolved-through-the-imports-and-the-method-around-a-match)).
-- `match.encloses_for: [<pack>]` on a declaration rule makes its node the start of that pack's reference-rule edges written inside it, in place of copying those rules ([Tree references](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-references.md#a-dependents-node-as-the-start-of-another-rutters-edges)).
+  ([The method around a match](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-abilities.md#a-field-resolved-through-the-imports-and-the-method-around-a-match)).
+- `match.encloses_for: [<pack>]` on a declaration rule makes its node the start of that pack's reference-rule edges written inside it, in place of copying those rules ([Tree references](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-references.md#a-dependents-node-as-the-start-of-another-rutters-edges)).
 - `on_miss_name: fallback`, on an end that holds `on_miss` and `fallback`, puts the miss mark
-  under the fallback name ([Tree references](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-references.md#a-second-name-fallback-and-on_miss_name)).
+  under the fallback name ([Tree references](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-references.md#a-second-name-fallback-and-on_miss_name)).
 - A declaration rule's `name_child` list is a path of one step or more; each step is a field, else
   the first named child of that node type, so `[name]` reaches a name with no field
-  ([A name below the match](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-abilities.md#a-name-below-the-match-and-a-value-from-the-docblock)).
+  ([A name below the match](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-abilities.md#a-name-below-the-match-and-a-value-from-the-docblock)).
 - A declaration rule's attribute `{name, template}` may name its id's sources, such as the group
   of a `{docblock: <pattern>}` source, to store a short text read from the source, like a
   docblock's summary line, cut at 300 characters
-  ([An attribute on a declaration rule's node](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-references.md#an-attribute-on-a-declaration-rules-node)).
+  ([An attribute on a declaration rule's node](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-references.md#an-attribute-on-a-declaration-rules-node)).
 - On a call node without the field `call_arguments` names, the engine reads the arguments from
   its first named child of that node type
-  ([A call's argument and its name](https://github.com/camoa/periplus/blob/v0.9.2/docs/rutter-author-guide-imports.md#a-calls-argument-and-its-name)).
+  ([A call's argument and its name](https://github.com/camoa/periplus/blob/v0.10.0/docs/rutter-author-guide-imports.md#a-calls-argument-and-its-name)).
 
 ## Start a rutter
 
@@ -412,4 +412,4 @@ say the path. Never file the issue. Five parts, in this order:
 2. One minimal example of the shape, written fresh. Quote no site file.
 3. The measured counts, from the measurement.
 4. The engine message, verbatim.
-5. A link to [When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.9.2/docs/map-report-guide.md#when-a-gap-is-the-engines).
+5. A link to [When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.10.0/docs/map-report-guide.md#when-a-gap-is-the-engines).
