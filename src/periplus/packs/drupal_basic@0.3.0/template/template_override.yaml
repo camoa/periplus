@@ -1,0 +1,29 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A theme that ships a template of the same file name as a module's template overrides it: Drupal
+# renders the theme's copy in place of the module's while that theme is active. template.yaml keeps
+# both files as two locations of one node, so a theme hook or an include that names the template
+# still reaches it; this rule adds a theme_overrides_template edge from the theme to that template
+# when the node sits both in a module (template_in_module) and in a theme (template_in_theme).
+# Inferred: the override follows from the file names. A base theme's template that a sub-theme
+# copies, and a module's template that a theme copies under a suggestion name, give no edge.
+
+edge_kinds:
+- kind: theme_overrides_template
+  cause: none
+  description: "the theme ships a template of the same file name as a module's, which Drupal renders in place of the module's while that theme is active"
+  from: drupal.theme
+  to: drupal.template
+
+rules:
+- rule: theme_overrides_module_template
+  reads: map
+  match:
+    node_type: drupal.template
+    where: [{id_matches: '^(?<template>drupal\.template::.+)$'}]
+    follow:
+    - edge: template_in_module
+    - node: '{template}'
+    - edge: template_in_theme
+  emits: [{edge: {kind: theme_overrides_template, from: matched_node, to: this_node}}]
+  confidence: inferred

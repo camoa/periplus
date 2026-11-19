@@ -1,0 +1,165 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A variable one template hands another by name: each top-level key of the hash in
+# {% include 'card.html.twig' with { flag: data.flag } %}, include('card.html.twig', { flag: flag })
+# or {% embed 'card.html.twig' with { flag: flag } %} is the node card.flag, a
+# drupal.template_variable, with a passes_template_variable edge from the including template, as
+# the code states it. One rule per form. A key whose value starts with a name, data in
+# data.flag, also links the variable to the internal read node of that name in the including
+# template; the map rules then say where its value comes from (template_variable_from): a
+# variable of a hook that renders the including template, or a variable an include hands it.
+# The included template's reads of the name are template_reads_passed_variable edges.
+#
+# An include with no with, {% include 'card.html.twig' %}, hands the whole context and names no
+# variable, so it gives only template.yaml's template_includes edge. A key inside a nested hash,
+# b in { a: { b: 1 } }, is no variable of the included template. A hash held in a variable, an
+# include whose template name is built at run time, and a component named <theme>:<name> give
+# nothing. A value that starts with a quote, a number, a bracket, a call or a name a loop or a
+# macro around the include binds gives the variable and no source.
+
+node_types:
+- name: drupal.template_variable
+  description: "a variable an include hands a template by name, as card.flag for { flag: ... } in an include of card.html.twig"
+  id_namespace: drupal.template_variable
+
+edge_kinds:
+- kind: passes_template_variable
+  cause: from
+  description: "the template includes or embeds that variable's template and names the variable in the include's with hash or include()'s hash"
+  from: drupal.template
+  to: drupal.template_variable
+- kind: template_variable_given
+  cause: none
+  description: "internal: the include hands the variable a value that starts with that name, read in the including template"
+  from: drupal.template_variable
+  to: drupal.template_variable_read
+- kind: template_variable_from
+  cause: to
+  description: "the include hands the variable a value that starts with that variable of the including template, a hook's variable or one an include hands it"
+  from: drupal.template_variable
+  to: [drupal.theme_variable, drupal.template_variable]
+- kind: template_reads_passed_variable
+  cause: from
+  description: "the template writes that variable's name inside {{ }} or {% %}, and an include of the template names it in its hash"
+  from: drupal.template
+  to: drupal.template_variable
+
+rules:
+# One node rule and one edge rule per form, joined by the id.
+- rule: include_with_variable
+  reads: file
+  in: &roots
+  - module_root
+  - theme_root
+  match: &include_with
+    file: '*.html'
+    filetype: drupal_template_text
+    text: &key '[{,]\s*[''"]?(?<key>[A-Za-z_]\w*)[''"]?\s*:(?!:)\s*(?:(?<root>[A-Za-z_]\w*)(?!\w|\s*\())?'
+  values: &include_with_values
+    included: {from: {enclosing: include_with_hash, capture: included}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    nested: {from: {enclosing: hash_value, capture: mark}}
+    # @ when the key is not inside a nested hash, else empty.
+    top: {template: '{nested}@', normalize: [{replace: '^:.*$', with: ''}]}
+    loop_names: {from: {enclosing: for_loop, capture: bound}, join: '|'}
+    loop_keys: {from: {enclosing: for_loop, capture: key}, join: '|'}
+    macro_args: {from: {enclosing: macro_body, capture: args}, join: ',', normalize: [{replace: '=[^,]*', with: ''}, {replace: '[\s,]+', with: '|'}]}
+    # <template>|<name> for the value's first name, empty when a loop or a macro around the
+    # include binds it.
+    source:
+      template: '{template_name}|{root}#|{loop_names}|{loop_keys}|{macro_args}|'
+      normalize: [{replace: '^[^|]*\|(\w+)#.*\|\1\|.*$', with: ''}, {replace: '#.*$', with: ''}]
+  id: &id {template: '{included}.{key}{top}', normalize: [{replace: '@$', with: ''}]}
+  line: {capture: key}
+  emits: [{node: {type: drupal.template_variable}}]
+  confidence: declared
+
+- rule: include_with_variable_edges
+  reads: file
+  in: *roots
+  match: *include_with
+  values: *include_with_values
+  id: *id
+  line: {capture: key}
+  emits: &edges
+  - edge: {kind: passes_template_variable, from: {template: '{template_name}', type: drupal.template}, to: this_node}
+  - edge: {kind: template_variable_given, from: this_node, to: {template: '{source}', type: drupal.template_variable_read}}
+  confidence: declared
+
+- rule: include_call_variable
+  reads: file
+  in: *roots
+  match: &include_call {file: '*.html', filetype: drupal_template_text, text: *key}
+  values: &include_call_values
+    <<: *include_with_values
+    included: {from: {enclosing: include_call_hash, capture: included}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: *id
+  line: {capture: key}
+  emits: [{node: {type: drupal.template_variable}}]
+  confidence: declared
+
+- rule: include_call_variable_edges
+  reads: file
+  in: *roots
+  match: *include_call
+  values: *include_call_values
+  id: *id
+  line: {capture: key}
+  emits: *edges
+  confidence: declared
+
+- rule: embed_with_variable
+  reads: file
+  in: *roots
+  match: &embed_with {file: '*.html', filetype: drupal_template_text, text: *key}
+  values: &embed_with_values
+    <<: *include_with_values
+    included: {from: {enclosing: embed_with_hash, capture: included}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: *id
+  line: {capture: key}
+  emits: [{node: {type: drupal.template_variable}}]
+  confidence: declared
+
+- rule: embed_with_variable_edges
+  reads: file
+  in: *roots
+  match: *embed_with
+  values: *embed_with_values
+  id: *id
+  line: {capture: key}
+  emits: *edges
+  confidence: declared
+
+- rule: passed_variable_from_hook
+  reads: map
+  match:
+    node_type: drupal.template_variable
+    follow:
+    - edge: template_variable_given
+    - id_matches: '^drupal\.template_variable_read::(?<template>[^|]+)\|(?<root>\w+)$'
+    - node: 'drupal.template::{template}'
+    - incoming_edge: theme_hook_template
+    - id_matches: '^drupal\.theme_hook::(?<hook>.+)$'
+    - node: 'drupal.theme_variable::{hook}.{root}'
+  emits: [{edge: {kind: template_variable_from, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: passed_variable_from_include
+  reads: map
+  match:
+    node_type: drupal.template_variable
+    follow:
+    - edge: template_variable_given
+    - id_matches: '^drupal\.template_variable_read::(?<template>[^|]+)\|(?<root>\w+)$'
+    - node: 'drupal.template_variable::{template}.{root}'
+  emits: [{edge: {kind: template_variable_from, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: template_reads_passed_variable
+  reads: map
+  match:
+    node_type: drupal.template_variable_read
+    where: [{id_matches: '^drupal\.template_variable_read::(?<template>[^|]+)\|(?<var>\w+)$'}]
+    follow:
+    - node: 'drupal.template_variable::{template}.{var}'
+  emits: [{edge: {kind: template_reads_passed_variable, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred

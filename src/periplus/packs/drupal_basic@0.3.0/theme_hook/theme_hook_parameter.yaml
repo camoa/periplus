@@ -1,0 +1,318 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method whose '#theme' is one of its parameters renders the hook its caller names: in
+# respond($request, $data, $hook) { return ['#theme' => $hook, '#data' => $data]; }, a caller
+# that writes $this->respond($request, [], 'invoice_sheet') renders invoice_sheet through it. A
+# file rule writes each such parameter as the internal node <method>|<place>, the place being an
+# x per parameter before it and a #, and an edge has_theme_parameter from the method. Another
+# writes each argument of a method call that is a quoted name or a class constant as the internal
+# node <argument>|<caller>|<called name>|<place>. The map rules join an argument to the parameter
+# of the same place of a method the caller calls by that name (calls), and give:
+# - renders_theme_hook from the caller to the hook the argument names, a quoted name or the text
+#   of the class constant, read on the class, its parents and its interfaces as
+#   theme_hook_constant.yaml reads it. Inferred: one hop through a call.
+# - passes_theme_variable from the called method to each variable of that hook named by a key
+#   '#x' the called method writes (render_variable.yaml), inferred, and to a variable a loop
+#   declares for the hook (theme_hook_loop.yaml).
+# - passes_theme_variable, mentioned, from the called method to such a variable of a hook whose
+#   name a class constant read in the caller holds (theme_hook_constant.yaml's internal node),
+#   when the caller passes the hook in a variable, as $hook = Names::SHEET; then
+#   $this->respond($request, [], $hook): the caller's read of the constant is the only tie.
+# A '#theme' => $hook whose $hook is not a parameter, a parameter after a default value holding a
+# comma or a parenthesis, '#theme' => $hook in a function outside a class, $build['#theme'] =
+# $hook, and an argument that is any other variable or expression give nothing. A call whose
+# name matches two methods the caller calls links both.
+
+node_types:
+- name: drupal.theme_parameter
+  description: "internal: a parameter of a method that a render array in it gives '#theme', at its place among the parameters"
+  id_namespace: drupal.theme_parameter
+  internal: true
+- name: drupal.theme_argument
+  description: "internal: a quoted name or class constant given as an argument of a method call, at its place among the arguments"
+  id_namespace: drupal.theme_argument
+  internal: true
+
+edge_kinds:
+- kind: has_theme_parameter
+  cause: none
+  description: "internal: the method gives '#theme' one of its parameters"
+  from: php.method
+  to: drupal.theme_parameter
+
+rules:
+- rule: theme_parameter
+  reads: file
+  in: [source]
+  match: &parameter
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"]#theme[''"]\s*=>\s*\$(?<param>[A-Za-z_]\w*)\s*(?=[,\]])'
+  values: &parameter_values
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    params: {from: {enclosing: named_function, capture: params}, join: '¤', normalize: [{replace: '^.*¤', with: ''}]}
+    # An x for each parameter before $param, then #; empty when $param is no parameter. The
+    # parameter list is written <params>@<param>, quoted texts and brackets taken out first, so a
+    # comma inside a default value does not count.
+    place:
+      template: '{params}@{param}'
+      normalize:
+      - {replace: '''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"', with: ''}
+      - {replace: '\[[^\[\]@]*\]', with: ''}
+      - {replace: '\[[^\[\]@]*\]', with: ''}
+      - {replace: '^(?=[^@]*@(\w+)$)(?![^@]*\$\1(?!\w))[\s\S]*$', with: ''}
+      - {replace: '(?=[^@]*@(\w+)$)(?=[^@]*?\$\1(?!\w))(?![^,@]*\$\1(?!\w))[^,@]*,', with: 'x'}
+      - {replace: '[^x][\s\S]*$', with: '#'}
+  id: &parameter_id {template: '{psr4_class}::{method}|{place}'}
+  line: {capture: param}
+  emits: [{node: {type: drupal.theme_parameter}}]
+  confidence: inferred
+
+- rule: method_has_theme_parameter
+  reads: file
+  in: [source]
+  match: *parameter
+  values: *parameter_values
+  id: *parameter_id
+  line: {capture: param}
+  emits: [{edge: {kind: has_theme_parameter, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}}]
+  confidence: inferred
+
+# The arguments: a quoted name, a constant read through the file's use statements, a constant
+# of a class in the file's own namespace, and self:: or static::. Each is one argument of a call
+# ->name(...) or ::name(...), after the arguments before it, read whole.
+- rule: theme_argument_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: &call '(?:->|::)\s*(?<name>[A-Za-z_]\w*)\s*\((?<before>(?:(?:''(?:[^''\\]|\\.)*+''|"(?:[^"\\]|\\.)*+"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*+''|"(?:[^"\\]|\\.)*+"|\([^()]*+\))*+\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*+''|"(?:[^"\\]|\\.)*+"|\[[^\[\]]*+\])*+\]|[^,()\[\]''\";{}])++,)*?)\s*(?:''(?<hook>[A-Za-z_][A-Za-z0-9_]*)''|(?<key>(?!(?:self|static|parent)::)[A-Z]\w*::[A-Z][A-Z0-9_]*)|(?:self|static)::(?<own>[A-Z][A-Z0-9_]*))\s*(?=[,)])'
+  values: &argument_values
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    place:
+      template: '{before}#'
+      normalize:
+      - {replace: '''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"', with: ''}
+      - {replace: '\([^()]*\)', with: ''}
+      - {replace: '\([^()]*\)', with: ''}
+      - {replace: '\[[^\[\]]*\]', with: ''}
+      - {replace: '\[[^\[\]]*\]', with: ''}
+      - {replace: '[^,#]', with: ''}
+      - {replace: ',', with: 'x'}
+    # Only the argument form this rule reads; a value of a capture that took no part is absent.
+    quoted: {from: {capture: hook}}
+  id: {template: '''{quoted}|{psr4_class}::{method}|{name}|{place}'}
+  line: {capture: name}
+  emits: [{node: {type: drupal.theme_argument}}]
+  confidence: inferred
+
+- rule: theme_argument_bound_constant
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: *call}
+  values: {<<: *argument_values, bound: {from: {capture: key}}}
+  id:
+    template: '{bound}|{psr4_class}::{method}|{name}|{place}'
+    resolve: [bound_first_segment]
+    separator: '::'
+  line: {capture: name}
+  emits: [{node: {type: drupal.theme_argument}}]
+  confidence: inferred
+
+- rule: theme_argument_constant_in_namespace
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: *call}
+  values: {<<: *argument_values, local: {from: {capture: key}}}
+  id: {template: '{psr4_namespace}{local}|{psr4_class}::{method}|{name}|{place}'}
+  line: {capture: name}
+  emits: [{node: {type: drupal.theme_argument}}]
+  confidence: inferred
+
+- rule: theme_argument_own_constant
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: *call}
+  values: {<<: *argument_values, self: {from: {capture: own}}}
+  id: {template: '{psr4_class}::{self}|{psr4_class}::{method}|{name}|{place}'}
+  line: {capture: name}
+  emits: [{node: {type: drupal.theme_argument}}]
+  confidence: inferred
+
+# The caller renders the hook a quoted name gives the parameter.
+- rule: caller_renders_named_hook
+  reads: map
+  match:
+    node_type: drupal.theme_argument
+    where: [&named {id_matches: '^drupal\.theme_argument::''(?<hook>[A-Za-z_]\w*)\|(?<caller>[^|]+)\|(?<name>\w+)\|(?<place>x*#)$'}]
+    follow:
+    - &caller {node: 'php.method::{caller}'}
+    - &callee_step {edge: calls}
+    - &callee {id_matches: '^php\.method::(?<callee>.+::{name})$'}
+    - &param {node: 'drupal.theme_parameter::{callee}|{place}'}
+    - *caller
+  emits: [{edge: {kind: renders_theme_hook, from: matched_node, to: {template: '{hook}', type: drupal.theme_hook}}}]
+  confidence: inferred
+
+# The caller renders the hook the text of a class constant gives the parameter.
+- rule: caller_renders_constant_hook
+  reads: map
+  match:
+    node_type: drupal.theme_argument
+    where: [&constant {id_matches: '^drupal\.theme_argument::(?<class>[^:|'']+)::(?<constant>[A-Z][A-Z0-9_]*)\|(?<caller>[^|]+)\|(?<name>\w+)\|(?<place>x*#)$'}]
+    follow: &constant_text
+    - {node: 'php.type::{class}'}
+    - {ancestors: [inherits, implements]}
+    - {id_matches: '^php\.type::(?<owner>.+)$'}
+    - {node: 'drupal.class_constant::{owner}::{constant}'}
+    - {edge: has_constant_text}
+    - {id_matches: '^drupal\.constant_text::(?<hook>[A-Za-z_]\w*)$'}
+    - *caller
+    - *callee_step
+    - *callee
+    - *param
+    - *caller
+  emits: [{edge: {kind: renders_theme_hook, from: matched_node, to: {template: '{hook}', type: drupal.theme_hook}}}]
+  confidence: inferred
+
+# The called method passes each key '#x' it writes to the variable x of that hook.
+- rule: callee_passes_named_hook_variable
+  reads: map
+  match:
+    node_type: drupal.theme_argument
+    where: [*named]
+    follow:
+    - *caller
+    - *callee_step
+    - *callee
+    - *param
+    - &keys {node: 'php.method::{callee}'}
+    - &key_step {edge: names_render_key}
+    - &key {id_matches: '^drupal\.render_key::(?<key>.+)$'}
+    - {node: 'drupal.theme_variable::{hook}.{key}'}
+  emits: [&passes {edge: {kind: passes_theme_variable, from: {template: '{callee}', types: [php.method]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: callee_passes_constant_hook_variable
+  reads: map
+  match:
+    node_type: drupal.theme_argument
+    where: [*constant]
+    follow:
+    - {node: 'php.type::{class}'}
+    - {ancestors: [inherits, implements]}
+    - {id_matches: '^php\.type::(?<owner>.+)$'}
+    - {node: 'drupal.class_constant::{owner}::{constant}'}
+    - {edge: has_constant_text}
+    - {id_matches: '^drupal\.constant_text::(?<hook>[A-Za-z_]\w*)$'}
+    - *caller
+    - *callee_step
+    - *callee
+    - *param
+    - *keys
+    - *key_step
+    - *key
+    - {node: 'drupal.theme_variable::{hook}.{key}'}
+  emits: [*passes]
+  confidence: inferred
+
+# The caller passes the hook in a variable: the tie is a class constant the caller reads.
+- rule: callee_passes_read_hook_variable
+  reads: map
+  match:
+    node_type: drupal.constant_read
+    where: [&read {id_matches: '^drupal\.constant_read::(?<class>[^:|]+)::(?<constant>[A-Z][A-Z0-9_]*)\|(?<reader>php\.method::.+)$'}]
+    follow:
+    - {node: 'php.type::{class}'}
+    - {ancestors: [inherits, implements]}
+    - {id_matches: '^php\.type::(?<owner>.+)$'}
+    - {node: 'drupal.class_constant::{owner}::{constant}'}
+    - {edge: has_constant_text}
+    - {id_matches: '^drupal\.constant_text::(?<hook>[A-Za-z_]\w*)$'}
+    - {node: '{reader}'}
+    - {edge: calls}
+    - {id_matches: '^php\.method::(?<callee>.+)$'}
+    - {edge: has_theme_parameter}
+    - *keys
+    - *key_step
+    - *key
+    - {node: 'drupal.theme_variable::{hook}.{key}'}
+  emits: [*passes]
+  confidence: mentioned
+
+# The same three, to a variable a loop declares for the hook (theme_hook_loop.yaml).
+- rule: callee_passes_named_hook_loop_variable
+  reads: map
+  match:
+    node_type: drupal.theme_argument
+    where: [*named]
+    follow:
+    - *caller
+    - *callee_step
+    - *callee
+    - *param
+    - *keys
+    - *key_step
+    - *key
+    - &listed {node: 'drupal.constant_text::{hook}'}
+    - &listed_in {incoming_edge: has_constant_text}
+    - &list_step {incoming_edge: lists_constant}
+    - &list {id_matches: '^drupal\.class_constant::(?<list>.+)$'}
+    - &loop_variable {node: 'drupal.theme_loop_variable::{list}|{key}'}
+  emits: [*passes]
+  confidence: inferred
+
+- rule: callee_passes_constant_hook_loop_variable
+  reads: map
+  match:
+    node_type: drupal.theme_argument
+    where: [*constant]
+    follow:
+    - {node: 'php.type::{class}'}
+    - {ancestors: [inherits, implements]}
+    - {id_matches: '^php\.type::(?<owner>.+)$'}
+    - {node: 'drupal.class_constant::{owner}::{constant}'}
+    - {edge: has_constant_text}
+    - {id_matches: '^drupal\.constant_text::(?<hook>[A-Za-z_]\w*)$'}
+    - *caller
+    - *callee_step
+    - *callee
+    - *param
+    - *keys
+    - *key_step
+    - *key
+    - *listed
+    - *listed_in
+    - *list_step
+    - *list
+    - *loop_variable
+  emits: [*passes]
+  confidence: inferred
+
+- rule: callee_passes_read_hook_loop_variable
+  reads: map
+  match:
+    node_type: drupal.constant_read
+    where: [*read]
+    follow:
+    - {node: 'php.type::{class}'}
+    - {ancestors: [inherits, implements]}
+    - {id_matches: '^php\.type::(?<owner>.+)$'}
+    - {node: 'drupal.class_constant::{owner}::{constant}'}
+    - {edge: has_constant_text}
+    - {id_matches: '^drupal\.constant_text::(?<hook>[A-Za-z_]\w*)$'}
+    - {node: '{reader}'}
+    - {edge: calls}
+    - {id_matches: '^php\.method::(?<callee>.+)$'}
+    - {edge: has_theme_parameter}
+    - *keys
+    - *key_step
+    - *key
+    - *listed
+    - *listed_in
+    - *list_step
+    - *list
+    - *loop_variable
+  emits: [*passes]
+  confidence: mentioned

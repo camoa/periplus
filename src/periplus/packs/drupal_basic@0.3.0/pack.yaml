@@ -82,6 +82,36 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   value, X::NAME, self::NAME or static::NAME assigned, returned or given as an argument, whose
 #   text is such a hook's name or a hook the map holds gives a renders_theme_hook edge, as
 #   mentioned; a constant compared with ==, ===, != or !== gives none.
+# - each key of a hook entry's 'variables' array, as a drupal.theme_variable node <hook>.<name>
+#   with a variable_of_theme_hook edge to the hook; a name a template writes inside {{ }} or {% %}
+#   that a hook rendering the template declares, as an inferred template_reads_variable edge; and a
+#   render array key '#name' in a method or function that renders a hook declaring that variable,
+#   as an inferred passes_theme_variable edge (theme_hook/); a name a {% for %} loop or a
+#   {% macro %} around it binds is no read;
+# - each key of the 'variables' array hook_theme writes in a foreach over a class constant's list
+#   of names, as a drupal.theme_loop_variable node <class>::<LIST>|<name> with an inferred
+#   variable_of_theme_hook edge to each hook a listed constant's text names, and an inferred
+#   template_reads_variable edge from a module template named for such a hook
+#   (theme_hook/theme_hook_loop.yaml);
+# - a method whose '#theme' is one of its parameters: an inferred renders_theme_hook edge from each
+#   caller that passes a quoted name or a class constant at that parameter's place, and a
+#   passes_theme_variable edge from the method for each '#name' key it writes, inferred, or
+#   mentioned when the caller passes the hook in a variable and reads the constant that names it
+#   (theme_hook/theme_hook_parameter.yaml);
+# - each top-level key of the hash an include, include() or embed hands a template, as a
+#   drupal.template_variable node <template>.<name> with a passes_template_variable edge from the
+#   including template, an inferred template_variable_from edge to the hook variable or passed
+#   variable its value starts with, and an inferred template_reads_passed_variable edge from the
+#   included template that writes the name (template/template_include_variable.yaml);
+# - each {% set x = ... %} outside a macro, as a drupal.template_set_variable node
+#   <template>|x, with template_variable_from to the variable or the earlier set name its value
+#   starts with, and from an include's variable whose value is a name set above the include
+#   (template/template_set_variable.yaml);
+# - a name a template reads that a template including it with no hash and no only holds as a
+#   variable, as a mentioned template_reads_context_variable edge, when nothing declares or hands
+#   the template that name (template/template_context_variable.yaml);
+# - a template that a module and a theme both ship under one file name, as an inferred
+#   theme_overrides_template edge from the theme to it;
 # - each simple configuration file, with no top-level uuid, as a config_provided_by_theme edge to
 #   the theme its name starts with when the map holds that theme, else a config_provided_by edge
 #   to the module of that name, inferred when the map does not hold it; each theme core.extension
@@ -205,6 +235,13 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   or ->removeRole('x'), as a changes_role edge, to the role user.role.x, joined through an
 #   internal role-name hub; a role no mapped file declares ends at an unresolved role, and a
 #   variable in the argument keeps the call as a php.call_site marked resolution runtime;
+#   in_array('x', $account->getRoles()) gives the same checks_role edge, and in_array('x', $roles)
+#   gives an inferred one when every value the method or function assigns $roles is a getRoles()
+#   call; in_array(self::X, ...), with the getRoles() list or such a variable, and
+#   in_array(Owner::X, $account->getRoles()) give an inferred checks_role edge to the role the
+#   constant's text names; a string literal equal to a role's name, with a separator and 8
+#   characters or more, in a method, function or class constant gives a mentions_role edge with
+#   confidence mentioned, unless the same method, function or class writes it as an array key;
 # - each configuration object that \Drupal::config('x'), $this->config('x') or get('x') on a config
 #   factory names, as a reads_config_object edge, and that getEditable('x') on a config factory
 #   names, as an edits_config_object edge; a name no mapped file declares ends at an unresolved
@@ -874,12 +911,45 @@ files:
       - name: twig_expression
         open: '\{(?<mark>[{%])'
         balance: ['\{', '\}']
+      # A for loop, from its {% for %} to its {% endfor %}; bound is the name it binds, key the
+      # key name of {% for key, value in ... %}. A macro, from {% macro %} to {% endmacro %};
+      # args is its argument list. Read by theme_hook/template_reads_variable.yaml, which reads no
+      # name a loop or a macro around it binds.
+      - name: for_loop
+        open: '(?=\{%-?\s*for\s+(?:(?<key>[A-Za-z_]\w*)\s*,\s*)?(?<bound>[A-Za-z_]\w*)\s+in\b)'
+        balance: ['\{%-?\s*for\b', '\{%-?\s*endfor\b']
+      - name: macro_body
+        open: '(?=\{%-?\s*macro\s+\w+\s*\((?<args>[^)]*)\))'
+        balance: ['\{%-?\s*macro\b', '\{%-?\s*endmacro\b']
+      # The hash an include hands a template, from the include to the hash's closing brace;
+      # included is the template's file stem. One span per form: {% include 'x.html.twig' with
+      # {...} %}, include('x.html.twig', {...}) and {% embed 'x.html.twig' with {...} %}. A hash
+      # written as a key's value, key: {...}, is hash_value. Read by
+      # template/template_include_variable.yaml.
+      - name: include_with_hash
+        open: '\binclude\s+[''"](?:[^''"]*/)?(?<included>[^''"/:]+)\.html\.twig[''"](?:\s+ignore\s+missing)?\s+with\s*(?=\{)'
+        balance: ['\{', '\}']
+      - name: include_call_hash
+        open: '\binclude\(\s*[''"](?:[^''"]*/)?(?<included>[^''"/:]+)\.html\.twig[''"]\s*,\s*(?=\{)'
+        balance: ['\{', '\}']
+      - name: embed_with_hash
+        open: '\bembed\s+[''"](?:[^''"]*/)?(?<included>[^''"/:]+)\.html\.twig[''"](?:\s+ignore\s+missing)?\s+with\s*(?=\{)'
+        balance: ['\{', '\}']
+      - name: hash_value
+        open: '(?<mark>:)\s*(?=\{)'
+        balance: ['\{', '\}']
+      # From a {% set x = ... %} to the end of the template, where x is set; set is the name.
+      # The closing token never matches. Read by template/template_set_variable.yaml.
+      - name: set_scope
+        open: '(?=\{%-?\s*set\s+(?<set>[A-Za-z_]\w*)\s*=)'
+        balance: ['(?!x)x', '(?!y)y']
     # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
     # attachment. The sections are the comments and the strings. The spans kept here are attached,
     # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
     # subscribed_events, listener_list, own_listener_list, named_listener_list,
-    # qualified_listener_list, class_listener_list, named_function, first_parameter_type, class_like_body,
-    # attributed_class, array_assigned, in_array_list, alter_list, any_function and switch_body.
+    # qualified_listener_list, class_listener_list, named_function, foreach_body, assigned_constant,
+    # keyed_entry, constant_array, first_parameter_type, class_like_body, attributed_class,
+    # array_assigned, quoted_key_array, in_array_list, alter_list, any_function and switch_body.
     drupal_php_text:
       endings: [php, module, theme, inc, install, profile]
       reader: text
@@ -975,11 +1045,32 @@ files:
       - name: class_listener_list
         open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?<key>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
         balance: ['[', ']']
-      # The body of a named function or method; function is its name. A closure has no name and
-      # opens none, so a match inside one reads the function around it.
+      # The body of a named function or method; function is its name, params its parameter list
+      # up to the first closing parenthesis. A closure has no name and opens none, so a match
+      # inside one reads the function around it.
       - name: named_function
-        open: '\bfunction\s+(?<function>\w+)\s*\([^)]*\)[^{;]*'
+        open: '\bfunction\s+(?<function>\w+)\s*\((?<params>[^)]*)\)[^{;]*'
         balance: ['{', '}']
+      # The body of a foreach loop; list is what it loops over, as written, and name the variable
+      # each value is bound to. Read by theme_hook/theme_hook_loop.yaml.
+      - name: foreach_body
+        open: '\bforeach\s*\(\s*(?<list>[^;{}]*?)\s+as\s+(?:\$\w+\s*=>\s*)?\$(?<name>\w+)\s*\)\s*(?=\{)'
+        balance: ['{', '}']
+      # A variable assigned a class constant, $names = X::NAMES;, from after the semicolon to the
+      # brace that closes the next block, so a loop written right after it is inside; var is the
+      # variable, constant the constant as written. Read by theme_hook/theme_hook_loop.yaml.
+      - name: assigned_constant
+        open: '\$(?<var>\w+)\s*=\s*(?<constant>[A-Za-z_]\w*::[A-Z][A-Z0-9_]*)\s*;'
+        balance: ['{', '}']
+      # An array assigned to a variable's key, $items[$name] = [...]; entry is the key variable.
+      - name: keyed_entry
+        open: '\$\w+\s*\[\s*\$(?<entry>\w+)\s*\]\s*=\s*(?=\[)'
+        balance: ['[', ']']
+      # The array a class constant is declared with, const NAMES = [...]; constant is its name.
+      # Read by theme_hook/theme_hook_loop.yaml.
+      - name: constant_array
+        open: '\bconst\s+(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?=\[)'
+        balance: ['[', ']']
       # The same body, or the body of an anonymous class; scope is function <name> or new class, so
       # the spans around a match, outermost first, show whether an anonymous class stands between
       # it and the named function or method that creates the class. Read by the event rules, which
@@ -1017,6 +1108,11 @@ files:
       # An array literal assigned to a variable, $list = [...]; list is the variable's name.
       - name: array_assigned
         open: '\$(?<list>\w+)\s*=\s*(?=\[)'
+        balance: ['[', ']']
+      # An array written as the value of a quoted key, 'name' => [...]; key is the key. Read by
+      # theme_hook/theme_variable.yaml, which joins the keys around a match into a path.
+      - name: quoted_key_array
+        open: '[\[,(\s][''"](?<key>[A-Za-z_][A-Za-z0-9_ ]*)[''"]\s*=>\s*(?=\[)'
         balance: ['[', ']']
       # A list of callables written whole under a key whose value is one, '#submit' => [...] or
       # '#process' => [...] in an array or ['#submit'] = [...] assigned; mark is the key. Read by

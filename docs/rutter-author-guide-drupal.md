@@ -513,7 +513,59 @@ two calls share holds each place's value under `differs`.
 - `checks_role` and `changes_role`, from the method or function around `->hasRole('x')`, or
   `->addRole('x')` and `->removeRole('x')`, to the role `user.role.x`, joined through the internal
   hub `drupal.role_name`; an unmapped role ends at an unresolved one, and a variable role keeps
-  the call as a `php.call_site` marked `resolution: runtime`.
+  the call as a `php.call_site` marked `resolution: runtime`. `in_array('x', $account->getRoles())`
+  gives the same `checks_role` edge. `in_array('x', $roles)` gives an inferred one through the
+  internal `names_role_in_variable` edge, which holds the variable's name as an edge attribute: a
+  map rule follows `php_basic`'s local variable of that name, and joins only when every value
+  the method or function assigns it is a `getRoles()` call. A role held in a class constant,
+  `in_array(self::X, $account->getRoles())`, `in_array(Owner::X, $account->getRoles())` or
+  `in_array(self::X, $roles)`, gives an inferred `checks_role` to the role the constant's text
+  names; `self::X` is read from the nearest class or interface up the parents that declares it.
+- `mentions_role`, from a method, function or class that holds a string literal equal to a role's
+  name, through `mention/php_literal.yaml`'s internal literal, with confidence `mentioned`. A
+  literal the same method, function or class writes as an array key, `$x['k']` or `'k' => value`,
+  is an internal `names_literal_key` edge and gives no mention.
+- `drupal.theme_variable`, a node for each key of a hook entry's `variables` array, with
+  `variable_of_theme_hook` to its hook; the span `quoted_key_array` gives the keys around a match, so a
+  key of a default value's own array is no variable. `template_reads_variable`, inferred, from a
+  template that writes the variable's name inside `{{ }}` or `{% %}` to a variable of a hook that
+  renders it, except a name a `{% for %}` loop or a `{% macro %}` around it binds, which the spans
+  `for_loop` and `macro_body` give; `passes_theme_variable`, inferred, from a method or function
+  that renders the hook and writes the key `'#name'`.
+- `drupal.theme_loop_variable`, a kind of `drupal.theme_variable`, for each key of the `variables`
+  array of an entry `$items[$name] = [...]` that hook_theme writes in a `foreach` over a class
+  constant `X::NAMES`, or over a variable assigned it before the loop; the node is
+  `<class>::NAMES|<name>`, one variable for every hook the list names. The spans `foreach_body`,
+  `assigned_constant` and `keyed_entry` give the loop, and `constant_array` the internal
+  `lists_constant` edge from the list to each `self::X` it holds. `variable_of_theme_hook`,
+  inferred, to each hook a listed constant's text names; `template_reads_variable`, inferred, from
+  a module template named for such a hook.
+- A method whose `'#theme'` is one of its parameters, as `respond($request, $data, $hook)`: the
+  internal `drupal.theme_parameter` node holds the parameter's place, read from the span
+  `named_function`'s `params`, and the internal `drupal.theme_argument` node each quoted name or
+  class constant a call passes, at its place. `renders_theme_hook`, inferred, from each caller that
+  passes a hook at that place, a quoted name or a class constant's text; `passes_theme_variable`
+  from the method, for each `'#name'` it writes, inferred, or mentioned when the caller passes the
+  hook in a variable and reads the class constant that names it elsewhere in its body.
+- `drupal.template_set_variable`, a kind of `drupal.template_variable`, for each
+  `{% set x = ... %}` outside a macro, as `<template>|x`. `template_variable_from` to
+  the hook variable, passed variable or earlier set name a value `y` or `y.z` starts with; from an
+  include's variable whose value starts with a name set above the include, which the span
+  `set_scope` gives, to the end of the template: a set inside an `{% if %}` that does not run, or
+  inside a `{% for %}` loop that has ended, still counts.
+- `template_reads_context_variable`, mentioned, from a template to a variable of a template that
+  includes it with no hash and no `only`, as `{% include 'x.html.twig' %}`, when the included
+  template reads that name and no hook, loop or include hands it to the template by name: the
+  including template's passed variable, set name, hook variable or loop variable of that name. One
+  bare include away; whether the name is set above the include is not read.
+- `drupal.template_variable`, a node for each top-level key of the hash an include hands a template,
+  in `{% include 'x.html.twig' with {...} %}`, `include('x.html.twig', {...})` or
+  `{% embed 'x.html.twig' with {...} %}`, with `passes_template_variable` from the including
+  template. `template_variable_from`, inferred, to the including template's hook variable or
+  passed variable that the value starts with; `template_reads_passed_variable`, inferred, from the
+  included template that writes the name. An include with no hash names no variable.
+- `theme_overrides_template`, inferred, from a theme to a template that both it and a module ship
+  under one file name.
 - `reads_config_object` and `edits_config_object`, from the method or function around
   `\Drupal::config('x')`, `$this->config('x')`, or `get('x')` and `getEditable('x')` on a config
   factory, to the configuration object `x`, unresolved when no file declares it.

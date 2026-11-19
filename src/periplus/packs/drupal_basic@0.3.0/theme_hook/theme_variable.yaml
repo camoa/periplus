@@ -1,0 +1,53 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A variable a theme hook declares: each key of the 'variables' array of a hook entry in a
+# hook_theme function, as 'invoice' in 'invoice_card' => ['variables' => ['invoice' => NULL]], is
+# the node <hook>.<variable>, invoice_card.invoice, with a variable_of_theme_hook edge to the hook.
+# Drupal hands a template only the variables its hook declares. Read as text: the keys around a
+# match, from the span quoted_key_array of drupal_php_text, must end in <hook>|variables inside a
+# hook_theme body, so a key of a default value's own array, as 'path' in 'link' => ['path' =>
+# NULL], is no variable. A hook entry written $items['hook'] = [...], or registered in a loop under
+# a variable name, gives no variable here (a loop over a constant list: theme_hook_loop.yaml); a
+# 'render element' hook declares none.
+
+node_types:
+- name: drupal.theme_variable
+  description: "a variable a theme hook declares in the 'variables' array of its hook_theme entry, as invoice_card.invoice"
+  id_namespace: drupal.theme_variable
+
+edge_kinds:
+- kind: variable_of_theme_hook
+  description: "the theme hook declares that variable in the 'variables' array of its hook_theme entry"
+  from: drupal.theme_variable
+  to: drupal.theme_hook
+  groups: true
+
+rules:
+- rule: theme_variable
+  reads: file
+  in: [source]
+  match: &variable_key
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<var>[A-Za-z_][A-Za-z0-9_]*)[''"]\s*=>'
+  values: &variable_values
+    in_theme: {from: {enclosing: hook_theme_body, capture: mark}}
+    keys: {from: {enclosing: quoted_key_array, capture: key, excluding_own: true}, join: '|'}
+    hook: {template: '{keys}', normalize: [{replace: '\|variables$', with: ''}, {replace: '^.*\|', with: ''}]}
+    # @ when the keys around the match end in <hook>|variables inside hook_theme, else empty, and
+    # an id that names an empty value makes nothing.
+    inside: {template: '{in_theme}|{keys}', normalize: [{replace: '^function\|(?:.*\|)?[A-Za-z_]\w*\|variables$', with: '@'}, {replace: '^(?!@$).*$', with: ''}]}
+  id: &variable_id {template: '{hook}.{var}{inside}', normalize: [{replace: '@$', with: ''}]}
+  line: {capture: var}
+  emits: [{node: {type: drupal.theme_variable}}]
+  confidence: declared
+
+- rule: theme_variable_of_hook
+  reads: file
+  in: [source]
+  match: *variable_key
+  values: *variable_values
+  id: *variable_id
+  line: {capture: var}
+  emits: [{edge: {kind: variable_of_theme_hook, from: this_node, to: {template: '{hook}', type: drupal.theme_hook}}}]
+  confidence: declared

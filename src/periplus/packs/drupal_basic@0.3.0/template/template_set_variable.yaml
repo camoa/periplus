@@ -1,0 +1,108 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A name a template sets: {% set flags = data.flags %} or {% set flags = data %} is the node
+# <template>|flags, a drupal.template_set_variable, a kind of drupal.template_variable. Its value
+# starts with a name, data, which the template holds as a hook's variable, a variable an include
+# hands it, or an earlier set name:
+# - to a hook's or an include's variable, a template_variable_given edge to the internal read node
+#   of that name, which template_include_variable.yaml and theme_hook_loop.yaml join as they join
+#   an include's value (template_variable_from, inferred);
+# - to a name set above it in the same template, a template_variable_from edge to that set name,
+#   declared.
+# An include whose hash hands a set name on, {% include 'card.html.twig' with { flags: flags } %}
+# below the set, gives template_variable_from from card.flags to the set name, declared, in each
+# include form template_include_variable.yaml reads.
+#
+# Scope: a set applies from its tag to the end of the template (the span set_scope), so a use
+# above the set does not reach it. Not expressed: a set inside an {% if %} that does not run, and a
+# name set twice, which reaches every set of that name above the use, and the end of a for loop:
+# Twig keeps a set inside a loop to that loop, but its scope here runs on to the end of the
+# template. A set inside a macro, which Twig keeps to the macro, gives no node; a set whose value
+# is anything but a name or a dotted name with filters after it, as {% set x = a ~ b %} or
+# {% set x = a ? b : c %}, gives the node and no source; the block form {% set x %}...{% endset %} gives nothing.
+
+node_types:
+- name: drupal.template_set_variable
+  parent: drupal.template_variable
+  description: "a name a template sets with {% set x = ... %}, as invoice-sheet|flags"
+  id_namespace: drupal.template_variable
+
+rules:
+- rule: template_set_variable
+  reads: file
+  in: &roots
+  - module_root
+  - theme_root
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\{%-?\s*set\s+(?<set>[A-Za-z_]\w*)\s*='
+  values: &outside
+    macro_args: {from: {enclosing: macro_body, capture: args}, join: '|'}
+    # @ when no macro holds the set, else empty.
+    outside: {template: '#{macro_args}', normalize: [{replace: '^#$', with: '@'}, {replace: '^#.+$', with: ''}]}
+  id: {template: '{template_name}|{set}{outside}', normalize: [{replace: '@$', with: ''}]}
+  line: {capture: set}
+  emits: [{node: {type: drupal.template_set_variable}}]
+  confidence: declared
+
+# The value's first name, as an include's value is read (template_include_variable.yaml).
+- rule: template_set_variable_given
+  reads: file
+  in: *roots
+  match: &set_value
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\{%-?\s*set\s+(?<set>[A-Za-z_]\w*)\s*=\s*(?<root>[A-Za-z_]\w*)(?:\.\w+)*\s*(?:\|[^%]*)?-?%\}'
+  values: *outside
+  id: &set_id {template: '{template_name}|{set}{outside}', normalize: [{replace: '@$', with: ''}]}
+  line: {capture: set}
+  emits: [{edge: {kind: template_variable_given, from: this_node, to: {template: '{template_name}|{root}', type: drupal.template_variable_read}}}]
+  confidence: declared
+
+- rule: template_set_from_set
+  reads: file
+  in: *roots
+  match: *set_value
+  values:
+    <<: *outside
+    sets: {from: {enclosing: set_scope, capture: set}, join: '|'}
+    # @ when no macro holds the set and the value's first name is another name set above, else
+    # empty.
+    earlier: {template: '{outside}{root}#{set}#|{sets}|', normalize: [{replace: '^@(\w+)#\1#.*$', with: ''}, {replace: '^@(\w+)#\w+#.*\|\1\|.*$', with: '@'}, {replace: '^(?!@$).*$', with: ''}]}
+  id: {template: '{template_name}|{set}{earlier}', normalize: [{replace: '@$', with: ''}]}
+  line: {capture: set}
+  emits: [{edge: {kind: template_variable_from, from: this_node, to: {template: '{template_name}|{root}', types: [drupal.template_set_variable]}}}]
+  confidence: declared
+
+# An include's hash key whose value starts with a name set above the include.
+- rule: include_variable_from_set
+  reads: file
+  in: *roots
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '[{,]\s*[''"]?(?<key>[A-Za-z_]\w*)[''"]?\s*:(?!:)\s*(?<root>[A-Za-z_]\w*)(?!\w|\s*\()'
+  values:
+    with: {from: {enclosing: include_with_hash, capture: included}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    call: {from: {enclosing: include_call_hash, capture: included}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    embed: {from: {enclosing: embed_with_hash, capture: included}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    included: {template: '{with}{call}{embed}'}
+    nested: {from: {enclosing: hash_value, capture: mark}}
+    loop_names: {from: {enclosing: for_loop, capture: bound}, join: '|'}
+    loop_keys: {from: {enclosing: for_loop, capture: key}, join: '|'}
+    macro_args: {from: {enclosing: macro_body, capture: args}, join: ',', normalize: [{replace: '=[^,]*', with: ''}, {replace: '[\s,]+', with: '|'}]}
+    sets: {from: {enclosing: set_scope, capture: set}, join: '|'}
+    # @ when the key is not inside a nested hash, the value's first name is set above and no
+    # loop or macro around the include binds it; else empty.
+    set_above:
+      template: '{nested}#{root}#|{sets}|#|{loop_names}|{loop_keys}|{macro_args}|'
+      normalize:
+      - {replace: '^:.*$', with: ''}
+      - {replace: '^#(\w+)#.*\|\1\|.*#.*\|\1\|.*$', with: ''}
+      - {replace: '^#(\w+)#.*\|\1\|.*#.*$', with: '@'}
+      - {replace: '^(?!@$).*$', with: ''}
+  id: {template: '{included}.{key}{set_above}', normalize: [{replace: '@$', with: ''}]}
+  line: {capture: key}
+  emits: [{edge: {kind: template_variable_from, from: this_node, to: {template: '{template_name}|{root}', types: [drupal.template_set_variable]}}}]
+  confidence: declared

@@ -1,0 +1,142 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Theme hooks registered in a loop over a constant list of names:
+#
+#   $names = Names::HOOKS;
+#   foreach ($names as $name) {
+#     $items[$name] = ['variables' => ['data' => NULL]];
+#   }
+#
+# with const HOOKS = [self::SHEET, self::PAGE]; and const SHEET = 'invoice_sheet';. Each key of the
+# 'variables' array in the loop body is the node <list>|<variable>, Names::HOOKS|data, a
+# drupal.theme_loop_variable: one variable declared for every hook the list names. Read as text,
+# inside a hook_theme function: the loop is foreach over X::NAME, or over a variable assigned
+# X::NAME before it in the same block, X read through the file's use statements, and the entry is
+# $items[$name] = [...] with the loop's own variable. A file rule writes each self::A or static::A
+# inside the array of const NAME = [...] as a lists_constant edge from NAME to A. The map rules then
+# give, inferred, as the list is joined to the hooks through the constants' texts:
+# - variable_of_theme_hook from the variable to each hook whose name a listed constant holds;
+# - template_reads_variable from a module template named for such a hook (my-sheet.html.twig for
+#   my_sheet, as theme_hook_from_module_template.yaml reads a name) to the variable it reads;
+# - template_variable_from from a variable an include hands on, or a {% set %} name, whose value
+#   starts with such a variable of the template's hook.
+# A list held in a variable assigned anything else, a list built by a call, an array literal in
+# the loop, a name in the list written as text or as another class's constant, an entry keyed by
+# anything but the loop's variable, and a 'render element' entry give nothing.
+
+node_types:
+- name: drupal.theme_loop_variable
+  parent: drupal.theme_variable
+  description: "a variable hook_theme declares in a loop for every hook a constant list names, as Names::HOOKS|data"
+  id_namespace: drupal.theme_loop_variable
+
+edge_kinds:
+- kind: lists_constant
+  cause: none
+  description: "the class constant's array names that constant of the same class, as self::A"
+  from: drupal.class_constant
+  to: drupal.class_constant
+
+rules:
+- rule: theme_loop_variable
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<var>[A-Za-z_][A-Za-z0-9_]*)[''"]\s*=>'
+  values:
+    in_theme: {from: {enclosing: hook_theme_body, capture: mark}}
+    keys: {from: {enclosing: quoted_key_array, capture: key, excluding_own: true}, join: '|'}
+    list: {from: {enclosing: foreach_body, capture: list}, join: '¤', normalize: [{replace: '^.*¤', with: ''}]}
+    name: {from: {enclosing: foreach_body, capture: name}, join: '¤', normalize: [{replace: '^.*¤', with: ''}]}
+    entry: {from: {enclosing: keyed_entry, capture: entry}, join: '¤', normalize: [{replace: '^.*¤', with: ''}]}
+    assigned: {from: {enclosing: assigned_constant, capture: var}, join: '¤', normalize: [{replace: '^.*¤', with: ''}]}
+    constant: {from: {enclosing: assigned_constant, capture: constant}, join: '¤', normalize: [{replace: '^.*¤', with: ''}]}
+    # The list as X::NAME: written so in the foreach, or the constant the innermost assignment
+    # around the loop gives the variable it loops over; else empty.
+    named_list:
+      template: '{list}#{assigned}#{constant}'
+      normalize:
+      - {replace: '^\$(\w+)#\1#(?=[A-Za-z_]\w*::[A-Z][A-Z0-9_]*$)', with: ''}
+      - {replace: '(?<=[A-Z0-9_])#[\s\S]*$', with: ''}
+      - {replace: '^(?![A-Za-z_]\w*::[A-Z][A-Z0-9_]*$).*$', with: ''}
+    # @ when the key sits right inside 'variables' of an entry keyed by the loop's variable, in a
+    # hook_theme body; else empty.
+    inside:
+      template: '{in_theme}|{keys}|{entry}#{name}'
+      normalize:
+      - {replace: '^function\|variables\|(\w+)#\1$', with: '@'}
+      - {replace: '^(?!@$).*$', with: ''}
+  id:
+    template: '{named_list}|{var}{inside}'
+    resolve: [bound_first_segment]
+    separator: '::'
+    normalize: [{replace: '@$', with: ''}]
+  line: {capture: var}
+  emits: [{node: {type: drupal.theme_loop_variable}}]
+  confidence: declared
+
+- rule: constant_lists_own_constant
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,]\s*(?:self|static)::(?<item>[A-Z][A-Z0-9_]*)\s*(?=[,\]])'
+  values:
+    list: {from: {enclosing: constant_array, capture: constant}, join: '¤', normalize: [{replace: '^.*¤', with: ''}]}
+    # @ inside a constant's array, else empty, and an id that names an empty value makes nothing.
+    inside: {template: '{list}', normalize: [{replace: '^.+$', with: '@'}]}
+  id: {template: '{psr4_class}::{item}{inside}', normalize: [{replace: '@$', with: ''}]}
+  line: {capture: item}
+  emits: [{edge: {kind: lists_constant, from: {template: '{psr4_class}::{list}', types: [drupal.class_constant]}, to: this_node}}]
+  confidence: declared
+
+- rule: loop_variable_of_hook
+  reads: map
+  match:
+    node_type: drupal.theme_loop_variable
+    where: [{id_matches: '^drupal\.theme_loop_variable::(?<list>.+)\|\w+$'}]
+    follow:
+    - node: 'drupal.class_constant::{list}'
+    - edge: lists_constant
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<hook>[A-Za-z_]\w*)$'
+  emits: [{edge: {kind: variable_of_theme_hook, from: this_node, to: {template: '{hook}', type: drupal.theme_hook}}}]
+  confidence: inferred
+
+- rule: template_reads_loop_variable
+  reads: map
+  match:
+    node_type: drupal.template_variable_read
+    where: [{id_matches: '^drupal\.template_variable_read::(?<template>[^|]+)\|(?<var>\w+)$'}]
+    follow: &loop_variable
+    - node: 'drupal.template::{template}'
+    - incoming_edge: module_template_name_of
+    - id_matches: '^drupal\.module_template_name::(?<hook>\w+)$'
+    - node: 'drupal.constant_text::{hook}'
+    - incoming_edge: has_constant_text
+    - incoming_edge: lists_constant
+    - id_matches: '^drupal\.class_constant::(?<list>.+)$'
+    - node: 'drupal.theme_loop_variable::{list}|{var}'
+  emits: [{edge: {kind: template_reads_variable, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred
+
+- rule: passed_variable_from_loop_variable
+  reads: map
+  match:
+    node_type: drupal.template_variable
+    follow:
+    - edge: template_variable_given
+    - id_matches: '^drupal\.template_variable_read::(?<template>[^|]+)\|(?<var>\w+)$'
+    - node: 'drupal.template::{template}'
+    - incoming_edge: module_template_name_of
+    - id_matches: '^drupal\.module_template_name::(?<hook>\w+)$'
+    - node: 'drupal.constant_text::{hook}'
+    - incoming_edge: has_constant_text
+    - incoming_edge: lists_constant
+    - id_matches: '^drupal\.class_constant::(?<list>.+)$'
+    - node: 'drupal.theme_loop_variable::{list}|{var}'
+  emits: [{edge: {kind: template_variable_from, from: this_node, to: matched_node}}]
+  confidence: inferred

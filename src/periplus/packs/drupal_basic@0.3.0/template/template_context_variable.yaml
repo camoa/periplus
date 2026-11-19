@@ -1,0 +1,153 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An include with no hash and no only, {% include 'flagged.html.twig' %} or
+# {{ include('flagged.html.twig') }}, hands the included template the whole context of the one
+# that includes it. Read from the reading side: a name the included template reads (the internal
+# read node of template_reads_variable.yaml) that no hook of the included template declares, no
+# loop declares for it (theme_hook_loop.yaml), no include hands it by name and the template does
+# not set itself (template_set_variable.yaml), and that the including template holds as a
+# variable an include hands it, a {% set %} name, a variable its hook declares or a variable a
+# loop declares for its hook, is a template_reads_context_variable edge from the included
+# template to that variable. One bare include away only. A file rule writes each bare include as
+# the internal node <including>><included> with an edge to the included template. A name the
+# included template sets from itself, {% set x = x|default(1) %}, links nothing either.
+#
+# Mentioned: the link holds only because the two names are equal, and the including template may
+# never set the name on the path that reaches the include. Not expressed: whether the name is set
+# above the include, an include inside a loop that binds the name, and an embed, whose blocks see
+# the context too. An include with a hash, with only, or whose template name is built at run time
+# gives nothing.
+
+node_types:
+- name: drupal.context_include
+  description: "internal: a bare include that hands the included template the whole context, as invoice-actions>invoice-flagged"
+  id_namespace: drupal.context_include
+  internal: true
+
+edge_kinds:
+- kind: context_include_of
+  cause: none
+  description: "internal: the bare include includes that template"
+  from: drupal.context_include
+  to: drupal.template
+- kind: template_reads_context_variable
+  cause: from
+  description: "the template reads that name, and a template that holds it as a variable includes this one with no hash and no only"
+  from: drupal.template
+  to: [drupal.template_variable, drupal.theme_variable]
+
+rules:
+- rule: bare_include
+  reads: file
+  in: &roots
+  - module_root
+  - theme_root
+  match: &tag
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\{%-?\s*include\s+[''"](?:[^''"]*/)?(?<included>[^''"/:]+)\.html\.twig[''"](?:\s+ignore\s+missing)?\s*-?%\}'
+  id: &id {template: '{template_name}>{included}'}
+  line: {capture: included}
+  emits: [{node: {type: drupal.context_include}}]
+  confidence: declared
+
+- rule: bare_include_of
+  reads: file
+  in: *roots
+  match: *tag
+  id: *id
+  line: {capture: included}
+  emits: &of [{edge: {kind: context_include_of, from: this_node, to: {template: '{included}', types: [drupal.template]}}}]
+  confidence: declared
+
+- rule: bare_include_call
+  reads: file
+  in: *roots
+  match: &call
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '\binclude\(\s*[''"](?:[^''"]*/)?(?<included>[^''"/:]+)\.html\.twig[''"]\s*\)'
+  id: *id
+  line: {capture: included}
+  emits: [{node: {type: drupal.context_include}}]
+  confidence: declared
+
+- rule: bare_include_call_of
+  reads: file
+  in: *roots
+  match: *call
+  id: *id
+  line: {capture: included}
+  emits: *of
+  confidence: declared
+
+# The read side: one rule per place the including template holds the name.
+- rule: reads_context_passed_variable
+  reads: map
+  match:
+    node_type: drupal.template_variable_read
+    where: [&read {id_matches: '^drupal\.template_variable_read::(?<template>[^|]+)\|(?<var>\w+)$'}]
+    unless: &declared_here
+    - [{node: 'drupal.template_variable::{template}.{var}'}]
+    - [{node: 'drupal.template_variable::{template}|{var}'}]
+    - [{node: 'drupal.template::{template}'}, {incoming_edge: theme_hook_template}, {id_matches: '^drupal\.theme_hook::(?<hook>.+)$'}, {node: 'drupal.theme_variable::{hook}.{var}'}]
+    - [{node: 'drupal.template::{template}'}, {incoming_edge: module_template_name_of}, {id_matches: '^drupal\.module_template_name::(?<hook>\w+)$'}, {node: 'drupal.constant_text::{hook}'}, {incoming_edge: has_constant_text}, {incoming_edge: lists_constant}, {id_matches: '^drupal\.class_constant::(?<list>.+)$'}, {node: 'drupal.theme_loop_variable::{list}|{var}'}]
+    follow:
+    - &included {node: 'drupal.template::{template}'}
+    - &including {incoming_edge: context_include_of}
+    - &from {id_matches: '^drupal\.context_include::(?<from>[^>]+)>'}
+    - {node: 'drupal.template_variable::{from}.{var}'}
+  emits: [&reads {edge: {kind: template_reads_context_variable, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: mentioned
+
+- rule: reads_context_set_variable
+  reads: map
+  match:
+    node_type: drupal.template_variable_read
+    where: [*read]
+    unless: *declared_here
+    follow:
+    - *included
+    - *including
+    - *from
+    - {node: 'drupal.template_variable::{from}|{var}'}
+  emits: [*reads]
+  confidence: mentioned
+
+- rule: reads_context_hook_variable
+  reads: map
+  match:
+    node_type: drupal.template_variable_read
+    where: [*read]
+    unless: *declared_here
+    follow:
+    - *included
+    - *including
+    - *from
+    - {node: 'drupal.template::{from}'}
+    - {incoming_edge: theme_hook_template}
+    - {id_matches: '^drupal\.theme_hook::(?<hook>.+)$'}
+    - {node: 'drupal.theme_variable::{hook}.{var}'}
+  emits: [*reads]
+  confidence: mentioned
+
+- rule: reads_context_loop_variable
+  reads: map
+  match:
+    node_type: drupal.template_variable_read
+    where: [*read]
+    unless: *declared_here
+    follow:
+    - *included
+    - *including
+    - *from
+    - {node: 'drupal.template::{from}'}
+    - {incoming_edge: module_template_name_of}
+    - {id_matches: '^drupal\.module_template_name::(?<hook>\w+)$'}
+    - {node: 'drupal.constant_text::{hook}'}
+    - {incoming_edge: has_constant_text}
+    - {incoming_edge: lists_constant}
+    - {id_matches: '^drupal\.class_constant::(?<list>.+)$'}
+    - {node: 'drupal.theme_loop_variable::{list}|{var}'}
+  emits: [*reads]
+  confidence: mentioned

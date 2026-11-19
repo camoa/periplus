@@ -12,7 +12,7 @@
 extra for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.10.0.
+Status: **beta**, version 0.10.1.
 
 </div>
 
@@ -63,7 +63,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.10.0
+uv tool install git+https://github.com/camoa/periplus@v0.10.1
 ```
 
 To install from a local copy of this repository:
@@ -195,8 +195,7 @@ kinds of tool that page describes.
 | What it needs to run | The command line | The tool | A database, a server or a viewer | A model |
 | A new stack | A new rutter, with no engine change | Code in the tool | Code in the tool | A new prompt |
 
-[`docs/evals.md`](docs/evals.md) sets out how Periplus is evaluated and holds the numbers of the
-runs so far.
+[`docs/evals.md`](docs/evals.md) compares one job done with the map and without it.
 
 ## What the map holds
 
@@ -285,7 +284,7 @@ beside `drupal_basic` when the site uses that module.
 
 | Rutter | Version | What it finds |
 |---|---|---|
-| `drupal_basic` | 0.3.0 | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays and plugins. The services and entity types that `\Drupal::service('x')`, `$container->get('x')`, `\Drupal::entityQuery('x')` and an entity type manager's `getStorage('x')` name in PHP functions and methods, with a static `load()` on a module's own entity class. The route and path a method or function links to, and the views plugins a view uses. Plugin types with their plugins and managers, an entity type's handler classes, a constraint's validator, and the service that answers a custom route requirement. Events with their subscribers and dispatchers, custom Twig filters and functions with the templates that call them, the field storages that code and templates name, and the block, theme hook or field a suggestion template's name points to. The roles that `hasRole`, `addRole` and `removeRole` name, the configuration objects that `\Drupal::config('x')` and a config factory name, the queue workers whose queues a queue factory gets, and the forms a `form_<id>_alter` hook alters. The factory a service is built by, local tasks, local actions and contextual links with their routes and classes, entity and confirm forms typed as forms, and the macro files a template imports. Hooks from `Hook` attribute methods, and from procedural functions named by their file's name, such as `mymod_cron` in `mymod.module`. Each PHP attribute with the class, method, function, property or parameter it sits on, each route subscriber as a route alter marked `resolution: runtime`, and the themes `core.extension` installs. The module or theme that holds each route, service, library, class and template, the form class a `getForm(X::class)` builds, and the route a template's path reaches by its shape. Depends on `php_basic`, `yaml_basic` and `twig_basic`. |
+| `drupal_basic` | 0.3.0 | Configuration, modules, themes, services, routes, permissions, libraries, templates, hooks, entity types, fields, displays and plugins. The services and entity types that `\Drupal::service('x')`, `$container->get('x')`, `\Drupal::entityQuery('x')` and an entity type manager's `getStorage('x')` name in PHP functions and methods, with a static `load()` on a module's own entity class. The route and path a method or function links to, and the views plugins a view uses. Plugin types with their plugins and managers, an entity type's handler classes, a constraint's validator, and the service that answers a custom route requirement. Events with their subscribers and dispatchers, custom Twig filters and functions with the templates that call them, the field storages that code and templates name, and the block, theme hook or field a suggestion template's name points to. The roles that `hasRole`, `addRole`, `removeRole` and `in_array` on `getRoles()` name, as text or a class constant, and role names written as text, the configuration objects that `\Drupal::config('x')` and a config factory name, the queue workers whose queues a queue factory gets, and the forms a `form_<id>_alter` hook alters. The factory a service is built by, local tasks, local actions and contextual links with their routes and classes, entity and confirm forms typed as forms, and the macro files a template imports. The variables a theme hook declares, also in a loop over a constant list of names, the templates that read them and the code that passes them as `'#name'`, also through a method that takes the hook as a parameter, the variables an include hands a template with its hash, a template's `{% set %}` names, the names a template reads from one that includes it with no hash, and the theme template that overrides a module's template of the same name. Hooks from `Hook` attribute methods, and from procedural functions named by their file's name, such as `mymod_cron` in `mymod.module`. Each PHP attribute with the class, method, function, property or parameter it sits on, each route subscriber as a route alter marked `resolution: runtime`, and the themes `core.extension` installs. The module or theme that holds each route, service, library, class and template, the form class a `getForm(X::class)` builds, and the route a template's path reaches by its shape. Depends on `php_basic`, `yaml_basic` and `twig_basic`. |
 | `drupal_js_basic` | 0.0.1 | Drupal behaviors, the behaviors they attach and the calls written in them, `drupalSettings` keys that PHP attaches and behaviors read, the libraries that PHP, templates and components attach, the library scripts and stylesheets, and the paths that script strings, template literals and `Drupal.url()` write, with the route a template literal's path reaches by its shape. A request whose URL is built at run time is a node marked `resolution: runtime`. Depends on `js_basic` and `drupal_basic`. |
 | `drupal_more` | 0.1.0 | Base fields an entity class defines and the entity type a reference field targets, the PHP class or trait that reads or writes a field by name, a `has_handler` edge from an entity class to each handler class its annotation names, the storage schema, views data and translation handlers among them, which `drupal_basic` does not read, `Job::create('type')` calls, and `->hasPermission('literal')` checks. Depends on `drupal_basic` and `advancedqueue_basic`. |
 | `ai_basic` | 0.0.1 | The AI module's agent plugins and function call plugins, by attribute, each joined to its class. |
@@ -347,20 +346,26 @@ set `views_root` under `folders`; a template is named by its path below `views_r
 
 New in this release:
 
-- **Entrances.** `depth --entrances` lists which of the given ids are entrances: they set
-  something off and nothing sets them off. `--ids` prints only those ids.
-- **Part types in the map.** `periplus map` writes the part types into the map header. A slice
-  or another saved piece keeps them, so `find` and `undescribed` sort it as the whole map does.
-  Rebuild a map to gain the field.
-- **Skills.** The describe skill sets out the work as a walk from the entrances of the set.
-- **Fixes.** `slice --from A --from B` now keeps both ids. `--out` creates missing folders.
-- **Docs.** Two new pages: [using the map with an AI agent](docs/using-the-map-with-an-agent.md)
-  and [how Periplus is evaluated](docs/evals.md).
+- **Roles named as text.** In the Drupal rutter, `in_array('x', $account->getRoles())` gives a
+  `checks_role` edge to the role. So does the same check through a variable or a class constant.
+  A role name written as text in a method, function or class constant gives a weaker
+  `mentions_role` edge.
+- **Template variables.** The Drupal rutter maps the variables a theme hook declares. It links
+  them to the code that passes them in a render array and to the templates that read them. It
+  also maps the variables an include or embed passes on to the template it includes. A template
+  rendered under a hook name passed as a parameter is tied to the hook through the caller. Theme
+  hooks registered in a loop over a constant list get their variables. A `{% set %}` name is tied
+  to where its value comes from. A bare include ties a name read in the included template to the
+  including template's variable.
+- **Theme overrides.** A theme template that overrides a module's template of the same name gives
+  a `theme_overrides_template` edge.
+- **Docs.** [How Periplus is evaluated](docs/evals.md) is now a short comparison page.
 
-Release 0.9.2 made `depth` report each start alone and rewrote the map skill. Release 0.9.1 made
-`show` print the description of each linked thing. Release 0.9.0 added marks, walks by cause, sets
-of ids and the description tools. The [changelog](CHANGELOG.md) lists them. Run
-`periplus skills install` after upgrading.
+Release 0.10.0 added `depth --entrances` and stored the part types in the map header. Release
+0.9.2 made `depth` report each start alone and rewrote the map skill. Release 0.9.1 made `show`
+print the description of each linked thing. Release 0.9.0 added marks, walks by cause, sets of ids
+and the description tools. The [changelog](CHANGELOG.md) lists them. Run `periplus skills install`
+after upgrading.
 
 ## Write a rutter
 

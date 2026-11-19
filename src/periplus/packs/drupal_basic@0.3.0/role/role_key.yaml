@@ -1,0 +1,147 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A string literal written as an array key, as a names_literal_key edge from the method, function
+# or class around it to the internal drupal.literal node of its text, the node
+# mention/php_literal.yaml writes. role/role_mentioned.yaml reads it: a key such as
+# $totals['late_payer'] or ['late_payer' => 0] names a slot of an array, not a role, so the role
+# gets no mention from the same method, function or class.
+#
+# Two places are keys: the index of $x['k'], and the key of 'k' => value. The parse tree does not
+# tell a key from a value inside one array element, so a key is read where the element holds a
+# second string, the value, or a value of one of the types below. An element whose other part is
+# an integer or a variable reads its string as the key, so 0 => 'late_payer' and $k =>
+# 'late_payer' give no mention; a class constant beside a string, self::X => 'late_payer', is
+# never read as a key, so a map from a status to a role still mentions it.
+
+edge_kinds:
+- kind: names_literal_key
+  cause: none
+  from: [php.method, php.function, php.class_like]
+  to: drupal.literal
+  description: "internal: the method, function or class writes a string literal with that text as an array key"
+
+rules:
+- rule: literal_index_key
+  reads: file
+  in: [source]
+  match:
+    reference: subscript_expression
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: &key '''(?<text>[a-z][a-z0-9_.:/-]*)'''}}]
+  emits: &key_edge [{edge: {kind: names_literal_key, from: enclosing_declaration, to: {template: '{text}', type: drupal.literal}}}]
+  confidence: declared
+
+# 'k' => 'v': the first of two strings is the key.
+- rule: literal_key_of_text
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where:
+    - {name_matches: {child: string, nth: 1, pattern: *key}}
+    - {name_matches: {child: string, nth: 2, pattern: '(?s).*'}}
+  emits: *key_edge
+  confidence: declared
+
+# 'k' => <a value of one type>: one rule per type of value.
+- rule: literal_key_of_integer
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: *key}}, {name_matches: {child: integer, pattern: '(?s).*'}}]
+  emits: *key_edge
+  confidence: declared
+
+- rule: literal_key_of_boolean
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: *key}}, {name_matches: {child: boolean, pattern: '(?s).*'}}]
+  emits: *key_edge
+  confidence: declared
+
+- rule: literal_key_of_null
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: *key}}, {name_matches: {child: 'null', pattern: '(?s).*'}}]
+  emits: *key_edge
+  confidence: declared
+
+- rule: literal_key_of_variable
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: *key}}, {name_matches: {child: variable_name, pattern: '(?s).*'}}]
+  emits: *key_edge
+  confidence: declared
+
+- rule: literal_key_of_expression
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: *key}}, {name_matches: {child: binary_expression, pattern: '(?s).*'}}]
+  emits: *key_edge
+  confidence: declared
+
+- rule: literal_key_of_array
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: *key}}, {name_matches: {child: array_creation_expression, pattern: '(?s).*'}}]
+  emits: *key_edge
+  confidence: declared
+
+- rule: literal_key_of_method_call
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: *key}}, {name_matches: {child: member_call_expression, pattern: '(?s).*'}}]
+  emits: *key_edge
+  confidence: declared
+
+- rule: literal_key_of_function_call
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: *key}}, {name_matches: {child: function_call_expression, pattern: '(?s).*'}}]
+  emits: *key_edge
+  confidence: declared
+
+- rule: literal_key_of_index
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: *key}}, {name_matches: {child: subscript_expression, pattern: '(?s).*'}}]
+  emits: *key_edge
+  confidence: declared

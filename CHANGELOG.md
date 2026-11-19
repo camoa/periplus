@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-19
+
+### Added
+
+- The Drupal rutter links a user role named as text to the role. `in_array('x', $account->getRoles())` gives a `checks_role` edge, like `hasRole('x')`. The same check through a variable that holds `getRoles()`, or with a class constant, gives an inferred `checks_role` edge.
+- A role name written as a string value in a method, function or class constant gives a `mentions_role` edge, with confidence `mentioned`. A string the same code writes as an array key gives none.
+- A theme's template that overrides a module's template of the same file name gives an inferred `theme_overrides_template` edge from the theme.
+- Theme hook variables. Each variable a theme hook declares is a `drupal.theme_variable` node with a `variable_of_theme_hook` edge to its hook. A template that reads it gives `template_reads_variable`. Code that renders the hook and passes the variable as `'#name'` gives `passes_theme_variable`.
+- Variables an include or embed passes on. Each key of the hash an include or embed hands a template is a `drupal.template_variable` node, with `passes_template_variable` from the including template. `template_variable_from` links it to the variable its value comes from. `template_reads_passed_variable` links the included template that reads it.
+- A hook name passed as a parameter. A method whose `'#theme'` is one of its parameters renders the hook its caller names. The caller gets an inferred `renders_theme_hook` edge to that hook. The method gets an inferred `passes_theme_variable` edge to each variable of that hook it writes as `'#name'`. When the caller holds the hook name in a variable set from a class constant, that edge has confidence `mentioned`.
+- Theme hooks registered in a loop over a constant list of names. Each key of the loop's `variables` array is a `drupal.theme_loop_variable` node, with `variable_of_theme_hook` to each hook the list names. The templates of those hooks that read it give `template_reads_variable`.
+- `{% set %}` names. A name a template sets is a `drupal.template_set_variable` node. `template_variable_from` links it to the variable or set name its value starts with. An include that hands the set name on links to it the same way.
+- Bare includes. An include with no hash and no `only` hands the included template the whole context. A name the included template reads and gets from nowhere else gives `template_reads_context_variable`, with confidence `mentioned`, to the variable of that name in the including template.
+
+### Changed
+
+- `docs/evals.md` is rewritten as a short comparison page.
+
 ## [0.10.0] - 2026-11-18
 
 ### Added

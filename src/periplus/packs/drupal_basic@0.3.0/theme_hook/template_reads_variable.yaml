@@ -1,0 +1,71 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A template that reads a variable its theme hook declares: a name written inside {{ }} or {% %} in
+# the template a hook renders (theme_hook_template), equal to a variable of that hook
+# (theme_variable.yaml), as invoice in {{ invoice.number }} or flags in {% if flags.is_overdue %},
+# is a template_reads_variable edge to <hook>.<variable>, at the line of each read. A file rule
+# writes each such name as the internal node <template>|<name>; a map rule joins it only to a
+# variable of a hook that renders that template, so a name no hook declares makes nothing.
+#
+# Read as text. A name after a dot, a pipe, a quote, a slash, a dash or an @, a name followed by (
+# or a quote, a name followed by plain words and a closing quote, as tracking in 'Carrier tracking
+# number'|t, and a hash key followed by : are no read, so the key of {key: value} and the part
+# after a ternary's ? are not read. A name that a {% for %} loop or a {% macro %} around it binds,
+# as page inside {% for page in pages %} ... {% endfor %}, is the loop's or the macro's, not the
+# hook's, and is no read; the name in the for tag itself counts as bound, so {% for page in
+# page.items %} reads no page. The name a {% set %} assigns, flags in {% set flags = ... %}, is
+# no read; its value, flags in {% set flags = flags|default([]) %}, is, and the names below it
+# read the value set from it. A word
+# in a quoted text that does not end that way, and a keyword equal to one, read as the variable.
+# Twig's own variables and a variable a preprocess function adds are not declared, so they link
+# nothing.
+
+node_types:
+- name: drupal.template_variable_read
+  description: "internal: a name a template writes inside {{ }} or {% %}, before the map joins it to a variable of the hook that renders the template"
+  id_namespace: drupal.template_variable_read
+  internal: true
+
+edge_kinds:
+- kind: template_reads_variable
+  cause: from
+  description: "the template writes that variable's name inside {{ }} or {% %}, and a theme hook that renders the template declares it"
+  from: drupal.template
+  to: drupal.theme_variable
+
+rules:
+- rule: template_variable_name
+  reads: file
+  in:
+  - module_root
+  - theme_root
+  match:
+    file: '*.html'
+    filetype: drupal_template_text
+    text: '(?<![\w.$|''"/@-])(?<!\bset )(?<var>[A-Za-z_][A-Za-z0-9_]*)\b(?![(''"]|\s*:|[\w \t]*[''"])'
+  values:
+    in_expression: {from: {enclosing: twig_expression, capture: mark}}
+    loop_names: {from: {enclosing: for_loop, capture: bound}, join: '|'}
+    loop_keys: {from: {enclosing: for_loop, capture: key}, join: '|'}
+    macro_args: {from: {enclosing: macro_body, capture: args}, join: ',', normalize: [{replace: '=[^,]*', with: ''}, {replace: '[\s,]+', with: '|'}]}
+    # @ when no loop or macro around the name binds it, else empty, and an id that names an
+    # empty value makes nothing.
+    unbound:
+      template: '{var}#|{loop_names}|{loop_keys}|{macro_args}|'
+      normalize: [{replace: '^(\w+)#.*\|\1\|.*$', with: ''}, {replace: '^.+$', with: '@'}]
+  id: {template: '{template_name}|{in_expression}{var}{unbound}', normalize: [{replace: '\|[{%]+', with: '|'}, {replace: '@$', with: ''}]}
+  emits: [{node: {type: drupal.template_variable_read}}]
+  confidence: inferred
+
+- rule: template_reads_theme_variable
+  reads: map
+  match:
+    node_type: drupal.template_variable_read
+    where: [{id_matches: '^drupal\.template_variable_read::(?<template>[^|]+)\|(?<var>\w+)$'}]
+    follow:
+    - node: 'drupal.template::{template}'
+    - incoming_edge: theme_hook_template
+    - id_matches: '^drupal\.theme_hook::(?<hook>.+)$'
+    - node: 'drupal.theme_variable::{hook}.{var}'
+  emits: [{edge: {kind: template_reads_variable, from: {template: '{template}', type: drupal.template}, to: matched_node}}]
+  confidence: inferred
