@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-11-24
+
+### Added
+
+- The Drupal rutter links code to the entity type it creates. `X::create([...])` on an entity class gives an inferred `creates_entity_type` edge from the method or function to the entity type, beside the `uses_entity_type` edge. So does `create()` on a storage from `getStorage('x')`: chained, held in a local variable of the same function, or held in a property that is set once. The null-safe forms `?->create(` are read for the chained and local variable cases. A storage whose entity type is not a text literal gives no edge.
+- A skill, `periplus-analyze`, for a code review or analysis that uses the map. It starts from the fact that a map is not the code: it can have gaps, and it does not hold what happens between its links. It says to identify with the map first, to read around each line the map names, to ask the same questions at every entrance, and to report the gaps noticed on the way.
+- A form class sets off the methods Drupal runs on it. A form class gives an inferred `runs_form_method` edge to the `buildForm`, `validateForm` and `submitForm` it declares, and an entity form also to its `form` and `save`. A walk from a `_form` route now reaches what the form does.
+
+### Changed
+
+- The map skill says how to ask what touches a thing: `periplus show THING` lists every link in and out, the kinds no walk follows too. `periplus find` lists only the links that hold the words.
+
 ## [0.10.1] - 2026-11-19
 
 ### Added

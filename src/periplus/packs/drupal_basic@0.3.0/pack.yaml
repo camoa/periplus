@@ -294,6 +294,14 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 #   (call/typed_receivers.yaml);
 # - each ->getForm(X::class), as an inferred builds_form edge from the method around it, or the
 #   function around it in a module, install, inc, theme or profile file, to the form class X;
+# - each entity a method or function creates, as an inferred creates_entity_type edge to its entity
+#   type, beside the uses_entity_type edge: X::create([...]) on an entity class, and create() on a
+#   storage from getStorage('x'), chained, held in a local variable of the same function, or held
+#   in a property of $this set once (call/entity_create_static.yaml, call/storage_create_*.yaml,
+#   call/storage_property_create.yaml);
+# - the methods Drupal runs on a form class that the class declares, as an inferred
+#   runs_form_method edge from the class: buildForm, validateForm and submitForm, and form and
+#   save on an entity form (form/form_entry_method.yaml);
 # - a method called on a service, as \Drupal::service('x')->m() or $container->get('x')->m(), or on
 #   a method's local variable assigned such a service, as an inferred calls edge to the method on
 #   the class the services file gives that service;

@@ -1,0 +1,45 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# ->getStorage('invoice')->create([...]): a creates_entity_type edge (call/entity_create_static.yaml)
+# from the method or function around the call to the entity type the literal names. The object
+# before getStorage is not read: the uses_entity_type rules of call/call.yaml read it.
+#
+# Inferred: getStorage on any object is taken as the entity type manager's.
+#
+# Missing results: a getStorage whose argument is not a text literal gives no edge.
+
+rules:
+- rule: storage_create_chained
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: create
+    - name_matches: {child: object, pattern: '(?s).*->\s*getStorage\(\s*[''"](?<et>[a-z0-9_]+)[''"]\s*\)'}
+  emits:
+  - edge:
+      kind: creates_entity_type
+      from: enclosing_declaration
+      to: {template: '{et}', types: [drupal.entity_type]}
+  confidence: inferred
+
+# ->getStorage('invoice')?->create([...]), the same edge.
+- rule: storage_create_chained_nullsafe
+  reads: file
+  in: [source]
+  match:
+    reference: nullsafe_member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: create
+    - name_matches: {child: object, pattern: '(?s).*->\s*getStorage\(\s*[''"](?<et>[a-z0-9_]+)[''"]\s*\)'}
+  emits:
+  - edge:
+      kind: creates_entity_type
+      from: enclosing_declaration
+      to: {template: '{et}', types: [drupal.entity_type]}
+  confidence: inferred

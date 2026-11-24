@@ -525,6 +525,16 @@ two calls share holds each place's value under `differs`.
   name, through `mention/php_literal.yaml`'s internal literal, with confidence `mentioned`. A
   literal the same method, function or class writes as an array key, `$x['k']` or `'k' => value`,
   is an internal `names_literal_key` edge and gives no mention.
+- `creates_entity_type`, inferred, from the method or function around `X::create([...])` on an
+  entity class to its entity type, beside the `uses_entity_type` edge of the same call. The same
+  edge from `create()` on a storage: `->getStorage('x')->create(`, a local variable assigned
+  `getStorage('x')` in the same function and not assigned again before the call, and a property
+  of `$this` that the class or a parent sets once to `getStorage('x')`. `?->create(` is read for
+  the chained and local variable forms. An entity type that is not a text literal gives no edge.
+- `runs_form_method`, inferred, from a form class to the `buildForm`, `validateForm` and
+  `submitForm` it declares itself, and from an entity form also to its `form` and `save`. A form
+  class is one that descends from a core form base or interface, or that has a `form_has_id`
+  edge.
 - `drupal.theme_variable`, a node for each key of a hook entry's `variables` array, with
   `variable_of_theme_hook` to its hook; the span `quoted_key_array` gives the keys around a match, so a
   key of a default value's own array is no variable. `template_reads_variable`, inferred, from a

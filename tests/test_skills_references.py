@@ -15,7 +15,13 @@ from _no_checkout import LINK_PREFIX, VERSION, without_example_projects
 from periplus.cli import build_parser
 
 ROOT = Path(__file__).resolve().parent.parent
-SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps", "periplus-describe")
+SKILLS = (
+    "periplus-rutter",
+    "periplus-map",
+    "periplus-gaps",
+    "periplus-describe",
+    "periplus-analyze",
+)
 RAW = {
     s: (ROOT / "src/periplus/skills" / s / "SKILL.md").read_text(encoding="utf-8") for s in SKILLS
 }

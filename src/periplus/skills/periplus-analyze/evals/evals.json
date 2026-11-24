@@ -1,0 +1,26 @@
+{
+  "skill_name": "periplus-analyze",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "This project has a Periplus map. We are going to change how an invoice gets created. What is likely to go wrong? Give the file and line for each problem.",
+      "expected_output": "A list of likely problems, each with its file and line and the entrance it sits on, found by reading only the code the map named.",
+      "expectations": [
+        "Names the target and its entrances with periplus commands before it opens any code",
+        "Reads the whole function around each line the map names, not the line alone",
+        "Reports what runs after the target in the same function, not only the steps that lead to it",
+        "Says for each finding whether the lines were read, and that nothing was run"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "This project has a Periplus map. While you review how invoices are created, you see a call in the code that the map does not link. What do you do?",
+      "expected_output": "The answer reports the missing link with its file and line as a map gap, and points to the periplus-gaps skill for the rule.",
+      "expectations": [
+        "Reports the missing link with its file and line",
+        "Names it a map gap and points to the periplus-gaps skill",
+        "Does not present a text search result as an answer from the map"
+      ]
+    }
+  ]
+}

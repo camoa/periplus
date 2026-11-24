@@ -11,7 +11,13 @@ from ruamel.yaml import YAML
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS_SRC = ROOT / "src" / "periplus" / "skills"
-SKILLS = ("periplus-rutter", "periplus-map", "periplus-gaps", "periplus-describe")
+SKILLS = (
+    "periplus-rutter",
+    "periplus-map",
+    "periplus-gaps",
+    "periplus-describe",
+    "periplus-analyze",
+)
 
 
 def _front_matter(text: str) -> str:

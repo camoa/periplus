@@ -23,8 +23,8 @@ references/find-a-feature.md: what the work holds, a worked example, and how to 
   It is often shared code: walk on with `--through ID` only when it belongs to the topic.
 - A **shared thing** is one that code writes and other code reads: a variable handed to a
   template, a config value, a global. Writers and readers both point at it, so a walk off
-  ends there. They are still connected: `periplus affected THING` lists every reader and
-  writer. Walk on from the readers that belong to the topic.
+  ends there. They are still connected: `periplus show THING` lists every reader and writer.
+  Walk on from the readers that belong to the topic.
 - A **start** is where your words land. An **entrance** sets something off, and nothing in the
   map sets it off. A slice read with `--map` is the map. `periplus depth IDS --entrances` lists
   the entrances among many ids. The periplus-describe skill means the same.
@@ -40,7 +40,7 @@ references/find-a-feature.md: what the work holds, a worked example, and how to 
 ## The tools
 
 `periplus --help` prints this list; `periplus find --help` prints one command's options. Every
-option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.10.1/docs/navigation.md).
+option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.10.2/docs/navigation.md).
 
 <!-- periplus-help -->
 ```text
@@ -145,6 +145,15 @@ Defaults that bound a result:
 ## Ways that tend to work
 
 - A lookup: `periplus find` on the words, then `periplus reach` or `periplus show`.
+- The steps from A to B: `periplus path A B`, one step a line, each with its file and line. A
+  chain holds only the steps that lead to B. For what a method does after that step, run
+  `periplus show` on the method: it lists every call the method makes, each with its line.
+- From a line, in an error, a diff or a search hit: `periplus at FILE:42` names the thing on
+  that line and what holds it. `periplus in FILE` lists what else the map holds in that file, in
+  line order.
+- What touches a thing, such as a role, a permission or a config value: `periplus show THING`.
+  It lists every link in and out, the `touch` kinds too, such as a role check, which no walk
+  follows. `periplus find` lists only the links that hold your words, never all links of a thing.
 - One slice need not hold it all. When the start count, the depth or the 500 cap gets in the
   way, make partial slices, one per entrance or part, and join them into one file:
 
@@ -162,4 +171,5 @@ periplus minus rim.map.json login.map.json
 
 - A set that should be one flow but falls into pieces may lack a start, or a link in the map.
 - The periplus-describe skill describes a thing whose code you read, and a saved set (`--map`).
+- The periplus-analyze skill guides a review of the code the map named: what can go wrong.
 - When the map has no answer, or to confirm a line, see references/code-search.md.

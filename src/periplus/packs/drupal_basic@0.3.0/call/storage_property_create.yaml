@@ -1,0 +1,36 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# $this->storage->create([...]) on a property that the class, or a class it extends, sets once to
+# a getStorage('x') call, as $this->storage = $entity_type_manager->getStorage('invoice') in its
+# constructor: a uses_entity_type edge and a creates_entity_type edge from the method around the
+# create call to the entity type x, as Invoice::create([...]) gives (call/call.yaml,
+# call/entity_create_static.yaml). A storage made and used in one function already gives the uses
+# edge from its getStorage('x') call.
+#
+# Inferred: the property is followed to its one assignment.
+#
+# Missing results: a property assigned more than once with different values, or a getStorage
+# whose argument is not a text literal, gives no edge.
+
+rules:
+- rule: storage_property_create
+  reads: map
+  match:
+    node_type: php.call_site
+    where:
+    - id_matches: '^php\.call_site::(?<class>[^:]+)::(?<method>[^:]+)::\$this->(?<member>\w+)->create$'
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - node: 'php.member_assignment::{owner}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::[^:]+::\$this->\w+=[\s\S]*->getStorage\(\s*[''"](?<et>[a-z0-9_]+)[''"]\s*\)$'
+    - node: 'php.method::{class}::{method}'
+    unless_matched:
+    - [{node: 'php.member_assignment::{owner}::$this->{member}'}, {edge: assigned_value}, {id_matches: '^php\.member_assignment_value::[^:]+::[^:]+::\$this->\w+=(?![\s\S]*->getStorage\(\s*[''"]{et}[''"]\s*\)$)'}]
+  emits:
+  - edge: {kind: uses_entity_type, from: matched_node, to: {template: '{et}', types: [drupal.entity_type]}}
+  - edge: {kind: creates_entity_type, from: matched_node, to: {template: '{et}', types: [drupal.entity_type]}}
+  confidence: inferred

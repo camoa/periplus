@@ -12,7 +12,7 @@
 extra for the tests. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
 every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.</sub>
 
-Status: **beta**, version 0.10.1.
+Status: **beta**, version 0.10.2.
 
 </div>
 
@@ -63,7 +63,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.10.1
+uv tool install git+https://github.com/camoa/periplus@v0.10.2
 ```
 
 To install from a local copy of this repository:
@@ -78,8 +78,8 @@ ships into `~/.claude/skills`. Run it again after an update to replace the older
 #### Use the skills with other agents
 
 The skills follow the [Agent Skills](https://agentskills.io) format: a folder with a `SKILL.md`
-file. After `periplus skills install`, the folders `periplus-describe`, `periplus-gaps`, `periplus-map` and
-`periplus-rutter` are in `~/.claude/skills`. Copy them to the folder the agent reads, and copy them
+file. After `periplus skills install`, the folders `periplus-analyze`, `periplus-describe`,
+`periplus-gaps`, `periplus-map` and `periplus-rutter` are in `~/.claude/skills`. Copy them to the folder the agent reads, and copy them
 again after each update. The folder `~/.agents/skills` serves four agents at once:
 
 ```
@@ -346,23 +346,19 @@ set `views_root` under `folders`; a template is named by its path below `views_r
 
 New in this release:
 
-- **Roles named as text.** In the Drupal rutter, `in_array('x', $account->getRoles())` gives a
-  `checks_role` edge to the role. So does the same check through a variable or a class constant.
-  A role name written as text in a method, function or class constant gives a weaker
-  `mentions_role` edge.
-- **Template variables.** The Drupal rutter maps the variables a theme hook declares. It links
-  them to the code that passes them in a render array and to the templates that read them. It
-  also maps the variables an include or embed passes on to the template it includes. A template
-  rendered under a hook name passed as a parameter is tied to the hook through the caller. Theme
-  hooks registered in a loop over a constant list get their variables. A `{% set %}` name is tied
-  to where its value comes from. A bare include ties a name read in the included template to the
-  including template's variable.
-- **Theme overrides.** A theme template that overrides a module's template of the same name gives
-  a `theme_overrides_template` edge.
-- **Docs.** [How Periplus is evaluated](docs/evals.md) is now a short comparison page.
+- **Entity creation.** The Drupal rutter links a method or function to the entity type it
+  creates, with a `creates_entity_type` edge: `X::create()` on an entity class, and `create()` on
+  a storage from `getStorage('x')`.
+- **Form methods.** A form class gives a `runs_form_method` edge to the `buildForm`,
+  `validateForm` and `submitForm` it declares. A walk from a form route now reaches them.
+- **Map skill.** For "what touches this thing", the skill now says to run `periplus show THING`.
+- **Analyze skill.** A new skill, `periplus-analyze`, guides a code review that uses the map:
+  identify with the map, read around each line it names, and ask the same questions at every
+  entrance. It starts from the fact that a map is not the code.
 
-Release 0.10.0 added `depth --entrances` and stored the part types in the map header. Release
-0.9.2 made `depth` report each start alone and rewrote the map skill. Release 0.9.1 made `show`
+Release 0.10.1 added roles named as text, template variables and theme overrides to the Drupal
+rutter. Release 0.10.0 added `depth --entrances` and stored the part types in the map header.
+Release 0.9.2 made `depth` report each start alone and rewrote the map skill. Release 0.9.1 made `show`
 print the description of each linked thing. Release 0.9.0 added marks, walks by cause, sets of ids
 and the description tools. The [changelog](CHANGELOG.md) lists them. Run `periplus skills install`
 after upgrading.

@@ -1,0 +1,68 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The methods Drupal's form builder calls on a form object, from the form class to each one the
+# class itself declares: buildForm when the form is built, validateForm and submitForm when it is
+# sent. A route's _form, an entity type's form handler or a form id reaches the class, and this
+# edge carries a walk on to the code that runs, so a walk by cause back from a form's method
+# reaches the route that shows the form. The callbacks buildForm names, such as an #ajax callback
+# or a #submit handler, follow from buildForm through form/form_handler.yaml.
+#
+# A class is a form when it descends from a core form base or interface, the list
+# form/form_handler.yaml reads, or when it returns a literal form id from getFormId
+# (form/form_id.yaml). An entity form also gives form, which core's EntityForm::buildForm
+# calls, and save, which its default actions add as a submit handler.
+#
+# Inferred: Drupal's form API, not the class, says which methods run.
+#
+# Limits:
+# - A method the class inherits and does not declare gives no edge: the class's parent, inside
+#   or outside the map, holds it.
+# - An entity form whose actions() drops ::save still gives the save edge.
+
+edge_kinds:
+- kind: runs_form_method
+  cause: from
+  description: "the form runs that method of its own class: buildForm to build it, validateForm and submitForm when it is sent, and form and save on an entity form"
+  from: php.class
+  to: php.method
+
+rules:
+- rule: form_class_runs_method
+  reads: map
+  match:
+    node_type: php.class
+    follow:
+    - id_matches: '^php\.type::(?<cls>.+)$'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::Drupal\\Core\\(?:Form\\(?:FormInterface|FormBase|ConfirmFormBase|ConfigFormBase)|Entity\\(?:EntityFormInterface|ContentEntityFormInterface|EntityForm|ContentEntityForm|EntityDeleteForm|ContentEntityDeleteForm|EntityConfirmFormBase|ContentEntityConfirmFormBase|BundleEntityFormBase))$'
+    - node: 'php.type::{cls}'
+    - edge: contains
+    - id_matches: '::(?:buildForm|validateForm|submitForm)$'
+  emits: [{edge: {kind: runs_form_method, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+- rule: form_id_class_runs_method
+  reads: map
+  match:
+    node_type: drupal.form_id
+    follow:
+    - incoming_edge: form_has_id
+    - id_matches: '^php\.type::(?<cls>.+)$'
+    - edge: contains
+    - id_matches: '::(?:buildForm|validateForm|submitForm)$'
+  emits: [{edge: {kind: runs_form_method, from: {template: '{cls}', types: [php.class]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: entity_form_runs_method
+  reads: map
+  match:
+    node_type: php.class
+    follow:
+    - id_matches: '^php\.type::(?<cls>.+)$'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::Drupal\\Core\\Entity\\(?:EntityFormInterface|ContentEntityFormInterface|EntityForm|ContentEntityForm)$'
+    - node: 'php.type::{cls}'
+    - edge: contains
+    - id_matches: '::(?:form|save)$'
+  emits: [{edge: {kind: runs_form_method, from: this_node, to: matched_node}}]
+  confidence: inferred
