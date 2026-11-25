@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- New pages: [how Periplus fits together](docs/architecture.md), [rule composition](docs/rule-composition.md) with a runnable example in `examples/rule-composition`, [extending Periplus](docs/extending-periplus.md), [judging a map](docs/mapping-quality.md), [seeing the map as a graph](docs/visualize-the-map.md) with Gephi, [telling apart things that share a name](docs/disambiguation.md), [questions and answers](docs/faq.md), a [glossary](docs/glossary.md) and a [docs index](docs/README.md).
+- `AGENTS.md` and `llms.txt`, entry points for an AI agent.
+- The map, analyze and describe skills say what to do when several things share a name.
+
+### Changed
+
+- The README opens with what Periplus is for, and its long tables moved to the pages that hold them. `docs/rutters.md` now lists what each bundled rutter reads and the example rutters.
+- [Using the map with an AI agent](docs/using-the-map-with-an-agent.md) gives ten everyday uses, each with a prompt to copy.
+- `docs/evals.md`: the second job is now three runs per side, run by a script.
+
+### Fixed
+
+- The map report's list of files no rule read named a file twice, as `x` and `./x`, and named files that rules had read, when one rutter's folder was `.` and another's was `./**`. A folder written as `.` now gives the same paths as `./**`, so a map built with such a folder writes `x` where it wrote `./x`.
+- The same list no longer names files under `.periplus`.
+- `docs/navigation.md`: several words given to `periplus find` need quotes, and the GraphML label keeps a dotted name whole.
+
 ## [0.10.2] - 2026-11-24
 
 ### Added

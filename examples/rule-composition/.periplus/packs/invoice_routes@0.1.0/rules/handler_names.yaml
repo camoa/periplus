@@ -1,0 +1,18 @@
+node_types:
+- name: inv.handler_name
+  id_namespace: inv.handler_name
+  description: "the name a route gives the function that handles it, as the routes file writes it"
+edge_kinds:
+- kind: names_handler
+  from: inv.route
+  to: inv.handler_name
+  cause: touch
+  description: "the routes file names this function as the route's handler"
+rules:
+- rule: handler_name
+  reads: file
+  in: [routes]
+  match: {file: app, filetype: routes, text: '(?m)^(?<verb>[A-Z]+)[ \t]+(?<path>\S+)[ \t]+(?<fn>\w+)'}
+  id: {template: '{verb} {path}'}
+  emits: [{edge: {kind: names_handler, from: this_node, to: {template: '{fn}', type: inv.handler_name}}}]
+  confidence: declared

@@ -1,0 +1,12 @@
+node_types:
+- name: inv.route
+  id_namespace: inv.route
+  description: "an HTTP route the routes file declares, named by its method and path"
+rules:
+- rule: route
+  reads: file
+  in: [routes]
+  match: {file: app, filetype: routes, text: '(?m)^(?<verb>[A-Z]+)[ \t]+(?<path>\S+)'}
+  id: {template: '{verb} {path}'}
+  emits: [{node: {type: inv.route}}]
+  confidence: declared

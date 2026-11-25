@@ -1,0 +1,4 @@
+POST   /invoices           createInvoice
+GET    /invoices/:id       showInvoice
+POST   /invoices/:id/send  sendInvoice
+DELETE /invoices/:id       removeInvoice

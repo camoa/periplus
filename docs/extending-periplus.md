@@ -1,0 +1,144 @@
+# Extending Periplus
+
+When the map lacks something the code holds, this page tells you where the fix goes: a new rule,
+a new rutter, or the engine. A gap is a rutter matter first: the engine changes only when no rule
+can state the shape. Each answer below ends with the commands that show the fix works.
+
+## Decide
+
+Read the list from the top and stop at the first line that fits.
+
+1. **A bundled rutter covers the stack, and a rule can match the thing.** Write a rule. Put it
+   in your project's own rutter first. Offer it to the bundled rutter when any project on that
+   stack could hold the same thing.
+2. **The thing is a convention of your project only.** Write a project rutter in
+   `.periplus/packs` that depends on the bundled one. It stays in your repository.
+3. **No rutter covers the stack.** Start a new rutter.
+4. **No rule can state the shape, and you have shown it.** Only then is it the engine.
+
+[Where a rule belongs](map-report-guide.md#where-a-rule-belongs) gives the detail for the first
+three. [When a gap is the engine's](map-report-guide.md#when-a-gap-is-the-engines) gives the test
+for the fourth. [Bundled rutters](rutters.md) lists what ships.
+
+## 1. A rule for a covered stack
+
+Many bundled rutters start their `pack.yaml` with a comment that lists what they do not map yet.
+A shape listed there is a rule nobody wrote yet, not a defect. `js_basic` lists generators:
+`function* pages(list) {}` gives no node. A rule file in the project rutter of section 2 adds
+them, with the type `js_basic` already declares:
+
+```yaml .periplus/packs/acme_js@0.1.0/rules/generators.yaml
+rules:
+- rule: generator_declaration
+  reads: file
+  in: [js_source]
+  match: {declaration: generator_function_declaration, name_child: name, filetype: javascript}
+  id: {from: qualified_name}
+  emits: [{node: {type: js.function}}]
+  confidence: declared
+```
+
+```text
+$ periplus map
+...
+  acme_js generator_declaration fired 1
+$ periplus find pages --no-edges
+js.function::src/pages.js:pages  js.function  mapped  src/pages.js:1
+```
+
+Any JavaScript project can hold a generator, so this rule belongs in `js_basic` in the end.
+[CONTRIBUTING](../CONTRIBUTING.md) says how to propose it.
+
+## 2. A project rutter for your own conventions
+
+A project rutter is a folder in `.periplus/packs`. The smallest one names itself and the
+rutter it builds on:
+
+```yaml .periplus/packs/acme_js@0.1.0/pack.yaml
+pack: acme_js
+version: 0.1.0
+depends: [js_basic]
+```
+
+Pin both rutters in `.periplus/settings.yml`, then check the new one:
+
+```text
+$ periplus validate acme_js
+...
+Problems:
+  none
+```
+
+It may use the folders, file types and node types of `js_basic`. When the convention lives in a
+file the bundled rutter does not read, the rutter declares its own folder and file type.
+[Rule composition](rule-composition.md) shows one: a routes file joined to the JavaScript
+functions it names.
+
+## 3. A new rutter for a new stack
+
+No bundled rutter reads Ruby. A new rutter declares the file type, the folder and the first
+rule, and depends on nothing:
+
+```yaml .periplus/packs/ruby_text@0.1.0/pack.yaml
+pack: ruby_text
+version: 0.1.0
+depends: []
+folders:
+  ruby: ./lib/**
+files:
+  types:
+    ruby:
+      endings: [rb]
+      reader: text
+```
+
+```yaml .periplus/packs/ruby_text@0.1.0/rules/classes.yaml
+node_types:
+- name: ruby.class
+  id_namespace: ruby.class
+  description: "a Ruby class, named by its name"
+rules:
+- rule: class
+  reads: file
+  in: [ruby]
+  match: {file: '**', filetype: ruby, text: '(?m)^[ \t]*class[ \t]+(?<name>\w+)'}
+  id: {template: '{name}'}
+  emits: [{node: {type: ruby.class}}]
+  confidence: declared
+```
+
+```text
+$ periplus validate ruby_text
+$ periplus map
+$ periplus find Invoice --no-edges
+ruby.class::Invoice  ruby.class  mapped  lib/invoice.rb:1
+```
+
+Start with the structure, then add one small rule file at a time. Do not start a second rutter
+for a stack one already covers. [Writing a rutter](rutter-author-guide.md) has every rule shape.
+
+## 4. The engine, last
+
+A refusal of one rule is not yet an engine gap. Write the shape a second way and run it. A text
+rule whose edge names both ends as templates, `from: {template: ...}` and `to: {template: ...}`,
+is refused:
+
+```text
+$ periplus validate invoice_routes
+Problems:
+  26  invoice_routes/rules/handled_by.yaml: the rule route_handler cannot be executed: an edge of a text rule does not run between this_node and a capture or a template
+```
+
+The same edge with `from: this_node` runs, and the map holds it. That gap was a rule written the
+wrong way, not the engine's.
+
+The engine changes only for an operation that any rutter can reuse and that no small rule can
+state. It never learns a fact about one language or one framework, as
+[Principles](principles.md) says. A request for an engine change holds:
+
+- The rutter and its version, from the map's `packs` list.
+- The smallest example of the shape, written fresh, with no private code.
+- Each formulation you ran, with the engine's message for each, word for word.
+- What the map holds now, and what it should hold.
+
+[Report a wrong map](../CONTRIBUTING.md#report-a-wrong-map) gives the rest of the issue form.

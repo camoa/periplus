@@ -1,0 +1,38 @@
+# Periplus
+
+> Periplus reads a code base and writes a map: one JSON file of the things it found and the links between them, each with its file and line. Rules written as YAML, grouped in rutters, say what to find for each stack, and the engine that runs them knows no language and no framework. The same code always gives the same map. People and AI agents ask the map with the `periplus` command, and keep what they learn as rules and descriptions. A map holds only what its rules look for, so a missing link does not show that the code has none.
+
+Install with `uv tool install periplus-map` or `pip install periplus-map`. Run `periplus init`, then `periplus map`, in the project folder. `periplus skills install` copies the skills that teach an agent to use the map.
+
+## Start here
+
+- [README](https://github.com/camoa/periplus/blob/main/README.md): what Periplus is, install, the first map, and what the map holds
+- [AGENTS.md](https://github.com/camoa/periplus/blob/main/AGENTS.md): the rules an AI agent follows in this repository or with a map
+- [Docs index](https://github.com/camoa/periplus/blob/main/docs/README.md): every page, grouped by what the reader wants to do
+- [Questions and answers](https://github.com/camoa/periplus/blob/main/docs/faq.md): short answers to what people and agents ask, including what the map can tell you
+- [Glossary](https://github.com/camoa/periplus/blob/main/docs/glossary.md): the words Periplus uses, and the pairs that get confused
+
+## Use the map
+
+- [Navigating the map](https://github.com/camoa/periplus/blob/main/docs/navigation.md): which command answers which question, with each command's options, output and exit codes
+- [Using the map with an AI agent](https://github.com/camoa/periplus/blob/main/docs/using-the-map-with-an-agent.md): requests that make an agent use the map
+- [Reading the map report](https://github.com/camoa/periplus/blob/main/docs/map-report-guide.md): what `periplus map` reports, and where the rule for a gap belongs
+- [Judging a map](https://github.com/camoa/periplus/blob/main/docs/mapping-quality.md): how far to trust a map, and what it cannot tell you
+
+## Extend the map
+
+- [Writing a rutter](https://github.com/camoa/periplus/blob/main/docs/rutter-author-guide.md): the files of a rutter, one rule of each shape, and how to check a rutter
+- [Extending Periplus](https://github.com/camoa/periplus/blob/main/docs/extending-periplus.md): choose between a new rule, a new rutter and an engine change
+- [Bundled rutters](https://github.com/camoa/periplus/blob/main/docs/rutters.md): every rutter that ships with Periplus and what it maps
+
+## Understand the design
+
+- [How Periplus fits together](https://github.com/camoa/periplus/blob/main/docs/architecture.md): the five parts and what passes between them
+- [Principles](https://github.com/camoa/periplus/blob/main/docs/principles.md): why the engine knows no stack, and what the map must hold
+- [The evals page](https://github.com/camoa/periplus/blob/main/docs/evals.md): jobs done by the same agent with a map and without one
+
+## Optional
+
+- [Changelog](https://github.com/camoa/periplus/blob/main/CHANGELOG.md): what each release added and changed
+- [Contributing](https://github.com/camoa/periplus/blob/main/CONTRIBUTING.md): propose a rutter, run the tests, report a wrong map
+- [Skills](https://github.com/camoa/periplus/tree/main/src/periplus/skills): the instructions the skills give an agent

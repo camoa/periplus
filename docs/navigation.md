@@ -401,9 +401,10 @@ a hub: name, type, `hop N` and `fan N`, the edges it would follow. In JSON: `com
 periplus find [TEXT] [--any] [--type T]... [--path P]... [--mark TEXT]... [--parts] [--edges|--no-edges] [--kinds] [--source|--no-source] [--limit N] [--ids] [--map PATH] [--format text|json]
 ```
 
-Lists the things that hold the words of `TEXT`, then the edges that hold them. `TEXT` is split at
-spaces. Each word must match a thing, in its id, a string attribute value or its description;
-`--any` keeps a thing that matches any one word. Matching ignores case, and a word matches inside
+Lists the things that hold the words of `TEXT`, then the edges that hold them. `TEXT` is one
+argument, so quote several words, as `periplus find 'two words'`: unquoted, the second word is
+refused with exit 2. `TEXT` is split at spaces. Each word must match a thing, in its id, a string
+attribute value or its description; `--any` keeps a thing that matches any one word. Matching ignores case, and a word matches inside
 a longer one. A string item of a list attribute counts; numbers, booleans and nested objects do
 not.
 
@@ -1005,8 +1006,10 @@ periplus export --format graphml|dot|mermaid [--map PATH] [--report text|json]
 ```
 
 Prints the map in another format to standard output. In GraphML the node id is a generated
-token (`n0`, `n1`), the node's `label` is its short name (the id without its type prefix and
-without namespaces) and the map id is in the node's `id` data; each edge's `label` is its kind.
+token (`n0`, `n1`), the node's `label` is the id without its type prefix, with each `::` part cut
+to what follows its last backslash: `php.method::Drupal\greet\Form\GreetForm::submitForm` gives
+`GreetForm::submitForm`, and `python.function::shop.tools.helper` keeps its dots as
+`shop.tools.helper`. The map id is in the node's `id` data; each edge's `label` is its kind.
 `--format` is required. Warnings go to standard error: Mermaid warns above 500 edges or 50,000
 characters. `--report json` writes them to standard error as one JSON document instead: `format`,
 `warnings` and `problems`.

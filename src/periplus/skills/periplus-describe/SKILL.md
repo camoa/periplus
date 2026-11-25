@@ -21,6 +21,8 @@ them after `#`, so a plain-word question reaches a thing whose id lacks those wo
   the entries to redo.
 - One or two plain sentences, with the words a person would search for: the feature, the
   business term, the effect a user sees. Never restate the id, the type or the source line.
+- Where a thing shares its name with another, use the words that set it apart, and do not name
+  the other meaning: `periplus find` matches every word, so a denied word finds this thing too.
 - Edge entries are short phrases, only for links where something happens, such as a call, a use,
   an alter, a redirect, a read or a write. Say what happens, by its meaning. Write them while the
   node's code is open. They carry no fingerprint, and `periplus stale` does not list them: when

@@ -1,0 +1,17 @@
+attributes:
+- name: route
+  on: [js.function]
+  description: The route that runs this function.
+  mark: route handler
+rules:
+- rule: route_on_handler
+  reads: map
+  match:
+    node_type: inv.route
+    where:
+    - id_matches: '^inv\.route::(?<route>.+)$'
+    follow:
+    - edge: handled_by
+  emits:
+  - attribute: {name: route, template: '{route}', target: matched_node}
+  confidence: inferred

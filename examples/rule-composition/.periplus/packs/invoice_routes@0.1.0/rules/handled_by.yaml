@@ -1,0 +1,19 @@
+edge_kinds:
+- kind: handled_by
+  from: inv.route
+  to: js.function
+  realizes: to
+  description: "the route runs that function: a script declares a function of the name the routes file gives"
+rules:
+- rule: route_handler
+  reads: map
+  match:
+    node_type: js.function
+    where:
+    - id_matches: '^js\.function::.+:(?<fn>\w+)$'
+    follow:
+    - node: 'inv.handler_name::{fn}'
+    - incoming_edge: names_handler
+  emits:
+  - edge: {kind: handled_by, from: matched_node, to: this_node}
+  confidence: inferred

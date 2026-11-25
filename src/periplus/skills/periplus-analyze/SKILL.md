@@ -50,6 +50,9 @@ gaps. You notice them because you read around the line.
 
 ## Strategies
 
+- **Name the thing you mean.** When a word of the question fits several things that share a
+  name, say which one the review is about before you read. Ask the user when the map and the
+  code cannot tell.
 - **Work back from the target.** Start at the thing the question is about and ask the map what
   reaches it. Starting at the entrances you know misses the ones you do not.
 - **One entrance at a time.** Follow one entrance to the target and read it whole before the

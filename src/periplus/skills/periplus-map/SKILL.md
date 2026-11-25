@@ -138,6 +138,8 @@ Defaults that bound a result:
   with `grep`, `head`, `awk`, `cut` or a script, JSON included: they drop rows without a word.
 - A cut reply names the command for the rest. It never shows that nothing else is there.
 - Widen loose words yourself (login: authentication, sign in, session); drop what does not fit.
+- When the words land on several things that share a name, say which one you mean before you go
+  on. Ask the user when the map and the code cannot tell.
 - Run from the folder that holds `.periplus/`, and run `periplus map` only when asked. A short
   name that fits several things exits 31 and lists their ids; paste one as printed.
 - When the map and the code disagree, say so. It is a map gap; the periplus-gaps skill records it.

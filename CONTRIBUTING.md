@@ -26,7 +26,7 @@ A pull request for a rutter contains:
   project and compares the result with what it expects. `98c-go-pack.sh` and
   `98d-laravel-pack.sh` are examples. A rutter for a family that has a script updates that script
   and adds none.
-- A row in the README table of rutters, with what the rutter finds.
+- A row in the table of [docs/rutters.md](docs/rutters.md), with what the rutter finds.
 
 A rutter that adds to a list another rutter owns adds rows to that rutter's table through
 `add_table_rows`, rather than copying its rule. A bundled pack's folder version stays as it is

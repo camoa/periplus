@@ -1,0 +1,10 @@
+pack: invoice_routes
+version: 0.1.0
+depends: [js_basic]
+folders:
+  routes: ./config
+files:
+  types:
+    routes:
+      endings: [routes]
+      reader: text
