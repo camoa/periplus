@@ -15,7 +15,7 @@ from test_demo_a_support import map_project, mapped, nodes, pin, plant, rutter
 from periplus.errors import ExitCode
 from periplus.map import MapReport
 
-LARAVEL = ("php_basic@0.2.0", "laravel_basic@0.0.5")
+LARAVEL = ("php_basic@0.3.0", "laravel_basic@0.0.5")
 BOOKS = "app/Http/Controllers/BookController.php"
 INDEX = "App\\Http\\Controllers\\BookController::index"
 

@@ -1,0 +1,2139 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The walking-skeleton Drupal pack: every exported or installed configuration file becomes one
+# node.
+#
+# What it maps, and what it does not map yet.
+# The basic Drupal pack maps, beside php_basic's classes, functions and methods:
+# - configuration, modules, themes, services with their tags and classes, routes, permissions,
+#   libraries, templates, entity types, bundles, fields, displays, menu links, local tasks, local
+#   actions, contextual links, block placements and the plugin kinds whose folders are named under folders below. A service's
+#   class may be a class or an interface, as for a service a factory builds, and each tagged_as
+#   edge holds its tag's applies_to and priority, as edge attributes;
+# - each bundle under the id <entity type>.<bundle>, as node.article. A bundle config file of a core
+#   prefix declares it with its label, a configured_by edge to that file and a bundle_of edge to
+#   its entity type. A field instance or a display gives a field_of or displays edge to the bundle
+#   its entity type and bundle keys name, and an inferred bundle_of edge from that bundle. A bundle
+#   or an entity type that no rule declares, such as a paragraph type or the ECK entity type
+#   my_type, ends at a referenced node. A field storage gives a storage_of edge to its entity
+#   type, a view or form mode a mode_of edge to its entity type, and a display in a mode other than
+#   default an in_mode edge to that mode;
+# - each service that \Drupal::service('x') names in a PHP function or method, as a uses_service
+#   edge; each service that get('x') or ?->get('x') names on an object written $container,
+#   $this->container, \Drupal::getContainer(), or getContainer() on $this, static or self, as a
+#   uses_service edge with confidence inferred; and each entity type
+#   that \Drupal::entityQuery('x') or \Drupal::entityQueryAggregate('x') names, or that
+#   getStorage('x'), getViewBuilder('x'), getListBuilder('x'), getFormObject('x') or
+#   getAccessControlHandler('x') names on an object written ending in entityTypeManager, written
+#   $entity_type_manager, written as the container's get('entity_type.manager') or
+#   \Drupal::service('entity_type.manager'), or reached through a property of $this whose declared
+#   type is EntityTypeManager or EntityTypeManagerInterface, as a uses_entity_type edge. A service
+#   or an entity type that no mapped file declares, such as node, or config.factory when core's
+#   services files are not in the tree, ends at a referenced node: core's and contributed modules'
+#   PHP is outside the mapped code;
+# - each method that carries a Hook attribute or that a Hook attribute on its class names, by its
+#   method argument or as __invoke, and each function in a module, install, inc, theme,
+#   profile, post_update.php or deploy.php file whose name starts with the first part of the file
+#   name and an underscore, as an implements_hook edge to the hook the rest of the name gives:
+#   mymod_cron in mymod.module implements cron, mymod_post_update_fix in mymod.post_update.php
+#   implements post_update_NAME, as every update_N function implements the one hook update_N. A
+#   function in an inc file, or a theme file other than the theme's own, below a custom theme
+#   folder, whose name starts with that folder's name and an underscore, implements a hook the
+#   same way: mytheme_preprocess_node in mytheme/preprocess/node.preprocess.inc or in
+#   mytheme/includes/content.theme implements preprocess_node. A hook found by a
+#   function's name has confidence inferred. It is known when the table hook_names below lists
+#   it (core's hooks, and a tool's that its rutter adds), when it fits a placeholder form of core,
+#   when a custom or contributed *.api.php file defines it, by name or as a placeholder pattern,
+#   when custom code invokes or alters it by a quoted name, when a plugin manager's alterInfo()
+#   names it, when a Hook attribute names it, or when a docblock says Implements hook_NAME().
+#   Contributed modules and themes are read from the optional folders contrib_module and
+#   contrib_theme, for those hook names only. Any other such hook is no hook node: each function
+#   named for it gets a named_like_hook edge to a referenced drupal.hook, confidence mentioned,
+#   and the attribute hook_known: no, printed as [hook by name only] (hook/hook_known.yaml);
+# - each hook a method or function runs by a quoted name on an object written ending in
+#   moduleHandler, module_handler, themeManager or theme_manager, or \Drupal::theme(), or the
+#   container's module_handler or theme.manager service: invoke, invokeAll, invokeAllWith,
+#   invokeDeprecated and invokeAllDeprecated run the hook, and alter, alterDeprecated and
+#   alterForTheme run hook <type>_alter for each quoted type, as an inferred invokes_hook edge; a
+#   hook name in a variable marks the call resolution runtime (hook/hook_invoke.yaml,
+#   hook/hook_alter_list.yaml, hook/hook_invoke_runtime.yaml). Each alterInfo('x') a plugin
+#   manager calls, as an inferred registers_alter_hook edge to hook x_alter. Each function hook_x
+#   of an *.api.php file, as a documents_hook edge to hook x (hook/hook_api.yaml). Invokers,
+#   implementations and the documenting function meet at one drupal.hook node;
+# - a route's methods, its requirements _access, _format, _user_is_logged_in, _csrf_token,
+#   _entity_access and _custom_access, and its options no_cache and _admin_route, as attributes
+#   holding the value as written; each role its _role names, as a requires_role or accepts_role
+#   edge to user.role.<role>; a _custom_access written service:method as an
+#   access_checked_by_service edge, one written Class::method as an access_checked_by edge; a
+#   _title_callback written Class::method as a titled_by edge; each parameter typed
+#   entity:<type> or entity_revision:<type> as a loads_entity_type edge; an _entity_form,
+#   _entity_list or _entity_view default as a shows_entity_form, lists_entity_type or
+#   views_entity_type edge to the entity type, with a uses_entity_form edge to the form class the
+#   entity type declares for the operation and a uses_list_builder edge to its list builder; an
+#   _entity_create_access or _entity_create_any_access requirement as a
+#   checks_entity_create_access edge, and an _entity_access requirement as an inferred
+#   checks_entity_access edge to the entity type its parameter is named for
+#   (route/route_entity_defaults.yaml);
+# - each role's configuration as a role, with its is_admin attribute, and each permission it lists
+#   as a grants_permission edge. A role or permission that no mapped file declares, such as one
+#   from core or a contributed module, ends at a referenced node.;
+# - each route a template names in path('x') or url('x'), as a template_links_route edge, read as
+#   text; a core route such as user.login ends at a referenced node. A path a template's attribute
+#   writes, as href="/my/item/{{ item.id }}/edit", also gives an inferred template_links_route edge
+#   to each route whose path has the same shape, each {x} and {{ ... }} written as *;
+# - each template another template names in an include, extends, embed, import or from, as a
+#   template_includes edge, and each component an include or embed names as theme:name, as a
+#   template_includes_component edge to the component's name. Read as text; a name no mapped
+#   template or component has ends at a referenced node;
+# - each theme hook that a hook_theme function declares, as a drupal.theme_hook node, and the
+#   method around '#theme' => 'name' in a render array of a class under src, or the function around
+#   it in a module, install, inc, theme or profile file, as an inferred renders_theme_hook edge to
+#   it. A hook links to its template by theme_hook_template: the template key as declared, its
+#   last part when the key holds a folder, as cards/my-card for my-card, and
+#   for a hook with no template and no function key its name with underscores written as dashes,
+#   as inferred. A template named <entity>--<bundle>--<view mode> of node, taxonomy-term,
+#   block-content, paragraph, media or comment gives a suggests_bundle edge to the bundle
+#   <entity>.<bundle>, as inferred. $build['#theme'] = 'name' gives the same renders_theme_hook
+#   edge as the array form. A module template my-card.html.twig, in a module with a hook_theme
+#   function none of whose entries is read as text, as one that registers its hooks in a loop, is
+#   the template of the hook my_card when a class constant's text or a '#theme' names that hook
+#   and no hook_theme entry, other hook or include already accounts for the template, as an
+#   inferred theme_hook_template edge. A method or function that passes a class constant on as a
+#   value, X::NAME, self::NAME or static::NAME assigned, returned or given as an argument, whose
+#   text is such a hook's name or a hook the map holds gives a renders_theme_hook edge, as
+#   mentioned; a constant compared with ==, ===, != or !== gives none.
+# - each key of a hook entry's 'variables' array, as a drupal.theme_variable node <hook>.<name>
+#   with a variable_of_theme_hook edge to the hook; a name a template writes inside {{ }} or {% %}
+#   that a hook rendering the template declares, as an inferred template_reads_variable edge; and a
+#   render array key '#name' in a method or function that renders a hook declaring that variable,
+#   as an inferred passes_theme_variable edge (theme_hook/); a name a {% for %} loop or a
+#   {% macro %} around it binds is no read;
+# - each key of the 'variables' array hook_theme writes in a foreach over a class constant's list
+#   of names, as a drupal.theme_loop_variable node <class>::<LIST>|<name> with an inferred
+#   variable_of_theme_hook edge to each hook a listed constant's text names, and an inferred
+#   template_reads_variable edge from a module template named for such a hook
+#   (theme_hook/theme_hook_loop.yaml);
+# - a method whose '#theme' is one of its parameters: an inferred renders_theme_hook edge from each
+#   caller that passes a quoted name or a class constant at that parameter's place, and a
+#   passes_theme_variable edge from the method for each '#name' key it writes, inferred, or
+#   mentioned when the caller passes the hook in a variable and reads the constant that names it
+#   (theme_hook/theme_hook_parameter.yaml);
+# - each top-level key of the hash an include, include() or embed hands a template, as a
+#   drupal.template_variable node <template>.<name> with a passes_template_variable edge from the
+#   including template, an inferred template_variable_from edge to the hook variable or passed
+#   variable its value starts with, and an inferred template_reads_passed_variable edge from the
+#   included template that writes the name (template/template_include_variable.yaml);
+# - each {% set x = ... %} outside a macro, as a drupal.template_set_variable node
+#   <template>|x, with template_variable_from to the variable or the earlier set name its value
+#   starts with, and from an include's variable whose value is a name set above the include
+#   (template/template_set_variable.yaml);
+# - a name a template reads that a template including it with no hash and no only holds as a
+#   variable, as a mentioned template_reads_context_variable edge, when nothing declares or hands
+#   the template that name (template/template_context_variable.yaml);
+# - a template that a module and a theme both ship under one file name, as an inferred
+#   theme_overrides_template edge from the theme to it;
+# - each simple configuration file, with no top-level uuid, as a config_provided_by_theme edge to
+#   the theme its name starts with when the map holds that theme, else a config_provided_by edge
+#   to the module of that name, inferred when the map does not hold it; each theme core.extension
+#   lists, as an installs_theme edge; each literal form id a form class returns, as a drupal.form_id
+#   node with a form_has_id edge from the class, and each form id a CAPTCHA point or the honeypot
+#   settings switch protection on for, as a config_names_form edge, and each they name and leave
+#   off, as a config_names_form_off edge; each config file's top-level status, as the attribute
+#   status; each #validate or #submit handler a method or function adds with [] =, with
+#   array_unshift or as an item of a list written whole with [...] or array(...), as a
+#   registers_form_handler edge to the function or method it names, a class imported under another
+#   name followed to its class, a function so added giving no hook by its name unless the map names
+#   that hook otherwise, and a handler held in a variable or another expression, or a '::method'
+#   whose form object no rule names, as an edge to a
+#   drupal.runtime_form_handler node marked resolution runtime; each callable under an element
+#   callback key core calls, such as #process, #pre_render, #value_callback or the callback of
+#   #ajax, the same way, as a registers_element_callback edge (form/form_handler.yaml lists the
+#   keys; each such edge and each registers_form_handler edge holds its key in the attribute key),
+#   a 'service:method' callable whose service the map holds no class for, or a '::method'
+#   in an alter of a form id no mapped class returns, ending at an unresolved method named by the
+#   service id or the form id; with honeypot's protect_all_forms true, a config_names_form edge to
+#   each form id a mapped class returns that the file leaves protected, and the setting as the
+#   attribute protect_all_forms; each hook
+#   named <extension>_<type>_<operation>,
+#   as an inferred hook_acts_on_entity_type edge to <type>; each route's path, as a
+#   route_serves_path edge to a drupal.url_path node, and each path Url::fromUserInput or
+#   Url::fromUri('internal:...') names, as a links_to_path edge; each route name Url::fromRoute,
+#   Link::createFromRoute, new Url, $this->redirect or ->setRedirect names, as a links_to_route
+#   edge from the method or function around the call; each field, filter and style plugin a view's config file names, as a
+#   view_uses_field_plugin, view_uses_filter_plugin or view_uses_style_plugin edge. The rule files'
+#   headers name their limits.
+# - \Drupal::cache() as a uses_service edge to cache.default, and \Drupal::cache('x') to cache.x;
+#   a route whose requirements hold a key that a service's tag names in applies_to, as an
+#   access_checked_by_service edge to that service; a theme's simple configuration, such as
+#   mytheme.settings, as provided by the theme when the map holds it; an argument of a service that
+#   is itself a list of @names, one level down; a class that extends RouteSubscriberBase or
+#   HttpExceptionSubscriberBase as an event subscriber, and a route subscriber's alters_route edge
+#   to each route its alterRoutes names by a text literal, with an alters_routes edge to a
+#   drupal.route_alter node marked resolution runtime when it picks routes at run time
+#   (route/route_alter.yaml); each method named on<status> or
+#   on<digit>xx, as on403 or on4xx, of a class that descends from HttpExceptionSubscriberBase, as
+#   an inferred subscribed_by edge from KernelEvents::EXCEPTION holding the priority getPriority()
+#   gives: core's 0, the integer the nearest class of its line that declares it returns, or
+#   computed when that one computes it;
+# - each constraint plugin's validator class, as a validated_by edge: declared from a validatedBy()
+#   that returns Name::class or the class's full name in single quotes, else inferred from the name
+#   <constraint class>Validator when the map holds it and the constraint class writes no
+#   validatedBy(); each class an entity type's attribute or annotation names under handlers, as a
+#   has_access_handler, has_list_builder, has_view_builder, has_storage_handler, has_form_handler
+#   for any form operation, has_route_provider or, for any other key such as views_data,
+#   has_entity_handler edge from the entity type, at the line that names the class, written
+#   Name::class or as text in the attribute, the key
+#   below the handler group, such as duplicate or html, in the edge attribute entry; the entity
+#   type's link templates, as has_link_template edges to their paths, its admin_permission and
+#   collection_permission, as has_admin_permission and has_collection_permission edges, its
+#   bundle_entity_type and bundle_of, as has_bundle_entity_type and bundle_entity_type_of edges,
+#   its field_ui_base_route, as a has_field_ui_base_route edge, its config_prefix and
+#   permission_granularity as attributes, and a config entity type's config_name_prefix edge to
+#   <provider module>.<config_prefix>. (entity_type/); and each route core's route providers build
+#   from a link template, entity.<type>.<name>, with its path and a route_from_link_template edge,
+#   inferred (route/route_link_template.yaml);
+# - each PHP attribute, as a has_attribute edge from the class, method, function, property or
+#   parameter it sits on to its class; each attribute class that extends core's attribute Plugin,
+#   and each annotation class that extends core's annotation Plugin, as a drupal.plugin_type node;
+#   each class that carries that attribute, or opens its docblock with that annotation, as a
+#   plugin_of_type edge; and a manager constructor that passes the attribute or annotation class
+#   to parent::__construct, as a manages_plugin_type edge holding the discovery subfolder, with
+#   plugin_type_interface from the type to the interface it names, plugin_alter_hook and
+#   plugin_cache_key on the manager class, and falls_back_to_plugin from getFallbackPluginId;
+# - each plugin of any type below a module's src/Plugin folder, declared by an attribute or an
+#   annotation, as a drupal.discovered_plugin named <short type name>::<id>, unless a kind below
+#   maps it; and from each plugin class, the deriver, provider, context entity types, entity_type
+#   and, of a field widget or formatter, field_types its definition names (plugin_type/);
+# - a generic plugin's plugin type, when its attribute or imported annotation class is outside the
+#   map, as plugin_of_type; a migrate plugin's source_module and destination_module, as
+#   attributes, and destination_module as a plugin_destination_module edge; and a key other than
+#   class that an alter hook sets on a plugin's definition, or a field type it adds to a widget's
+#   or formatter's field_types, as changes_plugin_definition and its class or field type edge
+#   (plugin_type/);
+# - each method call through a property or parameter whose declared type is a service's id, an
+#   alias of it, or the class of that one service, as a calls_service edge (call/);
+# - each method call through a property that create() fills from the container, by a
+#   constructor argument or a setter, or that a services file's list fills by position, and
+#   through a local variable assigned \Drupal::service('x'), the container's get('x') or a
+#   \Drupal:: shortcut, as a calls_service edge, and each service create() hands to the class as
+#   a creates_with_service edge (call/service_through_create.yaml, and the files beside it);
+# - each event constant of a class that descends from Symfony's or Drupal's Event, or whose name
+#   ends in Events, a text or a string built from one, all of them or, of a class that documents
+#   some with @Event, those and the ones a dispatch, key, attribute or call names, as a drupal.event named by the text the constant holds, with a drupal.event_constant
+#   <class>::<CONST> and its names_event edge to it, or named <class>::<CONST> when the mapped file
+#   gives the constant no text, a constant read through a class that inherits it named as its
+#   declaring class's, and a contributed module's constant read for its text only when the folder
+#   contrib_module is on disk; each key of getSubscribedEvents, written X::NAME, self::NAME,
+#   static::NAME or X::class, parent::class among them, as a subscribed_by edge from the event to
+#   the listener method, or to the unresolved method as written when no mapped class of its line
+#   declares it, each listener of
+#   a list of lists its own, holding the listener's priority as written in the edge attribute
+#   priority, 0 when none is written, as Symfony runs it, or the integer a mapped file declares a
+#   constant priority with; X::NAME no use binds is the constant of the file's namespace and
+#   parent::NAME the one on the class's written parent, and parent::NAME or parent::class with no
+#   written parent, in any form, a runtime registration; the same edge from each AsEventListener
+#   attribute on a method or a class and each kernel.event_listener tag in a services file, its
+#   event a constant, a name, a class, X::class, the core constant the table core_event_names gives
+#   for a core name, a container parameter a mapped parameters block gives a value, or the method's
+#   parameter type, its method written, or derived as Symfony derives it from the event's text,
+#   or a drupal.runtime_listener marked as an unknown boundary when no mapped file gives that text
+#   (event/event_listener.yaml), a tag event written past its line a runtime registration, each
+#   such method holding listens_by_attribute, marked
+#   [AsEventListener, not wired by core]; the same edge from a key written as a name or with its
+#   namespace, ->addListener(), ->addTag('kernel.event_listener', ...) in PHP and the keys a
+#   subclass inherits from a mapped base or from a core base the rutter holds as data, a function
+#   listener as subscribed_by_function, ->addSubscriber() as registers_subscriber, and what only the
+#   running code names, an expression among it, as a drupal.runtime_subscription or
+#   drupal.runtime_listener with the runtime mark, by registers_listener_at_runtime
+#   (event/listener_registration.yaml, event/inherited_subscription.yaml); a tag's or attribute's
+#   dispatcher in the edge attribute dispatcher; an addListener or addSubscriber call on an object
+#   whose known type is not an event dispatcher as nothing, one on an object of no known type with
+#   the edge attribute receiver: not known to be an event dispatcher, and one on a known event
+#   dispatcher with receiver: an event dispatcher; and each ->dispatch() as a dispatched_by edge to
+#   the method around it, or a dispatched_by_function edge to the function around it, at the line
+#   of ->dispatch, the call read whole across lines and comments, its event the second argument
+#   however deep the first nests, the class of the object dispatched alone, $this's among them, a
+#   declared class holding event_from: declared type,
+#   or the name written first, and a name or object only the running code gives as a
+#   drupal.runtime_event with the runtime mark, each with the same receiver check; a class kept
+#   in a module, install, inc, theme, profile or plain .php file, its methods read as a class's
+#   under src. A key's event is the text its constant holds when a
+#   mapped file declares it, so two constants of one text meet on one event. All inferred: a
+#   method's class is named from the file's path, or outside src from the file's namespace. An event of core, Symfony or a contributed
+#   module, such as KernelEvents::REQUEST, keeps its constant's name and ends at a referenced
+#   node;
+# - each new TwigFilter('name') or new TwigFunction('name') in a class that descends from Twig's
+#   AbstractExtension, as a twig.filter or twig.function node with a provided_by edge to the class,
+#   and each template that calls it inside {{ }} or {% %}, as template_uses_twig_filter or
+#   template_uses_twig_function;
+# - each ->get('x'), ->set('x', ...) and ->hasField('x') in a PHP method or function, and each
+#   v.field_x in a template, as an inferred accesses_field edge: from a template read whose
+#   variable, as node or term, or whose suggestion's hook, for content.field_x, names an entity
+#   type, to that entity type's storage of x; from any other reader to the one storage named x
+#   when every storage of x has one entity type, else an accesses_shared_field_name edge to the
+#   drupal.shared_field_name x, which has a shared_field_name_of edge to each of those storages.
+#   Each storage a method of a module's class or a module's function accesses gets an inferred
+#   module_accesses_field edge from that module, a use and not a membership.
+#   A name that starts with field_ and that no mapped storage has ends at the unresolved
+#   field.storage.<name>; any other name with no storage gives nothing. A call on a config factory
+#   or a config object, a variable or property ending in config, \Drupal::config(),
+#   $this->config(), or get() or getEditable() on a config factory, names no field;
+# - each theme suggestion template, by its file name, as an inferred edge to the block plugin of
+#   block--<id> or block--<base>--<derivative>, the placement block.block.<id>, the theme hook of
+#   <base>--..., and the field storage of field--field-x or field--<entity type>--field-x, each
+#   only when the map holds the target;
+# - each ->hasRole('x') in a PHP method or function, as a checks_role edge, and each ->addRole('x')
+#   or ->removeRole('x'), as a changes_role edge, to the role user.role.x, joined through an
+#   internal role-name hub; a role no mapped file declares ends at an unresolved role, and a
+#   variable in the argument keeps the call as a php.call_site marked resolution runtime;
+#   in_array('x', $account->getRoles()) gives the same checks_role edge, and in_array('x', $roles)
+#   gives an inferred one when every value the method or function assigns $roles is a getRoles()
+#   call; in_array(self::X, ...), with the getRoles() list or such a variable, and
+#   in_array(Owner::X, $account->getRoles()) give an inferred checks_role edge to the role the
+#   constant's text names; a string literal equal to a role's name, with a separator and 8
+#   characters or more, in a method, function or class constant gives a mentions_role edge with
+#   confidence mentioned, unless the same method, function or class writes it as an array key;
+# - each configuration object that \Drupal::config('x'), $this->config('x') or get('x') on a config
+#   factory names, as a reads_config_object edge, and that getEditable('x') on a config factory
+#   names, as an edits_config_object edge; $this->config('x') of a name the class's
+#   getEditableConfigNames() lists, as text or as a constant, and a form element's #config_target,
+#   as an edits_config_object edge, and each listed name as a declares_editable_config edge from the
+#   class (config/config_form_edit.yaml, config/config_target.yaml); a name no mapped file declares
+#   ends at an unresolved configuration object; a name in a variable keeps the call as a
+#   php.call_site marked resolution runtime (config/config_runtime_name.yaml);
+# - each listAll('prefix.') on a config factory or the config storage, as a lists_config_prefix
+#   edge to the drupal.config_prefix of that text, joined by prefix_of_config to each
+#   configuration object whose name starts with it (config/config_prefix.yaml);
+# - each configuration name built from a quoted prefix of whole parts and a variable, as
+#   get('mymod.item.' . $id), as a names_config_by_prefix edge to that drupal.config_prefix, and
+#   getLanguageConfigOverride() with such a name kept with the runtime mark (config/);
+# - each top-level key of a config/schema/*.schema.yml file, as a drupal.config_schema node with
+#   its schema_type and label, a schema_describes_config edge to each configuration object Drupal's
+#   lookup gives it, and a schema_covers_prefix edge from a key ending in .* to the prefix before
+#   its * (config/config_schema.yaml); the type each entry of its mapping or sequence names, three
+#   levels down, as schema_entry_type, or schema_entry_dynamic_type for a type with a bracketed
+#   part Drupal fills from the configuration (config/config_schema_entry.yaml); and from a key
+#   <family>.<plugin id> of a core plugin family, as action.configuration.<id>, a
+#   schema_for_plugin edge to that plugin (config/config_schema_plugin.yaml);
+# - each dependency a configuration file lists under dependencies.enforced, with the edge attribute
+#   enforced: true on its dependency edge (config/config_enforced.yaml); and the plugin an action, a
+#   media type, a REST resource configuration, a field storage or a display component names by its
+#   id, as a config_names_plugin edge (config/config_plugin.yaml);
+# - each migration of a module's migrations folder, as a drupal.migration, with edges to its source,
+#   process and destination plugins as drupal.discovered_plugin <attribute class>::<id>, to its
+#   destination entity type and configuration, to the migrations it requires, and to its tags
+#   (migration/migration.yaml);
+# - a module's info file's recommends, test_dependencies and configure keys, as recommends_module,
+#   test_depends_on_module and configure_route edges, and a module's or theme's
+#   core_version_requirement, package and lifecycle, as attributes;
+# - each queue that \Drupal::queue('x') or get('x') on a queue factory names, as a uses_queue edge
+#   to the queue worker plugin x, the worker Drupal runs for that queue; a worker no mapped file
+#   declares, such as a contributed module's, ends at a referenced node;
+# - each method or function that implements a hook form_<id>_alter, as an inferred alters_form
+#   edge to the form id <id>; a form id no mapped class returns, such as a core form's or a base
+#   form id, ends at a referenced node;
+# - a queue, role, configuration or field name given as self::X or static::X, where X is declared
+#   as text on the class, a parent or an interface, through the nearest that declares it, as the
+#   edge the text would give, inferred, at the call's line;
+# - each service's factory key, as a built_by_service edge to a factory service written @name or a
+#   built_by_class edge to a class, and a built_by_method edge to the factory's method on the
+#   factory service's class or the class written, unresolved when the map holds no such method;
+# - a service's autowire, autoconfigure and public keys, or the ones its file's _defaults gives
+#   it, as attributes holding the text true or false; its decorates key, as a decorates_service
+#   edge; each @name in its calls, as an injects_service edge; each %name% in its entry, as an
+#   injects_parameter edge to the drupal.container_parameter a parameters block declares with its
+#   value; each constructor parameter of an autowired service's class that no list of arguments or
+#   named argument fills, by its type as a service id or alias, else marked unresolved, or by an
+#   Autowire or AutowireServiceClosure attribute naming the service in quotes or as X::class, as
+#   an injects_service edge, and the same of a class that core's AutowireTrait,
+#   FormBase or ControllerBase builds, as an autowires_service edge; \Drupal::service(X::class),
+#   the container's get(X::class) and the class resolver's X::class, as a uses_service edge to the
+#   service X; and a service provider's calls on $container that remove, read, register or test a
+#   quoted service id, as removes_service, reads_service_definition, registers_service and
+#   checks_service edges (service/, call/service_class_constant.yaml);
+# - the services files of core and of contributed modules, read by the same service rules from the
+#   folder services_source, so a custom service or class that injects config.factory, or autowires
+#   Drupal\Core\Config\ConfigFactoryInterface, joins to core's service and alias. Only those
+#   *.services.yml files are read there. Such a service sits at its file under core or the
+#   contributed folder, has no service_in_module edge, and its class ends at a referenced node,
+#   since core's and contrib's PHP is not read;
+# - each entry of a links.task or links.contextual file, as a drupal.local_task or
+#   drupal.contextual_link node with a links_to_route edge to its route_name; a local task's
+#   base_route as a task_base_route edge and its parent_id as a child_of_task edge; and the class
+#   and deriver of a local task, a local action or a contextual link, as link_class and
+#   link_deriver edges;
+# - a class that extends a core entity form, delete form, confirm form or bundle form base, as a
+#   drupal.form_class, as one that extends FormBase is;
+# - each Twig file not named .html.twig that defines a macro, as a template named by its stem, and
+#   each template or component that imports it with import or from, as a template_includes or
+#   component_includes_template edge;
+# - what a module or theme holds, one edge kind each: route_in_module and service_in_module from
+#   its routing and services files, library_in_module or library_in_theme from a library's first
+#   name part, class_in_module from a class named Drupal\<module>\..., inferred, and
+#   template_in_module or template_in_theme from a template's folder, inferred;
+# - the rest of what a module or theme holds, to the extension whose info file sits in the nearest
+#   folder above the file, so a submodule or a test module keeps its own (module/member_folder.yaml):
+#   each function of a module, install, inc, theme, profile or plain PHP file, hook or helper, as
+#   function_in_module or function_in_theme; each theme hook a hook_theme declares, as
+#   theme_hook_in_module or theme_hook_in_theme; each template, one that opens with a comment and
+#   a macro file too, as template_in_module or template_in_theme; each menu link, local task,
+#   local action, contextual link and permission, as <thing>_in_module; each file a module or
+#   theme ships in config/install or config/optional, as config_in_module or config_in_theme; each
+#   configuration schema key, as config_schema_in_module or config_schema_in_theme; each migration
+#   of a migrations folder, as migration_in_module; and
+#   each component, as component_in_module or component_in_theme. Through the module class_in_module
+#   gives a class, also inferred: each plugin by its class, form id, entity type, plugin type,
+#   route alteration, Twig filter and function, event constant and the event its text names, and a
+#   route entity.<type>.<name> no routing file gives a module, by its entity type's class, as
+#   plugin_in_module, form_id_in_module and the like. A test class Drupal\Tests\<module>\... is a
+#   class_in_module of that module, and each class, trait, interface or enum in a theme's folder a
+#   class_in_theme of that theme;
+# - the same entity type manager, service container, config factory and queue factory calls on an
+#   object known by its declared type, not its name: a parameter of the method or function around
+#   the call, or a property of $this typed on the property, on a promoted constructor parameter, in
+#   a @var docblock, or by the typed parameter it is assigned from, as inferred edges
+#   (call/typed_receivers.yaml);
+# - each ->getForm(X::class), as an inferred builds_form edge from the method around it, or the
+#   function around it in a module, install, inc, theme or profile file, to the form class X;
+# - each entity a method or function creates, as an inferred creates_entity_type edge to its entity
+#   type, beside the uses_entity_type edge: X::create([...]) on an entity class, and create() on a
+#   storage from getStorage('x'), chained, held in a local variable of the same function, or held
+#   in a property of $this set once (call/entity_create_static.yaml, call/storage_create_*.yaml,
+#   call/storage_property_create.yaml);
+# - the methods Drupal runs on a form class that the class declares, as an inferred
+#   runs_form_method edge from the class: buildForm, validateForm and submitForm, and form and
+#   save on an entity form (form/form_entry_method.yaml);
+# - a method called on a service, as \Drupal::service('x')->m() or $container->get('x')->m(), or on
+#   a method's local variable assigned such a service, as an inferred calls edge to the method on
+#   the class the services file gives that service;
+# - each page display of a view that has a path, as the route view.<view>.<display>, with its
+#   path, a route_from_view edge to the view's config object and a shape_of_route edge;
+# - a _custom_access written service:method as an access_checked_by edge to the method on the
+#   service's class or its nearest ancestor (route/route_custom_access_method.yaml);
+# - core's user.login, user.register, user.pass, user.page, user.logout, user.logout.confirm,
+#   user.reset, user.reset.login, user.reset.form, user.cancel_confirm, entity.user.canonical and
+#   entity.user.edit_form, when core.extension lists the user module, as routes with their paths,
+#   route_uses_form_id edges to the forms five of them build, and the shape of each path with
+#   placeholders (route/core_user_routes.yaml); and a page--a--b template as a suggests_path edge to /a/b when the map
+#   holds that path;
+# - a variable assigned from getRouteName() and compared with == or === to a quoted route name,
+#   or tested with in_array against a literal list in the same function, as a checks_route edge
+#   from the function or method to each route, confidence mentioned;
+# - each function or method that implements preprocess_<hook> or preprocess_<hook>__<suggestion>,
+#   as an inferred preprocesses_theme_hook edge to the theme hook <hook> when the map holds it; a
+#   theme's template named exactly for a core theme hook, as node.html.twig, or a suggestion of
+#   one, as node--article.html.twig, as the theme hook node, with an inferred theme_hook_template
+#   edge from that hook to the exact template and a suggests_theme_hook edge from the suggestion.
+#   A module's suggestion template gives no suggests_theme_hook edge;
+# - the route entity.<type>.canonical, as a route_renders_theme_hook edge to the theme hook <type>;
+# - a quoted '@<namespace>/.../<name>.html.twig' held as a value in a template, as an inferred
+#   template_includes edge, and a relative path in a template's data-* attribute, joined by its
+#   shape to a route as template_links_route;
+# - each menu--<name>.html.twig, as an inferred suggests_menu edge to system.menu.<name> when the
+#   map holds it; each menu link's menu_name, as a link_in_menu edge to system.menu.<name>; and
+#   each comparison of a menu_name key to a text, or case of a switch on one, as a mentioned
+#   checks_menu edge from the function or method around it to system.menu.<name>;
+# - each region a theme's info file lists, as a drupal.theme_region <theme>.<region> with a
+#   region_of_theme edge; each block placement's theme and region, as a placed_in_region edge; and
+#   each region--<region>.html.twig in a theme, as an inferred suggests_region edge to the region
+#   when the map holds it;
+# - each module core.extension lists, as an installs_module edge, and each mapped module or theme
+#   it does not list, as an inferred not_installed_by edge to core.extension and the attribute
+#   installed: no, which spreads to everything inside the module or theme and prints as
+#   [not installed];
+# - each string literal in a PHP method or function, and each quoted text in a template, whose whole
+#   text equals the id of a route, a service, a configuration object or a queue worker, as a
+#   mentions_route, mentions_service, mentions_config or mentions_queue edge with confidence
+#   mentioned (mention/). The text must hold a separator and 8 characters or more, a service id a
+#   dot; a text that is the id of two of a route, a service and a configuration object mentions
+#   neither, and a method, function or template that already links that thing by another rule
+#   gets no mention.
+#
+# False results:
+# - A suggests_bundle edge is made whether or not the bundle is mapped: the engine cannot ask. An
+#   unmapped bundle ends at a referenced node.
+# - A simple configuration file whose owner the map holds as neither a theme nor a module ends
+#   at a referenced module of that name, inferred: core.extension's module list is not read, so a
+#   core or contributed module's settings take that guess unless another file names the module.
+# - A hook with a template key kept in a variables default, or an entry whose first key is not a
+#   registry key, reads as no hook or as the wrong one. A hook entry that opens with the key
+#   type, pattern or function is not found. One that opens with path or file is found when a
+#   registry key follows at its own bracket level, so a variable default such as
+#   'link' => ['path' => NULL] does not read as a hook. Inside a hook_theme function, any key
+#   whose array opens with a registry key reads as a hook: 'nested' => ['variables' => NULL]
+#   inside an entry gives the hook nested.
+# - A function name of the form <extension>_<type>_<operation> whose hook is known gives a
+#   hook_acts_on_entity_type edge whether or not <type> is an entity type. A helper whose hook
+#   nothing names, as user_cookie_delete in core, loses that edge with its hook node.
+# - A helper whose name fits a placeholder form of core, such as mymod_preprocess_x or
+#   mymod_form_x_alter, or whose rest is a known hook's name, reads as a known hook.
+# - A contributed module's hook is known only when the module's code is on disk in the folder
+#   contrib_module or contrib_theme, or an implementation's docblock names it. Without either,
+#   its implementations get named_like_hook edges and [hook by name only]. That is the map saying
+#   what the code on disk shows, not a gap; no table row stands in for a contributed module.
+# - The prefix is the file name, not an installed module's name. If Drupal core were inside the
+#   mapped folders, its files such as form.inc would give false hooks, such as select_options from
+#   form_select_options.
+# - A procedural function kept beside a Hook attribute method for the same hook, a LegacyHook shim,
+#   reads as a second implementation of that hook, though Drupal skips the shim.
+# - A function below one that carries the ProceduralHookScanStop attribute, and every function of
+#   a module that sets skip_procedural_hook_scan, still reads as a hook, though Drupal does not
+#   scan them.
+# - A misspelled service or entity type name ends at a referenced node, as a real one from core
+#   does when core's services files are not read, and not at an unresolved one.
+# - A $container or $this->container that is not Drupal's service container gives a false
+#   service, and a false calls edge for a method called on it.
+# - A text constant of an Event class or an *Events class that documents none of its constants
+#   with @Event reads as an event name, so one that holds another text is a false event.
+# - The object of ->get('x'), ->set('x') and ->hasField('x') is read only to leave out a config
+#   factory or a config object: $form_state->get('x'), $request->get('x'), a config object held in
+#   a variable of another name, as $settings->get('x'), and a name given as a class constant on a
+#   config object link to a field storage named x.
+# - A template variable named as an entity template names its entity, such as node, term or
+#   user, reads as that entity even where a preprocess function set it to something else.
+# - A filter called with a space after the pipe and an argument list, as | money(2), also reads as
+#   a call of the function money, which links when an extension provides a function of that name.
+# - The object of hasRole, addRole and removeRole is not read, so such a method of any class gives
+#   a role edge. A config factory and a queue factory are known by the object's name or its
+#   declared type, and
+#   $this->config('x') is taken to be core's.
+# - A queue is named by its worker plugin, so a queue that no worker processes anywhere ends at a
+#   referenced worker plugin of its name.
+# - alters_form cannot tell a form id from a base form id: form_node_form_alter links to the form
+#   id node_form.
+# - A template's owner is read from its folder: the folder right before templates for a module,
+#   the folder below custom_theme for a theme. A folder named other than its machine name gives a
+#   wrong owner. A drush.services.yml's services belong to the folder that holds it, by its name.
+#   When the project folder is the module or theme itself, the settings value drupal_extension
+#   names that folder; without it, those owners and a PSR-4 class's module are absent.
+#   module/template_member.yaml also reads a template's owner from the nearest info file, so such a
+#   template gets the right owner beside the wrong one.
+# - Two routes whose paths have one shape, as /my/item/{id} and /my/item/{name}, both get a
+#   template_links_route edge from each template path of that shape.
+# - The subscribed_by edge of an HttpExceptionSubscriberBase descendant reads the method's name
+#   only, not getHandledFormats(), so a method for a format the class does not handle still links.
+#   Its priority is read only from a getPriority() whose body is return <integer>;, so one that
+#   returns a constant or an expression holds no priority.
+#
+# Missing results:
+# - A literal mentions a thing only by its whole id: a name inside another id, such as a view id
+#   inside views.view.<id>, a field name inside field.storage.<type>.<field>, or a mapping id
+#   inside salesforce_mapping.salesforce_mapping.<id>, joins nothing. A literal equal to a form id,
+#   a theme hook, an event, a permission, a bundle or a plugin other than a queue worker joins
+#   nothing either, and one in a class constant or a property default joins nothing.
+# - A '#theme' outside any named function, such as a property default, gives no edge and one
+#   skipped row. A method of a class kept in a module file reads as a function of the method's
+#   name. A render array in a closure counts the named function around it. A theme hook declared
+#   by a method of a class,
+#   or by a hook_theme function that is not named theme or ending in _theme, is not found. A
+#   hook a hook_theme registers in a loop is found only through its module template, as above, so
+#   a hook whose name holds a dash, or a template included by path, gives no
+#   hook. A constant read as \A\B::NAME, with its namespace written, or in a function declared
+#   inside a method or in a method of an anonymous class, gives no renders_theme_hook edge. A
+#   template named <entity>--<name>.html.twig gives no suggests_bundle edge, because the file
+#   cannot tell a bundle from a view mode or a node id.
+# - A form id is read only from a getFormId() whose body returns a literal text, which gives a
+#   drupal.form_id node and a form_has_id edge. A constant, a concatenation or a variable returned
+#   gives neither.
+# - A template is known by its file stem, and a component by its name without the theme: two
+#   themes that define a component of one name meet at one node, as templates of one name do.
+#   A template or component named by a variable or a concatenation gives no edge, beyond a
+#   quoted @<namespace> path held as a value. A path held without its @namespace gives none. Only
+#   a name ending in .html.twig gives a template edge. A component's own
+#   components/<name>/<name>.twig gives its include, route and path edges from
+#   drupal.component::<name>, under the mirror kinds component_includes_template,
+#   component_includes_component and component_links_route, and links_to_path. A story file and
+#   any other Twig file not named .html.twig give none.
+# - A function in a module file named other than its module, such as includes/helpers.inc
+#   holding mymod_ functions, gives no hook. A theme's inc file, and a theme file named other than
+#   its theme, such as includes/content.theme, is read by the name of the folder directly below
+#   custom_theme, so a theme nested deeper, or one whose folder name is not its machine name,
+#   gives no hook. Nor does a function named with another module's name, such as
+#   othermod_cron in mymod.module, which Drupal counts as a hook of othermod.
+# - The number of an update_N function is not recorded apart from the function's name.
+# - A plugin whose id is a constant or a concatenation gives no node. A views plugin gives
+#   one skipped row, argument 0 or id missing, from the rule that reads the other form of the id.
+# - A plugin manager names no plugin type when it names its attribute class as text, its
+#   annotation class in double quotes, or builds its discovery itself, such as from YAML files. One
+#   that inherits its constructor from a manager the map does not hold, that no core row names and
+#   whose name does not end in PluginManager, gets no inherits_plugin_type. Its service gets no
+#   edge to the type; the edge starts at its constructor. An annotation plugin type is read only
+#   from the first annotation of a plugin class's docblock.
+# - An entity type handler set in code outside hook_entity_type_alter and hook_entity_type_build,
+#   as by a contributed module that builds its entity types, gives no edge.
+# - A route subscriber that extends another of the project's route subscribers, not
+#   RouteSubscriberBase as written, gets no alters_routes or alters_route edge.
+# - A hook with a variable part keeps that part in its name: mymod_form_user_login_form_alter
+#   implements form_user_login_form_alter, which instance_of_hook links to form_FORM_ID_alter. A
+#   name whose part the map does not know and whose shape another hook may share, as x_insert,
+#   gets no instance link.
+# - A hook run on a module handler or theme manager held under another name and of no declared
+#   type gives no invokes_hook edge, and one named by a constant gives no edge and no runtime mark;
+#   one in a variable on an object known only by its declared type gets no runtime mark. An
+#   alter list item written 'form_' . $id gives nothing. A hook a module handler runs in core,
+#   such as entity_presave, gets no invoker: core is outside the mapped code.
+# - A class that extends ContentEntityBase and carries no ContentEntityType attribute or
+#   annotation, such as an abstract base or a bundle class, reads as a descendant of the boundary
+#   name ContentEntityBase, and is still not marked as an entity class.
+# - A service or entity type named by a variable gives no edge. In a method or a module-family
+#   file's function, call/runtime_argument.yaml and its function twin keep the call as a
+#   php.call_site marked resolution runtime; a variable service id also goes under skipped, and a
+#   variable entity type in getStorage() does not. Elsewhere both go under skipped. A
+#   concatenation or a class constant that no mapped file declares as text gives no edge and goes
+#   under skipped. So does parent::X, even
+#   when a mapped file declares it: only self and static read as the enclosing class. A service
+#   named X::class is the exception: call/service_class_constant.yaml joins it to the service of
+#   that id, and the skipped row stays.
+#   No rule gives an edge for getStorage('x') or get('x') on an object with another name whose type
+#   no rule knows, such as an untyped parameter $etm or a local variable, or for a receiver written
+#   with a space or a line break inside get('entity_type.manager').
+# - A \Drupal:: shortcut gives a uses_service edge only when the table shortcut_services below
+#   lists its method, or it is cache() with no argument or a quoted bin; \Drupal::cache($bin) is
+#   kept as a call site marked resolution runtime. A static load, loadMultiple or create
+#   call gives a uses_entity_type edge from entity_class_static_call only on a class the table
+#   entity_classes lists by its full name, resolved through the file's use statements: a core
+#   entity class, or one a loaded rutter adds under add_table_rows. A module's own class named as
+#   a listed one, such as its User class, gives none, and any other class gives no row.
+#   create() whose first argument is quoted text, $container or $this->container is no entity
+#   call and gives no row. On a class the map holds as an entity type's class, as a module's own
+#   MyEntity, call/entity_class_call.yaml gives the edge from the method, at the call's line.
+#   Message::load(1) and a call on a subclass of an entity class give none.
+# - The container rules read get('x') in lower case only: another letter case, such as
+#   ->GET('x'), gives no edge and no skipped row.
+# - A contributed module's bundle config file, such as paragraphs.paragraphs_type.text or
+#   eck.eck_type.my_type.my_bundle, stays a plain config object. Its bundle is
+#   referenced, with no label and no configured_by edge, and a type that no field or display names
+#   has no bundle node. That module's own rutter maps the file onto the same bundle id.
+# - A display in the mode default has no in_mode edge, because that mode has no config file.
+# - An entity reference field's target bundles, under settings.handler_settings.target_bundles,
+#   give no edge.
+# - A top-level function in a plain .php file in the custom folders, other than a post_update.php
+#   or deploy.php file, makes no hook. Each such file leaves two skipped rows in the report, one
+#   per hook rule, at its first function.
+# - A _custom_access method that neither the service's class nor a mapped ancestor declares ends at
+#   an unresolved method of the service's class.
+# - A route name compared with !=, !==, switch or a variable, a route list in a property, a
+#   constant or another function, a route name held in a parameter such as hook_help's
+#   $route_name, and a variable bound twice in one function give no checks_route edge. A file
+#   that holds two classes with a method of one name reads both as the class its path names.
+# - Only the core user routes listed above get a path, and only from an exported core.extension;
+#   the routes of other core modules get none. user.logout.confirm is mapped on the assumption that
+#   the site runs core 10.3 or later, which added it. A page--a--b template whose path parts hold underscores, or name an
+#   argument as %, links to no path.
+# - applies_to is read on any tag of a service, and a comma-separated list of keys joins no
+#   route.
+# - A route parameter that Drupal converts to an entity because its name is an entity type, with
+#   no options.parameters type, gives no loads_entity_type edge.
+# - Requirements, defaults and options other than those listed above give nothing:
+#   _module_dependencies, _entity_bundles, a parameter's pattern, _auth, _maintenance_access, a
+#   custom default such as tempstore_id, a custom option, and the like.
+# - An attribute keeps the value as written, so no_cache: 'TRUE' and no_cache: true give "TRUE"
+#   and true, and is_admin: null gives null.
+# - A key or name whose class no use statement binds joins its event only when a mapped class of
+#   the file's namespace or one of its mapped ancestors declares that constant. A priority is kept
+#   as written, so self::LATE stays a name, not its number. A dispatch of a typed parameter or
+#   property names the event by the declared class; an object of a subclass names its own when the
+#   code runs. parent::NAME as a getSubscribedEvents() key or a method attribute's event gives
+#   nothing, and in addListener() or addTag() it reads as an expression, a runtime registration;
+#   parent::class in a class-level attribute gives nothing and a skipped row. A test outside
+#   tests/src and an .api.php file give nothing.
+# - Drupal core, as of 11.4, registers no listener from an AsEventListener attribute by itself; its
+#   edge holds what the attribute declares, and its method holds the mark. A name the table
+#   core_event_names does not list, as a contributed module's, is the event of that name, which
+#   meets a subscriber's constant when a mapped file, or a contributed module's file under
+#   contrib_event_source, gives the constant that text; with core itself in the map, a core name
+#   meets the constant, not the text. A dispatcher a tag or an attribute names is kept as written:
+#   the map does not say which service it is. A registration
+#   on an object of no known type rests on the method's name, which its edge's receiver attribute
+#   says. The rutter holds the subscriptions of every abstract core subscriber base of Drupal 11.4;
+#   a subclass of a concrete core subscriber other than DefaultExceptionHtmlSubscriber and
+#   CustomPageExceptionHtmlSubscriber reads as a base outside the map. A method attribute on a
+#   base's method is inherited too.
+# - A filter or function name that is not a text literal, and an extension that implements
+#   ExtensionInterface without AbstractExtension, give nothing. A filter or function after a hash
+#   in the same print, as {{ {a: 1}|money }}, gives nothing.
+# - A field named as v['field_x'], through ?->get(), by a variable, or by a constant of core or
+#   contrib gives no accesses_field edge; the constant leaves a skipped row. A name given as
+#   self::X or static::X that does not start with field_ links nothing. A template reads only
+#   names that start with field_. A PHP receiver's entity type is not read, nor is content.field_x
+#   in a template whose name holds no --, nor a block template's: such a read of a name that
+#   storages on two entity types share ends at the shared name, not a storage. The edge sits at
+#   the line of the call or of the read in the template file that holds it.
+# - A field suggestion is read only for a field name that starts with field_: field--body and
+#   field--node--body give nothing, since field--<name> may name a field type and
+#   field--<entity type>--<name> a bundle. A core hook outside the list core_hook
+#   gives, and block--<module>, link to nothing, since the map holds no such node. A preprocess of
+#   such a hook gives no preprocesses_theme_hook edge, nor does a theme_suggestions_<hook> hook.
+#   A canonical route whose entity type has no theme hook in the map gives no
+#   route_renders_theme_hook edge. A derivative written with
+#   a dash in it, as block--x--main-2 for x:main-2, is read with an underscore and links nothing.
+# - A queue name held in a variable leaves a skipped row and keeps no call site; a config name held
+#   in a variable keeps its call as a php.call_site marked resolution runtime, in a method or a
+#   module-family file's function, and leaves no skipped row for a config factory's get() or
+#   getEditable(), only for \Drupal::config(); elsewhere it leaves a skipped row; a role,
+#   config or queue name given by a constant of core or contrib leaves a skipped row. One given as
+#   self::X or static::X, declared as text on an interface or a parent, gives its edge at the
+#   call's line and keeps the skipped row. Foo::X declared on a parent or an interface of Foo, a
+#   constant declared by an expression, and a text holding a backslash give nothing. A ?-> call
+#   to hasRole, get or getEditable gives nothing. The call that follows a queue's get, such as
+#   createItem or claimItem, is not read. A config, queue or role edge sits at the call's line.
+# - A generic hook_form_alter that tests $form_id with ==, in_array or switch gives no alters_form
+#   edge.
+# - A menu name compared with the text written first, as 'main' == $variables['menu_name'], or
+#   compared through getMenuName() or a variable gives no checks_menu edge. A comparison in a
+#   method of a second class in one file reads as the method of that name on the file's class.
+#   A theme hook of core not listed in the core_hook path value gives no template edge, and a
+#   preprocess function of such a hook links only when another rule makes the hook. A
+#   region--<region> template of a sub-theme that takes its regions from its base theme links to
+#   nothing.
+# - A factory class written without a namespace, and a factory set in code, give no edge; a factory
+#   service no mapped file declares names no method. A local task, local action or contextual link
+#   that a deriver makes at run time is not a node: the entry that names the deriver is. A menu
+#   link's class and deriver, and a link's route_parameters, give nothing.
+# - A macro file is a node only when it defines a macro, and is known by its stem, so two macro
+#   files of one stem meet at one node. An import of a name with a dot before .twig other than
+#   .html.twig, of _self or of a variable, and an import in a Twig file that is neither a
+#   .html.twig template nor a component, give nothing.
+# - A constraint whose validatedBy() returns a text in double quotes, a concatenation or a call
+#   gets no validated_by edge, declared or inferred. A validatedBy() a parent writes is not read,
+#   so its subclass still gets the inferred edge.
+# - A template path with a literal value in a placeholder slot, as /my/item/5, a path with no
+#   leading slash outside a data-* attribute, a path no mapped routing file declares, such as a
+#   core route's, and a path built in Twig other than by {{ ... }} holes or a {% set %} joined
+#   with ~ give no route edge. A query string and a fragment are cut before the shape is made. Two
+#   pieces of a ~ join that are not quoted and stand side by side give no route edge.
+# - A hook that core runs from a form links to the form only for hook_user_login. A Login
+#   Destination rule links only its login and registration triggers. A form display links to its
+#   entity form only for a type without bundles and a mode other than default, and only when the
+#   map holds the form id.
+# - An entity type test links a generic entity hook only when it is a whole if condition on
+#   $entity with == or ===, in a function of a module file; a test in a hook implemented by a
+#   method, the name written first, and a test joined with && or || give nothing.
+# - getForm($variable), getForm('text') and a form built other than by ->getForm(X::class) give
+#   no builds_form edge. A form class the map does not hold ends at a referenced node. A grouped
+#   use, use A\{B, C}, binds no name for it.
+# - Only the first call of a service chain is joined. A service no mapped services file declares,
+#   or one a variable or a constant names, gives no calls edge, nor does a local variable that
+#   holds another value in its method, a local variable in a plain function such as a hook, or a
+#   call in a function of a plain .php file.
+# - A view's page display with no path, a display of another plugin, such as a feed, and a route
+#   a module alters give no route. The route_from_view and shape_of_route edges are read as text,
+#   at the indentation Drupal exports; a view file indented otherwise gets the route and its path
+#   only.
+# - A routing file's route_callbacks key names no route, and a service alias written on one line,
+#   name: '@other', gives no service_in_module edge. A library, class or template whose module or
+#   theme the map does not hold gives no ownership edge.
+# - A file more than eight folders below its extension's folder gives no membership edge. A
+#   method, property or call site, a script's settings and URL calls, a script function inside a
+#   block, and a hook name get no membership edge of their own: they reach the module through their
+#   class, script or function, and a hook name is shared by every module that implements it. A
+#   plugin, form id, Twig callable or event of a class the map holds
+#   under no module gives none, and an event a constant names only by its own name gives none.
+#
+# Settings to know:
+# - core names Drupal core's folder, ./web/core by default, else docroot/core or core when init
+#   finds one there; with contrib_module it gives the services files read from services_source. A
+#   project without core in its tree maps its own services only, and a service it uses from core
+#   ends at a referenced or unresolved node.
+# - Only the custom modules and themes are read as PHP. Move them with custom_module and
+#   custom_theme under folders. A folder setting may not leave the project root, so a site is
+#   mapped from inside its own tree or from a copy.
+# - This pack repeats php_basic's PHP grammar pin, because a pack that reads a file type as a tree
+#   must pin the grammar itself. A grammar update must change both packs.
+pack: drupal_basic
+version: 0.4.0
+depends: [yaml_basic, php_basic, twig_basic]
+values:
+  drupal_extension: The machine name of the module, theme or install profile the project folder is, when it is its own repository; set custom_module, or custom_theme, to . as well.
+
+# ======================================================================================
+# DETECTION
+#
+# What makes a checkout a Drupal checkout, so `periplus init` can prefill this pin. The
+# answer is written here rather than in the engine: recognising a stack is pack data, and
+# a pack somebody else wrote is detected exactly the way this one is.
+#
+# Neither signal is "there is PHP here". php_basic, yaml_basic and twig_basic are reached
+# through `depends` and declare no detector of their own, because a repository having PHP
+# in it is not a stack anybody pins.
+#
+# What init writes is a suggestion in a file the person then edits. A missed detection
+# costs them one typed line; a spurious one costs a wrong pin in a committed artifact. So
+# both signals below are things only a Drupal repository has.
+# ======================================================================================
+detect:
+  any_of:
+    # The dependency, which is the claim the repository makes about itself. `drupal/core`
+    # rather than `drupal/core-recommended`: the substring covers core, core-recommended
+    # and core-composer-scaffold, and every Drupal site requires at least one of them.
+    # Drupal CMS's composer.json, on 2026-08-28, requires drupal/core-composer-scaffold,
+    # drupal/core-project-message and drupal/core-recommended.
+    - path: composer.json
+      contains: "drupal/core"
+
+    # The docroot, for a checkout that has core in the tree and no composer.json at the
+    # root -- core's own repository, and a site vendored without Composer. The filename
+    # alone is the evidence, so this signal needs no `contains`.
+    - path: web/core/lib/Drupal.php
+
+    # A module's, theme's or install profile's own repository, the layout a contributed project
+    # keeps: its info file at the repository root. The ending .info.yml and the type key are
+    # Drupal's own; a site repository never holds one at its root.
+    - path: "*.info.yml"
+      contains: "type: module"
+    - path: "*.info.yml"
+      contains: "type: theme"
+    - path: "*.info.yml"
+      contains: "type: profile"
+
+# Where else a Drupal project keeps these, when the default above does not exist: a docroot
+# folder in place of web, the Drupal root at the project root, and config/default in place of
+# config/sync. `periplus init` writes the first that exists into the project settings.
+folder_candidates:
+  config: [config/default]
+  custom_module: [docroot/modules/custom, modules/custom]
+  custom_theme: [docroot/themes/custom, themes/custom]
+  contrib_module: [docroot/modules/contrib, modules/contrib]
+  contrib_theme: [docroot/themes/contrib, themes/contrib]
+  core: [docroot/core, core]
+
+# Contributed code is read for hook names only, and a project may keep none of it on disk. Core is
+# read for its services files only, and a project may keep it outside the tree.
+optional_folders: [contrib_module, contrib_theme, core]
+
+folders:
+  config:        ./config/sync
+  custom_module: ./web/modules/custom
+  custom_theme: ./web/themes/custom
+  # Contributed modules and themes, read only for the hook names their *.api.php files define
+  # (hook/hook_known.yaml) and the event names their constants hold (event/event_name.yaml). A
+  # project with no such folder on disk gets nothing from it.
+  contrib_module: ./web/modules/contrib
+  contrib_theme: ./web/themes/contrib
+  # Drupal core, read only for its services files (services_source below).
+  core: ./web/core
+  # Where a contributed project keeps its *.api.php files: its own folder, a folder directly
+  # inside it, as a submodule, and each folder under its modules folder. Not every folder at any
+  # depth, which costs a directory listing each.
+  contrib_source:
+  - "{contrib_module}/*"
+  - "{contrib_module}/*/*"
+  - "{contrib_module}/*/modules/*"
+  - "{contrib_theme}/*"
+  - "{contrib_theme}/*/*"
+  - "{contrib_theme}/*/modules/*"
+  # Where a contributed project keeps its event-name constants, read for their names only
+  # (event/event_name.yaml): its src folder at any depth, of the project and of each folder under
+  # its modules folder, where a file whose name holds Event is read.
+  contrib_event_source:
+  - "{contrib_module}/*/src"
+  - "{contrib_module}/*/src/**"
+  - "{contrib_module}/*/modules/*/src"
+  - "{contrib_module}/*/modules/*/src/**"
+  # Where core and contributed modules keep their *.services.yml files, read by service/ only, so
+  # a service, alias or parameter they declare is a node a custom service or class can join to:
+  # core.services.yml, each core module's folder, and each contributed project's folder, a folder
+  # directly inside it, and each folder under its modules folder. No other file there is read.
+  services_source:
+  - "{core}"
+  - "{core}/modules/*"
+  - "{contrib_module}/*"
+  - "{contrib_module}/*/*"
+  - "{contrib_module}/*/modules/*"
+  # An extension's shipped configuration: config/install and config/optional.
+  module_config:
+  - "{custom_module}/**/config/install"
+  - "{custom_module}/**/config/optional"
+  - "{custom_theme}/**/config/install"
+  - "{custom_theme}/**/config/optional"
+  # An extension's configuration schema files, config/schema/*.schema.yml
+  # (config/config_schema.yaml).
+  config_schema:
+  - "{custom_module}/**/config/schema"
+  - "{custom_theme}/**/config/schema"
+  # A module's migrations folder, where core's migrate module discovers migrations/*.yml
+  # (migration/migration.yaml).
+  migrations: "{custom_module}/**/migrations"
+  module_root: "{custom_module}/**"
+  theme_root: "{custom_theme}/**"
+  # php_basic's source, narrowed to the custom modules and themes at any depth.
+  source:
+  - "{custom_module}/**"
+  - "{custom_theme}/**"
+  # The folder a plugin kind is discovered in: the sub-folder its manager names, below a module's
+  # src folder, and every folder below it. A class elsewhere is not discovered. An entity type is
+  # discovered in src/Entity.
+  action_classes: "{module_root}/src/Plugin/Action/**"
+  block_plugin_classes: "{module_root}/src/Plugin/Block/**"
+  constraint_classes: "{module_root}/src/Plugin/Validation/Constraint/**"
+  entity_type_classes: "{module_root}/src/Entity/**"
+  field_formatter_classes: "{module_root}/src/Plugin/Field/FieldFormatter/**"
+  field_type_classes: "{module_root}/src/Plugin/Field/FieldType/**"
+  field_widget_classes: "{module_root}/src/Plugin/Field/FieldWidget/**"
+  mail_classes: "{module_root}/src/Plugin/Mail/**"
+  # Every plugin folder, for a plugin of any type (plugin_type/plugin_id.yaml).
+  plugin_classes: "{module_root}/src/Plugin/**"
+  media_source_classes: "{module_root}/src/Plugin/media/Source/**"
+  queue_worker_classes: "{module_root}/src/Plugin/QueueWorker/**"
+  rest_resource_classes: "{module_root}/src/Plugin/rest/resource/**"
+  views_field_classes: "{module_root}/src/Plugin/views/field/**"
+  views_filter_classes: "{module_root}/src/Plugin/views/filter/**"
+  views_style_classes: "{module_root}/src/Plugin/views/style/**"
+
+files:
+  # The Drupal endings that hold PHP, added to php_basic's list.
+  extends: php_basic
+  # A module's or theme's tests folder holds its tests, test modules and fixtures: mapped, and
+  # printed after the rest.
+  supporting: ['**/tests/**']
+  add_extensions: [module, install, inc, theme, profile, engine]
+  # The Group module's group.permissions files hold Group permissions, not Drupal permissions, and
+  # their stem also ends in .permissions.
+  exclude:
+  - '**/*.group.permissions.yml'
+  types:
+    # php_basic's type, given the path value extension: the first part of a module, install,
+    # include, theme, profile, post_update.php or deploy.php file's name, which its procedural
+    # hook functions start with. Absent for any other ending. And theme_name: the name of the
+    # folder directly below custom_theme that holds an inc file, or a theme file other than the
+    # theme's own, which a theme's included files name their functions with. A type read as a tree needs its pack to pin the grammar,
+    # php_basic's pin repeated. api.php is claimed on its own so a rule can keep to a module's
+    # *.api.php files, which document hooks and never run, with ending: api.php; a rule that reads
+    # PHP by ending: php lists api.php beside it.
+    php:
+      endings: [module, install, inc, theme, profile, api.php]
+      reader: tree
+      path_values:
+        extension:
+          pattern: '^(?:.*/)?(?<name>[^/.]+)\.(?:(?:[^/]+\.)?(?:module|install|inc|theme|profile)|post_update\.php|deploy\.php)$'
+          template: '{name}'
+        theme_name:
+          pattern: '^(?<name>[^/]+)/(?!(?P=name)\.theme$)(?:[^/]+/)*[^/]+\.(?:inc|theme)$'
+          template: '{name}'
+          root_name: drupal_extension
+          relative_to: custom_theme
+        # The folder that holds the file, read by module/member_folder.yaml.
+        file_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
+          root_name: drupal_extension
+
+    # yaml_basic's type yml, read as data, given the path value config_owner: the first
+    # dot-separated part of a configuration file's name, the module that provides the file when
+    # it is simple configuration. Absent for core.*, which names no module.
+    yml:
+      endings: [yml]
+      reader: data
+      format: yaml
+      path_values:
+        config_owner:
+          pattern: '^(?:.*/)?(?!core\.)(?<owner>[^/.]+)\.[^/]+\.[^/.]+$'
+          template: '{owner}'
+        # The folder that holds the file, from the project folder, which module/member_folder.yaml
+        # walks up to the nearest folder holding an info file.
+        file_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
+          root_name: drupal_extension
+        # A services file's path less .services.yml, read by service/service_autowire.yaml to join
+        # a service to its file's _defaults.
+        services_file:
+          pattern: '^(?<file>.+)\.services\.yml$'
+          template: '{file}'
+        # The machine name an info file gives its module or theme: my_module for my_module.info.yml.
+        info_name:
+          pattern: '^(?:.*/)?(?<name>[^/]+)\.info\.yml$'
+          template: '{name}'
+
+    # Three text readings, beside the tree and data readings twig_basic, php_basic and yaml_basic
+    # give the same files, for what those cannot reach: a call inside a template, the array form
+    # of an attachment, a docblock tag, a class constant used as an array key, YAML held in the text
+    # of a key. Declared here because the engine lets one text type claim a file ending across all
+    # packs; drupal_js_basic, drupal_next, drush_basic, salesforce_basic, twig_tweak_basic and
+    # webform_basic read them. A dependent rutter may declare a type again
+    # under the same name to add path values or spans, which merge into it, as drupal_js_basic
+    # does for drupal_php_text.
+    # Templates read as text with their own name as a value, beside the reading twig_basic
+    # gives them. A match that starts inside a Twig comment makes nothing.
+    drupal_template_text:
+      endings: [twig]
+      reader: text
+      path_values:
+        # The folder that holds the file, read by module/member_folder.yaml.
+        file_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
+          root_name: drupal_extension
+        template_name:
+          pattern: '^(?:.*/)?(?<name>[^/]+)\.html\.twig$'
+          template: '{name}'
+        # The bundle an entity template suggestion names, as node.article for
+        # node--article--teaser. Absent for any other name.
+        bundle_suggestion:
+          pattern: '^(?:.*/)?(?<entity>node|taxonomy-term|block-content|paragraph|media|comment)--(?<bundle>[a-z][a-z0-9-]*?)--[a-z0-9]+(?:-[a-z0-9]+)*\.html\.twig$'
+          template: '{entity}.{bundle}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # The name of a single-directory component whose folder components/<name>/ holds the
+        # file <name>.twig. Absent for any other file.
+        component_name:
+          pattern: '^(?:.*/)?components/(?<name>[^/]+)/(?P=name)\.twig$'
+          template: '{name}'
+        # What a theme suggestion's file name names, read by theme_hook/suggestion_*.yaml, its
+        # dashes written back as underscores. Each is absent for any other name. hook_suggestion
+        # is the part before the first --, the base hook.
+        hook_suggestion:
+          pattern: '^(?:.*/)?(?<base>[a-z0-9_]+(?:-[a-z0-9_]+)*)--[^/]+\.html\.twig$'
+          template: '{base}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # A template named exactly for a theme hook of Drupal core, read by
+        # theme_hook/core_theme_hook.yaml, its dashes written back as underscores: node for
+        # node.html.twig. core_hook_suggestion is the same hook before a --, node for
+        # node--article.html.twig. Each is absent for any other name.
+        core_hook:
+          pattern: '^(?:.*/)?(?<hook>html|page|region|block|node|user|field|menu|comment|taxonomy-term|media|breadcrumb|status-messages|links|item-list|page-title|pager|table|form|form-element|form-element-label|input|select|textarea|details|fieldset|container|image|username|maintenance-page|menu-local-tasks|menu-local-task|menu-local-action|views-view|views-view-unformatted|views-view-fields|views-view-field|views-view-list|views-view-table|views-view-grid|views-exposed-form|views-mini-pager)\.html\.twig$'
+          template: '{hook}'
+          normalize:
+          - {replace: '-', with: '_'}
+        core_hook_suggestion:
+          pattern: '^(?:.*/)?(?<hook>html|page|region|block|node|user|field|menu|comment|taxonomy-term|media|breadcrumb|status-messages|links|item-list|page-title|pager|table|form|form-element|form-element-label|input|select|textarea|details|fieldset|container|image|username|maintenance-page|menu-local-tasks|menu-local-task|menu-local-action|views-view|views-view-unformatted|views-view-fields|views-view-field|views-view-list|views-view-table|views-view-grid|views-exposed-form|views-mini-pager)--[^/]+\.html\.twig$'
+          template: '{hook}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # menu--<name>, and the same with --<anything> after it: the menu <name>, read by
+        # theme_hook/suggestion_menu.yaml, with its dashes as underscores and as written, since
+        # Drupal writes a menu's dashes as underscores in its suggestion.
+        menu_suggestion:
+          pattern: '^(?:.*/)?menu--(?<name>[a-z0-9_]+(?:-[a-z0-9_]+)*)(?:--[^/]*)?\.html\.twig$'
+          template: '{name}'
+          normalize:
+          - {replace: '-', with: '_'}
+        menu_suggestion_as_written:
+          pattern: '^(?:.*/)?menu--(?<name>[a-z0-9_]+(?:-[a-z0-9_]+)*)(?:--[^/]*)?\.html\.twig$'
+          template: '{name}'
+        # region--<region>, and the same with --<anything> after it, in a theme folder: the
+        # region <theme>.<region>, read by theme/theme_region.yaml.
+        region_suggestion:
+          pattern: '^(?<theme>[^/]+)/(?:[^/]+/)*region--(?<region>[a-z0-9_]+(?:-[a-z0-9_]+)*)(?:--[^/]*)?\.html\.twig$'
+          template: '{theme}.{region}'
+          root_name: drupal_extension
+          relative_to: custom_theme
+          normalize:
+          - {replace: '-', with: '_'}
+        # block--<id>: a block plugin id or a block placement id. A placement id may hold __, which
+        # the file name writes as --.
+        block_suggestion:
+          pattern: '^(?:.*/)?block--(?<id>[a-z0-9_]+(?:--?[a-z0-9_]+)*)\.html\.twig$'
+          template: '{id}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # One part with its dashes kept, for a plugin id written with a dash.
+        block_suggestion_as_written:
+          pattern: '^(?:.*/)?block--(?<id>[a-z0-9_]+(?:-[a-z0-9_]+)*)\.html\.twig$'
+          template: '{id}'
+        # block--<base>--<derivative>: the derivative plugin <base>:<derivative>.
+        block_derivative_suggestion:
+          pattern: '^(?:.*/)?block--(?<base>[a-z0-9_]+(?:-[a-z0-9_]+)*)--(?<derivative>[a-z0-9_]+(?:-[a-z0-9_]+)*)\.html\.twig$'
+          template: '{base}:{derivative}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # page--<a>--<b>: the internal path /a/b whose page the template themes, each -- read as
+        # a slash and the other dashes kept, as written in a URL.
+        page_path_suggestion:
+          pattern: '^(?:.*/)?page--(?<path>[a-z0-9_]+(?:-[a-z0-9_]+)*(?:--[a-z0-9_]+(?:-[a-z0-9_]+)*)*)\.html\.twig$'
+          template: '/{path}'
+          normalize:
+          - {replace: '--', with: '/'}
+        # field--field-<name>: a field whose name starts with field_, on any entity type.
+        field_suggestion:
+          pattern: '^(?:.*/)?field--(?<field>field(?:-[a-z0-9_]+)+)\.html\.twig$'
+          template: '{field}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # field--<entity type>--field-<name>, and the same with --<bundle> after it:
+        # <entity type>.<field name>, as the field storage's own name ends.
+        entity_field_suggestion:
+          pattern: '^(?:.*/)?field--(?<entity>[a-z0-9_]+(?:-[a-z0-9_]+)*)--(?<field>field(?:-[a-z0-9_]+)+)(?:--[a-z0-9_]+(?:-[a-z0-9_]+)*)?\.html\.twig$'
+          template: '{entity}.{field}'
+          normalize:
+          - {replace: '-', with: '_'}
+        # The folder right before a module template's templates folder, read as its module's
+        # name; the innermost one, so a nested submodule's template names the submodule. Absent
+        # for a template outside a templates folder.
+        module_of_template:
+          pattern: '^(?:.*/)?(?<module>[^/]+)/templates/(?:[^/]+/)*[^/]+\.html\.twig$'
+          template: '{module}'
+          root_name: drupal_extension
+          relative_to: custom_module
+        # The folder below custom_theme that holds a theme template, read as its theme's name. A
+        # first folder named templates or layouts is a theme's own folder, when custom_theme is .
+        # and drupal_extension is not set: no value, rather than a theme of that name.
+        theme_of_template:
+          pattern: '^(?!(?:templates|layouts)/)(?<theme>[^/]+)/(?:[^/]+/)*[^/]+\.html\.twig$'
+          template: '{theme}'
+          root_name: drupal_extension
+          relative_to: custom_theme
+      sections:
+      - name: comment
+        open: '\{#'
+        close: '#\}'
+      spans:
+      # A Twig print or tag, from {{ or {% to its first closing brace. A hash inside, such as
+      # {a: 1}, ends the span at its own closing brace, so what follows the hash is outside.
+      - name: twig_expression
+        open: '\{(?<mark>[{%])'
+        balance: ['\{', '\}']
+      # A for loop, from its {% for %} to its {% endfor %}; bound is the name it binds, key the
+      # key name of {% for key, value in ... %}. A macro, from {% macro %} to {% endmacro %};
+      # args is its argument list. Read by theme_hook/template_reads_variable.yaml, which reads no
+      # name a loop or a macro around it binds.
+      - name: for_loop
+        open: '(?=\{%-?\s*for\s+(?:(?<key>[A-Za-z_]\w*)\s*,\s*)?(?<bound>[A-Za-z_]\w*)\s+in\b)'
+        balance: ['\{%-?\s*for\b', '\{%-?\s*endfor\b']
+      - name: macro_body
+        open: '(?=\{%-?\s*macro\s+\w+\s*\((?<args>[^)]*)\))'
+        balance: ['\{%-?\s*macro\b', '\{%-?\s*endmacro\b']
+      # The hash an include hands a template, from the include to the hash's closing brace;
+      # included is the template's file stem. One span per form: {% include 'x.html.twig' with
+      # {...} %}, include('x.html.twig', {...}) and {% embed 'x.html.twig' with {...} %}. A hash
+      # written as a key's value, key: {...}, is hash_value. Read by
+      # template/template_include_variable.yaml.
+      - name: include_with_hash
+        open: '\binclude\s+[''"](?:[^''"]*/)?(?<included>[^''"/:]+)\.html\.twig[''"](?:\s+ignore\s+missing)?\s+with\s*(?=\{)'
+        balance: ['\{', '\}']
+      - name: include_call_hash
+        open: '\binclude\(\s*[''"](?:[^''"]*/)?(?<included>[^''"/:]+)\.html\.twig[''"]\s*,\s*(?=\{)'
+        balance: ['\{', '\}']
+      - name: embed_with_hash
+        open: '\bembed\s+[''"](?:[^''"]*/)?(?<included>[^''"/:]+)\.html\.twig[''"](?:\s+ignore\s+missing)?\s+with\s*(?=\{)'
+        balance: ['\{', '\}']
+      - name: hash_value
+        open: '(?<mark>:)\s*(?=\{)'
+        balance: ['\{', '\}']
+      # From a {% set x = ... %} to the end of the template, where x is set; set is the name.
+      # The closing token never matches. Read by template/template_set_variable.yaml.
+      - name: set_scope
+        open: '(?=\{%-?\s*set\s+(?<set>[A-Za-z_]\w*)\s*=)'
+        balance: ['(?!x)x', '(?!y)y']
+    # PHP read as text, beside the tree reading the PHP packs give it, for the array form of an
+    # attachment. The sections are the comments and the strings. The spans kept here are attached,
+    # the array after '#attached' =>, library_list, the array after 'library' =>, hook_theme_body,
+    # subscribed_events, listener_list, own_listener_list, named_listener_list,
+    # qualified_listener_list, class_listener_list, named_function, foreach_body, assigned_constant,
+    # keyed_entry, constant_array, first_parameter_type, class_like_body, attributed_class,
+    # array_assigned, quoted_key_array, in_array_list, alter_list, any_function and switch_body.
+    drupal_php_text:
+      endings: [php, module, theme, inc, install, profile, api.php]
+      reader: text
+      path_values:
+        # The folder that holds the file, read by module/member_folder.yaml.
+        file_dir:
+          pattern: '^(?<dir>.+)/[^/]+$'
+          template: '{dir}'
+          root_name: drupal_extension
+        # The class a file under src holds, by Drupal's PSR-4 layout: <module>/src/A/B.php is
+        # Drupal\<module>\A\B, and <module>/tests/src/A/B.php is Drupal\Tests\<module>\A\B. The
+        # prefix is matched lazily, the empty prefix first, so the module is the folder right before
+        # src or tests/src, also when that folder is the first of the path, as <module>/tests/src.
+        # A tests/src folder at the start of the path names no module: no class.
+        psr4_class:
+          pattern: '^(?:.*?/)??(?!tests/src/)(?<module>[^/]+)/(?<tests>(?:tests/)?)src/(?<rest>.+)\.php$'
+          template: 'Drupal\{tests}{module}\{rest}'
+          root_name: drupal_extension
+          normalize:
+          - {replace: '^Drupal\\tests/', with: 'Drupal\Tests\'}
+          - {replace: '/', with: '\'}
+        # The file's path from the project folder, read by form/form_handler.yaml to join a
+        # handler to the imports of its own file.
+        file_path:
+          pattern: '^(?<path>.+)$'
+          template: '{path}'
+        # php.function:: for a file Drupal loads whose code is not a class under src: a module,
+        # install, inc, theme or profile file, or a .php file outside src and tests, such as
+        # <module>.post_update.php, but not an .api.php file, which documents and never runs. The
+        # event rules read a dispatch or a registration in its functions, and in the methods of a
+        # class it keeps (event/listener_registration.yaml, event/event_dispatch.yaml).
+        procedural_owner:
+          pattern: '^(?!(?:.*/)?(?:src|tests)/).*(?:\.(?:module|install|inc|theme|profile)|(?<!\.api)\.php)$'
+          template: 'php.function::'
+        # The namespace of that class, with a backslash after it: Drupal\<module>\A\ for
+        # <module>/src/A/B.php.
+        psr4_namespace:
+          pattern: '^(?:.*?/)??(?!tests/src/)(?<module>[^/]+)/(?<tests>(?:tests/)?)src/(?<rest>(?:[^/]+/)*)[^/]+\.php$'
+          template: 'Drupal\{tests}{module}\{rest}'
+          root_name: drupal_extension
+          normalize:
+          - {replace: '^Drupal\\tests/', with: 'Drupal\Tests\'}
+          - {replace: '/', with: '\'}
+      sections:
+      - name: heredoc
+        open: '<<<[ \t]*["'']?(?<label>[A-Za-z_][A-Za-z0-9_]*)'
+        close: '\n[ \t]*{label}\b'
+      - name: block_comment
+        open: '/\*'
+        close: '\*/'
+      - name: line_comment
+        open: '//'
+        close: '\n'
+      - name: hash_comment
+        open: '#[^\[\n]'
+        close: '\n'
+      - name: string
+        open: ''''
+        close: '(?:[^''\\]|\\(?s:.))*'''
+      - name: string
+        open: '"'
+        close: '(?:[^"\\]|\\(?s:.))*"'
+      spans:
+      - name: attached
+        open: '[\[,(\s][''"](?<mark>#attached)[''"]\s*=>\s*(?=\[)'
+        balance: ['[', ']']
+      - name: library_list
+        open: '[\[,(\s][''"](?<mark>library)[''"]\s*=>\s*(?=\[)'
+        balance: ['[', ']']
+      # The same two arrays assigned at any depth of a render array: $build['#attached'] = [...]
+      # opens attached, and $build['#attached']['library'] = [...] opens both.
+      - name: attached
+        open: '\[\s*[''"](?<mark>#attached)[''"]\s*\]\s*\+?=\s*(?=\[)'
+        balance: ['[', ']']
+      - name: attached
+        open: '\[\s*[''"](?<mark>#attached)[''"]\s*\]\s*\[\s*[''"]library[''"]\s*\]\s*\+?=\s*(?=\[)'
+        balance: ['[', ']']
+      - name: library_list
+        open: '\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"](?<mark>library)[''"]\s*\]\s*\+?=\s*(?=\[)'
+        balance: ['[', ']']
+      # The same arrays written array(...).
+      - name: attached
+        open: '[\[,(\s][''"](?<mark>#attached)[''"]\s*=>\s*array\s*(?=\()'
+        balance: ['(', ')']
+      - name: library_list
+        open: '[\[,(\s][''"](?<mark>library)[''"]\s*=>\s*array\s*(?=\()'
+        balance: ['(', ')']
+      - name: attached
+        open: '\[\s*[''"](?<mark>#attached)[''"]\s*\]\s*\+?=\s*array\s*(?=\()'
+        balance: ['(', ')']
+      - name: attached
+        open: '\[\s*[''"](?<mark>#attached)[''"]\s*\]\s*\[\s*[''"]library[''"]\s*\]\s*\+?=\s*array\s*(?=\()'
+        balance: ['(', ')']
+      - name: library_list
+        open: '\[\s*[''"]#attached[''"]\s*\]\s*\[\s*[''"](?<mark>library)[''"]\s*\]\s*\+?=\s*array\s*(?=\()'
+        balance: ['(', ')']
+      # The body of a function named theme or ending in _theme, which is where hook_theme returns
+      # its entries.
+      - name: hook_theme_body
+        open: '\b(?<mark>function)\s+(?:\w+_)?theme\s*\([^)]*\)[^{;]*(?=\{)'
+        balance: ['{', '}']
+      # The body of getSubscribedEvents, where a subscriber keys its events.
+      - name: subscribed_events
+        open: '\b(?<mark>function)\s+getSubscribedEvents\s*\(\s*\)[^{;]*'
+        balance: ['{', '}']
+      # A key whose value is a list of listeners, X::NAME => [['a', 10], ['b']] or
+      # $events[X::NAME] = [[...], ...]: key is X::NAME, class X and constant NAME. The second span
+      # is the same key written self::NAME or static::NAME. Read by event/event_subscriber.yaml.
+      - name: listener_list
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<!\\)\b(?<key>(?<class>[A-Z]\w*|parent)::(?<constant>[A-Z][A-Z0-9_]*))\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
+      - name: own_listener_list
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<sw>self|static)::(?<constant>[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
+      # The same list under a key written as a name, 'kernel.request' => [[...]], name the name, or
+      # with its namespace, \A\B::NAME => [[...]], key the key. Read by event/listener_registration.yaml.
+      - name: named_listener_list
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*[''"](?<name>[^''"$\\\s{}]+)[''"]\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
+      - name: qualified_listener_list
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?<key>\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*::[A-Z][A-Z0-9_]*|parent::[A-Z][A-Z0-9_]*)\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
+      # The same list under a key written as a class, X::class => [[...]], key the class as written.
+      # Read by event/listener_registration.yaml.
+      - name: class_listener_list
+        open: '[\[,(](?:\s|//[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))*(?<![\w\\])(?<key>\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*)::class\s*(?:=>|\]\s*=)\s*(?=\[\s*\[)'
+        balance: ['[', ']']
+      # The body of a named function or method; function is its name, params its parameter list
+      # up to the first closing parenthesis. A closure has no name and opens none, so a match
+      # inside one reads the function around it.
+      - name: named_function
+        open: '\bfunction\s+(?<function>\w+)\s*\((?<params>[^)]*)\)[^{;]*'
+        balance: ['{', '}']
+      # The body of a foreach loop; list is what it loops over, as written, and name the variable
+      # each value is bound to. Read by theme_hook/theme_hook_loop.yaml.
+      - name: foreach_body
+        open: '\bforeach\s*\(\s*(?<list>[^;{}]*?)\s+as\s+(?:\$\w+\s*=>\s*)?\$(?<name>\w+)\s*\)\s*(?=\{)'
+        balance: ['{', '}']
+      # A variable assigned a class constant, $names = X::NAMES;, from after the semicolon to the
+      # brace that closes the next block, so a loop written right after it is inside; var is the
+      # variable, constant the constant as written. Read by theme_hook/theme_hook_loop.yaml.
+      - name: assigned_constant
+        open: '\$(?<var>\w+)\s*=\s*(?<constant>[A-Za-z_]\w*::[A-Z][A-Z0-9_]*)\s*;'
+        balance: ['{', '}']
+      # An array assigned to a variable's key, $items[$name] = [...]; entry is the key variable.
+      - name: keyed_entry
+        open: '\$\w+\s*\[\s*\$(?<entry>\w+)\s*\]\s*=\s*(?=\[)'
+        balance: ['[', ']']
+      # The array a class constant is declared with, const NAMES = [...]; constant is its name.
+      # Read by theme_hook/theme_hook_loop.yaml.
+      - name: constant_array
+        open: '\bconst\s+(?<constant>[A-Z][A-Z0-9_]*)\s*=\s*(?=\[)'
+        balance: ['[', ']']
+      # The same body, or the body of an anonymous class; scope is function <name> or new class, so
+      # the spans around a match, outermost first, show whether an anonymous class stands between
+      # it and the named function or method that creates the class. Read by the event rules, which
+      # own a call in an anonymous class by that function or method. The parentheses after the name
+      # or after new class are read balanced, four levels deep, past quoted text on one line, so a
+      # closure or an array among an anonymous class's arguments, with its own braces and
+      # semicolons, is not taken for its body. An anonymous class whose arguments are not read so
+      # opens no span, never one at a brace among its arguments: its methods are then named
+      # functions inside the one that creates the class, which the event rules read as methods of
+      # an anonymous class.
+      - name: function_scope
+        open: '\b(?<scope>function\s+\w+(?=\s*\([^)]*\)))(?:\s*\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"])*\))*\))*\))*\))?[^{;]*'
+        balance: ['{', '}']
+      - name: function_scope
+        open: '\b(?<scope>new\s+class\b)(?:\s*\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"]|\((?:''(?:[^''\\\n]|\\.)*''|"(?:[^"\\\n]|\\.)*\"|[^()''"])*\))*\))*\))*\)|(?!\s*\())[^{;()]*'
+        balance: ['{', '}']
+      # The type of a named function's or method's first parameter, from after its opening
+      # parenthesis to the $ of the parameter, the comma or the closing parenthesis; method is the
+      # name. Read by event/listener_method.yaml, one class of a union at a time.
+      - name: first_parameter_type
+        open: '\bfunction\s+(?<method>\w+)\s*\(\s*(?:#\[[^\]]*\]\s*)*(?:(?:public|protected|private|readonly)\s+)*'
+        balance: ['(?!x)x', '[$,)]']
+      # The body of a named class, trait, interface or enum; class is its name, kind which of the
+      # four it is, and parent the class it extends, as written. Read by the event rules, which name a method of a class kept in a
+      # module file by its class, and read parent::class as that parent.
+      - name: class_like_body
+        open: '(?<![\w$>:])(?<kind>class|trait|interface|enum)\s+(?!extends\b|implements\b)(?<class>\w+)(?:\s+extends\s+(?<parent>\\?[A-Za-z_][\w\\]*))?[^{;]*'
+        balance: ['{', '}']
+      # An attribute written on a named class, from its #[ to its ], with the attributes after it;
+      # parent is the class the class extends, as written. Read by event/event_listener.yaml, which
+      # reads parent:: in an attribute on the class as that parent.
+      - name: attributed_class
+        open: '(?=#\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:#\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*)*(?:(?:final|abstract|readonly)\s+)*class\s+\w+\s+extends\s+(?<parent>\\?[A-Za-z_][\w\\]*))'
+        balance: ['[', ']']
+      # An array literal assigned to a variable, $list = [...]; list is the variable's name.
+      - name: array_assigned
+        open: '\$(?<list>\w+)\s*=\s*(?=\[)'
+        balance: ['[', ']']
+      # An array written as the value of a quoted key, 'name' => [...]; key is the key. Read by
+      # theme_hook/theme_variable.yaml, which joins the keys around a match into a path.
+      - name: quoted_key_array
+        open: '[\[,(\s][''"](?<key>[A-Za-z_][A-Za-z0-9_ ]*)[''"]\s*=>\s*(?=\[)'
+        balance: ['[', ']']
+      # A list of callables written whole under a key whose value is one, '#submit' => [...] or
+      # '#process' => [...] in an array or ['#submit'] = [...] assigned; mark is the key. Read by
+      # form/form_handler.yaml.
+      - name: handler_list
+        open: '[\[,(\s][''"](?<mark>#(?:validate|submit|element_validate|process|after_build|pre_render|post_render|entity_builders|date_date_callbacks|date_time_callbacks|file_value_callbacks))[''"]\s*(?:=>|\]\s*=)\s*(?=\[)'
+        balance: ['[', ']']
+      # The same list written array(...).
+      - name: handler_list
+        open: '[\[,(\s][''"](?<mark>#(?:validate|submit|element_validate|process|after_build|pre_render|post_render|entity_builders|date_date_callbacks|date_time_callbacks|file_value_callbacks))[''"]\s*(?:=>|\]\s*=)\s*array\s*(?=\()'
+        balance: ['(', ')']
+      # A use statement at the start of a line, to its semicolon, and the braces of a grouped use
+      # inside one; prefix is the group's prefix. Read by form/form_handler.yaml for an import under
+      # another name. The opening token of use_statement never matches, so its semicolon ends it.
+      - name: use_statement
+        open: '(?m)^(?<mark>use)\s'
+        balance: ['(?!x)x', ';']
+      - name: use_group
+        open: '(?m)^use\s+\\?(?<prefix>[A-Za-z_][\w\\]*\\)(?=\{)'
+        balance: ['{', '}']
+      # The array literal in_array tests a variable against, in_array($v, [...]); var is the
+      # variable's name.
+      - name: in_array_list
+        open: '(?<![!\w])in_array\(\s*\$(?<var>\w+)\s*,\s*(?=\[)'
+        balance: ['[', ']']
+      # The list of hook types an alter call is given, ->alter(['a', 'b'], ...), and the same list
+      # after alterForTheme's or alterDeprecated's first argument, or given to drupal_alter; mark is
+      # the call. Read by hook/hook_known.yaml.
+      - name: alter_list
+        open: '(?<mark>->\s*alter\(|->\s*(?:alterForTheme|alterDeprecated)\(\s*(?:''[^'']*''|"[^"]*"|[^,()''"]+),|\bdrupal_alter\()\s*(?=\[)'
+        balance: ['[', ']']
+      # The same list when the object is a module handler or a theme manager by its name, as
+      # hook/hook_invoke.yaml reads it; mark is the call. Read by hook/hook_alter_list.yaml.
+      - name: runner_alter_list
+        open: '(?:[mM]oduleHandler|module_handler|[tT]hemeManager|theme_manager|\bDrupal::theme)(?:\(\))?\s*->\s*(?<mark>alter)\(\s*(?=\[)'
+        balance: ['[', ']']
+      - name: runner_alter_list
+        open: '(?:->\s*get|\bDrupal::service)\(\s*[''"](?:module_handler|theme\.manager)[''"]\s*\)\s*->\s*(?<mark>alter)\(\s*(?=\[)'
+        balance: ['[', ']']
+      - name: runner_alter_list
+        open: '(?:[mM]oduleHandler|module_handler|[tT]hemeManager|theme_manager|\bDrupal::theme)(?:\(\))?\s*->\s*(?<mark>alterDeprecated|alterForTheme)\(\s*(?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))+,\s*(?=\[)'
+        balance: ['[', ']']
+      # The body of a named function, a method or a closure; function is function <name>, or
+      # function alone for a closure, so a match inside a closure reads the closure.
+      - name: any_function
+        open: '\b(?<function>function(?:\s+\w+)?)\s*\([^)]*\)[^{;]*'
+        balance: ['{', '}']
+      # The body of a switch statement; subject is what it switches on. Read by
+      # menu_link/menu_name_compared.yaml.
+      - name: switch_body
+        open: '\bswitch\s*\((?<subject>[^{;]*)\)\s*'
+        balance: ['{', '}']
+      # The namespace a file declares, ns, to the next namespace statement or the end of its braces.
+      # Read by the event rules for a class kept in a file outside src.
+      - name: php_namespace
+        open: '(?m)^namespace\s+(?<ns>[A-Za-z_][\w\\]*)\s*;'
+        balance: ['(?!x)x', '(?m)^namespace\b']
+      - name: php_namespace
+        open: '(?m)^namespace\s+(?<ns>[A-Za-z_][\w\\]*)\s*(?=\{)'
+        balance: ['{', '}']
+      # An array given as a named argument, as handlers: [...] or links: [...] in an entity type
+      # attribute; argument is the argument's name. Read by entity_type/entity_type_entry_attribute.yaml.
+      - name: named_argument_array
+        open: '(?<![\w$>\\:])(?<argument>[a-z_]+)\s*:\s*(?=\[)'
+        balance: ['[', ']']
+      # A statement that calls a method on a variable or on one of its items; rk is the object as
+      # written, $x, $x['key'] or $x[$key], to the statement's semicolon. Read by
+      # entity_type/entity_type_alter.yaml.
+      - name: entity_type_receiver
+        open: '(?<![\w$>:\\])(?<rk>\$(?!this\b)\w+(?:\[\s*(?:[''"][a-z][a-z0-9_]*[''"]|\$\w+)\s*\])?)(?=\s*->)'
+        balance: ['(?!x)x', ';']
+      # A local variable assigned an item of an array by a quoted key, $type = $types['node'];, to
+      # the first closing brace after it; la is the assignment as written. Read by
+      # entity_type/entity_type_alter.yaml.
+      - name: entity_type_local
+        open: '(?<![\w$>:\\])(?<la>\$\w+\s*=\s*\$\w+\[\s*[''"][a-z][a-z0-9_]*[''"]\s*\])\s*;'
+        balance: ['(?!x)x', '\}']
+    # Configuration and the other YAML files read as text, beside the data reading yaml_basic
+    # gives them.
+    drupal_yml_text:
+      endings: [yml]
+      reader: text
+      path_values:
+        # The module a <module>.services.yml file names. Absent for drush.services.yml, which
+        # names no module.
+        services_owner:
+          pattern: '^(?:.*/)?(?!drush\.)(?<module>[^/.]+)\.services\.yml$'
+          template: '{module}'
+        # The folder that holds a drush.services.yml, read as its module's name.
+        folder_module:
+          pattern: '^(?:.*/)?(?<module>[^/]+)/drush\.services\.yml$'
+          template: '{module}'
+          root_name: drupal_extension
+      spans:
+      # The services block of a services file, from services: to the next top-level key, so the
+      # keys of a parameters block are outside it. The opener never matches; only the end counts.
+      - name: services_block
+        open: '(?m)^(?<mark>services):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^[A-Za-z_]']
+      # The parameters block of a services file, to the next top-level key; read by
+      # event/event_listener.yaml for a tag's event written as a parameter.
+      - name: parameters_block
+        open: '(?m)^(?<mark>parameters):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^[A-Za-z_]']
+      # One service of a services block, from its key to the next line indented two spaces or
+      # less that is no comment; service is the key. Read by event/event_listener_tag.yaml.
+      - name: service_entry
+        open: '(?m)^  (?<service>[A-Za-z0-9\\][\w.\\-]*):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^ {0,2}[^\s#]']
+      # honeypot.settings' form_settings block, to the next top-level key; read by
+      # form/form_protection.yaml.
+      - name: honeypot_form_settings
+        open: '(?m)^(?<mark>form_settings):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^[A-Za-z_]']
+      # The rest of a file after protect_all_forms: false, to its end: neither token ever matches.
+      - name: honeypot_selected_forms
+        open: '(?m)^(?<mark>protect_all_forms):[ \t]*false[ \t]*$'
+        balance: ['(?!x)x', '(?!y)y']
+      # A configuration file's top-level dependencies block, its enforced block, and each list
+      # inside that, list the list's name, as Drupal exports them; read by
+      # config/config_enforced.yaml.
+      - name: dependencies_block
+        open: '(?m)^(?<mark>dependencies):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^[^\s#]']
+      - name: enforced_block
+        open: '(?m)^  (?<mark>enforced):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^ {0,2}[^\s#]']
+      - name: enforced_list
+        open: '(?m)^    (?<list>module|config|theme):[ \t]*$'
+        balance: ['(?!x)x', '(?m)^ {0,4}[^\s#-]']
+
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.0"
+  language: php
+  grammar_version: "0.24.1"
+  # A call argument written MyType::ENTITY_TYPE, self::X or static::X stands for the text that
+  # constant is declared with, when a mapped file declares it as one text literal. A constant read
+  # as parent::X, of core, of contrib, or declared by an expression gives the row "argument N is a
+  # class constant with no declared text".
+  constant_access:
+    node: class_constant_access_expression
+    scope: [name, qualified_name, relative_scope]
+    name: [name]
+    enclosing: [self, static]
+  constant_declaration:
+    node: const_element
+    name: [name]
+    value: [string, encapsed_string]
+
+# Name tables that call/call.yaml looks a written name up in.
+tables:
+  # Each static method of core's Drupal class, as of Drupal 11.4, that gets one fixed service from
+  # the container, and that service. cache() names its service by its argument and is read by
+  # drupal_cache_call and drupal_cache_bin_call.
+  shortcut_services:
+    accessManager: access_manager
+    classResolver: class_resolver
+    config: config.factory
+    configFactory: config.factory
+    csrfToken: csrf_token
+    currentUser: current_user
+    database: database
+    destination: redirect.destination
+    entityDefinitionUpdateManager: entity.definition_update_manager
+    entityTypeManager: entity_type.manager
+    flood: flood
+    formBuilder: form_builder
+    hasRequest: request_stack
+    httpClient: http_client
+    isConfigSyncing: config.installer
+    keyValue: keyvalue
+    keyValueExpirable: keyvalue.expirable
+    languageManager: language_manager
+    linkGenerator: link_generator
+    lock: lock
+    logger: logger.factory
+    menuTree: menu.link_tree
+    messenger: messenger
+    moduleHandler: module_handler
+    pathValidator: path.validator
+    queue: queue
+    request: request_stack
+    requestStack: request_stack
+    routeMatch: current_route_match
+    state: state
+    theme: theme.manager
+    time: datetime.time
+    token: token
+    transliteration: transliteration
+    translation: string_translation
+    typedDataManager: typed_data_manager
+    urlGenerator: url_generator
+  # Each event name a constant of an *Events class of Drupal 11.4 core holds, and of Symfony 7.4's
+  # KernelEvents and ConsoleEvents, and that constant, so a listener tag's event: kernel.request
+  # meets the event a subscriber names KernelEvents::REQUEST, which keeps its constant's name
+  # because core is outside the map (event/event_listener_tag.yaml).
+  core_event_names:
+    account.set: Drupal\Core\Session\AccountEvents::SET_USER
+    block_content.get_dependency: Drupal\block_content\BlockContentEvents::BLOCK_CONTENT_GET_DEPENDENCY
+    config.collection_info: Drupal\Core\Config\ConfigCollectionEvents::COLLECTION_INFO
+    config.delete: Drupal\Core\Config\ConfigEvents::DELETE
+    config.delete.collection: Drupal\Core\Config\ConfigCollectionEvents::DELETE_IN_COLLECTION
+    config.importer.import: Drupal\Core\Config\ConfigEvents::IMPORT
+    config.importer.missing_content: Drupal\Core\Config\ConfigEvents::IMPORT_MISSING_CONTENT
+    config.importer.validate: Drupal\Core\Config\ConfigEvents::IMPORT_VALIDATE
+    config.rename: Drupal\Core\Config\ConfigEvents::RENAME
+    config.rename.collection: Drupal\Core\Config\ConfigCollectionEvents::RENAME_IN_COLLECTION
+    config.save: Drupal\Core\Config\ConfigEvents::SAVE
+    config.save.collection: Drupal\Core\Config\ConfigCollectionEvents::SAVE_IN_COLLECTION
+    config.transform.export: Drupal\Core\Config\ConfigEvents::STORAGE_TRANSFORM_EXPORT
+    config.transform.import: Drupal\Core\Config\ConfigEvents::STORAGE_TRANSFORM_IMPORT
+    config_translation.populate_mapper: Drupal\config_translation\Event\ConfigTranslationEvents::POPULATE_MAPPER
+    console.command: Symfony\Component\Console\ConsoleEvents::COMMAND
+    console.error: Symfony\Component\Console\ConsoleEvents::ERROR
+    console.signal: Symfony\Component\Console\ConsoleEvents::SIGNAL
+    console.terminate: Symfony\Component\Console\ConsoleEvents::TERMINATE
+    entity_type.definition.create: Drupal\Core\Entity\EntityTypeEvents::CREATE
+    entity_type.definition.delete: Drupal\Core\Entity\EntityTypeEvents::DELETE
+    entity_type.definition.update: Drupal\Core\Entity\EntityTypeEvents::UPDATE
+    field_storage.definition.create: Drupal\Core\Field\FieldStorageDefinitionEvents::CREATE
+    field_storage.definition.delete: Drupal\Core\Field\FieldStorageDefinitionEvents::DELETE
+    field_storage.definition.update: Drupal\Core\Field\FieldStorageDefinitionEvents::UPDATE
+    jsonapi.resource_type.build: Drupal\jsonapi\ResourceType\ResourceTypeBuildEvents::BUILD
+    kernel.controller: Symfony\Component\HttpKernel\KernelEvents::CONTROLLER
+    kernel.controller_arguments: Symfony\Component\HttpKernel\KernelEvents::CONTROLLER_ARGUMENTS
+    kernel.exception: Symfony\Component\HttpKernel\KernelEvents::EXCEPTION
+    kernel.finish_request: Symfony\Component\HttpKernel\KernelEvents::FINISH_REQUEST
+    kernel.request: Symfony\Component\HttpKernel\KernelEvents::REQUEST
+    kernel.response: Symfony\Component\HttpKernel\KernelEvents::RESPONSE
+    kernel.terminate: Symfony\Component\HttpKernel\KernelEvents::TERMINATE
+    kernel.view: Symfony\Component\HttpKernel\KernelEvents::VIEW
+    language.delete_override: Drupal\language\Config\LanguageConfigOverrideEvents::DELETE_OVERRIDE
+    language.save_override: Drupal\language\Config\LanguageConfigOverrideEvents::SAVE_OVERRIDE
+    locale.save_translation: Drupal\locale\LocaleEvents::SAVE_TRANSLATION
+    migrate.idmap_message: Drupal\migrate\Event\MigrateEvents::IDMAP_MESSAGE
+    migrate.map_delete: Drupal\migrate\Event\MigrateEvents::MAP_DELETE
+    migrate.map_save: Drupal\migrate\Event\MigrateEvents::MAP_SAVE
+    migrate.post_import: Drupal\migrate\Event\MigrateEvents::POST_IMPORT
+    migrate.post_rollback: Drupal\migrate\Event\MigrateEvents::POST_ROLLBACK
+    migrate.post_row_delete: Drupal\migrate\Event\MigrateEvents::POST_ROW_DELETE
+    migrate.post_row_save: Drupal\migrate\Event\MigrateEvents::POST_ROW_SAVE
+    migrate.pre_import: Drupal\migrate\Event\MigrateEvents::PRE_IMPORT
+    migrate.pre_rollback: Drupal\migrate\Event\MigrateEvents::PRE_ROLLBACK
+    migrate.pre_row_delete: Drupal\migrate\Event\MigrateEvents::PRE_ROW_DELETE
+    migrate.pre_row_save: Drupal\migrate\Event\MigrateEvents::PRE_ROW_SAVE
+    prepare_layout: Drupal\layout_builder\LayoutBuilderEvents::PREPARE_LAYOUT
+    render.page_display_variant.select: Drupal\Core\Render\RenderEvents::SELECT_PAGE_DISPLAY_VARIANT
+    routing.route_alter: Drupal\Core\Routing\RoutingEvents::ALTER
+    routing.route_dynamic: Drupal\Core\Routing\RoutingEvents::DYNAMIC
+    routing.route_finished: Drupal\Core\Routing\RoutingEvents::FINISHED
+    routing.static: Drupal\Core\Routing\RoutingEvents::STATIC
+    section_component.build.render_array: Drupal\layout_builder\LayoutBuilderEvents::SECTION_COMPONENT_BUILD_RENDER_ARRAY
+    site.maintenance_mode_request: Drupal\Core\Site\MaintenanceModeEvents::MAINTENANCE_MODE_REQUEST
+    user.flood_blocked_ip: Drupal\user\Event\UserEvents::FLOOD_BLOCKED_IP
+    user.flood_blocked_user: Drupal\user\Event\UserEvents::FLOOD_BLOCKED_USER
+  # Each entity class of Drupal 11.4 core by its fully qualified name, and its entity type id. A
+  # contributed module's rutter adds its own classes under add_table_rows. The contact module's
+  # Message, for contact_message, is not listed.
+  entity_classes:
+    Drupal\Core\Datetime\Entity\DateFormat: date_format
+    Drupal\Core\Entity\Entity\EntityFormDisplay: entity_form_display
+    Drupal\Core\Entity\Entity\EntityFormMode: entity_form_mode
+    Drupal\Core\Entity\Entity\EntityViewDisplay: entity_view_display
+    Drupal\Core\Entity\Entity\EntityViewMode: entity_view_mode
+    Drupal\Core\Field\Entity\BaseFieldOverride: base_field_override
+    Drupal\block\Entity\Block: block
+    Drupal\block_content\Entity\BlockContent: block_content
+    Drupal\block_content\Entity\BlockContentType: block_content_type
+    Drupal\comment\Entity\Comment: comment
+    Drupal\comment\Entity\CommentType: comment_type
+    Drupal\contact\Entity\ContactForm: contact_form
+    Drupal\content_moderation\Entity\ContentModerationState: content_moderation_state
+    Drupal\editor\Entity\Editor: editor
+    Drupal\field\Entity\FieldConfig: field_config
+    Drupal\field\Entity\FieldStorageConfig: field_storage_config
+    Drupal\file\Entity\File: file
+    Drupal\filter\Entity\FilterFormat: filter_format
+    Drupal\image\Entity\ImageStyle: image_style
+    Drupal\language\Entity\ConfigurableLanguage: configurable_language
+    Drupal\language\Entity\ContentLanguageSettings: language_content_settings
+    Drupal\media\Entity\Media: media
+    Drupal\media\Entity\MediaType: media_type
+    Drupal\menu_link_content\Entity\MenuLinkContent: menu_link_content
+    Drupal\node\Entity\Node: node
+    Drupal\node\Entity\NodeType: node_type
+    Drupal\path_alias\Entity\PathAlias: path_alias
+    Drupal\responsive_image\Entity\ResponsiveImageStyle: responsive_image_style
+    Drupal\rest\Entity\RestResourceConfig: rest_resource_config
+    Drupal\search\Entity\SearchPage: search_page
+    Drupal\shortcut\Entity\Shortcut: shortcut
+    Drupal\shortcut\Entity\ShortcutSet: shortcut_set
+    Drupal\system\Entity\Action: action
+    Drupal\system\Entity\Menu: menu
+    Drupal\taxonomy\Entity\Term: taxonomy_term
+    Drupal\taxonomy\Entity\Vocabulary: taxonomy_vocabulary
+    Drupal\user\Entity\Role: user_role
+    Drupal\user\Entity\User: user
+    Drupal\views\Entity\View: view
+    Drupal\workflows\Entity\Workflow: workflow
+    Drupal\workspaces\Entity\Workspace: workspace
+  # The variable a Drupal 11.4 core entity template is given its entity in, and that entity type,
+  # written entity.<type>, read by field/field_access.yaml for v.field_x. A contributed module's
+  # rutter adds its own under add_table_rows.
+  twig_entity_variables:
+    comment: entity.comment
+    media: entity.media
+    node: entity.node
+    term: entity.taxonomy_term
+    user: entity.user
+  # The theme hook of each Drupal 11.4 core entity template, as a suggestion's file name starts
+  # with it, and its entity type, written entity.<type>, read by field/field_access.yaml for
+  # content.field_x.
+  template_entity_hooks:
+    comment: entity.comment
+    media: entity.media
+    node: entity.node
+    taxonomy_term: entity.taxonomy_term
+    user: entity.user
+
+  # Every hook Drupal core documents, read by hook/hook_known.yaml: each function hook_NAME in
+  # core's *.api.php files outside tests folders, as NAME, from cores 10.5.8, 11.1.2 and 11.4.10
+  # taken together, so a hook 11 removed, such as file_validate, stays. A placeholder form, such as
+  # form_FORM_ID_alter, is listed as core writes it; hook_known.yaml's pattern repeats those forms
+  # with each placeholder as any word. To regenerate, run in a core checkout:
+  #   find . -name '*.api.php' -not -path '*/tests/*' | xargs grep -hoE '^function hook_\w+\(' \
+  #     | sed -E 's/^function hook_//; s/\($//' | sort -u
+  # The first rows after ENTITY_TYPE_access are hooks core 11.4.11 runs and documents in no
+  # *.api.php file: alterInfo('x') of a plugin manager, a quoted alter('x') or invoke($m, 'x'),
+  # and EntityDisplayRepository's alter('entity_' . $display_type . '_info'), each x as NAME_alter.
+  # MigratePluginManager's alterInfo('migrate_' . $type . '_info') and ViewsPluginManager's
+  # alterInfo('views_plugins_' . $type) give a row for each type core's services pass them, where
+  # no *.api.php file names that hook: views.api.php documents views_plugins_display_extenders_alter,
+  # but core runs views_plugins_display_extender_alter.
+  # A contributed module's rutter adds its module's hooks under add_table_rows.
+  hook_names: {ENTITY_TYPE_access: ENTITY_TYPE_access,
+    action_info_alter: action_info_alter, breakpoints_alter: breakpoints_alter,
+    entity_form_mode_info_alter: entity_form_mode_info_alter,
+    field_config_create: field_config_create, icon_extractor_info_alter: icon_extractor_info_alter,
+    image_toolkit_operation_alter: image_toolkit_operation_alter,
+    layout_builder_section_storage_alter: layout_builder_section_storage_alter,
+    migrate_destination_info_alter: migrate_destination_info_alter,
+    migrate_id_map_info_alter: migrate_id_map_info_alter,
+    migrate_process_info_alter: migrate_process_info_alter,
+    migrate_source_info_alter: migrate_source_info_alter,
+    top_bar_item_alter: top_bar_item_alter, views_handler_options_alter: views_handler_options_alter,
+    views_plugins_display_extender_alter: views_plugins_display_extender_alter,
+    workflow_type_info_alter: workflow_type_info_alter,
+    ENTITY_TYPE_build_defaults_alter: ENTITY_TYPE_build_defaults_alter,
+    ENTITY_TYPE_create: ENTITY_TYPE_create, ENTITY_TYPE_create_access: ENTITY_TYPE_create_access,
+    ENTITY_TYPE_delete: ENTITY_TYPE_delete, ENTITY_TYPE_duplicate: ENTITY_TYPE_duplicate,
+    ENTITY_TYPE_field_values_init: ENTITY_TYPE_field_values_init,
+    ENTITY_TYPE_form_mode_alter: ENTITY_TYPE_form_mode_alter,
+    ENTITY_TYPE_insert: ENTITY_TYPE_insert, ENTITY_TYPE_load: ENTITY_TYPE_load,
+    ENTITY_TYPE_predelete: ENTITY_TYPE_predelete,
+    ENTITY_TYPE_prepare_form: ENTITY_TYPE_prepare_form, ENTITY_TYPE_presave: ENTITY_TYPE_presave,
+    ENTITY_TYPE_revision_create: ENTITY_TYPE_revision_create,
+    ENTITY_TYPE_revision_delete: ENTITY_TYPE_revision_delete,
+    ENTITY_TYPE_storage_load: ENTITY_TYPE_storage_load,
+    ENTITY_TYPE_translation_create: ENTITY_TYPE_translation_create,
+    ENTITY_TYPE_translation_delete: ENTITY_TYPE_translation_delete,
+    ENTITY_TYPE_translation_insert: ENTITY_TYPE_translation_insert,
+    ENTITY_TYPE_update: ENTITY_TYPE_update, ENTITY_TYPE_view: ENTITY_TYPE_view,
+    ENTITY_TYPE_view_alter: ENTITY_TYPE_view_alter,
+    ENTITY_TYPE_view_mode_alter: ENTITY_TYPE_view_mode_alter, ajax_render_alter: ajax_render_alter,
+    archiver_info_alter: archiver_info_alter, batch_alter: batch_alter, block_access: block_access,
+    block_alter: block_alter, block_build_BASE_BLOCK_ID_alter: block_build_BASE_BLOCK_ID_alter,
+    block_build_alter: block_build_alter,
+    block_view_BASE_BLOCK_ID_alter: block_view_BASE_BLOCK_ID_alter,
+    block_view_alter: block_view_alter, cache_flush: cache_flush,
+    ckeditor4to5upgrade_plugin_info_alter: ckeditor4to5upgrade_plugin_info_alter,
+    ckeditor5_plugin_info_alter: ckeditor5_plugin_info_alter,
+    comment_links_alter: comment_links_alter, condition_info_alter: condition_info_alter,
+    config_action_alter: config_action_alter, config_import_steps_alter: config_import_steps_alter,
+    config_schema_info_alter: config_schema_info_alter,
+    config_translation_info: config_translation_info,
+    config_translation_info_alter: config_translation_info_alter,
+    contextual_links_alter: contextual_links_alter,
+    contextual_links_plugins_alter: contextual_links_plugins_alter,
+    contextual_links_view_alter: contextual_links_view_alter, countries_alter: countries_alter,
+    cron: cron, css_alter: css_alter, data_type_info_alter: data_type_info_alter,
+    default_admin_content_form_ignore_form_ids: default_admin_content_form_ignore_form_ids,
+    default_admin_content_form_routes: default_admin_content_form_routes,
+    default_admin_content_form_routes_alter: default_admin_content_form_routes_alter,
+    display_variant_plugin_alter: display_variant_plugin_alter,
+    editor_info_alter: editor_info_alter, editor_js_settings_alter: editor_js_settings_alter,
+    editor_xss_filter_alter: editor_xss_filter_alter, element_info_alter: element_info_alter,
+    element_plugin_alter: element_plugin_alter, entity_access: entity_access,
+    entity_base_field_info: entity_base_field_info,
+    entity_base_field_info_alter: entity_base_field_info_alter,
+    entity_build_defaults_alter: entity_build_defaults_alter,
+    entity_bundle_create: entity_bundle_create, entity_bundle_delete: entity_bundle_delete,
+    entity_bundle_field_info: entity_bundle_field_info,
+    entity_bundle_field_info_alter: entity_bundle_field_info_alter,
+    entity_bundle_info: entity_bundle_info, entity_bundle_info_alter: entity_bundle_info_alter,
+    entity_create: entity_create, entity_create_access: entity_create_access,
+    entity_delete: entity_delete, entity_display_build_alter: entity_display_build_alter,
+    entity_duplicate: entity_duplicate, entity_extra_field_info: entity_extra_field_info,
+    entity_extra_field_info_alter: entity_extra_field_info_alter,
+    entity_field_access: entity_field_access, entity_field_access_alter: entity_field_access_alter,
+    entity_field_storage_info: entity_field_storage_info,
+    entity_field_storage_info_alter: entity_field_storage_info_alter,
+    entity_field_values_init: entity_field_values_init,
+    entity_form_display_alter: entity_form_display_alter,
+    entity_form_mode_alter: entity_form_mode_alter, entity_insert: entity_insert,
+    entity_load: entity_load, entity_operation: entity_operation,
+    entity_operation_alter: entity_operation_alter, entity_predelete: entity_predelete,
+    entity_preload: entity_preload, entity_prepare_form: entity_prepare_form,
+    entity_prepare_view: entity_prepare_view, entity_presave: entity_presave,
+    entity_query_ENTITY_TYPE_alter: entity_query_ENTITY_TYPE_alter,
+    entity_query_alter: entity_query_alter,
+    entity_query_tag__ENTITY_TYPE__TAG_alter: entity_query_tag__ENTITY_TYPE__TAG_alter,
+    entity_query_tag__TAG_alter: entity_query_tag__TAG_alter,
+    entity_reference_selection_alter: entity_reference_selection_alter,
+    entity_revision_create: entity_revision_create, entity_revision_delete: entity_revision_delete,
+    entity_storage_load: entity_storage_load, entity_translation_create: entity_translation_create,
+    entity_translation_delete: entity_translation_delete,
+    entity_translation_insert: entity_translation_insert, entity_type_alter: entity_type_alter,
+    entity_type_build: entity_type_build, entity_update: entity_update, entity_view: entity_view,
+    entity_view_alter: entity_view_alter, entity_view_display_alter: entity_view_display_alter,
+    entity_view_mode_alter: entity_view_mode_alter,
+    entity_view_mode_info_alter: entity_view_mode_info_alter, extension: extension,
+    field_formatter_info_alter: field_formatter_info_alter,
+    field_formatter_settings_summary_alter: field_formatter_settings_summary_alter,
+    field_formatter_third_party_settings_form: field_formatter_third_party_settings_form,
+    field_info_alter: field_info_alter,
+    field_info_entity_type_ui_definitions_alter: field_info_entity_type_ui_definitions_alter,
+    field_info_max_weight: field_info_max_weight, field_purge_field: field_purge_field,
+    field_purge_field_storage: field_purge_field_storage,
+    field_storage_config_update_forbid: field_storage_config_update_forbid,
+    field_type_category_info_alter: field_type_category_info_alter,
+    field_ui_preconfigured_options_alter: field_ui_preconfigured_options_alter,
+    field_views_data: field_views_data, field_views_data_alter: field_views_data_alter,
+    field_views_data_views_data_alter: field_views_data_views_data_alter,
+    field_widget_complete_WIDGET_TYPE_form_alter: field_widget_complete_WIDGET_TYPE_form_alter,
+    field_widget_complete_form_alter: field_widget_complete_form_alter,
+    field_widget_info_alter: field_widget_info_alter,
+    field_widget_settings_summary_alter: field_widget_settings_summary_alter,
+    field_widget_single_element_WIDGET_TYPE_form_alter: field_widget_single_element_WIDGET_TYPE_form_alter,
+    field_widget_single_element_form_alter: field_widget_single_element_form_alter,
+    field_widget_third_party_settings_form: field_widget_third_party_settings_form,
+    file_copy: file_copy, file_download: file_download,
+    file_mimetype_mapping_alter: file_mimetype_mapping_alter, file_move: file_move,
+    file_url_alter: file_url_alter, file_validate: file_validate,
+    filetransfer_info: filetransfer_info, filetransfer_info_alter: filetransfer_info_alter,
+    filter_format_disable: filter_format_disable, filter_info_alter: filter_info_alter,
+    filter_secure_image_alter: filter_secure_image_alter,
+    form_BASE_FORM_ID_alter: form_BASE_FORM_ID_alter, form_FORM_ID_alter: form_FORM_ID_alter,
+    form_alter: form_alter, form_system_theme_settings_alter: form_system_theme_settings_alter,
+    help: help, help_section_info_alter: help_section_info_alter,
+    help_topics_info_alter: help_topics_info_alter, hook_info: hook_info,
+    icon_pack_alter: icon_pack_alter, image_effect_info_alter: image_effect_info_alter,
+    image_style_flush: image_style_flush, install: install, install_tasks: install_tasks,
+    install_tasks_alter: install_tasks_alter, js_alter: js_alter,
+    js_settings_alter: js_settings_alter, js_settings_build: js_settings_build,
+    jsonapi_ENTITY_TYPE_filter_access: jsonapi_ENTITY_TYPE_filter_access,
+    jsonapi_entity_field_filter_access: jsonapi_entity_field_filter_access,
+    jsonapi_entity_filter_access: jsonapi_entity_filter_access,
+    language_fallback_candidates_OPERATION_alter: language_fallback_candidates_OPERATION_alter,
+    language_fallback_candidates_alter: language_fallback_candidates_alter,
+    language_negotiation_info_alter: language_negotiation_info_alter,
+    language_switch_links_alter: language_switch_links_alter,
+    language_types_info: language_types_info, language_types_info_alter: language_types_info_alter,
+    layout_alter: layout_alter, library_info_alter: library_info_alter,
+    library_info_build: library_info_build, link_alter: link_alter,
+    local_tasks_alter: local_tasks_alter,
+    locale_translation_projects_alter: locale_translation_projects_alter, mail: mail,
+    mail_alter: mail_alter, mail_backend_info_alter: mail_backend_info_alter,
+    media_source_info_alter: media_source_info_alter,
+    menu_links_discovered_alter: menu_links_discovered_alter,
+    menu_local_actions_alter: menu_local_actions_alter,
+    menu_local_tasks_alter: menu_local_tasks_alter,
+    migrate_MIGRATION_ID_prepare_row: migrate_MIGRATION_ID_prepare_row,
+    migrate_prepare_row: migrate_prepare_row, migration_plugins_alter: migration_plugins_alter,
+    module_implements_alter: module_implements_alter, module_preinstall: module_preinstall,
+    module_preuninstall: module_preuninstall, modules_installed: modules_installed,
+    modules_uninstalled: modules_uninstalled, navigation_content_top: navigation_content_top,
+    navigation_content_top_alter: navigation_content_top_alter,
+    navigation_defaults: navigation_defaults,
+    navigation_menu_link_tree_alter: navigation_menu_link_tree_alter,
+    node_access_records: node_access_records, node_access_records_alter: node_access_records_alter,
+    node_grants: node_grants, node_grants_alter: node_grants_alter,
+    node_links_alter: node_links_alter, node_search_ranking: node_search_ranking,
+    node_search_result: node_search_result, node_update_index: node_update_index,
+    oembed_resource_url_alter: oembed_resource_url_alter, options_list_alter: options_list_alter,
+    page_attachments: page_attachments, page_attachments_alter: page_attachments_alter,
+    page_bottom: page_bottom, page_top: page_top,
+    plugin_filter_TYPE__CONSUMER_alter: plugin_filter_TYPE__CONSUMER_alter,
+    plugin_filter_TYPE_alter: plugin_filter_TYPE_alter, post_update_NAME: post_update_NAME,
+    preprocess: preprocess, preprocess_HOOK: preprocess_HOOK, query_TAG_alter: query_TAG_alter,
+    query_alter: query_alter, queue_info_alter: queue_info_alter, ranking: ranking,
+    rebuild: rebuild, removed_post_updates: removed_post_updates, render_template: render_template,
+    requirements: requirements, requirements_alter: requirements_alter,
+    rest_resource_alter: rest_resource_alter, runtime_requirements: runtime_requirements,
+    runtime_requirements_alter: runtime_requirements_alter, schema: schema,
+    search_plugin_alter: search_plugin_alter, search_preprocess: search_preprocess,
+    shortcut_default_set: shortcut_default_set, system_breadcrumb_alter: system_breadcrumb_alter,
+    system_info_alter: system_info_alter, system_themes_page_alter: system_themes_page_alter,
+    template_preprocess_default_variables_alter: template_preprocess_default_variables_alter,
+    theme: theme, theme_registry_alter: theme_registry_alter,
+    theme_suggestions_HOOK: theme_suggestions_HOOK,
+    theme_suggestions_HOOK_alter: theme_suggestions_HOOK_alter,
+    theme_suggestions_alter: theme_suggestions_alter, themes_installed: themes_installed,
+    themes_uninstalled: themes_uninstalled, token_info: token_info,
+    token_info_alter: token_info_alter, tokens: tokens, tokens_alter: tokens_alter,
+    toolbar: toolbar, toolbar_alter: toolbar_alter, tour_tips_alter: tour_tips_alter,
+    tour_tips_info_alter: tour_tips_info_alter,
+    transliteration_overrides_alter: transliteration_overrides_alter, uninstall: uninstall,
+    update_N: update_N, update_dependencies: update_dependencies,
+    update_last_removed: update_last_removed, update_projects_alter: update_projects_alter,
+    update_requirements: update_requirements, update_requirements_alter: update_requirements_alter,
+    update_status_alter: update_status_alter, updater_info: updater_info,
+    updater_info_alter: updater_info_alter, user_cancel: user_cancel,
+    user_cancel_methods_alter: user_cancel_methods_alter,
+    user_format_name_alter: user_format_name_alter, user_login: user_login,
+    user_logout: user_logout, validation_constraint_alter: validation_constraint_alter,
+    verify_update_archive: verify_update_archive, views_analyze: views_analyze,
+    views_data: views_data, views_data_alter: views_data_alter,
+    views_form_substitutions: views_form_substitutions,
+    views_invalidate_cache: views_invalidate_cache,
+    views_plugins_access_alter: views_plugins_access_alter,
+    views_plugins_area_alter: views_plugins_area_alter,
+    views_plugins_argument_alter: views_plugins_argument_alter,
+    views_plugins_argument_default_alter: views_plugins_argument_default_alter,
+    views_plugins_argument_validator_alter: views_plugins_argument_validator_alter,
+    views_plugins_cache_alter: views_plugins_cache_alter,
+    views_plugins_display_alter: views_plugins_display_alter,
+    views_plugins_display_extenders_alter: views_plugins_display_extenders_alter,
+    views_plugins_exposed_form_alter: views_plugins_exposed_form_alter,
+    views_plugins_field_alter: views_plugins_field_alter,
+    views_plugins_filter_alter: views_plugins_filter_alter,
+    views_plugins_join_alter: views_plugins_join_alter,
+    views_plugins_pager_alter: views_plugins_pager_alter,
+    views_plugins_query_alter: views_plugins_query_alter,
+    views_plugins_relationship_alter: views_plugins_relationship_alter,
+    views_plugins_row_alter: views_plugins_row_alter,
+    views_plugins_sort_alter: views_plugins_sort_alter,
+    views_plugins_style_alter: views_plugins_style_alter,
+    views_plugins_wizard_alter: views_plugins_wizard_alter, views_post_build: views_post_build,
+    views_post_execute: views_post_execute, views_post_render: views_post_render,
+    views_pre_build: views_pre_build, views_pre_execute: views_pre_execute,
+    views_pre_render: views_pre_render, views_pre_view: views_pre_view,
+    views_preview_info_alter: views_preview_info_alter, views_query_alter: views_query_alter,
+    views_query_substitutions: views_query_substitutions,
+    views_ui_display_tab_alter: views_ui_display_tab_alter,
+    views_ui_display_top_alter: views_ui_display_top_alter,
+    views_ui_display_top_links_alter: views_ui_display_top_links_alter}
+  # Each entity type id core declares by a ContentEntityType or ConfigEntityType attribute or
+  # annotation, in the same three cores, read by hook/hook_known.yaml to bind the ENTITY_TYPE of a
+  # hook_ENTITY_TYPE_ form. A contributed module's rutter adds its entity types under
+  # add_table_rows.
+  entity_type_ids: {action: action, base_field_override: base_field_override, block: block,
+    block_content: block_content, block_content_type: block_content_type, comment: comment,
+    comment_type: comment_type, configurable_language: configurable_language,
+    contact_form: contact_form, contact_message: contact_message,
+    content_moderation_state: content_moderation_state, date_format: date_format, editor: editor,
+    entity_form_display: entity_form_display, entity_form_mode: entity_form_mode,
+    entity_view_display: entity_view_display, entity_view_mode: entity_view_mode,
+    field_config: field_config, field_storage_config: field_storage_config, file: file,
+    filter_format: filter_format, image_style: image_style,
+    language_content_settings: language_content_settings, media: media, media_type: media_type,
+    menu: menu, menu_link_content: menu_link_content, node: node, node_type: node_type,
+    path_alias: path_alias, responsive_image_style: responsive_image_style,
+    rest_resource_config: rest_resource_config, search_page: search_page, shortcut: shortcut,
+    shortcut_set: shortcut_set, taxonomy_term: taxonomy_term,
+    taxonomy_vocabulary: taxonomy_vocabulary, tour: tour, user: user, user_role: user_role,
+    view: view, workflow: workflow, workspace: workspace}
+
+  # Core's concrete plugin managers, for plugin_type/plugin_manager_inherited.yaml: the folder each
+  # one's constructor names, its attribute class and, when it names one, its annotation class.
+  core_manager_folders:
+    'Drupal\Core\Action\ActionManager': 'Plugin/Action'
+    'Drupal\Core\Archiver\ArchiverManager': 'Plugin/Archiver'
+    'Drupal\Core\Block\BlockManager': 'Plugin/Block'
+    'Drupal\Core\Condition\ConditionManager': 'Plugin/Condition'
+    'Drupal\Core\Config\Action\ConfigActionManager': 'Plugin/ConfigAction'
+    'Drupal\Core\Display\VariantManager': 'Plugin/DisplayVariant'
+    'Drupal\Core\Entity\EntityReferenceSelection\SelectionPluginManager': 'Plugin/EntityReferenceSelection'
+    'Drupal\Core\Field\FieldTypePluginManager': 'Plugin/Field/FieldType'
+    'Drupal\Core\Field\FormatterPluginManager': 'Plugin/Field/FieldFormatter'
+    'Drupal\Core\Field\WidgetPluginManager': 'Plugin/Field/FieldWidget'
+    'Drupal\Core\ImageToolkit\ImageToolkitManager': 'Plugin/ImageToolkit'
+    'Drupal\Core\ImageToolkit\ImageToolkitOperationManager': 'Plugin/ImageToolkit/Operation'
+    'Drupal\Core\Layout\LayoutPluginManager': 'Plugin/Layout'
+    'Drupal\Core\Mail\MailManager': 'Plugin/Mail'
+    'Drupal\Core\Queue\QueueWorkerManager': 'Plugin/QueueWorker'
+    'Drupal\Core\Render\ElementInfoManager': 'Element'
+    'Drupal\Core\Theme\Icon\IconExtractorPluginManager': 'Plugin/IconExtractor'
+    'Drupal\Core\TypedData\TypedDataManager': 'Plugin/DataType'
+    'Drupal\Core\Validation\ConstraintManager': 'Plugin/Validation/Constraint'
+    'Drupal\ckeditor5\Plugin\CKEditor5PluginManager': 'Plugin/CKEditor5Plugin'
+    'Drupal\editor\Plugin\EditorManager': 'Plugin/Editor'
+    'Drupal\filter\FilterPluginManager': 'Plugin/Filter'
+    'Drupal\help\HelpSectionManager': 'Plugin/HelpSection'
+    'Drupal\image\ImageEffectManager': 'Plugin/ImageEffect'
+    'Drupal\language\LanguageNegotiationMethodManager': 'Plugin/LanguageNegotiation'
+    'Drupal\layout_builder\SectionStorage\SectionStorageManager': 'Plugin/SectionStorage'
+    'Drupal\media\MediaSourceManager': 'Plugin/media/Source'
+    'Drupal\navigation\TopBarItemManager': 'Plugin/TopBarItem'
+    'Drupal\rest\Plugin\Type\ResourcePluginManager': 'Plugin/rest/resource'
+    'Drupal\search\SearchPluginManager': 'Plugin/Search'
+    'Drupal\workflows\WorkflowTypeManager': 'Plugin/WorkflowType'
+  core_manager_attributes:
+    'Drupal\Core\Action\ActionManager': 'Drupal\Core\Action\Attribute\Action'
+    'Drupal\Core\Archiver\ArchiverManager': 'Drupal\Core\Archiver\Attribute\Archiver'
+    'Drupal\Core\Block\BlockManager': 'Drupal\Core\Block\Attribute\Block'
+    'Drupal\Core\Condition\ConditionManager': 'Drupal\Core\Condition\Attribute\Condition'
+    'Drupal\Core\Config\Action\ConfigActionManager': 'Drupal\Core\Config\Action\Attribute\ConfigAction'
+    'Drupal\Core\Display\VariantManager': 'Drupal\Core\Display\Attribute\DisplayVariant'
+    'Drupal\Core\Entity\EntityReferenceSelection\SelectionPluginManager': 'Drupal\Core\Entity\Attribute\EntityReferenceSelection'
+    'Drupal\Core\Field\FieldTypePluginManager': 'Drupal\Core\Field\Attribute\FieldType'
+    'Drupal\Core\Field\FormatterPluginManager': 'Drupal\Core\Field\Attribute\FieldFormatter'
+    'Drupal\Core\Field\WidgetPluginManager': 'Drupal\Core\Field\Attribute\FieldWidget'
+    'Drupal\Core\ImageToolkit\ImageToolkitManager': 'Drupal\Core\ImageToolkit\Attribute\ImageToolkit'
+    'Drupal\Core\ImageToolkit\ImageToolkitOperationManager': 'Drupal\Core\ImageToolkit\Attribute\ImageToolkitOperation'
+    'Drupal\Core\Layout\LayoutPluginManager': 'Drupal\Core\Layout\Attribute\Layout'
+    'Drupal\Core\Mail\MailManager': 'Drupal\Core\Mail\Attribute\Mail'
+    'Drupal\Core\Queue\QueueWorkerManager': 'Drupal\Core\Queue\Attribute\QueueWorker'
+    'Drupal\Core\Render\ElementInfoManager': 'Drupal\Core\Render\Attribute\RenderElement'
+    'Drupal\Core\Theme\Icon\IconExtractorPluginManager': 'Drupal\Core\Theme\Icon\Attribute\IconExtractor'
+    'Drupal\Core\TypedData\TypedDataManager': 'Drupal\Core\TypedData\Attribute\DataType'
+    'Drupal\Core\Validation\ConstraintManager': 'Drupal\Core\Validation\Attribute\Constraint'
+    'Drupal\ckeditor5\Plugin\CKEditor5PluginManager': 'Drupal\ckeditor5\Attribute\CKEditor5Plugin'
+    'Drupal\editor\Plugin\EditorManager': 'Drupal\editor\Attribute\Editor'
+    'Drupal\filter\FilterPluginManager': 'Drupal\filter\Attribute\Filter'
+    'Drupal\help\HelpSectionManager': 'Drupal\help\Attribute\HelpSection'
+    'Drupal\image\ImageEffectManager': 'Drupal\image\Attribute\ImageEffect'
+    'Drupal\language\LanguageNegotiationMethodManager': 'Drupal\language\Attribute\LanguageNegotiation'
+    'Drupal\layout_builder\SectionStorage\SectionStorageManager': 'Drupal\layout_builder\Attribute\SectionStorage'
+    'Drupal\media\MediaSourceManager': 'Drupal\media\Attribute\MediaSource'
+    'Drupal\navigation\TopBarItemManager': 'Drupal\navigation\Attribute\TopBarItem'
+    'Drupal\rest\Plugin\Type\ResourcePluginManager': 'Drupal\rest\Attribute\RestResource'
+    'Drupal\search\SearchPluginManager': 'Drupal\search\Attribute\Search'
+    'Drupal\workflows\WorkflowTypeManager': 'Drupal\workflows\Attribute\WorkflowType'
+  core_manager_annotations:
+    'Drupal\Core\Action\ActionManager': 'Drupal\Core\Annotation\Action'
+    'Drupal\Core\Archiver\ArchiverManager': 'Drupal\Core\Archiver\Annotation\Archiver'
+    'Drupal\Core\Block\BlockManager': 'Drupal\Core\Block\Annotation\Block'
+    'Drupal\Core\Condition\ConditionManager': 'Drupal\Core\Condition\Annotation\Condition'
+    'Drupal\Core\Display\VariantManager': 'Drupal\Core\Display\Annotation\DisplayVariant'
+    'Drupal\Core\Entity\EntityReferenceSelection\SelectionPluginManager': 'Drupal\Core\Entity\Annotation\EntityReferenceSelection'
+    'Drupal\Core\Field\FieldTypePluginManager': 'Drupal\Core\Field\Annotation\FieldType'
+    'Drupal\Core\Field\FormatterPluginManager': 'Drupal\Core\Field\Annotation\FieldFormatter'
+    'Drupal\Core\Field\WidgetPluginManager': 'Drupal\Core\Field\Annotation\FieldWidget'
+    'Drupal\Core\ImageToolkit\ImageToolkitManager': 'Drupal\Core\ImageToolkit\Annotation\ImageToolkit'
+    'Drupal\Core\ImageToolkit\ImageToolkitOperationManager': 'Drupal\Core\ImageToolkit\Annotation\ImageToolkitOperation'
+    'Drupal\Core\Layout\LayoutPluginManager': 'Drupal\Core\Layout\Annotation\Layout'
+    'Drupal\Core\Mail\MailManager': 'Drupal\Core\Annotation\Mail'
+    'Drupal\Core\Queue\QueueWorkerManager': 'Drupal\Core\Annotation\QueueWorker'
+    'Drupal\Core\Render\ElementInfoManager': 'Drupal\Core\Render\Annotation\RenderElement'
+    'Drupal\Core\TypedData\TypedDataManager': 'Drupal\Core\TypedData\Annotation\DataType'
+    'Drupal\Core\Validation\ConstraintManager': 'Drupal\Core\Validation\Annotation\Constraint'
+    'Drupal\ckeditor5\Plugin\CKEditor5PluginManager': 'Drupal\ckeditor5\Annotation\CKEditor5Plugin'
+    'Drupal\editor\Plugin\EditorManager': 'Drupal\editor\Annotation\Editor'
+    'Drupal\filter\FilterPluginManager': 'Drupal\filter\Annotation\Filter'
+    'Drupal\help\HelpSectionManager': 'Drupal\help\Annotation\HelpSection'
+    'Drupal\image\ImageEffectManager': 'Drupal\image\Annotation\ImageEffect'
+    'Drupal\language\LanguageNegotiationMethodManager': 'Drupal\language\Annotation\LanguageNegotiation'
+    'Drupal\layout_builder\SectionStorage\SectionStorageManager': 'Drupal\layout_builder\Annotation\SectionStorage'
+    'Drupal\media\MediaSourceManager': 'Drupal\media\Annotation\MediaSource'
+    'Drupal\rest\Plugin\Type\ResourcePluginManager': 'Drupal\rest\Annotation\RestResource'
+    'Drupal\search\SearchPluginManager': 'Drupal\search\Annotation\SearchPlugin'
+    'Drupal\workflows\WorkflowTypeManager': 'Drupal\workflows\Annotation\WorkflowType'
+  # The node type of the plugins each core alter hook of plugin definitions changes, for plugin_type/plugin_alter.yaml.
+  plugin_alter_types:
+    field_info_alter: drupal.field_type
+    block_alter: drupal.block_plugin
+    action_info_alter: drupal.action_plugin
+    queue_info_alter: drupal.queue_worker_plugin
+    mail_backend_info_alter: drupal.mail_plugin
+    validation_constraint_alter: drupal.constraint_plugin
+    media_source_info_alter: drupal.media_source
+    rest_resource_alter: drupal.rest_resource
+    views_plugins_field_alter: drupal.views_field_plugin
+    views_plugins_filter_alter: drupal.views_filter_plugin
+    views_plugins_style_alter: drupal.views_style_plugin
+    local_tasks_alter: drupal.local_task
+    menu_local_actions_alter: drupal.local_action
+    contextual_links_plugins_alter: drupal.contextual_link
+  # The same, for the two whose plugins list field types.
+  plugin_alter_field_types_types:
+    field_widget_info_alter: drupal.field_widget
+    field_formatter_info_alter: drupal.field_formatter
+  # The short name of the attribute class of each core plugin manager that alter hook serves.
+  plugin_alter_short_names:
+    archiver_info_alter: Archiver
+    condition_info_alter: Condition
+    config_action_alter: ConfigAction
+    display_variant_plugin_alter: DisplayVariant
+    entity_reference_selection_alter: EntityReferenceSelection
+    image_toolkit_operation_alter: ImageToolkitOperation
+    layout_alter: Layout
+    icon_extractor_info_alter: IconExtractor
+    data_type_info_alter: DataType
+    ckeditor5_plugin_info_alter: CKEditor5Plugin
+    editor_info_alter: Editor
+    filter_info_alter: Filter
+    help_section_info_alter: HelpSection
+    image_effect_info_alter: ImageEffect
+    language_negotiation_info_alter: LanguageNegotiation
+    layout_builder_section_storage_alter: SectionStorage
+    migrate_source_info_alter: MigrateSource
+    migrate_process_info_alter: MigrateProcess
+    migrate_destination_info_alter: MigrateDestination
+    migrate_id_map_info_alter: PluginID
+    top_bar_item_alter: TopBarItem
+    search_plugin_alter: Search
+    workflow_type_info_alter: WorkflowType
+    views_plugins_access_alter: ViewsAccess
+    views_plugins_area_alter: ViewsArea
+    views_plugins_argument_alter: ViewsArgument
+    views_plugins_argument_default_alter: ViewsArgumentDefault
+    views_plugins_argument_validator_alter: ViewsArgumentValidator
+    views_plugins_cache_alter: ViewsCache
+    views_plugins_display_alter: ViewsDisplay
+    views_plugins_display_extender_alter: ViewsDisplayExtender
+    views_plugins_exposed_form_alter: ViewsExposedForm
+    views_plugins_join_alter: ViewsJoin
+    views_plugins_pager_alter: ViewsPager
+    views_plugins_query_alter: ViewsQuery
+    views_plugins_relationship_alter: ViewsRelationship
+    views_plugins_row_alter: ViewsRow
+    views_plugins_sort_alter: ViewsSort
+    views_plugins_wizard_alter: ViewsWizard
+  # The start of the id of the plugin each configuration schema family names, before ::<id>, for
+  # config/config_schema_plugin.yaml.
+  config_schema_plugin_nodes:
+    action.configuration: drupal.plugin.action
+    block.settings: drupal.plugin.block
+    condition.plugin: drupal.plugin_id::Condition
+    editor.settings: drupal.plugin_id::Editor
+    entity_reference_selection: drupal.plugin_id::EntityReferenceSelection
+    field.field_settings: drupal.plugin.field_type
+    field.storage_settings: drupal.plugin.field_type
+    field.value: drupal.plugin.field_type
+    field.formatter.settings: drupal.plugin.field_formatter
+    field.widget.settings: drupal.plugin.field_widget
+    filter_settings: drupal.plugin_id::Filter
+    image.effect: drupal.plugin_id::ImageEffect
+    layout_plugin.settings: drupal.plugin_id::Layout
+    media.source: drupal.plugin.media_source
+    search.plugin: drupal.plugin_id::Search
+    workflow.type_settings: drupal.plugin_id::WorkflowType
+    views.field: drupal.plugin.views_field
+    views.filter: drupal.plugin.views_filter
+    views.style: drupal.plugin.views_style
+    views.access: drupal.plugin_id::ViewsAccess
+    views.area: drupal.plugin_id::ViewsArea
+    views.argument: drupal.plugin_id::ViewsArgument
+    views.argument_default: drupal.plugin_id::ViewsArgumentDefault
+    views.argument_validator: drupal.plugin_id::ViewsArgumentValidator
+    views.cache: drupal.plugin_id::ViewsCache
+    views.display: drupal.plugin_id::ViewsDisplay
+    views.display_extender: drupal.plugin_id::ViewsDisplayExtender
+    views.exposed_form: drupal.plugin_id::ViewsExposedForm
+    views.pager: drupal.plugin_id::ViewsPager
+    views.query: drupal.plugin_id::ViewsQuery
+    views.relationship: drupal.plugin_id::ViewsRelationship
+    views.row: drupal.plugin_id::ViewsRow
+    views.sort: drupal.plugin_id::ViewsSort
+# The core and Symfony classes and interfaces that the custom code builds on and the map never
+# reads. Each one an inherits or implements edge reaches becomes a boundary node this pack draws,
+# with no location. A custom class that descends from a name with a type takes that type: those
+# roles have no attribute to read. A plugin base names no type, because its attribute or
+# annotation already gives the plugin. Contributed modules' bases belong to their own rutters.
+boundary:
+  core_classes:
+    type: php.class_like
+    ancestry: [inherits, implements]
+    names:
+      Drupal\Component\Plugin\Attribute\Plugin: ~
+      Drupal\Component\Plugin\Derivative\DeriverBase: ~
+      Drupal\Core\Block\BlockBase: ~
+      Drupal\Core\Config\Entity\ConfigEntityBase: ~
+      Drupal\Core\Config\Entity\ConfigEntityListBuilder: ~
+      Drupal\Core\Controller\ControllerBase: drupal.controller_class
+      Drupal\Core\Entity\BundleEntityFormBase: drupal.form_class
+      Drupal\Core\Entity\ContentEntityBase: ~
+      Drupal\Core\Entity\ContentEntityConfirmFormBase: drupal.form_class
+      Drupal\Core\Entity\ContentEntityDeleteForm: drupal.form_class
+      Drupal\Core\Entity\ContentEntityForm: drupal.form_class
+      Drupal\Core\Entity\EntityAccessControlHandler: ~
+      Drupal\Core\Entity\EntityConfirmFormBase: drupal.form_class
+      Drupal\Core\Entity\EntityDeleteForm: drupal.form_class
+      Drupal\Core\Entity\EntityForm: drupal.form_class
+      Drupal\Core\EventSubscriber\HttpExceptionSubscriberBase: drupal.event_subscriber_class
+      Drupal\Core\Form\ConfigFormBase: drupal.config_form_class
+      Drupal\Core\Form\ConfirmFormBase: drupal.form_class
+      Drupal\Core\Form\FormBase: drupal.form_class
+      Drupal\Core\Mail\Plugin\Mail\PhpMail: ~
+      Drupal\Core\Plugin\DefaultPluginManager: ~
+      Drupal\Core\Plugin\PluginBase: ~
+      Drupal\Core\Queue\QueueWorkerBase: ~
+      Drupal\Core\Routing\RouteSubscriberBase: drupal.event_subscriber_class
+      Drupal\KernelTests\Components\ComponentKernelTestBase: ~
+      Drupal\KernelTests\KernelTestBase: ~
+      Drupal\Tests\BrowserTestBase: ~
+      Drupal\Tests\UnitTestCase: ~
+      Symfony\Component\Validator\Constraint: ~
+      Symfony\Component\Validator\ConstraintValidator: ~
+      Symfony\Contracts\EventDispatcher\Event: ~
+  core_interfaces:
+    type: php.interface
+    ancestry: [inherits, implements]
+    names:
+      Drupal\Component\Plugin\PluginInspectionInterface: ~
+      Drupal\Core\Ajax\CommandInterface: ~
+      Drupal\Core\Cache\CacheableDependencyInterface: ~
+      Drupal\Core\DependencyInjection\ContainerInjectionInterface: ~
+      Drupal\Core\DependencyInjection\ServiceModifierInterface: ~
+      Drupal\Core\Entity\EntityHandlerInterface: ~
+      Drupal\Core\Flood\FloodInterface: ~
+      Drupal\Core\Form\FormInterface: ~
+      Drupal\Core\Lock\LockBackendInterface: ~
+      Drupal\Core\Plugin\ContainerFactoryPluginInterface: ~
+      Drupal\Core\Plugin\Discovery\ContainerDeriverInterface: ~
+      Drupal\Core\Queue\QueueInterface: ~
+      Drupal\Core\Routing\Access\AccessInterface: ~
+      Symfony\Component\EventDispatcher\EventSubscriberInterface: drupal.event_subscriber_class

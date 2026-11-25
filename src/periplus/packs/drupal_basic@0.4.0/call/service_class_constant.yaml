@@ -1,0 +1,142 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A service id written as a class constant, X::class, as Drupal 10.1 and later name a service by
+# its class or interface:
+# - \Drupal::service(X::class), and get(X::class) on the service container as call/call.yaml
+#   knows it, $container, $this->container, \Drupal::getContainer() or getContainer() on $this,
+#   static or self: a uses_service edge to the service whose id is X's full name, from the method
+#   around the call, or the function around it in a module, install, inc, theme or profile file,
+#   at the call's line. The container is asked for that id, so a service no mapped file declares
+#   under it ends at a referenced node, as a quoted id does.
+# - \Drupal::classResolver(X::class) and ->getInstanceFromDefinition(X::class): the class
+#   resolver returns the service of that id when the container has one, else a new X. So the
+#   uses_service edge is made only when the map holds a service of that id, from the method or
+#   function around the call, at the call's line.
+# X is read as text: a leading backslash names the class in full, else X's first segment goes
+# through the file's use statements, else X is in the file's own namespace, as PHP reads it. All
+# inferred: the class is resolved from text, and the container is known by its name.
+#
+# Limits: self::class, static::class and parent::class give nothing, nor does a class written
+# with no namespace in a file outside src. A call in a closure counts the named function around
+# it.
+
+node_types:
+- name: drupal.resolved_class
+  description: "internal: a class the class resolver is asked for by X::class, before the map joins it to a service of that id"
+  id_namespace: drupal.resolved_class
+  internal: true
+- name: drupal.class_resolver_call
+  description: "internal: one class resolver call by X::class, m|<class>::<method>|<X as written> or f|<function>|<X as written>, at its line"
+  id_namespace: drupal.class_resolver_call
+  internal: true
+
+edge_kinds:
+- kind: resolves_class
+  cause: none
+  description: "internal: the class resolver call asks for that class by X::class"
+  from: drupal.class_resolver_call
+  to: drupal.resolved_class
+
+rules:
+- rule: service_by_class_constant
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: &service_text '(?:(?:^|[^\w\\])\\?Drupal::service|(?:\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\))\??->get)\(\s*(?!(?:self|static|parent)::)(?<class>\\?[A-Za-z_][\w\\]*)::class\s*\)'
+  values: &method_value
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: &class_in_src {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', normalize: [{replace: '\\\\', with: '\'}]}
+  line: {capture: class}
+  emits:
+  - edge: {kind: uses_service, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}
+  confidence: inferred
+
+- rule: service_by_class_constant_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: &module_endings [module, install, inc, theme, profile]
+    text: *service_text
+  values: &function_value
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: &class_in_function {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment], separator: '\', normalize: [{replace: '\\\\', with: '\'}]}
+  line: {capture: class}
+  emits:
+  - edge: {kind: uses_service, from: {template: '{function}', types: [php.function]}, to: this_node}
+  confidence: inferred
+
+# A class resolver call is a node at its line, with its class resolved apart, so the map rule's
+# edge sits at the call.
+- rule: class_resolver_call
+  reads: file
+  in: [source]
+  match: &resolver_match
+    file: '**'
+    filetype: drupal_php_text
+    text: &resolver_text '(?:(?:^|[^\w\\])\\?Drupal::classResolver|->getInstanceFromDefinition)\(\s*(?!(?:self|static|parent)::)(?<class>\\?[A-Za-z_][\w\\]*)::class\s*\)'
+  values: *method_value
+  id: &resolver_call_id {template: 'm|{psr4_class}::{method}|{class}'}
+  line: {capture: class}
+  emits: [{node: {type: drupal.class_resolver_call}}]
+  confidence: inferred
+
+- rule: class_resolver_class
+  reads: file
+  in: [source]
+  match: *resolver_match
+  values: *method_value
+  id: *resolver_call_id
+  line: {capture: class}
+  emits:
+  - edge: {kind: resolves_class, from: this_node, to: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', types: [drupal.resolved_class]}}
+  confidence: inferred
+
+- rule: class_resolver_call_in_function
+  reads: file
+  in: [source]
+  match: &resolver_function_match
+    file: '**'
+    filetype: drupal_php_text
+    ending: *module_endings
+    text: *resolver_text
+  values: *function_value
+  id: &resolver_function_id {template: 'f|{function}|{class}'}
+  line: {capture: class}
+  emits: [{node: {type: drupal.class_resolver_call}}]
+  confidence: inferred
+
+- rule: class_resolver_class_in_function
+  reads: file
+  in: [source]
+  match: *resolver_function_match
+  values: *function_value
+  id: *resolver_function_id
+  line: {capture: class}
+  emits:
+  - edge: {kind: resolves_class, from: this_node, to: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment], separator: '\', types: [drupal.resolved_class]}}
+  confidence: inferred
+
+- rule: class_resolver_service_in_method
+  reads: map
+  match:
+    node_type: drupal.class_resolver_call
+    where: [{id_matches: '^drupal\.class_resolver_call::m\|(?<caller>[^|]+)\|'}]
+    follow:
+    - &resolved_service_1 {edge: resolves_class}
+    - &resolved_service_2 {id_matches: '^drupal\.resolved_class::(?<class>.+)$'}
+    - &resolved_service_3 {node: 'drupal.service::{class}'}
+  emits: [{edge: {kind: uses_service, from: {template: '{caller}', types: [php.method]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: class_resolver_service_in_function
+  reads: map
+  match:
+    node_type: drupal.class_resolver_call
+    where: [{id_matches: '^drupal\.class_resolver_call::f\|(?<caller>[^|]+)\|'}]
+    follow: [*resolved_service_1, *resolved_service_2, *resolved_service_3]
+  emits: [{edge: {kind: uses_service, from: {template: '{caller}', types: [php.function]}, to: matched_node}}]
+  confidence: inferred

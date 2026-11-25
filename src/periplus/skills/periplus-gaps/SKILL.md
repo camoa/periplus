@@ -7,11 +7,11 @@ description: Reads a Periplus map and the code behind it, lists what the map lac
 
 ## Where the detail lives
 
-- [Navigation](https://github.com/camoa/periplus/blob/v0.10.3/docs/navigation.md) holds the signature, output rows and exit codes of each command used here.
-- [Where a rule belongs](https://github.com/camoa/periplus/blob/v0.10.3/docs/map-report-guide.md#where-a-rule-belongs) and
-  [When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.10.3/docs/map-report-guide.md#when-a-gap-is-the-engines) hold the full choice of destination.
-- [The rutter author guide](https://github.com/camoa/periplus/blob/v0.10.3/docs/rutter-author-guide.md) and the rutter skill hold how a rule is written and a rutter started.
-- [Bundled rutters](https://github.com/camoa/periplus/blob/v0.10.3/docs/rutters.md) lists every rutter that ships with Periplus.
+- [Navigation](https://github.com/camoa/periplus/blob/v0.11.0/docs/navigation.md) holds the signature, output rows and exit codes of each command used here.
+- [Where a rule belongs](https://github.com/camoa/periplus/blob/v0.11.0/docs/map-report-guide.md#where-a-rule-belongs) and
+  [When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.11.0/docs/map-report-guide.md#when-a-gap-is-the-engines) hold the full choice of destination.
+- [The rutter author guide](https://github.com/camoa/periplus/blob/v0.11.0/docs/rutter-author-guide.md) and the rutter skill hold how a rule is written and a rutter started.
+- [Bundled rutters](https://github.com/camoa/periplus/blob/v0.11.0/docs/rutters.md) lists every rutter that ships with Periplus.
 
 ## Find the gaps
 
@@ -33,6 +33,8 @@ classes.
    failed) is where a missing rule shows, except an id step 4 prints under Site faults.
 3. Read the rows the map skipped. `periplus map --format json` prints the map report; read its
    `skipped` rows, each a file, line, rule and reason, for code a rule matched and could not use.
+   Its `made_nothing` rows name each data rule whose own filters left out every value it reached;
+   check that filter against the files.
 4. Print the report from the map file. The program ships with this skill and needs only the
    standard library. Run it from the project root:
    `python3 ${CLAUDE_SKILL_DIR}/scripts/gap_read.py .periplus/map.json`. Under Resolution gaps it prints the count of `referenced` nodes,
@@ -182,7 +184,13 @@ language rutter's rule to change one list.
 A gap is the engine's when the engine refuses the rule you wrote and no other rule can state the
 shape. Claim it only after two formulations were written, run and refused, quoting the engine's
 message for each. The test is in
-[When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.10.3/docs/map-report-guide.md#when-a-gap-is-the-engines).
+[When a gap is the engine's](https://github.com/camoa/periplus/blob/v0.11.0/docs/map-report-guide.md#when-a-gap-is-the-engines).
+These shapes are rules, not engine gaps: a fact at the line of an edge a map rule walked
+(`place: edge`), one join per table row (`in_table` with `value`, and an end typed from the
+table), a place marked as decided at run time by a map rule (`resolution: runtime`), every entry
+of a group in a docblock annotation (`match.each`), a match passed over in a closure or an
+attribute (`within`, `not_within`), a class tested by its full name (`fill: qualified_name`), and
+a project folder that is one unit (`root_name`). The rutter skill says how to write each.
 
 ## Run it again
 

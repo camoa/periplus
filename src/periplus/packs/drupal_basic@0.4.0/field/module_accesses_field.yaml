@@ -1,0 +1,49 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A module whose code reads or writes a field: module_accesses_field from the module to the field
+# storage, for each accesses_field edge (field_access.yaml, field_constant_call.yaml) from a method
+# of a class the module holds (class_in_module) or from a function of the module
+# (function_in_module). It states use, not membership: the field belongs to its entity type, and a
+# module that reads it does not own it. Inferred, as the edges it is drawn from. The edge sits at
+# the line of the accesses_field edge it is drawn from, the call. A field instance reaches the
+# module through stored_by to its storage. Code in a theme, and a template, give nothing here.
+
+edge_kinds:
+- kind: module_accesses_field
+  cause: from
+  from: drupal.module
+  to: drupal.field_storage
+  description: "code of the module, a function or a method of a class it holds, reads or writes that field; use, not ownership"
+
+rules:
+- rule: module_method_accesses_field
+  reads: map
+  match:
+    node_type: php.method
+    where: [{id_matches: '^php\.method::(?<class>[^:]+)::\w+$'}]
+    follow:
+    - edge: accesses_field
+    - place: edge
+    - id_matches: '^(?<storage>drupal\.config::field\.storage\..+)$'
+    - node: 'php.type::{class}'
+    - edge: class_in_module
+    - id_matches: '^drupal\.module::(?<module>.+)$'
+    - node: '{storage}'
+  emits: [{edge: {kind: module_accesses_field, from: {template: '{module}', type: drupal.module}, to: matched_node}}]
+  confidence: inferred
+
+- rule: module_function_accesses_field
+  reads: map
+  match:
+    node_type: php.function
+    where: [{id_matches: '^(?<function>php\.function::.+)$'}]
+    follow:
+    - edge: accesses_field
+    - place: edge
+    - id_matches: '^(?<storage>drupal\.config::field\.storage\..+)$'
+    - node: '{function}'
+    - edge: function_in_module
+    - id_matches: '^drupal\.module::(?<module>.+)$'
+    - node: '{storage}'
+  emits: [{edge: {kind: module_accesses_field, from: {template: '{module}', type: drupal.module}, to: matched_node}}]
+  confidence: inferred

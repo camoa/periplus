@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The bundled TypeScript stacks, typescript@0.1.0, react@0.1.0 and nextjs@0.2.0, read as text.
+# The bundled TypeScript stacks, typescript@0.2.0, react@0.1.0 and nextjs@0.2.1, read as text.
 # A small Next.js application holds a module with a relative import and an exported function, a
 # component that uses a hook and renders another component, a page, a layout, a route handler
 # exporting GET, and a fetch('/api/items') call. The check names each node type and edge kind the
@@ -70,9 +70,9 @@ TS
 cat >"$site/.periplus/settings.yml" <<'YML'
 periplus_version: 0
 packs:
-  - typescript@0.1.0
+  - typescript@0.2.0
   - react@0.1.0
-  - nextjs@0.2.0
+  - nextjs@0.2.1
 values:
   typescript_alias_root: .
 YML

@@ -22,8 +22,8 @@ Each one solves one task.
 
 - [Reading the map report](map-report-guide.md): read what `periplus map` reports, part by part,
   and decide where the rule for a gap belongs.
-- [Extending Periplus](extending-periplus.md): choose between a new rule, a new rutter and an
-  engine change.
+- [Extending Periplus](extending-periplus.md): what a rule can do today, and how to choose
+  between a new rule, a new rutter and an engine change.
 - [One word, several things](disambiguation.md): tell apart the things that share one name, and
   save the answer as descriptions.
 - [Visualize the map](visualize-the-map.md): export a slice of the map and look at it in a graph
@@ -31,21 +31,24 @@ Each one solves one task.
 
 Write a rutter. Start with the first page, then open the one that fits the rule you need.
 
-- [Writing a rutter](rutter-author-guide.md): the files of a rutter, one rule of each shape, and
-  how to check a rutter.
+- [Writing a rutter](rutter-author-guide.md): the files of a rutter, one rule of each shape, how
+  to check a rutter, and which ability to reach for before a workaround.
 - [Text spans](rutter-author-guide-text.md): rules on text files. Spans, values from enclosing
-  spans, the line of a node, and a path below a folder.
+  spans, the line of a node, a path below a folder, a project that is one unit at its root, and
+  which data-rule values list a skipped row.
 - [Reading the Drupal rutters](rutter-author-guide-drupal.md): parse-tree rules, read through the
   PHP and Drupal rutters.
 - [Tree references](rutter-author-guide-references.md): calls read from a parse tree, tables,
-  `add_table_rows`, `in_table`, `encloses_for`, and every key the schemas accept that the engine
-  does not run.
+  `add_table_rows`, `in_table` with `fill: qualified_name`, `encloses_for`, and every key the
+  schemas accept that the engine does not run.
 - [Import paths and call arguments](rutter-author-guide-imports.md): a name bound from an import
   path, and a call's arguments.
 - [Second children and id patterns](rutter-author-guide-abilities.md): a condition on a second
-  child, an id that must fit a pattern, a declared end, and a class constant as a call's argument.
+  child, an id that must fit a pattern, a declared end, `within` and `not_within`, every entry of
+  a group in a docblock annotation, and a class constant as a call's argument.
 - [Map rules](rutter-author-guide-map-rules.md): rules that read the map the file rules made, run
-  in passes, one hop each.
+  in passes, one hop each. A fire placed at an edge it walked, a capture looked up in a table, and
+  a place marked as decided at run time.
 
 ## Reference
 

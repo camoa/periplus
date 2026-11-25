@@ -1,0 +1,37 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A template that holds a quoted text equal to the id of a route or a configuration object, as a
+# mentions_route or mentions_config edge to that thing with confidence mentioned, as
+# mention/mention_php.yaml joins a PHP literal, under the same test that the text names one kind of
+# thing only. The text is the internal node of mention/twig_literal.yaml. A template that links the
+# route with path() or url() gets no mention of it. A quoted text equal to a theme hook's name is
+# no join: in a template it is more often the argument of a block, entity or form call that shares
+# the hook's name.
+
+rules:
+- rule: template_mentions_route
+  reads: map
+  match:
+    node_type: drupal.template_literal_site
+    where: [{id_matches: '^drupal\.template_literal_site::(?<owner>[^|]+)\|(?<text>[^|]+)$'}]
+    follow:
+    - node: 'drupal.route::{text}'
+    unless_matched:
+    - [{incoming_edge: template_links_route}, {id_matches: '^drupal\.template::{owner}$'}]
+    - [{node: 'drupal.service::{text}'}]
+    - [{node: 'drupal.config::{text}'}]
+  emits: [{edge: {kind: mentions_route, from: {template: '{owner}', types: [drupal.template]}, to: matched_node}}]
+  confidence: mentioned
+
+- rule: template_mentions_config
+  reads: map
+  match:
+    node_type: drupal.template_literal_site
+    where: [{id_matches: '^drupal\.template_literal_site::(?<owner>[^|]+)\|(?<text>[^|]+)$'}]
+    follow:
+    - node: 'drupal.config::{text}'
+    unless_matched:
+    - [{node: 'drupal.route::{text}'}]
+    - [{node: 'drupal.service::{text}'}]
+  emits: [{edge: {kind: mentions_config, from: {template: '{owner}', types: [drupal.template]}, to: matched_node}}]
+  confidence: mentioned

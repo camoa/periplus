@@ -1,0 +1,341 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Code that names a field: ->get('field_x'), ->set('field_x', ...) and ->hasField('field_x') in a
+# PHP method or function, and <variable>.field_x inside {{ }} or {% %} in a template. Each links to
+# the internal field-name hub (field/field_name.yaml). The map rules then give accesses_field:
+# - from a template read whose variable names an entity type (the table twig_entity_variables,
+#   node.field_x), or content.field_x in a template whose file name starts with an entity
+#   template's hook (the table template_entity_hooks, node--article), to the storage of that
+#   entity type, else to the unresolved field.storage.<entity type>.<name>;
+# - from any other reader, to the one storage of that name when every storage of the name has one
+#   entity type; to the drupal.shared_field_name node of that name when its storages sit on two
+#   or more entity types, since nothing says which one is read; and, for a name that starts with
+#   field_ and that no mapped storage has, to the unresolved field.storage.<name>, a mark. Any
+#   other name with no storage gives nothing.
+# An edge from code sits at the line of the call, whether a text literal or a class constant
+# names the field; a template's at the line of the read, in the file that holds it.
+#
+# The object is read only to leave out a config factory or a config object, so ->get('field_x')
+# on a form state, a request or a config object held in a variable of another name links to a
+# storage named field_x too. The argument is a text literal, or a class constant a mapped file
+# declares as text, on any object; a constant of core or contrib leaves a skipped row, and a
+# variable, an expression, a double-quoted text holding $ and a text holding a backslash give
+# nothing. field/field_constant_call.yaml reads self::X and static::X declared on a parent or an
+# interface. A template reads x.field_y only: x['field_y'] and a name built in Twig
+# give nothing.
+#
+# A map rule that must know a fact is absent tests it with a try and an id_matches whose
+# alternation captures a name only where the try reached nothing; the edge's template names that
+# capture, so the other path makes nothing.
+
+node_types:
+# One read of a field in a template: <template>:<variable>.<field>, at each line it is written.
+- name: drupal.template_field_read
+  description: "Internal: one read of a field written as variable.field_x in a Twig template, at its line, joined in the map to the field it names"
+  id_namespace: drupal.template_field_read
+  internal: true
+# One call that names a field as a text literal or a class constant in PHP, at its line:
+# php.method::<class>::<method>|<name><arguments>, or php.function::<function>|<name><arguments>.
+- name: drupal.code_field_read
+  description: "Internal: one ->get(), ->set() or ->hasField() call with a text literal or a class constant in a method or function, at its line, joined in the map to the field it names"
+  id_namespace: drupal.code_field_read
+  internal: true
+# What a read's variable or its template's hook names: entity.<entity type> from a table, else
+# the name as written.
+- name: drupal.field_entity_hint
+  description: "Internal: what a template field read's variable or template name points at, entity.<type> from a lookup table, else the name as written"
+  id_namespace: drupal.field_entity_hint
+  internal: true
+
+edge_kinds:
+- kind: names_field
+  cause: none
+  description: "The method, function, call or template read names that field: a literal or constant in ->get(), ->set() or ->hasField(), or x.field_y in Twig"
+  from: [php.method, php.function, drupal.code_field_read, drupal.template_field_read]
+  to: drupal.field_name
+- kind: read_on_entity
+  cause: none
+  description: "The template field read's variable or template name points at that entity hint, an entity type from a lookup table or the name as written"
+  from: drupal.template_field_read
+  to: drupal.field_entity_hint
+- kind: accesses_field
+  cause: from
+  description: "The method, function or template names that field storage's machine name in ->get(), ->set(), ->hasField() or Twig; a field_ name no storage has ends unresolved"
+  from: [php.method, php.function, drupal.template]
+  to: drupal.field_storage
+- kind: accesses_shared_field_name
+  cause: from
+  description: "The method, function or template names that field machine name, which storages on two or more entity types share, so the storage it means is not known"
+  from: [php.method, php.function, drupal.template]
+  to: drupal.shared_field_name
+
+rules:
+# A text literal: a drupal.code_field_read node at the call's line, which the code_read rules
+# below join to the field the text names. A call on a config factory or a config object, the
+# shapes config/config_call.yaml reads, names no field: the object ends in such a shape. That
+# shape is a variable or a property ending in config, as $config or $this->config; a config
+# factory; or \Drupal::config(), $this->config(), or get() or getEditable() on a config factory.
+- rule: field_read_in_method
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - &read_name {name_matches: {child: name, pattern: 'get|set|hasField'}}
+    - &not_config {name_matches: {child: object, pattern: '(?s)(?!.*?(?:\$\w*[cC]onfig|.*->\w*[cC]onfig|.*(?:configFactory|config_factory)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]config\.factory[''"]\)|\\?Drupal::service\([''"]config\.factory[''"]\)|\\?Drupal::config\((?:[^()]|\([^()]*\))*\)|\$this->config\((?:[^()]|\([^()]*\))*\)|(?:.*(?:configFactory|config_factory)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]config\.factory[''"]\)|\\?Drupal::service\([''"]config\.factory[''"]\))->(?:get|getEditable)\((?:[^()]|\([^()]*\))*\))\Z).*'}}
+    - &read_text {name_matches: {child: arguments, pattern: '(?s)\(\s*[''"][^''"$\\]*[''"]\s*(?:,.*)?\)'}}
+    - within: [method_declaration]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, arguments]
+    template: 'php.method::{enclosing_type}::{enclosing_method}|{declared_name}{arguments}'
+  emits: &read_node [{node: {type: drupal.code_field_read}}]
+  confidence: declared
+
+- rule: field_read_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: name
+    filetype: php
+    holder: function_definition
+    where: [*read_name, *not_config, *read_text]
+  id:
+    from: [enclosing_type, declared_name, arguments]
+    template: 'php.function::{enclosing_type}|{declared_name}{arguments}'
+  emits: *read_node
+  confidence: declared
+
+# A class constant, read as the text a mapped file declares it with, on any object: names_field
+# from the method or function around the call, at its line, which the code_accesses rules below
+# follow. In a method, the call is also a drupal.code_field_read node at its line, which
+# field/field_constant_call.yaml reads for self::X and static::X.
+- rule: field_constant_read_in_method
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: name
+    filetype: php
+    where: [*read_name, &read_constant {name_matches: {child: arguments, pattern: '(?s)\(\s*(?:\\?[A-Za-z_][\w\\]*|self|static)::[A-Z_][A-Z0-9_]*\s*(?:,.*)?\)'}}, {within: [method_declaration]}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, arguments]
+    template: 'php.method::{enclosing_type}::{enclosing_method}|{declared_name}{arguments}'
+  emits: *read_node
+  confidence: declared
+
+# The edge passes over a request's parameter bag, ->attributes, ->query, ->request, ->headers,
+# ->cookies, ->server or ->files, which holds request values and no field, so a core constant
+# there, as RouteObjectInterface::ROUTE_OBJECT, lists no skipped row.
+- rule: field_named_by_constant_in_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - {name_matches: 'get|set|hasField'}
+    - *read_constant
+    - {name_matches: {child: object, pattern: '(?s)(?!.*->(?:attributes|query|request|headers|cookies|server|files)$).*'}}
+  emits: [{edge: {kind: names_field, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.field_name]}}}]
+  confidence: declared
+
+# A template read: the read node, its field-name hub, and what its variable names.
+- rule: field_read_in_template
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\b(?<var>[A-Za-z_]\w*)\.(?<field>field_\w+)'}
+  values:
+    in_twig: {from: {enclosing: twig_expression, capture: mark}}
+  id: {template: '{in_twig}|{template_name}:{var}.{field}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{node: {type: drupal.template_field_read}}]
+  confidence: declared
+
+- rule: field_read_names_field
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\b(?<var>[A-Za-z_]\w*)\.(?<field>field_\w+)'}
+  values:
+    in_twig: {from: {enclosing: twig_expression, capture: mark}}
+  id: {template: '{in_twig}|{template_name}:{var}.{field}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{edge: {kind: names_field, from: this_node, to: {from: {capture: field}, type: drupal.field_name}}}]
+  confidence: declared
+
+- rule: field_read_on_variable
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\b(?<var>[A-Za-z_]\w*)\.(?<field>field_\w+)'}
+  values:
+    in_twig: {from: {enclosing: twig_expression, capture: mark}}
+  id: {template: '{in_twig}|{template_name}:{var}.{field}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{edge: {kind: read_on_entity, from: this_node, to: {from: {capture: var}, resolve: [lookup_last_segment_in: twig_entity_variables, as_written], type: drupal.field_entity_hint}}}]
+  confidence: declared
+
+# content.field_x in <hook>--....html.twig: the hook's entity type.
+- rule: field_read_on_template_hook
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*--*.html', filetype: drupal_template_text, text: '\bcontent\.(?<field>field_\w+)'}
+  values:
+    in_twig: {from: {enclosing: twig_expression, capture: mark}}
+  id: {template: '{in_twig}|{template_name}:content.{field}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{edge: {kind: read_on_entity, from: this_node, to: {template: '{hook_suggestion}', resolve: [lookup_last_segment_in: template_entity_hooks, as_written], type: drupal.field_entity_hint}}}]
+  confidence: declared
+
+# A template read whose entity type is known: that entity type's storage, else a mark.
+- rule: template_accesses_entity_field
+  reads: map
+  match:
+    node_type: drupal.template_field_read
+    where: [{id_matches: '^drupal\.template_field_read::(?<template>[^:]+):\w+\.(?<field>\w+)$'}]
+    follow:
+    - edge: read_on_entity
+    - id_matches: '^drupal\.field_entity_hint::entity\.(?<entity>\w+)$'
+    - node: 'drupal.template::{template}'
+  emits: [{edge: {kind: accesses_field, from: matched_node, to: {template: 'field.storage.{entity}.{field}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred
+
+# A template read whose entity type is not known, through the hub: the name's one storage, its
+# shared name, or the mark. unknown is captured only where no entity hint was reached.
+- rule: template_accesses_field
+  reads: map
+  match:
+    node_type: drupal.template_field_read
+    where: [{id_matches: '^drupal\.template_field_read::(?<read>(?<template>[^:]+):\w+\.(?<field>\w+))$'}]
+    follow:
+    - try: [{edge: read_on_entity}, {id_matches: '^drupal\.field_entity_hint::entity\.'}]
+    - id_matches: '^(?:drupal\.field_entity_hint::|drupal\.template_field_read::(?<unknown>))'
+    - node: 'drupal.template_field_read::{read}'
+    - edge: names_field
+    - edge: field_name_ready
+    - try: [{edge: field_name_shared}]
+    - id_matches: '^(?:drupal\.config::|drupal\.field_name::(?<single>))'
+    - node: 'drupal.field_name::{field}'
+    - edge: field_name_of
+    - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+)\.'
+    - node: 'drupal.template::{template}'
+  emits: [{edge: {kind: accesses_field, from: matched_node, to: {template: 'field.storage.{entity}.{field}{unknown}{single}', type: drupal.field_storage}}}]
+  confidence: inferred
+
+- rule: template_accesses_shared_field_name
+  reads: map
+  match:
+    node_type: drupal.template_field_read
+    where: [{id_matches: '^drupal\.template_field_read::(?<read>(?<template>[^:]+):\w+\.(?<field>\w+))$'}]
+    follow:
+    - try: [{edge: read_on_entity}, {id_matches: '^drupal\.field_entity_hint::entity\.'}]
+    - id_matches: '^(?:drupal\.field_entity_hint::|drupal\.template_field_read::(?<unknown>))'
+    - node: 'drupal.template_field_read::{read}'
+    - edge: names_field
+    - edge: field_name_shared
+    - node: 'drupal.template::{template}'
+  emits: [{edge: {kind: accesses_shared_field_name, from: matched_node, to: {template: '{field}{unknown}', type: drupal.shared_field_name}}}]
+  confidence: inferred
+
+- rule: template_accesses_field_mark
+  reads: map
+  match:
+    node_type: drupal.template_field_read
+    where: [{id_matches: '^drupal\.template_field_read::(?<read>(?<template>[^:]+):\w+\.(?<field>\w+))$'}]
+    follow:
+    - try: [{edge: read_on_entity}, {id_matches: '^drupal\.field_entity_hint::entity\.'}]
+    - id_matches: '^(?:drupal\.field_entity_hint::|drupal\.template_field_read::(?<unknown>))'
+    - node: 'drupal.template_field_read::{read}'
+    - edge: names_field
+    - try: [{edge: field_name_of}]
+    - id_matches: '^(?:drupal\.config::|drupal\.field_name::(?<none>))'
+    - node: 'drupal.template::{template}'
+  emits: [{edge: {kind: accesses_field, from: matched_node, to: {template: 'field.storage.{field}{unknown}{none}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred
+
+# Code, a text literal: the read node at the call's line, joined as a template read is. The name's
+# one storage, when no two storages of it differ in entity type; its shared name; or the mark.
+- rule: code_read_accesses_field
+  reads: map
+  match:
+    node_type: drupal.code_field_read
+    where: [&read_id {id_matches: '(?s)^drupal\.code_field_read::(?<caller>php\.(?:method|function)::[^|]+)\|\w+\(\s*[''"](?<field>[^''"]*)[''"]'}]
+    follow:
+    - node: 'drupal.field_name::{field}'
+    - edge: field_name_ready
+    - try: [{edge: field_name_shared}]
+    - id_matches: '^(?:drupal\.config::|drupal\.field_name::(?<single>))'
+    - node: 'drupal.field_name::{field}'
+    - edge: field_name_of
+    - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+)\.'
+    - node: '{caller}'
+  emits: [{edge: {kind: accesses_field, from: matched_node, to: {template: 'field.storage.{entity}.{field}{single}', type: drupal.field_storage}}}]
+  confidence: inferred
+
+- rule: code_read_accesses_shared_field_name
+  reads: map
+  match:
+    node_type: drupal.code_field_read
+    where: [*read_id]
+    follow:
+    - node: 'drupal.field_name::{field}'
+    - edge: field_name_shared
+    - node: '{caller}'
+  emits: [{edge: {kind: accesses_shared_field_name, from: matched_node, to: {template: '{field}', type: drupal.shared_field_name}}}]
+  confidence: inferred
+
+# none is captured only where the name has no hub with a storage.
+- rule: code_read_accesses_field_mark
+  reads: map
+  match:
+    node_type: drupal.code_field_read
+    where: [{id_matches: '(?s)^drupal\.code_field_read::(?<caller>php\.(?:method|function)::[^|]+)\|\w+\(\s*[''"](?<field>field_\w+)[''"]'}]
+    follow:
+    - try: [{node: 'drupal.field_name::{field}'}, {edge: field_name_of}]
+    - id_matches: '^(?:drupal\.config::|drupal\.code_field_read::(?<none>))'
+    - node: '{caller}'
+  emits: [{edge: {kind: accesses_field, from: matched_node, to: {template: 'field.storage.{field}{none}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred
+
+# Code, a class constant: from the method or function, each names_field link its file rule wrote,
+# placed at the link's line, the call, to the name's one storage, from the second pass, when no two
+# storages of it differ in entity type; single is captured only where no field_name_shared edge was
+# reached. field/field_constant_call.yaml gives self::X and static::X declared on a parent or an
+# interface.
+- rule: code_accesses_field
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - &names_field {edge: names_field}
+    - &placed {place: edge}
+    - id_matches: '^drupal\.field_name::(?<field>.+)$'
+    - edge: field_name_ready
+    - try: [{edge: field_name_shared}]
+    - id_matches: '^(?:drupal\.config::|drupal\.field_name::(?<single>))'
+    - node: 'drupal.field_name::{field}'
+    - edge: field_name_of
+    - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+)\.'
+  emits: [{edge: {kind: accesses_field, from: this_node, to: {template: 'field.storage.{entity}.{field}{single}', type: drupal.field_storage}}}]
+  confidence: inferred
+
+- rule: code_accesses_shared_field_name
+  reads: map
+  match:
+    node_type: php.callable
+    follow: [*names_field, *placed, {id_matches: '^drupal\.field_name::(?<field>.+)$'}, {edge: field_name_shared}]
+  emits: [{edge: {kind: accesses_shared_field_name, from: this_node, to: {template: '{field}', type: drupal.shared_field_name}}}]
+  confidence: inferred
+
+# A name that starts with field_ and that no mapped storage has: the unresolved
+# field.storage.<name>. none is captured only where no storage was reached.
+- rule: code_accesses_field_mark
+  reads: map
+  match:
+    node_type: php.callable
+    follow:
+    - *names_field
+    - *placed
+    - id_matches: '^drupal\.field_name::(?<field>field_\w+)$'
+    - try: [{edge: field_name_of}]
+    - id_matches: '^(?:drupal\.config::|drupal\.field_name::(?<none>))'
+  emits: [{edge: {kind: accesses_field, from: this_node, to: {template: 'field.storage.{field}{none}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred

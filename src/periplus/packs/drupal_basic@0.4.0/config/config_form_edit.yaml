@@ -1,0 +1,254 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# $this->config('x') reads or edits x, as ConfigFormBaseTrait::config() decides: it returns an
+# editable object for a name the class's getEditableConfigNames() lists, and an immutable one for
+# any other name. Each name getEditableConfigNames() returns, as 'x' or as self::X or static::X,
+# gives declares_editable_config from the class to that configuration object, at the name's line.
+# Each $this->config('x') or $this->config(self::X|static::X) gives edits_config_object when the
+# class, or the nearest ancestor that writes getEditableConfigNames(), lists the same name, as text
+# or as a constant of the same text, and reads_config_object otherwise, from the method around the
+# call, at the call's line. A constant's text is read from the class or its nearest ancestor or
+# interface that declares it (constant/constant_text.yaml). A configuration object no mapped file
+# declares ends unresolved.
+#
+# Both rules read the PHP as text, in a class under src, by Drupal's PSR-4 layout; a file rule
+# keeps the call and the listed names as internal nodes, and map rules join them, so each edge is
+# inferred. $this->config() in a class with no getEditableConfigNames() is read as a read, taken
+# to be core's config() of ControllerBase, FormBase or ConfigFormBase; in a test class of a
+# module's tests/src/Kernel, Functional or FunctionalJavascript folder, which by Drupal's test
+# layout descends from KernelTestBase or BrowserTestBase, whose config() calls getEditable(), it is
+# an edit.
+#
+# Limits: getEditableConfigNames() returning a variable, a concatenation, a call or a constant of
+# another class lists nothing, so $this->config() of such a name reads as a read. A name built at
+# run time in $this->config() is kept by config/config_runtime_name.yaml.
+
+node_types:
+- name: drupal.own_config_call
+  description: "internal: a $this->config() call with a text or a self::/static:: constant, named <class>::<method>|<name> or <class>::<method>|::<CONSTANT>"
+  id_namespace: drupal.own_config_call
+  internal: true
+- name: drupal.editable_config_name
+  description: "internal: a name a class's getEditableConfigNames() returns, named <class>|<name> or <class>|::<CONSTANT>"
+  id_namespace: drupal.editable_config_name
+  internal: true
+
+edge_kinds:
+- kind: declares_editable_config
+  cause: none
+  description: "the class's getEditableConfigNames() lists that configuration object, so its $this->config() of that name returns an editable object"
+  from: php.class_like
+  to: drupal.config_object
+- kind: lists_editable_name
+  cause: none
+  description: "internal step: the class's getEditableConfigNames() returns that name"
+  from: php.class_like
+  to: drupal.editable_config_name
+
+rules:
+# The file rules. A name inside getEditableConfigNames(), as text or as a constant of the class.
+- rule: editable_config_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [string]
+    text: '(?<=[\[(,\s])[''"](?<config>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_*-]+)+)[''"](?=\s*[,\])])'
+  values: &in_editable_names
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '^(?!getEditableConfigNames$).*$', with: ''}]}
+  id: {template: '{psr4_class}|{config}{function}', normalize: [{replace: 'getEditableConfigNames$', with: ''}]}
+  line: {capture: config}
+  emits: [{node: {type: drupal.editable_config_name}}]
+  confidence: declared
+
+- rule: editable_config_constant
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?<=[\[(,\s])(?:self|static)::(?<constant>[A-Z_][A-Z0-9_]*)(?=\s*[,\])])'
+  values: *in_editable_names
+  id: {template: '{psr4_class}|::{constant}{function}', normalize: [{replace: 'getEditableConfigNames$', with: ''}]}
+  line: {capture: constant}
+  emits: [{node: {type: drupal.editable_config_name}}]
+  confidence: declared
+
+- rule: editable_config_name_of_class
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [string]
+    text: '(?<=[\[(,\s])[''"](?<config>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_*-]+)+)[''"](?=\s*[,\])])'
+  values: *in_editable_names
+  id: {template: '{psr4_class}|{config}{function}', normalize: [{replace: 'getEditableConfigNames$', with: ''}]}
+  line: {capture: config}
+  emits: [{edge: {kind: lists_editable_name, from: {template: '{psr4_class}', types: [php.class_like]}, to: this_node}}]
+  confidence: declared
+
+- rule: editable_config_constant_of_class
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?<=[\[(,\s])(?:self|static)::(?<constant>[A-Z_][A-Z0-9_]*)(?=\s*[,\])])'
+  values: *in_editable_names
+  id: {template: '{psr4_class}|::{constant}{function}', normalize: [{replace: 'getEditableConfigNames$', with: ''}]}
+  line: {capture: constant}
+  emits: [{edge: {kind: lists_editable_name, from: {template: '{psr4_class}', types: [php.class_like]}, to: this_node}}]
+  confidence: declared
+
+# $this->config('x') and $this->config(self::X), in a method of a class under src.
+- rule: own_config_call
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\$this\s*->\s*config\(\s*[''"](?<config>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_-]+)+)[''"]\s*\)'
+  values: &method
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{psr4_class}::{method}|{config}'}
+  emits: [{node: {type: drupal.own_config_call}}]
+  confidence: declared
+
+- rule: own_config_constant_call
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\$this\s*->\s*config\(\s*(?:self|static)::(?<constant>[A-Z_][A-Z0-9_]*)\s*\)'
+  values: *method
+  id: {template: '{psr4_class}::{method}|::{constant}'}
+  emits: [{node: {type: drupal.own_config_call}}]
+  confidence: declared
+
+# The class lists the name: the step the map rules below take, and the edge a reader sees.
+- rule: class_declares_editable_config
+  reads: map
+  match:
+    node_type: drupal.editable_config_name
+    where: [{id_matches: '^drupal\.editable_config_name::(?<class>[^|]+)\|(?<config>[^:].*)$'}]
+    follow: [{node: 'php.type::{class}'}]
+  emits: [{edge: {kind: declares_editable_config, from: matched_node, to: {template: '{config}', types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: declared
+
+- rule: class_declares_editable_config_constant
+  reads: map
+  match:
+    node_type: drupal.editable_config_name
+    where: [{id_matches: '^drupal\.editable_config_name::(?<class>[^|]+)\|::(?<constant>\w+)$'}]
+    follow: &constant_text
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<config>.+)$'
+    - node: 'php.type::{class}'
+  emits: [{edge: {kind: declares_editable_config, from: matched_node, to: {template: '{config}', types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred
+
+# $this->config('x'): edited when the class or its nearest ancestor that lists names lists x, as
+# text or as a constant whose text is x.
+- rule: own_config_edited
+  reads: map
+  match:
+    node_type: drupal.own_config_call
+    where: [&literal_call {id_matches: '^drupal\.own_config_call::(?<class>.+)::(?<method>\w+)\|(?<config>[^:].*)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - edge: lists_editable_name
+    - id_matches: '^drupal\.editable_config_name::[^|]+\|{config}$'
+    - node: 'php.method::{class}::{method}'
+  emits: [{edge: {kind: edits_config_object, from: matched_node, to: {template: '{config}', types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: own_config_edited_by_listed_constant
+  reads: map
+  match:
+    node_type: drupal.own_config_call
+    where: [*literal_call]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - edge: lists_editable_name
+    - id_matches: '^drupal\.editable_config_name::(?<lister>[^|]+)\|::(?<constant>\w+)$'
+    - node: 'php.type::{lister}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::{config}$'
+    - node: 'php.method::{class}::{method}'
+  emits: [{edge: {kind: edits_config_object, from: matched_node, to: {template: '{config}', types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: own_config_edited_in_test
+  reads: map
+  match:
+    node_type: drupal.own_config_call
+    where: [*literal_call, &test_class {id_matches: '^drupal\.own_config_call::Drupal\\Tests\\[^\\]+\\(?:Kernel|Functional|FunctionalJavascript)\\'}]
+    follow: [{node: 'php.method::{class}::{method}'}]
+  emits: [{edge: {kind: edits_config_object, from: matched_node, to: {template: '{config}', types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: own_config_read
+  reads: map
+  match:
+    node_type: drupal.own_config_call
+    where: [*literal_call]
+    follow: [{node: 'php.method::{class}::{method}'}]
+    unless:
+    - [{id_matches: '^drupal\.own_config_call::Drupal\\Tests\\[^\\]+\\(?:Kernel|Functional|FunctionalJavascript)\\'}]
+    - [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {edge: lists_editable_name}, {id_matches: '^drupal\.editable_config_name::[^|]+\|{config}$'}]
+    - [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {edge: lists_editable_name}, {id_matches: '^drupal\.editable_config_name::(?<lister>[^|]+)\|::(?<constant>\w+)$'}, {node: 'php.type::{lister}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<owner>.+)$'}, {node: 'drupal.class_constant::{owner}::{constant}'}, {edge: has_constant_text}, {id_matches: '^drupal\.constant_text::{config}$'}]
+  emits: [{edge: {kind: reads_config_object, from: matched_node, to: {template: '{config}', types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred
+
+# $this->config(self::X): the constant's text first, then the same two tests.
+- rule: own_config_constant_edited
+  reads: map
+  match:
+    node_type: drupal.own_config_call
+    where: [&constant_call {id_matches: '^drupal\.own_config_call::(?<class>.+)::(?<method>\w+)\|::(?<constant>\w+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<config>.+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - edge: lists_editable_name
+    - id_matches: '^drupal\.editable_config_name::[^|]+\|(?:::{constant}|{config})$'
+    - node: 'php.method::{class}::{method}'
+  emits: [{edge: {kind: edits_config_object, from: matched_node, to: {template: '{config}', types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: own_config_constant_read
+  reads: map
+  match:
+    node_type: drupal.own_config_call
+    where: [*constant_call]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<config>.+)$'
+    - node: 'php.method::{class}::{method}'
+    unless:
+    - [{id_matches: '^drupal\.own_config_call::Drupal\\Tests\\[^\\]+\\(?:Kernel|Functional|FunctionalJavascript)\\'}]
+    unless_matched:
+    - [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {edge: lists_editable_name}, {id_matches: '^drupal\.editable_config_name::[^|]+\|(?:::{constant}|{config})$'}]
+  emits: [{edge: {kind: reads_config_object, from: matched_node, to: {template: '{config}', types: [drupal.config_object], on_miss: unresolved}}}]
+  confidence: inferred

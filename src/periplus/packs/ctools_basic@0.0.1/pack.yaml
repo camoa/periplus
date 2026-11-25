@@ -1,0 +1,54 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The Chaos Tools (ctools) contributed module, beside what drupal_basic already reads of it:
+# - each route default ctools reads: _wizard, a uses_wizard edge to the form wizard class;
+#   _entity_wizard: 'type.operation', a shows_entity_wizard edge to the entity type and a
+#   uses_entity_wizard edge to the wizard class the entity type declares for the operation under
+#   its handlers' wizard group; and tempstore_id, as a default or on a tempstore route parameter,
+#   the route's tempstore_id attribute and a uses_tempstore edge to a ctools.tempstore node that
+#   routes naming the same id share (route/route_wizard.yaml);
+# - each class that descends from ctools' FormWizardBase, as a ctools.form_wizard, or from
+#   EntityFormWizardBase, as a ctools.entity_form_wizard, by the boundary group ctools_classes
+#   below; and each step form a wizard's getOperations() names under 'form', as a class constant
+#   or a full name in text, a wizard_step_form edge from that method to the form class
+#   (wizard/wizard.yaml).
+#
+# What drupal_basic already gives, with no rule here: ctools' Relationship plugins and the block
+# plugins of ctools and ctools_block (entity_view, entity_field), by the general plugin rules; a
+# route requirement _ctools_access, joined to the ctools.access service by its applies_to tag;
+# the alter hooks of ctools, ctools_block, ctools_views and ctools_entity_mask; and the
+# configuration schema keys of ctools and ctools_block, with block.settings.entity_field:* joined
+# to its block plugin.
+#
+# Not mapped yet:
+# - A Relationship plugin's data_type, property_name and context definitions: ctools' own plugins
+#   set them in their derivers, and no module read writes them in the annotation.
+# - ctools' display variant plugins (BlockDisplayVariant is a base, not a plugin) and the blocks
+#   a variant holds, which live in configuration.
+# - ctools_views: the class its hook_views_plugins_display_alter() puts in place of core's block
+#   display, and the schema its hook_config_schema_info_alter() changes.
+# - ctools_entity_mask: an entity type's mask key, which names the entity type it copies its
+#   fields and displays from.
+# - The step forms of a wizard written other than as a 'form' key in getOperations(), and a
+#   wizard's route name and tempstore id returned by its own methods.
+pack: ctools_basic
+version: 0.0.1
+depends: [drupal_basic]
+
+# Detected when the project requires the module, or the site's configuration enables it.
+detect:
+  any_of:
+    - path: composer.json
+      contains: "drupal/ctools"
+    - path: "{config}/core.extension.yml"
+      contains: "\n  ctools: "
+
+# ctools' wizard bases, which a project's wizard extends and the map does not read when ctools is
+# a contributed module. A class that descends from one takes its type.
+boundary:
+  ctools_classes:
+    type: php.class_like
+    ancestry: [inherits, implements]
+    names:
+      Drupal\ctools\Wizard\EntityFormWizardBase: ctools.entity_form_wizard
+      Drupal\ctools\Wizard\FormWizardBase: ctools.form_wizard

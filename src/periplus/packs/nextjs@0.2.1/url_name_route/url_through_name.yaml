@@ -1,0 +1,16 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+# A module that fetches a name reaches the route the name holds, at the line of each fetch: the
+# map rule starts at typescript's name_fetch node of the call.
+rules:
+- rule: fetch_through_name
+  reads: map
+  match:
+    node_type: typescript.name_fetch
+    where: [{id_matches: '^typescript\.name_fetch::(?<module>[^|]+)\|(?<var>\w+)$'}]
+    follow:
+    - {node: 'typescript.module::{module}'}
+    - {edge: fetches_name}
+    - {id_matches: '^typescript\.url_name::{module}\|{var}$'}
+    - {edge: name_holds_route}
+  emits: [{edge: {kind: calls_route, from: {template: '{module}', type: typescript.module}, to: matched_node}}]
+  confidence: inferred

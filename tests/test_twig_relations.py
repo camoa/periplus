@@ -36,7 +36,7 @@ def _plant(root: Path) -> None:
     (theme / "components" / "button").mkdir(parents=True)
     (root / ".periplus").mkdir()
     (root / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n"
     )
     (theme / "mytheme.info.yml").write_text("name: My theme\ntype: theme\nbase theme: false\n")
     for name, text in TEMPLATES.items():

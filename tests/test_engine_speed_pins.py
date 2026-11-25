@@ -377,7 +377,7 @@ def test_a_reference_rule_s_enclosing_declaration_rules_are_found_once_per_run(
     plant(
         tmp_path,
         {
-            ".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n",
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.3.0]\n",
             "One.php": THING,
             "Two.php": THING.replace("Thing", "Other"),
         },
@@ -494,7 +494,7 @@ def test_a_tree_node_s_children_are_scanned_once_for_each_set_of_body_types(
     plant(
         tmp_path,
         {
-            ".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n",
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.3.0]\n",
             "Many.php": MEMBERS,
         },
     )
@@ -533,7 +533,7 @@ def test_a_rule_s_packs_are_worked_out_once_whatever_the_number_of_files(
     def counted(files: int) -> int:
         root = tmp_path / str(files)
         sources = {f"S{n}.php": THING.replace("Thing", f"Thing{n}") for n in range(files)}
-        plant(root, {".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n"})
+        plant(root, {".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.3.0]\n"})
         plant(root, sources)
         calls: list[str] = []
 
@@ -559,7 +559,7 @@ def test_each_yaml_file_of_a_run_is_parsed_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The settings, each pack's manifest and each of its rule files: one parse each."""
-    plant(tmp_path, {".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n"})
+    plant(tmp_path, {".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.3.0]\n"})
     plant(tmp_path, {"One.php": THING})
     parsed: list[str] = []
 

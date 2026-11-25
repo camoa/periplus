@@ -1,0 +1,701 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Autowiring, as Drupal's YamlFileLoader and Symfony's container do it.
+#
+# A service's autowire, autoconfigure and public keys, from its own entry, else from its file's
+# _defaults, are written on the service as the attributes autowire, autoconfigure and public, each
+# the text true or false. _defaults gives autowire and autoconfigure to every service but an alias,
+# and public to aliases too, as YamlFileLoader does. A map rule writes each, so a value read from
+# the entry and one carried from _defaults take one form.
+#
+# A service is autowired when its entry sets autowire: true, or when its file's _defaults sets it
+# and the entry does not set autowire itself. The container gives each parameter of its class's
+# constructor the service whose id is the parameter's type, an alias such as
+# Drupal\mymod\MailerInterface: '@mymod.mailer' among them, and asks for nothing else by type. Each
+# such parameter gives an injects_service edge, at the parameter's line, inferred, its edge
+# attribute autowired_by saying which match gave it:
+# - the type is a service id or alias the map holds: an edge to it;
+# - else an edge to the type as a service id, marked unresolved, as core's
+#   Drupal\Core\Config\ConfigFactoryInterface is in a map without core.
+# A parameter that carries #[Autowire(service: 'x')], #[Autowire('@x')],
+# #[Autowire(value: '@x')], #[AutowireServiceClosure('x')], or the same attributes with the service
+# written X::class, gets the service x instead: an autowire_names_service edge from the parameter,
+# read wherever it is written, and for an autowired service an injects_service edge, declared, at
+# the attribute's line. X is read as call/service_class_constant.yaml reads it, the service of X's
+# full name. A parameter that carries any other attribute of Symfony's dependency injection, such
+# as AutowireCallable, gets no edge by its type.
+#
+# Arguments written in the entry take their parameters' places, and autowiring fills the rest. A
+# named argument, $name: '@x', takes the parameter $name, so that parameter gets no autowired edge
+# and the others still do. A list of arguments fills the first parameters by position, so a service
+# whose arguments are a list gets no autowired edge here; service_positional_autowire.yaml gives
+# the parameters after the list theirs.
+#
+# Limits: a constructor the class inherits, a parameter typed by a union, a scalar parameter, an
+# untyped plain parameter, an attribute with another argument, such as param: or env:, and an
+# attribute whose X::class or parameter the patterns do not read give none. A Symfony autowiring
+# alias named by type and parameter name, as 'Psr\Log\LoggerInterface $acmeLogger', is read as the
+# type alone. A $name: key anywhere in the entry counts as a named argument.
+
+node_types:
+- name: drupal.autowired_service
+  description: "internal: a service whose own entry in services.yml sets autowire: true"
+  id_namespace: drupal.autowired_service
+  internal: true
+- name: drupal.service_sets_autowire
+  description: "internal: a service whose own entry sets autowire, true or false"
+  id_namespace: drupal.service_sets_autowire
+  internal: true
+- name: drupal.autoconfigured_service
+  description: "internal: a service whose own entry sets autoconfigure: true"
+  id_namespace: drupal.autoconfigured_service
+  internal: true
+- name: drupal.service_sets_autoconfigure
+  description: "internal: a service whose own entry sets autoconfigure, true or false"
+  id_namespace: drupal.service_sets_autoconfigure
+  internal: true
+- name: drupal.public_service
+  description: "internal: a service whose own entry sets public: true"
+  id_namespace: drupal.public_service
+  internal: true
+- name: drupal.service_sets_public
+  description: "internal: a service whose own entry sets public, true or false"
+  id_namespace: drupal.service_sets_public
+  internal: true
+- name: drupal.service_positional_arguments
+  description: "internal: a service whose arguments are a list, which fills its first parameters by position"
+  id_namespace: drupal.service_positional_arguments
+  internal: true
+- name: drupal.service_named_argument
+  description: "internal: a named argument $name of a service's entry, <service>|<name>"
+  id_namespace: drupal.service_named_argument
+  internal: true
+- name: drupal.services_file
+  description: "internal: a services file, its path less .services.yml"
+  id_namespace: drupal.services_file
+  internal: true
+- name: drupal.autowire_services_file
+  description: "internal: a services file whose _defaults sets autowire: true"
+  id_namespace: drupal.autowire_services_file
+  internal: true
+- name: drupal.autoconfigure_services_file
+  description: "internal: a services file whose _defaults sets autoconfigure: true"
+  id_namespace: drupal.autoconfigure_services_file
+  internal: true
+- name: drupal.public_services_file
+  description: "internal: a services file whose _defaults sets public: true"
+  id_namespace: drupal.public_services_file
+  internal: true
+- name: drupal.private_services_file
+  description: "internal: a services file whose _defaults sets public: false"
+  id_namespace: drupal.private_services_file
+  internal: true
+- name: drupal.constructor_parameter
+  description: "internal: a parameter of a method typed by a class name, <class>::<method>::$<name>::<type>"
+  id_namespace: drupal.constructor_parameter
+  internal: true
+
+attributes:
+- name: autowire
+  on: [drupal.service]
+  description: "the service's autowire setting, true or false, from its own entry or from its file's _defaults"
+- name: autoconfigure
+  on: [drupal.service]
+  description: "the service's autoconfigure setting, true or false, from its own entry or from its file's _defaults"
+- name: public
+  on: [drupal.service]
+  description: "the service's public setting, true or false, from its own entry or from its file's _defaults"
+
+edge_attributes:
+- name: autowired_by
+  on: [injects_service, autowires_service]
+  description: "how autowiring picked the service: the parameter's type is its id or alias, or an Autowire attribute names it"
+
+edge_kinds:
+- kind: in_services_file
+  cause: none
+  description: "internal: the service is declared in that services file"
+  from: drupal.service
+  to: drupal.services_file
+- kind: autowire_names_service
+  cause: from
+  description: "the constructor parameter carries #[Autowire] naming that service, which autowiring passes to it"
+  from: [php.property, php.parameter]
+  to: drupal.service
+
+rules:
+# The markers, one per entry and key.
+- rule: service_autowired
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - key: {name: autowire, equals: true}
+  id: {from: key}
+  emits: [{node: {type: drupal.autowired_service}}]
+  confidence: declared
+
+- rule: service_sets_autowire
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - key: {name: autowire, not_equals: null}
+  id: {from: key}
+  emits: [{node: {type: drupal.service_sets_autowire}}]
+  confidence: declared
+
+- rule: service_autoconfigured
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - key: {name: autoconfigure, equals: true}
+  id: {from: key}
+  emits: [{node: {type: drupal.autoconfigured_service}}]
+  confidence: declared
+
+- rule: service_sets_autoconfigure
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - key: {name: autoconfigure, not_equals: null}
+  id: {from: key}
+  emits: [{node: {type: drupal.service_sets_autoconfigure}}]
+  confidence: declared
+
+- rule: service_public
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - key: {name: public, equals: true}
+  id: {from: key}
+  emits: [{node: {type: drupal.public_service}}]
+  confidence: declared
+
+- rule: service_sets_public
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - key: {name: public, not_equals: null}
+  id: {from: key}
+  emits: [{node: {type: drupal.service_sets_public}}]
+  confidence: declared
+
+# Arguments as a list, written [...] with something in it, or as lines that start with a dash.
+- rule: service_positional_arguments
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: drupal_yml_text
+    text: '(?m)^[ \t]+arguments:[ \t]*(?:\[(?![ \t]*\])|(?:#[^\n]*)?\n[ \t]*-)'
+  values: &entry_values
+    in_services: {from: {enclosing: services_block, capture: mark}}
+    service: {from: {enclosing: service_entry, capture: service}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{in_services}|{service}', normalize: [{replace: '^services\|', with: ''}]}
+  emits: [{node: {type: drupal.service_positional_arguments}}]
+  confidence: declared
+
+- rule: service_named_argument
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: drupal_yml_text
+    text: '(?:^|[\s{,])\$(?<param>\w+)[ \t]*:'
+  values: *entry_values
+  id: {template: '{in_services}|{service}|{param}', normalize: [{replace: '^services\|', with: ''}]}
+  emits: [{node: {type: drupal.service_named_argument}}]
+  confidence: declared
+
+- rule: service_in_services_file
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+  id: {from: key}
+  emits:
+  - edge: {kind: in_services_file, from: this_node, to: {from: [], template: '{services_file}'}}
+  confidence: declared
+
+- rule: services_file_autowire_default
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yml
+    each: services.*
+    where:
+    - id_matches: ^_defaults$
+    - key: {name: autowire, equals: true}
+  id: {template: '{services_file}'}
+  emits: [{node: {type: drupal.autowire_services_file}}]
+  confidence: declared
+
+- rule: services_file_autoconfigure_default
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yml
+    each: services.*
+    where:
+    - id_matches: ^_defaults$
+    - key: {name: autoconfigure, equals: true}
+  id: {template: '{services_file}'}
+  emits: [{node: {type: drupal.autoconfigure_services_file}}]
+  confidence: declared
+
+- rule: services_file_public_default
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yml
+    each: services.*
+    where:
+    - id_matches: ^_defaults$
+    - key: {name: public, equals: true}
+  id: {template: '{services_file}'}
+  emits: [{node: {type: drupal.public_services_file}}]
+  confidence: declared
+
+- rule: services_file_private_default
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: yml
+    each: services.*
+    where:
+    - id_matches: ^_defaults$
+    - key: {name: public, equals: false}
+  id: {template: '{services_file}'}
+  emits: [{node: {type: drupal.private_services_file}}]
+  confidence: declared
+
+# The attributes: the entry's own value first, else the one _defaults gives.
+- rule: service_autowire_true
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: &service '^drupal\.service::(?<svc>.+)$'}]
+    follow: [{node: 'drupal.autowired_service::{svc}'}]
+  emits: [{attribute: {name: autowire, template: 'true'}}]
+  confidence: declared
+
+- rule: service_autowire_false
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: *service}]
+    follow: [{node: 'drupal.service_sets_autowire::{svc}'}]
+    unless: [[{node: 'drupal.autowired_service::{svc}'}]]
+  emits: [{attribute: {name: autowire, template: 'false'}}]
+  confidence: declared
+
+- rule: service_autowire_from_defaults
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: *service}]
+    follow:
+    - &in_file {edge: in_services_file}
+    - &file_id {id_matches: '^drupal\.services_file::(?<file>.+)$'}
+    - node: 'drupal.autowire_services_file::{file}'
+    unless: [[{node: 'drupal.service_sets_autowire::{svc}'}], [{edge: alias_of_service}]]
+  emits: [{attribute: {name: autowire, template: 'true'}}]
+  confidence: declared
+
+- rule: service_autoconfigure_true
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: *service}]
+    follow: [{node: 'drupal.autoconfigured_service::{svc}'}]
+  emits: [{attribute: {name: autoconfigure, template: 'true'}}]
+  confidence: declared
+
+- rule: service_autoconfigure_false
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: *service}]
+    follow: [{node: 'drupal.service_sets_autoconfigure::{svc}'}]
+    unless: [[{node: 'drupal.autoconfigured_service::{svc}'}]]
+  emits: [{attribute: {name: autoconfigure, template: 'false'}}]
+  confidence: declared
+
+- rule: service_autoconfigure_from_defaults
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: *service}]
+    follow: [*in_file, *file_id, {node: 'drupal.autoconfigure_services_file::{file}'}]
+    unless: [[{node: 'drupal.service_sets_autoconfigure::{svc}'}], [{edge: alias_of_service}]]
+  emits: [{attribute: {name: autoconfigure, template: 'true'}}]
+  confidence: declared
+
+- rule: service_public_true
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: *service}]
+    follow: [{node: 'drupal.public_service::{svc}'}]
+  emits: [{attribute: {name: public, template: 'true'}}]
+  confidence: declared
+
+- rule: service_public_false
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: *service}]
+    follow: [{node: 'drupal.service_sets_public::{svc}'}]
+    unless: [[{node: 'drupal.public_service::{svc}'}]]
+  emits: [{attribute: {name: public, template: 'false'}}]
+  confidence: declared
+
+- rule: service_public_from_defaults
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: *service}]
+    follow: [*in_file, *file_id, {node: 'drupal.public_services_file::{file}'}]
+    unless: [[{node: 'drupal.service_sets_public::{svc}'}]]
+  emits: [{attribute: {name: public, template: 'true'}}]
+  confidence: declared
+
+- rule: service_private_from_defaults
+  reads: map
+  match:
+    node_type: drupal.service
+    where: [{id_matches: *service}]
+    follow: [*in_file, *file_id, {node: 'drupal.private_services_file::{file}'}]
+    unless: [[{node: 'drupal.service_sets_public::{svc}'}]]
+  emits: [{attribute: {name: public, template: 'false'}}]
+  confidence: declared
+
+# Each parameter of a method typed by a class name, ?Name included, promoted or not. The map rules
+# below read only the constructor's.
+- rule: constructor_promoted_parameter
+  reads: file
+  in: [source]
+  match:
+    declaration: property_promotion_parameter
+    name_child: name
+    filetype: php
+    where: [{has_child: named_type}]
+  id: &parameter_id
+    from: [enclosing_type, enclosing_method, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}::{type}"
+  emits: [{node: {type: drupal.constructor_parameter}}]
+  confidence: declared
+
+- rule: constructor_promoted_nullable_parameter
+  reads: file
+  in: [source]
+  match:
+    declaration: property_promotion_parameter
+    name_child: name
+    filetype: php
+    where: [{has_child: optional_type}]
+  id: *parameter_id
+  emits: [{node: {type: drupal.constructor_parameter}}]
+  confidence: declared
+
+- rule: constructor_plain_parameter
+  reads: file
+  in: [source]
+  match:
+    declaration: simple_parameter
+    name_child: name
+    filetype: php
+    where: [{has_child: named_type}, {not_within: [anonymous_function, arrow_function]}]
+  id: *parameter_id
+  emits: [{node: {type: drupal.constructor_parameter}}]
+  confidence: declared
+
+- rule: constructor_plain_nullable_parameter
+  reads: file
+  in: [source]
+  match:
+    declaration: simple_parameter
+    name_child: name
+    filetype: php
+    where: [{has_child: optional_type}, {not_within: [anonymous_function, arrow_function]}]
+  id: *parameter_id
+  emits: [{node: {type: drupal.constructor_parameter}}]
+  confidence: declared
+
+# #[Autowire(service: 'x')], and #[Autowire('@x')] or #[Autowire(value: '@x')], on a parameter,
+# written as a name or a qualified name: from the promoted property or the parameter it sits on.
+- rule: autowire_attribute_service
+  reads: file
+  in: [source]
+  match:
+    reference: attribute
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: 'Autowire'}
+    - &service_argument
+      name_matches: {child: parameters, pattern: '\(\s*service\s*:\s*[''"](?<svc>[^''"@%][^''"]*)[''"]\s*,?\s*\)'}
+  emits: &autowire_edge [{edge: {kind: autowire_names_service, from: enclosing_declaration, to: {template: '{svc}', types: [drupal.service]}}}]
+  confidence: declared
+
+- rule: autowire_attribute_at_service
+  reads: file
+  in: [source]
+  match:
+    reference: attribute
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: 'Autowire'}
+    - &at_argument
+      name_matches: {child: parameters, pattern: '\(\s*(?:value\s*:\s*)?[''"]@(?<svc>[^''"@%][^''"]*)[''"]\s*,?\s*\)'}
+  emits: *autowire_edge
+  confidence: declared
+
+- rule: autowire_qualified_attribute_service
+  reads: file
+  in: [source]
+  match:
+    reference: attribute
+    name_child: qualified_name
+    filetype: php
+    where:
+    - name_matches: {child: qualified_name, pattern: '\\?Symfony\\Component\\DependencyInjection\\Attribute\\Autowire'}
+    - *service_argument
+  emits: *autowire_edge
+  confidence: declared
+
+- rule: autowire_qualified_attribute_at_service
+  reads: file
+  in: [source]
+  match:
+    reference: attribute
+    name_child: qualified_name
+    filetype: php
+    where:
+    - name_matches: {child: qualified_name, pattern: '\\?Symfony\\Component\\DependencyInjection\\Attribute\\Autowire'}
+    - *at_argument
+  emits: *autowire_edge
+  confidence: declared
+
+# #[AutowireServiceClosure('x')] or (service: 'x'): a closure that returns the service x when
+# called, the service passed lazily.
+- rule: autowire_service_closure
+  reads: file
+  in: [source]
+  match:
+    reference: attribute
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: 'AutowireServiceClosure'}
+    - &closure_argument
+      name_matches: {child: parameters, pattern: '\(\s*(?:service\s*:\s*)?[''"](?<svc>[^''"@%][^''"]*)[''"]\s*,?\s*\)'}
+  emits: *autowire_edge
+  confidence: declared
+
+- rule: autowire_qualified_service_closure
+  reads: file
+  in: [source]
+  match:
+    reference: attribute
+    name_child: qualified_name
+    filetype: php
+    where:
+    - name_matches: {child: qualified_name, pattern: '\\?Symfony\\Component\\DependencyInjection\\Attribute\\AutowireServiceClosure'}
+    - *closure_argument
+  emits: *autowire_edge
+  confidence: declared
+
+# The same attributes with the service written X::class: #[Autowire(service: X::class)] and
+# #[AutowireServiceClosure(X::class)], read as text up to the parameter's name, on a promoted
+# parameter, from its property, or on a typed plain parameter, from php.parameter::<class>::$<name>,
+# where has_attribute starts it. X resolves as call/service_class_constant.yaml resolves it.
+- rule: autowire_attribute_class_constant_promoted
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[\s*(?:\\?Symfony\\Component\\DependencyInjection\\Attribute\\)?(?:Autowire\(\s*service\s*:|AutowireServiceClosure\(\s*(?:service\s*:)?)\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\s*(?:,[^\]]*)?\)\s*\]\s*(?:(?:public|protected|private|readonly)\s+)+\??\\?[\w\\]*\s*\$(?<param>\w+)'
+  id: &attribute_class {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', normalize: [{replace: '\\\\', with: '\'}]}
+  line: {capture: class}
+  emits:
+  - edge: {kind: autowire_names_service, from: {template: '{psr4_class}::${param}', types: [php.property]}, to: this_node}
+  confidence: inferred
+
+- rule: autowire_attribute_class_constant_plain
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[\s*(?:\\?Symfony\\Component\\DependencyInjection\\Attribute\\)?(?:Autowire\(\s*service\s*:|AutowireServiceClosure\(\s*(?:service\s*:)?)\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\s*(?:,[^\]]*)?\)\s*\]\s*(?!(?:public|protected|private|readonly)\b)\??\\?[A-Za-z_][\w\\]*\s+\$(?<param>\w+)'
+  id: *attribute_class
+  line: {capture: class}
+  emits:
+  - edge: {kind: autowire_names_service, from: {template: '{psr4_class}::${param}', types: [php.parameter]}, to: this_node}
+  confidence: inferred
+
+# The joins. Each starts at a constructor parameter and ends at the autowired service whose class
+# declares that constructor: by its own autowire: true, or by its file's _defaults. A list of
+# arguments, or a named argument for the parameter, blocks it.
+- rule: autowired_parameter_by_id
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: &parameter '^drupal\.constructor_parameter::(?<class>[^:]+)::__construct::\$(?<param>\w+)::(?<type>[^:]+)$'}]
+    unless: &has_autowire_attribute
+    - [{node: 'php.property::{class}::${param}'}, {edge: has_attribute}, {id_matches: &di_attribute '^php\.type::Symfony\\Component\\DependencyInjection\\Attribute\\'}]
+    - [{node: 'php.parameter::{class}::${param}'}, {edge: has_attribute}, {id_matches: *di_attribute}]
+    follow:
+    - node: 'drupal.service::{type}'
+    - &class_service {node: 'php.type::{class}'}
+    - &incoming_service {incoming_edge: service_class}
+    - &service_id {id_matches: '^drupal\.service::(?<svc>.+)$'}
+    - &own_autowire {node: 'drupal.autowired_service::{svc}'}
+    - &the_service {node: 'drupal.service::{svc}'}
+    unless_matched: &explicit_arguments
+    - [{node: 'drupal.service_positional_arguments::{svc}'}]
+    - [{node: 'drupal.service_named_argument::{svc}|{param}'}]
+  emits: &by_id [{edge: {kind: injects_service, from: matched_node, to: {template: '{type}', types: [drupal.service]}, attributes: {autowired_by: {template: 'type is the service id or alias'}}}}]
+  confidence: inferred
+
+- rule: autowired_parameter_by_id_from_defaults
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: *has_autowire_attribute
+    follow:
+    - node: 'drupal.service::{type}'
+    - *class_service
+    - *incoming_service
+    - *service_id
+    - &file_autowire_1 {edge: in_services_file}
+    - &file_autowire_2 {id_matches: '^drupal\.services_file::(?<file>.+)$'}
+    - &file_autowire_3 {node: 'drupal.autowire_services_file::{file}'}
+    - *the_service
+    unless_matched: &not_by_defaults
+    - [{node: 'drupal.service_positional_arguments::{svc}'}]
+    - [{node: 'drupal.service_named_argument::{svc}|{param}'}]
+    - [{node: 'drupal.service_sets_autowire::{svc}'}]
+  emits: *by_id
+  confidence: inferred
+
+- rule: autowired_parameter_unresolved
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: *has_autowire_attribute
+    follow: [*class_service, *incoming_service, *service_id, *own_autowire, *the_service]
+    unless_matched:
+    - [{node: 'drupal.service_positional_arguments::{svc}'}]
+    - [{node: 'drupal.service_named_argument::{svc}|{param}'}]
+    - [{node: 'drupal.service::{type}'}]
+  emits: &unresolved [{edge: {kind: injects_service, from: matched_node, to: {template: '{type}', types: [drupal.service], on_miss: unresolved}, attributes: {autowired_by: {template: 'type is the service id or alias'}}}}]
+  confidence: inferred
+
+- rule: autowired_parameter_unresolved_from_defaults
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: *has_autowire_attribute
+    follow: [*class_service, *incoming_service, *service_id, *file_autowire_1, *file_autowire_2, *file_autowire_3, *the_service]
+    unless_matched:
+    - [{node: 'drupal.service_positional_arguments::{svc}'}]
+    - [{node: 'drupal.service_named_argument::{svc}|{param}'}]
+    - [{node: 'drupal.service_sets_autowire::{svc}'}]
+    - [{node: 'drupal.service::{type}'}]
+  emits: *unresolved
+  confidence: inferred
+
+# An Autowire attribute on a constructor parameter of an autowired service's class.
+- rule: autowired_attribute_on_property
+  reads: map
+  match:
+    node_type: php.property
+    where: [{id_matches: &property '^php\.property::(?<class>[^:]+)::\$(?<param>\w+)$'}]
+    follow:
+    - &named {edge: autowire_names_service}
+    - &placed {place: edge}
+    - &named_id {id_matches: '^drupal\.service::(?<target>.+)$'}
+    - *class_service
+    - *incoming_service
+    - *service_id
+    - *own_autowire
+    - *the_service
+    unless_matched: *explicit_arguments
+  emits: &attribute_injection [{edge: {kind: injects_service, from: matched_node, to: {template: '{target}', types: [drupal.service]}, attributes: {autowired_by: {template: 'Autowire attribute'}}}}]
+  confidence: declared
+
+- rule: autowired_attribute_on_property_from_defaults
+  reads: map
+  match:
+    node_type: php.property
+    where: [{id_matches: *property}]
+    follow: [*named, *placed, *named_id, *class_service, *incoming_service, *service_id, *file_autowire_1, *file_autowire_2, *file_autowire_3, *the_service]
+    unless_matched: *not_by_defaults
+  emits: *attribute_injection
+  confidence: declared
+
+# A plain parameter's attribute starts at php.parameter::<class>::$<name>, with no method part,
+# which no rule finds, so these start at the typed constructor parameter.
+- rule: autowired_attribute_on_parameter
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    follow: [&plain_parameter {node: 'php.parameter::{class}::${param}'}, *named, *placed, *named_id, *class_service, *incoming_service, *service_id, *own_autowire, *the_service]
+    unless_matched: *explicit_arguments
+  emits: *attribute_injection
+  confidence: declared
+
+- rule: autowired_attribute_on_parameter_from_defaults
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    follow: [*plain_parameter, *named, *placed, *named_id, *class_service, *incoming_service, *service_id, *file_autowire_1, *file_autowire_2, *file_autowire_3, *the_service]
+    unless_matched: *not_by_defaults
+  emits: *attribute_injection
+  confidence: declared

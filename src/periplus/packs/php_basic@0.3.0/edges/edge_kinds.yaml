@@ -1,0 +1,71 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The edge kinds this pack declares. Finding them is in edges/find_structure.yaml.
+#
+# inherits ends at the abstract php.class_like, so a type named only by an extends and also by an
+# implements elsewhere takes the more specific php.interface.
+edge_kinds:
+
+- kind: inherits
+  cause: none
+  description: "the class or interface extends that one, as its extends clause names it; from a php.class_alias, the class class_alias() gives that second name"
+  from: php.class_like
+  to: php.class_like
+
+- kind: implements
+  description: "the class or enum names that interface in its implements clause"
+  from: [php.class, php.enum]
+  to: php.interface
+  # realizes: the from end is a concrete form of the to end; a walk that reaches the to end
+  # adds the from ends at the same hop.
+  realizes: true
+
+- kind: mixes_in
+  cause: none
+  description: "the class or trait uses that trait with a use statement in its body"
+  from: php.class_like
+  to: php.trait
+
+- kind: contains
+  cause: none
+  description: "the file, type, function or YAML entry holds that declaration or nested YAML entry directly inside it"
+  from: php.class_like
+  to: php.method
+
+- kind: calls
+  cause: from
+  description: "the function or method calls that function or method; a call on an object may be inferred from declared types, and in Go the end may be a type converted by name"
+  from: [php.function, php.method]
+  to: [php.function, php.method]
+
+# The joins of a call through a property; edges/find_structure.yaml finds them. The edge
+# property_typed_as, from a property to its declared type, is declared in edges/find_structure.yaml.
+- kind: declares_property
+  cause: none
+  description: "the class or trait declares that property, on the property itself or as a promoted constructor parameter"
+  from: php.class_like
+  to: php.property
+
+- kind: parameter_typed_as
+  cause: none
+  description: "the parameter's signature names that class as its type, Foo $x or ?Foo $x"
+  from: php.parameter
+  to: php.parameter_type
+
+- kind: assigned_value
+  cause: none
+  description: "the assignment to $this->name gives that value, as written right of the ="
+  from: php.member_assignment
+  to: php.member_assignment_value
+
+- kind: has_call_site
+  cause: none
+  description: "the method or function holds that call site, a call kept at its line"
+  from: [php.method, php.function]
+  to: php.call_site
+
+- kind: call_site_in
+  cause: none
+  description: "the call site sits in that method or function; the reverse of has_call_site"
+  from: php.call_site
+  to: [php.method, php.function]

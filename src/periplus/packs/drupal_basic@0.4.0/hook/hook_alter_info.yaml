@@ -1,0 +1,32 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A plugin manager names the alter hook of its plugin definitions with $this->alterInfo('x'), a
+# method of DefaultPluginManager. The manager then runs hook x_alter each time it builds its
+# definitions, through the module handler it was given. The edge runs from the method that calls
+# alterInfo, usually the constructor, where plugin_type/plugin_manager.yaml starts its
+# manages_plugin_type edge, to the hook x_alter, so the hook meets its implementations.
+#
+# Inferred: alterInfo is taken to be DefaultPluginManager's by its name. A hook name in a variable
+# or a constant gives no edge and no row.
+
+edge_kinds:
+- kind: registers_alter_hook
+  cause: from
+  description: "the plugin manager's method names that hook with alterInfo('x'), so the manager runs hook x_alter on its plugin definitions when it builds them"
+  from: [php.method, php.function]
+  to: drupal.hook
+
+rules:
+- rule: plugin_alter_hook_by_alter_info
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this'}
+    - name_matches: {child: name, pattern: alterInfo}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<type>\w+)[''"]\s*\)'}
+  emits: [{edge: {kind: registers_alter_hook, from: enclosing_declaration, to: {template: '{type}_alter', types: [drupal.hook]}}}]
+  confidence: inferred

@@ -221,7 +221,7 @@ def test_a_function_in_a_drupal_module_core_extension_does_not_list_carries_the_
 ) -> None:
     (tmp_path / ".periplus").mkdir()
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n"
     )
     for name in ("shop", "stock"):
         module = tmp_path / "web" / "modules" / "custom" / name

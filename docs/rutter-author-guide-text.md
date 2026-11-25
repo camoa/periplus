@@ -171,12 +171,56 @@ before any file is read, at exit 18:
 the folder views_root, which a path value is relative_to, holds ** in its value
 ```
 
+## A project that is one unit at its root
+
+A pattern that reads a name from a folder, such as the unit in `units/inv/src/one.sx`, finds no
+such folder when the project folder is that unit: the path is `src/one.sx`. `root_name` names a
+settings value that stands for the project folder's name:
+
+```yaml
+values:
+  unit_name: The unit's name, when the project folder is one unit.
+files:
+  types:
+    code:
+      endings: [sx]
+      reader: text
+      path_values:
+        unit:
+          pattern: '^(?:.*?/)??(?<unit>[^/]+)/src/[^/]+\.sx$'
+          template: '{unit}'
+          root_name: unit_name
+```
+
+When the settings give `values: {unit_name: inv}`, the pattern searches `inv/src/one.sx` and the
+value is `inv`, as it is for `units/inv/src/one.sx` in a larger project. A folder inside the unit
+keeps its own name: `sub/src/two.sx` searches `inv/sub/src/two.sx` and gives `sub`. The name
+comes from the settings, never from the folder on disk, so the map is the same wherever the
+checkout sits. The name goes before every path that starts at the project folder: a path value
+with no `relative_to`, or one `relative_to` a folder that the settings set to `.`. A path value
+relative to a folder below the project folder, and a path value with no `root_name`, search the
+path as it is. Without the value the path is searched as it is too, so `periplus map` does not
+ask for a value that a `root_name` names and no `{name}` in a loaded rutter's files reads.
+`periplus init` prints a line for each value a `root_name` names, with the sentence its rutter
+declares.
+
+A `root_name` naming a value that the rutter, or a rutter it depends on, does not declare, and
+the settings do not give, is refused when the rules load, at exit 19, as a template naming one
+is. So is a given value that is empty, `.` or `..`, or holds `/`, `\`, a space or a control
+character:
+
+```
+the settings value unit_name of <project>/.periplus/settings.yml, which acme/pack.yaml reads as the name of the project folder, is 'inv/sub', which is no folder name
+```
+
+A capture that is also a settings value stays refused, as for any template.
+
 ## The keys of a list as paths
 
 A data rule can turn each key under a list into the path of another file. A path value on the
 file's type gives the folder the file sits in, and the edge's `to` joins it with each key:
 
-```yaml drupal_js_basic@0.0.1/pack.yaml
+```yaml drupal_js_basic@0.1.0/pack.yaml
     yml:
       endings: [yml]
       reader: data
@@ -244,11 +288,41 @@ edges that way, as `drupal_basic` does for a permission with and without a plus 
 key a file leaves out is silent by design: the file does not state that relation. An id that
 names an absent value makes nothing and leaves no row, on a data rule as on a text rule.
 
-A data rule's `where`, `pattern` and `listed_at` pick between edges. So a data edge leaves its row
-only when it has none of them and its key path reached a value that gives no end, such as a
-mapping. A data rule leaves `fired and emitted nothing` only when a key path of its edges reached
-a value and it made no edge and left no edge's row. A binding rule never leaves either row, since
-it makes no node or edge.
+A data rule's `where`, `pattern` and `listed_at` pick between edges, so a value they leave out
+leaves no row. A data edge leaves its row when it makes no end at all and lost a value its filter
+did not leave out: a value that is not text, such as a mapping or a list, a template left without
+a value, or, in the list form, a fixed key the entry lacks. A number, true or false is text. This
+holds for a single key, a key path with a star and the list form with `each` alike. A key path
+that reaches nothing, as an item under a star that lacks the key, gives no value and no row. An
+edge that makes an end from some values lists no row for the ones it lost. A `listed_at` path the
+entry does not hold lists nothing, so it leaves every end out, as a filter does. A data rule leaves `fired and emitted nothing` only when a key path of its edges
+reached a value and it made no edge and left no edge's row. A rule whose filters left out every
+value it reached, in the whole map, is listed once under Rules that fired and made nothing. A
+binding rule never leaves either row, since it makes no node or edge.
+
+This data rule leaves out every label that starts `tmp_` with its `pattern`:
+
+```yaml
+- rule: box_label
+  reads: file
+  in: [shelves]
+  match: {file: '*', filetype: shelf}
+  id: {template: '{file_stem}'}
+  emits:
+  - edge: {kind: labelled, from: this_node, to: {from: {key: labels.*.name}, pattern: '^(?!tmp_)(?<label>.+)$', template: '{label}'}}
+  confidence: declared
+```
+
+A file whose labels are `tmp_one` and `tmp_two` lists no skipped row: the filter chose. When no
+file in the project gives the rule an edge, the report names it once:
+
+```
+Rules that fired and made nothing:
+  shelf box_label
+```
+
+A second file with the label `red` gives an edge to `shelf.label::red`, and the section is empty
+again. So read a rule listed there as a filter to check against the files, not as a shape to map.
 
 ## A rule that runs long
 

@@ -27,6 +27,8 @@ such below.
 Read the project settings file. It names the packs, and it may override any folder a pack
 declares. Absent settings is an error, not a default — the engine must not guess where a
 repository keeps its configuration.
+A name or a value under `values` that is not text, such as `8` or `true`, refuses the settings
+file with exit 4, rather than reading it as a number.
 
 ### 2. Resolve the pack graph, and build the type table
 
@@ -64,7 +66,8 @@ templates with patterns alone.
 
 ### 5. Run map rules to a fixpoint
 
-Every rule whose `reads` is `map`, repeatedly, until nothing changes.
+Every rule whose `reads` is `map`, repeatedly, until nothing changes. A rule that writes the mark
+`resolution: runtime` is held back from the loop and runs once, in one last pass after it.
 
 It terminates because a pass may only add attributes or refine a type downward through a
 hierarchy the packs declare, and that hierarchy is finite. Nothing moves back up. Edges a map
@@ -118,6 +121,10 @@ A run fails, loudly, on any of these. None of them may be a warning.
   minimum; refusing is better, because a map missing a third of its rules is worse than no
   map.
 - A grammar version that does not match what the pack pinned.
+
+`periplus validate` runs the same checks before any source file is read, over every pinned
+rutter when the project pins the one named. A rutter with a schema error is refused before its
+rules are checked; the other rutters' problems are still reported.
 
 ## What it must report
 

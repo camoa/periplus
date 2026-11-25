@@ -1,0 +1,70 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# ctools' form wizards. A class that descends from ctools' FormWizardBase is a ctools.form_wizard,
+# and one that descends from EntityFormWizardBase a ctools.entity_form_wizard, by the boundary
+# group ctools_classes in pack.yaml; both are drupal_basic's form classes, as FormWizardBase
+# extends core's FormBase.
+# A wizard names its steps in getOperations(), each an array whose 'form' key names the step's
+# form class. Each 'form' => MyStepForm::class, the name resolved through the file's use
+# statements, else its namespace, and each 'form' => 'Drupal\mymod\Form\MyStepForm', a full
+# name written as text, inside a method named getOperations, is a wizard_step_form edge from that
+# method to the form class, at the class's line. A 'form' key in any other method gives nothing.
+#
+# Limits: a step form held in a variable or a constant, or returned by a helper method, gives
+# nothing; the method is read by its name, whatever class holds it. The two wizard types come from
+# the boundary, so a map that reads ctools' own classes, as a map of ctools itself, keeps its
+# wizards as drupal.form_class.
+
+node_types:
+- name: ctools.form_wizard
+  description: "a project class that descends from ctools' FormWizardBase: a multi-step form whose steps getOperations() names"
+  parent: drupal.form_class
+  id_namespace: php.type
+- name: ctools.entity_form_wizard
+  description: "a project class that descends from ctools' EntityFormWizardBase: a form wizard that adds or edits a config entity"
+  parent: ctools.form_wizard
+  id_namespace: php.type
+
+edge_kinds:
+- kind: wizard_step_form
+  cause: from
+  description: "the wizard's getOperations() names that form class as the form of one of its steps"
+  from: php.method
+  to: php.class
+
+rules:
+# 'form' => MyStepForm::class.
+- rule: wizard_step_form_constant
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"]form[''"]\s*=>\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\b'
+  values: &operations
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '^(?!getOperations$).*$', with: ''}]}
+  id: {template: '{psr4_class}::{method}'}
+  line: {capture: class}
+  emits:
+  - edge:
+      kind: wizard_step_form
+      from: this_node
+      to: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', types: [php.class]}
+  confidence: declared
+
+# 'form' => 'Drupal\mymod\Form\MyStepForm', or with doubled backslashes.
+- rule: wizard_step_form_text
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"]form[''"]\s*=>\s*[''"]\\{0,2}(?<class>[A-Za-z_]\w*(?:\\{1,2}\w+)+)[''"]'
+  values:
+    <<: *operations
+    form: {from: {capture: class}, normalize: [{replace: '\\\\', with: '\'}]}
+  id: {template: '{psr4_class}::{method}'}
+  line: {capture: class}
+  emits:
+  - edge: {kind: wizard_step_form, from: this_node, to: {template: '{form}', types: [php.class]}}
+  confidence: declared

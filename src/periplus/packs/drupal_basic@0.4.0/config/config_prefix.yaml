@@ -1,0 +1,167 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Code that lists configuration names by their start: listAll('mymod.item.') on a config factory,
+# as config_call.yaml knows one, or on the active config storage, an object written ending in
+# configStorage or config_storage, or \Drupal::service('config.storage'). The call returns every
+# name that starts with the text, so it names no single configuration object: it gives
+# lists_config_prefix, from the method or function around the call to the drupal.config_prefix node
+# of the text as written. A map rule joins that prefix to each configuration object the map holds
+# whose name starts with it, cut after whole parts, as mymod.item. or mymod.item for
+# mymod.item.default, by prefix_of_config. A config schema key ending in .*
+# (config/config_schema.yaml) and a config entity type's names meet at the same prefix node.
+#
+# A configuration name built from a quoted start of whole parts and a variable, as
+# get('mymod.item.' . $id) or getEditable() on a config factory, \Drupal::config(),
+# $this->config() or getLanguageConfigOverride($langcode, 'mymod.item.' . $id) on a language
+# manager, names one object the code picks at run time from that prefix: names_config_by_prefix,
+# inferred, from the method or function around the call, at the call's line. The call also keeps
+# its run-time mark (config_runtime_name.yaml).
+#
+# Limits: a prefix cut inside a part, as listAll('views.view.my_'), joins no configuration object;
+# a prefix of more than four parts joins none; listAll() with no argument, or a variable, gives
+# nothing. On a config factory, the factory is known by the object's name, so the edge is inferred.
+
+node_types:
+- name: drupal.config_prefix
+  description: "the start of configuration names, as mymod.item., that code lists with listAll() or a schema key or config entity type covers: every name starting with it"
+  id_namespace: drupal.config_prefix
+
+edge_kinds:
+- kind: lists_config_prefix
+  cause: from
+  description: "the function or method lists every configuration name starting with that prefix, by listAll('prefix') on a config factory or the config storage"
+  from: [php.method, php.function]
+  to: drupal.config_prefix
+- kind: names_config_by_prefix
+  cause: from
+  description: "the function or method names one configuration object whose name starts with that prefix and ends in a value known only at run time, as get('mymod.item.' . $id)"
+  from: [php.method, php.function]
+  to: drupal.config_prefix
+- kind: prefix_of_config
+  cause: none
+  description: "the configuration object's name starts with that prefix, cut after whole parts"
+  from: drupal.config_prefix
+  to: drupal.config_object
+
+rules:
+- rule: config_prefix_listed_from_factory
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '(?s).*(?:configFactory|config_factory)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]config\.factory[''"]\)|\\?Drupal::service\([''"]config\.factory[''"]\)'}
+    - name_matches: {child: name, pattern: listAll}
+  emits: [{edge: {kind: lists_config_prefix, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.config_prefix]}}}]
+  confidence: inferred
+
+- rule: config_prefix_listed_from_storage
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '(?s).*(?:configStorage|config_storage)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]config\.storage[''"]\)|\\?Drupal::service\([''"]config\.storage[''"]\)'}
+    - name_matches: {child: name, pattern: listAll}
+  emits: [{edge: {kind: lists_config_prefix, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.config_prefix]}}}]
+  confidence: inferred
+
+# A name built from a quoted prefix and a variable, in a method and in a function.
+- rule: config_named_by_prefix_in_method
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: &prefix_text '(?:(?:(?<![\w\\$>:])\\?Drupal::config|\$this->config|(?:configFactory(?:\(\))?|\$config_factory|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]config\.factory[''"]\)|\\?Drupal::service\([''"]config\.factory[''"]\))\s*->\s*(?:get|getEditable))\(\s*|(?:languageManager(?:\(\))?|\$language_manager|\\?Drupal::service\([''"]language_manager[''"]\))\s*->\s*getLanguageConfigOverride\(\s*(?:[^,()''"]|''[^'']*''|"[^"]*"|\([^()]*\))+,\s*)[''"](?<prefix>[a-z0-9_]+(?:\.[a-z0-9_]+)*\.)[''"]\s*\.\s*\$'}
+  values:
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{prefix}'}
+  line: {capture: prefix}
+  emits: [{edge: {kind: names_config_by_prefix, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}}]
+  confidence: inferred
+
+- rule: config_named_by_prefix_in_function
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, ending: [module, install, inc, theme, profile], text: *prefix_text}
+  values:
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{prefix}'}
+  line: {capture: prefix}
+  emits: [{edge: {kind: names_config_by_prefix, from: {template: '{function}', types: [php.function]}, to: this_node}}]
+  confidence: inferred
+
+# A prefix of one, two, three or four whole parts, with the dot after it and without.
+- rule: config_prefix_1_dot
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<prefix>[^.]+\.)'}]
+    follow: [{node: 'drupal.config_prefix::{prefix}'}]
+  emits: [{edge: {kind: prefix_of_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_prefix_2_dot
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<prefix>[^.]+\.[^.]+\.)'}]
+    follow: [{node: 'drupal.config_prefix::{prefix}'}]
+  emits: [{edge: {kind: prefix_of_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_prefix_3_dot
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<prefix>[^.]+\.[^.]+\.[^.]+\.)'}]
+    follow: [{node: 'drupal.config_prefix::{prefix}'}]
+  emits: [{edge: {kind: prefix_of_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_prefix_4_dot
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<prefix>[^.]+\.[^.]+\.[^.]+\.[^.]+\.)'}]
+    follow: [{node: 'drupal.config_prefix::{prefix}'}]
+  emits: [{edge: {kind: prefix_of_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_prefix_1
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<prefix>[^.]+)(?:\.|$)'}]
+    follow: [{node: 'drupal.config_prefix::{prefix}'}]
+  emits: [{edge: {kind: prefix_of_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_prefix_2
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<prefix>[^.]+\.[^.]+)(?:\.|$)'}]
+    follow: [{node: 'drupal.config_prefix::{prefix}'}]
+  emits: [{edge: {kind: prefix_of_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_prefix_3
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<prefix>[^.]+\.[^.]+\.[^.]+)(?:\.|$)'}]
+    follow: [{node: 'drupal.config_prefix::{prefix}'}]
+  emits: [{edge: {kind: prefix_of_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_prefix_4
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<prefix>[^.]+\.[^.]+\.[^.]+\.[^.]+)(?:\.|$)'}]
+    follow: [{node: 'drupal.config_prefix::{prefix}'}]
+  emits: [{edge: {kind: prefix_of_config, from: matched_node, to: this_node}}]
+  confidence: declared

@@ -11,7 +11,7 @@ export PERIPLUS_CONFIG_DIR="$work/userconf"
 mkdir "$PERIPLUS_CONFIG_DIR"
 site="$work/site"
 mkdir -p "$site/.periplus" "$site/src/Service" "$site/src/Web"
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n' >"$site/.periplus/settings.yml"
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.3.0\n' >"$site/.periplus/settings.yml"
 python="$(head -1 "$(command -v "$PERIPLUS")" | sed 's/^#!//')"
 
 for pair in Alpha:one Beta:two Gamma:three Delta:four; do

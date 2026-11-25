@@ -1,0 +1,89 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method that compares a Salesforce event's or mapped object's ->getMapping()->id() with a
+# mapping id acts only on that mapping: an acts_on_salesforce_mapping edge to the mapping
+# salesforce_mapping.salesforce_mapping.<id>. Both == / === and != / !== count: a subscriber that
+# returns early when the id differs acts only on the mapping it names. Mentioned: the link rests on
+# a text compared to the id.
+# - A quoted id on either side of the comparison is read as text. The edge ends at the mapping,
+#   or at a referenced node when no config file declares it.
+# - self::X or static::X is an internal edge to the class constant <class>::X; the join walks
+#   from the class to its parents and interfaces, takes the text of the nearest one that declares
+#   X (drupal_basic constant/constant_text.yaml), and gives the edge, unresolved when no config
+#   file declares that mapping.
+# The method is named by the class the file's path gives by Drupal's PSR-4 layout. A comparison
+# in a function of a .module or .inc file, one with a constant of another class, Other::X, and
+# an id held in a variable give no edge.
+
+edge_kinds:
+- kind: acts_on_salesforce_mapping
+  cause: to
+  from: php.method
+  to: salesforce.mapping
+  description: "the method acts on that Salesforce mapping only, as it compares the mapping id of an event or a mapped object with its id; a name written as text"
+- kind: compares_mapping_constant
+  cause: none
+  from: php.method
+  to: drupal.class_constant
+  description: "internal: the method compares a mapping id with that class constant, which a map rule reads to find the mapping"
+
+rules:
+- rule: mapping_id_compared_to_text
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: 'getMapping\(\)\??->id\(\)\s*[!=]==?\s*[''"](?<mapping>[a-z0-9_]+)[''"]'
+  values:
+    method: &method {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: 'salesforce_mapping.salesforce_mapping.{mapping}'}
+  line: {capture: mapping}
+  emits: [{edge: {kind: acts_on_salesforce_mapping, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}}]
+  confidence: mentioned
+
+- rule: text_compared_to_mapping_id
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [string]
+    text: '[''"](?<mapping>[a-z0-9_]+)[''"]\s*[!=]==?\s*\$[\w>?()-]*?getMapping\(\)\??->id\(\)'
+  values:
+    method: *method
+  id: {template: 'salesforce_mapping.salesforce_mapping.{mapping}'}
+  line: {capture: mapping}
+  emits: [{edge: {kind: acts_on_salesforce_mapping, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}}]
+  confidence: mentioned
+
+- rule: mapping_id_compared_to_constant
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: 'getMapping\(\)\??->id\(\)\s*[!=]==?\s*(?:self|static)::(?<constant>[A-Z_][A-Z0-9_]*)\b'
+  values:
+    method: *method
+  id: {template: '{psr4_class}::{constant}'}
+  line: {capture: constant}
+  emits: [{edge: {kind: compares_mapping_constant, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}}]
+  confidence: mentioned
+
+- rule: mapping_id_constant_text
+  reads: map
+  match:
+    node_type: php.method
+    follow:
+    - edge: compares_mapping_constant
+    - place: edge
+    - id_matches: '^drupal\.class_constant::(?<class>[^:]+)::(?<constant>\w+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<mapping>[a-z0-9_]+)$'
+  emits: [{edge: {kind: acts_on_salesforce_mapping, from: this_node, to: {template: 'salesforce_mapping.salesforce_mapping.{mapping}', types: [salesforce.mapping], on_miss: unresolved}}}]
+  confidence: mentioned

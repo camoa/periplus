@@ -81,6 +81,18 @@ $ periplus show 'php.method::Acme\Billing\Reminder::send'
 
 Read an `inferred` or `mentioned` link at its line before an answer rests on it.
 
+The Drupal rutter makes some statements with different confidence:
+
+- A function gets `implements_hook` when the map knows its hook: from core, an `*.api.php` file,
+  code that invokes the hook, a `Hook` attribute or an `Implements hook_NAME().` docblock. A
+  function only named like a hook gets `named_like_hook`, `mentioned`, and the mark
+  `[hook by name only]`. It may be a helper, or a hook of a module that is not on disk.
+- A call on a service gives `calls_service`. It is `declared` when the code names the service in
+  `create()`, in a services file's arguments or in `\Drupal::service('x')`. It is `inferred` when
+  the map knows the service only from a declared type, or knows the container only by its name.
+- A call that runs a hook or reads configuration by a name held in a variable is marked
+  `resolution: runtime`. The map keeps the call and names no target.
+
 ## The map report: what the run could not finish
 
 `periplus map` prints a report on every run. `periplus map --format json` prints the report as
@@ -91,6 +103,8 @@ JSON. The parts that bear on quality:
   a rule to write.
 - **Matches skipped.** A rule matched at a file and line but could not build what it emits. Open
   the line: the shape there is one the rule does not cover.
+- **Rules that fired and made nothing.** A data rule reached values, and its own filters left
+  out every one of them in the whole map. Check the filter against the files.
 - **Rules not executed.** The engine cannot run these rules, and the reason is given.
 - **Unknown boundaries.** The count, by rutter and by reason, `no rule` or `run-time`.
 

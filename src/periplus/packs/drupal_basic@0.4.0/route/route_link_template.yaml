@@ -1,0 +1,347 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The routes core's route providers build from an entity type's link templates, which no routing
+# file declares. An entity type whose route_provider names DefaultHtmlRouteProvider or
+# AdminHtmlRouteProvider, or a mapped class that extends one, gets the route
+# entity.<type>.<template name with each dash written as an underscore> for its add-form,
+# edit-form and delete-form templates; for canonical when it has a view builder, which a content
+# entity type has by default; for collection when it has a list builder and an admin_permission or
+# a collection_permission; for add-page when its entity_keys name a bundle; and for
+# delete-multiple-form when it has a delete-multiple-confirm form, as the provider's code checks.
+# One that names RevisionHtmlRouteProvider, or a class that extends it, gets the route for its
+# version-history, revision, revision-revert-form and revision-delete-form templates. Each route
+# gets a route_serves_path edge to the template's path and a route_from_link_template edge to the
+# entity type, holding the template's name in the edge attribute rel, both at the template's
+# line. Inferred: core's provider code, not the mapped files, builds the route. A route a routing
+# file also declares is the same node.
+#
+# Limits:
+# - A provider that overrides its parent's route methods still reads as building every route its
+#   parent builds; one that builds other routes gives none of them.
+# - A route a route subscriber changes or removes keeps the path the template gives.
+# - The derived path gets no shape_of_route edge, so a template's path of that shape does not
+#   reach the route.
+
+edge_kinds:
+- kind: route_from_link_template
+  cause: none
+  description: "core's route provider builds the route from that entity type's link template; the edge attribute rel holds the template's name"
+  from: drupal.route
+  to: drupal.entity_type
+- kind: builds_html_routes
+  cause: none
+  description: "step to route_from_link_template: the route provider entry names DefaultHtmlRouteProvider, AdminHtmlRouteProvider or a class that extends one"
+  from: drupal.entity_type_entry
+  to: php.class
+- kind: builds_revision_routes
+  cause: none
+  description: "step to route_from_link_template: the route provider entry names RevisionHtmlRouteProvider or a class that extends it"
+  from: drupal.entity_type_entry
+  to: php.class
+
+rules:
+- rule: route_provider_builds_html_routes
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|route_provider\|[^|]+$'}]
+    follow:
+    - edge: entry_names_class
+    - id_matches: '^drupal\.class_ref::Drupal\\Core\\Entity\\Routing\\(?:Default|Admin)HtmlRouteProvider$'
+  emits: [{edge: {kind: builds_html_routes, from: this_node, to: {template: '{owner}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: route_provider_subclass_builds_html_routes
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|route_provider\|[^|]+$'}]
+    follow:
+    - edge: entry_names_class
+    - id_matches: '^drupal\.class_ref::(?<provider>.+)$'
+    - node: 'php.type::{provider}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Drupal\\Core\\Entity\\Routing\\(?:Default|Admin)HtmlRouteProvider$'
+  emits: [{edge: {kind: builds_html_routes, from: this_node, to: {template: '{owner}', types: [php.class]}}}]
+  confidence: inferred
+
+- rule: route_provider_builds_revision_routes
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|route_provider\|[^|]+$'}]
+    follow:
+    - edge: entry_names_class
+    - id_matches: '^drupal\.class_ref::Drupal\\Core\\Entity\\Routing\\RevisionHtmlRouteProvider$'
+  emits: [{edge: {kind: builds_revision_routes, from: this_node, to: {template: '{owner}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: route_provider_subclass_builds_revision_routes
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|route_provider\|[^|]+$'}]
+    follow:
+    - edge: entry_names_class
+    - id_matches: '^drupal\.class_ref::(?<provider>.+)$'
+    - node: 'php.type::{provider}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::Drupal\\Core\\Entity\\Routing\\RevisionHtmlRouteProvider$'
+  emits: [{edge: {kind: builds_revision_routes, from: this_node, to: {template: '{owner}', types: [php.class]}}}]
+  confidence: inferred
+
+- rule: link_template_route_form
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>add-form|edit-form|delete-form)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+  emits: [{edge: {kind: route_from_link_template, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node, attributes: {rel: {template: '{rel}'}}}}]
+  confidence: inferred
+
+- rule: link_template_route_path_form
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>add-form|edit-form|delete-form)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|links|{rel}|{route_rel}'
+    - edge: link_template_path
+  emits: [{edge: {kind: route_serves_path, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: link_template_route_canonical_content
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>canonical)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|content_entity_type'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+  emits: [{edge: {kind: route_from_link_template, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node, attributes: {rel: {template: '{rel}'}}}}]
+  confidence: inferred
+
+- rule: link_template_route_path_canonical_content
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>canonical)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|content_entity_type'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|links|{rel}|{route_rel}'
+    - edge: link_template_path
+  emits: [{edge: {kind: route_serves_path, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: link_template_route_canonical_view_builder
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>canonical)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|handlers|view_builder'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+  emits: [{edge: {kind: route_from_link_template, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node, attributes: {rel: {template: '{rel}'}}}}]
+  confidence: inferred
+
+- rule: link_template_route_path_canonical_view_builder
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>canonical)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|handlers|view_builder'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|links|{rel}|{route_rel}'
+    - edge: link_template_path
+  emits: [{edge: {kind: route_serves_path, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: link_template_route_collection_admin
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>collection)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|handlers|list_builder'
+    - node: 'drupal.entity_type_entry::{owner}|admin_permission'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+  emits: [{edge: {kind: route_from_link_template, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node, attributes: {rel: {template: '{rel}'}}}}]
+  confidence: inferred
+
+- rule: link_template_route_path_collection_admin
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>collection)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|handlers|list_builder'
+    - node: 'drupal.entity_type_entry::{owner}|admin_permission'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|links|{rel}|{route_rel}'
+    - edge: link_template_path
+  emits: [{edge: {kind: route_serves_path, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: link_template_route_collection_permission
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>collection)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|handlers|list_builder'
+    - node: 'drupal.entity_type_entry::{owner}|collection_permission'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+  emits: [{edge: {kind: route_from_link_template, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node, attributes: {rel: {template: '{rel}'}}}}]
+  confidence: inferred
+
+- rule: link_template_route_path_collection_permission
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>collection)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|handlers|list_builder'
+    - node: 'drupal.entity_type_entry::{owner}|collection_permission'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|links|{rel}|{route_rel}'
+    - edge: link_template_path
+  emits: [{edge: {kind: route_serves_path, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: link_template_route_add_page
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>add-page)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|entity_keys|bundle'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+  emits: [{edge: {kind: route_from_link_template, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node, attributes: {rel: {template: '{rel}'}}}}]
+  confidence: inferred
+
+- rule: link_template_route_path_add_page
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>add-page)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|entity_keys|bundle'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|links|{rel}|{route_rel}'
+    - edge: link_template_path
+  emits: [{edge: {kind: route_serves_path, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: link_template_route_delete_multiple
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>delete-multiple-form)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|form|delete-multiple-confirm'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+  emits: [{edge: {kind: route_from_link_template, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node, attributes: {rel: {template: '{rel}'}}}}]
+  confidence: inferred
+
+- rule: link_template_route_path_delete_multiple
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>delete-multiple-form)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'drupal.entity_type_entry::{owner}|form|delete-multiple-confirm'
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_html_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|links|{rel}|{route_rel}'
+    - edge: link_template_path
+  emits: [{edge: {kind: route_serves_path, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node}}]
+  confidence: inferred
+
+- rule: link_template_route_revision
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>version-history|revision|revision-revert-form|revision-delete-form)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_revision_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+  emits: [{edge: {kind: route_from_link_template, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node, attributes: {rel: {template: '{rel}'}}}}]
+  confidence: inferred
+
+- rule: link_template_route_path_revision
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>version-history|revision|revision-revert-form|revision-delete-form)\|(?<route_rel>[^|]+)$'}]
+    follow:
+    - node: 'php.type::{owner}'
+    - incoming_edge: builds_revision_routes
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|links|{rel}|{route_rel}'
+    - edge: link_template_path
+  emits: [{edge: {kind: route_serves_path, from: {template: 'entity.{type}.{route_rel}', types: [drupal.route]}, to: matched_node}}]
+  confidence: inferred

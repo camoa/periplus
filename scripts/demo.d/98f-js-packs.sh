@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The bundled JavaScript packs, js_basic and drupal_js_basic, pinned beside drupal_basic@0.3.0.
+# The bundled JavaScript packs, js_basic and drupal_js_basic, pinned beside drupal_basic@0.4.0.
 # A module holds a libraries file, a script with two named functions and four behaviors, a
 # controller and a template. The functions are js.function nodes named by script path and name.
 # Each behavior is a node; the one whose attach calls the other's attach has an attaches_behavior
@@ -70,7 +70,7 @@ final class WidgetController {
 EOF
 printf "<div>{{ attach_library('mymodule/widget') }}</div>\n" \
     >"$module/templates/mymodule-widget.html.twig"
-printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - drupal_js_basic@0.0.1\n' \
+printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n  - drupal_js_basic@0.1.0\n' \
     >"$site/.periplus/settings.yml"
 
 (cd "$site" && "$PERIPLUS" map --output "$work/one.json" --format json >"$work/one-report.json")
@@ -137,9 +137,9 @@ assert edges == sorted([
      [(script, 2)]),
     ("script_declares_function", f"js.file::{script}", f"js.function::{script}:shout",
      [(script, 6)]),
-    # A map rule's edge sits at the behavior that holds the call.
+    # The edge cites the line of the call, not the behavior that holds it.
     ("js_calls", widget, other,
-     [(script, line(script, "Drupal.behaviors.mymoduleWidget = {"))]),
+     [(script, line(script, "Drupal.behaviors.mymoduleOther.attach(context);"))]),
     ("script_declares_behavior", f"js.file::{script}", widget, [(script, line(script, "Drupal.behaviors.mymoduleWidget = {"))]),
     ("script_declares_behavior", f"js.file::{script}", other, [(script, line(script, "Drupal.behaviors.mymoduleOther = {"))]),
     ("script_declares_behavior", f"js.file::{script}", arrow, [(script, line(script, "Drupal.behaviors.mymoduleArrow = (context) => {"))]),

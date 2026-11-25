@@ -1,0 +1,63 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The plugin type of a generic plugin (plugin_id.yaml), as a plugin_of_type edge from its class to
+# drupal.plugin_type::<the attribute or annotation class>: the class the attribute's name resolves
+# to through the file's imports, the one whose short name names the plugin, or the class the first
+# annotation of the docblock resolves to. plugin_type_attribute.yaml and
+# plugin_type_annotation.yaml give the edge when the map holds that class and it extends core's
+# Plugin; these give it when it does not, as for a core plugin type such as MigrateSource. The end
+# is the plugin type node other rules map, as a manager in the map that names the class makes it,
+# and else a referenced node. Declared: the attribute or annotation names the class.
+#
+# A class that carries a plugin attribute gets no edge from its annotation, as Drupal reads the
+# attribute. Drupal's annotation reader matches an annotation by its name, so only an annotation
+# the file imports with use names its class; one it does not import, which reads as a class of the
+# plugin's own namespace, gives no edge. Core's @MigrateProcessPlugin and @SearchPlugin name the
+# plugins MigrateProcess and Search. Limits: an attribute imported under another name gives no
+# edge here.
+
+rules:
+- rule: generic_plugin_of_attribute_type
+  reads: map
+  match:
+    node_type: drupal.plugin_attribute_written
+    where: [{id_matches: '^drupal\.plugin_attribute_written::[^|]+\|(?<class>[^|]+)\|(?<short>\w+)\|(?<pid>.+)$'}]
+    follow:
+    - {node: 'drupal.plugin_id::{short}::{pid}'}
+    - &class {node: 'php.type::{class}'}
+    - {edge: has_attribute}
+    - {id_matches: '^php\.type::(?<attr>(?:[\w\\]*\\)?{short})$'}
+    - *class
+    unless_matched:
+    - [{node: 'php.type::{attr}'}, {ancestors: [inherits]}, {edge: inherits}, {id_matches: '^php\.type::Drupal\\Component\\Plugin\\Attribute\\Plugin$'}]
+  emits: [{edge: {kind: plugin_of_type, from: matched_node, to: {template: '{attr}', types: [drupal.plugin_type]}}}]
+  confidence: declared
+
+- rule: generic_plugin_of_annotation_type
+  reads: map
+  match:
+    node_type: drupal.class_annotation
+    where: [{id_matches: '^drupal\.class_annotation::(?<class>(?<ns>[\w\\]+)\\\w+)::(?<annotation>(?:[\w\\]*\\)?(?<short>\w+))$'}]
+    unless: &attribute_wins
+    - [{node: 'drupal.plugin_attribute_site::{class}'}]
+    - [{id_matches: '::{ns}\\\w+$'}]
+    follow: &generic_plugin_class
+    - *class
+    - {incoming_edge: plugin_class}
+    - {id_matches: '^drupal\.plugin_id::{short}::'}
+    - *class
+    unless_matched: &mapped_annotation_type
+    - [{node: 'php.type::{annotation}'}, {ancestors: [inherits]}, {edge: inherits}, {id_matches: '^php\.type::Drupal\\Component\\Annotation\\Plugin$'}]
+  emits: &to_annotation [{edge: {kind: plugin_of_type, from: matched_node, to: {template: '{annotation}', types: [drupal.plugin_type]}}}]
+  confidence: declared
+
+- rule: generic_plugin_of_renamed_annotation_type
+  reads: map
+  match:
+    node_type: drupal.class_annotation
+    where: [{id_matches: '^drupal\.class_annotation::(?<class>(?<ns>[\w\\]+)\\\w+)::(?<annotation>(?:[\w\\]*\\)?(?<short>MigrateProcess|Search)Plugin)$'}]
+    unless: *attribute_wins
+    follow: *generic_plugin_class
+    unless_matched: *mapped_annotation_type
+  emits: *to_annotation
+  confidence: declared

@@ -1,0 +1,142 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A hook, named without its hook_ prefix, and the method or function that implements it.
+
+node_types:
+- name: drupal.hook
+  description: "A hook, named without its hook_ prefix, taken from a Hook attribute or from a function name by naming convention"
+  id_namespace: drupal.hook
+- name: drupal.hook_by_name
+  description: "internal: a function whose name reads as its extension's name, an underscore and a hook's name, <function>|<hook>, kept at the function so hook_known.yaml can say it is only named like that hook"
+  id_namespace: drupal.hook_by_name
+  internal: true
+
+edge_kinds:
+- kind: implements_hook
+  cause: to
+  description: "The function or method implements that hook, by a Hook attribute or by naming convention (extension or theme name, an underscore, the hook name)"
+  from: [php.method, php.function]
+  to: drupal.hook
+- kind: named_like_hook
+  cause: none
+  description: "The function's name is its extension's name, _ and that hook's name, and nothing else in the map names the hook; a helper so named gets it too, so it does not say the function runs as a hook"
+  from: php.function
+  to: drupal.hook
+- kind: hook_acts_on_entity_type
+  cause: to
+  description: "The hook, named <entity type>_<operation> such as node_presave, acts on that entity type, by naming convention, so a helper of that shape can give a false link"
+  from: drupal.hook
+  to: drupal.entity_type
+
+# A function that implements a hook by its name: in a module, install, include, theme, profile,
+# post_update.php or deploy.php file, the first part of the file name, an underscore, then the
+# hook's name. Every update_N function implements the one hook update_N, every post-update
+# function the one hook post_update_NAME and every deploy function the one hook deploy_NAME; the
+# number or the name stays in the function's name. The hook collector of Drupal 11.1 goes by the name too and takes no list of
+# hook names. It leaves out install, uninstall, schema and update_N functions, which Drupal's
+# installer and update system call; this rule keeps them. Themes name their hook functions the
+# same way. Inferred, because a name is a convention.
+#
+# Each rule lists every PHP ending but api.php: an *.api.php file documents hooks and has no
+# extension value, and hook_api.yaml reads its functions.
+#
+# A function that code adds as a form's #validate or #submit handler is not read as a hook, unless
+# the map names that hook otherwise: form/form_handler.yaml withholds it before the map rules run.
+#
+# Any other prefixed function reads as a hook too, such as a form callback added through a
+# variable, the helper mymod_build_list or mymod_update_NEXT. hook_known.yaml takes back the hook
+# node and the implements_hook link of a hook that no table of known hooks, api file, invocation,
+# Hook attribute or Implements docblock names, and gives the function a named_like_hook link,
+# confidence mentioned, and the mark [hook by name only]. hook_by_name_site keeps each such
+# function's name and hook for that rule. A hook those sources name is known and keeps its link.
+#
+# False results to know about: a file named other than its module gives no hook. A theme file named other than its theme, such as includes/content.theme
+# holding mytheme_ functions, is read by the theme's folder name, by hook_theme_include.yaml. A hook
+# with a variable part keeps it, so mymod_form_user_login_form_alter names the hook
+# form_user_login_form_alter, which hook_instance.yaml links to form_FORM_ID_alter. A function in a file of another ending leaves two skipped rows.
+
+rules:
+- rule: hook_from_function_name
+  reads: file
+  in:
+  - source
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: [php, module, install, inc, theme, profile]}
+  id:
+    from: declared_name
+    pattern: '^{extension}_(?<hook>\w+)$'
+    template: '{hook}'
+    normalize:
+    - {replace: '^update_\d+$', with: 'update_N'}
+    - {replace: '^post_update_\w+$', with: 'post_update_NAME'}
+    - {replace: '^deploy_\w+$', with: 'deploy_NAME'}
+  emits:
+  - node:
+      type: drupal.hook
+  confidence: inferred
+- rule: function_implements_hook
+  reads: file
+  in:
+  - source
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: [php, module, install, inc, theme, profile]}
+  id:
+    from: declared_name
+    pattern: '^{extension}_(?<hook>\w+)$'
+    template: '{hook}'
+    normalize:
+    - {replace: '^update_\d+$', with: 'update_N'}
+    - {replace: '^post_update_\w+$', with: 'post_update_NAME'}
+    - {replace: '^deploy_\w+$', with: 'deploy_NAME'}
+  emits:
+  - edge:
+      kind: implements_hook
+      from: {declared: php.function}
+      to: this_node
+  confidence: inferred
+- rule: hook_by_name_site
+  reads: file
+  in:
+  - source
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: [php, module, install, inc, theme, profile]}
+  id:
+    from: declared_name
+    pattern: '^(?<fn>{extension}_(?<hook>\w+))$'
+    template: '{fn}|{hook}'
+    normalize:
+    - {replace: '\|update_\d+$', with: '|update_N'}
+    - {replace: '\|post_update_\w+$', with: '|post_update_NAME'}
+    - {replace: '\|deploy_\w+$', with: '|deploy_NAME'}
+  emits:
+  - node:
+      type: drupal.hook_by_name
+  confidence: inferred
+
+# A hook named for an entity type and an operation, such as node_presave or my_entity_insert,
+# links to the entity type it acts on. The operations are those Drupal defines as
+# hook_ENTITY_TYPE_<operation>; the type is the shortest part before one of them. Generic entity_
+# hooks act on every type and get no edge. Hooks of other subsystems that share the shape are left
+# out: block_view and block_view_alter (block rendering), contextual_links_view_alter, the
+# views_ hooks, the theme layer's preprocess_ and theme_ hooks, such as preprocess_views_view
+# and theme_suggestions_views_view_alter, and the jsonapi_, language_fallback_candidates_ and
+# post_update_ hooks. Inferred, because a name is a convention.
+#
+# A hook named by a Hook attribute gets the same edge from hook_attribute.yaml.
+#
+# False results to know about: an entity type whose id starts with entity_ gets none. Another
+# subsystem's hook of the same shape, not listed above, gives a false edge, and so does a helper
+# read as a hook, such as user_cookie_delete or node_mass_update; it ends at a referenced
+# drupal.entity_type node, here cookie or mass.
+- rule: hook_acts_on_entity_type
+  reads: file
+  in:
+  - source
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: [php, module, install, inc, theme, profile]}
+  id:
+    from: declared_name
+    pattern: '^{extension}_(?!entity_|block_view(?:_alter)?$|contextual_links_view_alter$|views_|preprocess_|theme_|jsonapi_|language_fallback_candidates_|post_update_)(?<etype>\w+?)_(?<op>access|create_access|create|presave|insert|update|predelete|delete|preload|load|storage_load|view|view_alter|build_defaults_alter|prepare_form|field_values_init|duplicate|revision_create|revision_delete|translation_create|translation_insert|translation_delete|form_mode_alter|view_mode_alter)$'
+    template: '{etype}'
+  emits:
+  - edge:
+      kind: hook_acts_on_entity_type
+      from: {declared: drupal.hook}
+      to: this_node
+  confidence: inferred

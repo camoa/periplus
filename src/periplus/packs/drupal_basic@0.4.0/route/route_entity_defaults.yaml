@@ -1,0 +1,168 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The route defaults and requirements of Drupal core that name an entity type, read from the
+# routing file. _entity_form: 'type.operation' shows that entity type's form for the operation, a
+# shows_entity_form edge, and a uses_entity_form edge to the form class the entity type declares
+# for that operation, default when none is written. _entity_list: 'type' lists the entity type, a
+# lists_entity_type edge, and a uses_list_builder edge to the list builder it declares.
+# _entity_view: 'type.view_mode' views it, a views_entity_type edge. The requirement
+# _entity_create_access: 'type' or 'type:{bundle}', and _entity_create_any_access: 'type', check
+# create access on the entity type, a checks_entity_create_access edge. Declared: the routing file
+# names the type. _entity_access: 'name.operation' checks access on the route parameter of that
+# name, which by core's convention is named as its entity type: a checks_entity_access edge,
+# inferred. The form class and the list builder are joined in the map through the entity type's
+# handler entries (entity_type/entity_type_entry.yaml), so they need the entity type's class in the
+# map; a core entity type's gives no such edge. Two rules for the routing file, because a rule that
+# emits an edge emits no node.
+
+node_types:
+- name: drupal.entity_form_ref
+  description: "internal: an _entity_form value as written, type.operation"
+  id_namespace: drupal.entity_form_ref
+  internal: true
+
+edge_kinds:
+- kind: shows_entity_form
+  cause: from
+  description: "the route's _entity_form default names that entity type and an operation; the route shows the entity's form"
+  from: drupal.route
+  to: drupal.entity_type
+- kind: lists_entity_type
+  cause: from
+  description: "the route's _entity_list default names that entity type; the route shows its list builder's page"
+  from: drupal.route
+  to: drupal.entity_type
+- kind: views_entity_type
+  cause: from
+  description: "the route's _entity_view default names that entity type and a view mode; the route renders the entity"
+  from: drupal.route
+  to: drupal.entity_type
+- kind: checks_entity_access
+  cause: from
+  description: "the route's _entity_access requirement checks an operation on the route parameter of that name, read as the entity type it is named for"
+  from: drupal.route
+  to: drupal.entity_type
+- kind: checks_entity_create_access
+  cause: from
+  description: "the route's _entity_create_access or _entity_create_any_access requirement checks create access on that entity type"
+  from: drupal.route
+  to: drupal.entity_type
+- kind: names_entity_form
+  cause: none
+  description: "step to uses_entity_form: the route's _entity_form value as written"
+  from: drupal.route
+  to: drupal.entity_form_ref
+- kind: uses_entity_form
+  description: "the route's _entity_form operation is answered by that form class, which the entity type declares for the operation"
+  from: drupal.route
+  to: php.class
+  realizes: to
+- kind: uses_list_builder
+  description: "the route's _entity_list is answered by that list builder, which the entity type declares"
+  from: drupal.route
+  to: php.class
+  realizes: to
+
+rules:
+- rule: route_entity_defaults_from_routing_file
+  reads: file
+  in: [module_root]
+  match: &route
+    file: '*.routing'
+    filetype: yaml
+    each: '*'
+    where:
+    - has_key:
+        path: path
+  id: {from: key}
+  emits:
+  - edge:
+      kind: shows_entity_form
+      from: this_node
+      to: {from: {key: defaults._entity_form}, pattern: '^(?<type>[^.\s]+)(?:\..*)?$', template: '{type}'}
+  - edge:
+      kind: names_entity_form
+      from: this_node
+      to: {from: {key: defaults._entity_form}}
+  - edge:
+      kind: lists_entity_type
+      from: this_node
+      to: {from: {key: defaults._entity_list}}
+  - edge:
+      kind: views_entity_type
+      from: this_node
+      to: {from: {key: defaults._entity_view}, pattern: '^(?<type>[^.\s]+)(?:\..*)?$', template: '{type}'}
+  - edge:
+      kind: checks_entity_create_access
+      from: this_node
+      to: {from: {key: requirements._entity_create_access}, pattern: '^(?<type>[^:\s]+)(?::.*)?$', template: '{type}'}
+  - edge:
+      kind: checks_entity_create_access
+      from: this_node
+      to: {from: {key: requirements._entity_create_any_access}}
+  confidence: declared
+
+- rule: route_entity_access_from_routing_file
+  reads: file
+  in: [module_root]
+  match: *route
+  id: {from: key}
+  emits:
+  - edge:
+      kind: checks_entity_access
+      from: this_node
+      to: {from: {key: requirements._entity_access}, pattern: '^(?<type>[^.\s]+)\..*$', template: '{type}'}
+  confidence: inferred
+
+# _entity_form: 'my_type.duplicate' to the form class my_type declares for duplicate.
+- rule: route_uses_entity_form
+  reads: map
+  match:
+    node_type: drupal.route
+    follow:
+    - edge: names_entity_form
+    - place: edge
+    - id_matches: '^drupal\.entity_form_ref::(?<type>[^.]+)\.(?<operation>[^.]+)$'
+    - node: 'drupal.entity_type::{type}'
+    - incoming_edge: entity_type_of_class
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|form|{operation}'
+    - edge: entry_names_class
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+  emits: [{edge: {kind: uses_entity_form, from: this_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared
+
+# _entity_form: 'my_type', no operation: core's default operation.
+- rule: route_uses_default_entity_form
+  reads: map
+  match:
+    node_type: drupal.route
+    follow:
+    - edge: names_entity_form
+    - place: edge
+    - id_matches: '^drupal\.entity_form_ref::(?<type>[^.]+)$'
+    - node: 'drupal.entity_type::{type}'
+    - incoming_edge: entity_type_of_class
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|form|default'
+    - edge: entry_names_class
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+  emits: [{edge: {kind: uses_entity_form, from: this_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared
+
+# _entity_list: 'my_type' to the list builder my_type declares.
+- rule: route_uses_list_builder
+  reads: map
+  match:
+    node_type: drupal.route
+    follow:
+    - edge: lists_entity_type
+    - place: edge
+    - id_matches: '^drupal\.entity_type::(?<type>.+)$'
+    - incoming_edge: entity_type_of_class
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|handlers|list_builder'
+    - edge: entry_names_class
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+  emits: [{edge: {kind: uses_list_builder, from: this_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared

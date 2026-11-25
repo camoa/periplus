@@ -1,0 +1,34 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A role named by self::X or static::X in ->hasRole(), ->addRole() or ->removeRole() in a method,
+# read from role_call.yaml's drupal.role_call node of the call: the map rules take the class around
+# the call and X from the call as written, walk from that class to its parents and interfaces, take
+# the text of the nearest one that declares X (constant/constant_text.yaml), and give checks_role
+# or changes_role to user.role.<text>, an unresolved role when no file declares it, at the call's
+# line. A constant the class itself declares also gives role_call.yaml's edge.
+
+rules:
+- rule: code_checks_role_by_constant
+  reads: map
+  match:
+    node_type: drupal.role_call
+    where: [{id_matches: '(?s)^drupal\.role_call::(?<caller>php\.method::(?<class>[^|]+)::\w+)\|hasRole\(\s*(?:self|static)::(?<constant>[A-Z_][A-Z0-9_]*)\s*\)$'}]
+    follow: &constant_text
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.class_constant::{owner}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<role>.+)$'
+    - node: '{caller}'
+  emits: [{edge: {kind: checks_role, from: matched_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: code_changes_role_by_constant
+  reads: map
+  match:
+    node_type: drupal.role_call
+    where: [{id_matches: '(?s)^drupal\.role_call::(?<caller>php\.method::(?<class>[^|]+)::\w+)\|(?:addRole|removeRole)\(\s*(?:self|static)::(?<constant>[A-Z_][A-Z0-9_]*)\s*\)$'}]
+    follow: *constant_text
+  emits: [{edge: {kind: changes_role, from: matched_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: inferred

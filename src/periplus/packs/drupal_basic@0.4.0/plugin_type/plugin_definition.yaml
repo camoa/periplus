@@ -1,0 +1,196 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The values of a plugin's definition that name another known thing, read from the attribute or
+# annotation on a class below a module's src/Plugin folder, for a plugin of any type. Each edge
+# starts at the class; plugin_class joins the class to its plugin node. Each sits at the line of the
+# value.
+# - deriver: the deriver class, as deriver: MyDeriver::class, resolved through the file's imports
+#   and namespace, or deriver = "Drupal\mymod\Plugin\Deriver\MyDeriver" in full.
+# - provider: the module the plugin needs.
+# - A context of an entity type: 'node' => new EntityContextDefinition('entity:node') or
+#   "node" = @ContextDefinition("entity:node"), to the entity type node.
+# - entity_type: the entity type key some plugin types take, such as a views argument validator.
+# - field_types of a field widget or formatter: each field type in the list, to its field type
+#   plugin.
+# Declared: the definition names each value.
+#
+# Limits: the derivatives a deriver makes, and the keys it sets on them at run time, as
+# $this->derivatives[$id]['label'] = ..., are not read; the deriver is the end. A deriver named as
+# text in an attribute, a provider, entity type or field type that is a constant, and a context
+# written other than as entity:<type> give nothing. A value in an annotation that is not the first
+# annotation of its docblock line, and a value in a class that holds a second attribute or
+# annotation with the same key, are read the same as the plugin's own.
+
+edge_kinds:
+- kind: plugin_deriver
+  cause: none
+  description: "the plugin class's attribute or annotation names that deriver class, which makes the plugin's derivatives at run time"
+  from: php.class
+  to: php.class
+- kind: plugin_provider
+  cause: to
+  description: "the plugin class's attribute or annotation names that module as its provider, the module the plugin needs"
+  from: php.class
+  to: drupal.module
+- kind: plugin_context_entity_type
+  cause: to
+  description: "the plugin class's attribute or annotation declares a context of that entity type, written entity:<type>"
+  from: php.class
+  to: drupal.entity_type
+- kind: plugin_entity_type
+  cause: to
+  description: "the plugin class's attribute or annotation names that entity type under its entity_type key"
+  from: php.class
+  to: drupal.entity_type
+- kind: plugin_field_type
+  cause: to
+  description: "the field widget or formatter class lists that field type under field_types"
+  from: php.class
+  to: drupal.field_type
+
+rules:
+# deriver: X::class in an attribute, #[Name(...)] and #[\Full\Name(...)].
+- rule: plugin_deriver_from_attribute
+  reads: file
+  in: [plugin_classes]
+  match:
+    reference: attribute
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: '[A-Z]\w*'}
+    - name_matches: {child: parameters, pattern: &deriver_argument '(?s)\(.*?\bderiver\s*:\s*(?<deriver>\\?[A-Za-z_][\w\\]*)::class\b.*'}
+  emits: &deriver_edge
+  - edge:
+      kind: plugin_deriver
+      from: enclosing_declaration
+      to: {template: '{deriver}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [php.class]}
+  confidence: declared
+
+- rule: plugin_deriver_from_qualified_attribute
+  reads: file
+  in: [plugin_classes]
+  match:
+    reference: attribute
+    name_child: qualified_name
+    filetype: php
+    where:
+    - name_matches: {child: qualified_name, pattern: '.+'}
+    - name_matches: {child: parameters, pattern: *deriver_argument}
+  emits: *deriver_edge
+  confidence: declared
+
+# deriver = "Drupal\mymod\Plugin\Deriver\MyDeriver" in an annotation, a full class name.
+- rule: plugin_deriver_from_annotation
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@[A-Z]\w*\((?:(?!\*/|\n[ \t]*\*[ \t]*@[A-Z])[\s\S])*?(?<![\w$])deriver\s*=\s*"\\?(?<deriver>[A-Za-z_][\w\\]*)"'
+  id: {template: '{deriver}'}
+  line: {capture: deriver}
+  emits:
+  - edge: {kind: plugin_deriver, from: {template: '{psr4_class}', types: [php.class]}, to: this_node}
+  confidence: declared
+
+# provider: 'forum' in an attribute that starts a line, and provider = "forum" in an annotation.
+- rule: plugin_provider_from_attribute
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?m)^#\[\s*\\?(?:\w+\\)*[A-Z]\w*\s*\((?:(?!\)\s*\])[\s\S])*?\bprovider\s*:\s*[''"](?<provider>\w+)[''"]'
+  id: {template: '{provider}'}
+  line: {capture: provider}
+  emits: &provider_edge
+  - edge: {kind: plugin_provider, from: {template: '{psr4_class}', types: [php.class]}, to: this_node}
+  confidence: declared
+
+- rule: plugin_provider_from_annotation
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@[A-Z]\w*\((?:(?!\*/|\n[ \t]*\*[ \t]*@[A-Z])[\s\S])*?(?<![\w$])provider\s*=\s*"(?<provider>\w+)"'
+  id: {template: '{provider}'}
+  line: {capture: provider}
+  emits: *provider_edge
+  confidence: declared
+
+# 'node' => new EntityContextDefinition('entity:node') or new ContextDefinition(data_type:
+# 'entity:node') as an array value, and "node" = @ContextDefinition("entity:node").
+- rule: plugin_context_entity_type_from_attribute
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '=>\s*new\s+\\?(?:\w+\\)*(?:Entity)?ContextDefinition\(\s*(?:data_type\s*:\s*)?[''"]entity:(?<entity>\w+)'
+  id: {template: '{entity}'}
+  line: {capture: entity}
+  emits: &context_edge
+  - edge: {kind: plugin_context_entity_type, from: {template: '{psr4_class}', types: [php.class]}, to: this_node}
+  confidence: declared
+
+- rule: plugin_context_entity_type_from_annotation
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '"\s*=\s*@ContextDefinition\(\s*"entity:(?<entity>\w+)'
+  id: {template: '{entity}'}
+  line: {capture: entity}
+  emits: *context_edge
+  confidence: declared
+
+# entity_type: 'user' in an attribute that starts a line, and entity_type = "user" in an annotation.
+- rule: plugin_entity_type_from_attribute
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?m)^#\[\s*\\?(?:\w+\\)*[A-Z]\w*\s*\((?:(?!\)\s*\])[\s\S])*?\bentity_type\s*:\s*[''"](?<entity>\w+)[''"]'
+  id: {template: '{entity}'}
+  line: {capture: entity}
+  emits: &entity_edge
+  - edge: {kind: plugin_entity_type, from: {template: '{psr4_class}', types: [php.class]}, to: this_node}
+  confidence: declared
+
+- rule: plugin_entity_type_from_annotation
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@[A-Z]\w*\((?:(?!\*/|\n[ \t]*\*[ \t]*@[A-Z])[\s\S])*?(?<![\w$])entity_type\s*=\s*"(?<entity>\w+)"'
+  id: {template: '{entity}'}
+  line: {capture: entity}
+  emits: *entity_edge
+  confidence: declared
+
+# Each item of field_types: ['string', 'text'] or field_types = {"string", "text"}, one line or
+# several: a quoted name, not a key's value, followed only by more quoted names to the list's end,
+# above the class line. The attribute or annotation of a field widget or formatter holds no other
+# list of plain names.
+- rule: plugin_field_type_listed
+  reads: file
+  in: [field_widget_classes, field_formatter_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment, string]
+    text: '(?m)(?<![:=])(?<![:=]\s)[''"](?<field_type>\w+)[''"](?=(?:[\s*]*,[\s*]*[''"]\w+[''"])*[\s*]*,?[\s*]*[\]}])(?=(?:(?!\bfunction\b)[\s\S])*?^(?:final\s+|abstract\s+)?class\b)'
+  id: {template: '{field_type}'}
+  line: {capture: field_type}
+  emits:
+  - edge: {kind: plugin_field_type, from: {template: '{psr4_class}', types: [php.class]}, to: this_node}
+  confidence: declared

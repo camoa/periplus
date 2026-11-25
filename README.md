@@ -11,7 +11,7 @@ A deterministic, framework-aware semantic code graph, for people and AI agents.
 [![Latest tag](https://img.shields.io/github/v/tag/camoa/periplus)](https://github.com/camoa/periplus/tags)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
 
-Status: **beta**, version 0.10.3.
+Status: **beta**, version 0.11.0.
 
 </div>
 
@@ -64,6 +64,25 @@ What they learn is kept as rules and descriptions.
   analyse code with it, to describe what it reads, to connect the docs to the code, to find what
   the map lacks, and to write the rule that fills the gap.
 
+### What ships, and what you add
+
+Periplus does not try to ship rules for every stack. No tool can. It ships the engine, which knows
+no language, a small format for rules, and skills that let an AI agent write the rules your code
+needs.
+
+The bundled rutters show what that makes possible. Drupal is the deep stack, chosen because one
+Drupal site mixes PHP, YAML configuration, templates and plugins. A second rutter, `drupal_next`,
+links a Next.js front end to the Drupal site behind it. One map then follows a request from the
+front end to the Drupal code that answers it. The rutters for other stacks are starting points.
+[Bundled rutters](docs/rutters.md) marks each one.
+
+When the map lacks something, that is a rule nobody wrote yet. An agent with the `periplus-gaps`
+and `periplus-rutter` skills finds the gap and writes the rule in your project's own rutter. A
+person can do the same with [Writing a rutter](docs/rutter-author-guide.md). From then on, the map
+holds what the rule finds. [Extending Periplus](docs/extending-periplus.md#what-a-rule-can-do-today) lists what a rule can do without an engine change. A general rule, for a language, a framework or software that other
+projects use too, is welcome in Periplus itself, as [Contributing](CONTRIBUTING.md#propose-a-rutter)
+says. That is how Periplus grows.
+
 The routes of [`examples/rule-composition`](examples/rule-composition) and what handles them, cut
 by `periplus slice --path config/ --out routes.map.json` and drawn by
 `periplus export --format mermaid --map routes.map.json`:
@@ -94,8 +113,7 @@ flowchart LR
 A map is not the code, and Periplus is not magic. The map holds what its rutters look for. A
 link that no rule reads is not in the map, so a missing link does not show that the code has
 none. The map also holds no run-time behaviour. What it gives is a steady base: the same answer
-to the same question, and a place where each gap you find becomes a rule. The map holds that link
-from then on.
+to the same question.
 
 In the project's own runs on one code base, the work with a map was steadier from run to run. A
 map improved with new rules and descriptions helped more than the map as first built. On the map
@@ -153,7 +171,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.10.3
+uv tool install git+https://github.com/camoa/periplus@v0.11.0
 ```
 
 To install from a local copy of this repository:
@@ -163,7 +181,7 @@ uv tool install /path/to/periplus           # or: pip install /path/to/periplus
 ```
 
 After any of these installs, run `periplus skills install` to copy the Claude skills Periplus
-ships into `~/.claude/skills`. Run it again after an update to replace the older copies.
+ships into `~/.claude/skills`. Run it again after an upgrade to replace the older copies.
 
 #### Use the skills with other agents
 
@@ -171,7 +189,7 @@ The skills follow the [Agent Skills](https://agentskills.io) format: a folder wi
 file. After `periplus skills install`, the folders `periplus-setup`, `periplus-map`,
 `periplus-analyze`, `periplus-describe`, `periplus-document`, `periplus-gaps` and
 `periplus-rutter` are in `~/.claude/skills`. Copy them to the folder the agent reads, and copy them
-again after each update. The folder `~/.agents/skills` serves four agents at once:
+again after each upgrade. The folder `~/.agents/skills` serves four agents at once:
 
 ```
 mkdir -p ~/.agents/skills && rsync -a --delete ~/.claude/skills/periplus-* ~/.agents/skills/
@@ -182,7 +200,10 @@ mkdir -p ~/.agents/skills && rsync -a --delete ~/.claude/skills/periplus-* ~/.ag
 - [GitHub Copilot in VS Code](https://code.visualstudio.com/docs/copilot/customization/agent-skills): `~/.copilot/skills`, `~/.agents/skills` or `~/.claude/skills`, so the Claude install already works. A repository can use `.github/skills`.
 - [Cursor](https://cursor.com/docs/context/skills): `~/.cursor/skills` or `~/.agents/skills`, and it also reads `~/.claude/skills`. A repository can use `.cursor/skills`.
 
-To upgrade an install from PyPI, use the tool you installed with:
+To upgrade an install from PyPI, run `periplus upgrade`. It asks PyPI for the newest version,
+finds how Periplus was installed, and runs the matching command. `periplus upgrade --check` prints
+the installed version, the newest and the command, and changes nothing. To run the command
+yourself, use the tool you installed with:
 
 ```
 uv tool upgrade periplus-map
@@ -190,16 +211,19 @@ pipx upgrade periplus-map
 pip install -U periplus-map
 ```
 
-`uv tool upgrade` leaves an install pinned to an exact version, such as `periplus-map==0.5.1`, where
-it is. For that one, run `uv tool install periplus-map@latest`.
+`uv tool upgrade` leaves an install pinned to an exact version, such as `periplus-map==0.5.1`,
+where it is. `periplus upgrade` then says the version did not change and exits 35. For that one,
+run `uv tool install periplus-map@latest`.
 
-Then run `periplus skills install` again, and repeat the copy above for any other agent. Read the
-[changelog](CHANGELOG.md) before you upgrade: when a bundled rutter's version changes, update the
-pins in your project's settings with `periplus update` and map again.
+`periplus upgrade` refreshes the skills in `~/.claude/skills` when they are installed. After an
+upgrade by hand, run `periplus skills install` again. Repeat the copy above for any other agent.
+Read the [changelog](CHANGELOG.md) before you upgrade: when a bundled rutter's version changes, run
+`periplus update` in each project to move its pins, and map again.
 
-To update a local install, pull the repository and run `uv tool install /path/to/periplus` again. A
-local directory is rebuilt when `pyproject.toml` changes or a file under `src/periplus` does. Run
-`uv tool install --reinstall /path/to/periplus` for the form that always rebuilds. The command
+`periplus upgrade` does not change a local install. To upgrade one, pull the repository and run
+`uv tool install /path/to/periplus` again. A local directory is rebuilt when `pyproject.toml`
+changes or a file under `src/periplus` does. Run `uv tool install --reinstall /path/to/periplus`
+for the form that always rebuilds. The command
 `periplus status` prints a `rutters:` digest of the bundled rutters, so you can compare two installs.
 
 The distribution name is `periplus-map`. Its seven runtime dependencies are pinned exactly. One
@@ -225,7 +249,7 @@ version:
 ```yaml
 periplus_version: 0
 packs:
-  - drupal_basic@0.3.0
+  - drupal_basic@0.4.0
 folders:
   config: ./config/default
 ```
@@ -233,15 +257,18 @@ folders:
 The `folders` line moves the config folder from `drupal_basic`'s default, `./config/sync`. Leave
 it out when your site uses the default.
 
-In a Drupal project, `periplus init` pins `drupal_basic@0.3.0` when `composer.json` names
-`drupal/core` or `web/core/lib/Drupal.php` exists. It also pins each contributed-module rutter,
-such as `webform_basic`, whose module `core.extension.yml` lists, plus `drush_basic` for Drush
-commands and `drupal_js_basic` for scripts in custom modules and themes. It prints one line per
+In a Drupal project, `periplus init` pins `drupal_basic@0.4.0` when `composer.json` names
+`drupal/core` or `web/core/lib/Drupal.php` exists. It also pins it for a module, theme or install
+profile with its `*.info.yml` file at the root, which is mapped from the folder that holds it, as
+[Questions and answers](docs/faq.md#how-do-i-map-a-drupal-module-that-is-its-own-repository)
+says. It also pins each contributed-module rutter, such as `webform_basic`, whose module
+`core.extension.yml` lists, plus `drush_basic` for Drush commands and `drupal_js_basic` for
+scripts in custom modules and themes. It prints one line per
 pin with the file that matched. Where `web/modules/custom`, `web/themes/custom` or `config/sync`
 do not exist, it looks for the `docroot/` and project-root versions and `config/default`. It
 writes each one it finds under `folders` and prints what it chose. A folder it found nowhere is
 printed as `unplaced`; declare it under `folders` yourself. The rutters that `drupal_basic`
-depends on load without a pin of their own. After you update Periplus, run `periplus update` to
+depends on load without a pin of their own. After `periplus upgrade`, run `periplus update` to
 bring the pins to the installed versions.
 
 Outside Drupal, `init` pins `laravel_basic` when `composer.json` requires `laravel/framework`, and
@@ -377,12 +404,12 @@ found at several places with different values keeps each place's value.
 ### The rutters provided
 
 What the map holds depends on the rutters loaded. A rutter is one of three kinds.
-[Bundled rutters](docs/rutters.md) says what each maps and what it depends on.
+[Bundled rutters](docs/rutters.md) says what each maps, what job it does and what it depends on.
 
 - **Ships with the package**, and loads by its pin alone:
   - Languages and file types: `php_basic`, `js_basic`, `go_basic`, `typescript`, `react`,
     `nextjs`, `yaml_basic` and `twig_basic`.
-  - Drupal: `drupal_basic`, `drupal_js_basic` and `drupal_more`, plus 14 rutters for contributed
+  - Drupal: `drupal_basic`, `drupal_js_basic` and `drupal_more`, plus 16 rutters for contributed
     modules, each pinned beside `drupal_basic` when the site uses that module.
   - Laravel: `laravel_basic`.
 - **An example in the repository:** `python_text`, `typer_text` and `speckitty`, in
@@ -390,8 +417,8 @@ What the map holds depends on the rutters loaded. A rutter is one of three kinds
   `pack_paths`, then pin it. Python is not read out of the box.
 - **Any other stack:** write a rutter, as [Write a rutter](#write-a-rutter) shows.
 
-What each release added is in the [changelog](CHANGELOG.md). Run `periplus skills install` after
-upgrading.
+What each release added is in the [changelog](CHANGELOG.md). `periplus upgrade` refreshes the
+installed skills. After an upgrade by hand, run `periplus skills install`.
 
 ## Write a rutter
 
@@ -407,7 +434,8 @@ project, read what the map cannot explain, and write the next rule.
    pinned rutter, and with none it stops at exit 17.
 3. Read the unknowns. In the report, `unread` lists the files in the rules' folders that no rule
    read. `skipped` lists each match whose rule could not build a node or edge it emits, with the
-   reason. `not_executed` lists the rules the engine cannot run, and why. In the map,
+   reason. `made_nothing` lists the data rules whose own filters left out every value they
+   reached. `not_executed` lists the rules the engine cannot run, and why. In the map,
    `counts.nodes_by_state` counts the `referenced` nodes, which a file names but no rule maps. It
    also counts the `unresolved` nodes, which a rule looked for and did not find.
 4. Write a rule for those names in a rutter under `.periplus/packs/`. Pin a new rutter under
@@ -581,11 +609,14 @@ periplus map                       # map this project and write .periplus/map.js
 periplus check-map                 # check every node and edge of the map against the map schema
 periplus fresh                     # say whether the map still matches the code, settings, rutters and tool
 periplus skills install            # copy the Claude skills Periplus ships into ~/.claude/skills
+periplus upgrade [--check]         # upgrade Periplus from PyPI and refresh the installed skills
 ```
 
 `periplus validate` takes a bare `name`, or `name@version` to pick one of several copies.
-`periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `skills`
-and `export` takes `--format json`. Every command that reads one map takes `--map PATH`.
+`periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `skills`,
+`upgrade` and `export` takes `--format json`. `periplus upgrade` is the only command that reaches the
+network. It exits 35 when it cannot read PyPI, cannot tell how Periplus was installed, the
+upgrade command fails or leaves the version as it was, or the skills cannot be refreshed. Every command that reads one map takes `--map PATH`.
 `periplus --version` prints the installed version, and `periplus <command> --help` gives each
 command's options.
 

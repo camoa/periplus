@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The bundled webform_basic pack, pinned beside drupal_basic@0.3.0. A handler class in the module's
+# The bundled webform_basic pack, pinned beside drupal_basic@0.4.0. A handler class in the module's
 # src/Plugin/WebformHandler folder with a WebformHandler annotation makes the plugin named by its
 # id, joined to its class by plugin_class. An annotation whose id is not quoted text makes no
 # plugin and is listed under skipped, and the same annotation on a class outside that folder makes
@@ -65,7 +65,7 @@ namespace Drupal\mymodule\Other;
 class NotAHandler {
 }
 EOF
-printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - webform_basic@0.0.1\n' \
+printf 'periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n  - webform_basic@0.0.1\n' \
     >"$site/.periplus/settings.yml"
 
 (cd "$site" && "$PERIPLUS" map --output "$work/one.json" --format json >"$work/one-report.json")

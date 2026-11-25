@@ -1,0 +1,1654 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A listener registered without getSubscribedEvents, by a kernel.event_listener tag in a services
+# file. Symfony's RegisterListenersPass, which Drupal's container runs, reads each such tag: its
+# event, its method and its priority, 0 when none is written. Each tag is a subscribed_by edge from
+# the event to the method, holding the priority, the same edge a subscriber's key gives, so every
+# listener of an event is found in one place.
+#
+# A tag item is read as text, in the flow form - { name: kernel.event_listener, event: x }, an
+# inline list tags: [{...}, {...}], or the block form, one key a line under the dash or the dash
+# alone on its line, in any key order, inside one service of the services block, into an internal
+# drupal.event_use node at the item's line. A child service with no class takes its parent's,
+# through parent:. An event written !php/const A\B::NAME is that constant's event, named by its text
+# when a mapped file gives it one, a constant read through a class that inherits it being its
+# declaring class's; with no method, the method Symfony derives from that text, as below, or, when
+# no mapped file gives the text, a drupal.runtime_listener <service>|<constant> marked as an
+# unknown boundary. An event written as a container parameter, '%name%', is the value a mapped
+# parameters block gives it, as the rules below say. The event is the name as written, in double
+# quotes \\, \" and \/ read as a backslash, a quote and a slash; a double-quoted name with any
+# other escape, as "a\tb", holds a character no event name holds and is a runtime registration of
+# the service, a drupal.runtime_subscription <service>|"<name as written>"; so is a name, quoted
+# or plain, that goes on past its line, which YAML folds, <service>|<name as written> with each line
+# break and the blanks around it one space. One the table
+# core_event_names lists, as kernel.request, is the
+# event of its core constant, as a subscriber's KernelEvents::REQUEST is; any other, as
+# my_module.paid, or a class's full name, as Drupal\my_module\Event\Paid, the name of an event
+# dispatched as an object, is the event of that name, which a mapped constant of that text also
+# names. The method is looked up on the
+# service's class, then on its mapped ancestors, and ends at an unresolved method of the class when
+# none declares it; a service the map holds no class for ends at an unresolved method named by the
+# service id.
+#
+# With no method, Symfony names it on<Event>, each letter at the start or after a character other
+# than a letter or a digit made upper case and those characters dropped: kernel.response gives
+# onKernelResponse; PHP finds a method in any letter case, so the name is matched in lower case
+# (event/listener_method.yaml). When the class and its mapped ancestors declare no method of that
+# name but one declares __invoke, __invoke listens; when neither is declared, the edge ends at the
+# unresolved derived name. With no event, Symfony takes the class that types the method's first
+# parameter, __invoke when no method is written, as the event's name: each class of a union, and
+# never a later parameter. A tag of another name, as event_subscriber, gives nothing.
+#
+# A tag's dispatcher key names the dispatcher service the listener is added to, in place of the
+# main event_dispatcher. Each such tag writes it on a use_dispatcher self-link, and every
+# listener map rule carries it to the subscribed_by edge as the edge attribute dispatcher, as
+# written; a tag without the key writes none, so an edge without it is on the main dispatcher.
+
+# An AsEventListener attribute is read across lines and comments. Its event A\B::NAME is read
+# through the use statement of A (the _q rules); X::NAME or A\B::NAME that no use statement binds
+# is the constant of the file's own namespace, unresolved when no mapped file declares it;
+# parent::NAME and parent::class read the parent the class extends, for an attribute on a class
+# through the span attributed_class; parent::NAME or parent::class with no written parent, in a
+# trait or a class that extends nothing, is a runtime registration, as an expression is; so is,
+# on a method of a trait, self::class, static::class, and self::NAME or static::NAME unless the
+# trait declares the constant (event/event.yaml); a priority written as a constant holds the integer a mapped
+# file declares it with (event/event_subscriber.yaml). A dispatcher key stays the service id as
+# written: no edge kind of the pack says a listener is added to another dispatcher.
+#
+# A method an AsEventListener attribute registers holds listens_by_attribute: AsEventListener,
+# printed [AsEventListener, not wired by core]. Drupal core, as of 11.4, registers no listener from
+# the attribute by itself, so the method listens only where something registers attribute
+# listeners; its subscribed_by edge holds what the attribute declares.
+attributes:
+- name: listens_by_attribute
+  on: [php.method]
+  mark: AsEventListener, not wired by core
+
+node_types:
+# A container parameter a services file's parameters block gives a value, by its name.
+- name: drupal.container_parameter
+  description: "a container parameter a services file's parameters block gives a value, by its name"
+  id_namespace: drupal.container_parameter
+# A method an AsEventListener attribute names, <class>::<method>, kept so a map rule can write
+# listens_by_attribute on it when the map holds it.
+- name: drupal.attribute_listener
+  description: "a method an AsEventListener attribute names, <class>::<method>"
+  id_namespace: drupal.attribute_listener
+  internal: true
+# A listener whose method Symfony names from the event's text, which a class constant holds.
+- name: drupal.runtime_listener
+  description: "a listener whose method Symfony derives from an event constant's text, <class>|<event as written>"
+  parent: php.method
+
+edge_attributes:
+- name: dispatcher
+  on: [use_dispatcher, subscribed_by, subscribed_by_function]
+  description: "the event dispatcher service a listener tag or attribute names under dispatcher, as written, when it names one; a listener without it is on the main event_dispatcher"
+
+edge_kinds:
+- kind: parameter_names_event
+  cause: none
+  description: "the container parameter's value, as a services file's parameters block gives it, names that event"
+  from: drupal.container_parameter
+  to: drupal.event
+- kind: parameter_derives_listener
+  cause: none
+  description: "a listener tag whose event is this parameter, with no method, is that derived method"
+  from: drupal.container_parameter
+  to: drupal.derived_listener
+# A listener tag's or attribute's site to itself, holding the dispatcher it names, which the map
+# rules carry to the subscribed_by edge.
+- kind: use_dispatcher
+  cause: none
+  description: "the listener tag or attribute names the dispatcher this self-link holds"
+  from: drupal.event_use
+  to: drupal.event_use
+# The event a listener tag or attribute names, the name as written or the core constant the table
+# gives, holding its priority.
+- kind: use_names_event
+  cause: none
+  description: "the listener tag or attribute names that event"
+  from: drupal.event_use
+  to: drupal.event
+
+rules:
+- rule: listener_tag
+  reads: file
+  in: [module_root]
+  match: &listener_tag
+    file: '*.services'
+    filetype: drupal_yml_text
+    text: '(?m)(?:^(?<ind>[ \t]*)-(?:[ \t]+(?![ \t])|(?=\n))|(?<=[\[,])[ \t]*(?=\{))(?=(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?name:[ \t]*[''"]?(?<tag>kernel\.event_listener)[''"]?[ \t]*(?:[,}#]|$))(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?event:[ \t]*(?:!php/const[ \t]+(?<event_const>\\?[\w\\]+::[A-Z][A-Z0-9_]*)|[''"]?%(?<event_param>[^%''",}\s#]+)%[''"]?(?=[ \t]*(?:[,}#]|$))|"(?<event_esc>(?:[^"\\\n]|\\[\\"/])*\\[^\\"/\n](?:[^"\\\n]|\\[^\n])*)"(?=[ \t]*(?:[,}#]|$))|"(?<event_dq>(?:[^"\\\n]|\\[\\"/])*\\[\\"/](?:[^"\\\n]|\\[\\"/])*)"(?=[ \t]*(?:[,}#]|$))|(?<event_wrap>"(?:[^"\\\n]|\\[^\n])*\\?\n(?:[^"\\]|\\[\s\S])*"|''(?:[^''\n]|'''')*\n(?:[^'']|'''')*'')(?=[ \t]*(?:[,}#]|$))|(?<event_pwrap>(?!!)[^''",}\s#]+(?:[ \t]*\n[ \t]+(?![-#}\]\s,])(?![^\s:,#{}\[\]]+:(?:[ \t]|$))[^,}#\n]*)+)(?=[ \t]*(?:[,}#]|$))|(?<event_quote>[''"]?)(?<event_raw>(?!!)[^''",}\s#]+)))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?method:[ \t]*[''"]?(?<method>\w+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?priority:[ \t]*[''"]?(?<priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?[+-]?[\w:\\]+))?)(?=(?:(?:[^\n]*\n(?P=ind)[ \t]+(?![ \t]))*?(?:[^\n{},]*[{,][ \t]*)*?dispatcher:[ \t]*[''"]?(?<dispatcher>[^''",}\s#]+))?)'
+  values: &tag_values
+    # The event as YAML reads it: in double quotes \\ is one backslash, and \" and \/ a quote
+    # and a slash. Any other escape gives a character no event name holds, and is read below as a
+    # runtime registration, as is a quoted or plain event that goes on past its line, which YAML
+    # folds.
+    event: {template: '{event_raw}{event_dq}§{event_quote}§{event_dq}', normalize: [{replace: '\\\\(?=[^§]*§§.)', with: '¤'}, {replace: '\\"(?=[^§]*§§.)', with: '"'}, {replace: '\\/(?=[^§]*§§.)', with: '/'}, {replace: '¤', with: '\'}, {replace: '§[''"]?§[\s\S]*$', with: ''}]}
+    in_services: {from: {enclosing: services_block, capture: mark}}
+    service: {from: {enclosing: service_entry, capture: service}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    prio: {template: '{tag}|{priority}', normalize: [{replace: '^[^|]*\|$', with: '0'}, {replace: '^[^|]*\|', with: ''}]}
+    no_method: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
+    no_event: {template: '{tag}|{event_raw}{event_dq}{event_esc}{event_const}{event_param}{event_wrap}{event_pwrap}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
+    econst: {from: {capture: event_const}, normalize: [{replace: '^\\', with: ''}]}
+    disp: {from: {capture: dispatcher}}
+    # A double-quoted event with another escape, in its quotes, or an event that goes on past its
+    # line, as written, each line break and the blanks around it one space.
+    rt_event: {template: '{event_esc}§{event_wrap}{event_pwrap}', normalize: [{replace: '^(?=[^§])', with: '"'}, {replace: '§$', with: '"'}, {replace: '^§', with: ''}, {replace: '[ \t]*\n[ \t]*', with: ' '}]}
+    typed_method: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: '__invoke'}, {replace: '^[^|]*\|', with: ''}]}
+    derived: &derived
+      template: '{tag}|{event}'
+      normalize: &camelize
+      - {replace: '^[^|]*\|', with: ''}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))a', with: 'A'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))b', with: 'B'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))c', with: 'C'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))d', with: 'D'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))e', with: 'E'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))f', with: 'F'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))g', with: 'G'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))h', with: 'H'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))i', with: 'I'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))j', with: 'J'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))k', with: 'K'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))l', with: 'L'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))m', with: 'M'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))n', with: 'N'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))o', with: 'O'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))p', with: 'P'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))q', with: 'Q'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))r', with: 'R'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))s', with: 'S'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))t', with: 'T'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))u', with: 'U'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))v', with: 'V'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))w', with: 'W'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))x', with: 'X'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))y', with: 'Y'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))z', with: 'Z'}
+      - {replace: '[^A-Za-z0-9]', with: ''}
+      - {replace: '^', with: 'on'}
+    derived_lower: {template: '{tag}|{event}', normalize: *camelize, case: lower}
+  id: {template: '{in_services}|{service}|{method}|tagged|{event}', normalize: [{replace: '^services\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+# A double-quoted event with an escape other than \\, \" and \/, as "a\tb", names an event
+# whose text holds a character no event name holds; the built container alone knows it. So does an
+# event written past its line, quoted or plain, which YAML folds.
+- rule: listener_tag_escaped
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|{rt_event}', normalize: [{replace: '^services\|', with: ''}]}
+  emits:
+  - node: {type: drupal.runtime_subscription}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: listener_tag_escaped_from
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|{rt_event}', normalize: [{replace: '^services\|', with: ''}]}
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{service}', types: [drupal.service]}, to: this_node}}]
+  confidence: declared
+
+- rule: listener_tag_event
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|{method}|tagged|{event}', normalize: [{replace: '^services\|', with: ''}]}
+  emits:
+  - &names_event_edge
+    edge:
+      kind: use_names_event
+      from: this_node
+      to: {template: '{event}', resolve: [{lookup_last_segment_in: core_event_names}, as_written], separator: ' ', types: [drupal.event]}
+      attributes: {priority: {template: '{prio}'}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{service}|{method}|tagged|{event}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+- rule: listener_tag_derived
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{no_method}|{service}|{derived}|{derived_lower}|tagged_derived|{event}', normalize: [{replace: '^services\|none\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_tag_derived_event
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{no_method}|{service}|{derived}|{derived_lower}|tagged_derived|{event}', normalize: [{replace: '^services\|none\|', with: ''}]}
+  emits:
+  - *names_event_edge
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{service}|{derived}|{derived_lower}|tagged_derived|{event}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+- rule: listener_tag_typed
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{no_event}|{service}|{typed_method}|tagged_typed', normalize: [{replace: '^services\|none\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_tag_typed_priority
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{no_event}|{service}|{typed_method}|tagged_typed', normalize: [{replace: '^services\|none\|', with: ''}]}
+  emits:
+  - edge:
+      kind: use_has_priority
+      from: this_node
+      to: {template: '{service}|{typed_method}|tagged_typed', type: drupal.event_use}
+      attributes: {priority: {template: '{prio}'}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{service}|{typed_method}|tagged_typed', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+# An event written !php/const A\B::NAME is the class constant, named by its text when a mapped file
+# declares it with one, on the class or the nearest mapped ancestor or interface that declares it,
+# else by the constant.
+- rule: listener_tag_constant
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|{method}|tagged_const|{econst}', normalize: [{replace: '^services\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_tag_constant_edges
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|{method}|tagged_const|{econst}', normalize: [{replace: '^services\|', with: ''}]}
+  emits: &constant_tag_edges
+  - edge:
+      kind: use_has_priority
+      from: this_node
+      to: {template: '{service}|{method}|tagged_const|{econst}', type: drupal.event_use}
+      attributes: {priority: {template: '{prio}'}}
+  - edge: {kind: use_names_event, from: this_node, to: {template: '{econst}', types: [drupal.event_text]}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{service}|{method}|tagged_const|{econst}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+- rule: listener_tag_constant_runtime
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{no_method}|{service}|-|tagged_const|{econst}', normalize: [{replace: '^services\|none\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_tag_constant_runtime_edges
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{no_method}|{service}|-|tagged_const|{econst}', normalize: [{replace: '^services\|none\|', with: ''}]}
+  emits:
+  - edge:
+      kind: use_has_priority
+      from: this_node
+      to: {template: '{service}|-|tagged_const|{econst}', type: drupal.event_use}
+      attributes: {priority: {template: '{prio}'}}
+  - edge: {kind: use_names_event, from: this_node, to: {template: '{econst}', types: [drupal.event_text]}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{service}|-|tagged_const|{econst}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+- rule: listener_tag_constant_subscribed_by_text
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<declarer>(?<service>[^|]+))\|(?<method>\w+)\|tagged_const\|(?<constant>(?<cc>.+)::(?<cn>[A-Z][A-Z0-9_]*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<constant>.+)$'}]
+    - node: 'drupal.class_constant::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - try: &tag_declarer
+      - node: 'drupal.service::{service}'
+      - ancestors: [extends_service]
+      - edge: service_class
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - try:
+        - ancestors: [inherits]
+        - id_matches: '^php\.type::(?<declarer>.+)$'
+        - node: 'php.method::{declarer}::{method}'
+    - node: 'drupal.event::{text}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_constant_subscribed_by_constant
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<declarer>(?<service>[^|]+))\|(?<method>\w+)\|tagged_const\|(?<constant>(?<cc>.+)::(?<cn>[A-Z][A-Z0-9_]*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: *tag_declarer
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<constant>.+)$'}]
+    - node: 'drupal.event::{constant}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless: [[{node: 'drupal.class_constant::{constant}'}, {edge: has_constant_text}], [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {edge: has_constant_text}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# With no method and a constant whose text a mapped file gives, the method Symfony derives from
+# that text (event/event_name.yaml): on<Event> when the class or a mapped ancestor declares it,
+# else __invoke, else the unresolved derived name; with a service the map holds no class for, the
+# unresolved derived name on the service id.
+- rule: listener_tag_constant_derived
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|-\|tagged_const\|(?<constant>(?<cc>.+)::(?<cn>[A-Z][A-Z0-9_]*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<constant>.+)$'}]
+    - node: 'drupal.class_constant::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::{lower}'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_constant_invoke
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|-\|tagged_const\|(?<constant>(?<cc>.+)::(?<cn>[A-Z][A-Z0-9_]*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<constant>.+)$'}]
+    - node: 'drupal.class_constant::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - id_matches: '^php\.type::(?<type>.+)$'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::__invoke'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'php.type::{type}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_constant_derived_unresolved
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|-\|tagged_const\|(?<constant>(?<cc>.+)::(?<cn>[A-Z][A-Z0-9_]*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<constant>.+)$'}]
+    - node: 'drupal.class_constant::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - id_matches: '^php\.type::(?<type>.+)$'
+    - node: 'drupal.event::{text}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'php.type::{type}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}], [{node: 'php.type::{type}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::__invoke'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{type}::{derived}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_constant_derived_by_service
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|-\|tagged_const\|(?<constant>(?<cc>.+)::(?<cn>[A-Z][A-Z0-9_]*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: [[{node: 'drupal.service::{service}'}, {ancestors: [extends_service]}, {edge: service_class}]]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<constant>.+)$'}]
+    - node: 'drupal.class_constant::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.event::{text}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{service}::{derived}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# With no method and a constant whose text no mapped file gives: only the text, which the built
+# container reads, names the method, so the edge ends at a drupal.runtime_listener
+# <service>|<constant as written> marked as an unknown boundary.
+- rule: listener_tag_constant_runtime_by_constant
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|-\|tagged_const\|(?<constant>(?<cc>.+)::(?<cn>[A-Z][A-Z0-9_]*))$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<constant>.+)$'}]
+    - node: 'drupal.event::{constant}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless: [[{node: 'drupal.class_constant::{constant}'}, {edge: has_constant_text}], [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {edge: has_constant_text}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{service}|{cc}::{cn}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# An event written as a container parameter, event: '%my_module.event%', is the text the services
+# file's parameters block gives that parameter, read by the rule below, when one mapped file gives
+# it one literal value; the event is named as a tag's quoted event is. Symfony's
+# RegisterListenersPass reads the tag as written and passes '%name%' on to the dispatcher's
+# addListener call, whose argument the built container replaces with the parameter's value; with
+# no method, the pass derives the method from the text as written, so from the parameter's name,
+# on<Name>, then __invoke. A parameter no mapped file gives a value, or that two
+# give different values, is decided when the container is built: the tag is then a
+# drupal.runtime_subscription <service>|%<parameter>%, marked resolution: runtime, with a
+# registers_listener_at_runtime edge from the service.
+- rule: container_parameter
+  reads: file
+  in: [module_root]
+  match: &container_parameter
+    file: '*.services'
+    filetype: drupal_yml_text
+    text: '(?m)^  (?<name>[A-Za-z0-9_][\w.\-]*):[ \t]*(?:''(?<single>(?:[^''\n%]|'''')+)''|"(?<double>(?:[^"\\\n%]|\\[\\"])+)"|(?<plain>[^\s''"#\[{&*!|>%@`,][^\n#%]*?))[ \t]*(?:#[^\n]*)?$'
+  values: &parameter_values
+    in_parameters: {from: {enclosing: parameters_block, capture: mark}}
+    # '' is a quote in single quotes, before the first §; \\ a backslash and \" a quote in double
+    # quotes, between the two.
+    text: {template: '{single}§{double}§{plain}', normalize: [{replace: '''''(?=[^§]*§[^§]*§)', with: ''''}, {replace: '\\\\(?=[^§]*§[^§]*$)', with: '¤'}, {replace: '\\"(?=[^§]*§[^§]*$)', with: '"'}, {replace: '¤', with: '\'}, {replace: '§', with: ''}]}
+    # Symfony derives the method from the tag's text as written, %name%, before the container
+    # gives the parameter its value, so from the parameter's name.
+    derived:
+      template: '{name}'
+      normalize:
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))a', with: 'A'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))b', with: 'B'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))c', with: 'C'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))d', with: 'D'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))e', with: 'E'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))f', with: 'F'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))g', with: 'G'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))h', with: 'H'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))i', with: 'I'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))j', with: 'J'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))k', with: 'K'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))l', with: 'L'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))m', with: 'M'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))n', with: 'N'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))o', with: 'O'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))p', with: 'P'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))q', with: 'Q'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))r', with: 'R'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))s', with: 'S'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))t', with: 'T'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))u', with: 'U'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))v', with: 'V'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))w', with: 'W'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))x', with: 'X'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))y', with: 'Y'}
+      - {replace: '(?:^|(?<=[^A-Za-z0-9]))z', with: 'Z'}
+      - {replace: '[^A-Za-z0-9]', with: ''}
+      - {replace: '^', with: 'on'}
+    lower: {template: '{derived}', case: lower}
+  id: {template: '{in_parameters}|{name}', normalize: [{replace: '^parameters\|', with: ''}]}
+  emits: [{node: {type: drupal.container_parameter}}]
+  confidence: declared
+
+- rule: container_parameter_value
+  reads: file
+  in: [module_root]
+  match: *container_parameter
+  values: *parameter_values
+  id: {template: '{in_parameters}|{name}', normalize: [{replace: '^parameters\|', with: ''}]}
+  emits:
+  - edge: {kind: parameter_names_event, from: this_node, to: {template: '{text}', resolve: [{lookup_last_segment_in: core_event_names}, as_written], separator: ' ', types: [drupal.event_text]}}
+  - edge: {kind: parameter_derives_listener, from: this_node, to: {template: '{derived}|{lower}', types: [drupal.derived_listener]}}
+  confidence: declared
+
+- rule: listener_tag_parameter
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|{method}|tagged_param|{event_param}', normalize: [{replace: '^services\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_tag_parameter_edges
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|{method}|tagged_param|{event_param}', normalize: [{replace: '^services\|', with: ''}]}
+  emits:
+  - {edge: {kind: use_has_priority, from: this_node, to: {template: '{service}|{method}|tagged_param|{event_param}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{service}|{method}|tagged_param|{event_param}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+- rule: listener_tag_parameter_derived
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{no_method}|{service}|-|tagged_param|{event_param}', normalize: [{replace: '^services\|none\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_tag_parameter_derived_edges
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{no_method}|{service}|-|tagged_param|{event_param}', normalize: [{replace: '^services\|none\|', with: ''}]}
+  emits:
+  - {edge: {kind: use_has_priority, from: this_node, to: {template: '{service}|-|tagged_param|{event_param}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{service}|-|tagged_param|{event_param}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+- rule: listener_tag_parameter_runtime
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|%{event_param}%', normalize: [{replace: '^services\|', with: ''}]}
+  emits:
+  - node: {type: drupal.runtime_subscription}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: listener_tag_parameter_runtime_from
+  reads: file
+  in: [module_root]
+  match: *listener_tag
+  values: *tag_values
+  id: {template: '{in_services}|{service}|%{event_param}%', normalize: [{replace: '^services\|', with: ''}]}
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{service}', types: [drupal.service]}, to: this_node}}]
+  confidence: declared
+
+# One literal value: the runtime mark is taken back, before the passes.
+- rule: listener_tag_parameter_given
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|[^|]+\|tagged_param\|(?<param>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.runtime_subscription::{service}|%{param}%'
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}]]
+  emits: [{withhold: matched_node}]
+  confidence: inferred
+
+- rule: listener_tag_parameter_subscribed_by
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|(?<method>\w+)\|tagged_param\|(?<param>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - try:
+      - node: 'drupal.service::{service}'
+      - ancestors: [extends_service]
+      - edge: service_class
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - try:
+        - ancestors: [inherits]
+        - id_matches: '^php\.type::(?<declarer>.+)$'
+        - node: 'php.method::{declarer}::{method}'
+    - node: 'drupal.event::{event}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_parameter_subscribed_by_service
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|(?<method>\w+)\|tagged_param\|(?<param>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: [[{node: 'drupal.service::{service}'}, {ancestors: [extends_service]}, {edge: service_class}]]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.event::{event}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{service}::{method}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_parameter_derived_method
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|-\|tagged_param\|(?<param>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::{lower}'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_parameter_invoke
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|-\|tagged_param\|(?<param>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - id_matches: '^php\.type::(?<type>.+)$'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::__invoke'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}], [{node: 'php.type::{type}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_parameter_derived_unresolved
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|-\|tagged_param\|(?<param>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - id_matches: '^php\.type::(?<type>.+)$'
+    - node: 'drupal.event::{event}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}], [{node: 'php.type::{type}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}], [{node: 'php.type::{type}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::__invoke'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{type}::{derived}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_parameter_derived_by_service
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|-\|tagged_param\|(?<param>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: [[{node: 'drupal.service::{service}'}, {ancestors: [extends_service]}, {edge: service_class}]]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_names_event
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.container_parameter::{param}'
+    - edge: parameter_derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.event::{event}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'drupal.container_parameter::{param}'}, {edge: parameter_names_event}, {id_matches: '^drupal\.event::(?!{event}$)'}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{service}::{derived}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# The method a tag names, on the service's class or the nearest mapped ancestor that declares it,
+# else unresolved on the service's class.
+- rule: listener_tag_subscribed_by
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|(?<method>[^|]+)\|tagged\|'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - id_matches: '^php\.type::(?<type>(?<declarer>.+))$'
+    - try:
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'drupal.event::{event}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# A tag of a service the map holds no class for: an unresolved method named by the service id.
+- rule: listener_tag_subscribed_by_service
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|(?<method>[^|]+)\|(?:[^|]+\|)?tagged(?:_derived)?\|'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless: [[{node: 'drupal.service::{service}'}, {ancestors: [extends_service]}, {edge: service_class}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{service}::{method}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# With no method: on<Event> when the class or a mapped ancestor declares it, else __invoke when
+# one declares that, else the unresolved on<Event> of the service's class.
+- rule: listener_tag_subscribed_by_derived
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|(?<derived>[^|]+)\|(?<lower>[^|]+)\|tagged_derived\|'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::{lower}'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_subscribed_by_invoke
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|(?<derived>[^|]+)\|(?<lower>[^|]+)\|tagged_derived\|'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - id_matches: '^php\.type::(?<type>.+)$'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::__invoke'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'php.type::{type}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_tag_subscribed_by_derived_unresolved
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|(?<derived>[^|]+)\|(?<lower>[^|]+)\|tagged_derived\|'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - id_matches: '^php\.type::(?<type>.+)$'
+    - node: 'drupal.event::{event}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched:
+    - [{node: 'php.type::{type}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]
+    - [{node: 'php.type::{type}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::__invoke'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{type}::{derived}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# With no event: the class that types a parameter of the method, as Symfony reads its first one.
+- rule: listener_tag_subscribed_by_type
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<service>[^|]+)\|(?<method>[^|]+)\|tagged_typed$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - node: 'drupal.service::{service}'
+    - ancestors: [extends_service]
+    - edge: service_class
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.method::{declarer}::{method}'
+    - node: 'drupal.method_ref::{declarer}::{method}'
+    - edge: first_parameter_typed_as
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'php.method::{declarer}::{method}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# Symfony's AsEventListener attribute, #[AsEventListener(event: X, method: 'm', priority: 10)], on
+# a method or on a class, read as text in a file under src, as the Hook attribute is: any
+# attribute written AsEventListener, with or without its namespace, alone or in a group such as
+# #[Hook('x'), AsEventListener(...)], counts, and an attribute of another name, as
+# AsEventListenerish, gives nothing. Arguments may hold parentheses two levels deep. Each argument
+# is read whole, by its name or by its place, event first, method second, priority third and
+# dispatcher fourth; a priority not written is 0, and a dispatcher is kept, without its quotes, in
+# the edge attribute dispatcher. The node sits at the attribute's line, and its edge is a
+# subscribed_by edge as a subscriber's key gives. An event or method written as an expression, as
+# 'a' . 'b' or self::PREFIX . '.x', which only the running code turns into a name, is a
+# drupal.runtime_subscription <class>::<method>|<expression> on a method, or <class>|<expression>
+# on a class, marked resolution: runtime, with a registers_listener_at_runtime edge from the method
+# or the class; a method argument on a method, which Symfony refuses, is not read.
+#
+# The event: a class constant, X::NAME, \A\B::NAME, self::NAME or static::NAME, is read as a
+# subscriber's key is (event/event_subscriber.yaml); a quoted name as a tag's event is. With no
+# event, the class that types the listener method's first parameter is the event's name, as
+# Symfony takes it, read from event/listener_method.yaml. An event written X::class, the name of an
+# event dispatched as an object, is the event of the class's full name, through the file's use
+# statements, its namespace, or self. The method: on a method, that method; on a class, the method
+# argument, else on<Event> derived from the event's text, a quoted name's, a constant's when a
+# mapped file gives it, or a class's full name when a file gives it (event/event_name.yaml), then
+# __invoke, then the unresolved derived name; when no mapped file gives the text, a
+# drupal.runtime_listener node marked resolution: runtime; and with no event either, __invoke.
+- rule: listener_attribute_use
+  reads: file
+  in: [source]
+  match: &listener_attribute
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?:#\[(?:(?:[^\[\]()]|\[[^\[\]]*\]|\((?:[^()]|\([^()]*\))*\))*?,\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*)??|(?<=,)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*)\\?(?:[\w\\]*\\)?(?<tag>AsEventListener)(?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\((?=(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:))(?<p1>(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+)[,)])?(?=(?:(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:))(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+,){1}(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:))(?<p2>(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+)[,)])?(?=(?:(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:))(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+,){2}(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:))(?<p3>(?:(?=(?:(?<pcref3>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu3>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+)[,)])?(?=(?:(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:))(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+,){3}(?!\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\w+\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:))(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[''"](?<p4_text>[^''"]*)[''"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,)])?(?<p4>(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+)[,)])?(?=(?:(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+,)*?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*event\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<n_event>(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+)[,)])?(?=(?:(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+,)*?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*method\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<n_method>(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+)[,)])?(?=(?:(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+,)*?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*priority\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?<n_priority>(?:(?=(?:(?<pcref>(?:self|static|\\?(?:[A-Za-z_]\w*\\)+[A-Z]\w*)::[A-Z][A-Z0-9_]*)|(?<pcu>[A-Z]\w*::[A-Z][A-Z0-9_]*))\s*[,\]\)]))?(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+)[,)])?(?=(?:(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+,)*?\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*dispatcher\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*:(?!:)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?=[''"](?<n_disp_text>[^''"]*)[''"]\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*[,)])?(?<n_dispatcher>(?:''[^'']*''|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|[^,()\[\]''"])+)[,)])?(?<args>(?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\))?(?=\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:,(?:[^\[\]()]|\[[^\[\]]*\]|\((?:[^()]|\([^()]*\))*\))*)?\](?:\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*#\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*(?:(?:public|protected|private|static|final|abstract|readonly)\s+)*(?:function\s+(?<method>\w+)\s*(?:(?://[^\n]*(?![^\n])|/\*(?:[^*]|\*(?!/))*\*/|#(?!\[)[^\n]*(?![^\n]))\s*)*\(|class\s))'
+  values: &attribute_values
+    # parent:: in the attribute is the class's written parent: the class around a method, or the
+    # class the attribute sits on.
+    parent_cls: {from: {enclosing: class_like_body, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    aparent: {from: {enclosing: attributed_class, capture: parent}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    # trait for an attribute on a method of a trait, where self:: and static:: name the class that
+    # uses the trait (event/event.yaml).
+    trt: {from: {enclosing: class_like_body, capture: kind}, join: '|', normalize: [{replace: '^.*\|', with: ''}, {replace: '^(?!trait$).*$', with: ''}]}
+    ev0: {template: '{tag}|{n_event}{p1}', normalize: [{replace: '^[^|]*\|\s*', with: ''}, {replace: '\s+$', with: ''}, {replace: '^null$', with: ''}]}
+    ev: {template: '{tag}|{parent_cls}{aparent}§{ev0}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^[^§]*§(?!parent::(?:[A-Z]|class\b))', with: ''}, {replace: '^§', with: ''}, {replace: '§parent(?=::)', with: ''}]}
+    key: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*::[A-Z][A-Z0-9_]*$).*$', with: ''}]}
+    class: {template: '{tag}|{key}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '::.*$', with: ''}, {replace: '^\\.*$', with: ''}]}
+    constant: {template: '{tag}|{key}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^.*::', with: ''}]}
+    own: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!(?:self|static)::[A-Z][A-Z0-9_]*$).*$', with: ''}, {replace: '^\w+::', with: ''}]}
+    const_ev: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!(?:\\?(?:[A-Za-z_]\w*\\)*[A-Z]\w*|self|static)::[A-Z][A-Z0-9_]*$).*$', with: ''}]}
+    text: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!''[^'']*''$|"[^"]*"$).*$', with: ''}, {replace: '^.|.$', with: ''}]}
+    no_event: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
+    # The method argument, written on a class: a quoted name, else an expression; on a method,
+    # where Symfony refuses one, none.
+    meth_arg: {template: '{tag}|{method}|{n_method}{p2}', normalize: [{replace: '^[^|]*\|[^|]+\|.*$', with: ''}, {replace: '^[^|]*\|\|\s*', with: ''}, {replace: '\s+$', with: ''}, {replace: '^null$', with: ''}]}
+    meth: {template: '{tag}|{meth_arg}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!''\w+''$|"\w+"$).*$', with: ''}, {replace: '^.|.$', with: ''}]}
+    meth_expr: {template: '{tag}|{meth_arg}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?:''\w+''|"\w+")$', with: ''}]}
+    # parent::NAME or parent::class left in ev has no written parent, in a trait or a class that extends nothing.
+    ev_expr: {template: '{tag}|{ev}§{trt}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?=(?:self|static)::(?:[A-Z][A-Z0-9_]*|class)§trait$)', with: '¤'}, {replace: '§[\s\S]*$', with: ''}, {replace: '^(?:''[^'']*''|"[^"]*"|(?!parent::(?:[A-Z][A-Z0-9_]*|class)$)\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Za-z_]\w*)$', with: ''}, {replace: '^¤', with: ''}]}
+    expr: {template: '§{ev_expr}§{meth_expr}', normalize: [{replace: '^§§', with: ''}, {replace: '§$', with: ''}, {replace: '^§', with: ''}, {replace: '§', with: ','}, {replace: '\s+', with: ''}, {replace: '\|', with: '¦'}]}
+    owner_at: {template: '{tag}|{method}', normalize: [{replace: '^[^|]*\|$', with: '{psr4_class}'}, {replace: '^[^|]*\|', with: '{psr4_class}::'}]}
+    listener: {template: '{tag}|{method}{meth}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+    tmark: {template: '§{trt}§{own}§trait‖drupal.event_use::{psr4_class}::{own}|subscribed_here|{psr4_class}::{listener}‖drupal.runtime_subscription::{owner_at}|{expr}‖drupal.class_constant::{psr4_class}::{own}', normalize: [{replace: '^§trait§[^§]+§', with: ''}, {replace: '^§[\s\S]*$', with: ''}]}
+    no_method: {template: '{tag}|{method}{meth_arg}', normalize: [{replace: '^[^|]*\|$', with: 'none'}, {replace: '^[^|]*\|.+$', with: ''}]}
+    typed_method: {template: '{tag}|{method}{meth}|{meth_expr}', normalize: [{replace: '^[^|]*\|[^|]*\|.+$', with: ''}, {replace: '^[^|]*\|\|$', with: '__invoke'}, {replace: '^[^|]*\|', with: ''}, {replace: '\|$', with: ''}]}
+    disp: {template: '{tag}|{n_disp_text}{p4_text}|{n_dispatcher}{p4}', normalize: [{replace: '^[^|]*\|\|', with: ''}, {replace: '^[^|]*\|(?=[^|]*\|)', with: ''}, {replace: '\|.*$', with: ''}, {replace: '^\s+|\s+$', with: ''}]}
+    prio: {template: '{tag}|{n_priority}{p3}', normalize: [{replace: '^[^|]*\|\s*$', with: '0'}, {replace: '^[^|]*\|\s*', with: ''}, {replace: '\s+$', with: ''}]}
+    pk: {template: '§{psr4_class}§{pcref}{pcu}{pcref3}{pcu3}', normalize: [{replace: '§(?:self|static)(?=::)', with: ''}, {replace: '^§[^§]*§', with: ''}, {replace: '^§', with: '@'}]}
+    ph: {template: '§{psr4_namespace}§{pcu}{pcu3}', normalize: [{replace: '§', with: ''}]}
+    derived: {template: '{tag}|{text}', normalize: *camelize}
+    derived_lower: {template: '{tag}|{text}', normalize: *camelize, case: lower}
+    ns: {template: '{psr4_namespace}', normalize: [{replace: '\\$', with: ''}]}
+    # An event written as a class, X::class, as written, and the class for the event's end.
+    class_ev: {template: '{tag}|{ev}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '^(?!\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::class$).*$', with: ''}, {replace: '^parent::class$', with: ''}]}
+    class_ev_t: {template: '{class_ev}§{trt}', normalize: [{replace: '^(?:self|static)::class§trait$', with: ''}, {replace: '§[\s\S]*$', with: ''}]}
+    # parent::class is the class the attribute's class extends, as written.
+    cls: {template: '{tag}|{class_ev_t}§P{parent_cls}{aparent}', normalize: [{replace: '^[^|]*\|', with: ''}, {replace: '::class(?=§P)', with: ''}, {replace: '^parent§P', with: ''}, {replace: '§P.*$', with: ''}, {replace: '^(?:self|static)$', with: '§{psr4_class}'}, {replace: '^§', with: '\'}]}
+  id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_use_q
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [bound_first_segment], separator: '\'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_use_listener
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::'}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{key}|{psr4_class}::{listener}', type: drupal.event_use}}}, {edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{listener}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+- rule: listener_attribute_use_listener_q
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [bound_first_segment], separator: '\'}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{key}|{psr4_class}::{listener}', type: drupal.event_use}}}, {edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{listener}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{key}|subscribed|{psr4_class}::{listener}', resolve: [bound_first_segment], separator: '\', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+- rule: listener_attribute_own_class
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{psr4_class}::{own}|subscribed_here|{psr4_class}::{listener}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_own_class_listener
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{psr4_class}::{own}|subscribed_here|{psr4_class}::{listener}'}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_names_listener, from: this_node, to: {template: '{psr4_class}::{listener}', types: [php.method]}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}::{own}|subscribed_here|{psr4_class}::{listener}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+# In a trait, self::NAME or static::NAME: the site that keeps the use above or the runtime
+# registration listener_attribute_expression gives (event/event.yaml).
+- rule: listener_attribute_own_class_trait_site
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{tmark}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_in_namespace
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{listener}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_in_namespace_priority
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{listener}'}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{listener}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_namespace}{class}::{constant}|subscribed_here|{psr4_class}::{listener}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+- rule: listener_attribute_named
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{psr4_class}|{listener}|listens|{text}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_named_event
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{psr4_class}|{listener}|listens|{text}'}
+  emits:
+  - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
+  - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
+  - edge:
+      kind: use_names_event
+      from: this_node
+      to: {template: '{text}', resolve: [{lookup_last_segment_in: core_event_names}, as_written], separator: ' ', types: [drupal.event]}
+      attributes: {priority: {template: '{prio}'}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}|{listener}|listens|{text}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+# An event written as a class, X::class, the event of the class's full name; on a class with no
+# method, the method Symfony derives from that name (event/event_name.yaml), on<Event>, then
+# __invoke, then the unresolved derived name, or, when no file gives the full name, a
+# drupal.runtime_listener <class>|<X::class as written> marked as an unknown boundary.
+- rule: listener_attribute_class
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{psr4_class}|{listener}|listens|{class_ev_t}'}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_class_event
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{psr4_class}|{listener}|listens|{class_ev_t}'}
+  emits:
+  - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
+  - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
+  - {edge: {kind: use_names_event, from: this_node, to: {template: '{cls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}, attributes: {priority: {template: '{prio}'}}}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}|{listener}|listens|{class_ev_t}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+- rule: listener_attribute_class_derived_use
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_method}|{psr4_class}|-|listens_class|{class_ev_t}', normalize: [{replace: '^none\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_class_derived_event
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_method}|{psr4_class}|-|listens_class|{class_ev_t}', normalize: [{replace: '^none\|', with: ''}]}
+  emits:
+  - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
+  - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
+  - {edge: {kind: use_names_event, from: this_node, to: {template: '{cls}', resolve: [{full_if_prefixed: '\'}, bound_first_segment, {prefix_with: ns}], separator: '\', types: [drupal.event_text]}, attributes: {priority: {template: '{prio}'}}}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}|-|listens_class|{class_ev_t}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+- rule: listener_attribute_class_derived
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<class>[^|]+)\|-\|listens_class\|(?<written>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.constant_text::{event}'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::{lower}'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}, {attribute: {name: listens_by_attribute, template: AsEventListener, target: matched_node}}]
+  confidence: inferred
+
+- rule: listener_attribute_class_invoke
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<class>[^|]+)\|-\|listens_class\|(?<written>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.constant_text::{event}'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::__invoke'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}, {attribute: {name: listens_by_attribute, template: AsEventListener, target: matched_node}}]
+  confidence: inferred
+
+- rule: listener_attribute_class_derived_unresolved
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<class>[^|]+)\|-\|listens_class\|(?<written>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.constant_text::{event}'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.event::{event}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}], [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::__invoke'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{class}::{derived}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_attribute_class_runtime
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<class>[^|]+)\|-\|listens_class\|(?<written>.+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'drupal.event::{event}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'drupal.constant_text::{event}'}, {edge: derives_listener}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{class}|{written}', types: [drupal.runtime_listener], on_miss: unknown_boundary}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_attribute_names_method
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{psr4_class}::{listener}'}
+  emits: [{node: {type: drupal.attribute_listener}}]
+  confidence: declared
+
+# On a class with a quoted event and no method: the name Symfony derives.
+- rule: listener_attribute_derived
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_method}|{psr4_class}|{derived}|{derived_lower}|listens_derived|{text}', normalize: [{replace: '^none\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_derived_event
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_method}|{psr4_class}|{derived}|{derived_lower}|listens_derived|{text}', normalize: [{replace: '^none\|', with: ''}]}
+  emits:
+  - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}
+  - {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}
+  - edge:
+      kind: use_names_event
+      from: this_node
+      to: {template: '{text}', resolve: [{lookup_last_segment_in: core_event_names}, as_written], separator: ' ', types: [drupal.event]}
+      attributes: {priority: {template: '{prio}'}}
+  - {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}|{derived}|{derived_lower}|listens_derived|{text}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}
+  confidence: declared
+
+# On a class with a constant event and no method: the listener only the built container names.
+- rule: listener_attribute_runtime
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_method}|{psr4_class}|{const_ev}', normalize: [{replace: '^none\|', with: ''}]}
+  emits:
+  - node: {type: drupal.runtime_listener}
+  - attribute: {name: resolution, template: runtime}
+  - attribute: {name: listens_by_attribute, template: AsEventListener}
+  confidence: declared
+
+- rule: listener_attribute_runtime_use
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|{no_method}|subscribed_runtime|{psr4_class}|{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::', normalize: [{replace: '\|none\|', with: '|'}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_runtime_use_q
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|{no_method}|subscribed_runtime|{psr4_class}|{key}', resolve: [bound_first_segment], separator: '\', normalize: [{replace: '\|none\|', with: '|'}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_runtime_use_priority
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|{no_method}|subscribed_runtime|{psr4_class}|{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::', normalize: [{replace: '\|none\|', with: '|'}]}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{key}|{psr4_class}|_here', type: drupal.event_use}}}, {edge: {kind: use_has_priority, from: this_node, to: {template: '{key}|subscribed_runtime|{psr4_class}|{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{key}|subscribed_runtime|{psr4_class}|{key}', resolve: [{full_if_prefixed: '\'}, bound_first_segment], separator: '::', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+- rule: listener_attribute_runtime_use_priority_q
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{key}|{no_method}|subscribed_runtime|{psr4_class}|{key}', resolve: [bound_first_segment], separator: '\', normalize: [{replace: '\|none\|', with: '|'}]}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_bound, from: this_node, to: {template: 'bound|{key}|{psr4_class}|_here', type: drupal.event_use}}}, {edge: {kind: use_has_priority, from: this_node, to: {template: '{key}|subscribed_runtime|{psr4_class}|{key}', resolve: [bound_first_segment], separator: '\', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{key}|subscribed_runtime|{psr4_class}|{key}', resolve: [bound_first_segment], separator: '\', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+- rule: listener_attribute_runtime_own
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_method}|{psr4_class}::{own}|subscribed_runtime|{psr4_class}|{const_ev}', normalize: [{replace: '^none\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_runtime_own_priority
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_method}|{psr4_class}::{own}|subscribed_runtime|{psr4_class}|{const_ev}', normalize: [{replace: '^none\|', with: ''}]}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_class}::{own}|subscribed_runtime|{psr4_class}|{const_ev}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}::{own}|subscribed_runtime|{psr4_class}|{const_ev}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+- rule: listener_attribute_runtime_in_namespace
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_method}|{psr4_namespace}{class}::{constant}|subscribed_runtime_here|{psr4_class}|{const_ev}', normalize: [{replace: '^none\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_runtime_in_namespace_priority
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_method}|{psr4_namespace}{class}::{constant}|subscribed_runtime_here|{psr4_class}|{const_ev}', normalize: [{replace: '^none\|', with: ''}]}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_namespace}{class}::{constant}|subscribed_runtime_here|{psr4_class}|{const_ev}', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_namespace}{class}::{constant}|subscribed_runtime_here|{psr4_class}|{const_ev}', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+# An event or method argument written as an expression, as 'a' . 'b' or self::PREFIX . '.x': only
+# the running code names it, so the attribute is a drupal.runtime_subscription <class>|<expression>
+# or <class>::<method>|<expression>, from the method it sits on, or the class.
+- rule: listener_attribute_expression
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{owner_at}|{expr}'}
+  emits:
+  - node: {type: drupal.runtime_subscription}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: listener_attribute_expression_from
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{owner_at}|{expr}'}
+  emits: [{edge: {kind: registers_listener_at_runtime, from: {template: '{owner_at}', types: [php.method, php.class]}, to: this_node}}]
+  confidence: declared
+
+# On a class with no event: the map rule reads the type of the method's parameter.
+- rule: listener_attribute_class_typed
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_event}|{psr4_class}|{typed_method}|listens_typed', normalize: [{replace: '^none\|', with: ''}]}
+  emits: [{node: {type: drupal.event_use}}]
+  confidence: declared
+
+- rule: listener_attribute_class_typed_priority
+  reads: file
+  in: [source]
+  match: *listener_attribute
+  values: *attribute_values
+  id: {template: '{no_event}|{psr4_class}|{typed_method}|listens_typed', normalize: [{replace: '^none\|', with: ''}]}
+  emits: [{edge: {kind: use_priority_constant, from: this_node, to: {template: '{pk}', resolve: [{full_if_prefixed: '@'}, {full_if_prefixed: '\'}, bound_first_segment, as_written], separator: '::', types: [drupal.class_constant]}}}, {edge: {kind: use_priority_constant, from: this_node, to: {template: '{ph}', types: [drupal.class_constant]}}}, {edge: {kind: use_has_priority, from: this_node, to: {template: '{psr4_class}|{typed_method}|listens_typed', type: drupal.event_use}, attributes: {priority: {template: '{prio}'}}}}, {edge: {kind: use_dispatcher, from: this_node, to: {template: '{psr4_class}|{typed_method}|listens_typed', type: drupal.event_use}, attributes: {dispatcher: {template: '{disp}'}}}}]
+  confidence: declared
+
+- rule: listener_attribute_subscribed_by
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<class>[^|]+)\|(?<method>[^|]+)\|listens\|'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{class}::{method}', types: [php.method]}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_attribute_subscribed_by_derived
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<class>[^|]+)\|(?<derived>[^|]+)\|(?<lower>[^|]+)\|listens_derived\|'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::{lower}'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}, {attribute: {name: listens_by_attribute, template: AsEventListener, target: matched_node}}]
+  confidence: inferred
+
+- rule: listener_attribute_subscribed_by_invoke
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<class>[^|]+)\|(?<derived>[^|]+)\|(?<lower>[^|]+)\|listens_derived\|'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::__invoke'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}, {attribute: {name: listens_by_attribute, template: AsEventListener, target: matched_node}}]
+  confidence: inferred
+
+- rule: listener_attribute_subscribed_by_derived_unresolved
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<class>[^|]+)\|(?<derived>[^|]+)\|(?<lower>[^|]+)\|listens_derived\|'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_names_event
+    - edge_attribute: priority
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless:
+    - [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]
+    - [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::__invoke'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{class}::{derived}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# A class-level attribute with a constant event and no method, whose constant's text a mapped file
+# gives: the runtime listener the file rule made is taken back, and the method is the one Symfony
+# derives from that text (event/event_name.yaml): on<Event> when the class or a mapped ancestor
+# declares it, else __invoke, else the unresolved derived name.
+- rule: listener_attribute_runtime_named_by_text
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_runtime(?<flavor>_here|)\|(?<class>[^|]+)\|(?<written>[^|]+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: [[{node: 'drupal.event_use::bound|{written}|{class}|{flavor}'}]]
+    follow:
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
+    - node: 'drupal.class_constant::{event}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - node: 'php.method::{class}|{written}'
+  emits: [{withhold: matched_node}]
+  confidence: inferred
+
+- rule: listener_attribute_constant_derived
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_runtime(?<flavor>_here|)\|(?<class>[^|]+)\|(?<written>[^|]+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: [[{node: 'drupal.event_use::bound|{written}|{class}|{flavor}'}]]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
+    - node: 'drupal.class_constant::{event}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::{lower}'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}, {attribute: {name: listens_by_attribute, template: AsEventListener, target: matched_node}}]
+  confidence: inferred
+
+- rule: listener_attribute_constant_invoke
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_runtime(?<flavor>_here|)\|(?<class>[^|]+)\|(?<written>[^|]+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: [[{node: 'drupal.event_use::bound|{written}|{class}|{flavor}'}]]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
+    - node: 'drupal.class_constant::{event}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.method_name::{declarer}::__invoke'
+    - edge: method_name_of
+    - id_matches: '^drupal\.method_ref::(?<found>.+)$'
+    - node: 'php.method::{found}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{text}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}, {attribute: {name: listens_by_attribute, template: AsEventListener, target: matched_node}}]
+  confidence: inferred
+
+- rule: listener_attribute_constant_derived_unresolved
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_runtime(?<flavor>_here|)\|(?<class>[^|]+)\|(?<written>[^|]+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    unless: [[{node: 'drupal.event_use::bound|{written}|{class}|{flavor}'}]]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
+    - node: 'drupal.class_constant::{event}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<text>.+)$'
+    - edge: derives_listener
+    - id_matches: '^drupal\.derived_listener::(?<derived>[^|]+)\|(?<lower>.+)$'
+    - node: 'drupal.event::{text}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless_matched: [[{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::{lower}'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}], [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<named>.+)$'}, {node: 'drupal.method_name::{named}::__invoke'}, {edge: method_name_of}, {id_matches: '^drupal\.method_ref::(?<found>.+)$'}, {node: 'php.method::{found}'}]]
+  emits: [{edge: {kind: subscribed_by, from: matched_node, to: {template: '{class}::{derived}', types: [php.method], on_miss: unresolved}, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# With no text in the mapped files, the runtime listener's event is named by the constant.
+- rule: listener_attribute_runtime_by_constant
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_runtime\|(?<class>[^|]+)\|(?<written>[^|]+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
+    - node: 'php.method::{class}|{written}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless: [[{node: 'drupal.class_constant::{event}'}, {edge: has_constant_text}], [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {edge: has_constant_text}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+# A constant of the file's own namespace with no text, when no use statement binds its class:
+# unresolved when no mapped class declares it.
+- rule: listener_attribute_runtime_in_namespace_by_constant
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<event>(?<cc>[^|]+)::(?<cn>[A-Z][A-Z0-9_]*))\|subscribed_runtime(?<flavor>_here)\|(?<class>[^|]+)\|(?<written>[^|]+)$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - try: [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {id_matches: '^drupal\.class_constant::(?<event>.+)$'}]
+    - node: 'php.method::{class}|{written}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+    unless: [[{node: 'drupal.event_use::bound|{written}|{class}|{flavor}'}], [{node: 'drupal.class_constant::{event}'}, {edge: has_constant_text}], [{node: 'php.type::{cc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<cd>.+)$'}, {node: 'drupal.class_constant::{cd}::{cn}'}, {edge: has_constant_text}]]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}]
+  confidence: inferred
+
+- rule: listener_attribute_subscribed_by_type
+  reads: map
+  match:
+    node_type: drupal.event_use
+    where: [{id_matches: '^drupal\.event_use::(?<class>[^|]+)\|(?<method>[^|]+)\|listens_typed$'}, {id_matches: '^(?<use_id>[\s\S]+)$'}]
+    follow:
+    - try: [{edge: use_dispatcher}, {edge_attribute: dispatcher}]
+    - edge: use_has_priority
+    - edge_attribute: priority
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'php.method::{declarer}::{method}'
+    - node: 'drupal.method_ref::{declarer}::{method}'
+    - edge: first_parameter_typed_as
+    - id_matches: '^drupal\.event::(?<event>.+)$'
+    - node: 'php.method::{declarer}::{method}'
+    - id_matches: '^(?<target_id>[\s\S]+)$'
+    - try: [{node: '{use_id}'}, {edge: use_priority_constant}, {id_matches: '^drupal\.class_constant::(?<pc>.+)::(?<pn>[A-Z_][A-Z0-9_]*)$'}, {node: 'php.type::{pc}'}, {ancestors: [inherits, implements]}, {id_matches: '^php\.type::(?<pcd>.+)$'}, {node: 'drupal.class_constant::{pcd}::{pn}'}, {edge: has_constant_int}, {id_matches: '^drupal\.constant_int::(?<priority>-?\d+)$'}, {node: '{target_id}'}]
+  emits: [{edge: {kind: subscribed_by, from: {template: '{event}', types: [drupal.event]}, to: matched_node, attributes: {priority: {template: '{priority}'}, dispatcher: {template: '{dispatcher}'}}}}, {attribute: {name: listens_by_attribute, template: AsEventListener, target: matched_node}}]
+  confidence: inferred
+
+- rule: listener_attribute_method_marked
+  reads: map
+  match:
+    node_type: drupal.attribute_listener
+    where: [{id_matches: '^drupal\.attribute_listener::(?<method>.+)$'}]
+    follow: [{node: 'php.method::{method}'}]
+  emits: [{attribute: {name: listens_by_attribute, template: AsEventListener, target: matched_node}}]
+  confidence: inferred

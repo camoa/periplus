@@ -26,7 +26,7 @@ from test_validate import (
 
 from periplus.errors import ExitCode
 
-SOURCE = "drush_basic@0.0.1"
+SOURCE = "drush_basic@0.1.0"
 RULE_FILE = Path("command") / "command_docblock.yaml"
 TEXT_RULE_FILE = Path("command") / "command_text.yaml"
 TEXT_RULE = r"""$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
@@ -310,7 +310,10 @@ def test_validate_in_a_project_asks_no_value_of_a_rutter_the_project_does_not_pi
 ) -> None:
     """The project pins js_basic only, so it gives no value the named rutter declares, and the
     named rutter's folders resolve against its own dependency order, not the pinned one."""
-    _pin(project, "js_basic")
+    (project.root / ".periplus" / "settings.yml").write_text(
+        f"periplus_version: 0\npacks:\n  - js_basic@{_pinned_version('js_basic')}\n",
+        encoding="utf-8",
+    )
 
     status, payload = _call(["validate", pack], cwd=project.root, config=project.config)
 
@@ -346,3 +349,266 @@ def _pinned_version(name: str) -> str:
     """The version half of the bundled directory ``<name>@<version>``."""
     (directory,) = [e for e in BUNDLED_PACKS.iterdir() if e.name.startswith(f"{name}@")]
     return directory.name.split("@")[1]
+
+
+ACME_MANIFEST = """$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+pack: {name}
+version: 0.0.1
+depends: [{depends}]
+folders:
+  {folder}: ./**
+"""
+ACME_RULES = """$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+node_types:
+- name: {name}.item
+  id_namespace: {name}.item
+rules:
+- rule: {name}_items
+  reads: file
+  in: [{folder}]
+  match:
+    file: '*.inv'
+    filetype: yaml
+    each: 'items.*'
+    where: [{{id_matches: '^a'}}]
+  id: {{from: key}}
+  emits: [{{node: {{type: {name}.item}}}}]
+  confidence: declared
+"""
+
+
+def _acme(packs: Path, name: str, *, depends: str = "yaml_basic") -> Path:
+    """A neutral rutter with one data rule that ``map`` executes, under ``packs``."""
+    target = packs / f"{name}@0.0.1"
+    target.mkdir()
+    folder = f"{name}_root"
+    (target / "pack.yaml").write_text(
+        ACME_MANIFEST.format(name=name, depends=depends, folder=folder), encoding="utf-8"
+    )
+    (target / "inv.yaml").write_text(ACME_RULES.format(name=name, folder=folder), encoding="utf-8")
+    return target
+
+
+@pytest.mark.parametrize(
+    ("key", "old", "new"),
+    [
+        ("match.where.*.matches", "{id_matches: '^a'}", "{matches: '^a'}"),
+        ("id.from.key", "id: {from: key}", "id: {from: {key: name}}"),
+        (
+            "values.*.from.key",
+            "id: {from: key}",
+            "id: {from: key}\n  values: {label: {from: {key: name}}}",
+        ),
+    ],
+)
+def test_validate_reports_a_data_rule_key_map_does_not_execute_as_map_does(
+    project: Project,  # noqa: F811
+    key: str,
+    old: str,
+    new: str,
+) -> None:
+    _edit(_acme(project.packs, "acme"), Path("inv.yaml"), old, new)
+    _pin(project, "acme")
+
+    map_status, expected, status, actual = _both(project, "acme")
+
+    assert map_status == RULE_NOT_EXECUTABLE
+    assert [m for _, m in expected] == [
+        f"acme/inv.yaml: the rule acme_items cannot be executed: the key {key} is accepted and "
+        "not executed"
+    ]
+    assert (status, actual) == (map_status, expected)
+
+
+def test_validate_of_a_pack_that_fails_its_schema_gives_the_other_problems_map_gives(
+    project: Project,  # noqa: F811
+) -> None:
+    """The named pack fails its schema and the pack it depends on holds a rule map refuses. Map
+    gives both; validate lists the first under its schema errors and the second as a problem."""
+    _edit(_acme(project.packs, "basefix"), Path("inv.yaml"), "{id_matches: '^a'}", "{matches: 'a'}")
+    _edit(
+        _acme(project.packs, "topfix", depends="basefix"),
+        Path("pack.yaml"),
+        "topfix_root: ./**",
+        "topfix_root: {template: '.'}",
+    )
+    _pin(project, "topfix")
+
+    map_status, expected, status, payload = (
+        *_call(["map"], cwd=project.root, config=project.config),
+        *_call(["validate", "topfix"], cwd=project.root, config=project.config),
+    )
+    mapped = _problems(expected)
+    errors = payload["errors"]
+    assert isinstance(errors, list)
+
+    assert {code for code, _ in mapped} == {ExitCode.SCHEMA_INVALID, RULE_NOT_EXECUTABLE}
+    assert _problems(payload) == [p for p in mapped if p[0] != ExitCode.SCHEMA_INVALID]
+    schema = [m for code, m in mapped if code == ExitCode.SCHEMA_INVALID]
+    assert len(schema) == len(errors)
+    assert all(
+        m.startswith(f"topfix/{e['file']} {e['pointer']}: {e['message']}")
+        for m, e in zip(schema, errors, strict=True)
+    )
+    assert status == ExitCode.SCHEMA_INVALID != 0
+    assert map_status == ExitCode.SCHEMA_INVALID
+
+
+def test_the_text_form_never_says_no_problems_beneath_a_schema_error(
+    project: Project,  # noqa: F811
+) -> None:
+    _edit(_acme(project.packs, "acme"), Path("pack.yaml"), "acme_root: ./**", "acme_root: 7")
+    _pin(project, "acme")
+
+    result = _run(["validate", "acme"], cwd=project.root, config=project.config)
+    problems = result.stdout.split("\nProblems:\n", 1)[1]
+
+    assert "\nSchema errors:\n  pack.yaml  $.folders.acme_root" in result.stdout
+    assert problems.splitlines()[0].strip() != "none"
+    assert "periplus map refuses" in problems
+    assert result.returncode == ExitCode.SCHEMA_INVALID
+
+
+def _manifest(packs: Path, name: str, body: str) -> None:
+    """A pack of one manifest, ``body`` written after its name and version."""
+    (packs / f"{name}@0.0.1").mkdir()
+    (packs / f"{name}@0.0.1" / "pack.yaml").write_text(
+        '$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"\n'
+        f"pack: {name}\nversion: 0.0.1\n{body}",
+        encoding="utf-8",
+    )
+
+
+def _pin_all(where: Project, *names: str) -> None:
+    (where.root / ".periplus" / "settings.yml").write_text(
+        "periplus_version: 0\npacks:\n" + "".join(f"  - {n}@0.0.1\n" for n in names),
+        encoding="utf-8",
+    )
+
+
+def test_validate_gives_the_schema_problem_of_a_dependency_as_map_does(
+    project: Project,  # noqa: F811
+) -> None:
+    """The named pack is sound and the pack it depends on fails its schema in its folders."""
+    _manifest(project.packs, "basefix", "depends: []\nfolders:\n  basefix_root: 7\n")
+    _manifest(project.packs, "topfix", "depends: [basefix]\n")
+    _pin(project, "topfix")
+
+    map_status, expected, status, actual = _both(project, "topfix")
+
+    assert [code for code, _ in expected] == [ExitCode.SCHEMA_INVALID]
+    assert (status, actual) == (map_status, expected)
+
+
+def test_validate_of_a_pack_that_fails_its_schema_gives_the_pinned_conflicts_map_gives(
+    project: Project,  # noqa: F811
+) -> None:
+    """Two pinned packs add one table row and one folder with different values; the named pack,
+    which depends on one of them, fails its schema."""
+    _manifest(project.packs, "ownfix", "depends: []\ntables:\n  t:\n    k1: v\n")
+    for name, row, folder in (("midfix", "x", "a/**"), ("otherfix", "y", "b/**")):
+        _manifest(
+            project.packs,
+            name,
+            f"depends: [ownfix]\nadd_table_rows:\n  ownfix:\n    t:\n      k2: {row}\n"
+            f"folders:\n  shared: {folder}\n",
+        )
+    _manifest(project.packs, "topfix", "depends: [midfix]\nfolders:\n  topfix_root: 7\n")
+    _pin_all(project, "topfix", "otherfix")
+
+    map_status, expected, status, actual = _both(project, "topfix")
+
+    assert {code for code, _ in expected} > {ExitCode.SCHEMA_INVALID}
+    assert actual == [p for p in expected if not p[1].startswith("topfix/")]
+    assert status == map_status == ExitCode.SCHEMA_INVALID
+
+
+def test_validate_gives_the_fix_map_names_for_a_boundary_schema_error(
+    project: Project,  # noqa: F811
+) -> None:
+    _edit(_acme(project.packs, "acme"), Path("pack.yaml"), "folders:", "boundary: 7\nfolders:")
+    _pin(project, "acme")
+
+    _, mapped = _call(["map"], cwd=project.root, config=project.config)
+    (message,) = [m for _, m in _problems(mapped)]
+    hint = message.rsplit("; ", 1)[1]
+    text = _run(["validate", "acme"], cwd=project.root, config=project.config).stdout
+    _, payload = _call(["validate", "acme"], cwd=project.root, config=project.config)
+    errors = payload["errors"]
+    assert isinstance(errors, list)
+
+    assert hint.startswith("write boundary: {<group>")
+    assert hint in text.split("\nSchema errors:\n", 1)[1].split("\nProblems:\n", 1)[0]
+    assert [e["hint"] for e in errors] == [hint]
+
+
+def test_the_text_form_names_no_schema_refusal_when_the_pack_passes_its_schema(
+    project: Project,  # noqa: F811
+) -> None:
+    _edit(_acme(project.packs, "acme"), Path("inv.yaml"), "{id_matches: '^a'}", "{matches: 'a'}")
+    _pin(project, "acme")
+
+    result = _run(["validate", "acme"], cwd=project.root, config=project.config)
+
+    assert result.returncode == RULE_NOT_EXECUTABLE
+    assert "match.where.*.matches is accepted and not executed" in result.stdout
+    assert "periplus map refuses" not in result.stdout
+
+
+REFERENCE_MANIFEST = """$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+pack: acmeref
+version: 0.0.1
+depends: []
+grammar:
+  provider: tree-sitter
+  provider_version: "0.26.0"
+  language: php
+  grammar_version: "0.24.1"
+folders:
+  acmeref_root: ./**
+files:
+  extensions: [php]
+identity:
+  qualified_name: {parts: [namespace, declared_name], separator: "\\\\"}
+  namespace: {declaration: namespace_definition, name_child: name}
+  written_names: [name, qualified_name, namespace_name]
+"""
+REFERENCE_RULES = """$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+node_types:
+- {name: acmeref.unit, id_namespace: acmeref.unit}
+edge_kinds:
+- {kind: acmeref_makes, from: [acmeref.unit], to: [acmeref.unit]}
+rules:
+- rule: acmeref_makes
+  reads: file
+  in: [acmeref_root]
+  match:
+    reference: object_creation_expression
+    name_child: [name]
+    filetype: php
+    where: [{has_child: arguments}]
+  emits: [{edge: {kind: acmeref_makes, from: enclosing_declaration, to: {types: [acmeref.unit]}}}]
+  confidence: declared
+"""
+
+
+def test_validate_refuses_a_reference_rule_condition_as_map_does(
+    project: Project,  # noqa: F811
+) -> None:
+    """A condition a reference rule's where does not take is refused with the one message that
+    names the conditions it takes, within and not_within among them."""
+    target = project.packs / "acmeref@0.0.1"
+    target.mkdir()
+    (target / "pack.yaml").write_text(REFERENCE_MANIFEST, encoding="utf-8")
+    (target / "rules.yaml").write_text(REFERENCE_RULES, encoding="utf-8")
+    _pin(project, "acmeref")
+
+    map_status, expected, status, actual = _both(project, "acmeref")
+
+    assert map_status == RULE_NOT_EXECUTABLE
+    assert [m for _, m in expected] == [
+        "acmeref/rules.yaml: the rule acmeref_makes cannot be executed: the match.where of a "
+        "reference rule holds only name_matches, within, not_within, in_table and not_in_table "
+        "conditions, within and not_within each a list of tree node types"
+    ]
+    assert (status, actual) == (map_status, expected)

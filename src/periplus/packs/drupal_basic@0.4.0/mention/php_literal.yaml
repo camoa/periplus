@@ -1,0 +1,120 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A PHP string literal shaped like a Drupal id, as an internal node at the literal's own line: a
+# drupal.literal_site <class>::<method>|<text> inside a method, <function>|<text> inside a
+# function, and a drupal.class_literal_site <class>|<text> in a class body outside any method, a
+# constant or a property default. The map rules of mention/mention_php.yaml join each one to the
+# route, service, configuration or other thing whose id equals the text, and the join sits at the
+# line of the text. One text written twice in one method is one node with two lines; the written
+# map keeps only the joins.
+#
+# The literal passes only when its whole text is a specific name: it starts with a lowercase letter,
+# holds only lowercase letters, digits and the separators . : / _ -, ends with a letter or a digit,
+# holds at least one separator, so it has two parts or more, and is at least 8 characters long.
+# Short common words, 'cart' or 'status', and text with a space, a capital or a variable in front
+# pass over, so a word that only happens to equal an id makes nothing. The rules read string nodes
+# of the parse tree, so text in a comment is never read. A double-quoted string is read up to its
+# first variable: "my_module.$name" holds my_module. and passes over, as its text ends in a dot.
+#
+# drupal.literal is the node of a text as an array key, which role/role_key.yaml writes.
+
+node_types:
+- name: drupal.literal
+  id_namespace: drupal.literal
+  internal: true
+  description: "internal: a quoted text written as an array key, which role/role_mentioned.yaml reads to give no mention"
+- name: drupal.literal_site
+  id_namespace: drupal.literal_site
+  internal: true
+  description: "internal: the place of a quoted text shaped like a Drupal id in one method or function, at the text's line"
+- name: drupal.class_literal_site
+  id_namespace: drupal.class_literal_site
+  internal: true
+  description: "internal: the place of a quoted text shaped like a Drupal id in a class body outside any method, at the text's line"
+
+rules:
+- rule: php_literal_site_in_method
+  reads: file
+  in: [source]
+  match:
+    declaration: string
+    name_child: [string_content]
+    filetype: php
+    where: &site_where
+    - name_matches: {child: string_content, pattern: '(?=.{8})[a-z][a-z0-9]*(?:[._:/-][a-z0-9]+)+'}
+    - within: [method_declaration]
+  id: &method_site_id
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: '{enclosing_type}::{enclosing_method}|{declared_name}'
+  emits: &site_node [{node: {type: drupal.literal_site}}]
+  confidence: mentioned
+
+- rule: php_literal_double_quoted_site_in_method
+  reads: file
+  in: [source]
+  match:
+    declaration: encapsed_string
+    name_child: [string_content]
+    filetype: php
+    where: *site_where
+  id: *method_site_id
+  emits: *site_node
+  confidence: mentioned
+
+- rule: php_literal_site_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: string
+    name_child: [string_content]
+    filetype: php
+    holder: function_definition
+    where: &function_site_where
+    - name_matches: {child: string_content, pattern: '(?=.{8})[a-z][a-z0-9]*(?:[._:/-][a-z0-9]+)+'}
+  id: &function_site_id
+    from: [enclosing_type, declared_name]
+    template: '{enclosing_type}|{declared_name}'
+  emits: *site_node
+  confidence: mentioned
+
+- rule: php_literal_double_quoted_site_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: encapsed_string
+    name_child: [string_content]
+    filetype: php
+    holder: function_definition
+    where: *function_site_where
+  id: *function_site_id
+  emits: *site_node
+  confidence: mentioned
+
+- rule: php_literal_site_in_class
+  reads: file
+  in: [source]
+  match:
+    declaration: string
+    name_child: [string_content]
+    filetype: php
+    where: &class_site_where
+    - name_matches: {child: string_content, pattern: '(?=.{8})[a-z][a-z0-9]*(?:[._:/-][a-z0-9]+)+'}
+    - within: [declaration_list, enum_declaration_list]
+    - not_within: [method_declaration]
+  id: &class_site_id
+    from: [enclosing_type, declared_name]
+    template: '{enclosing_type}|{declared_name}'
+  emits: &class_site_node [{node: {type: drupal.class_literal_site}}]
+  confidence: mentioned
+
+- rule: php_literal_double_quoted_site_in_class
+  reads: file
+  in: [source]
+  match:
+    declaration: encapsed_string
+    name_child: [string_content]
+    filetype: php
+    where: *class_site_where
+  id: *class_site_id
+  emits: *class_site_node
+  confidence: mentioned

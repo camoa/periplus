@@ -1,0 +1,200 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An autowired service whose arguments are a list. Symfony gives the listed arguments to the first
+# parameters of the class's constructor, by position, and autowires each parameter after them, as
+# service/service_autowire.yaml autowires a service with no list: the service whose id is the
+# parameter's type, an injects_service edge at the parameter's line, inferred. The rules there give
+# no edge to a service with a list; these give the edge to each parameter at a position past the
+# list's end.
+#
+# A rule reads no position of a child, so position is read as text, one rule per place: each of the
+# constructor's first twelve parameters, in a file under src, gets an internal
+# drupal.constructor_parameter_position node, <class>::$<name>, with an edge to its position, 0 to
+# 11; each argument of a list, written [a, b] or as lines that start with a dash, an internal
+# drupal.service_positional_argument node, <service>|<index>. A list counts only when its whole is
+# read, at most twelve arguments, each a quoted text, a plain word, a bracketed list or a braced map
+# on its own, with no line between two dash lines: a drupal.service_arguments_read node. A list read
+# in part, a parameter past the twelfth, or one the patterns do not read, as one with a comment in
+# its declaration, gives no edge, as before. Each parameter before the place is an atomic group,
+# (?>...), so a constructor with fewer parameters fails at once instead of trying every split.
+#
+# A service with a parent key gets no edge here: Symfony adds its list after the parent's
+# arguments, so its positions depend on the parent.
+#
+# Limits: a named argument, $name: '@x', in a list's place is service_autowire.yaml's; a parameter
+# typed by a class no service names gets the unresolved edge only, as service_autowire.yaml gives
+# it; an Autowire attribute on a parameter past the list gives no edge here.
+
+node_types:
+- name: drupal.constructor_parameter_position
+  description: "internal: a constructor parameter, <class>::$<name>, read by its place in the parameter list"
+  id_namespace: drupal.constructor_parameter_position
+  internal: true
+- name: drupal.argument_position
+  description: "internal: a position in a parameter or argument list, from 0"
+  id_namespace: drupal.argument_position
+  internal: true
+- name: drupal.service_positional_argument
+  description: "internal: an argument of a service's list, <service>|<index>"
+  id_namespace: drupal.service_positional_argument
+  internal: true
+- name: drupal.service_arguments_read
+  description: "internal: a service whose list of arguments the patterns read to its end"
+  id_namespace: drupal.service_arguments_read
+  internal: true
+
+edge_kinds:
+- kind: parameter_at_position
+  cause: none
+  description: "internal: the constructor parameter stands at that position"
+  from: drupal.constructor_parameter_position
+  to: drupal.argument_position
+
+rules:
+- &position_row
+  rule: constructor_parameter_at_0
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}
+  id: {template: '{psr4_class}::${param}'}
+  line: {capture: param}
+  emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '0', types: [drupal.argument_position]}}}]
+  confidence: declared
+- {<<: *position_row, rule: constructor_parameter_at_1, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){1}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '1', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_2, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){2}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '2', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_3, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){3}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '3', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_4, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){4}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '4', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_5, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){5}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '5', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_6, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){6}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '6', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_7, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){7}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '7', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_8, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){8}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '8', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_9, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){9}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '9', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_10, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){10}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '10', types: [drupal.argument_position]}}}]}
+- {<<: *position_row, rule: constructor_parameter_at_11, match: {file: '**', filetype: drupal_php_text, text: '\bfunction\s+__construct\s*\(\s*(?>(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$\w+(?:\s*=\s*(?:''[^'']*''|"[^"]*"|\[[^\[\]]*\]|\w+\([^()]*\)|[^,()\[\]''"]+))?\s*,\s*){11}(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*(?:[^,()\[\]''"$#/]|/(?![/*]))*\$(?<param>\w+)'}, emits: [{edge: {kind: parameter_at_position, from: this_node, to: {template: '11', types: [drupal.argument_position]}}}]}
+
+
+# Each argument of a list, by its index: [a, b] written in brackets, and lines that start with a dash.
+- &argument_row
+  rule: service_argument_flow_0
+  reads: file
+  in: [module_root, services_source]
+  match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}
+  values: &entry_values
+    in_services: {from: {enclosing: services_block, capture: mark}}
+    service: {from: {enclosing: service_entry, capture: service}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{in_services}|{service}|0', normalize: [{replace: '^services\|', with: ''}]}
+  emits: [{node: {type: drupal.service_positional_argument}}]
+  confidence: declared
+- {<<: *argument_row, rule: service_argument_block_0, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*'}, id: {template: '{in_services}|{service}|0', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_1, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){1}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|1', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_1, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){1}'}, id: {template: '{in_services}|{service}|1', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_2, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){2}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|2', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_2, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){2}'}, id: {template: '{in_services}|{service}|2', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_3, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){3}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|3', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_3, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){3}'}, id: {template: '{in_services}|{service}|3', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_4, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){4}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|4', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_4, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){4}'}, id: {template: '{in_services}|{service}|4', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_5, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){5}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|5', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_5, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){5}'}, id: {template: '{in_services}|{service}|5', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_6, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){6}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|6', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_6, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){6}'}, id: {template: '{in_services}|{service}|6', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_7, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){7}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|7', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_7, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){7}'}, id: {template: '{in_services}|{service}|7', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_8, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){8}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|8', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_8, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){8}'}, id: {template: '{in_services}|{service}|8', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_9, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){9}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|9', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_9, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){9}'}, id: {template: '{in_services}|{service}|9', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_10, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){10}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|10', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_10, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){10}'}, id: {template: '{in_services}|{service}|10', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_flow_11, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)\s*,\s*){11}(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)'}, id: {template: '{in_services}|{service}|11', normalize: [{replace: '^services\|', with: ''}]}}
+- {<<: *argument_row, rule: service_argument_block_11, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*(?:\n(?P=li)-[^\n]*){11}'}, id: {template: '{in_services}|{service}|11', normalize: [{replace: '^services\|', with: ''}]}}
+
+# A list read to its end: at most twelve arguments, each one the patterns above read.
+- {<<: *argument_row, rule: service_arguments_read_flow, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*\[\s*(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)(?:\s*,\s*(?:''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''[^'']*''|"[^"]*"|\[[^\[\]]*\])*\]|\{(?:[^{}''"]|''[^'']*''|"[^"]*")*\}|[^,\[\]{}''"\s#](?:[^,\[\]{}\n#]*[^,\[\]{}\s#])?)){0,11}\s*,?\s*\]'}, id: {template: '{in_services}|{service}', normalize: [{replace: '^services\|', with: ''}]}, emits: [{node: {type: drupal.service_arguments_read}}]}
+- {<<: *argument_row, rule: service_arguments_read_block, match: {file: '*.services', filetype: drupal_yml_text, text: '(?m)^[ \t]+arguments:[ \t]*(?:#[^\n]*)?\n(?<li>[ \t]+)-[^\n]*\n(?:(?P=li)-[^\n]*\n){0,11}(?!(?P=li)[ \t]*\S)'}, id: {template: '{in_services}|{service}', normalize: [{replace: '^services\|', with: ''}]}, emits: [{node: {type: drupal.service_arguments_read}}]}
+
+# The joins: each as its twin in service_autowire.yaml, for a service whose list is read whole,
+# from a parameter at a position the list leaves out.
+- rule: autowired_parameter_after_arguments_by_id
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: &parameter '^drupal\.constructor_parameter::(?<class>[^:]+)::__construct::\$(?<param>\w+)::(?<type>[^:]+)$'}]
+    unless: &has_autowire_attribute
+    - [{node: 'php.property::{class}::${param}'}, {edge: has_attribute}, {id_matches: &di_attribute '^php\.type::Symfony\\Component\\DependencyInjection\\Attribute\\'}]
+    - [{node: 'php.parameter::{class}::${param}'}, {edge: has_attribute}, {id_matches: *di_attribute}]
+    follow:
+    - node: 'drupal.service::{type}'
+    - &class_service {node: 'php.type::{class}'}
+    - &incoming_service {incoming_edge: service_class}
+    - &service_id {id_matches: '^drupal\.service::(?<svc>.+)$'}
+    - &own_autowire {node: 'drupal.autowired_service::{svc}'}
+    - &read {node: 'drupal.service_arguments_read::{svc}'}
+    - &position_node {node: 'drupal.constructor_parameter_position::{class}::${param}'}
+    - &position_edge {edge: parameter_at_position}
+    - &position {id_matches: '^drupal\.argument_position::(?<at>\d+)$'}
+    - &the_service {node: 'drupal.service::{svc}'}
+    unless_matched: &filled
+    - [{node: 'drupal.service_positional_argument::{svc}|{at}'}]
+    - [{node: 'drupal.service_named_argument::{svc}|{param}'}]
+    - [{node: 'drupal.service::{svc}'}, {edge: extends_service}]
+  emits: &by_id [{edge: {kind: injects_service, from: matched_node, to: {template: '{type}', types: [drupal.service]}, attributes: {autowired_by: {template: 'type is the service id or alias'}}}}]
+  confidence: inferred
+
+- rule: autowired_parameter_after_arguments_by_id_from_defaults
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: *has_autowire_attribute
+    follow:
+    - node: 'drupal.service::{type}'
+    - *class_service
+    - *incoming_service
+    - *service_id
+    - &file_autowire_1 {edge: in_services_file}
+    - &file_autowire_2 {id_matches: '^drupal\.services_file::(?<file>.+)$'}
+    - &file_autowire_3 {node: 'drupal.autowire_services_file::{file}'}
+    - *read
+    - *position_node
+    - *position_edge
+    - *position
+    - *the_service
+    unless_matched: &filled_by_defaults
+    - [{node: 'drupal.service_positional_argument::{svc}|{at}'}]
+    - [{node: 'drupal.service_named_argument::{svc}|{param}'}]
+    - [{node: 'drupal.service::{svc}'}, {edge: extends_service}]
+    - [{node: 'drupal.service_sets_autowire::{svc}'}]
+  emits: *by_id
+  confidence: inferred
+
+- rule: autowired_parameter_after_arguments_unresolved
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: *has_autowire_attribute
+    follow: [*class_service, *incoming_service, *service_id, *own_autowire, *read, *position_node, *position_edge, *position, *the_service]
+    unless_matched:
+    - [{node: 'drupal.service_positional_argument::{svc}|{at}'}]
+    - [{node: 'drupal.service_named_argument::{svc}|{param}'}]
+    - [{node: 'drupal.service::{svc}'}, {edge: extends_service}]
+    - [{node: 'drupal.service::{type}'}]
+  emits: &unresolved [{edge: {kind: injects_service, from: matched_node, to: {template: '{type}', types: [drupal.service], on_miss: unresolved}, attributes: {autowired_by: {template: 'type is the service id or alias'}}}}]
+  confidence: inferred
+
+- rule: autowired_parameter_after_arguments_unresolved_from_defaults
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: *has_autowire_attribute
+    follow: [*class_service, *incoming_service, *service_id, *file_autowire_1, *file_autowire_2, *file_autowire_3, *read, *position_node, *position_edge, *position, *the_service]
+    unless_matched:
+    - [{node: 'drupal.service_positional_argument::{svc}|{at}'}]
+    - [{node: 'drupal.service_named_argument::{svc}|{param}'}]
+    - [{node: 'drupal.service::{svc}'}, {edge: extends_service}]
+    - [{node: 'drupal.service_sets_autowire::{svc}'}]
+    - [{node: 'drupal.service::{type}'}]
+  emits: *unresolved
+  confidence: inferred

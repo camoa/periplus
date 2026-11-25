@@ -1,0 +1,54 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+rules:
+# '#attached' => ['library' => ['module/library', ...]], either array also written array(...), in a
+# method of a class file under src: each text in the list is a library the method attaches. The id
+# names both spans, so a text outside either one makes nothing. A closure reads the named method around it. A list outside
+# any named function, such as a property's default, has an empty method, so the edge is not made
+# and the match is listed under skipped.
+- rule: library_attached_in_array_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: &library_text '[\[(,\s][''"](?<library>[A-Za-z0-9_]+/[\w.-]+)[''"]\s*[,\])]'
+  values:
+    in_attached: &in_attached {from: {enclosing: attached, capture: mark}}
+    in_library: &in_library {from: {enclosing: library_list, capture: mark}}
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: &library_id
+    template: '{in_attached}|{in_library}|{library}'
+    normalize:
+    - {replace: '^.*\|', with: ''}
+  line: {capture: library}
+  emits:
+  - edge:
+      kind: attaches_library
+      from: {template: '{psr4_class}::{method}', types: [php.method]}
+      to: this_node
+  confidence: declared
+# The same list in a function of a procedural file, such as a hook in a .module file: the
+# function attaches the library. Its node is the one php_basic makes for the function.
+- rule: library_attached_in_array_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, theme, inc, install, profile]
+    text: *library_text
+  values:
+    in_attached: *in_attached
+    in_library: *in_library
+    fn_name: {from: {enclosing: function_body, capture: name}}
+    in_class: {from: {enclosing: class_body, capture: mark}}
+    fn: {template: '{in_class}|{fn_name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+  id: *library_id
+  line: {capture: library}
+  emits:
+  - edge:
+      kind: attaches_library
+      from: {template: '{fn}', types: [php.function]}
+      to: this_node
+  confidence: declared

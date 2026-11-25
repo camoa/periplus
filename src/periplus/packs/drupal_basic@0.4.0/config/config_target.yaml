@@ -1,0 +1,47 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A config form element that names its configuration with #config_target (Drupal 10.2 and
+# later): ConfigFormBase loads the element's default value from that configuration and saves the
+# submitted value to it, so the method that builds the element edits the configuration object.
+# '#config_target' => 'x.y:key' and '#config_target' => new ConfigTarget('x.y', 'key') each give
+# edits_config_object from the method around the element, of the class under src by Drupal's PSR-4
+# layout, to x.y, at the line of the name. Read as text, so the edge is inferred.
+#
+# Limits: a target held in a variable or a constant, and a ConfigTarget built elsewhere, give
+# nothing. A config name given as text needs a dot, as every configuration name has.
+
+rules:
+- rule: config_target_text
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"]#config_target[''"]\s*=>\s*[''"](?<config>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_-]+)+):'
+  values: &method
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{config}'}
+  line: {capture: config}
+  emits:
+  - edge:
+      kind: edits_config_object
+      from: {template: '{psr4_class}::{method}', types: [php.method]}
+      to: this_node
+  confidence: inferred
+
+- rule: config_target_object
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"]#config_target[''"]\s*=>\s*new\s+\\?(?:Drupal\\Core\\Form\\)?ConfigTarget\(\s*[''"](?<config>[A-Za-z0-9_]+(?:\.[A-Za-z0-9_-]+)+)[''"]'
+  values: *method
+  id: {template: '{config}'}
+  line: {capture: config}
+  emits:
+  - edge:
+      kind: edits_config_object
+      from: {template: '{psr4_class}::{method}', types: [php.method]}
+      to: this_node
+  confidence: inferred

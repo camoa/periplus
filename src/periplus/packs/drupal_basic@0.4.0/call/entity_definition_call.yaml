@@ -1,0 +1,133 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# More calls that name an entity type by a text literal, as a uses_entity_type edge from the method
+# or function around the call, as call/call.yaml gives for getStorage. The entity type manager's
+# getDefinition('x'), hasDefinition('x') and getHandler('x', 'y'), on an object written ending in
+# entityTypeManager, written $entity_type_manager, or written as the container's
+# get('entity_type.manager') or \Drupal::service('entity_type.manager'); inferred, as there: the
+# object's name says it is the entity type manager. A property of $this whose declared type is the
+# entity type manager is read by call/typed_receivers.yaml. And core's ConfigEntityUpdater, whose
+# update($sandbox, 'x', ...) runs a callback over every entity of the config entity type x, on the
+# object \Drupal::classResolver(ConfigEntityUpdater::class) returns; declared, since the call names
+# the class. A name in a variable is kept as a php.call_site marked resolution runtime, as
+# call/runtime_argument.yaml keeps getStorage($type): in a method here, in a function of a
+# module-family file by call/runtime_argument_in_function.yaml; the edge rules leave such a call
+# alone, so it gives no skipped row.
+
+rules:
+- rule: entity_definition_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '(?s).*entityTypeManager(?:\(\))?|\$entity_type_manager'}
+    - name_matches: {child: name, pattern: 'getDefinition|hasDefinition|getHandler'}
+    - name_matches: {child: arguments, pattern: &first_not_variable '(?s)\(\s*[^,$\s][^,$]*(?:,.*)?\)'}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+- rule: container_entity_definition_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]entity_type\.manager[''"]\)|\\?Drupal::service\([''"]entity_type\.manager[''"]\)'}
+    - name_matches: {child: name, pattern: 'getDefinition|hasDefinition|getHandler'}
+    - name_matches: {child: arguments, pattern: *first_not_variable}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+# \Drupal::classResolver(ConfigEntityUpdater::class)->update($sandbox, 'my_type', ...), the class
+# written by its short name or in full.
+- rule: config_entity_updater_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '(?s)\\?Drupal::classResolver\(\s*\\?(?:Drupal\\Core\\Config\\Entity\\)?ConfigEntityUpdater::class\s*\)'}
+    - name_matches: {child: name, pattern: update}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 1}, types: [drupal.entity_type]}
+  confidence: declared
+
+# $this->entityTypeManager->getDefinition($type), on any manager object the edge rules above read,
+# and ->setRedirect($route): the name is built at run time, as call/runtime_argument.yaml reads its
+# twins.
+- rule: runtime_entity_definition_call
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &definition_where
+    - name_matches: {child: object, pattern: '(?s).*entityTypeManager(?:\(\))?|\$entity_type_manager|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]entity_type\.manager[''"]\)|\\?Drupal::service\([''"]entity_type\.manager[''"]\)'}
+    - name_matches: {child: name, pattern: 'getDefinition|hasDefinition|getHandler'}
+    - name_matches: {child: arguments, pattern: &first_variable '(?s)\(\s*[^,$]*\$.*'}
+  id: &member_runtime_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}(runtime)"
+  emits: &runtime_node
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: runtime_entity_definition_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *definition_where
+  id: *member_runtime_id
+  emits: &runtime_edges
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+- rule: runtime_set_redirect_call
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &redirect_where
+    - name_matches: {child: name, pattern: setRedirect}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *member_runtime_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_set_redirect_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *redirect_where
+  id: *member_runtime_id
+  emits: *runtime_edges
+  confidence: declared

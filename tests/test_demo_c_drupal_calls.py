@@ -166,7 +166,7 @@ def mapped(tmp_path_factory: pytest.TempPathFactory) -> tuple[dict[str, Any], Ma
     root = tmp_path_factory.mktemp("drupal_calls")
     (root / ".periplus").mkdir()
     (root / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n"
     )
     for name, text in FILES.items():
         path = root / MODULE / name
@@ -376,20 +376,28 @@ def test_a_declared_name_ends_at_a_mapped_node_and_an_undeclared_one_at_a_refere
 def test_a_variable_argument_gives_a_skipped_row_and_no_edge(
     mapped: tuple[dict[str, Any], MapReport],
 ) -> None:
-    _, report = mapped
+    document, report = mapped
     rules = ("service_call", "entity_query_call", "storage_call", "container_get_call")
     skipped = sorted((rule, line) for _, line, rule, _ in report.skipped if rule in rules)
     assert skipped == sorted(
         [
             ("service_call", _line(CONTROLLER, "$other = \\Drupal::service($name);")),
-            (
-                "storage_call",
-                _line(CONTROLLER, "$any = $this->entityTypeManager->getStorage($type);"),
-            ),
             ("container_get_call", _line(FORM, "$any = $container->get($name);")),
             ("container_get_call", _line(FORM, '$dq_any = $container->get("$name");')),
         ]
     )
+    # The run-time twin marks the variable getStorage call, so storage_call leaves no row.
+    storage = f"php.call_site::{NS}Controller\\ThingController::entities::"
+    marked = {
+        n["id"]: [place["line"] for place in n["locations"]]
+        for n in document["nodes"]
+        if n["id"].startswith(storage) and n.get("attributes", {}).get("resolution") == "runtime"
+    }
+    assert marked == {
+        storage + "$this->entityTypeManager->getStorage(runtime)": [
+            _line(CONTROLLER, "$any = $this->entityTypeManager->getStorage($type);")
+        ]
+    }
 
 
 def test_a_class_whose_property_holds_a_service_calls_the_services_method_through_it(

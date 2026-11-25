@@ -28,7 +28,7 @@ the conventions page is not read as documentation:
 ```yaml
 periplus_version: 0
 packs:
-  - php_basic@0.2.0
+  - php_basic@0.3.0
   - invoicing@0.1.0
 ```
 
@@ -540,7 +540,10 @@ Map rule passes:
   pass 1: ... invoicing fits_class_full fired 6, invoicing fits_class_short fired 3, invoicing fits_method_short fired 10, invoicing looks_like_method fired 11, invoicing looks_like_namespaced fired 6, invoicing looks_like_class fired 3
   pass 2: invoicing documents fired 21, invoicing documents_ambiguous fired 2, invoicing missing_name fired 2
   pass 3: none
+  pass 4: ...
 ```
+
+The last pass runs only `php_basic`'s map rule that marks a call decided at run time.
 
 ## The questions, and the commands that answer them
 

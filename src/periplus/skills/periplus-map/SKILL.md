@@ -40,7 +40,7 @@ references/find-a-feature.md: what the work holds, a worked example, and how to 
 ## The tools
 
 `periplus --help` prints this list; `periplus find --help` prints one command's options. Every
-option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.10.3/docs/navigation.md).
+option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.11.0/docs/navigation.md).
 
 <!-- periplus-help -->
 ```text
@@ -54,6 +54,7 @@ set up and build:
   check-map    check the written map against the map schema
   fresh        say whether the map still matches the code, the settings, the rutters and the tool
   skills       manage the Claude skills this package ships
+  upgrade      upgrade Periplus to the newest release on PyPI, and refresh installed skills
 
 learn the map's words:
   types        list the node types and edge kinds in the written map

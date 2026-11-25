@@ -18,6 +18,31 @@ method in one rule, and keeps an id only when its source fits a pattern. [Map ru
 [Tree references](rutter-author-guide-references.md) covers calls read from a parse tree, tables,
 `add_table_rows`, `in_table` and `encloses_for`.
 
+Before you write a workaround, check whether one of these abilities states the shape:
+
+- A fact written on one line inside a large node: a `place: edge` step puts the fire at the line
+  of the edge it walked, with no internal node to carry the line
+  ([Map rules](rutter-author-guide-map-rules.md#a-fire-at-the-line-of-the-edge-it-walked)).
+- One join that differs only by a name or a type: an `in_table` follow step with `value`, and an
+  end typed `types: ['{name}']`, in place of one rule per row
+  ([Map rules](rutter-author-guide-map-rules.md#a-table-in-place-of-one-rule-per-row)).
+- A join that shows the code names no target: a map rule emits a node with
+  `resolution: runtime`, in one last pass
+  ([Map rules](rutter-author-guide-map-rules.md#mark-a-place-decided-at-run-time)).
+- A group of entries in a docblock annotation: `match.each` with one or two stars, in place of a
+  rule per key or per position
+  ([Every entry of a group](rutter-author-guide-abilities.md#every-entry-of-a-group-in-a-docblock-annotation)).
+- A match that is not the rule's business, such as a call in a closure or in an attribute:
+  `within` or `not_within`, on a declaration or a reference rule
+  ([The method around a match](rutter-author-guide-abilities.md#a-field-resolved-through-the-imports-and-the-method-around-a-match)).
+- A class tested by its full name after the imports: `fill: qualified_name` on a reference rule's
+  `in_table` or `not_in_table`
+  ([Tree references](rutter-author-guide-references.md#a-name-tested-against-a-table-in_table-and-not_in_table)).
+- A project folder that is itself one unit, such as one module: `root_name` on a path value
+  ([A project that is one unit at its root](rutter-author-guide-text.md#a-project-that-is-one-unit-at-its-root)).
+- A data rule whose filter leaves out every value: the map report lists it under Rules that fired
+  and made nothing ([Two skipped rows](rutter-author-guide-text.md#two-skipped-rows)).
+
 ## The files of a rutter, and how a project loads one
 
 A rutter is one folder named `<pack>@<version>`. It holds:
@@ -36,12 +61,17 @@ patterns under `supporting_paths`, and the navigation commands print such nodes 
 or fold them into a count. The settings add patterns with `supporting`, and
 `supporting_from_packs: false` drops every rutter's.
 `values` names strings, as `values: {module: example.com/app}`, that any template may name, a
-path value's too. A setting that a path value, a capture or the engine also gives, and a path value
+path value's too. A settings file whose `values` holds a name or a value that is not text, such
+as `8` or `true`, is refused with exit 4, and no value of that file is used; write it in quotes,
+as `version: '8'`. The message names the file and the fix:
+`the value unit_name under values is not text, so no value of this file is used; write a number, true or false in quotes, as unit_name: '8'`. A setting that a path value, a capture or the engine also gives, and a path value
 template naming what neither its pattern nor a setting gives, refuse the map with exit 19.
 A rutter whose rules name a setting declares it in the manifest's `values`, each name with one
 sentence on what it holds, as `values: {module: The module path that go.mod names.}`.
 `periplus map` refuses, with exit 26, a project whose settings do not give a value a loaded rutter
-declares. `periplus validate` refuses it too when the project pins the rutter, or a rutter that
+declares, but for a value a path value's `root_name` names and no `{name}` in a rutter file reads
+([A project that is one unit at its root](rutter-author-guide-text.md#a-project-that-is-one-unit-at-its-root)).
+`periplus validate` refuses it too when the project pins the rutter, or a rutter that
 depends on it, and otherwise does not ask for one.
 `validate` accepts a value a rule names only when the settings give it, the user settings in
 `<config dir>/settings.yml` among them, or when the rule's rutter, or a rutter it depends on,
@@ -293,12 +323,17 @@ $ periplus status
 $ periplus map --output map.json --format json >report.json
 ```
 
-`validate` checks each file of a rutter against the two schemas. When they pass, it runs the
-checks `periplus map` runs before it reads a source file, on the rutter and the rutters it
-depends on. Inside a project it uses the project's settings values and folders. When the project
-pins the rutter, or a rutter that depends on it, and every pinned rutter's dependencies resolve,
-it resolves folders against every pinned rutter, as `map` does; otherwise against the rutter and
-the rutters it depends on;
+`validate` checks each file of a rutter against the two schemas, then runs the checks
+`periplus map` runs before it reads a source file. Inside a project it uses the project's
+settings values and folders. When the project pins the rutter, or a rutter that depends on it,
+and every pinned rutter's dependencies resolve, it runs them on every pinned rutter, as `map`
+does; otherwise on the rutter and the rutters it depends on. A rutter with a schema error is
+refused for it before its rules are checked, by `map` as by `validate`, so fix the schema errors
+first and run `validate` again; the problems of the other rutters are still reported, and the
+exit status is not 0. With `--format json`, each schema error holds `file`, `pointer`,
+`keyword`, `message`, `context` and `hint`. The `hint` is empty except for a fault in the
+`boundary` block, where it gives the shape to write, as
+`write boundary: {<group>: {type: <node type>, ancestry: [<edge kind>], names: {<name>: <node type or ~>}}}`;
 `status` shows which rutters the
 project matched, and from where; `periplus spec <pack>` prints the schemas and what the rutter's
 manifest declares and inherits. In the map report, `not_executed` lists the rules the engine cannot

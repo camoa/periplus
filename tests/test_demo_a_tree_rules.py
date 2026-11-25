@@ -102,7 +102,7 @@ MAIN = MAIN_HEAD + "".join(f"// filler {i}\n" for i in range(1, 301)) + MAIN_TAI
 def references(tmp_path_factory: pytest.TempPathFactory) -> tuple[MapReport, dict[str, Any]]:
     root = tmp_path_factory.mktemp("references")
     rutter(root, "calls", CALLS, {"calls.yaml": CALLS_RULES})
-    pin(root, "php_basic@0.2.0", "calls@0.0.1")
+    pin(root, "php_basic@0.3.0", "calls@0.0.1")
     plant(root, {"src/Lib/Util.php": UTIL, "src/App/Main.php": MAIN})
     report, document = map_project(root)
     assert report.problems == () and report.not_executed == (), report
@@ -331,8 +331,8 @@ def _basic(document: dict[str, Any]) -> tuple[set[str], set[tuple[str, str, str]
 def test_a_rutter_depending_on_php_basic_changes_none_of_php_basics_ids_or_edges(
     tmp_path: Path,
 ) -> None:
-    alone = _models(tmp_path / "alone", ("php_basic@0.2.0",))
-    both = _models(tmp_path / "both", ("php_basic@0.2.0", "models@0.0.1"))
+    alone = _models(tmp_path / "alone", ("php_basic@0.3.0",))
+    both = _models(tmp_path / "both", ("php_basic@0.3.0", "models@0.0.1"))
     ids, stated = _basic(alone)
     assert {"php.type::App\\Models\\User", "php.method::App\\Models\\User::save"} <= ids
     assert ("inherits", "php.type::App\\Models\\User", "php.type::App\\Models\\Base") in stated
@@ -342,7 +342,7 @@ def test_a_rutter_depending_on_php_basic_changes_none_of_php_basics_ids_or_edges
 def test_the_dependent_rutters_own_rules_state_their_node_and_edge_on_the_class(
     tmp_path: Path,
 ) -> None:
-    both = _models(tmp_path, ("php_basic@0.2.0", "models@0.0.1"))
+    both = _models(tmp_path, ("php_basic@0.3.0", "models@0.0.1"))
     assert "models.model::App\\Models\\User" in nodes(both)
     assert (
         "implemented_by",
@@ -352,7 +352,7 @@ def test_the_dependent_rutters_own_rules_state_their_node_and_edge_on_the_class(
 
 
 def test_no_id_in_the_map_starts_with_none(tmp_path: Path) -> None:
-    both = _models(tmp_path, ("php_basic@0.2.0", "models@0.0.1"))
+    both = _models(tmp_path, ("php_basic@0.3.0", "models@0.0.1"))
     named = [n["id"] for n in both["nodes"]]
     named += [end for e in both["edges"] for end in (e["from"], e["to"])]
     assert not [i for i in named if i.startswith("None::")]
@@ -360,7 +360,7 @@ def test_no_id_in_the_map_starts_with_none(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("bad", ["None::X", "::X"])
 def test_the_map_schema_rejects_a_node_whose_id_has_no_namespace(tmp_path: Path, bad: str) -> None:
-    document = _models(tmp_path, ("php_basic@0.2.0", "models@0.0.1"))
+    document = _models(tmp_path, ("php_basic@0.3.0", "models@0.0.1"))
     validator = Draft202012Validator(_schema(periplus.map.MAP_SCHEMA))
     validator.validate(document)
     planted = copy.deepcopy(document)
@@ -383,7 +383,7 @@ def test_the_write_guard_refuses_an_id_whose_namespace_no_pack_declares_and_writ
 
     monkeypatch.setattr(periplus.map, "build_document", planted)
     rutter(tmp_path, "models", MODELS, {"models.yaml": MODELS_RULES})
-    pin(tmp_path, "php_basic@0.2.0", "models@0.0.1")
+    pin(tmp_path, "php_basic@0.3.0", "models@0.0.1")
     plant(tmp_path, {"src/Models/User.php": USER})
     report, _ = map_project(tmp_path)
     assert report.map_path is None and not (tmp_path / "map.json").exists()

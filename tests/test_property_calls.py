@@ -112,9 +112,9 @@ def test_a_project_local_pack_with_the_same_grammar_gives_the_same_edges(tmp_pat
     """php_basic copied into the project's .periplus/packs as own@0.0.1: its declaration rules and
     map rules give the same three calls edges a bundled pack gives (property 5)."""
     pack = tmp_path / ".periplus" / "packs" / "own@0.0.1"
-    shutil.copytree(Path(periplus.__file__).parent / "packs" / "php_basic@0.2.0", pack)
+    shutil.copytree(Path(periplus.__file__).parent / "packs" / "php_basic@0.3.0", pack)
     manifest = (pack / "pack.yaml").read_text()
-    manifest = manifest.replace("pack: php_basic\nversion: 0.2.0\n", "pack: own\nversion: 0.0.1\n")
+    manifest = manifest.replace("pack: php_basic\nversion: 0.3.0\n", "pack: own\nversion: 0.0.1\n")
     assert "pack: own\n" in manifest
     (pack / "pack.yaml").write_text(manifest)
     report, document = _map_files(
@@ -177,7 +177,7 @@ class Twice
 
 
 def _map_files(
-    root: Path, files: dict[str, str], pack: str = "php_basic@0.2.0"
+    root: Path, files: dict[str, str], pack: str = "php_basic@0.3.0"
 ) -> tuple[MapReport, dict[str, Any]]:
     (root / ".periplus").mkdir(exist_ok=True)
     (root / ".periplus" / "settings.yml").write_text(f"periplus_version: 0\npacks: [{pack}]\n")

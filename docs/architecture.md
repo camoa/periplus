@@ -90,7 +90,8 @@ Rules run in two kinds:
    another rule.
 2. **Map rules** (`reads: map`) run after every file rule, over the map the file rules made. They
    join what was found in different files. The engine runs them in passes until a pass adds
-   nothing. A map rule that reads an edge another map rule made fires one pass later.
+   nothing. A map rule that reads an edge another map rule made fires one pass later. A map rule
+   that marks a place as decided at run time runs once, in one last pass.
 
 So a chain across files is a series of small rules, one link each. The map report lists each pass
 and the rules that fired in it. [Rule composition](rule-composition.md) works through an example,

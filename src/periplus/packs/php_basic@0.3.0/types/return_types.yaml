@@ -1,0 +1,186 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A call on what a method of $this returns, inside a class method: $this->m()->n(), and
+# $x = $this->m(); $x->n(). A method's declared return type keeps an internal php.return_type,
+# <class>::<method>::<type>, resolved through the imports and namespace, joined from the method by
+# returns_type: Foo and ?Foo give Foo, and self gives the class that declares the method. The call
+# $this->m(...)->n keeps a php.call_site at its line, <class>::<method>::$this->m()->n, its
+# arguments dropped, joined to and from the method around it. The map rules give that call site,
+# and a call site $x->n of variable_calls.yaml whose $x local_types.yaml saw assigned
+# $this->m(...), its calls edge, inferred: they look m up on the enclosing class and then its
+# ancestors through extends and used traits, take its return type, and look n up on that type and
+# then its ancestors through extends. A type outside the map, or a method n no class in the map
+# declares, lands unresolved under the type.
+#
+# Limits: a method with no return type, or one of static, a union or a scalar, gives no edge; its
+# call sites stay. A chain $this->a()->b()->c() joins b only: ->c, and any call whose $this->m(...)
+# holds parentheses two deep, keeps no call site here. A nullsafe call, $this->m()?->n() or
+# $x?->n(), and a call on a property's method result, $this->p->m()->n(), make nothing here. A
+# variable with two different values in one method, $this->a() and $this->b() or anything else,
+# gets no edge here: the map does not know which one holds at the call.
+node_types:
+- name: php.return_type
+  description: "the class a PHP method declares as its return type; self gives the declaring class"
+  id_namespace: php.return_type
+  internal: true
+
+edge_kinds:
+- kind: returns_type
+  cause: none
+  description: "the method declares that class as its return type; self gives the declaring class"
+  from: php.method
+  to: php.return_type
+
+rules:
+
+- rule: find_return_type
+  reads: file
+  in: [source]
+  match: &named_match
+    declaration: method_declaration
+    name_child: name
+    filetype: php
+    where:
+    - has_child: named_type
+    - name_matches: {child: return_type, pattern: '(?!(?i:self|static)$)\\?[A-Za-z_][\w\\]*'}
+  id: &type_id
+    from: [enclosing_type, declared_name, {qualified: return_type}]
+    template: "{enclosing_type}::{declared_name}::{return_type}"
+  emits: [{node: {type: php.return_type}}]
+  confidence: declared
+
+- rule: method_returns_type
+  reads: file
+  in: [source]
+  match: *named_match
+  id: &method_id
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: &returns_edge [{edge: {kind: returns_type, from: this_node, to: {declared: php.return_type}}}]
+  confidence: declared
+
+- rule: find_nullable_return_type
+  reads: file
+  in: [source]
+  match: &nullable_match
+    declaration: method_declaration
+    name_child: name
+    filetype: php
+    where:
+    - has_child: optional_type
+    - name_matches: {child: return_type, pattern: '\?\s*(?!(?i:self|static|array|bool|callable|false|float|int|iterable|mixed|never|null|object|string|true|void)$)\\?[A-Za-z_][\w\\]*'}
+  id: *type_id
+  emits: [{node: {type: php.return_type}}]
+  confidence: declared
+
+- rule: method_returns_nullable_type
+  reads: file
+  in: [source]
+  match: *nullable_match
+  id: *method_id
+  emits: *returns_edge
+  confidence: declared
+
+- rule: find_self_return_type
+  reads: file
+  in: [source]
+  match: &self_match
+    declaration: method_declaration
+    name_child: name
+    filetype: php
+    where:
+    - has_child: named_type
+    - name_matches: {child: return_type, pattern: '(?i:self)'}
+  id:
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}::{enclosing_type}"
+  emits: [{node: {type: php.return_type}}]
+  confidence: declared
+
+- rule: method_returns_self
+  reads: file
+  in: [source]
+  match: *self_match
+  id: *method_id
+  emits: *returns_edge
+  confidence: declared
+
+# One call of $this->m(...) as the object, its arguments at most one parenthesis deep, so that
+# $this->a()->b()->c is never read as $this->a()->c.
+- rule: find_this_chain_call
+  reads: file
+  in: [source]
+  match: &chain_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$this->\w+\s*\([^()]*(?:\([^()]*\)[^()]*)*\)'}
+    - name_matches: {child: name, pattern: '\w+'}
+  id: &chain_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}"
+    normalize: [{replace: '(?s)\s*\(.*\)(?=->\w+$)', with: '()'}]
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: this_chain_call_method
+  reads: file
+  in: [source]
+  match: *chain_match
+  id: *chain_id
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+- rule: calls_through_this_return_type
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<inner>\w+)\(\)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, mixes_in]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.method::{owner}::{inner}'
+    - edge: returns_type
+    - id_matches: '^php\.return_type::[^:]+::\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: &on_type
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+  emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+# The value's text is as written, so the pattern allows spaces and arguments; it is the one call
+# find_this_chain_call reads. A variable with any other value as well makes nothing: it may hold
+# that value at the call.
+- rule: calls_through_local_this_call
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)->(?<method>\w+))$'}]
+    follow:
+    - node: 'php.local_variable::{class}::{meth}::${var}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::(?<value>.+)$'
+    - id_matches: '^php\.local_value::[^:]+::\$\w+=\$this->(?<inner>\w+)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, mixes_in]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.method::{owner}::{inner}'
+    - edge: returns_type
+    - id_matches: '^php\.return_type::[^:]+::\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try: *on_type
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched:
+    - - node: 'php.local_variable::{class}::{meth}::${var}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::(?!{value}$)'
+  emits: *calls_edge
+  confidence: inferred

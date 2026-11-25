@@ -6,7 +6,7 @@ A tree rutter states one with a reference rule. `php_basic` has several for PHP 
 with [php.function, php.method] at each end; each block below is from the file its fence names, in
 src/periplus/packs.
 
-```yaml php_basic@0.2.0/edges/find_structure.yaml
+```yaml php_basic@0.3.0/edges/find_structure.yaml
 - rule: calls_function
   reads: file
   in: [source]
@@ -44,6 +44,11 @@ belong to this pack or to a pack it depends on, read the same file type, select 
 a type the kind allows at its from end. A call inside a closure counts the function around the
 closure. A call with no such declaration around it, as at the top of a file or in a folder only the
 reference rule reads, makes nothing and goes under `skipped`: no enclosing declaration is mapped.
+Where such a match is not the rule's business, `where: [{within: [<node type>, ...]}]` or
+`not_within`, as on a declaration rule
+([The method around a match](rutter-author-guide-abilities.md#a-field-resolved-through-the-imports-and-the-method-around-a-match)),
+passes it over with no row and no fire: `not_within: [attribute_list]` leaves out a `new` written
+in a class's attribute, which no method holds.
 
 `name_child` names the field whose whole text is the written name, so a qualified name stays whole.
 The grammar's `resolve` steps then run on it with the file's imports and namespace, as on names
@@ -131,7 +136,7 @@ A written name that no file declares, such as the method of a `\Drupal::` shortc
 its end through a table the rutter carries. `tables` is a top-level key of `pack.yaml`: a map from
 a table's name to a map of written name to node name. The Drupal pack declares several; two of them:
 
-```yaml drupal_basic@0.3.0/pack.yaml
+```yaml drupal_basic@0.4.0/pack.yaml
 # Name tables that call/call.yaml looks a written name up in.
 tables:
   # Each static method of core's Drupal class, as of Drupal 11.4, that gets one fixed service from
@@ -152,7 +157,7 @@ the nearer pack's wins whole, so a key that only the farther one holds is not fo
 a table that none of them declares refuses the map with exit 26, naming the `tables` key.
 `periplus validate` checks this too and gives the same message.
 
-```yaml drupal_basic@0.3.0/call/call.yaml
+```yaml drupal_basic@0.4.0/call/call.yaml
 # \Drupal::logger('my_module'), \Drupal::currentUser() and the other shortcuts, to the service the
 # table shortcut_services gives for the method's name. Inferred: the table, not the file, names the
 # service. The methods other rules read, and getContainer, are left to them; setContainer and
@@ -286,8 +291,53 @@ first part of the name it is assigned to is in `shared`; `js_basic` names that o
   confidence: declared
 ```
 
+On a reference rule, `{table: <table>, fill: qualified_name}` tests the first `name_child` resolved
+through the file's imports and namespace, the full name its edge end reads before the end's own
+`resolve` steps. So a table keyed by full names keeps `Crate::create()` after `use Lib\Box as
+Crate` when `Lib\Box` is a key, and passes over any other class with no row and no fire. A name
+that is not a written name, or that no resolution step holds for, is a key of no table.
+
+This rule reads `create()` only on a class the table `boxes` lists by its full name, and not in a
+class's attribute, which no method holds:
+
+```yaml
+# pack.yaml
+tables:
+  boxes: {'Lib\Box': box}
+```
+
+```yaml
+- rule: box_made
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: scope
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: create}
+    - in_table: {table: boxes, fill: qualified_name}
+    - not_within: [attribute_list]
+  emits:
+  - edge:
+      kind: makes_box
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: boxes], separator: ' ', types: [acme.box]}
+  confidence: inferred
+```
+
+After `use Lib\Box as Crate;`, `Crate::create()` in a method gives `makes_box` to
+`acme.box::box` at the call's line. `Other::create()` gives nothing and lists no row. So a rule
+that is not the business of most classes stays silent on them, with no twin rule to catch the
+rest. On a declaration rule the same fill is refused:
+
+```
+the rule box_made cannot be executed: in_table names the fill qualified_name, which this kind of rule does not give a table condition
+```
+
 A table none of the visible rutters declares refuses the rule, and so does a capture no pattern of
-the same `where` defines, a fill other than `enclosing_type` or on another kind of rule, or, on a
+the same `where` defines, a fill other than `enclosing_type` or, on a reference rule,
+`qualified_name`, or a fill on another kind of rule, or, on a
 declaration rule whose `name_child` is a list, a condition with no capture and no fill.
 
 ## Where the framework begins: boundary
@@ -297,7 +347,7 @@ The project's classes extend and implement classes the map never reads, such as 
 `ancestry` and its `names`. The Drupal pack declares two groups, `core_classes` and
 `core_interfaces`:
 
-```yaml drupal_basic@0.3.0/pack.yaml
+```yaml drupal_basic@0.4.0/pack.yaml
 # The core and Symfony classes and interfaces that the custom code builds on and the map never
 # reads. Each one an inherits or implements edge reaches becomes a boundary node this pack draws,
 # with no location. A custom class that descends from a name with a type takes that type: those
@@ -392,8 +442,8 @@ cleaned id, so a method id must repeat that normalize to match.
 
 `where: [{has_child: struct_type}]` fires a declaration rule only on a node with a direct child of
 that type, and an enclosing class comes from the rule that fires. Elsewhere it refuses the map with
-exit 26, as a `where` other than `name_matches`, `in_table` or `not_in_table` on a reference rule
-does. A declaration rule's `name_child` written as a string names a field. Its list form is a path
+exit 26, as a `where` other than `name_matches`, `within`, `not_within`, `in_table` or
+`not_in_table` on a reference rule does. A declaration rule's `name_child` written as a string names a field. Its list form is a path
 whose steps are each a field or else the first named child of that node type, so
 `[package_identifier]` reaches Go's package name, which has no field. A reference rule's
 `name_child`, one entry or two, reads each entry the same way. A path value added alone to
@@ -424,7 +474,10 @@ map with exit 26: a declaration rule's attribute template names only the sources
 
 The map schema declares one such mark, `resolution: runtime`: an unknown boundary, reason
 run-time. A rule read this call site, but its target or argument is built at run time, and no rule
-will draw the edge. The node's state is `unknown_boundary`.
+will draw the edge. The node's state is `unknown_boundary`. A map rule writes the same mark beside
+the node it emits, as
+[Mark a place decided at run time](rutter-author-guide-map-rules.md#mark-a-place-decided-at-run-time)
+says.
 
 ```yaml
   emits:
@@ -546,8 +599,9 @@ rule kind decides the form, the same one its node attributes take:
 - {edge: {kind: labelled, from: this_node, to: {from: {key: labels.*.name}}, attributes: {color: {from: {key: labels.*.color}}, shelf: {from: {key: shelf}}}}}
 ```
 
-A template that names an absent value, an argument or key the match does not give, and a key
-path that reaches nothing, a mapping or a list, write nothing. A data rule pairs each value with
+An attribute whose template names an absent value, an argument or key the match does not give,
+or whose key path reaches nothing, a mapping or a list, is not written; the edge is still made, and
+no row is listed. A number, true or false is written as that value; an edge end reads it as text. A data rule pairs each value with
 its own end: a key path with a star is read inside the list item the end comes from, so
 `labels.*.color` gives each `labels.*.name` edge its own label's color, and a key path with no
 star, as `shelf`, is read once for the fire. The item is the end's key path, or the `each` part of
@@ -624,7 +678,7 @@ twins in one file and share the match through a YAML anchor: `match: &m {...}`, 
 rule made a node for the file, the edge is skipped and `skipped` says
 `no value for enclosing_file`. This is `drupal_js_basic` linking a script to its behavior:
 
-```yaml drupal_js_basic@0.0.1/behavior/behavior.yaml
+```yaml drupal_js_basic@0.1.0/behavior/behavior.yaml
 - rule: behavior_from_assignment_in_file
   reads: file
   in: [js_source]
@@ -711,7 +765,7 @@ rutter writes. The type resolves through the file's imports and namespace, as a 
 A `property_typed_as` edge runs from each property to its type node. The map rule
 `calls_through_typed_property` reads each call site:
 
-```yaml php_basic@0.2.0/edges/find_structure.yaml
+```yaml php_basic@0.3.0/edges/find_structure.yaml
 - rule: calls_through_typed_property
   reads: map
   match:
@@ -764,7 +818,7 @@ site `$this-><member>-><method>()`, with an edge to and from its enclosing metho
 node, not its twin. A function's parameter has no enclosing method;
 `variable_calls_in_function.yaml` gives it the id `<function>::$<name>`. The map rule reads each call site:
 
-```yaml php_basic@0.2.0/edges/find_structure.yaml
+```yaml php_basic@0.3.0/edges/find_structure.yaml
 - rule: calls_through_assigned_property
   reads: map
   match:
@@ -797,7 +851,7 @@ that class's assignment of it, to the assigned parameter of the assigning method
 Every step names a whole id with `node:` or follows an edge. The `try` step then finds the class
 that declares the method, as in the rule above. The `calls` edge runs from the method around the
 call to `<declarer>::<method>`, at the call site's line, inferred.
-`drupal_basic@0.3.0/service` holds the same walk for a property assigned `\Drupal::service('<id>')`, in single or double quotes: it follows
+`drupal_basic@0.4.0/service` holds the same walk for a property assigned `\Drupal::service('<id>')`, in single or double quotes: it follows
 `service_class` from that service to its class. Its `service_chain_calls.yaml` and
 `service_local_calls.yaml` take the same walk for a call on the service written in one expression
 and on a method's local variable assigned the service.
@@ -810,7 +864,9 @@ own property is matched by both map rules, and its edge carries two provenance r
 parent class through a property only a child assigns gives no edge: no rule walks from the parent
 to the child's assignment. A property typed by a union of two or more class names gives no edge
 either, and neither does a property set in `create()` from `$container->get('<id>')`. Such a call keeps its
-call site node, with no `calls` edge.
+call site node, with no `calls` edge. In a Drupal class,
+`drupal_basic@0.4.0/call/service_through_create.yaml` gives that call a `calls_service` edge to
+the service `create()` names, at the call's line.
 
 ## Keys the schemas accept and the engine does not run
 
@@ -830,29 +886,31 @@ file.recommendations.*: text topic
 file.resolution: detect_references_independently_of_imports match never_match_by
     on_multiple_definitions on_zero_definitions scope
 file.rules.*.emits.*: role type
-file.rules.*.emits.*.edge.attributes.*: from literal normalize pattern
-file.rules.*.emits.*.edge.attributes.*.from: annotation_key argument argument_class argument_key
-    array_key_class attribute_argument capture each each_key incoming_edges key literal qualified value
+file.rules.*.emits.*.edge.attributes.*: literal normalize pattern
+file.rules.*.emits.*.edge.attributes.*.from: argument argument_class argument_key array_key_class
+    capture each each_key incoming_edges literal qualified value
 file.rules.*.emits.*.edge.attributes.*.normalize.*: replace with
+file.rules.*.emits.*.edge.from: normalize
 file.rules.*.emits.*.edge.from.from: annotation_key argument argument_class argument_key
     array_key_class attribute_argument each each_key incoming_edges literal qualified value
 file.rules.*.emits.*.edge.from.from.*: annotation_key argument argument_class argument_key
     array_key_class attribute_argument capture each_key incoming_edges literal qualified value
+file.rules.*.emits.*.edge.from.normalize.*: replace with
 file.rules.*.emits.*.edge.from.where.*: ancestor_reaches applies_to attribute_argument
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
     has_promoted_constructor_parameter id_matches in_method_with_attribute in_table is_mapping
-    key method_set_covers name name_matches not_in_table on_service
+    key method_set_covers name name_matches not_in_table not_within on_service within
 file.rules.*.emits.*.edge.from.where.*.in_table: capture fill pattern table
 file.rules.*.emits.*.edge.from.where.*.name_matches: child nth pattern
 file.rules.*.emits.*.edge.from.where.*.not_in_table: capture fill pattern table
-file.rules.*.emits.*.edge.to.from: annotation_key argument_class argument_key array_key_class
-    each each_key incoming_edges literal qualified value
+file.rules.*.emits.*.edge.to.from: argument_class argument_key array_key_class each each_key
+    incoming_edges literal qualified value
 file.rules.*.emits.*.edge.to.from.*: annotation_key argument argument_class argument_key
     array_key_class attribute_argument capture each_key incoming_edges literal qualified value
 file.rules.*.emits.*.edge.to.where.*: ancestor_reaches applies_to attribute_argument
     base_is_known_plugin contained_by_type has_argument has_child has_incoming_edge has_key
     has_promoted_constructor_parameter id_matches in_method_with_attribute in_table is_mapping
-    key method_set_covers name name_matches not_in_table on_service
+    key method_set_covers name name_matches not_in_table not_within on_service within
 file.rules.*.emits.*.edge.to.where.*.in_table: capture fill pattern table
 file.rules.*.emits.*.edge.to.where.*.name_matches: child nth pattern
 file.rules.*.emits.*.edge.to.where.*.not_in_table: capture fill pattern table

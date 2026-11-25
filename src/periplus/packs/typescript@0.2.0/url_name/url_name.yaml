@@ -1,0 +1,20 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# A name that a URL is held under: a variable in this module, or a prop. A fetch of the name reaches
+# the URL the name holds.
+
+node_types:
+- name: typescript.url_name
+  description: "A name that holds a URL: a variable in one module, <module>|<name>, or a prop, prop|<name>"
+  id_namespace: typescript.url_name
+# One fetch of a name in one module, <module>|<name>, at the line of each such fetch.
+- name: typescript.name_fetch
+  description: "Internal: a fetch() call with a variable or prop as the URL, at its line, from which a map rule reaches the route the name holds"
+  id_namespace: typescript.name_fetch
+  internal: true
+edge_kinds:
+- kind: fetches_name
+  cause: from
+  description: "the module calls fetch() with that variable or prop as the URL"
+  from: typescript.module
+  to: typescript.url_name

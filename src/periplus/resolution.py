@@ -163,6 +163,7 @@ def resolve(
     root_hint = _root_hint(start, settings_path, project_root)
     located = locate_settings(root_hint, config_dir, settings_path)
     sources, documents, problems = _read(located)
+    problems += _values_not_text(sources, documents)
     effective_root = next((source.root for source in sources if source.kind == "project"), None)
 
     skipped: dict[str, str] = {}
@@ -273,6 +274,38 @@ def _read(
         else:
             sources.append(source)
     return tuple(sources), documents, problems
+
+
+def _values_not_text(
+    sources: tuple[SettingsSource, ...], documents: Mapping[str, Mapping[str, object]]
+) -> list[Problem]:
+    """A problem for each settings file whose ``values`` holds a name or a value that is not text,
+    which drops every value of that file."""
+    problems = []
+    for source in sources:
+        values = documents.get(source.kind, {}).get("values") if source.status == "used" else None
+        if not isinstance(values, Mapping):
+            continue
+        names = sorted(str(k) for k in values if not isinstance(k, str))
+        bad = sorted(k for k, v in values.items() if isinstance(k, str) and not isinstance(v, str))
+        found = [
+            *(f"the name {k} under values is not text" for k in names),
+            *(f"the value {k} under values is not text" for k in bad),
+        ]
+        if found:
+            fix = (
+                f"write the name in quotes, as '{names[0]}'"
+                if names
+                else f"write a number, true or false in quotes, as {bad[0]}: '8'"
+            )
+            problems.append(
+                Problem(
+                    ExitCode.UNREADABLE_SETTINGS,
+                    f"{source.path}: {', '.join(found)}, so no value of this file is used; {fix}",
+                    {"path": str(source.path), "cause": "values"},
+                )
+            )
+    return problems
 
 
 def _merge(

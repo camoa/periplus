@@ -320,6 +320,7 @@ def test_the_subcommands_are_exactly_the_set_listed_below() -> None:
         "order",
         "path",
         "skills",
+        "upgrade",
         "slice",
         "extract",
         "join",
@@ -496,7 +497,7 @@ def test_init_prefills_the_pack_it_detected_in_the_directory_it_ran_in(tmp_path:
 
     The fixture is a ``composer.json`` requiring Drupal core, which is what the bundled drupal_basic
     detector matches. The pin is read out of the settings file the command wrote, through the
-    loader, for the reason ``test_init.py`` gives -- the stub already carries ``drupal_basic@0.3.0``
+    loader, for the reason ``test_init.py`` gives -- the stub already carries ``drupal_basic@0.4.0``
     inside a comment, so a substring search passes against a run that detected nothing.
     """
     from periplus.settings import load_settings_document
@@ -515,7 +516,7 @@ def test_init_prefills_the_pack_it_detected_in_the_directory_it_ran_in(tmp_path:
     document = load_settings_document(project / ".periplus" / "settings.yml")
     packs = document.get("packs")
     assert packs is not None, "`periplus init` in a Drupal checkout declared no `packs:`"
-    assert list(packs) == ["drupal_basic@0.3.0"]
+    assert list(packs) == ["drupal_basic@0.4.0"]
 
 
 def test_init_in_a_directory_matching_no_pack_still_exits_zero(tmp_path: Path) -> None:

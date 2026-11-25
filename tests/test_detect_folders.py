@@ -141,11 +141,40 @@ def test_the_bundled_packs_detect_a_docroot_site_and_place_its_folders(tmp_path:
         ("salesforce_basic", "config/default/core.extension.yml"),
         ("salesforce_eca_basic", "config/default/core.extension.yml"),
     ]
-    # The contributed folders are optional: absent here, placed nowhere, and not asked for.
+    # The contributed folders and core are optional: absent here, placed nowhere, and not asked for.
     assert [(one.folder, one.path, one.optional) for one in placed] == [
         ("config", "config/default", False),
         ("contrib_module", None, True),
         ("contrib_theme", None, True),
+        ("core", None, True),
         ("custom_module", "docroot/modules/custom", False),
         ("custom_theme", "docroot/themes/custom", False),
     ]
+
+
+NAMED = """\
+pack: named
+version: 0.1.0
+depends: [base]
+values:
+  unit_name: The unit's name, when the project folder is one unit.
+  other: Not named by a root_name.
+files:
+  types:
+    code:
+      endings: [sx]
+      path_values:
+        unit: {pattern: '^(?<u>[^/]+)/', template: '{u}', root_name: unit_name}
+        plain: {pattern: '^(?<p>.+)$', template: '{p}'}
+"""
+
+
+def test_the_root_names_of_the_pinned_packs_come_with_their_descriptions(tmp_path: Path) -> None:
+    from periplus.detect import root_names
+
+    candidates = _candidates(tmp_path, {"base@0.1.0": BASE, "named@0.1.0": NAMED})
+
+    assert root_names(candidates, ["named@0.1.0"]) == (
+        ("unit_name", "The unit's name, when the project folder is one unit."),
+    )
+    assert root_names(candidates, ["base@0.1.0"]) == ()

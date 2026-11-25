@@ -1,0 +1,149 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The keys of a ContentEntityType or ConfigEntityType attribute (Drupal 11.1 and later), read as
+# text into the internal entries entity_type_entry.yaml describes, each at its value's line. A
+# handler is an item of the named argument handlers written 'key' => Name::class, its group the
+# quoted key of the array around it, such as form, or handlers for an item of handlers itself;
+# Name resolves through the file's use statements, else the file's namespace; a class written as
+# text, 'Drupal\mymod\MyStorage' or "Drupal\\mymod\\MyStorage", is its full name, as PHP
+# does not resolve a text. A link template is an
+# item of links written 'name' => '/path'. A key named in an array outside its named argument, as in
+# a method's return value, is no entry: its id names an empty value and makes nothing. Two rules
+# for each shape, because a rule that emits an edge emits no node.
+
+rules:
+# handlers: ['list_builder' => ListBuilder::class, 'form' => ['default' => Form\MyForm::class]].
+- rule: entity_handler_entry_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match: &handler
+    file: '*'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<entry>[\w-]+)[''"]\s*=>\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\b'
+  values: &handler_values
+    argument: {from: {enclosing: named_argument_array, capture: argument}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    group: {from: {enclosing: quoted_key_array, capture: key}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    site_group: {template: '{argument}|{group}', normalize: [{replace: '^(?!handlers\|).*$', with: ''}, {replace: '^handlers\|$', with: 'handlers'}, {replace: '^handlers\|', with: ''}]}
+    handler: {template: '{argument}|{class}', normalize: [{replace: '^(?!handlers\|).*$', with: ''}, {replace: '^handlers\|', with: ''}]}
+  id: {template: '{psr4_class}|{site_group}|{entry}'}
+  line: {capture: class}
+  emits: [{node: {type: drupal.entity_type_entry}}]
+  confidence: declared
+
+- rule: entity_handler_entry_class_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match: *handler
+  values: *handler_values
+  id: {template: '{handler}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', normalize: [{replace: '\\\\', with: '\'}]}
+  line: {capture: class}
+  emits:
+  - edge: {kind: entry_names_class, from: {template: '{psr4_class}|{site_group}|{entry}', types: [drupal.entity_type_entry]}, to: this_node}
+  confidence: declared
+
+# handlers: ['storage' => 'Drupal\mymod\MyStorage']: the class written as text, in full.
+- rule: entity_text_handler_entry_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match: &text_handler
+    file: '*'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<entry>[\w-]+)[''"]\s*=>\s*[''"]\\{0,2}(?<class>[A-Za-z_]\w*(?:\\{1,2}\w+)+)[''"]'
+  values: &text_handler_values
+    argument: {from: {enclosing: named_argument_array, capture: argument}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    group: {from: {enclosing: quoted_key_array, capture: key}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    site_group: {template: '{argument}|{group}', normalize: [{replace: '^(?!handlers\|).*$', with: ''}, {replace: '^handlers\|$', with: 'handlers'}, {replace: '^handlers\|', with: ''}]}
+    handler: {template: '{argument}|{class}', normalize: [{replace: '^(?!handlers\|).*$', with: ''}, {replace: '^handlers\|', with: ''}, {replace: '\\\\', with: '\'}]}
+  id: {template: '{psr4_class}|{site_group}|{entry}'}
+  line: {capture: class}
+  emits: [{node: {type: drupal.entity_type_entry}}]
+  confidence: declared
+
+- rule: entity_text_handler_entry_class_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match: *text_handler
+  values: *text_handler_values
+  id: {template: '{handler}'}
+  line: {capture: class}
+  emits:
+  - edge: {kind: entry_names_class, from: {template: '{psr4_class}|{site_group}|{entry}', types: [drupal.entity_type_entry]}, to: this_node}
+  confidence: declared
+
+# links: ['canonical' => '/my/item/{my_item}'].
+- rule: entity_link_entry_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match: &link
+    file: '*'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<rel>[\w-]+)[''"]\s*=>\s*[''"](?<path>/[^''"\s]*)[''"]'
+  values: &link_values
+    argument: {from: {enclosing: named_argument_array, capture: argument}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    route_rel: {template: '{argument}|{rel}', normalize: [{replace: '^(?!links\|).*$', with: ''}, {replace: '^links\|', with: ''}, {replace: '-', with: '_'}]}
+    link_path: {template: '{argument}|{path}', normalize: [{replace: '^(?!links\|).*$', with: ''}, {replace: '^links\|', with: ''}]}
+  id: {template: '{psr4_class}|links|{rel}|{route_rel}'}
+  line: {capture: path}
+  emits: [{node: {type: drupal.entity_type_entry}}]
+  confidence: declared
+
+- rule: entity_link_entry_path_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match: *link
+  values: *link_values
+  id: {template: '{link_path}'}
+  line: {capture: path}
+  emits:
+  - edge: {kind: link_template_path, from: {template: '{psr4_class}|links|{rel}|{route_rel}', types: [drupal.entity_type_entry]}, to: this_node}
+  confidence: declared
+
+# admin_permission: 'administer things', and the other keys whose value names one thing.
+- rule: entity_key_entry_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match: &key
+    file: '*'
+    filetype: drupal_php_text
+    text: '(?<![\w$>\\:])(?<key>admin_permission|collection_permission|bundle_entity_type|bundle_of|field_ui_base_route)\s*:\s*[''"](?<value>[^''"\n]+)[''"]'
+  id: {template: '{psr4_class}|{key}'}
+  line: {capture: value}
+  emits: [{node: {type: drupal.entity_type_entry}}]
+  confidence: declared
+
+- rule: entity_key_entry_value_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match: *key
+  id: {template: '{value}'}
+  line: {capture: value}
+  emits:
+  - edge: {kind: entry_value, from: {template: '{psr4_class}|{key}', types: [drupal.entity_type_entry]}, to: this_node}
+  confidence: declared
+
+# #[ContentEntityType(: a content entity type, which core gives a view builder by default.
+- rule: content_entity_type_entry_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '*'
+    filetype: drupal_php_text
+    text: '#\[\s*\\?(?:Drupal\\Core\\Entity\\Attribute\\)?(?<mark>ContentEntityType)\s*\('
+  id: {template: '{psr4_class}|content_entity_type'}
+  emits: [{node: {type: drupal.entity_type_entry}}]
+  confidence: declared
+
+# entity_keys: ['bundle' => 'type']: the entity type has bundles.
+- rule: bundle_key_entry_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '*'
+    filetype: drupal_php_text
+    text: '[\[,(\s][''"](?<key>bundle)[''"]\s*=>\s*[''"][^''"\s]+[''"]'
+  values:
+    argument: {from: {enclosing: named_argument_array, capture: argument}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    keys: {template: '{argument}', normalize: [{replace: '^(?!entity_keys$).*$', with: ''}]}
+  id: {template: '{psr4_class}|{keys}|bundle'}
+  emits: [{node: {type: drupal.entity_type_entry}}]
+  confidence: declared

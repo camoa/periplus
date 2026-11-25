@@ -19,9 +19,9 @@ own rutter `myproject`, planted under [Where a rule belongs](#where-a-rule-belon
 ```yaml
 periplus_version: 0
 packs:
-  - drupal_basic@0.3.0
-  - js_basic@0.0.1
-  - drupal_js_basic@0.0.1
+  - drupal_basic@0.4.0
+  - js_basic@0.0.2
+  - drupal_js_basic@0.1.0
   - myproject@0.0.1
 ```
 
@@ -48,7 +48,7 @@ cdn:
 ```
 
 Its `.module` file attaches the library and one setting, `greetBanner`, with the key `color`
-nested below it.
+nested below it. Then it calls a function whose name it reads from `$variables`.
 
 <!-- nav-file: web/modules/custom/greet/greet.module -->
 ```php
@@ -68,6 +68,7 @@ function greet_preprocess_page(array &$variables): void {
       ],
     ],
   ];
+  $variables['greet_notify']($variables['greet']);
 }
 ```
 
@@ -111,9 +112,9 @@ periplus map
 
 Map:
   path    /path/to/project/.periplus/map.json
-  nodes   12
-  edges   14
-  internal: 17 nodes and 14 edges left out
+  nodes   13
+  edges   15
+  internal: 22 nodes and 13 edges left out
 
 Boundaries:
   total 0
@@ -144,11 +145,11 @@ Files that did not parse cleanly:
   none
 
 Packs:
-  drupal_basic 0.3.0
-  drupal_js_basic 0.0.1
-  js_basic 0.0.1
+  drupal_basic 0.4.0
+  drupal_js_basic 0.1.0
+  js_basic 0.0.2
   myproject 0.0.1
-  php_basic 0.2.0
+  php_basic 0.3.0
   twig_basic 0.1.0
   yaml_basic 0.1.0
 
@@ -160,16 +161,21 @@ Rules executed:
 Rules that fired zero times:
 ...
 
+Rules that fired and made nothing:
+  none
+
 Map rule passes:
-  pass 1: drupal_basic claim_folder_0 fired 1, drupal_basic claim_folder_1 fired 1, drupal_basic claim_folder_2 fired 1, drupal_basic library_in_module fired 2
-  pass 2: drupal_basic function_in_module fired 1, drupal_basic template_member_of_module fired 1, drupal_js_basic script_in_module fired 1, drupal_js_basic behavior_in_module fired 1
-  pass 3: none
+  pass 1: drupal_basic preprocess_instance_by_shape fired 1, drupal_basic claim_folder_0 fired 1, drupal_basic claim_folder_1 fired 2, drupal_basic library_in_module fired 2
+  pass 2: drupal_basic function_in_module fired 1, drupal_basic template_member_of_module fired 1, drupal_js_basic script_in_module fired 1
+  pass 3: drupal_js_basic behavior_in_module fired 1
+  pass 4: none
+  pass 5: none
 
 Rules not executed:
   none
 
 Matches skipped:
-  web/modules/custom/greet/greet.libraries.yml:4 library_script fired and emitted nothing
+  web/modules/custom/greet/greet.module:17 calls_function_not_a_name function is not a written name
 
 Attributes that differ between files:
   none
@@ -240,7 +246,9 @@ the reason: rewrite the rule in a form the engine runs, or accept the gap.
 
 Text heading: Matches skipped. Each row is a file, a line, a rule and the reason. The rule matched
 there but could not build the node or edge it emits, so nothing was made for that match. When it
-is not empty, open the file at the line. The shape there is one the rule does not cover.
+is not empty, open the file at the line. The shape there is one the rule does not cover. A value
+that the rule's own `where`, `pattern` or `listed_at` leaves out is not such a shape: the rule
+chose to make nothing there, so the value leaves no row.
 
 A map rule also has a row when it would start from, or follow a `node` step to, a node another map
 rule made with an id no file rule found. The reason names that node and the map rule that made
@@ -252,6 +260,14 @@ Text heading: Rules that fired zero times. Each row is a pack and a rule that ra
 and matched nothing. Most rules of a broad rutter fire zero times on a small project, as here.
 When a rule you expected to fire is listed, the files hold a shape it does not match: plant that
 shape alone in a small project to see why.
+
+### `made_nothing`
+
+Text heading: Rules that fired and made nothing. Each row is a pack and a data rule whose edges
+reached values, which the edges' own `where`, `pattern` or `listed_at` then left out everywhere: the
+rule made no node, edge or attribute in the whole map, and listed no skipped row. A single fire
+left out that way lists no row, since the filter says the rule has no business there. When a whole
+rule is listed, check its filter against the files: a pattern that fits none of them looks the same.
 
 ### `differing`
 
@@ -268,7 +284,8 @@ navigation commands on the nodes the rule makes.
 ### `map_passes`
 
 Text heading: Map rule passes. Map rules join what the file rules found. Each pass lists the map
-rules that fired in it; the last pass adds nothing. An empty list means no map rule runs. There is
+rules that fired in it. The passes stop at one that adds nothing. When a loaded rutter has map
+rules that mark a place decided at run time, one more pass after it runs those rules alone. An empty list means no map rule runs. There is
 nothing to fix here; it explains edges no single file holds.
 
 ### `packs`
@@ -419,9 +436,9 @@ second project, `joined-only`, beside the planted one, holds one script with onl
 ```yaml
 periplus_version: 0
 packs:
-  - drupal_basic@0.3.0
-  - js_basic@0.0.1
-  - drupal_js_basic@0.0.1
+  - drupal_basic@0.4.0
+  - js_basic@0.0.2
+  - drupal_js_basic@0.1.0
 ```
 
 <!-- nav-file: joined-only/web/modules/custom/join/js/join.js -->
@@ -479,10 +496,10 @@ Files that did not parse cleanly:
   none
 
 Packs:
-  drupal_basic 0.3.0
-  drupal_js_basic 0.0.1
-  js_basic 0.0.1
-  php_basic 0.2.0
+  drupal_basic 0.4.0
+  drupal_js_basic 0.1.0
+  js_basic 0.0.2
+  php_basic 0.3.0
   twig_basic 0.1.0
   yaml_basic 0.1.0
 
@@ -496,8 +513,12 @@ Rules that fired zero times:
   drupal_js_basic path_in_script_string
 ...
 
+Rules that fired and made nothing:
+  none
+
 Map rule passes:
   pass 1: none
+  pass 2: none
 
 Rules not executed:
   none
@@ -514,10 +535,12 @@ Problems:
 
 </details>
 
-A library that lists only a URL is a shape not mapped yet too: the URL names no file to map. The rule
-`library_script` matches the entry of the library `cdn` in the planted libraries file and cannot
-build an edge from it, so the report of the planted project lists it under `skipped`, in the text
-heading Matches skipped, at its libraries file.
+A call whose function is a value, not a written name, is a shape not mapped yet too: the map
+cannot say which function runs. The rule `calls_function_not_a_name` matches the call
+`$variables['greet_notify'](...)` in the planted `.module` file and cannot build an edge from it,
+so the report of the planted project lists it under `skipped`, in the text heading Matches
+skipped, at its line. The library `cdn` leaves no row: `library_script` leaves out a script
+listed by URL with its own `where`, since a URL names no file to map.
 
 <details>
 <summary>The text report of the planted project</summary>
@@ -529,9 +552,9 @@ periplus map
 
 Map:
   path    /path/to/project/.periplus/map.json
-  nodes   12
-  edges   14
-  internal: 17 nodes and 14 edges left out
+  nodes   13
+  edges   15
+  internal: 22 nodes and 13 edges left out
 
 Boundaries:
   total 0
@@ -562,11 +585,11 @@ Files that did not parse cleanly:
   none
 
 Packs:
-  drupal_basic 0.3.0
-  drupal_js_basic 0.0.1
-  js_basic 0.0.1
+  drupal_basic 0.4.0
+  drupal_js_basic 0.1.0
+  js_basic 0.0.2
   myproject 0.0.1
-  php_basic 0.2.0
+  php_basic 0.3.0
   twig_basic 0.1.0
   yaml_basic 0.1.0
 
@@ -576,16 +599,21 @@ Rules executed:
 Rules that fired zero times:
 ...
 
+Rules that fired and made nothing:
+  none
+
 Map rule passes:
-  pass 1: drupal_basic claim_folder_0 fired 1, drupal_basic claim_folder_1 fired 1, drupal_basic claim_folder_2 fired 1, drupal_basic library_in_module fired 2
-  pass 2: drupal_basic function_in_module fired 1, drupal_basic template_member_of_module fired 1, drupal_js_basic script_in_module fired 1, drupal_js_basic behavior_in_module fired 1
-  pass 3: none
+  pass 1: drupal_basic preprocess_instance_by_shape fired 1, drupal_basic claim_folder_0 fired 1, drupal_basic claim_folder_1 fired 2, drupal_basic library_in_module fired 2
+  pass 2: drupal_basic function_in_module fired 1, drupal_basic template_member_of_module fired 1, drupal_js_basic script_in_module fired 1
+  pass 3: drupal_js_basic behavior_in_module fired 1
+  pass 4: none
+  pass 5: none
 
 Rules not executed:
   none
 
 Matches skipped:
-  web/modules/custom/greet/greet.libraries.yml:4 library_script fired and emitted nothing
+  web/modules/custom/greet/greet.module:17 calls_function_not_a_name function is not a written name
 
 Attributes that differ between files:
   none
@@ -803,6 +831,9 @@ Rules executed:
   none
 
 Rules that fired zero times:
+  none
+
+Rules that fired and made nothing:
   none
 
 Map rule passes:

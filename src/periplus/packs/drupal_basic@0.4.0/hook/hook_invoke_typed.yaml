@@ -1,0 +1,275 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A call that runs a hook on an object known by its declared type, the twin of
+# hook/hook_invoke.yaml, which knows the object by its name. The object is a parameter of the
+# method or function around the call, $mh, or a property of $this, $this->handler, whose declared
+# type is ModuleHandlerInterface, ModuleHandler, ThemeManagerInterface or ThemeManager, as
+# call/typed_receivers.yaml reads a type: a parameter's type; a property's type, on the property, a
+# promoted constructor parameter or a @var docblock, on the call's class or its nearest ancestor
+# that declares it; or the type of the parameter an untyped property is assigned from. The edge is
+# hook_invoke.yaml's invokes_hook, from the method or function around the call, at the call's line:
+#
+#   invokeAll('x') and invokeAllWith('x', ...) run hook x, from the first argument;
+#   invoke($module, 'x') and invokeAllDeprecated($message, 'x'), from the second;
+#   invokeDeprecated($message, $module, 'x'), from the third;
+#   alter('x'), from the first, and alterDeprecated($message, 'x') and alterForTheme($theme, 'x'),
+#   from the second, run hook x_alter.
+#
+# An object whose name ends in moduleHandler, module_handler, themeManager or theme_manager is
+# hook_invoke.yaml's, so this file makes no node for it and the edge is never made twice. Inferred:
+# the declared type is a claim about what runs. A call gets no edge when the map cannot tell which
+# object it runs on, as call/typed_receivers.yaml says: a parameter assigned in the body or named
+# again by a closure, and an untyped property assigned more than one value.
+#
+# Limits: an alter list, alter(['x', 'y']), on such an object, and a hook in a variable or a
+# constant, give nothing here; hook/hook_invoke_runtime.yaml marks a variable only on an object
+# known by its name.
+
+rules:
+# Each call to one of these methods with a quoted text among its arguments, kept as
+# call/typed_receivers.yaml's internal drupal.typed_call node and joined to the method or function
+# around it.
+- rule: hook_typed_call
+  reads: file
+  in: [source]
+  match: &method_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    holder: class_declaration
+    where: &call_where
+    - name_matches: {child: object, pattern: '(?!.*(?:[mM]oduleHandler|module_handler|[tT]hemeManager|theme_manager)$)(?:\$(?!this$)\w+|\$this->\w+)'}
+    - name_matches: {child: name, pattern: 'invoke|invokeAll|invokeAllWith|invokeDeprecated|invokeAllDeprecated|alter|alterDeprecated|alterForTheme'}
+    - name_matches: {child: arguments, pattern: '(?s)\(.*[''"]\w+[''"].*'}
+  id: &method_id
+    from: [enclosing_type, enclosing_method, declared_name, name, arguments]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
+  emits: [{node: {type: drupal.typed_call}}]
+  confidence: declared
+
+- rule: hook_typed_call_in
+  reads: file
+  in: [source]
+  match: *method_match
+  id: *method_id
+  emits: [{edge: {kind: typed_call_in, from: this_node, to: enclosing_method}}]
+  confidence: declared
+
+- rule: hook_typed_call_in_trait
+  reads: file
+  in: [source]
+  match: &trait_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    holder: trait_declaration
+    where: *call_where
+  id: *method_id
+  emits: [{node: {type: drupal.typed_call}}]
+  confidence: declared
+
+- rule: hook_typed_call_in_trait_in
+  reads: file
+  in: [source]
+  match: *trait_match
+  id: *method_id
+  emits: [{edge: {kind: typed_call_in, from: this_node, to: enclosing_method}}]
+  confidence: declared
+
+- rule: hook_typed_call_in_function
+  reads: file
+  in: [source]
+  match: &function_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    holder: function_definition
+    where: *call_where
+  id: &function_id
+    from: [enclosing_type, declared_name, name, arguments]
+    template: "{enclosing_type}::{declared_name}->{name}{arguments}"
+  emits: [{node: {type: drupal.typed_call}}]
+  confidence: declared
+
+- rule: hook_typed_call_in_function_in
+  reads: file
+  in: [source]
+  match: *function_match
+  id: *function_id
+  emits: [{edge: {kind: typed_call_in, from: this_node, to: enclosing_class}}]
+  confidence: declared
+
+# The joins: one rule for each way of naming the hook and each way of reading the type.
+- rule: hook_invoke_all_on_parameter
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<holder>[^$]+)::\$(?<var>\w+)->(?:invokeAll|invokeAllWith)\(\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: &parameter_walk
+    - node: 'php.parameter::{holder}::${var}'
+    - edge: parameter_typed_as
+    - id_matches: &runner_type '^php\.(?:parameter|property)_type::[^:]+::\$\w+::\\?Drupal\\Core\\(?:Extension\\ModuleHandler|Theme\\ThemeManager)(?:Interface)?$'
+    - node: 'drupal.typed_call::{call}'
+    - edge: typed_call_in
+    unless: &parameter_unless
+    - [{node: 'php.local_variable::{holder}::${var}'}]
+    - [{node: 'drupal.closure_parameter::{holder}::${var}'}]
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_invoke_all_on_typed_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:invokeAll|invokeAllWith)\(\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: &typed_property_walk
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_typed_as
+    - id_matches: *runner_type
+    - node: 'drupal.typed_call::{call}'
+    - edge: typed_call_in
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_invoke_all_on_assigned_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:invokeAll|invokeAllWith)\(\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: &assigned_property_walk
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - node: 'php.member_assignment::{owner}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
+    - node: 'php.parameter::{owner}::{setter}::${parameter}'
+    - edge: parameter_typed_as
+    - id_matches: *runner_type
+    - node: 'drupal.typed_call::{call}'
+    - edge: typed_call_in
+    unless_matched: &assigned_twice
+    - [{node: 'php.member_assignment::{owner}::$this->{member}'}, {edge: assigned_value}, {id_matches: '^php\.member_assignment_value::[^:]+::(?:(?!{setter}::)[^:]+::\$this->\w+=|[^:]+::\$this->\w+=(?!\${parameter}$))'}]
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_invoke_on_parameter
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<holder>[^$]+)::\$(?<var>\w+)->(?:invoke|invokeAllDeprecated)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *parameter_walk
+    unless: *parameter_unless
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_invoke_on_typed_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:invoke|invokeAllDeprecated)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *typed_property_walk
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_invoke_on_assigned_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:invoke|invokeAllDeprecated)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *assigned_property_walk
+    unless_matched: *assigned_twice
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_invoke_deprecated_on_parameter
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<holder>[^$]+)::\$(?<var>\w+)->(?:invokeDeprecated)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,(?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *parameter_walk
+    unless: *parameter_unless
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_invoke_deprecated_on_typed_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:invokeDeprecated)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,(?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *typed_property_walk
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_invoke_deprecated_on_assigned_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:invokeDeprecated)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,(?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *assigned_property_walk
+    unless_matched: *assigned_twice
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_alter_on_parameter
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<holder>[^$]+)::\$(?<var>\w+)->(?:alter)\(\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *parameter_walk
+    unless: *parameter_unless
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_alter_on_typed_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:alter)\(\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *typed_property_walk
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_alter_on_assigned_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:alter)\(\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *assigned_property_walk
+    unless_matched: *assigned_twice
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_alter_second_on_parameter
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<holder>[^$]+)::\$(?<var>\w+)->(?:alterDeprecated|alterForTheme)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *parameter_walk
+    unless: *parameter_unless
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_alter_second_on_typed_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:alterDeprecated|alterForTheme)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *typed_property_walk
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+
+- rule: hook_alter_second_on_assigned_property
+  reads: map
+  match:
+    node_type: drupal.typed_call
+    where: [{id_matches: '(?s)^drupal\.typed_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->(?:alterDeprecated|alterForTheme)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[''"](?<hook>\w+)[''"]\s*[,)].*)$'}]
+    follow: *assigned_property_walk
+    unless_matched: *assigned_twice
+  emits: [{edge: {kind: invokes_hook, from: matched_node, to: {template: '{hook}_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+

@@ -43,7 +43,7 @@ def _plant(root: Path) -> None:
     (root / MODULE).mkdir(parents=True)
     (root / ".periplus").mkdir()
     (root / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n"
     )
     (root / MODULE / "mymod.info.yml").write_text("name: My module\ntype: module\n")
     (root / MODULE / "mymod.routing.yml").write_text(ROUTING)

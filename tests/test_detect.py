@@ -17,7 +17,7 @@ Fixture packs are written under `tmp_path`, never edits to the packs that ship, 
 `test_manifest.py` gives: a detector introduced into a bundled pack to suit a test is a change to
 the product, and other suites read those packs.
 
-`_bundled_pin` reads the shipped directory name off disk rather than spelling `drupal_basic@0.3.0`
+`_bundled_pin` reads the shipped directory name off disk rather than spelling `drupal_basic@0.4.0`
 here.
 The version in a directory name is package data, not the code under test, and a test that pins it
 by hand breaks on a version bump for a reason that has nothing to do with detection.

@@ -3,7 +3,7 @@
 # default layout: a web route file with one closure route and two controller routes, one naming its
 # class in full, a base controller and a controller whose method returns a view, a model, Blade
 # views (one extends a layout and includes a partial, one uses components), a config file and a
-# migration. Its settings pin php_basic@0.2.0 and laravel_basic@0.0.5 and move no folder. The map
+# migration. Its settings pin php_basic@0.3.0 and laravel_basic@0.0.5 and move no folder. The map
 # exits 0 with no problems and nothing not executed, and holds exactly the route, view, controller,
 # model, config and migration nodes, the handled_by edge from each controller route to its method,
 # the Blade extends and include edges, the uses_component edges (<x-slot> and {{-- --}} tags give
@@ -173,7 +173,7 @@ return new class extends Migration
     }
 };
 EOF
-printf 'periplus_version: 0\npacks:\n  - php_basic@0.2.0\n  - laravel_basic@0.0.5\n' \
+printf 'periplus_version: 0\npacks:\n  - php_basic@0.3.0\n  - laravel_basic@0.0.5\n' \
     >"$site/.periplus/settings.yml"
 
 (cd "$site" && "$PERIPLUS" map --output "$work/one.json" --format json >"$work/one-report.json")

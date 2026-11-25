@@ -1,0 +1,118 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each top-level key of a module's or theme's config/schema/*.schema.yml, as a drupal.config_schema
+# node named by the key as written, as mymod.settings or mymod.item.*, with its type, as
+# config_object, config_entity or mapping, and its label, as written. A key is either a
+# configuration name or a type other schema keys name, such as action.configuration.<plugin>.
+#
+# A map rule joins each configuration object the map holds, by Drupal's lookup in
+# TypedConfigManager::getFallbackName(): the key equal to its name, else a key that keeps its
+# first parts and writes each later part as *, or writes them all as one *: mymod.item.a.b is
+# described by mymod.item.a.b, mymod.item.a.*, mymod.item.*.*, mymod.item.*, mymod.*.*.* and
+# mymod.*. A key ending in .* also covers the drupal.config_prefix of the text before its *, when a
+# file rule made that prefix (config/config_prefix.yaml), which is where a config entity type's
+# names meet it.
+#
+# Limits: a name that two keys of the map fit, as mymod.item.a.* and mymod.item.*, links to both,
+# though Drupal takes the first it finds; up to three parts after the kept ones are written as
+# stars. The types a key's entries name are read by config/config_schema_entry.yaml, and the
+# plugin a <family>.<plugin id> key describes by config/config_schema_plugin.yaml.
+
+node_types:
+- name: drupal.config_schema
+  description: "a top-level key of a config/schema/*.schema.yml file: the shape of the configuration names it fits, * standing for any part, or a type other keys name"
+  id_namespace: drupal.config_schema
+
+attributes:
+- name: schema_type
+  on: [drupal.config_schema]
+  description: "the type a configuration schema key extends, as written: config_object, config_entity, mapping, or another schema key"
+
+edge_kinds:
+- kind: schema_describes_config
+  cause: none
+  description: "the configuration schema key gives the shape of that configuration object, by Drupal's lookup: the name itself, or its first parts with the rest written as *"
+  from: drupal.config_schema
+  to: drupal.config_object
+- kind: schema_covers_prefix
+  cause: none
+  description: "the configuration schema key ending in .* gives the shape of every configuration name starting with that prefix"
+  from: drupal.config_schema
+  to: drupal.config_prefix
+
+rules:
+- rule: config_schema_key
+  reads: file
+  in: [config_schema]
+  match: {file: '*.schema', filetype: yaml, each: '*'}
+  id: {from: key}
+  emits:
+  - node: {type: drupal.config_schema}
+  - attribute: {name: schema_type, from: {key: type}}
+  - attribute: {name: label, from: {key: label}}
+  confidence: declared
+
+- rule: config_schema_by_name
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<name>.+)$'}]
+    follow: [{node: 'drupal.config_schema::{name}'}]
+  emits: [{edge: {kind: schema_describes_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+# The last one, two or three parts written as one *.
+- rule: config_schema_by_one_star_1
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<kept>.+)\.[^.]+$'}]
+    follow: [{node: 'drupal.config_schema::{kept}.*'}]
+  emits: [{edge: {kind: schema_describes_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_schema_by_one_star_2
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<kept>.+)\.[^.]+\.[^.]+$'}]
+    follow: [{node: 'drupal.config_schema::{kept}.*'}]
+  emits: [{edge: {kind: schema_describes_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_schema_by_one_star_3
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<kept>.+)\.[^.]+\.[^.]+\.[^.]+$'}]
+    follow: [{node: 'drupal.config_schema::{kept}.*'}]
+  emits: [{edge: {kind: schema_describes_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+# The last two or three parts each written as *.
+- rule: config_schema_by_stars_2
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<kept>.+)\.[^.]+\.[^.]+$'}]
+    follow: [{node: 'drupal.config_schema::{kept}.*.*'}]
+  emits: [{edge: {kind: schema_describes_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_schema_by_stars_3
+  reads: map
+  match:
+    node_type: drupal.config_object
+    where: [{id_matches: '^drupal\.config::(?<kept>.+)\.[^.]+\.[^.]+\.[^.]+$'}]
+    follow: [{node: 'drupal.config_schema::{kept}.*.*.*'}]
+  emits: [{edge: {kind: schema_describes_config, from: matched_node, to: this_node}}]
+  confidence: declared
+
+- rule: config_schema_covers_prefix
+  reads: map
+  match:
+    node_type: drupal.config_schema
+    where: [{id_matches: '^drupal\.config_schema::(?<prefix>[^*]+\.)\*(?:\.\*)*$'}]
+    follow: [{node: 'drupal.config_prefix::{prefix}'}]
+  emits: [{edge: {kind: schema_covers_prefix, from: this_node, to: matched_node}}]
+  confidence: declared

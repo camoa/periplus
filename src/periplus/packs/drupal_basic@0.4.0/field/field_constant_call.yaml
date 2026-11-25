@@ -1,0 +1,83 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field named by self::X or static::X in ->get(), ->set() or ->hasField() in a method, read from
+# field_access.yaml's drupal.code_field_read node of the call: the map rules take the class around
+# the call and X from the call as written, walk from that class to its parents and interfaces and
+# take the text of the nearest one that declares X (constant/constant_text.yaml). A text that
+# starts with field_ gives accesses_field to the one storage of that name, or
+# accesses_shared_field_name to its drupal.shared_field_name, as field_access.yaml joins a literal;
+# a name no mapped storage has ends at the unresolved field.storage.<name>. Each edge sits at the
+# call's line. A text that does not start with field_ gives nothing. A constant the class itself
+# declares also gives field_access.yaml's edge.
+
+rules:
+# The nearest class that declares X decides: the walk ends at its text.
+- rule: code_names_field_by_class_constant
+  reads: map
+  match:
+    node_type: drupal.code_field_read
+    where: [&self_constant {id_matches: '(?s)^drupal\.code_field_read::(?<caller>php\.method::(?<class>[^|]+)::\w+)\|\w+\(\s*(?:self|static)::(?<constant>[A-Z_][A-Z0-9_]*)\s*(?:,.*)?\)$'}]
+    follow:
+    - &class {node: 'php.type::{class}'}
+    - &ancestors {ancestors: [inherits, implements]}
+    - &owner {id_matches: '^php\.type::(?<owner>.+)$'}
+    - &constant {node: 'drupal.class_constant::{owner}::{constant}'}
+    - &text {edge: has_constant_text}
+    - &field {id_matches: '^drupal\.constant_text::(?<field>field_\w+)$'}
+  emits: [{edge: {kind: names_field, from: this_node, to: {template: '{field}', type: drupal.field_name}}}]
+  confidence: inferred
+
+# The call node's own names_field, to the name's one storage, when no two storages of it differ in
+# entity type; single is captured only where no field_name_shared edge was reached. A name with no
+# storage has no hub, so the mark below reads the constant again.
+- rule: code_accesses_field_by_class_constant
+  reads: map
+  match:
+    node_type: drupal.code_field_read
+    where: [&caller_id {id_matches: '^drupal\.code_field_read::(?<caller>php\.method::[^|]+)\|'}]
+    follow:
+    - edge: names_field
+    - id_matches: '^drupal\.field_name::(?<field>.+)$'
+    - edge: field_name_ready
+    - try: [{edge: field_name_shared}]
+    - id_matches: '^(?:drupal\.config::|drupal\.field_name::(?<single>))'
+    - node: 'drupal.field_name::{field}'
+    - edge: field_name_of
+    - id_matches: '^drupal\.config::field\.storage\.(?<entity>[^.]+)\.'
+    - &caller {node: '{caller}'}
+  emits: [{edge: {kind: accesses_field, from: matched_node, to: {template: 'field.storage.{entity}.{field}{single}', type: drupal.field_storage}}}]
+  confidence: inferred
+
+- rule: code_accesses_shared_field_name_by_class_constant
+  reads: map
+  match:
+    node_type: drupal.code_field_read
+    where: [*caller_id]
+    follow:
+    - edge: names_field
+    - id_matches: '^drupal\.field_name::(?<field>.+)$'
+    - edge: field_name_shared
+    - *caller
+  emits: [{edge: {kind: accesses_shared_field_name, from: matched_node, to: {template: '{field}', type: drupal.shared_field_name}}}]
+  confidence: inferred
+
+# none is captured only where the name has no hub with a storage.
+- rule: code_accesses_field_by_class_constant_mark
+  reads: map
+  match:
+    node_type: drupal.code_field_read
+    where: [*self_constant]
+    follow:
+    - *class
+    - *ancestors
+    - *owner
+    - *constant
+    - *text
+    - *field
+    - try:
+      - node: 'drupal.field_name::{field}'
+      - edge: field_name_of
+    - id_matches: '^(?:drupal\.config::|drupal\.constant_text::(?<none>))'
+    - *caller
+  emits: [{edge: {kind: accesses_field, from: matched_node, to: {template: 'field.storage.{field}{none}', type: drupal.field_storage, on_miss: unresolved}}}]
+  confidence: inferred

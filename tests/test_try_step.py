@@ -59,7 +59,7 @@ HOLDER = (
 def _map(root: Path, rules: str, files: dict[str, str]):
     (root / ".periplus").mkdir(parents=True)
     (root / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [php_basic@0.2.0, own@0.0.1]\n"
+        "periplus_version: 0\npacks: [php_basic@0.3.0, own@0.0.1]\n"
     )
     pack = root / ".periplus" / "packs" / "own@0.0.1"
     (pack / "rules").mkdir(parents=True)

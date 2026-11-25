@@ -6,6 +6,10 @@ and how to run the tests and the checks.
 
 ## Propose a rutter
 
+General rutters are welcome: one for a language, a framework, a platform or common software that
+other projects use too. A rutter for one project's own conventions stays in that project's
+`.periplus/packs`.
+
 A bundled rutter lives in `src/periplus/packs/<pack>@<version>/`. The folder name gives the
 rutter's name and its exact version. The `pack` and `version` keys in its `pack.yaml` give the
 same two values. The bundled rutters that make a map are named `<stack>_basic`, as `php_basic`,

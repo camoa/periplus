@@ -1,0 +1,153 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A local variable that holds a service, and a call on it: $etm = \Drupal::entityTypeManager(); then
+# $etm->getDefinitions(), in a method or in a plain function such as a hook or an update function.
+# The call gives calls_service from the method or function to the service, at the call's line. The
+# variable gets the service in one of three ways:
+# - \Drupal::service('x'): declared, the code names the service;
+# - $container->get('x'), $this->container->get('x') or \Drupal::getContainer()->get('x'):
+#   inferred, the container is known by its name, as in call/call.yaml;
+# - a \Drupal:: shortcut with no argument that the table shortcut_services lists, as
+#   \Drupal::entityTypeManager(): inferred, the table names the service. request(), hasRequest()
+#   and isConfigSyncing() return a request or a yes or no, not the service, and give nothing.
+# service/service_local_calls.yaml gives the same call its calls edge to the service's class's
+# method, when a services file names the class; this gives the service itself.
+#
+# The map does not keep statement order, so a variable also assigned any other value in the
+# method or function, or that is also a parameter of it, gives no edge.
+
+node_types: []
+
+edge_kinds:
+- kind: local_shortcut_service
+  cause: none
+  description: "internal: the method or function calls a Drupal:: shortcut with no argument that returns that service; the edge attribute shortcut holds the method's name"
+  from: [php.method, php.function]
+  to: drupal.container_service
+
+edge_attributes:
+- name: shortcut
+  on: [local_shortcut_service]
+  description: "the name of the Drupal:: shortcut as written"
+
+rules:
+- rule: local_shortcut_service
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: '(?!(?:request|hasRequest|isConfigSyncing)$)(?<shortcut>\w+)'}
+    - name_matches: {child: arguments, pattern: '\(\s*\)'}
+    - in_table: {table: shortcut_services, capture: shortcut}
+  emits:
+  - edge:
+      kind: local_shortcut_service
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: shortcut_services], types: [drupal.container_service]}
+      attributes: {shortcut: {template: '{shortcut}'}}
+  confidence: inferred
+
+# In a method: <class>::<method>::$x->m.
+- rule: service_through_local_service_call
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: &method_site '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)\??->\w+)$'}]
+    follow:
+    - &method_var_1 {node: 'php.local_variable::{class}::{meth}::${var}'}
+    - &method_var_2 {edge: local_assigned}
+    - {id_matches: &service_value '^php\.local_value::(?<value>[^:]+::\$\w+=\\?Drupal::service\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\))$'}
+    - &method_site_1 {node: 'php.call_site::{site}'}
+    - &method_site_2 {edge: call_site_in}
+    unless_matched: &method_other
+    - [*method_var_1, *method_var_2, {id_matches: '(?s)^php\.local_value::(?!{value}$)'}]
+    - [{node: 'php.parameter::{class}::{meth}::${var}'}]
+  emits: &to_service [{edge: {kind: calls_service, from: matched_node, to: {template: '{svc}', types: [drupal.service]}}}]
+  confidence: declared
+
+- rule: service_through_local_container_get
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *method_site}]
+    follow:
+    - *method_var_1
+    - *method_var_2
+    - {id_matches: &container_value '^php\.local_value::(?<value>[^:]+::\$\w+=(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\))$'}
+    - *method_site_1
+    - *method_site_2
+    unless_matched: *method_other
+  emits: *to_service
+  confidence: inferred
+
+- rule: service_through_local_shortcut
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *method_site}]
+    follow:
+    - *method_var_1
+    - *method_var_2
+    - {id_matches: &shortcut_value '^php\.local_value::(?<value>(?<head>[^:]+::\$\w+=)(?<pre>\\?Drupal::)\w+(?<args>\(\s*\)))$'}
+    - {node: 'php.method::{class}::{meth}'}
+    - &shortcut_1 {edge: local_shortcut_service}
+    - &shortcut_2 {edge_attribute: shortcut}
+    - &shortcut_3 {id_matches: '^drupal\.container_service::(?<svc>.+)$'}
+    - &same_shortcut {node: 'php.local_value::{head}{pre}{shortcut}{args}'}
+    - *method_site_1
+    - *method_site_2
+    unless_matched: *method_other
+  emits: *to_service
+  confidence: inferred
+
+# In a plain function: <function>::$x->m, one :: before the variable.
+- rule: service_through_function_local_service_call
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: &function_site '^php\.call_site::(?<site>(?<fn>[^:]+)::\$(?<var>\w+)\??->\w+)$'}]
+    follow:
+    - &function_var_1 {node: 'php.local_variable::{fn}::${var}'}
+    - &function_var_2 {edge: local_assigned}
+    - {id_matches: *service_value}
+    - &function_site_1 {node: 'php.call_site::{site}'}
+    - &function_site_2 {edge: call_site_in}
+    unless_matched: &function_other
+    - [*function_var_1, *function_var_2, {id_matches: '(?s)^php\.local_value::(?!{value}$)'}]
+    - [{node: 'php.parameter::{fn}::${var}'}]
+  emits: *to_service
+  confidence: declared
+
+- rule: service_through_function_local_container_get
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *function_site}]
+    follow: [*function_var_1, *function_var_2, {id_matches: *container_value}, *function_site_1, *function_site_2]
+    unless_matched: *function_other
+  emits: *to_service
+  confidence: inferred
+
+- rule: service_through_function_local_shortcut
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *function_site}]
+    follow:
+    - *function_var_1
+    - *function_var_2
+    - {id_matches: *shortcut_value}
+    - {node: 'php.function::{fn}'}
+    - *shortcut_1
+    - *shortcut_2
+    - *shortcut_3
+    - *same_shortcut
+    - *function_site_1
+    - *function_site_2
+    unless_matched: *function_other
+  emits: *to_service
+  confidence: inferred

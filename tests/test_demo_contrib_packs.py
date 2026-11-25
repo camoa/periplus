@@ -13,6 +13,8 @@ from typing import Any
 import pytest
 from test_demo_a_support import edges, map_project, nodes, pin, plant
 
+import periplus
+
 MODULE_DIR = "web/modules/custom/mymodule"
 OWN_MODULE = "drupal.module::mymodule"
 MODULE_INFO = {
@@ -24,7 +26,8 @@ MODULE_INFO = {
 
 def _map(root: Path, pack: str, files: dict[str, str | bytes]) -> tuple[Any, dict[str, Any]]:
     plant(root, {**MODULE_INFO, **files})
-    pin(root, "drupal_basic@0.3.0", f"{pack}@0.0.1")
+    (bundled,) = (Path(periplus.__file__).parent / "packs").glob(f"{pack}@*")
+    pin(root, "drupal_basic@0.4.0", bundled.name)
     report, document = map_project(root)
     assert report.problems == () and report.not_executed == (), report
     return report, document
@@ -131,7 +134,8 @@ def test_a_static_load_on_a_contrib_entity_class_ends_at_its_entity_type(
 ) -> None:
     """load, loadMultiple and create on a class the pack adds to drupal_basic's table end at its
     entity type, through drupal_basic's rule, at the call's line. Another method gives nothing; a
-    module's own class of the same short name, and a class no table lists, keep a skipped row."""
+    module's own class of the same short name, and a class no table lists, give no skipped row
+    and keep their calls edge to an unresolved method."""
     first = next(iter(classes))
     short = first.rpartition("\\")[2]
     calls = [
@@ -171,10 +175,23 @@ def test_a_static_load_on_a_contrib_entity_class_ends_at_its_entity_type(
         for line in (calls[0], create)
         for name in (rule, "entity_class_static_create")
     }
-    assert [(line, r) for _, line, r, _ in report.skipped] == [
-        (at(own), rule),
-        (at("Unlisted::load(1);"), rule),
-    ]
+    assert report.skipped == ()
+    states = {n["id"]: n["state"] for n in document["nodes"]}
+    kept = {
+        (e["to"], place["line"], states[e["to"]])
+        for e in document["edges"]
+        if e["kind"] == "calls" and e["from"] == run_method and e["to"].endswith("::load")
+        for place in e["locations"]
+        if place["line"] in (at(own), at("Unlisted::load(1);"))
+    }
+    assert kept == {
+        (f"php.method::Drupal\\mymodule\\Entity\\{short}::load", at(own), "unresolved"),
+        (
+            "php.method::Drupal\\mymodule\\Controller\\Unlisted::load",
+            at("Unlisted::load(1);"),
+            "unresolved",
+        ),
+    }
 
 
 def test_eck_entity_type_and_bundle_files_make_a_content_entity_type_and_bundles(
@@ -312,7 +329,6 @@ def test_advancedqueue_job_type_from_attribute_and_annotation_but_not_a_constant
             "queue_job_type_from_attribute",
             "argument id is a class constant with no declared text",
         ),
-        (f"{folder}/MyJob.php", "instantiates_class", "no enclosing declaration is mapped"),
     ]
 
 
@@ -353,18 +369,8 @@ def test_ai_agent_and_function_call_plugins_from_attributes_including_a_constant
             ),
         },
     )
-    assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
-        (
-            f"{plugins}/AiAgent/MyAgent.php",
-            "instantiates_class",
-            "no enclosing declaration is mapped",
-        ),
-        (
-            f"{plugins}/AiFunctionCall/MyFunction.php",
-            "instantiates_class",
-            "no enclosing declaration is mapped",
-        ),
-    ]
+    # A new TranslatableMarkup inside an attribute leaves no skipped row.
+    assert report.skipped == ()
     cls = "php.type::Drupal\\mymodule\\Plugin\\"
     agent_base = "php.type::Drupal\\ai_agents\\PluginBase\\AiAgentBase"
     function_base = "php.type::Drupal\\ai\\Base\\FunctionCallBase"
@@ -886,9 +892,9 @@ def test_salesforce_tokens_name_field_storages_and_webform_elements(tmp_path: Pa
         ("maps_webform_element", contact_id, f"{element}topic"),
     }
     assert nodes(document)["drupal.config::field.storage.node.field_gone"]["state"] == "unresolved"
-    assert [(file, rule, why) for file, _, rule, why in report.skipped] == [
-        (article, "salesforce_token_names_element", "fired and emitted nothing")
-    ]
+    # The article mapping's Token rows hold no webform submission token, which the rule's own
+    # pattern leaves out, so they list no skipped row.
+    assert [(file, rule, why) for file, _, rule, why in report.skipped] == []
 
 
 def test_twig_tweak_calls_in_a_module_and_a_theme_but_not_a_variable_or_a_comment(

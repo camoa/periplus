@@ -1,0 +1,52 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Invoice::create([...]) and Node::create([...]): a creates_entity_type edge from the method or
+# function around the call to the entity type of the class, beside the uses_entity_type edge
+# entity_class_static_create (call/call.yaml) gives, so a reader can list what creates entities of
+# a type apart from what only uses it. The class is found the two ways the uses edge finds it: by
+# the table entity_classes, and for a module's own entity class by the map
+# (call/entity_class_call.yaml), at the line of each call. The storage forms are read in
+# call/storage_create_*.yaml and call/storage_property_create.yaml.
+#
+# Inferred: the table or the method's name, not the file, says the call creates an entity.
+#
+# Limits:
+# - A call through self::, static:: or a subclass makes no edge.
+
+edge_kinds:
+- kind: creates_entity_type
+  cause: from
+  description: "the method or function creates an entity of that type, with Entity::create() or with create() on the type's storage"
+  from: [php.method, php.function]
+  to: drupal.entity_type
+
+rules:
+- rule: entity_class_static_creates
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: scope
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?(?:\w+\\)*[A-Z]\w*'}
+    - name_matches: {child: name, pattern: 'create'}
+    - name_matches: {child: arguments, pattern: '(?s)\((?!\s*(?:[''"]|\$container\b|\$this->container\b|\$\w+\s*\.)).*\)'}
+    - in_table: {table: entity_classes, fill: qualified_name}
+  emits:
+  - edge:
+      kind: creates_entity_type
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: entity_classes], separator: ' ', types: [drupal.entity_type]}
+  confidence: inferred
+
+- rule: entity_class_static_creates_mapped
+  reads: map
+  match:
+    node_type: drupal.static_entity_call_site
+    where: [{id_matches: '^drupal\.static_entity_call_site::(?<owner>[^|]+)\|(?<class>.+)::create$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: creates_entity_type, from: {template: '{owner}', types: [php.method, php.function]}, to: matched_node}}]
+  confidence: inferred

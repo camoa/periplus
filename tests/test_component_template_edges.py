@@ -21,8 +21,8 @@ CALLS = """\
 
 FILES = {
     ".periplus/settings.yml": (
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n"
-        "  - twig_tweak_basic@0.0.1\n  - js_basic@0.0.1\n  - drupal_js_basic@0.0.1\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n"
+        "  - twig_tweak_basic@0.0.1\n  - js_basic@0.0.2\n  - drupal_js_basic@0.1.0\n"
     ),
     "m.info.yml": "name: M\ntype: module\ncore_version_requirement: ^10\n",
     "m.libraries.yml": "card:\n  js:\n    card.js: {}\n",

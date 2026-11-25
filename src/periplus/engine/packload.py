@@ -68,7 +68,8 @@ _ANCESTRY = frozenset({"within", "not_within"})
 
 #: The steps of a map rule's follow.
 _FOLLOW_STEPS = (
-    "edge", "incoming_edge", "edge_attribute", "ancestors", "node", "id_matches", "try"
+    "edge", "incoming_edge", "edge_attribute", "place", "ancestors", "node", "id_matches", "try",
+    "in_table",
 )
 
 #: Every key path of the two pack schemas that the engine or the pack check executes. ``*`` is one
@@ -103,6 +104,7 @@ EXECUTED_KEYS = frozenset(
                 ".types.*.format",
                 *(f".types.*.path_values{k}" for k in ("", ".*.pattern", ".*.template")),
                 ".types.*.path_values.*.relative_to",
+                ".types.*.path_values.*.root_name",
                 *(f".types.*.path_values.*{k}" for k in (".case", ".normalize")),
                 *(f".types.*.path_values.*.normalize.*{k}" for k in (".replace", ".with")),
                 *(f".types.*.sections{k}" for k in ("", ".*.name", ".*.open", ".*.close")),
@@ -157,6 +159,11 @@ EXECUTED_KEYS = frozenset(
             for key in ("unless", "unless_matched")
             for k in _FOLLOW_STEPS
         ),
+        *(
+            f"{_RULE}match.{key}.in_table.{k}"
+            for key in ("follow.*", "unless.*.*", "unless_matched.*.*")
+            for k in ("table", "capture", "value")
+        ),
         f"{_RULE}match.skip_names.*.table",
         *(
             f"{_RULE}match.where.*.{k}"
@@ -191,7 +198,9 @@ EXECUTED_KEYS = frozenset(
             for k in ("key", "attribute_argument", "annotation_key")
         ),
         f"{_RULE}emits.*.edge.to.from.attribute_argument",
+        f"{_RULE}emits.*.edge.to.from.annotation_key",
         f"{_RULE}emits.*.edge.to.from.argument",
+        *(f"{_RULE}emits.*.edge.to.normalize{k}" for k in ("", ".*.replace", ".*.with")),
         *(
             f"{_RULE}emits.*.edge.{end}{k}"
             for end in ("from", "to")
@@ -297,6 +306,10 @@ _REFERENCE_VALUES = {"enclosing_type", "enclosing_method"}
 #: The values a tree declaration or reference rule's table condition may test with ``fill``.
 _TABLE_FILLS = frozenset({"enclosing_type"})
 
+#: A reference rule's fills: beside those, ``qualified_name``, its first name child resolved as the
+#: written name its edge end reads.
+_REFERENCE_FILLS = _TABLE_FILLS | {"qualified_name"}
+
 #: The keys of the rule shapes this engine executes. A rule with any other key is not run.
 _RULE_KEYS = {"rule", "reads", "in", "match", "id", "emits", "confidence"}
 
@@ -314,6 +327,11 @@ _TREE_FILLED = {
 
 #: The edge ends of a tree rule that name a node, where the other kind of end is a written name.
 _TREE_ENDS = {"this_node", "enclosing_class"}
+
+#: The names a template of an annotation rule with ``match.each`` may fill: the entry's key and
+#: value, and the full name of the declaration's nearest enclosing type; ``group``, the key a star
+#: before the last one stands for, joins them when the path has one.
+_EACH_FILLED = {"key", "value", "enclosing_type"}
 
 #: The edge ends of a declaration rule: those, and the node the file's own rule made for it.
 _DECLARATION_ENDS = {*_TREE_ENDS, "enclosing_file", "enclosing_method"}
@@ -412,9 +430,11 @@ class Value:
     ``normalize`` and then ``case``, ``lower``, ``upper`` or ``""``. A path value holds the
     ``pattern`` searched in the file's path, and its template is filled from that pattern's
     captures; with ``relative_to``, a folder name, the pattern is searched in the path below the
-    deepest directory of that folder that holds the file. ``enclosing`` names a span and one
-    capture of its opening: the value joins that capture of each span holding the match with
-    ``join``; with ``excluding_own`` a span that opens where the match starts is left out."""
+    deepest directory of that folder that holds the file. ``root_name`` names a settings value
+    put, with a slash, before a searched path that starts at the project folder. ``enclosing``
+    names a span and one capture of its opening: the value joins that capture of each span
+    holding the match with ``join``; with ``excluding_own`` a span that opens where the match
+    starts is left out."""
 
     name: str
     capture: str
@@ -426,6 +446,7 @@ class Value:
     enclosing: tuple[str, str] | None = None
     join: str = ""
     excluding_own: bool = False
+    root_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -461,7 +482,9 @@ class Rule:
 
     A rule that matches a docblock annotation holds ``annotation``, the bare name written after the
     at sign, and ``applies_to``; ``id_argument`` and the second of each ``attributes`` pair name a
-    key of the annotation's body.
+    key of the annotation's body, a dotted key one inside a group. With ``each``, keys joined by
+    dots that end in a star, it fires on each entry of the group there, and its ``id_template``
+    names ``{key}``, ``{value}``, ``{enclosing_type}`` and, for a star before the last, ``{group}``.
     """
 
     pack: str
@@ -615,6 +638,8 @@ class EdgeSpec:
     declared: tuple[str, str] = ("", "")
     #: A reference rule's from end written as a template, in place of ``enclosing_declaration``.
     from_template: str | None = None
+    #: An annotation rule's ``template`` end: the normalize steps run on its filled text.
+    normalize: tuple[tuple[re.Pattern[str], str], ...] = ()
     #: The edge's attributes, each its name and its source: a template on a text, map,
     #: declaration or reference rule; a key path on a data rule; an argument on an attribute rule;
     #: a key on an annotation rule.
@@ -1119,7 +1144,8 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
     tree = rule.declaration or rule.attribute or rule.annotation or rule.reference
     known = {value.name for value in info.path_values} | set(values)
     normalize = [*rule.normalize, *(step for value in rule.values for step in value.normalize)]
-    unnamed = set(_step_names(normalize)) - known
+    # An annotation rule's steps fill from its entry alone; _build_attribute checks their names.
+    unnamed = set() if rule.annotation else set(_step_names(normalize)) - known
     if rule.supported and unnamed:
         reason = (
             f"a normalize step names {', '.join(sorted(unnamed))}, which is no path value or "
@@ -1215,8 +1241,9 @@ def _check_names(rule: Rule, info: FileInfo, values: Mapping[str, str]) -> Rule:
 
 
 def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
-    """The map rule, marked not executed when a follow or unless step's node template names a name
-    that no id_matches before it captures and no settings value gives, or its id or an edge
+    """The map rule, marked not executed when a follow or unless step's node template, or an
+    in_table step, names a name that no id_matches before it captures and no settings value gives,
+    an in_table step gives a capture already made, or its id or an edge
     template names one that no id_matches of the rule captures and no settings value gives. An
     unless chain knows only the captures of ``where`` and its own; an unless_matched chain knows
     those of ``follow`` too."""
@@ -1224,10 +1251,27 @@ def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
     for condition in rule.where:
         known |= set(condition.pattern.groupindex) if isinstance(condition, IdMatches) else set()
 
+    tabled: set[str] = set()
+
     def walk(steps: Sequence[tuple[str, Any]], inside: str, known: set[str]) -> str | None:
         """The reason the first node or id_matches step names a capture nothing before it made, or
-        None; a ``try`` is walked in place, its captures known to the steps after it."""
+        a step captures a name an in_table step before it gives, or None; a ``try`` is walked in
+        place, its captures known to the steps after it."""
         for name, value in steps:
+            taken = (
+                set(value[1].groupindex)
+                if name == "id_matches"
+                else {value}
+                if name == "edge_attribute"
+                else set()
+            )
+            if taken & tabled:
+                shown = value[0] if name == "id_matches" else value
+                return (
+                    f"the follow step {name} {shown}{inside} captures "
+                    f"{', '.join(sorted(taken & tabled))}, which an in_table step before it "
+                    "gives from a table"
+                )
             if name == "id_matches" and set(value_names(value[0])) - known:
                 lacking = ", ".join(sorted(set(value_names(value[0])) - known))
                 return (
@@ -1238,6 +1282,19 @@ def _check_map_names(rule: Rule, values: Mapping[str, str]) -> Rule:
                 known.update(value[1].groupindex)
             elif name == "edge_attribute":
                 known.add(value)
+            elif name == "in_table" and value[0] not in known:
+                return (
+                    f"the follow step in_table{inside} names the capture {value[0]}, "
+                    "which no id_matches captures before it"
+                )
+            elif name == "in_table" and value[1] in known:
+                return (
+                    f"the follow step in_table{inside} gives the capture {value[1]}, "
+                    "which a step before it already captures"
+                )
+            elif name == "in_table" and value[1]:
+                known.add(value[1])
+                tabled.add(value[1])
             elif name == "try":
                 reason = walk(value, " inside try", known)
                 if reason:
@@ -1309,8 +1366,9 @@ def _collisions(
     fills for a declaration rule and ``line``), that a rule on its file type captures or names as
     a value, or that a settings value gives or a pack declares; each such settings value name
     the engine fills, or a rule captures or names as a value; each path value template
-    naming a name that is no capture of its pattern and no settings value, or both; and each
-    path value normalize step naming a name that is no settings value: a problem naming the pack,
+    naming a name that is no capture of its pattern and no settings value, or both; each
+    path value normalize step or ``root_name`` naming a name that is no settings value; and each
+    given settings value a ``root_name`` names that is no folder name: a problem naming the pack,
     the file and the names, and the settings file of a settings value. A template or a normalize
     step may rely only on a value ``known`` holds for its pack: one the pack or a pack it depends
     on declares, or the settings give."""
@@ -1328,6 +1386,7 @@ def _collisions(
         return f"the settings value {name}{origin}"
 
     for pack in packs:
+        named_roots: set[str] = set()
         files_block = pack.manifest.document.get("files")
         declared = files_block.get("types") if isinstance(files_block, Mapping) else None
         for kind, spec in declared.items() if isinstance(declared, Mapping) else ():
@@ -1364,6 +1423,24 @@ def _collisions(
                             f"'{step['with']}', which names {missing}, no settings value"
                         )
                         problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
+                root = value.get("root_name")
+                if root is not None and root not in visible:
+                    message = f"{where}type {kind} has the root_name {root}, no settings value"
+                    problems.append(Problem(ExitCode.PACK_RULES_UNREADABLE, message, detail))
+                elif root is not None and root in values and root not in named_roots:
+                    named_roots.add(root)
+                    folder = values[root]
+                    if folder in ("", ".", "..") or any(
+                        c in "/\\" or c.isspace() or not c.isprintable() for c in folder
+                    ):
+                        message = (
+                            f"{setting(root)}, which {pack.name.pack}/{MANIFEST_FILENAME} reads "
+                            f"as the name of the project folder, is {folder!r}, which is no "
+                            "folder name"
+                        )
+                        problems.append(
+                            Problem(ExitCode.PACK_RULES_UNREADABLE, message, {"name": root})
+                        )
     for rule, source in zip(rules, sources, strict=True):
         names = {value.name for value in files.get(rule.filetype, FileInfo()).path_values}
         given = {*(rule.text.groupindex if rule.text is not None else ())}
@@ -1630,7 +1707,13 @@ def _check_edges(rule: Rule, types: Mapping[str, TypeInfo], kinds: Mapping[str, 
         composed_full = edge.full_id or bool(edge.types)
         from_full = composed_full and not edge.start or edge.start in whole
         to_full = composed_full and bool(edge.start) or edge.finish in whole
-        if any(namespace_of(types, name) is None for name in edge.types):
+        # A map rule's type from a table value is checked row by row with the packs.
+        tabled = bool(rule.matches_type)
+        if any(
+            namespace_of(types, t) is None
+            for t in edge.types
+            if not (tabled and t.startswith("{"))
+        ):
             reason = f"a type the end of {edge.kind} lists has no id namespace"
             return replace(rule, supported=False, reason=reason)
         if not from_twin and not from_full and len(namespaces(types, kind.from_types)) != 1:
@@ -2155,8 +2238,8 @@ def _read_into(end: Mapping[str, Any]) -> tuple[str, str, str] | None:
 
 def _read_value(name: str, spec: object, path: bool = False) -> Value:
     """One value: from one capture, the capture of each enclosing span with a join, or a
-    template, or for a path value a pattern and a template with an optional ``relative_to``; with
-    optional normalize and case."""
+    template, or for a path value a pattern and a template with an optional ``relative_to`` and
+    ``root_name``; with optional normalize and case."""
     keys = set(spec) - {"normalize", "case"} if isinstance(spec, Mapping) else set()
     source = spec.get("from") if isinstance(spec, Mapping) else None
     span = (
@@ -2168,13 +2251,14 @@ def _read_value(name: str, spec: object, path: bool = False) -> Value:
     )
     enclosing = span is not None
     if path:
-        wanted = keys - {"relative_to"} == {"pattern", "template"}
+        wanted = keys - {"relative_to", "root_name"} == {"pattern", "template"}
     else:
         wanted = keys in ({"from"}, {"template"}) or (enclosing and keys == {"from", "join"})
+    strings = ("template", "relative_to", "join", "root_name")
     if (
         not isinstance(spec, Mapping)
         or not wanted
-        or not all(isinstance(spec.get(k, ""), str) for k in ("template", "relative_to", "join"))
+        or not all(isinstance(spec.get(k, ""), str) for k in strings)
         or spec.get("case", "") not in ("", "lower", "upper")
     ):
         raise _Unsupported(
@@ -2192,6 +2276,7 @@ def _read_value(name: str, spec: object, path: bool = False) -> Value:
         (str(span["enclosing"]), str(span["capture"])) if span is not None else None,
         str(spec.get("join", "")),
         bool(span.get("excluding_own", False)) if span is not None else False,
+        spec.get("root_name"),
     )
 
 
@@ -2355,8 +2440,9 @@ def _build_map(pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[
             "the match.where of a map rule holds only id_matches, in_table and not_in_table "
             "conditions"
         )
-    follow = _read_follow(match.get("follow", []))
     withholds = [emit["withhold"] for emit in emits if "withhold" in emit]
+    unplaced = "a map rule that withholds takes no place step" if withholds else ""
+    follow = _read_follow(match.get("follow", []), unplaced, tables)
     if withholds and (
         len(emits) != 1
         or withholds[0] not in _MAP_ENDS
@@ -2368,22 +2454,60 @@ def _build_map(pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[
         )
     nodes = node_types(item)
     edges = [_read_map_edge(emit["edge"], bool(follow)) for emit in emits if "edge" in emit]
+    given = {value[1] for name, value in follow if name == "in_table" and value[1]}
+    tried = _table_values(follow) - given
+    for edge in edges:
+        typed = [t for t in (edge.to_type, *edge.types) if "{" in t]
+        found = PLACEHOLDER.fullmatch(edge.types[0]) if len(edge.types) == 1 else None
+        if typed and found is not None and found[1] in tried:
+            raise _Unsupported(
+                f"the {'to' if edge.start else 'from'} end's type {typed[0]} comes from an "
+                "in_table step inside a try, which can leave it unset; an end takes a type only "
+                "from an in_table step outside any try"
+            )
+        if typed and found is not None and edge.into is not None:
+            # The boundary check reads the end's types at load, which a table value is not.
+            raise _Unsupported(
+                f"the {'to' if edge.start else 'from'} end's type {typed[0]} comes from a table, "
+                "and such an end takes no boundary"
+            )
+        if typed and (found is None or found[1] not in given):
+            raise _Unsupported(
+                f"the {'to' if edge.start else 'from'} end's type {typed[0]} is not one {{name}} "
+                "that an in_table step's value gives, as the one item of types; an end takes a "
+                "type from a capture only through a table"
+            )
     attributes = [emit["attribute"] for emit in emits if "attribute" in emit]
+    if any(a.get("name") == "resolution" for a in attributes) and not nodes:
+        raise _Unsupported(
+            "a map rule writes the attribute resolution only beside the node it emits"
+        )
+    # Beside a node, only the run-time mark, as a file rule writes it.
+    marks = attributes if nodes else []
+    if any(a.get("name") != "resolution" for a in marks):
+        raise _Unsupported("beside its node a map rule writes only the attribute resolution")
+    if any(a.keys() != {"name", "template"} for a in marks):
+        raise _Unsupported(
+            "the attribute resolution beside a node takes a name and a template only"
+        )
     block = item.get("id")
     if (
         len(nodes) + len(edges) + len(attributes) + len(withholds) != len(emits)
         or len(nodes) > 1
         or any(emit["node"].keys() != {"type"} for emit in emits if "node" in emit)
-        or (nodes and (edges or attributes))
-        or ((edges or attributes) and block is not None)
+        or (nodes and edges)
+        or ((edges or attributes) and not nodes and block is not None)
         or (nodes and not (isinstance(block, Mapping) and set(block) == {"template"}))
     ):
         raise _Unsupported(
             "a map rule emits one node with a type and an id from one template, or edges and "
             "attributes and no id"
         )
+    templates = tuple((str(a["name"]), str(a["template"])) for a in marks)
     writes = tuple(
-        (str(a["name"]), a.get("template"), a.get("target", "this_node")) for a in attributes
+        (str(a["name"]), a.get("template"), a.get("target", "this_node"))
+        for a in attributes
+        if not nodes
     )
     if any(
         not {"name", "template"} <= set(a) <= {"name", "template", "target"} for a in attributes
@@ -2392,7 +2516,6 @@ def _build_map(pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[
             "an attribute of a map rule is not a name and a template, with an optional target "
             "this_node or matched_node"
         )
-    _refuse_resolution_value(pack, "map", ((name, template) for name, template, _ in writes))
     return Rule(
         pack=pack,
         name=str(item["rule"]),
@@ -2407,27 +2530,48 @@ def _build_map(pack: str, item: Mapping[str, Any], tables: Mapping[str, Mapping[
         id_template=str(block["template"]) if nodes and block is not None else "",
         matches_type=str(match["node_type"]),
         follow=tuple(follow),
-        unless=tuple(tuple(_read_follow(chain)) for chain in match.get("unless", [])),
-        unless_matched=tuple(
-            tuple(_read_follow(chain)) for chain in match.get("unless_matched", [])
+        unless=tuple(
+            tuple(_read_follow(chain, _UNPLACED, tables)) for chain in match.get("unless", [])
         ),
+        unless_matched=tuple(
+            tuple(_read_follow(chain, _UNPLACED, tables))
+            for chain in match.get("unless_matched", [])
+        ),
+        templates=templates,
         writes=writes,
         withholds=withholds[0] if withholds else "",
     )
 
 
-def _read_follow(steps: list[Mapping[str, Any]]) -> list[tuple[str, Any]]:
-    """A map rule's follow steps, each as its name and value; a ``try`` holds its own steps, and an
-    ``id_matches`` its expression and that expression compiled before its values are known."""
+def _read_follow(
+    steps: list[Mapping[str, Any]],
+    unplaced: str = "",
+    tables: Mapping[str, Mapping[str, str]] = _NO_TABLES,
+) -> list[tuple[str, Any]]:
+    """A map rule's follow steps, each as its name and value; a ``try`` holds its own steps, an
+    ``id_matches`` its expression and that expression compiled before its values are known, and an
+    ``in_table`` its capture, the name its value goes under or ``""``, and the table it names among
+    ``tables``. ``unplaced``, when given, is the reason a ``place`` step at any depth is refused."""
     follow: list[tuple[str, Any]] = []
     for step in steps:
         ((name, value),) = step.items()
-        if name == "edge_attribute" and (not follow or follow[-1][0] not in _WALKS):
-            raise _Unsupported("the follow step edge_attribute comes right after an edge step")
+        if name in _ON_EDGE and (not follow or follow[-1][0] not in (*_WALKS, *_ON_EDGE)):
+            raise _Unsupported(f"the follow step {name} comes right after an edge step")
+        if name == "place" and unplaced:
+            raise _Unsupported(unplaced)
+        if name == "place" and value != "edge":
+            raise _Unsupported("the follow step place takes the value edge")
         if name == "id_matches":
             value = (value, _regex(value, compile_unfilled))
         elif name == "ancestors":
             value = tuple(value)
+        elif name == "in_table":
+            if value["table"] not in tables:
+                raise _Unsupported(
+                    f"the follow step in_table names the table {value['table']}, which no tables "
+                    "key of the pack or a pack it depends on declares"
+                )
+            value = (value["capture"], value.get("value", ""), tables[value["table"]])
         elif name == "try":
             if (
                 not isinstance(value, list)
@@ -2440,13 +2584,32 @@ def _read_follow(steps: list[Mapping[str, Any]]) -> list[tuple[str, Any]]:
                 )
             ):
                 raise _Unsupported("try is not a list of follow steps")
-            value = tuple(_read_follow(value))
+            value = tuple(_read_follow(value, unplaced, tables))
         follow.append((name, value))
     return follow
 
 
-#: The follow steps that walk an edge, whose attributes an ``edge_attribute`` step after reads.
+def _table_values(steps: Sequence[tuple[str, Any]]) -> set[str]:
+    """The names the ``in_table`` steps among the read follow steps give a table's value under,
+    inside a ``try`` at any depth."""
+    names: set[str] = set()
+    for name, value in steps:
+        if name == "in_table" and value[1]:
+            names.add(value[1])
+        elif name == "try":
+            names |= _table_values(value)
+    return names
+
+
+#: The follow steps that walk an edge, whose attributes an ``edge_attribute`` step after reads and
+#: whose place a ``place`` step after gives the fire.
 _WALKS = ("edge", "incoming_edge")
+
+#: The follow steps that read the edge a step before walked, right after it or after each other.
+_ON_EDGE = ("edge_attribute", "place")
+
+#: Why a ``place`` step in an unless or unless_matched chain is refused: those chains make nothing.
+_UNPLACED = "the follow step place sits in follow, not in unless"
 
 #: The ends of a map rule's edge that name a node: the node it matched, and the node its follow
 #: steps reached.
@@ -2579,12 +2742,19 @@ def _build_reference(
         )
     where = match.get("where", [])
     if not isinstance(where, list) or not all(
-        isinstance(c, Mapping) and len(c) == 1 and set(c) <= {"name_matches", *_TABLE_CONDITIONS}
+        isinstance(c, Mapping)
+        and len(c) == 1
+        and set(c) <= {"name_matches", *_ANCESTRY, *_TABLE_CONDITIONS}
+        and all(
+            isinstance(c[k], list) and c[k] and all(isinstance(t, str) and t for t in c[k])
+            for k in _ANCESTRY & set(c)
+        )
         for c in where
     ):
         raise _Unsupported(
-            "the match.where of a reference rule holds only name_matches, in_table and "
-            "not_in_table conditions"
+            "the match.where of a reference rule holds only name_matches, within, not_within, "
+            "in_table and not_in_table conditions, within and not_within each a list of tree "
+            "node types"
         )
     name_matches = _name_matches(where, fields[0])
     groups = {group for _, pattern, _ in name_matches for group in pattern.groupindex}
@@ -2674,8 +2844,10 @@ def _build_reference(
         skip_names=_skip_names(match.get("skip_names", ()), tables),
         whole_written=match.get("whole_written") is True,
         name_matches=name_matches,
+        within=tuple(frozenset(c["within"]) for c in where if "within" in c),
+        not_within=frozenset(t for c in where for t in c.get("not_within", ())),
         where=_table_conditions(
-            where, tables, (p for _, p, _ in name_matches), "name_matches", fills=_TABLE_FILLS
+            where, tables, (p for _, p, _ in name_matches), "name_matches", fills=_REFERENCE_FILLS
         ),
     )
 
@@ -2704,10 +2876,11 @@ def _build_attribute(pack: str, item: Mapping[str, Any]) -> Rule:
     where = match.get("where")
     shape = "annotation" if "annotation" in match else "attribute"
     key = "annotation_key" if shape == "annotation" else "attribute_argument"
+    each = match.get("each") if shape == "annotation" else None
     if (
         set(item) | {"id"} != _RULE_KEYS
         or item["reads"] != "file"
-        or not set(match) <= {shape, "filetype", "where"}
+        or not set(match) <= {shape, "filetype", "where", *(("each",) if each is not None else ())}
         or "filetype" not in match
         or not (isinstance(where, list) and len(where) == 1 and set(where[0]) == {"applies_to"})
     ):
@@ -2726,12 +2899,46 @@ def _build_attribute(pack: str, item: Mapping[str, Any]) -> Rule:
         or (not edges and not nodes)
     ):
         raise _Unsupported(f"an {shape} rule emits one node with a type and attributes, or edges")
-    if shape == "annotation" and any({e.start, e.finish} - _TREE_ENDS for e in edges):
-        raise _Unsupported("an annotation rule's edge runs between this_node and enclosing_class")
+    parts = each.split(".") if isinstance(each, str) else []
+    if each is not None and not (
+        parts[-1:] == ["*"]
+        and parts[:-1].count("*") <= 1
+        and all(re.fullmatch(r'\*|[^.*"]+', part) for part in parts)
+    ):
+        raise _Unsupported(
+            "match.each of an annotation rule is keys joined by dots that end in a star, as "
+            "parts.inner.*, with at most one other star, which stands for any group's key"
+        )
+    ends = _TREE_ENDS | {key} | ({"template"} if each is not None else set())
+    if shape == "annotation" and any({e.start, e.finish} - ends for e in edges):
+        raise _Unsupported(
+            "an annotation rule's edge runs between this_node and enclosing_class, to "
+            "{from: {annotation_key: ...}}, or with match.each to {template: ...}"
+        )
     block = item.get("id", {})
     source = block.get("from") if isinstance(block, Mapping) else None
-    if "id" in item and (not set(block) <= {"from", "must_be"} or _argument(source, key) is None):
-        raise _Unsupported(f"the id block of an {shape} rule is not from one {key}")
+    template = block.get("template") if each is not None and isinstance(block, Mapping) else None
+    if "id" in item and not (
+        set(block) <= {"from", "must_be"} and _argument(source, key) is not None
+        or {"template"} <= set(block) <= {"template", "normalize"} and isinstance(template, str)
+    ):
+        raise _Unsupported(
+            f"the id block of an {shape} rule is not from one {key}"
+            + (", or a template with match.each" if shape == "annotation" else "")
+        )
+    if "id" in item and template == "":
+        raise _Unsupported("the id template of an annotation rule with match.each is empty")
+    normalize = _read_normalize(block["normalize"]) if template and "normalize" in block else ()
+    steps = [*normalize, *(step for e in edges for step in e.normalize)]
+    named = set(PLACEHOLDER.findall(template or "")) | set(_step_names(steps))
+    named |= {n for e in edges for n in PLACEHOLDER.findall(e.template or "")}
+    filled = _EACH_FILLED | ({"group"} if "*" in parts[:-1] else set())
+    if named - filled:
+        raise _Unsupported(
+            f"a template or normalize step of an annotation rule with match.each names "
+            f"{', '.join(sorted(named - filled))}, which is not key, value, enclosing_type, or "
+            "group with a star before the last one"
+        )
     if "id" not in item and (nodes or any("this_node" in (e.start, e.finish) for e in edges)):
         raise _Unsupported(f"an {shape} rule that emits a node or names this_node needs an id")
     read = [(a.get("name"), _argument(a.get("from"), key)) for a in attributes]
@@ -2748,12 +2955,14 @@ def _build_attribute(pack: str, item: Mapping[str, Any]) -> Rule:
         confidence=item["confidence"],
         attributes=tuple((str(name), str(argument)) for name, argument in read),
         edges=tuple(edges),
-        id_template="",
+        id_template=template or "",
+        normalize=normalize,
         attribute=match.get("attribute", ""),
         applies_to=where[0]["applies_to"],
         id_argument=_argument(source, key) or "",
         must_be_literal=block.get("must_be") == "string_literal",
         annotation=match.get("annotation", ""),
+        each=each,
     )
 
 
@@ -2861,22 +3070,42 @@ def _argument(source: object, key: str = "attribute_argument") -> str | None:
 
 
 def _read_attribute_edge(edge: Mapping[str, Any], shape: str, key: str) -> EdgeSpec:
-    """An edge of an attribute or annotation rule: between node ends, or to the id an argument's
-    value names; each of its attributes from one argument or annotation key, ``key``."""
+    """An edge of an attribute or annotation rule: between node ends, to the id the value of an
+    argument or an annotation key, ``key``, names, or, on an annotation rule, to the id
+    ``{template: ...}`` fills; each of its attributes from one ``key``."""
     start, end = edge["from"], edge["to"]
     argument = (
-        _argument(end.get("from")) if isinstance(end, Mapping) and set(end) == {"from"} else None
+        _argument(end.get("from"), key)
+        if isinstance(end, Mapping) and set(end) == {"from"}
+        else None
     )
     refused = f"an edge attribute of an {shape} rule is from one {key}"
     attributes = _edge_sources(edge, key, refused)
+    template = (
+        end["template"]
+        if shape == "annotation"
+        and isinstance(end, Mapping)
+        and {"template"} <= set(end) <= {"template", "normalize"}
+        else None
+    )
     if (
         set(edge) - {"attributes"} != {"kind", "from", "to"}
         or not (isinstance(start, str) and start in _ATTRIBUTE_ENDS)
-        or (argument is None and not (isinstance(end, str) and end in _ATTRIBUTE_ENDS))
+        or (
+            argument is None
+            and not isinstance(template, str)
+            and not (isinstance(end, str) and end in _ATTRIBUTE_ENDS)
+        )
     ):
         raise _Unsupported(
             "an edge of an attribute rule does not run from this_node, enclosing_class or "
             "enclosing_method to one of them or to {from: {attribute_argument: ...}}"
+        )
+    if isinstance(template, str):
+        return EdgeSpec(
+            edge["kind"], "", False, None, None, template, (), start, "template",
+            attributes=attributes,
+            normalize=_read_normalize(end["normalize"]) if "normalize" in end else (),
         )
     if argument is not None:
         return EdgeSpec(
@@ -2888,7 +3117,7 @@ def _read_attribute_edge(edge: Mapping[str, Any], shape: str, key: str) -> EdgeS
             None,
             (),
             start,
-            "attribute_argument",
+            key,
             attributes=attributes,
         )
     return EdgeSpec(

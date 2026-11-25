@@ -1,0 +1,210 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A service read from a services file, one per key under services. Two rules because a rule that
+# emits an edge emits no node. The key _defaults holds settings for the file, not a service, and
+# id_matches leaves it out. An argument names a service when it is written @name or @?name; the
+# arguments may be a list or a mapping of names, and an argument that is itself a list of names is
+# read one level down. @.inner and @<id>.inner, the service a decorator replaces, name no service
+# here: service/service_keys.yaml gives the decorates_service edge. The class key names the service's PHP class; a
+# leading backslash is dropped. An entry whose whole value is @name, or whose alias key is not
+# null, is an alias of the service it names and has no class, so an alias in either form is read
+# by its own node rule, which reads no class. An entry whose key holds a backslash and that has no
+# class key is a service of the class its key names, unless it is an alias. The keys autowire,
+# autoconfigure and public are written by service/service_autowire.yaml, with the value the file's
+# _defaults gives. Each tagged_as edge
+# holds its own tag's applies_to, the route requirement key an access_check tag's checker answers,
+# and priority, as edge attributes.
+
+edge_attributes:
+- name: applies_to
+  on: [tagged_as]
+  description: "the route requirement key the tag names under applies_to, which an access_check tag's checker answers"
+- name: priority
+  on: [tagged_as, subscribed_by, use_names_listener, use_has_priority, has_literal_priority, use_names_event, subscribed_by_function, inherits_subscription, inherits_subscription_by_priority]
+  description: "the priority as written, which orders what runs: a tag's, among the services a collector takes, or an event listener's, 0 when none is written"
+
+rules:
+- rule: service_from_services_file
+  reads: file
+  in:
+  - module_root
+  - services_source
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - key:
+        name: alias
+        equals: null
+    - is_mapping: true
+  id:
+    from: key
+  emits:
+  - node:
+      type: drupal.service
+  - attribute:
+      name: class
+      from:
+        key: class
+  confidence: declared
+- rule: service_alias_from_services_file
+  reads: file
+  in:
+  - module_root
+  - services_source
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - key:
+        name: alias
+        not_equals: null
+  id:
+    from: key
+  emits:
+  - node:
+      type: drupal.service
+  confidence: declared
+- rule: service_text_alias_from_services_file
+  reads: file
+  in:
+  - module_root
+  - services_source
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - is_mapping: false
+  id:
+    from: key
+  emits:
+  - node:
+      type: drupal.service
+  confidence: declared
+- rule: service_from_services_file_edges
+  reads: file
+  in:
+  - module_root
+  - services_source
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+  id:
+    from: key
+  emits:
+  - edge:
+      kind: injects_service
+      from: this_node
+      to:
+        from:
+          key: arguments
+        each: true
+        pattern: '^@\??(?!(?:.*\.)?inner$)(?<service>[^@=].*)$'
+        template: '{service}'
+  - edge:
+      kind: injects_service
+      from: this_node
+      to:
+        from:
+          key: arguments.*.*
+        pattern: '^@\??(?!(?:.*\.)?inner$)(?<service>[^@=].*)$'
+        template: '{service}'
+  - edge:
+      kind: extends_service
+      from: this_node
+      to:
+        from:
+          key: parent
+  - edge:
+      kind: alias_of_service
+      from: this_node
+      to:
+        from:
+          key: alias
+        pattern: '^@?(?<service>.+)$'
+        template: '{service}'
+  - edge:
+      kind: alias_of_service
+      from: this_node
+      to:
+        from: text
+        pattern: '^@(?<service>.+)$'
+        template: '{service}'
+  - edge:
+      kind: tagged_as
+      from: this_node
+      to:
+        from:
+          key: tags.*.name
+      attributes:
+        applies_to:
+          from:
+            key: tags.*.applies_to
+        priority:
+          from:
+            key: tags.*.priority
+  confidence: declared
+- rule: service_from_services_file_class
+  reads: file
+  in:
+  - module_root
+  - services_source
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+    - key:
+        name: alias
+        equals: null
+  id:
+    from: key
+  emits:
+  - edge:
+      kind: service_class
+      from: this_node
+      to:
+        from:
+          key: class
+        pattern: '^\\?(?<class>[^\\].*)$'
+        template: '{class}'
+  confidence: declared
+- rule: service_from_services_file_class_key
+  reads: file
+  in:
+  - module_root
+  - services_source
+  match:
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: \\
+    - key:
+        name: class
+        equals: null
+    - key:
+        name: alias
+        equals: null
+    - is_mapping: true
+  id:
+    from: key
+  emits:
+  - edge:
+      kind: service_class
+      from: this_node
+      to:
+        from:
+        - key
+        template: '{key}'
+  confidence: declared

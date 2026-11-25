@@ -169,8 +169,8 @@ def test_a_text_reader_beside_php_basic_adds_its_nodes_and_changes_nothing_else(
     map alone, node for node and edge for edge, plus one notes node per owner line, at that line;
     both packs' rules run."""
     alone_root, joint_root = tmp_path / "alone", tmp_path / "joint"
-    _notes_site(alone_root, "php_basic@0.2.0")
-    _notes_site(joint_root, "php_basic@0.2.0", "notes@0.0.1")
+    _notes_site(alone_root, "php_basic@0.3.0")
+    _notes_site(joint_root, "php_basic@0.3.0", "notes@0.0.1")
     alone_report, alone = clean_map(alone_root)
     joint_report, joint = clean_map(joint_root)
 
@@ -259,7 +259,7 @@ def test_a_text_rule_on_a_type_read_only_as_a_tree_is_refused(tmp_path: Path) ->
 
 def test_two_types_of_one_ending_read_the_same_way_are_refused(tmp_path: Path) -> None:
     extra = "    php_more:\n      endings: [php]\n      reader: text\n"
-    _notes_site(tmp_path, "php_basic@0.2.0", "notes@0.0.1", extra=extra)
+    _notes_site(tmp_path, "php_basic@0.3.0", "notes@0.0.1", extra=extra)
     report, document = map_site(tmp_path)
     assert document is None
     assert report.exit_code == ExitCode.PACK_RULES_UNREADABLE

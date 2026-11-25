@@ -1,0 +1,93 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A render array key that hands a theme hook one of its variables: in a method or function that
+# renders a hook (renders_theme_hook), a key '#x' equal to a variable the hook declares
+# (theme_variable.yaml) is a passes_theme_variable edge to <hook>.x, at the key's line. Each '#x'
+# key of an array is an internal drupal.render_key_site node at its line; a map rule joins it only
+# to a variable of a hook the same method or function renders, so '#cache', '#attached' and a key
+# the hook does not declare make nothing: Drupal drops a key its hook does not declare.
+#
+# Inferred: the key and the '#theme' are joined by their method or function, not by their array.
+# A method that renders two hooks which declare the same variable links the key to both. A key
+# written in double quotes, a key built at run time, and $build['#x'] = ... give nothing.
+
+node_types:
+- name: drupal.render_key
+  description: "internal: a key '#x' of a render array, before the map joins it to a variable of the hook the same code renders"
+  id_namespace: drupal.render_key
+  internal: true
+- name: drupal.render_key_site
+  description: "internal: one key '#x' of a render array in one method or function, at its line"
+  id_namespace: drupal.render_key_site
+  internal: true
+
+edge_kinds:
+- kind: names_render_key
+  cause: none
+  description: "internal: the method or function writes an array key '#x' with that name"
+  from: [php.method, php.function]
+  to: drupal.render_key
+- kind: passes_theme_variable
+  cause: from
+  description: "the method or function renders that theme hook and writes a render array key '#x' named for that variable of the hook"
+  from: [php.method, php.function]
+  to: drupal.theme_variable
+
+rules:
+- rule: render_key_in_array
+  reads: file
+  in: [source]
+  match:
+    reference: array_element_initializer
+    name_child: string
+    filetype: php
+    where: [{name_matches: {child: string, pattern: '''#(?<key>[A-Za-z_][A-Za-z0-9_]*)'''}}]
+  emits: [{edge: {kind: names_render_key, from: enclosing_declaration, to: {template: '{key}', type: drupal.render_key}}}]
+  confidence: declared
+
+# theme_hook/theme_hook_parameter.yaml reads names_render_key.
+# The key's site: php.method::<class>::<method>|'#x' in a method, php.function::<function>|'#x' in
+# a function.
+- rule: render_key_site_in_method
+  reads: file
+  in: [source]
+  match:
+    declaration: array_element_initializer
+    name_child: [string]
+    filetype: php
+    where:
+    - &render_key {name_matches: {child: string, pattern: '''#[A-Za-z_][A-Za-z0-9_]*'''}}
+    - within: [method_declaration]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: 'php.method::{enclosing_type}::{enclosing_method}|{declared_name}'
+  emits: &render_key_site [{node: {type: drupal.render_key_site}}]
+  confidence: declared
+
+- rule: render_key_site_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: array_element_initializer
+    name_child: [string]
+    filetype: php
+    holder: function_definition
+    where: [*render_key]
+  id:
+    from: [enclosing_type, declared_name]
+    template: 'php.function::{enclosing_type}|{declared_name}'
+  emits: *render_key_site
+  confidence: declared
+
+- rule: code_passes_theme_variable
+  reads: map
+  match:
+    node_type: drupal.render_key_site
+    where: [{id_matches: '^drupal\.render_key_site::(?<caller>php\.(?:method|function)::(?<owner>[^|]+))\|''#(?<key>\w+)''$'}]
+    follow:
+    - node: '{caller}'
+    - edge: renders_theme_hook
+    - id_matches: '^drupal\.theme_hook::(?<hook>.+)$'
+    - node: 'drupal.theme_variable::{hook}.{key}'
+  emits: [{edge: {kind: passes_theme_variable, from: {template: '{owner}', types: [php.method, php.function]}, to: matched_node}}]
+  confidence: inferred

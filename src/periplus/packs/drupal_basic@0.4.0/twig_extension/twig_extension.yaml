@@ -1,0 +1,48 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Twig filter or function a module's Twig extension provides, named as templates call it:
+# new TwigFilter('price', ...) in getFilters() is twig.filter::price, and new TwigFunction('total',
+# ...) in getFunctions() is twig.function::total. Each is provided by the class that creates it
+# and used by the templates that call it. Core's and contributed modules' filters and functions,
+# such as |t or attach_library(), are not nodes.
+
+node_types:
+- name: twig.filter
+  description: "a Twig filter that a mapped Twig extension class creates with new TwigFilter('name')"
+  id_namespace: twig.filter
+- name: twig.function
+  description: "a Twig function that a mapped Twig extension class creates with new TwigFunction('name')"
+  id_namespace: twig.function
+# Where a filter or function is created or called, as filter|<name> or function|<name>: one node
+# per name, at each creation, with an edge to each class that creates it.
+- name: drupal.twig_callable
+  description: "internal: a Twig filter or function name, where a class creates it or a template calls it"
+  id_namespace: drupal.twig_callable
+  internal: true
+
+edge_kinds:
+- kind: twig_filter_provided_by
+  cause: from
+  description: "the filter is created with new TwigFilter() in that class, which extends Twig's AbstractExtension"
+  from: twig.filter
+  to: php.class
+- kind: twig_function_provided_by
+  cause: from
+  description: "the function is created with new TwigFunction() in that class, which extends Twig's AbstractExtension"
+  from: twig.function
+  to: php.class
+- kind: template_uses_twig_filter
+  cause: from
+  description: "the template applies that filter, as {{ x|name }}, and a mapped Twig extension provides it"
+  from: drupal.template
+  to: twig.filter
+- kind: template_uses_twig_function
+  cause: from
+  description: "the template calls that function, as {{ name() }}, and a mapped Twig extension provides it"
+  from: drupal.template
+  to: twig.function
+- kind: twig_callable_in_class
+  cause: from
+  description: "step to the provided_by edges: the class creates a Twig filter or function of that name with new TwigFilter() or new TwigFunction()"
+  from: drupal.twig_callable
+  to: php.class

@@ -108,9 +108,21 @@
       "properties": {
         "edge": {"type": "string", "description": "Move to each node an edge of this declared kind runs to from the current node."},
         "incoming_edge": {"type": "string", "description": "Move to each node an edge of this declared kind runs from to the current node, in id order."},
-        "edge_attribute": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Right after an edge or incoming_edge step: the value the edge just walked holds for the edge attribute of this name joins the values under that name, one result for each value it holds; an edge that holds none gives nothing."},
+        "edge_attribute": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Right after an edge or incoming_edge step, or a place step on that edge: the value the edge just walked holds for the edge attribute of this name joins the values under that name, one result for each value it holds; an edge that holds none gives nothing."},
+        "place": {"enum": ["edge"], "description": "Right after an edge or incoming_edge step, or an edge_attribute step on that edge, in follow only: what the fire makes sits at each location of the edge just walked, in place of each location of the matched node. A later place step replaces an earlier one, and a place step inside a try that reaches nothing places nothing. A map rule that withholds takes none."},
         "ancestors": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "Run the steps after this one from the current node, else from the nearest node reached by edges of these declared kinds, breadth first, that gives a result: a member found on a class or else on its nearest ancestor."},
         "try": {"items": {"type": "object", "minProperties": 1, "maxProperties": 1}, "description": "A list of follow steps of the kinds above, try included. The steps inside and after it run from the current node, and if they reach nothing the later steps run with the captures it had, so a lookup that may fail (a method on an ancestor the map does not hold) leaves the end to on_miss. An id_matches inside a try that reaches a node rebinds its captures. The engine, not this schema, refuses a value that is not a list or an empty list."},
+        "in_table": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["table", "capture"],
+          "properties": {
+            "table": {"type": "string", "minLength": 1, "description": "The table's name: one the rule's pack or a pack it depends on declares under tables, the nearer pack's winning, with the rows loaded packs add under add_table_rows."},
+            "capture": {"type": "string", "minLength": 1, "description": "A capture a step before this one, or the rule's where, makes. Its text must be a key of the table, or the walk gives nothing here; inside a try, the steps after the try run with the captures it had."},
+            "value": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Optional: the table's value for that key joins the captures under this name, for the steps after it and the rule's templates. A name a step before it already captures is refused."}
+          },
+          "description": "Stay on the current node when the capture is a key of the table, and with value, bring the table's value for it into the captures. A table none of the visible packs declares, or a capture no step before it makes, refuses the rule."
+        },
         "node": {"type": "string", "description": "Move to the node whose whole id this template gives, filled from the captures before it; nothing when no rule found such a node or an edge end."},
         "id_matches": {"type": "string", "description": "RE2 searched in the current node's whole id; a node it does not fit gives nothing, and its named captures join the values. Each {name}, a name starting with a letter, is filled first with that capture as literal text; a capture no step before it makes leaves the rule not executed, and a quantifier such as {2} stays one."}
       }
@@ -565,7 +577,7 @@
         },
         "annotation": {
           "type": "string",
-          "description": "Bare annotation name. It binds to a class the pack supplies, not one the file imports."
+          "description": "Bare annotation name. It binds to a class the pack supplies, not one the file imports. The engine reads one grammar for it, in the comment right before the declaration: @Name( at the start of a comment line, a body of key = value entries split at commas, a key quoted or a bare word, a value in double quotes, a bare word, a nested annotation or a group in braces of further entries; the pack sets only the comment's node type, identity.comment, and the characters a nested annotation's name may hold besides word characters, those of identity.qualified_name.separator."
         },
         "static_call": {
           "type": "string"
@@ -612,7 +624,7 @@
         },
         "each": {
           "type": "string",
-          "description": "A path expression addressing repeated entries inside a data file."
+          "description": "A path expression addressing repeated entries inside a data file. On an annotation rule: keys joined by dots that end in a star, as parts.panel.*, naming a group in braces; the rule fires once for each entry of that group whose value is quoted text, at the line of the entry's key. One more star stands for any group's key, which a template names group. Its id is a non-empty {template: ...}, with an optional normalize, or from annotation_key, and an edge may run to {template: ...}, with an optional normalize; a template and a normalize step name key, value and enclosing_type. A path the annotation does not hold makes nothing; an entry that is not key = value or whose value is not quoted text, and a stop in the reading of a group the path reads, are listed under skipped, and the entries read before a stop stay."
         },
         "where": {
           "type": "array",
@@ -838,13 +850,13 @@
           "type": "array",
           "items": {"type": "string", "minLength": 1},
           "minItems": 1,
-          "description": "Tree node types, one of which must lie between the matched node and its nearest holder, that holder included; a match with none of them there is passed. Executed on a declaration rule. A tree node a closure makes, inside a method, is told apart this way."
+          "description": "Tree node types, one of which must lie between the matched node and its nearest holder, that holder included; a match with none of them there is passed. Executed on a declaration or reference rule. A tree node a closure makes, inside a method, is told apart this way."
         },
         "not_within": {
           "type": "array",
           "items": {"type": "string", "minLength": 1},
           "minItems": 1,
-          "description": "Tree node types none of which may lie between the matched node and its nearest holder, that holder included; a match with one of them there is passed. Executed on a declaration rule."
+          "description": "Tree node types none of which may lie between the matched node and its nearest holder, that holder included; a match with one of them there is passed. Executed on a declaration or reference rule."
         },
         "has_incoming_edge": {
           "type": "string",
@@ -885,7 +897,7 @@
         },
         "in_table": {
           "$ref": "#/$defs/tableCondition",
-          "description": "The name is a key of the table, or the match is passed and is no fire. The name is the text of the first name_child field on a tree declaration or reference rule, the whole node id on a map rule, and the entry's key or else the file's stem on a file rule. The mapping form {table, capture} tests instead the named capture of a pattern in the same where: a name_matches pattern on a tree rule, an id_matches pattern on a map or file rule; a capture that took no text is a key of no table. The table is one the rule's pack or a pack it depends on declares under tables, the nearer pack's winning, with the rows loaded packs add under add_table_rows. The mapping form {table, fill} tests a value the engine fills at the match, such as the enclosing type's name, and {table, fill, pattern, capture} a capture of a pattern searched in it. A table none of them declares, a capture no such pattern defines, or a fill the rule's kind does not give, refuses the rule."
+          "description": "The name is a key of the table, or the match is passed and is no fire. The name is the text of the first name_child field on a tree declaration or reference rule, the whole node id on a map rule, and the entry's key or else the file's stem on a file rule. The mapping form {table, capture} tests instead the named capture of a pattern in the same where: a name_matches pattern on a tree rule, an id_matches pattern on a map or file rule; a capture that took no text is a key of no table. The table is one the rule's pack or a pack it depends on declares under tables, the nearer pack's winning, with the rows loaded packs add under add_table_rows. The mapping form {table, fill} tests a value the engine fills at the match, such as the enclosing type's name, or on a reference rule qualified_name, its name child resolved through the imports, and {table, fill, pattern, capture} a capture of a pattern searched in it. A table none of them declares, a capture no such pattern defines, or a fill the rule's kind does not give, refuses the rule."
         },
         "not_in_table": {
           "$ref": "#/$defs/tableCondition",
@@ -1062,7 +1074,8 @@
               "type": "string"
             },
             "annotation_key": {
-              "type": "string"
+              "type": "string",
+              "description": "A key of an annotation's body; with dots, as api_paths.main, one entry inside a group, read as a key at the top level is. On an annotation rule's edge to end, the id that key's value names."
             },
             "argument_key": {
               "type": "string"
@@ -1200,7 +1213,7 @@
           "then": {
             "required": ["template"],
             "properties": {"template": {"const": "runtime"}},
-            "description": "The resolution mark is runtime, the only value the map schema allows, on every kind of rule."
+            "description": "The resolution mark is runtime, the only value the map schema allows, on every kind of rule. A map rule writes it only beside the one node it emits, and such a rule runs in one last pass, after a pass of the other map rules adds nothing."
           }
         },
         "binding": {
@@ -1302,6 +1315,11 @@
             "template": {
               "type": "string"
             },
+            "normalize": {
+              "type": "array",
+              "items": {"type": "object", "additionalProperties": false, "required": ["replace", "with"], "properties": {"replace": {"type": "string"}, "with": {"type": "string"}}},
+              "description": "Only on the to end {template: ...} of an annotation rule with match.each: steps run in order on the filled template, as an id's normalize runs."
+            },
             "each": {
               "type": "boolean"
             },
@@ -1319,7 +1337,7 @@
               "type": "array",
               "items": {"type": "string"},
               "minItems": 1,
-              "description": "In place of type: the candidate types, in order. The end lands on the first whose node of the resolved name a rule maps; when none is mapped, on_miss applies and the end takes the first type."
+              "description": "In place of type: the candidate types, in order. The end lands on the first whose node of the resolved name a rule maps; when none is mapped, on_miss applies and the end takes the first type. On a map rule's template end the one item may be {name}, a name an in_table follow step's value gives: the end takes the type that table holds for the key. Every value of the table, the rows other packs add included, must be a type the pack may name and the edge kind allows at that end, or the map is refused before any file is read. The in_table step that gives the name sits outside any try, no later step captures the same name, and such an end takes no boundary."
             },
             "pattern": {
               "type": "string",

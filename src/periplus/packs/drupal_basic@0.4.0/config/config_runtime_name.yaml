@@ -1,0 +1,229 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A call config_call.yaml or config_form_edit.yaml reads a configuration name from, where a
+# variable stands in the name: the name is known only when the code runs, as getEditable($name)
+# inside a foreach over listAll(). Each such call is kept as a php.call_site node marked resolution
+# runtime, with has_call_site and call_site_in edges to the method or function around it, and no
+# edge to a configuration object. The twins follow call/runtime_argument.yaml: \Drupal::config(),
+# get() and getEditable() on a config factory as config_call.yaml knows one, and $this->config(),
+# in a method, and the first three in a function of a module, install, theme, inc or profile file;
+# and getLanguageConfigOverride($langcode, $name) on a language manager, an object written ending
+# in languageManager or language_manager, whose second argument holds a variable.
+# A method's id ends in (runtime), so it stays apart from the call site php_basic gives the same
+# callee. A variable assigned a text a few lines above is not followed.
+#
+# Limits: a variable after a comma inside a nested call in the argument gives no node; a call in a
+# function of a plain .php file stays under skipped.
+
+rules:
+# \Drupal::config($name), in a method.
+- rule: runtime_config_read_by_drupal
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: &drupal_where
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: config}
+    - name_matches: {child: arguments, pattern: &first_variable '(?s)\(\s*[^,$]*\$.*'}
+  id: &scoped_id
+    from: [enclosing_type, enclosing_method, scope, name]
+    template: "{enclosing_type}::{enclosing_method}::{scope}::{name}"
+  emits: &runtime_node
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: runtime_config_read_by_drupal_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where: *drupal_where
+  id: *scoped_id
+  emits: &runtime_edges
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+# get($name) and getEditable($name) on a config factory, in a method.
+- rule: runtime_config_from_factory
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &factory_where
+    - name_matches: {child: object, pattern: &factory_object '(?s).*(?:configFactory|config_factory)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]config\.factory[''"]\)|\\?Drupal::service\([''"]config\.factory[''"]\)'}
+    - name_matches: {child: name, pattern: 'get|getEditable'}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: &member_runtime_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}(runtime)"
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_config_from_factory_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *factory_where
+  id: *member_runtime_id
+  emits: *runtime_edges
+  confidence: declared
+
+# $this->config($name), in a method.
+- rule: runtime_config_own_method
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &own_where
+    - name_matches: {child: object, pattern: '\$this'}
+    - name_matches: {child: name, pattern: config}
+    - name_matches: {child: arguments, pattern: *first_variable}
+  id: *member_runtime_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_config_own_method_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *own_where
+  id: *member_runtime_id
+  emits: *runtime_edges
+  confidence: declared
+
+# The same in a function of a module-family file, as call/runtime_argument_in_function.yaml.
+- rule: runtime_config_read_by_drupal_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: &module_endings [module, install, theme, inc, profile]
+    holder: function_definition
+    where: *drupal_where
+  id: &function_scoped_id
+    from: [enclosing_type, scope, name]
+    template: "{enclosing_type}::{scope}::{name}"
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_config_read_by_drupal_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *drupal_where
+  id: *function_scoped_id
+  emits: &function_runtime_edges
+  - edge: {kind: has_call_site, from: enclosing_class, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_class}
+  confidence: declared
+
+- rule: runtime_config_from_factory_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *factory_where
+  id: &function_member_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::{declared_name}->{name}(runtime)"
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_config_from_factory_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *factory_where
+  id: *function_member_id
+  emits: *function_runtime_edges
+  confidence: declared
+
+# getLanguageConfigOverride($langcode, 'mymod.item.' . $id) on a language manager: the name is the
+# second argument.
+- rule: runtime_config_language_override
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &override_where
+    - name_matches: {child: object, pattern: '(?s).*(?:languageManager|language_manager)(?:\(\))?|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]language_manager[''"]\)|\\?Drupal::service\([''"]language_manager[''"]\)'}
+    - name_matches: {child: name, pattern: getLanguageConfigOverride}
+    - name_matches: {child: arguments, pattern: '(?s)\((?:[^,()''"]|''[^'']*''|"[^"]*"|\([^()]*\))*,(?:[^,''"]|''[^'']*''|"[^"]*")*\$.*'}
+  id: *member_runtime_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_config_language_override_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *override_where
+  id: *member_runtime_id
+  emits: *runtime_edges
+  confidence: declared
+
+- rule: runtime_config_language_override_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *override_where
+  id: *function_member_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: runtime_config_language_override_in_function_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *override_where
+  id: *function_member_id
+  emits: *function_runtime_edges
+  confidence: declared

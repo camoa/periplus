@@ -170,7 +170,18 @@ def add_ids(parser: argparse.ArgumentParser) -> None:
 CATALOGUE: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "set up and build",
-        ("init", "status", "spec", "validate", "update", "map", "check-map", "fresh", "skills"),
+        (
+            "init",
+            "status",
+            "spec",
+            "validate",
+            "update",
+            "map",
+            "check-map",
+            "fresh",
+            "skills",
+            "upgrade",
+        ),
     ),
     ("learn the map's words", ("types", "legend")),
     ("cheap counts: ask these before pulling rows", ("depth", "count", "pieces", "files", "hubs")),
@@ -1080,6 +1091,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="copy the skills into ~/.claude/skills, replacing older copies",
         description="Copy every shipped skill into ~/.claude/skills, and stop.",
     )
+    upgrade = subcommands.add_parser(
+        "upgrade",
+        help="upgrade Periplus to the newest release on PyPI, and refresh installed skills",
+        description="Ask PyPI for the newest release, upgrade the way it was installed, and stop.",
+    )
+    upgrade.add_argument(
+        "--check",
+        action="store_true",
+        help="print the installed version, the newest and the command, and change nothing",
+    )
     lines = {action.dest: action.help for action in subcommands._choices_actions}
     parser.epilog = "\n\n".join(
         [
@@ -1182,6 +1203,11 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
             print(folder)
         return ExitCode.OK
 
+    if args.command == "upgrade":
+        from periplus.upgrade import upgrade
+
+        return upgrade(check=args.check, home=Path.home())
+
     # This lazy import is load-bearing, not tidiness. `init.py` imports `_escape`
     # from `periplus.report`, which pulls `resolution`, `settings` and `packs` behind it, so
     # `import periplus.init` reaches both runtime distributions. At module level that would put
@@ -1196,7 +1222,7 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
     # for the whole tool rather than a branch deciding which subcommand is exempt, and `--version`
     # above remains the question answered before any check.
     if args.command == "init":
-        from periplus.detect import detect, place
+        from periplus.detect import detect, place, root_names_in
         from periplus.init import initialise_project, render_text
 
         # Detection runs here rather than inside `initialise_project`, so that the command that
@@ -1210,7 +1236,10 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
         # The detections, not their pins. `initialise_project` derives what to write from what was
         # found, so the pins in the file and the evidence in the report cannot disagree.
         created = initialise_project(
-            here, detected=detected, placed=place(here, os.environ, dependencies, detected)
+            here,
+            detected=detected,
+            placed=place(here, os.environ, dependencies, detected),
+            root_names=root_names_in(here, os.environ, dependencies, detected),
         )
         sys.stdout.write(render_text(created))
         return created.exit_code

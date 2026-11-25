@@ -205,6 +205,9 @@ class MapReport:
     #: Each pinned pack whose file rules selected no file, with each base folder its rules reach:
     #: the folder, its value as written, and the number of directories it resolved to.
     empty_packs: tuple[tuple[str, tuple[tuple[str, str, int], ...]], ...] = ()
+    #: Each data rule, by pack and rule, that made no node, edge or attribute in the whole run and
+    #: listed no skipped row, though a fire reached values that its edges' own filters removed.
+    made_nothing: tuple[tuple[str, str], ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -358,7 +361,7 @@ def run(
     try:
         with SlowWatch(slow_after) as watch:
             found = run_file_rules(prepared.listings, rule_set, packs, folders, selection, watch)
-        found_nodes, found_edges, fires, opened, read, removed, broken, skipped = found
+        found_nodes, found_edges, fires, opened, read, removed, broken, skipped, filtered = found
         listings, pinned = prepared.listings, prepared.pinned
         empty = _empty_packs(listings, rule_set, packs, pinned, folders, read, overrides, selection)
         directories = sorted({path for name in prepared.wanted for path in folders[name]})
@@ -378,6 +381,7 @@ def run(
                 unlisted=tuple(unlisted),
                 empty_packs=empty,
             )
+        made = {(n.pack, n.rule) for n in found_nodes} | {(e.pack, e.rule) for e in found_edges}
         found_nodes, found_edges, withheld = withhold_found(rule_set, found_nodes, found_edges)
         fires.update(withheld)
         map_nodes, map_edges, map_fires, map_passes, unread_by_map = run_map_rules(
@@ -385,6 +389,11 @@ def run(
         )
         skipped.extend(unread_by_map)
         fires.update(map_fires)
+        made |= {(n.pack, n.rule) for n in map_nodes} | {(e.pack, e.rule) for e in map_edges}
+        listing = {row[2] for row in skipped}
+        made_nothing = tuple(
+            sorted(key for key in filtered if key not in made and key[1] not in listing)
+        )
         document, left_out = build_document(
             [*found_nodes, *map_nodes],
             [*found_edges, *map_edges],
@@ -440,6 +449,7 @@ def run(
         unread=tuple(unread),
         unlisted=tuple(unlisted),
         map_passes=tuple(map_passes),
+        made_nothing=made_nothing,
         internal=left_out,
         boundaries=_boundaries(document),
         unknown=_unknown(document),
@@ -653,6 +663,10 @@ def render_text(report: MapReport) -> str:
         "Rules that fired zero times", [f"{_escape(p)} {_escape(r)}" for p, r in report.idle]
     )
     lines += _section(
+        "Rules that fired and made nothing",
+        [f"{_escape(p)} {_escape(r)}" for p, r in report.made_nothing],
+    )
+    lines += _section(
         "Map rule passes",
         [
             f"pass {n}: "
@@ -689,6 +703,7 @@ def render_json(report: MapReport) -> str:
         "packs": [{"pack": p, "version": v} for p, v in report.packs],
         "executed": [{"pack": p, "rule": r, "fires": n} for p, r, n in report.executed],
         "zero_fires": [{"pack": p, "rule": r} for p, r in report.idle],
+        "made_nothing": [{"pack": p, "rule": r} for p, r in report.made_nothing],
         "not_executed": [
             {"pack": p, "rule": r, "reason": why} for p, r, why in report.not_executed
         ],

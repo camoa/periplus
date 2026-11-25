@@ -1,0 +1,100 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Three keys of a services file that service_definition.yaml does not read, as Drupal's
+# YamlFileLoader reads them:
+# - decorates: x, as a decorates_service edge to the service x the entry replaces in the container;
+# - calls, each method call the container makes after it builds the service, written
+#   [method, [args]] or {method: [args]}: each argument written @name or @?name, as an
+#   injects_service edge, as an argument under arguments gives one;
+# - parameters: each key of a services file's parameters block, as a drupal.container_parameter
+#   named by its key, with its value as written in the attribute value; and each %name% written
+#   in a service's entry, alone or inside other text, as an injects_parameter edge from the
+#   service to it.
+#
+# Limits: a %name% in a comment of the entry also counts. A parameter no mapped file declares,
+# such as core's, ends at a referenced node. A value that is a list or a mapping is not kept.
+
+attributes:
+- name: value
+  on: [drupal.container_parameter]
+  description: "the value a services file's parameters block gives the container parameter, as written"
+
+edge_kinds:
+- kind: decorates_service
+  cause: none
+  description: "the service's decorates key names that service, which the container replaces with this one, passing the old one in as .inner"
+  from: drupal.service
+  to: drupal.service
+- kind: injects_parameter
+  cause: from
+  description: "the service's arguments or calls in services.yml name that container parameter, written %name%"
+  from: drupal.service
+  to: drupal.container_parameter
+
+rules:
+- rule: service_decorates
+  reads: file
+  in: [module_root, services_source]
+  match: &service_entry
+    file: '*.services'
+    filetype: yaml
+    each: services.*
+    where:
+    - id_matches: ^[^_]
+  id: {from: key}
+  emits:
+  - edge:
+      kind: decorates_service
+      from: this_node
+      to: {from: {key: decorates}}
+  confidence: declared
+
+- rule: service_call_arguments
+  reads: file
+  in: [module_root, services_source]
+  match: *service_entry
+  id: {from: key}
+  emits:
+  - edge:
+      kind: injects_service
+      from: this_node
+      to:
+        from: {key: calls.*.*.*}
+        pattern: '^@\??(?<service>[^@=].*)$'
+        template: '{service}'
+  confidence: declared
+
+# Read as text, inside one service's entry of the services block: Symfony resolves %name% in any
+# argument or call, alone or inside other text. %% is an escaped percent sign and names none.
+- rule: service_parameter_arguments
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: drupal_yml_text
+    text: '(?:^|[^%])%(?<parameter>[A-Za-z_][\w.\-]*)%'
+  values:
+    in_services: {from: {enclosing: services_block, capture: mark}}
+    service: {from: {enclosing: service_entry, capture: service}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{in_services}|{service}', normalize: [{replace: '^services\|', with: ''}]}
+  line: {capture: parameter}
+  emits:
+  - edge: {kind: injects_parameter, from: this_node, to: {template: '{parameter}'}}
+  confidence: declared
+
+# Read as text, since a data rule's attribute reads a key below the entry, not the entry's own
+# value. A key two spaces in, inside the parameters block, with its value on the same line.
+- rule: container_parameter_from_services_file
+  reads: file
+  in: [module_root, services_source]
+  match:
+    file: '*.services'
+    filetype: drupal_yml_text
+    text: '(?m)^  (?<name>[A-Za-z0-9_][\w.\-]*):[ \t]*(?<value>[^\s#][^\n#]*?)[ \t]*(?:#[^\n]*)?$'
+  values:
+    in_parameters: {from: {enclosing: parameters_block, capture: mark}}
+  id: {template: '{in_parameters}|{name}', normalize: [{replace: '^parameters\|', with: ''}]}
+  emits:
+  - node: {type: drupal.container_parameter}
+  - attribute: {name: value, template: '{value}'}
+  confidence: declared

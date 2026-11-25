@@ -1,0 +1,380 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An alter hook of a plugin type's definitions changes one plugin by its id. A plugin manager runs
+# hook x_alter on the array of its definitions, keyed by plugin id, when it names x with
+# $this->alterInfo('x'). Inside a method or function that implements such a hook:
+# - $definitions['<id>']['class'] = X::class; or = 'Drupal\x\Y'; and $definitions['<id>'] = [...]
+#   holding 'class' => X::class or 'class' => 'Drupal\x\Y' give replaces_plugin_class from the
+#   method or function to the plugin <id>, with the class's full name in the edge attribute class,
+#   and sets_plugin_class from the method or function to that class: Drupal builds the plugin
+#   from it. X is resolved through the file's use statements and namespace; a quoted name is a
+#   full name.
+# - unset($definitions['<id>']) gives removes_plugin to the plugin <id>: Drupal no longer has it.
+# - $definitions['<id>']['<key>'] = X::class; or a quoted class, for any key but class, as
+#   list_class or deriver, and one level deeper, as ['forms']['configure'], gives
+#   changes_plugin_definition to the plugin <id>, with the key, forms.configure, in the edge
+#   attribute definition_key and the class's full name in definition_value, and
+#   sets_plugin_definition_class to that class. Drupal still builds the plugin from its own class.
+# - $definitions['<id>']['field_types'][] = 'y'; in an alter hook of field widgets or formatters
+#   gives changes_plugin_definition to the plugin, definition_key field_types and definition_value
+#   y, and adds_plugin_field_type to the field type y: Drupal offers the widget or formatter for it.
+# Each edge sits at the line where the assignment or the unset starts.
+#
+# Which plugin the id names depends on the hook:
+# - a hook of a core plugin manager: the tables plugin_alter_types,
+#   plugin_alter_field_types_types and plugin_alter_short_names in pack.yaml, built from each
+#   manager in core 11 that calls alterInfo('x') with a quoted name (BlockManager and
+#   LayoutPluginManager through getType(), MigratePluginManager and the views managers by their
+#   type). A kind this pack maps on its own ends at its node, as drupal.plugin.field_type::path for
+#   field_info_alter; any other at the generic plugin named by the short name of the manager's
+#   attribute class, drupal.plugin_id::Filter::filter_html for filter_info_alter.
+# - a hook of a plugin manager the map holds: the generic plugin named by the short name of each
+#   plugin type its constructor manages, through registers_alter_hook and manages_plugin_type, so
+#   a plugin type this pack has never heard of works too.
+# A plugin no mapped file declares, such as a core plugin, ends at a referenced node of that kind.
+# Inferred: the hook, not the line, says which plugin type the array holds.
+#
+# Each change is read as text into an internal drupal.plugin_alter_site node,
+# <method or function>|$<array>|class|<id> or ...|unset|<id>, at the line where it starts,
+# with an internal edge to the class it names; the map rules below join it to the hook its method
+# or function implements, only when the array is a parameter of that method or function, so a
+# local array of the same shape gives nothing. The method's class is the one the file's path names
+# by Drupal's PSR-4 layout.
+#
+# Limits: a hook in none of the tables and not registered by a mapped manager gives nothing, as do
+# element_plugin_alter (its plugins are named by two attribute classes, RenderElement and
+# FormElement), entity_type_alter (entity types are objects, changed with ->setClass()) and
+# migration_plugins_alter, config_translation_info_alter, breakpoints_alter, help_topics_info_alter,
+# icon_pack_alter and the field type category alter (YAML plugins with no attribute name). An id or
+# a class in a variable, X::class written self::, static:: or parent::, the second and later items of unset($a['x'], $a['y']), and an array nested more than two levels
+# around 'class' give nothing. plugin_filter_TYPE_alter and plugin_filter_TYPE__CONSUMER_alter
+# remove a plugin only from one list of choices and give nothing.
+
+node_types:
+- name: drupal.plugin_alter_site
+  description: "internal: one change to a plugin definition, <method or function id>|$<array>|class|<plugin id> or <method or function id>|$<array>|unset|<plugin id>, at its line"
+  id_namespace: drupal.plugin_alter_site
+  internal: true
+- name: drupal.plugin_alter_class
+  description: "internal: the full name of a class a plugin definition change names"
+  id_namespace: drupal.plugin_alter_class
+  internal: true
+
+- name: drupal.plugin_alter_value
+  description: "internal: a text value a plugin definition change adds, as a field type id"
+  id_namespace: drupal.plugin_alter_value
+  internal: true
+
+edge_kinds:
+- kind: replaces_plugin_class
+  cause: from
+  description: "in an alter hook of the plugin type's definitions, the method or function sets the class of that plugin's definition, so Drupal builds the plugin from another class; the edge attribute class names it"
+  from: [php.method, php.function]
+  to: [drupal.plugin, drupal.local_task, drupal.local_action, drupal.contextual_link]
+- kind: removes_plugin
+  cause: from
+  description: "in an alter hook of the plugin type's definitions, the method or function unsets that plugin's definition, so Drupal no longer has the plugin"
+  from: [php.method, php.function]
+  to: [drupal.plugin, drupal.local_task, drupal.local_action, drupal.contextual_link]
+- kind: sets_plugin_class
+  cause: touch
+  description: "in an alter hook of a plugin type's definitions, the method or function makes that class the class of a plugin, which replaces_plugin_class at the same line names"
+  from: [php.method, php.function]
+  to: php.class
+- kind: changes_plugin_definition
+  cause: from
+  description: "in an alter hook of the plugin type's definitions, the method or function sets a key of that plugin's definition other than its class, named in the edge attribute definition_key"
+  from: [php.method, php.function]
+  to: [drupal.plugin, drupal.local_task, drupal.local_action, drupal.contextual_link]
+- kind: sets_plugin_definition_class
+  cause: touch
+  description: "in an alter hook of a plugin type's definitions, the method or function makes that class the value of a key of a plugin's definition other than class, as list_class or deriver"
+  from: [php.method, php.function]
+  to: php.class
+- kind: adds_plugin_field_type
+  cause: from
+  description: "in an alter hook of field widgets or formatters, the method or function adds that field type to a plugin's field_types, so Drupal offers the widget or formatter for it"
+  from: [php.method, php.function]
+  to: drupal.field_type
+- kind: plugin_alter_site_key_class
+  cause: none
+  description: "internal: the plugin definition change sets a key other than class to that class"
+  from: drupal.plugin_alter_site
+  to: drupal.plugin_alter_class
+- kind: plugin_alter_site_value
+  cause: none
+  description: "internal: the plugin definition change adds that text value"
+  from: drupal.plugin_alter_site
+  to: drupal.plugin_alter_value
+- kind: plugin_alter_site_class
+  cause: none
+  description: "internal: the plugin definition change names that class"
+  from: drupal.plugin_alter_site
+  to: drupal.plugin_alter_class
+
+edge_attributes:
+- name: class
+  on: [replaces_plugin_class]
+  description: "the full name of the class the alter hook sets for the plugin"
+- name: definition_key
+  on: [changes_plugin_definition, sets_plugin_definition_class]
+  description: "the key of the plugin's definition the alter hook sets, as list_class, with a dot between nested keys"
+- name: definition_value
+  on: [changes_plugin_definition]
+  description: "the value the alter hook sets under definition_key: a class's full name, or the field type field_types gains"
+
+rules:
+# The changes: $a['<id>']['class'] = X::class; or a quoted class, and $a['<id>'] = [...] or
+# array(...) holding 'class' => X::class or a quoted class, an id with no $ or # in it.
+- rule: plugin_alter_class_in_method
+  reads: file
+  in: [source]
+  match: &class_match
+    file: '**'
+    filetype: drupal_php_text
+    text: &class_text '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*(?:\[\s*[''"]class[''"]\s*\]\s*=(?!=)\s*(?:(?!(?:self|static|parent)::)\\?[A-Za-z_][\w\\]*::class\b|(?<q>[''"])\\{0,2}[A-Za-z_]\w*(?:\\{1,2}\w+)+(?P=q))\s*;|=(?!=)\s*(?:\[|array\s*\()(?:[^\[\]()]|\[[^\[\]]*\]|\([^()]*\))*?[''"]class[''"]\s*=>\s*(?:(?!(?:self|static|parent)::)\\?[A-Za-z_][\w\\]*::class\b|(?<q2>[''"])\\{0,2}[A-Za-z_]\w*(?:\\{1,2}\w+)+(?P=q2)))'
+  values: &method_value
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: 'php.method::{psr4_class}::{method}|${var}|class|{pid}'}
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+- rule: plugin_alter_class_in_function
+  reads: file
+  in: [source]
+  match: &class_function_match
+    file: '**'
+    filetype: drupal_php_text
+    ending: &module_endings [module, install, inc, theme, profile]
+    text: *class_text
+  values: &function_value
+    function: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: 'php.function::{function}|${var}|class|{pid}'}
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+# The class of a change, written X::class: resolved as PHP reads it.
+- rule: plugin_alter_constant_class_in_method
+  reads: file
+  in: [source]
+  match: &constant_match
+    file: '**'
+    filetype: drupal_php_text
+    text: &constant_text '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*(?:\[\s*[''"]class[''"]\s*\]\s*=(?!=)\s*(?!(?:self|static|parent)::)(?<c1>\\?[A-Za-z_][\w\\]*)::class\b\s*;|=(?!=)\s*(?:\[|array\s*\()(?:[^\[\]()]|\[[^\[\]]*\]|\([^()]*\))*?[''"]class[''"]\s*=>\s*(?!(?:self|static|parent)::)(?<c2>\\?[A-Za-z_][\w\\]*)::class\b)'
+  values:
+    <<: *method_value
+    class: {template: '{c1}{c2}'}
+  id: {template: 'php.method::{psr4_class}::{method}|${var}|class|{pid}'}
+  emits:
+  - edge: {kind: plugin_alter_site_class, from: this_node, to: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', types: [drupal.plugin_alter_class]}}
+  confidence: inferred
+
+- rule: plugin_alter_constant_class_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: *module_endings
+    text: *constant_text
+  values:
+    <<: *function_value
+    class: {template: '{c1}{c2}'}
+  id: {template: 'php.function::{function}|${var}|class|{pid}'}
+  emits:
+  - edge: {kind: plugin_alter_site_class, from: this_node, to: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment], separator: '\', types: [drupal.plugin_alter_class]}}
+  confidence: inferred
+
+# The class of a change written as quoted text: a full name, its leading and doubled backslashes
+# taken out.
+- rule: plugin_alter_quoted_class_in_method
+  reads: file
+  in: [source]
+  match: &quoted_match
+    file: '**'
+    filetype: drupal_php_text
+    text: &quoted_text '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*(?:\[\s*[''"]class[''"]\s*\]\s*=(?!=)\s*(?<q>[''"])\\{0,2}(?<n1>[A-Za-z_]\w*(?:\\{1,2}\w+)+)(?P=q)\s*;|=(?!=)\s*(?:\[|array\s*\()(?:[^\[\]()]|\[[^\[\]]*\]|\([^()]*\))*?[''"]class[''"]\s*=>\s*(?<q2>[''"])\\{0,2}(?<n2>[A-Za-z_]\w*(?:\\{1,2}\w+)+)(?P=q2))'
+  values:
+    <<: *method_value
+    class: {template: '{n1}{n2}', normalize: [{replace: '\\\\', with: '\'}]}
+  id: {template: 'php.method::{psr4_class}::{method}|${var}|class|{pid}'}
+  emits:
+  - edge: {kind: plugin_alter_site_class, from: this_node, to: {template: '{class}', types: [drupal.plugin_alter_class]}}
+  confidence: inferred
+
+- rule: plugin_alter_quoted_class_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: *module_endings
+    text: *quoted_text
+  values:
+    <<: *function_value
+    class: {template: '{n1}{n2}', normalize: [{replace: '\\\\', with: '\'}]}
+  id: {template: 'php.function::{function}|${var}|class|{pid}'}
+  emits:
+  - edge: {kind: plugin_alter_site_class, from: this_node, to: {template: '{class}', types: [drupal.plugin_alter_class]}}
+  confidence: inferred
+
+# unset($a['<id>']), the first item of the list.
+- rule: plugin_alter_unset_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: &unset_text '\bunset\(\s*\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*[,)]'
+  values: *method_value
+  id: {template: 'php.method::{psr4_class}::{method}|${var}|unset|{pid}'}
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+- rule: plugin_alter_unset_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: *module_endings
+    text: *unset_text
+  values: *function_value
+  id: {template: 'php.function::{function}|${var}|unset|{pid}'}
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+# A key other than class set to a class, $a['<id>']['<key>'] = X::class or a quoted class: the
+# site <method or function>|$<array>|key|<key>|<id>, and the class as the twins above read it.
+- rule: plugin_alter_key_in_method
+  reads: file
+  in: [source]
+  match: &key_constant_match {file: '**', filetype: drupal_php_text, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"](?<rawkey>(?!class[''"]\s*\])\w+(?:[''"]\s*\]\s*\[\s*[''"]\w+)?)[''"]\s*\]\s*=(?!=)\s*(?!(?:self|static|parent)::)(?<c1>\\?[A-Za-z_][\w\\]*)::class\b\s*;'}
+  values: {<<: *method_value, key: {template: '{rawkey}', normalize: [{replace: '[''"]\s*\]\s*\[\s*[''"]', with: '.'}]}, class: {template: '{c1}'}}
+  id: &key_method_id {template: 'php.method::{psr4_class}::{method}|${var}|key|{key}|{pid}'}
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+- rule: plugin_alter_edge_key_in_method
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"](?<rawkey>(?!class[''"]\s*\])\w+(?:[''"]\s*\]\s*\[\s*[''"]\w+)?)[''"]\s*\]\s*=(?!=)\s*(?!(?:self|static|parent)::)(?<c1>\\?[A-Za-z_][\w\\]*)::class\b\s*;'}
+  values: {<<: *method_value, key: {template: '{rawkey}', normalize: [{replace: '[''"]\s*\]\s*\[\s*[''"]', with: '.'}]}, class: {template: '{c1}'}}
+  id: {template: 'php.method::{psr4_class}::{method}|${var}|key|{key}|{pid}'}
+  emits: [{edge: {kind: plugin_alter_site_key_class, from: this_node, to: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', types: [drupal.plugin_alter_class]}}}]
+  confidence: inferred
+
+- rule: plugin_alter_key_in_function
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, ending: *module_endings, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"](?<rawkey>(?!class[''"]\s*\])\w+(?:[''"]\s*\]\s*\[\s*[''"]\w+)?)[''"]\s*\]\s*=(?!=)\s*(?!(?:self|static|parent)::)(?<c1>\\?[A-Za-z_][\w\\]*)::class\b\s*;'}
+  values: {<<: *function_value, key: {template: '{rawkey}', normalize: [{replace: '[''"]\s*\]\s*\[\s*[''"]', with: '.'}]}, class: {template: '{c1}'}}
+  id: &key_function_id {template: 'php.function::{function}|${var}|key|{key}|{pid}'}
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+- rule: plugin_alter_edge_key_in_function
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, ending: *module_endings, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"](?<rawkey>(?!class[''"]\s*\])\w+(?:[''"]\s*\]\s*\[\s*[''"]\w+)?)[''"]\s*\]\s*=(?!=)\s*(?!(?:self|static|parent)::)(?<c1>\\?[A-Za-z_][\w\\]*)::class\b\s*;'}
+  values: {<<: *function_value, key: {template: '{rawkey}', normalize: [{replace: '[''"]\s*\]\s*\[\s*[''"]', with: '.'}]}, class: {template: '{c1}'}}
+  id: {template: 'php.function::{function}|${var}|key|{key}|{pid}'}
+  emits: [{edge: {kind: plugin_alter_site_key_class, from: this_node, to: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment], separator: '\', types: [drupal.plugin_alter_class]}}}]
+  confidence: inferred
+
+- rule: plugin_alter_quoted_key_in_method
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"](?<rawkey>(?!class[''"]\s*\])\w+(?:[''"]\s*\]\s*\[\s*[''"]\w+)?)[''"]\s*\]\s*=(?!=)\s*(?<q>[''"])\\{0,2}(?<n1>[A-Za-z_]\w*(?:\\{1,2}\w+)+)(?P=q)\s*;'}
+  values: {<<: *method_value, key: {template: '{rawkey}', normalize: [{replace: '[''"]\s*\]\s*\[\s*[''"]', with: '.'}]}, class: {template: '{n1}', normalize: [{replace: '\\\\', with: '\'}]}}
+  id: *key_method_id
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+- rule: plugin_alter_edge_quoted_key_in_method
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"](?<rawkey>(?!class[''"]\s*\])\w+(?:[''"]\s*\]\s*\[\s*[''"]\w+)?)[''"]\s*\]\s*=(?!=)\s*(?<q>[''"])\\{0,2}(?<n1>[A-Za-z_]\w*(?:\\{1,2}\w+)+)(?P=q)\s*;'}
+  values: {<<: *method_value, key: {template: '{rawkey}', normalize: [{replace: '[''"]\s*\]\s*\[\s*[''"]', with: '.'}]}, class: {template: '{n1}', normalize: [{replace: '\\\\', with: '\'}]}}
+  id: *key_method_id
+  emits: [{edge: {kind: plugin_alter_site_key_class, from: this_node, to: {template: '{class}', types: [drupal.plugin_alter_class]}}}]
+  confidence: inferred
+
+- rule: plugin_alter_quoted_key_in_function
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, ending: *module_endings, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"](?<rawkey>(?!class[''"]\s*\])\w+(?:[''"]\s*\]\s*\[\s*[''"]\w+)?)[''"]\s*\]\s*=(?!=)\s*(?<q>[''"])\\{0,2}(?<n1>[A-Za-z_]\w*(?:\\{1,2}\w+)+)(?P=q)\s*;'}
+  values: {<<: *function_value, key: {template: '{rawkey}', normalize: [{replace: '[''"]\s*\]\s*\[\s*[''"]', with: '.'}]}, class: {template: '{n1}', normalize: [{replace: '\\\\', with: '\'}]}}
+  id: *key_function_id
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+- rule: plugin_alter_edge_quoted_key_in_function
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, ending: *module_endings, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"](?<rawkey>(?!class[''"]\s*\])\w+(?:[''"]\s*\]\s*\[\s*[''"]\w+)?)[''"]\s*\]\s*=(?!=)\s*(?<q>[''"])\\{0,2}(?<n1>[A-Za-z_]\w*(?:\\{1,2}\w+)+)(?P=q)\s*;'}
+  values: {<<: *function_value, key: {template: '{rawkey}', normalize: [{replace: '[''"]\s*\]\s*\[\s*[''"]', with: '.'}]}, class: {template: '{n1}', normalize: [{replace: '\\\\', with: '\'}]}}
+  id: *key_function_id
+  emits: [{edge: {kind: plugin_alter_site_key_class, from: this_node, to: {template: '{class}', types: [drupal.plugin_alter_class]}}}]
+  confidence: inferred
+
+# $a['<id>']['field_types'][] = 'y': the site <method or function>|$<array>|field_types|<id>.
+- rule: plugin_alter_field_types_in_method
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"]field_types[''"]\s*\]\s*\[\s*\]\s*=(?!=)\s*[''"](?<val>\w+)[''"]\s*;'}
+  values: *method_value
+  id: {template: 'php.method::{psr4_class}::{method}|${var}|field_types|{pid}'}
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+# $a['<id>']['field_types'][] = 'y': the site <method or function>|$<array>|field_types|<id>.
+- rule: plugin_alter_edge_field_types_in_method
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"]field_types[''"]\s*\]\s*\[\s*\]\s*=(?!=)\s*[''"](?<val>\w+)[''"]\s*;'}
+  values: *method_value
+  id: {template: 'php.method::{psr4_class}::{method}|${var}|field_types|{pid}'}
+  emits: [{edge: {kind: plugin_alter_site_value, from: this_node, to: {template: '{val}', types: [drupal.plugin_alter_value]}}}]
+  confidence: inferred
+
+- rule: plugin_alter_field_types_in_function
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, ending: *module_endings, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"]field_types[''"]\s*\]\s*\[\s*\]\s*=(?!=)\s*[''"](?<val>\w+)[''"]\s*;'}
+  values: *function_value
+  id: {template: 'php.function::{function}|${var}|field_types|{pid}'}
+  emits: [{node: {type: drupal.plugin_alter_site}}]
+  confidence: inferred
+
+- rule: plugin_alter_edge_field_types_in_function
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, ending: *module_endings, text: '\$(?<var>\w+)\[\s*[''"](?<pid>[^''"$#\s{\\][^''"${\\]*)[''"]\s*\]\s*\[\s*[''"]field_types[''"]\s*\]\s*\[\s*\]\s*=(?!=)\s*[''"](?<val>\w+)[''"]\s*;'}
+  values: *function_value
+  id: {template: 'php.function::{function}|${var}|field_types|{pid}'}
+  emits: [{edge: {kind: plugin_alter_site_value, from: this_node, to: {template: '{val}', types: [drupal.plugin_alter_value]}}}]
+  confidence: inferred
+
+# The joins. Each fires on a change whose method or function implements a hook its table lists,
+# and ends at matched_node, that method or function; the table's value gives the plugin's type,
+# ptype, or its short name. cpid is the id of a class change, upid of an unset; the other makes
+# nothing.
+- &row
+  rule: plugin_alter_typed
+  reads: map
+  match: &row_match
+    node_type: drupal.plugin_alter_site
+    where: &site [{id_matches: '^drupal\.plugin_alter_site::(?<owner>php\.\w+::(?<name>[^|]+))\|(?<var>\$\w+)\|(?:class\|(?<cpid>.+)|unset\|(?<upid>.+)|key\|(?<key>[\w.]+)\|(?<kpid>.+)|field_types\|(?<fpid>.+))$'}]
+    follow: [&cls {try: [{edge: plugin_alter_site_class}, {id_matches: '^drupal\.plugin_alter_class::(?<cls>.+)$'}]}, &kcls {try: [{edge: plugin_alter_site_key_class}, {id_matches: '^drupal\.plugin_alter_class::(?<kcls>.+)$'}]}, &fval {try: [{edge: plugin_alter_site_value}, {id_matches: '^drupal\.plugin_alter_value::(?<val>.+)$'}]}, &param {node: 'php.parameter::{name}::{var}'}, &owner {node: '{owner}'}, &hook {edge: implements_hook}, {id_matches: '^drupal\.hook::(?<hook>\w+)$'}, {in_table: {table: plugin_alter_types, capture: hook, value: ptype}}, *owner]
+  emits: [{edge: {kind: replaces_plugin_class, from: matched_node, to: {template: '{cpid}', types: ['{ptype}']}, attributes: &class_attribute {class: {template: '{cls}'}}}}, {edge: {kind: removes_plugin, from: matched_node, to: {template: '{upid}', types: ['{ptype}']}}}, &sets {edge: {kind: sets_plugin_class, from: matched_node, to: {template: '{cls}', types: [php.class]}}}, {edge: {kind: changes_plugin_definition, from: matched_node, to: {template: '{kpid}', types: ['{ptype}']}, attributes: &definition_attributes {definition_key: {template: '{key}'}, definition_value: {template: '{kcls}'}}}}, &sets_definition {edge: {kind: sets_plugin_definition_class, from: matched_node, to: {template: '{kcls}', types: [php.class]}, attributes: {definition_key: {template: '{key}'}}}}]
+  confidence: inferred
+- {<<: *row, rule: plugin_alter_field_types_typed, match: {<<: *row_match, follow: [*cls, *kcls, *fval, *param, *owner, *hook, {id_matches: '^drupal\.hook::(?<hook>\w+)$'}, {in_table: {table: plugin_alter_field_types_types, capture: hook, value: ptype}}, *owner]}, emits: [{edge: {kind: replaces_plugin_class, from: matched_node, to: {template: '{cpid}', types: ['{ptype}']}, attributes: *class_attribute}}, {edge: {kind: removes_plugin, from: matched_node, to: {template: '{upid}', types: ['{ptype}']}}}, *sets, {edge: {kind: changes_plugin_definition, from: matched_node, to: {template: '{kpid}', types: ['{ptype}']}, attributes: *definition_attributes}}, *sets_definition, {edge: {kind: changes_plugin_definition, from: matched_node, to: {template: '{fpid}', types: ['{ptype}']}, attributes: {definition_key: {template: 'field_types'}, definition_value: {template: '{val}'}}}}, {edge: {kind: adds_plugin_field_type, from: matched_node, to: {template: '{val}', types: [drupal.field_type]}}}]}
+
+# The other core plugin types: the generic plugin named by the short name of the manager's
+# attribute class, <short name>::<id>.
+- {<<: *row, rule: plugin_alter_core_type, match: {<<: *row_match, follow: [*cls, *kcls, *fval, *param, *owner, *hook, {id_matches: '^drupal\.hook::(?<hook>\w+)$'}, {in_table: {table: plugin_alter_short_names, capture: hook, value: short}}, *owner]}, emits: [{edge: {kind: replaces_plugin_class, from: matched_node, to: {template: '{short}::{cpid}', types: [drupal.discovered_plugin]}, attributes: *class_attribute}}, {edge: {kind: removes_plugin, from: matched_node, to: {template: '{short}::{upid}', types: [drupal.discovered_plugin]}}}, *sets, {edge: {kind: changes_plugin_definition, from: matched_node, to: {template: '{short}::{kpid}', types: [drupal.discovered_plugin]}, attributes: *definition_attributes}}, *sets_definition]}
+
+# A plugin manager the map holds: the hook its constructor registers with alterInfo, and the short
+# name of each plugin type that constructor manages.
+- {<<: *row, rule: plugin_alter_mapped_manager, match: {<<: *row_match, follow: [*cls, *kcls, *fval, *param, *owner, *hook, {incoming_edge: registers_alter_hook}, {edge: manages_plugin_type}, {id_matches: '^drupal\.plugin_type::(?:.*\\)?(?<short>\w+)$'}, *owner]}, emits: [{edge: {kind: replaces_plugin_class, from: matched_node, to: {template: '{short}::{cpid}', types: [drupal.discovered_plugin]}, attributes: *class_attribute}}, {edge: {kind: removes_plugin, from: matched_node, to: {template: '{short}::{upid}', types: [drupal.discovered_plugin]}}}, *sets, {edge: {kind: changes_plugin_definition, from: matched_node, to: {template: '{short}::{kpid}', types: [drupal.discovered_plugin]}, attributes: *definition_attributes}}, *sets_definition]}

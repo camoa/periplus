@@ -1,0 +1,66 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A static load, loadMultiple or create call on a class the map holds as an entity type's class, as
+# MyEntity::load(1) on a module's own entity class: a uses_entity_type edge from the method or
+# function around the call to the class's entity type, at the line of each such call. Each call is
+# an internal drupal.static_entity_call_site node at its line, <class>::<method>|<called class>::
+# <name> in a method and <function>|<called class>::<name> in a function, the called class
+# resolved through the file's use statements and namespace as php_basic's calls edge resolves it;
+# entity_class_static_call_mapped joins the class through entity_type_of_class
+# (entity_type/entity_type_of_class.yaml). A class the table entity_classes lists is read by
+# entity_class_static_call (call/call.yaml). Inferred, as entity_class_static_call: the method's
+# name, not the file, says it loads entities.
+#
+# Limits: a call on a subclass of an entity class, or through self:: or static::, makes no edge.
+
+node_types:
+- name: drupal.static_entity_call_site
+  id_namespace: drupal.static_entity_call_site
+  internal: true
+  description: "internal: a static load, loadMultiple or create call on a written class in one method or function, at the call's line"
+
+rules:
+- rule: static_entity_call_site_in_method
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: name, pattern: 'load|loadMultiple|create'}
+    - name_matches: &written_class {child: scope, pattern: '(?!(?:self|static|parent)$)\\?(?:\w+\\)*\w+'}
+    - within: [method_declaration]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, {qualified: scope}]
+    template: '{enclosing_type}::{enclosing_method}|{scope}::{declared_name}'
+  emits: &call_site [{node: {type: drupal.static_entity_call_site}}]
+  confidence: declared
+
+- rule: static_entity_call_site_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: scoped_call_expression
+    name_child: name
+    filetype: php
+    holder: function_definition
+    where:
+    - name_matches: {child: name, pattern: 'load|loadMultiple|create'}
+    - name_matches: *written_class
+  id:
+    from: [enclosing_type, declared_name, {qualified: scope}]
+    template: '{enclosing_type}|{scope}::{declared_name}'
+  emits: *call_site
+  confidence: declared
+
+- rule: entity_class_static_call_mapped
+  reads: map
+  match:
+    node_type: drupal.static_entity_call_site
+    where: [{id_matches: '^drupal\.static_entity_call_site::(?<owner>[^|]+)\|(?<class>.+)::(?:load|loadMultiple|create)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: uses_entity_type, from: {template: '{owner}', types: [php.method, php.function]}, to: matched_node}}]
+  confidence: inferred

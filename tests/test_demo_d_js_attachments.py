@@ -83,8 +83,8 @@ def document(tmp_path: Path) -> dict[str, list[dict[str, object]]]:
     (module / "src" / "Controller").mkdir(parents=True)
     (tmp_path / ".periplus").mkdir()
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - js_basic@0.0.1\n"
-        "  - drupal_js_basic@0.0.1\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n  - js_basic@0.0.2\n"
+        "  - drupal_js_basic@0.1.0\n"
     )
     (module / "mymodule.info.yml").write_text(
         "name: My module\ntype: module\ncore_version_requirement: ^10\n"
@@ -175,8 +175,8 @@ def inc_document(tmp_path: Path) -> dict[str, list[dict[str, object]]]:
     (module / "js").mkdir(parents=True)
     (tmp_path / ".periplus").mkdir()
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - js_basic@0.0.1\n"
-        "  - drupal_js_basic@0.0.1\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n  - js_basic@0.0.2\n"
+        "  - drupal_js_basic@0.1.0\n"
     )
     (module / "mymodule.info.yml").write_text(
         "name: My module\ntype: module\ncore_version_requirement: ^10\n"

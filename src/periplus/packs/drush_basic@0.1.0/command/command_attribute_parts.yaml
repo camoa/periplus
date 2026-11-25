@@ -1,0 +1,98 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# What a command's attributes declare beside its name, read as text between the Command attribute,
+# #[CLI\Command(name: 'x', ...)], and the function keyword of its method (the span
+# drush_command_attributes in this pack's manifest):
+# - each text of the Command attribute's aliases list, #[CLI\Command(name: 'x', aliases: ['y'])],
+#   as a drush.command_alias y with alias_of_command to x;
+# - each #[CLI\Option(name: 'o')] as a drush.command_option x|o with option_of_command to x;
+# - each #[CLI\Argument(name: 'a')] as a drush.command_argument x|a with argument_of_command to x.
+# The attribute is written CLI\Command, Command or Drush\Attributes\Command, as a command file
+# imports it. Each is declared: the attribute states it.
+#
+# Limits: an attribute written before the Command attribute on the same method, a name that is not
+# a text literal, and a Usage attribute give nothing.
+
+rules:
+- rule: command_alias_from_attribute
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [string]
+    text: '[''"](?<alias>[\w:.-]+)[''"]'
+  values: &in_aliases
+    command: {from: {enclosing: drush_command_attributes, capture: command}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    aliases: {from: {enclosing: drush_aliases, capture: mark}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{alias}|{command}|{aliases}', normalize: [{replace: '\|.*$', with: ''}]}
+  line: {capture: alias}
+  emits: [{node: {type: drush.command_alias}}]
+  confidence: declared
+
+- rule: command_alias_from_attribute_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [string]
+    text: '[''"](?<alias>[\w:.-]+)[''"]'
+  values: *in_aliases
+  id: {template: '{alias}|{command}|{aliases}', normalize: [{replace: '\|.*$', with: ''}]}
+  line: {capture: alias}
+  emits: [{edge: {kind: alias_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+- rule: command_option_from_attribute
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[\s*(?:CLI\\|\\?Drush\\Attributes\\)?Option\(\s*name:\s*[''"](?<option>[^''"]+)[''"]'
+  values: &in_command
+    command: {from: {enclosing: drush_command_attributes, capture: command}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{node: {type: drush.command_option}}]
+  confidence: declared
+
+- rule: command_option_from_attribute_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[\s*(?:CLI\\|\\?Drush\\Attributes\\)?Option\(\s*name:\s*[''"](?<option>[^''"]+)[''"]'
+  values: *in_command
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{edge: {kind: option_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+- rule: command_argument_from_attribute
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[\s*(?:CLI\\|\\?Drush\\Attributes\\)?Argument\(\s*name:\s*[''"](?<argument>[^''"]+)[''"]'
+  values: *in_command
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{node: {type: drush.command_argument}}]
+  confidence: declared
+
+- rule: command_argument_from_attribute_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[\s*(?:CLI\\|\\?Drush\\Attributes\\)?Argument\(\s*name:\s*[''"](?<argument>[^''"]+)[''"]'
+  values: *in_command
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{edge: {kind: argument_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared

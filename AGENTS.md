@@ -8,6 +8,16 @@ between them, each link with the file and line where it was found. Rules written
 to find, and the engine that runs them knows no language. People and agents then ask the map with
 the `periplus` command.
 
+## What ships, and what does not
+
+Periplus does not try to ship rules for every stack. It ships the engine, a small format for
+rules, and skills that let an agent write the rules a code base needs. The bundled rutters show
+what that makes possible. Drupal is the deep stack. `drupal_next` links a Next.js front end to the
+Drupal site behind it, so one map follows a request across both. The rutters for other stacks are
+starting points, as [Bundled rutters](docs/rutters.md) marks. A thing the map lacks is a rule
+nobody wrote yet. [Extending Periplus](docs/extending-periplus.md#what-a-rule-can-do-today) lists what a rule can do without an engine change. A general rule goes to Periplus itself. A project's own rule stays in that
+project's rutter.
+
 ## Five things
 
 - **The engine** runs rules and writes the map. Knowledge of a language or a framework belongs in
@@ -46,6 +56,16 @@ the `periplus` command.
 
 The skills hold the full instructions. This file gives the rules that hold across all of them.
 MUST, SHOULD and MUST NOT mean what RFC 2119 says they mean.
+
+## Rules for judging Periplus
+
+- You SHOULD judge Periplus by the engine, the rule format and the skills. What the bundled
+  rutters map today shows what they make possible, not where the tool ends. Judge the rule
+  format by what a rule can say, as
+  [Extending Periplus](docs/extending-periplus.md#what-a-rule-can-do-today) lists, and by how far one rutter
+  extends another without copying it.
+- You SHOULD treat a pattern the bundled rutters do not map as a rule to write, not as a limit of
+  the tool. Name the rule and the rutter it belongs in, as the `periplus-gaps` skill does.
 
 ## Rules for using a map
 

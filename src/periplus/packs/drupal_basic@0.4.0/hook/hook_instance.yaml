@@ -1,0 +1,214 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A hook whose name fills in a placeholder of a hook core documents, linked to that pattern hook:
+# node_insert is an instance of ENTITY_TYPE_insert, form_user_login_form_alter of
+# form_FORM_ID_alter. An implementation lands on the concrete hook (hook/hook.yaml,
+# hook/hook_attribute.yaml); core's *.api.php file documents the pattern, hook_ENTITY_TYPE_insert,
+# which hook/hook_api.yaml names ENTITY_TYPE_insert when a mapped api file holds it, else a
+# referenced node. The patterns are every function hook_<name> with a placeholder in capitals in
+# core 11.4's *.api.php files outside tests:
+#
+#   lib/Drupal/Core/Entity/entity.api.php     ENTITY_TYPE_<operation> (22 operations),
+#                                             entity_query_ENTITY_TYPE_alter,
+#                                             entity_query_tag__ENTITY_TYPE__TAG_alter,
+#                                             entity_query_tag__TAG_alter
+#   lib/Drupal/Core/Form/form.api.php         form_FORM_ID_alter, form_BASE_FORM_ID_alter
+#   lib/Drupal/Core/Render/theme.api.php      preprocess_HOOK, theme_suggestions_HOOK,
+#                                             theme_suggestions_HOOK_alter
+#   lib/Drupal/Core/Database/database.api.php query_TAG_alter
+#   lib/Drupal/Core/Plugin/plugin.api.php     plugin_filter_TYPE_alter,
+#                                             plugin_filter_TYPE__CONSUMER_alter
+#   modules/field/field.api.php               field_widget_single_element_WIDGET_TYPE_form_alter,
+#                                             field_widget_complete_WIDGET_TYPE_form_alter
+#   modules/block/block.api.php               block_view_BASE_BLOCK_ID_alter,
+#                                             block_build_BASE_BLOCK_ID_alter
+#   modules/jsonapi/jsonapi.api.php           jsonapi_ENTITY_TYPE_filter_access
+#   modules/language/language.api.php        language_fallback_candidates_OPERATION_alter
+#   modules/migrate/migrate.api.php           migrate_MIGRATION_ID_prepare_row
+#
+# update_N and post_update_NAME are left out: hook/hook.yaml already names those hooks so.
+#
+# How a name is read:
+# - Inferred, when the placeholder part is a thing the map knows: an entity type id the table
+#   entity_type_ids lists, or one the map holds with a class, a bundle or a field storage, as
+#   hook/hook_known.yaml binds ENTITY_TYPE; a form id a mapped class's getFormId() returns, with
+#   form_has_id; for BASE_FORM_ID, <entity type>_form, the base form id core's entity forms give;
+#   a theme hook, a field widget plugin, a block plugin or a migration the map holds. A theme hook
+#   is read without its suggestion, preprocess_node__article giving node, as
+#   theme_hook/preprocess_theme_hook.yaml reads it. An ENTITY_TYPE_<operation> hook is linked
+#   only when hook/hook.yaml's hook_acts_on_entity_type already joins it to that entity type, so its
+#   exclusions hold here too.
+# - Mentioned, by the name's shape alone, when the placeholder part is not known and no other
+#   pattern fits the shape: form_X_alter (not when X is <known entity type>_form, which is the
+#   base form), preprocess_X, theme_suggestions_X not ending in _alter, query_X_alter,
+#   entity_query_tag__X_alter with no __ in X, plugin_filter_X_alter and
+#   plugin_filter_X__Y_alter, field_widget_..._X_form_alter, block_view_X_alter,
+#   block_build_X_alter, language_fallback_candidates_X_alter and migrate_X_prepare_row.
+# - Not linked: an ENTITY_TYPE_<operation>, entity_query_X_alter, jsonapi_X_filter_access or
+#   entity_query_tag__X__Y_alter name whose X is no known entity type, since any hook may end in
+#   _insert or _access (node_mass_update reads as entity type node_mass, which no table lists); and
+#   theme_suggestions_X_alter when X is no theme hook the map holds, since it may also be
+#   theme_suggestions_HOOK with a hook named X_alter.
+#
+# A hook named only by a Hook attribute is a referenced node, and a map rule starts only at a node a
+# file rule found, so hook_from_attribute_text gives it a node at the attribute's line.
+#
+# False results to know about: a placeholder part read by shape alone, such as a helper named
+# mymodule_query_x_alter, is linked with confidence mentioned; a form id the map does not hold may
+# be a base form id, linked to form_FORM_ID_alter.
+
+edge_kinds:
+- kind: instance_of_hook
+  realizes: true
+  description: "the hook fills in a placeholder of that hook core documents, as node_insert of ENTITY_TYPE_insert; inferred when the map knows the part, mentioned by the name's shape alone"
+  from: drupal.hook
+  to: drupal.hook
+
+rules:
+# #[Hook('node_insert')] and #[Hook(hook: 'x')], with or without the namespace, after the named
+# arguments method, module or order: the hook node, at its name's line.
+- rule: hook_from_attribute_text
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[(?:\\Drupal\\Core\\Hook\\Attribute\\)?Hook\((?:\s*(?:method|module|order)\s*:(?:[^,()\[\]]|\([^()]*\)|\[[^\[\]]*\])*,)*\s*(?:hook:\s*)?[''"](?<hook>\w+)[''"]'
+  id: {template: '{hook}'}
+  line: {capture: hook}
+  emits: [{node: {type: drupal.hook}}]
+  confidence: declared
+
+# --- ENTITY_TYPE -------------------------------------------------------------------------------
+
+# ENTITY_TYPE_<operation>, on hook_acts_on_entity_type's entity type, listed in entity_type_ids.
+- &entity_row
+  rule: entity_type_operation_instance_by_table
+  reads: map
+  match: &entity_op
+    node_type: drupal.hook
+    where:
+    - &op_name {id_matches: '^drupal\.hook::(?<etype>\w+?)_(?<op>access|create_access|create|presave|insert|update|predelete|delete|load|storage_load|view|view_alter|build_defaults_alter|prepare_form|field_values_init|duplicate|revision_create|revision_delete|translation_create|translation_insert|translation_delete|form_mode_alter|view_mode_alter)$'}
+    - &etype_listed {in_table: {table: entity_type_ids, capture: etype}}
+    follow: &acts_on [{edge: hook_acts_on_entity_type}, {id_matches: '^drupal\.entity_type::{etype}$'}]
+  emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'ENTITY_TYPE_{op}', types: [drupal.hook]}}}]
+  confidence: inferred
+# The same on an entity type the map holds with a class, a bundle or a field storage.
+- {<<: *entity_row, rule: entity_type_operation_instance_by_class, match: {<<: *entity_op, where: [*op_name], follow: [{edge: hook_acts_on_entity_type}, {id_matches: '^drupal\.entity_type::{etype}$'}, &by_class {edge: entity_class}]}}
+- {<<: *entity_row, rule: entity_type_operation_instance_by_bundle, match: {<<: *entity_op, where: [*op_name], follow: [{edge: hook_acts_on_entity_type}, {id_matches: '^drupal\.entity_type::{etype}$'}, &by_bundle {incoming_edge: bundle_of}]}}
+- {<<: *entity_row, rule: entity_type_operation_instance_by_storage, match: {<<: *entity_op, where: [*op_name], follow: [{edge: hook_acts_on_entity_type}, {id_matches: '^drupal\.entity_type::{etype}$'}, &by_storage {incoming_edge: storage_of}]}}
+
+# entity_query_ENTITY_TYPE_alter, jsonapi_ENTITY_TYPE_filter_access and
+# entity_query_tag__ENTITY_TYPE__TAG_alter: the entity type listed, or held with a class, a bundle
+# or a field storage.
+- &named_entity_row
+  rule: entity_query_instance_by_table
+  reads: map
+  match: &entity_query
+    node_type: drupal.hook
+    where: [&entity_query_name {id_matches: '^drupal\.hook::entity_query_(?!tag__)(?<etype>\w+)_alter$'}, *etype_listed]
+  emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'entity_query_ENTITY_TYPE_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+- {<<: *named_entity_row, rule: entity_query_instance_by_class, match: {<<: *entity_query, where: [*entity_query_name], follow: [&entity_node {node: 'drupal.entity_type::{etype}'}, *by_class]}}
+- {<<: *named_entity_row, rule: entity_query_instance_by_bundle, match: {<<: *entity_query, where: [*entity_query_name], follow: [*entity_node, *by_bundle]}}
+- {<<: *named_entity_row, rule: entity_query_instance_by_storage, match: {<<: *entity_query, where: [*entity_query_name], follow: [*entity_node, *by_storage]}}
+- &jsonapi_row {<<: *named_entity_row, rule: jsonapi_filter_access_instance_by_table, match: &jsonapi {node_type: drupal.hook, where: [&jsonapi_name {id_matches: '^drupal\.hook::jsonapi_(?<etype>\w+)_filter_access$'}, *etype_listed]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'jsonapi_ENTITY_TYPE_filter_access', types: [drupal.hook]}}}]}
+- {<<: *jsonapi_row, rule: jsonapi_filter_access_instance_by_class, match: {<<: *jsonapi, where: [*jsonapi_name], follow: [*entity_node, *by_class]}}
+- {<<: *jsonapi_row, rule: jsonapi_filter_access_instance_by_bundle, match: {<<: *jsonapi, where: [*jsonapi_name], follow: [*entity_node, *by_bundle]}}
+- {<<: *jsonapi_row, rule: jsonapi_filter_access_instance_by_storage, match: {<<: *jsonapi, where: [*jsonapi_name], follow: [*entity_node, *by_storage]}}
+- &tag_row {<<: *named_entity_row, rule: entity_query_tag_instance_by_table, match: &entity_query_tag {node_type: drupal.hook, where: [&entity_query_tag_name {id_matches: '^drupal\.hook::entity_query_tag__(?<etype>\w+?)__\w+_alter$'}, *etype_listed]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'entity_query_tag__ENTITY_TYPE__TAG_alter', types: [drupal.hook]}}}]}
+- {<<: *tag_row, rule: entity_query_tag_instance_by_class, match: {<<: *entity_query_tag, where: [*entity_query_tag_name], follow: [*entity_node, *by_class]}}
+- {<<: *tag_row, rule: entity_query_tag_instance_by_bundle, match: {<<: *entity_query_tag, where: [*entity_query_tag_name], follow: [*entity_node, *by_bundle]}}
+- {<<: *tag_row, rule: entity_query_tag_instance_by_storage, match: {<<: *entity_query_tag, where: [*entity_query_tag_name], follow: [*entity_node, *by_storage]}}
+
+# --- Forms -------------------------------------------------------------------------------------
+
+# form_<id>_alter where a mapped form class returns <id>.
+- rule: form_id_alter_instance
+  reads: map
+  match:
+    node_type: drupal.hook
+    where: [{id_matches: '^drupal\.hook::form_(?<fid>\w+)_alter$'}]
+    follow: [{node: 'drupal.form_id::{fid}'}, {incoming_edge: form_has_id}]
+  emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'form_FORM_ID_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+
+# form_<entity type>_form_alter: the base form id of that entity type's forms.
+- &base_form_row
+  rule: base_form_id_alter_instance_by_table
+  reads: map
+  match: &base_form
+    node_type: drupal.hook
+    where: [&base_form_name {id_matches: '^drupal\.hook::form_(?<etype>\w+)_form_alter$'}, *etype_listed]
+  emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'form_BASE_FORM_ID_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+- {<<: *base_form_row, rule: base_form_id_alter_instance_by_class, match: {<<: *base_form, where: [*base_form_name], follow: [*entity_node, *by_class]}}
+- {<<: *base_form_row, rule: base_form_id_alter_instance_by_bundle, match: {<<: *base_form, where: [*base_form_name], follow: [*entity_node, *by_bundle]}}
+- {<<: *base_form_row, rule: base_form_id_alter_instance_by_storage, match: {<<: *base_form, where: [*base_form_name], follow: [*entity_node, *by_storage]}}
+
+# form_<id>_alter by its shape, when no mapped class returns <id> and <id> is no base form id. etype
+# is the id less a closing _form, or the whole id.
+- rule: form_id_alter_instance_by_shape
+  reads: map
+  match:
+    node_type: drupal.hook
+    where:
+    - id_matches: '^drupal\.hook::form_(?<fid>(?<etype>\w+?)(?:_form)?)_alter$'
+    - not_in_table: {table: entity_type_ids, capture: etype}
+    unless:
+    - [{node: 'drupal.form_id::{fid}'}, {incoming_edge: form_has_id}]
+    - [*entity_node, *by_class]
+    - [*entity_node, *by_bundle]
+    - [*entity_node, *by_storage]
+  emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'form_FORM_ID_alter', types: [drupal.hook]}}}]
+  confidence: mentioned
+
+# --- Theme hooks -------------------------------------------------------------------------------
+
+# preprocess_<hook> and preprocess_<hook>__<suggestion>, on a theme hook the map holds.
+- &theme_row
+  rule: preprocess_instance
+  reads: map
+  match: &preprocess
+    node_type: drupal.hook
+    where: [&preprocess_name {id_matches: '^drupal\.hook::preprocess_(?<th>[a-z0-9_]+?)(?:__\w+)?$'}]
+    follow: [&theme_hook {node: 'drupal.theme_hook::{th}'}]
+  emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'preprocess_HOOK', types: [drupal.hook]}}}]
+  confidence: inferred
+- {<<: *theme_row, rule: preprocess_instance_by_shape, match: {node_type: drupal.hook, where: [*preprocess_name], unless: [[*theme_hook]]}, confidence: mentioned}
+- {<<: *theme_row, rule: theme_suggestions_alter_instance, match: {node_type: drupal.hook, where: [{id_matches: '^drupal\.hook::theme_suggestions_(?<th>\w+)_alter$'}], follow: [*theme_hook]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'theme_suggestions_HOOK_alter', types: [drupal.hook]}}}]}
+- &suggestions_row {<<: *theme_row, rule: theme_suggestions_instance, match: &suggestions {node_type: drupal.hook, where: [{id_matches: '^drupal\.hook::theme_suggestions_(?<th>\w+)$'}], follow: [*theme_hook]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'theme_suggestions_HOOK', types: [drupal.hook]}}}]}
+- {<<: *suggestions_row, rule: theme_suggestions_instance_by_shape, match: {node_type: drupal.hook, where: [{id_matches: '^drupal\.hook::theme_suggestions_(?<th>(?!\w*_alter$)\w+)$'}], unless: [[*theme_hook]]}, confidence: mentioned}
+
+# --- Plugins and migrations --------------------------------------------------------------------
+
+# field_widget_single_element_<widget>_form_alter and field_widget_complete_<widget>_form_alter.
+- &plugin_row
+  rule: field_widget_form_alter_instance
+  reads: map
+  match: &widget
+    node_type: drupal.hook
+    where: [&widget_name {id_matches: '^drupal\.hook::field_widget_(?<form>single_element|complete)_(?<part>\w+)_form_alter$'}]
+    follow: [&widget_node {node: 'drupal.plugin.field_widget::{part}'}]
+  emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'field_widget_{form}_WIDGET_TYPE_form_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+- {<<: *plugin_row, rule: field_widget_form_alter_instance_by_shape, match: {node_type: drupal.hook, where: [*widget_name], unless: [[*widget_node]]}, confidence: mentioned}
+# block_view_<base id>_alter and block_build_<base id>_alter.
+- &block_row {<<: *plugin_row, rule: block_alter_instance, match: &block {node_type: drupal.hook, where: [&block_name {id_matches: '^drupal\.hook::block_(?<phase>view|build)_(?<part>\w+)_alter$'}], follow: [&block_node {node: 'drupal.plugin.block::{part}'}]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'block_{phase}_BASE_BLOCK_ID_alter', types: [drupal.hook]}}}]}
+- {<<: *block_row, rule: block_alter_instance_by_shape, match: {node_type: drupal.hook, where: [*block_name], unless: [[*block_node]]}, confidence: mentioned}
+# migrate_<migration>_prepare_row.
+- &migrate_row {<<: *plugin_row, rule: migrate_prepare_row_instance, match: &migrate {node_type: drupal.hook, where: [&migrate_name {id_matches: '^drupal\.hook::migrate_(?<part>\w+)_prepare_row$'}], follow: [&migration_node {node: 'drupal.migration::{part}'}]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'migrate_MIGRATION_ID_prepare_row', types: [drupal.hook]}}}]}
+- {<<: *migrate_row, rule: migrate_prepare_row_instance_by_shape, match: {node_type: drupal.hook, where: [*migrate_name], unless: [[*migration_node]]}, confidence: mentioned}
+
+# --- Shapes alone: tags, plugin type ids and language operations, which no rule maps ----------
+
+- &shape_row
+  rule: query_tag_alter_instance_by_shape
+  reads: map
+  match: {node_type: drupal.hook, where: [{id_matches: '^drupal\.hook::query_\w+_alter$'}]}
+  emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'query_TAG_alter', types: [drupal.hook]}}}]
+  confidence: mentioned
+- {<<: *shape_row, rule: entity_query_tag_alter_instance_by_shape, match: {node_type: drupal.hook, where: [{id_matches: '^drupal\.hook::entity_query_tag__(?:(?!__)\w)+_alter$'}]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'entity_query_tag__TAG_alter', types: [drupal.hook]}}}]}
+- {<<: *shape_row, rule: plugin_filter_alter_instance_by_shape, match: {node_type: drupal.hook, where: [{id_matches: '^drupal\.hook::plugin_filter_(?:(?!__)\w)+_alter$'}]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'plugin_filter_TYPE_alter', types: [drupal.hook]}}}]}
+- {<<: *shape_row, rule: plugin_filter_consumer_alter_instance_by_shape, match: {node_type: drupal.hook, where: [{id_matches: '^drupal\.hook::plugin_filter_(?:(?!__)\w)+__(?:(?!__)\w)+_alter$'}]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'plugin_filter_TYPE__CONSUMER_alter', types: [drupal.hook]}}}]}
+- {<<: *shape_row, rule: language_fallback_alter_instance_by_shape, match: {node_type: drupal.hook, where: [{id_matches: '^drupal\.hook::language_fallback_candidates_\w+_alter$'}]}, emits: [{edge: {kind: instance_of_hook, from: this_node, to: {template: 'language_fallback_candidates_OPERATION_alter', types: [drupal.hook]}}}]}

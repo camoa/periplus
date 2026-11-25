@@ -260,7 +260,7 @@ def test_the_map_file_is_unchanged_by_the_shared_counts_and_write_functions_wo1(
     root = tmp_path
     (root / ".periplus").mkdir(exist_ok=True)
     (root / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [php_basic@0.2.0]\n", encoding="utf-8"
+        "periplus_version: 0\npacks: [php_basic@0.3.0]\n", encoding="utf-8"
     )
     (root / "src").mkdir()
     (root / "src" / "Greeter.php").write_text(
@@ -287,7 +287,7 @@ def test_the_map_file_is_unchanged_by_the_shared_counts_and_write_functions_wo1(
     assert {k: v for k, v in document.items() if k != "generated_by"} == {
         "periplus_map_version": 0,
         "cause_none_kinds": ["contains"],
-        "packs": [{"pack": "php_basic", "version": "0.2.0"}],
+        "packs": [{"pack": "php_basic", "version": "0.3.0"}],
         "settings": ".periplus/settings.yml",
         "roots": ["."],
         "type_hierarchy": [

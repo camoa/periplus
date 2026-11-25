@@ -2,7 +2,7 @@
 
 A tree rule can test the text of any child of its match, not only the name. A tree declaration
 rule can also require that its id source fit a pattern, and start or end an edge at the node
-another rule declares at the same match. No worked example below is Drupal. `tests/test_demo_b_tree_rules.py`, `tests/test_declared_end.py` and `tests/test_property_type_sources.py` map planted rutters that use these abilities. The last section reads a class constant as a call's argument.
+another rule declares at the same match. No worked example below is Drupal. `tests/test_demo_b_tree_rules.py`, `tests/test_declared_end.py` and `tests/test_property_type_sources.py` map planted rutters that use these abilities. An annotation rule can fire on every entry of a group nested in a docblock annotation. The last section reads a class constant as a call's argument.
 
 ## A call tested on its class and its method
 
@@ -101,7 +101,7 @@ settings value, and the id pattern names it in braces:
 ```yaml
 periplus_version: 0
 packs:
-  - php_basic@0.2.0
+  - php_basic@0.3.0
   - wp_prefix@0.0.1
 values:
   plugin: acme
@@ -323,9 +323,12 @@ as an id source, the name is the one the first rule minting a type not marked `i
 `enclosing_class` takes, among the holder rules that fire on the nearest holder, the first of a
 type the edge kind allows.
 
-Two `where` conditions of a tree declaration rule read the tree nodes from the match up to its
-nearest holder, that holder included. `within: [<node type>, ...]` passes a match only when one of
-those nodes has one of the types; `not_within: [<node type>, ...]` passes it only when none has.
+Two `where` conditions of a tree declaration or reference rule read the tree nodes from the match's
+parent up to its nearest holder, that holder included; the match's own type is not among them.
+`within: [<node type>, ...]` passes a match only when one of those nodes has one of the types;
+`not_within: [<node type>, ...]` passes it only when none has. The type names are not checked
+against the grammar when the rutter loads, so a misspelt type in `within` never holds, and one in
+`not_within` never leaves a match out.
 With no holder, the nodes run up to the file's root, or to a node that holds a body no rule fires
 on. A holder above the nearest one is never read. Two rules then split one shape, a call in a
 method's own body and a call in a closure inside it:
@@ -390,6 +393,151 @@ source is then only a condition, and an edge rule can use it to start at the pro
 attribute template may name the value too
 ([An attribute on a declaration rule's node](rutter-author-guide-references.md#an-attribute-on-a-declaration-rules-node)).
 
+## Every entry of a group in a docblock annotation
+
+This block is not a worked example; `tests/test_annotation_each.py` runs the same shapes.
+
+An annotation rule reads the keys at the top level of the annotation's body. With `match.each`,
+it fires once for each entry of a group nested in the body instead. The path is keys joined by
+dots that end in a star, as a data rule's `each` does, so `parts.panel.*` is each entry of the
+`panel` group inside `parts`. One more star may stand for any group's key: `parts.*.*` is each
+entry of every group inside `parts`, and the templates name that group's key `group`. A path part
+is any key the annotation may hold, quoted or bare, so `sub-parts.*` reads the quoted key
+`"sub-parts"`; a key that itself holds a dot or a star cannot be named in a path. A path without
+the last star, with a third star, with an empty part, or with a star inside a part, is refused at
+load, and so is a template that names `group` when the path has no second star.
+
+```text
+/**
+ * @Thing(
+ *   id = "invoice",
+ *   parts = {
+ *     "list" = "Acme\InvoiceList",
+ *     "panel" = {
+ *       "add" = "Acme\InvoiceAddPanel",
+ *       "edit" = "Acme\InvoiceEditPanel",
+ *     },
+ *   },
+ * )
+ */
+class Invoice {}
+```
+
+```yaml
+- rule: panel_entry
+  reads: file
+  in: [source]
+  match: {annotation: Thing, each: parts.panel.*, filetype: php, where: [{applies_to: class_declaration}]}
+  id: {template: '{enclosing_type}|panel|{key}'}
+  emits: [{node: {type: acme.entry}}]
+  confidence: declared
+- rule: panel_entry_class
+  reads: file
+  in: [source]
+  match: {annotation: Thing, each: parts.panel.*, filetype: php, where: [{applies_to: class_declaration}]}
+  id: {template: '{enclosing_type}|panel|{key}'}
+  emits: [{edge: {kind: entry_names_class, from: this_node, to: {template: '{value}'}}}]
+  confidence: declared
+```
+
+Two rules, because a rule that emits an edge emits no node. They make
+`acme.entry::Acme\Invoice|panel|add` and `acme.entry::Acme\Invoice|panel|edit`, each at the line
+of its own key, and an edge from each to the class its value names. The rule's
+templates name `key`, the entry's key without its quotes; `value`, the entry's value;
+`enclosing_type`, the full name of the class the annotation sits on; and, with a second star,
+`group`. A template that names anything else is refused at load, and so is an empty id template.
+The id may also come from `annotation_key` as before, and attributes and edge attributes still read
+the keys at the top level of the body. Only an edge's `to` end takes `{template: ...}`; the id of
+its node is minted in the namespace of the kind's to types, unless the template starts with a
+declared namespace.
+
+Two refusals, each leaving the rule not executed with exit 26 when the map runs:
+
+```
+the rule panel_entry cannot be executed: match.each of an annotation rule is keys joined by dots that end in a star, as parts.inner.*, with at most one other star, which stands for any group's key
+the rule panel_entry cannot be executed: a template or normalize step of an annotation rule with match.each names group, which is not key, value, enclosing_type, or group with a star before the last one
+```
+
+Use `match.each` where a group of an annotation holds one entry per thing. It replaces a rule per
+known key, and a rule per position in the group, and reads entries no rule could list ahead.
+
+An edge's `to` end may also be `{from: {annotation_key: <key>}}`, on any annotation rule: the id
+the value of that key of the same annotation names, in the namespace of the kind's to types. With
+`@Thing(id = "invoice", paths = {"main" = "/invoice/{id}", "make" = "/invoice"})`, a rule over
+`paths.*` with id `{template: '{value}'}` and the edge
+`{kind: path_of, from: this_node, to: {from: {annotation_key: id}}}` joins each path to
+`acme.thing::invoice`:
+
+```yaml
+- rule: thing_path
+  reads: file
+  in: [source]
+  match: {annotation: Thing, each: paths.*, filetype: php, where: [{applies_to: class_declaration}]}
+  id: {template: '{value}'}
+  emits: [{edge: {kind: path_of, from: this_node, to: {from: {annotation_key: id}}}}]
+  confidence: declared
+```
+
+The key may hold dots to name an entry inside a group, as the paragraph after next says. A key
+that is missing, or whose value is
+not quoted text, makes no edge for that entry and lists `key id is missing` or
+`key id is not quoted text` at the entry's line, also when a twin node rule fires there.
+
+The id and the `to` end take `normalize`, the steps an id's `normalize` takes elsewhere, run in
+order on the filled text. A step may name the same values the templates name, and no other.
+`to: {template: '{value}', normalize: [{replace: '^\\', with: ''}]}` drops a leading backslash
+from a class name, and an id
+`{template: '{enclosing_type}|paths|{key}|{key}', normalize: [{replace: '-(?=[^|]*$)', with: _}]}`
+turns `edit-page` into `edit_page` in the id's last part alone.
+
+A rule over every group of `parts`, with `{group}`, reads like this:
+
+```yaml
+- rule: any_part_entry
+  reads: file
+  in: [source]
+  match: {annotation: Thing, each: parts.*.*, filetype: php, where: [{applies_to: class_declaration}]}
+  id: {template: '{enclosing_type}|{group}|{key}', normalize: [{replace: '-', with: _}]}
+  emits: [{node: {type: acme.entry}}]
+  confidence: declared
+```
+
+With `"edit-page" = "Acme\InvoiceEditPanel"` in `panel`, it makes
+`acme.entry::Acme\Invoice|panel|edit_page`.
+
+Without `each`, an `annotation_key` with dots reads one entry inside a group, in the id, an
+attribute or an edge attribute: `{annotation_key: api_paths.main}` is the `main` entry of the
+`api_paths` group. It reads as a key at the top level does: a key the group does not hold is
+missing, a value that is not quoted text is not quoted text, and when the key is written twice the
+last one counts.
+
+A value is quoted text without its quotes, or the text of a nested annotation that holds one quoted
+text. An entry whose value is a group is not an entry of the path and makes nothing: `parts.*`
+gives `list` and not `panel`, and `parts.panel.*` reaches inside `panel`. So the same key at two
+depths, as `edit` in `parts` and in `parts.panel`, is an entry of each path once. An entry whose
+value is anything else, such as a bare `10` or `TRUE`, makes nothing and is listed under `skipped`
+as `entry low of group weights is not quoted text`. A key is quoted text or a bare word. A trailing
+comma adds no entry. A key written twice in one group is an entry each time; when both give one id,
+the node has both lines. A value that runs over two lines keeps the comment's margin between them,
+as a key at the top level does.
+
+The engine reads one annotation grammar, the one described above, and a pack cannot change it. The
+pack sets the comment's node type, `identity.comment`, and the characters of a nested annotation's
+name besides word characters, those of `identity.qualified_name.separator`.
+
+A path the annotation does not hold makes nothing and lists nothing. An entry that is not
+key = value is left out and listed under `skipped` at its line, as `group parts holds an entry that
+is not key = value`; the other entries still map. A list group, as `names = {"id", "label"}`, holds
+only such entries: a rule whose path reads it lists each item, and a rule whose path does not read
+it lists nothing.
+
+A group closed by the wrong mark, as `{` closed by `)`, stops the reading there. The entries a
+comma ended before that mark stay; the entry the mark ends, and everything after it, is not read.
+A rule lists the stop under `skipped`, as `group paths does not close` at the wrong mark's line,
+when the reading stopped inside a group its path reads, inside a group below one, or inside a group
+above one, or when no group its path names was read at all. A rule whose groups all closed before
+the stop lists nothing.
+
 ## A class constant as a call's argument
 
 This section is not a worked example. Its block is copied from the Drupal pack's manifest, in
@@ -399,7 +547,7 @@ src/periplus/packs, and `tests/test_demo_c_drupal.py` maps a class constant argu
 constant, `getStorage(MyType::ENTITY_TYPE)`, declared once as text. Two keys of the manifest's
 `grammar` block let the argument read it:
 
-```yaml drupal_basic@0.3.0/pack.yaml
+```yaml drupal_basic@0.4.0/pack.yaml
 # A call argument written MyType::ENTITY_TYPE, self::X or static::X stands for the text that
 # constant is declared with, when a mapped file declares it as one text literal. A constant read
 # as parent::X, of core, of contrib, or declared by an expression gives the row "argument N is a

@@ -25,7 +25,7 @@ So the map says where to read, and the code is what you judge.
 
 The periplus-map skill says how to use the map: the commands, what each shows, and how to follow
 nodes and edges. This skill names no commands; take them from there, and every option from
-[Navigation](https://github.com/camoa/periplus/blob/v0.10.3/docs/navigation.md). Use the map to
+[Navigation](https://github.com/camoa/periplus/blob/v0.11.0/docs/navigation.md). Use the map to
 name, before you open any code:
 
 - the target, the thing the question is about;

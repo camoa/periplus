@@ -1,0 +1,39 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A PHP method or function that holds a string literal equal to a library's id, my_module/cart, as
+# a mentions_library edge to the library at the literal's line, with confidence mentioned, as
+# drupal_basic's mention/mention_php.yaml joins the other things a literal names. A method or
+# function that already attaches that library gets no mention. A template that holds the library's
+# id as a quoted text, outside attach_library(), mentions it the same way, at the text's line.
+
+edge_kinds:
+- kind: mentions_library
+  cause: touch
+  from: [php.method, php.function, drupal.template]
+  to: drupal.library
+  description: "the code or template holds a text equal to that library's id, and no rule reads an attachment of it there; it names the library as text, and what it does with it is not known"
+
+rules:
+- rule: code_mentions_library
+  reads: map
+  match:
+    node_type: drupal.literal_site
+    where: [{id_matches: '^drupal\.literal_site::(?<owner>[^|]+)\|(?<text>[^|]+)$'}]
+    follow:
+    - node: 'drupal.library::{text}'
+    unless_matched:
+    - [{incoming_edge: attaches_library}, {id_matches: '^php\.(?:method|function)::{owner}$'}]
+  emits: [{edge: {kind: mentions_library, from: {template: '{owner}', types: [php.method, php.function]}, to: matched_node}}]
+  confidence: mentioned
+
+- rule: template_mentions_library
+  reads: map
+  match:
+    node_type: drupal.template_literal_site
+    where: [{id_matches: '^drupal\.template_literal_site::(?<owner>[^|]+)\|(?<text>[^|]+)$'}]
+    follow:
+    - node: 'drupal.library::{text}'
+    unless_matched:
+    - [{incoming_edge: template_attaches_library}, {id_matches: '^drupal\.template::{owner}$'}]
+  emits: [{edge: {kind: mentions_library, from: {template: '{owner}', types: [drupal.template]}, to: matched_node}}]
+  confidence: mentioned

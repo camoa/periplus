@@ -116,7 +116,7 @@ When several writers share the work:
 
 Each takes `--map PATH`, so a file written by `periplus slice`, `extract`, `join`, `common` or
 `minus` works as the map. Options and output are in
-[Navigation](https://github.com/camoa/periplus/blob/v0.10.3/docs/navigation.md#undescribed).
+[Navigation](https://github.com/camoa/periplus/blob/v0.11.0/docs/navigation.md#undescribed).
 
 ## Tips
 
@@ -138,7 +138,7 @@ name to its `text`, its `words`, optional `old` names, the node `ids` it names, 
 `origin`. `fingerprint` is written by
 `periplus stamp`; do not write it by hand. Keep `nodes` sorted by id and `edges` by `from`,
 `kind`, `to`, so a new pass adds lines without moving old ones. The exact shape is in
-[the descriptions schema](https://github.com/camoa/periplus/blob/v0.10.3/src/periplus/skills/periplus-map/references/descriptions.schema.json).
+[the descriptions schema](https://github.com/camoa/periplus/blob/v0.11.0/src/periplus/skills/periplus-map/references/descriptions.schema.json).
 
 - Quote a `text` that holds `: ` or ` #`; unquoted, YAML misreads it.
 - Write ids with single backslashes, as `--ids` prints them. Text rows and raw JSON print each

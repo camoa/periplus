@@ -1,0 +1,31 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A mail backend plugin declared by the Mail docblock annotation on its class, the twin of the
+# attribute rule: one plugin declared both ways is one node. An id that is not text in double
+# quotes makes no plugin and is listed under skipped in the map report.
+
+rules:
+- rule: mail_from_annotation
+  reads: file
+  in: [mail_classes]
+  match:
+    annotation: Mail
+    filetype: php
+    where: [{applies_to: class_declaration}]
+  id:
+    from: {annotation_key: id}
+    must_be: string_literal
+  emits: [{node: {type: drupal.mail_plugin}}, {attribute: {name: label, from: {annotation_key: label}}}, {attribute: {name: description, from: {annotation_key: description}}}]
+  confidence: declared
+- rule: mail_from_annotation_edges
+  reads: file
+  in: [mail_classes]
+  match:
+    annotation: Mail
+    filetype: php
+    where: [{applies_to: class_declaration}]
+  id:
+    from: {annotation_key: id}
+    must_be: string_literal
+  emits: [{edge: {kind: plugin_class, from: this_node, to: enclosing_class}}]
+  confidence: declared

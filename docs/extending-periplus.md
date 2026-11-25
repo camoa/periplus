@@ -4,6 +4,36 @@ When the map lacks something the code holds, this page tells you where the fix g
 a new rutter, or the engine. A gap is a rutter matter first: the engine changes only when no rule
 can state the shape. Each answer below ends with the commands that show the fix works.
 
+## What a rule can do today
+
+Periplus is new, so the bundled rutters do not cover many stacks yet. What a rutter can say
+without an engine change is the measure. A rule can:
+
+- Find a thing in a file of any text format, by a pattern, or in a parse tree, by node type.
+- Read the entries of a data file, such as YAML or JSON, and the entries of a docblock
+  annotation, group by group.
+- Join what other rules found, across files, formats and rutters, in passes, one hop each.
+- Look a name up in a table, and take a type from it. Another rutter adds rows to that table
+  without a copy of the rule.
+- Mark a call or a place whose target is decided at run time, rather than guess one.
+- Cite the line that shows each fact, also when a join walks an edge found on another line.
+
+A rutter adds to another rutter's types, tables and rules without copying them: it names the
+types of a rutter it depends on, adds table rows with `add_table_rows`, and adds its own rule
+files. [Writing a rutter](rutter-author-guide.md) leads to the section for each ability.
+
+When rules cannot express a pattern, the engine gains a general ability that every rutter can
+use, never knowledge of one stack. This release shows the effect. When the engine gained the table
+lookup, three families of one-rule-per-row rules in the Drupal rutter became table rows: 117 rules
+became 7, and a rutter for a contributed module can now add its own rows. When annotation groups
+became readable entry by entry, 49 rules became 16, and a limit of twenty entries went away.
+
+Those were copies of one rule, repeated for each name or each position. Small rules stay the way
+to write a rutter: each way of writing a thing is one rule, every such rule ends at the same thing
+in the map, and each can be read, changed or removed alone.
+[Rule composition](rule-composition.md) shows it on Drupal hooks, where each way of implementing
+a hook keeps its own rule.
+
 ## Decide
 
 Read the list from the top and stop at the first line that fits.

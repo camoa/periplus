@@ -1,0 +1,21 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# fetch(url) where url is a name in this module.
+
+rules:
+- rule: fetch_local_name
+  reads: file
+  in: [typescript_source]
+  match: {file: '**', filetype: typescript, text: '(?<![.\w])fetch\(\s*(?<var>\w+)!?\s*[,)]'}
+  id: {template: '{module}'}
+  emits: [{edge: {kind: fetches_name, from: this_node, to: {template: '{module}|{var}'}}}]
+  confidence: inferred
+
+# The same fetch as a node at its line, so the edge to the route sits at the call.
+- rule: fetch_name_site
+  reads: file
+  in: [typescript_source]
+  match: {file: '**', filetype: typescript, text: '(?<![.\w])fetch\(\s*(?<var>\w+)!?\s*[,)]'}
+  id: {template: '{module}|{var}'}
+  emits: [{node: {type: typescript.name_fetch}}]
+  confidence: inferred

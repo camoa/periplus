@@ -92,7 +92,7 @@ link from a page beside the missing-name mark that took its place, so the change
 sections to rewrite. A page or a section can take a description, and `periplus stale` lists it
 when its text changes. A renamed heading shows as gone: a section's id is its anchor, so every
 link to the old anchor breaks too.
-[Navigation](https://github.com/camoa/periplus/blob/v0.10.3/docs/navigation.md#diff) gives the
+[Navigation](https://github.com/camoa/periplus/blob/v0.11.0/docs/navigation.md#diff) gives the
 options.
 
 ## Writing new documentation
@@ -132,4 +132,4 @@ as text, so declare its confidence `mentioned`.
 - A new habit is a new small rule, recorded on the page with its rule file.
 - Stack knowledge stays in rules. Do not ask for an engine change before two ways of writing the
   rule are each refused with an engine message:
-  [Extending Periplus](https://github.com/camoa/periplus/blob/v0.10.3/docs/extending-periplus.md#4-the-engine-last).
+  [Extending Periplus](https://github.com/camoa/periplus/blob/v0.11.0/docs/extending-periplus.md#4-the-engine-last).

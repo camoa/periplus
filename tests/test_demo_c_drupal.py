@@ -17,7 +17,7 @@ from periplus.errors import ExitCode
 from periplus.map import MapReport, run
 from periplus.preflight import check_runtime_dependencies
 
-DRUPAL = "  - drupal_basic@0.3.0\n"
+DRUPAL = "  - drupal_basic@0.4.0\n"
 MODULE = Path("web/modules/custom/my_module")
 
 
@@ -116,6 +116,7 @@ def test_a_procedural_hook_is_mapped_by_its_function_name_and_implements_it(
     own = str(THEME / "my_theme.theme")
     assert sorted((f, r, why) for f, _, r, why in report.skipped) == [
         (own, "hook_from_theme_include", "the id source theme_name is absent"),
+        (own, "theme_include_hook_by_name_site", "the id source theme_name is absent"),
         (own, "theme_include_implements_hook", "the id source theme_name is absent"),
     ]
     # hook: (file name, function name)
@@ -139,15 +140,15 @@ def test_a_procedural_hook_is_mapped_by_its_function_name_and_implements_it(
             if text.startswith(f"function {function}(")
         )
         expected[hook] = (path, line, ("inferred",))
-    # No core table, api file or invocation names these two, so hook_by_name_only marks each.
-    for hook in ("settings_submit", "deploy_NAME"):
-        expected[hook] = (*expected[hook][:2], ("inferred", "inferred"))
+    # No core table, api file, invocation or docblock names these two: hook_by_name_only takes
+    # the hook node back, and each function is only named like its hook, and marked.
+    named_only = ("settings_submit", "deploy_NAME")
+    for hook in named_only:
+        del expected[hook]
     marked = sorted(
         node["id"] for node in document["nodes"] if node.get("attributes", {}).get("hook_known")
     )
     assert marked == [
-        "drupal.hook::deploy_NAME",
-        "drupal.hook::settings_submit",
         "php.function::mymod_deploy_seed",
         "php.function::mymod_settings_submit",
     ]
@@ -189,13 +190,31 @@ def test_a_procedural_hook_is_mapped_by_its_function_name_and_implements_it(
             ("mymod_deploy_seed", "$sandbox"),
         )
     ]
+    # Each preprocess hook fills in core's preprocess_HOOK; no theme hook of that name is mapped, so
+    # the link rests on the name's shape alone.
+    instances = [
+        (
+            "instance_of_hook",
+            f"drupal.hook::preprocess_{hook}",
+            "drupal.hook::preprocess_HOOK",
+            ["mentioned"],
+        )
+        for hook in ("html", "node", "page")
+    ]
     assert edges == sorted(
         [
             ("implements_hook", f"php.function::{function}", f"drupal.hook::{hook}", ["inferred"])
             for hook, (_, function) in wanted.items()
+            if hook not in named_only
+        ]
+        + [
+            ("named_like_hook", f"php.function::{function}", f"drupal.hook::{hook}", ["mentioned"])
+            for hook, (_, function) in wanted.items()
+            if hook in named_only
         ]
         + members
         + parameters
+        + instances
     )
     ids = {n["id"] for n in document["nodes"] if n["type"] == "drupal.hook"}
     assert "drupal.hook::" not in ids and not [i for i in ids if "helper" in i], ids
@@ -294,7 +313,7 @@ class OwnController {
 
 def test_a_static_call_on_a_mapped_entity_class_ends_at_its_entity_type(tmp_path: Path) -> None:
     """load, loadMultiple and create on a module's own entity class, declared by attribute or
-    annotation, content or config, end at that entity type, inferred, at the method's line;
+    annotation, content or config, end at that entity type, inferred, at the call's line;
     another method makes nothing."""
     files = {
         str(MODULE / f"src/Entity/{name}.php"): "<?php\n\nnamespace Drupal\\my_module\\Entity;\n\n"
@@ -316,10 +335,15 @@ def test_a_static_call_on_a_mapped_entity_class_ends_at_its_entity_type(tmp_path
         for p in e["provenance"]
     }
     rule = "entity_class_static_call_mapped"
-    line = _line(OWN_CALLER, "public function run() {")
+    calls = {
+        "gadget": "$a = Gadget::load(1);",
+        "widget": "$b = Widget::loadMultiple();",
+        "preset": "$c = Preset::create([]);",
+        "recipe": "$d = Recipe::load('x');",
+    }
     assert found == {
-        (f"drupal.entity_type::{name}", line, rule, "inferred")
-        for name in ("gadget", "widget", "preset", "recipe")
+        (f"drupal.entity_type::{name}", _line(OWN_CALLER, call), rule, "inferred")
+        for name, call in calls.items()
     }
     of_class = {
         (e["from"], e["to"]) for e in document["edges"] if e["kind"] == "entity_type_of_class"
@@ -716,7 +740,7 @@ def test_a_path_written_whole_links_to_the_node_its_route_serves_and_a_joined_on
             str(module / "templates/xy-button.html.twig"): BUTTON,
             str(module / "js/xy.js"): SCRIPT,
         },
-        packs=DRUPAL + "  - drupal_js_basic@0.0.1\n",
+        packs=DRUPAL + "  - drupal_js_basic@0.1.0\n",
     )
     document, _ = _map(tmp_path)
     path = "drupal.url_path::/x/y"
@@ -844,7 +868,9 @@ def test_a_route_requirement_joins_the_service_whose_tag_applies_to_it(tmp_path:
         )
     }
     assert not [n for n in document["nodes"] if n["type"] == "drupal.route_requirement"]
-    assert (report.internal.nodes, report.internal.edges) == (4, 5), report.internal
+    # Four of the internal nodes are my_module.chain's two list arguments, its read-whole mark and
+    # the service its second argument names, which one internal edge joins.
+    assert (report.internal.nodes, report.internal.edges) == (10, 8), report.internal
 
 
 def test_a_list_argument_of_a_service_injects_each_service_it_names(tmp_path: Path) -> None:
@@ -1059,7 +1085,7 @@ def test_an_entity_type_links_to_each_handler_class_its_attribute_or_annotation_
     tmp_path: Path,
 ) -> None:
     """One declared edge per handler, of the kind its key names, at the class's line; a handler
-    written as text in the attribute and an array in a method give none."""
+    written as text in the attribute gives one too, and an array in a method gives none."""
     _plant(tmp_path, HANDLED)
     document, _ = _map(tmp_path)
     own = "php.type::Drupal\\my_module\\"
@@ -1072,6 +1098,7 @@ def test_an_entity_type_links_to_each_handler_class_its_attribute_or_annotation_
     assert found == {
         ("has_access_handler", order, own + "OrderAccess", "declared"),
         ("has_list_builder", order, own + "OrderListBuilder", "declared"),
+        ("has_storage_handler", order, own + "OrderStorage", "declared"),
         ("has_form_handler", order, own + "Entity\\Form\\OrderForm", "declared"),
         ("has_view_builder", coupon, own + "CouponViewBuilder", "declared"),
         ("has_form_handler", coupon, own + "CouponForm", "declared"),
@@ -4153,7 +4180,8 @@ def test_code_and_templates_that_name_a_field_access_its_storage_its_shared_name
 ) -> None:
     """get, set and hasField in a method or a function give accesses_field to the one storage of
     that name, and accesses_shared_field_name to the shared name when storages on two entity types
-    hold it, inferred, at the method's line. node.field_y and content.field_y in a node template
+    hold it, inferred, at the call's line, whether a text or a class constant names it.
+    node.field_y and content.field_y in a node template
     reach the node storage, at the read's line. A field_ name with no storage ends at an
     unresolved field.storage.<name>, or field.storage.<entity type>.<name> when the read names its
     entity type; any other unmapped name, a variable and a name in plain text give nothing."""
@@ -4172,18 +4200,18 @@ def test_code_and_templates_that_name_a_field_access_its_storage_its_shared_name
     }
     shared = ("accesses_shared_field_name", "drupal.shared_field_name::field_color")
     assert found == {
-        ("accesses_field", paint, storage + "field_size", 9, "code_accesses_field_mark"),
-        ("accesses_field", paint, storage + "field_gone", 9, "code_accesses_field_mark"),
+        ("accesses_field", paint, storage + "field_size", 11, "code_read_accesses_field_mark"),
+        ("accesses_field", paint, storage + "field_gone", 13, "code_accesses_field_mark"),
         (
             "accesses_field",
             paint,
             storage + "field_gone",
-            9,
+            13,
             "code_accesses_field_by_class_constant_mark",
         ),
-        ("accesses_field", paint, storage + "node.body", 9, "code_accesses_field"),
-        (shared[0], paint, shared[1], 9, "code_accesses_shared_field_name"),
-        (shared[0], presave, shared[1], 3, "code_accesses_shared_field_name"),
+        ("accesses_field", paint, storage + "node.body", 12, "code_read_accesses_field"),
+        (shared[0], paint, shared[1], 10, "code_read_accesses_shared_field_name"),
+        (shared[0], presave, shared[1], 4, "code_read_accesses_shared_field_name"),
         (
             "accesses_field",
             template,
@@ -4401,19 +4429,13 @@ def test_a_role_named_in_code_is_checked_or_changed_and_a_variable_role_is_a_run
     tmp_path: Path,
 ) -> None:
     """hasRole gives checks_role, addRole and removeRole give changes_role, to user.role.<name> at
-    the method's or function's line; a role no file declares is unresolved. A variable argument
+    the call's line; a role no file declares is unresolved. A variable argument
     keeps the call as a runtime call site and a core constant leaves a skipped row."""
     _plant(tmp_path, ROLE_FILES)
     document, report = _map(tmp_path)
     gate = str(MODULE / "src/Access/Gate.php")
     module = str(MODULE / "my_module.module")
     assert sorted((f, line, r, why) for f, line, r, why in report.skipped) == [
-        (
-            "config/sync/user.role.editor.yml",
-            1,
-            "role_from_config_edges",
-            "edge grants_permission: no value for key permissions",
-        ),
         (module, 5, "role_changed_in_call", "argument 0 is not a text literal"),
         (gate, 16, "role_checked_in_call", "argument 0 is not a text literal"),
         (gate, 17, "role_checked_in_call", "argument 0 is a class constant with no declared text"),
@@ -4428,15 +4450,17 @@ def test_a_role_named_in_code_is_checked_or_changed_and_a_variable_role_is_a_run
         for p in e["provenance"]
     }
     assert found == {
-        ("checks_role", check, role + "editor", 11, "declared"),
-        ("changes_role", check, role + "ghost", 11, "declared"),
-        ("changes_role", check, role + "editor", 11, "declared"),
-        ("changes_role", check, role + "editor", 11, "inferred"),
-        ("changes_role", presave, role + "editor", 3, "declared"),
+        ("checks_role", check, role + "editor", 12, "declared"),
+        ("changes_role", check, role + "ghost", 13, "declared"),
+        ("changes_role", check, role + "editor", 14, "declared"),
+        ("changes_role", check, role + "editor", 14, "inferred"),
+        ("changes_role", presave, role + "editor", 4, "declared"),
     }
     marks = sorted((n["id"], n["type"]) for n in document["nodes"] if n["state"] == "unresolved")
     assert marks == [(role + "ghost", "drupal.role")]
-    # php_basic's variable_calls rules give each $account call its own unmarked site besides.
+    # php_basic's variable_calls rules give each $account call its own site besides. In
+    # Gate::check, $account is a parameter nothing types, so untyped_parameter_call_runtime marks
+    # those sites too; the edge's first place is the first call of that name.
     marked = {
         n["id"] for n in document["nodes"] if n.get("attributes", {}).get("resolution") == "runtime"
     }
@@ -4452,6 +4476,9 @@ def test_a_role_named_in_code_is_checked_or_changed_and_a_variable_role_is_a_run
             16,
         ),
         (presave, "php.call_site::my_module_user_presave::$account->removeRole(runtime)", 5),
+        (check, "php.call_site::Drupal\\my_module\\Access\\Gate::check::$account->hasRole", 12),
+        (check, "php.call_site::Drupal\\my_module\\Access\\Gate::check::$account->addRole", 13),
+        (check, "php.call_site::Drupal\\my_module\\Access\\Gate::check::$account->removeRole", 14),
     }
 
 
@@ -4508,17 +4535,16 @@ def test_a_config_name_read_or_edited_through_a_config_factory_links_to_its_conf
         if e["kind"] in ("reads_config_object", "edits_config_object") and e["from"] == build
     }
     config = "drupal.config::"
-    own = ("config_read_by_own_method", "inferred")
     by_drupal = ("config_read_by_drupal", "declared")
     from_factory = ("config_read_from_factory", "inferred")
     edited = ("config_edited_from_factory", "inferred")
-    by_constant = ("config_read_by_class_constant", "inferred")
+    own_constant = ("own_config_constant_read", "inferred")
     assert found == {
         (
             "reads_config_object",
             config + "my_module.settings",
-            (11, 12, 14, 18),
-            (by_constant, by_drupal, own, from_factory),
+            (12, 14, 18),
+            (by_drupal, from_factory, own_constant),
         ),
         ("reads_config_object", config + "system.site", (13,), (by_drupal,)),
         ("edits_config_object", config + "my_module.settings", (15,), (edited,)),
@@ -4600,7 +4626,7 @@ def test_a_queue_got_by_name_links_to_the_worker_of_that_queue(tmp_path: Path) -
         for p in e["provenance"]
     }
     assert found == {
-        (send, worker + "my_module_send", 9, "inferred"),
+        (send, worker + "my_module_send", 10, "inferred"),
         (send, worker + "contrib_pull", 11, "declared"),
         ("php.function::my_module_cron", worker + "my_module_send", 4, "inferred"),
     }
@@ -4676,7 +4702,7 @@ def test_a_form_id_alter_hook_alters_the_form_its_name_gives(tmp_path: Path) -> 
         (
             "php.method::Drupal\\my_module\\Hook\\FormHooks::loginAlter",
             form + "user_login_form",
-            10,
+            9,
             "inferred",
         ),
     }
@@ -5003,22 +5029,22 @@ class CoreController {
 def test_a_module_class_named_as_a_core_entity_class_ends_only_at_its_own_entity_type(
     tmp_path: Path,
 ) -> None:
-    """User::load on a module's own User class ends at its own entity type only, and keeps the
-    skipped row of a class the table does not list, as Unlisted does; User, Node and Term of core
-    end at core's entity types, through the use statements or written whole."""
+    """User::load on a module's own User class ends at its own entity type only, and leaves no
+    skipped row; Unlisted, a class the table does not list, leaves none either and keeps its calls
+    edge to an unresolved method. User, Node and Term of core end at core's entity types, through
+    the use statements or written whole."""
     _plant(tmp_path, SHORT_NAME_FILES)
     document, report = _map(tmp_path)
-    listing = str(MODULE / "src/Controller/ListController.php")
-    assert [(f, line, r, why) for f, line, r, why in report.skipped] == [
-        (
-            listing,
-            _line(SHORT_NAME_LIST, written),
-            "entity_class_static_call",
-            "no resolution step holds for scope",
-        )
-        for written in ("$own = User::load(1);", "$other = Unlisted::load(4);")
-    ]
+    assert report.skipped == ()
     listed = "php.method::Drupal\\my_module\\Controller\\ListController::run"
+    unlisted = "php.method::Drupal\\my_module\\Controller\\Unlisted::load"
+    assert [
+        ([place["line"] for place in e["locations"]], n["state"])
+        for e in document["edges"]
+        if e["kind"] == "calls" and e["from"] == listed and e["to"] == unlisted
+        for n in document["nodes"]
+        if n["id"] == unlisted
+    ] == [([_line(SHORT_NAME_LIST, "$other = Unlisted::load(4);")], "unresolved")]
     core = "php.method::Drupal\\my_module\\Controller\\CoreController::run"
     entity = "drupal.entity_type::"
     found = {
@@ -5214,8 +5240,9 @@ def test_a_name_given_as_a_constant_of_an_interface_or_a_parent_links_to_its_tar
 ) -> None:
     """A queue, role, configuration or field name given as self::X or static::X, where X is
     declared as text on an interface the class implements or on a parent's interface, gives the
-    edge the text would, inferred, at the method's line; a field_ name with no storage ends at an
-    unresolved storage. The file rules keep their skipped rows."""
+    edge the text would, inferred, at the call's line; a field_ name with no storage ends at an
+    unresolved storage.
+    The file rules keep their skipped rows."""
     _plant(tmp_path, CONSTANT_FILES)
     document, report = _map(tmp_path)
     notifier = str(MODULE / "src/Service/Notifier.php")
@@ -5223,12 +5250,6 @@ def test_a_name_given_as_a_constant_of_an_interface_or_a_parent_links_to_its_tar
     no_text = "argument 0 is a class constant with no declared text"
     assert sorted((f, line, r, why) for f, line, r, why in report.skipped) == sorted(
         [
-            (
-                "config/sync/user.role.my_editor.yml",
-                1,
-                "role_from_config_edges",
-                "edge grants_permission: no value for key permissions",
-            ),
             (notifier, 8, "queue_from_factory", no_text),
             (notifier, 8, "field_named_by_constant_in_call", no_text),
             (notifier, 9, "role_checked_in_call", no_text),
@@ -5261,18 +5282,25 @@ def test_a_name_given_as_a_constant_of_an_interface_or_a_parent_links_to_its_tar
     settings = "drupal.config::my_module.settings"
     storage = "drupal.config::field.storage."
     assert found == {
-        ("uses_queue", run, worker + "my_notify", 7, "queue_by_class_constant", "inferred"),
-        ("uses_queue", sweep, worker + "my_sweep", 7, "queue_by_class_constant", "inferred"),
-        ("checks_role", run, role, 7, "code_checks_role_by_constant", "inferred"),
-        ("changes_role", run, role, 7, "code_changes_role_by_constant", "inferred"),
-        ("reads_config_object", run, settings, 7, "config_read_by_class_constant", "inferred"),
-        ("edits_config_object", run, settings, 7, "config_edited_by_class_constant", "inferred"),
-        ("accesses_field", run, storage + "node.field_size", 7, "code_accesses_field", "inferred"),
+        ("uses_queue", run, worker + "my_notify", 8, "queue_by_class_constant", "inferred"),
+        ("uses_queue", sweep, worker + "my_sweep", 8, "queue_by_class_constant", "inferred"),
+        ("checks_role", run, role, 9, "code_checks_role_by_constant", "inferred"),
+        ("changes_role", run, role, 10, "code_changes_role_by_constant", "inferred"),
+        ("reads_config_object", run, settings, 11, "config_read_by_class_constant", "inferred"),
+        ("edits_config_object", run, settings, 12, "config_edited_by_class_constant", "inferred"),
+        (
+            "accesses_field",
+            run,
+            storage + "node.field_size",
+            13,
+            "code_accesses_field_by_class_constant",
+            "inferred",
+        ),
         (
             "accesses_field",
             run,
             storage + "field_gone",
-            7,
+            14,
             "code_accesses_field_by_class_constant_mark",
             "inferred",
         ),
@@ -6998,6 +7026,7 @@ def test_dispatches_and_registrations_outside_src_are_read_where_drupal_loads_th
     assert {rule for _, _, rule, _ in report.skipped} <= {
         "function_implements_hook",
         "hook_acts_on_entity_type",
+        "hook_by_name_site",
         "hook_from_function_name",
     }
 

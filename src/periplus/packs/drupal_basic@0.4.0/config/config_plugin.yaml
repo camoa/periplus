@@ -1,0 +1,71 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A configuration entity's file that names the plugin it runs by the plugin's id, as Drupal's
+# config entity stores it: an action's plugin (system.action.*), a media type's source
+# (media.type.*), a REST resource configuration's plugin_id (rest.resource.*), a field storage's
+# type, the field type plugin (field.storage.*), and each component's type in a form display, a
+# widget, or in a view display, a formatter (core.entity_form_display.*, core.entity_view_display.*).
+# Each is a config_names_plugin edge from the file's node to the plugin of that kind and id, at
+# the key's line, declared: the file states the id. A plugin of core or contrib, which the mapped
+# code does not declare, ends at a referenced node. A block placement's plugin is read by
+# block/block_placement_config.yaml, a view's plugins by views_plugin/views_plugin_use.yaml.
+#
+# Limits: a display component with no type, as an extra field, names no plugin; a plugin id named
+# deeper in the file, such as a block's visibility conditions, an image style's effects, an
+# editor's editor or a filter format's filters, gives nothing.
+
+edge_kinds:
+- kind: config_names_plugin
+  cause: from
+  description: "the configuration file names that plugin by its id: an action's plugin, a media type's source, a field storage's type, a display's widget or formatter"
+  from: drupal.config_object
+  to: drupal.plugin
+
+rules:
+- rule: action_config_names_plugin
+  reads: file
+  in: [config, module_config]
+  match: {file: 'system.action.*', filetype: yaml}
+  id: {from: file_stem}
+  emits: [{edge: {kind: config_names_plugin, from: this_node, to: {from: {key: plugin}, type: drupal.action_plugin}}}]
+  confidence: declared
+
+- rule: media_type_names_source
+  reads: file
+  in: [config, module_config]
+  match: {file: 'media.type.*', filetype: yaml}
+  id: {from: file_stem}
+  emits: [{edge: {kind: config_names_plugin, from: this_node, to: {from: {key: source}, type: drupal.media_source}}}]
+  confidence: declared
+
+- rule: rest_config_names_resource
+  reads: file
+  in: [config, module_config]
+  match: {file: 'rest.resource.*', filetype: yaml}
+  id: {from: file_stem}
+  emits: [{edge: {kind: config_names_plugin, from: this_node, to: {from: {key: plugin_id}, type: drupal.rest_resource}}}]
+  confidence: declared
+
+- rule: field_storage_names_type
+  reads: file
+  in: [config, module_config]
+  match: {file: 'field.storage.*', filetype: yaml}
+  id: {from: file_stem}
+  emits: [{edge: {kind: config_names_plugin, from: this_node, to: {from: {key: type}, type: drupal.field_type}}}]
+  confidence: declared
+
+- rule: form_display_names_widget
+  reads: file
+  in: [config, module_config]
+  match: {file: 'core.entity_form_display.*', filetype: yaml}
+  id: {from: file_stem}
+  emits: [{edge: {kind: config_names_plugin, from: this_node, to: {from: {key: 'content.*.type'}, type: drupal.field_widget}}}]
+  confidence: declared
+
+- rule: view_display_names_formatter
+  reads: file
+  in: [config, module_config]
+  match: {file: 'core.entity_view_display.*', filetype: yaml}
+  id: {from: file_stem}
+  emits: [{edge: {kind: config_names_plugin, from: this_node, to: {from: {key: 'content.*.type'}, type: drupal.field_formatter}}}]
+  confidence: declared

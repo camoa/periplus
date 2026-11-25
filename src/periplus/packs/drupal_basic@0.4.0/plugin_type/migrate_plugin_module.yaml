@@ -1,0 +1,72 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The module keys of core's migrate plugins, read from the attribute or annotation on a class below
+# a module's src/Plugin folder, as attributes of the plugin's node at the id's line, as
+# plugin_id.yaml's words are:
+# - source_module of @MigrateSource: core's attribute MigrateSource has no such key, only the
+#   annotation does. Core reads it as a module of the source database, the site the data comes
+#   from, not a module of this site, so it is kept as text and joins to no module.
+# - destination_module of #[MigrateDestination] or @MigrateDestination: a module that must be
+#   installed on this site. It also gives plugin_destination_module from the class to the module,
+#   at the value's line; a module no mapped file declares ends at a referenced node.
+# Declared: the attribute or annotation names the module. A name with characters other than
+# letters, digits and _ gives nothing.
+
+edge_kinds:
+- kind: plugin_destination_module
+  cause: to
+  description: "the migrate destination plugin class names that module under destination_module, a module that must be installed on the destination site"
+  from: php.class
+  to: drupal.module
+
+rules:
+- rule: migrate_source_module_from_annotation
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, reads_sections: [block_comment], text: '(?m)^[ \t]*\*[ \t]*@(?<short>MigrateSource)\((?=(?:\s*|(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])id\s*=\s*)"(?<pid>[^"]+)")(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])source_module\s*=\s*"(?<module>\w+)")'}
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - node: {type: drupal.discovered_plugin}
+  - attribute: {name: source_module, template: '{module}'}
+  confidence: declared
+
+- rule: migrate_destination_module_from_attribute
+  reads: file
+  in: [plugin_classes]
+  match: &destination_attribute {file: '**', filetype: drupal_php_text, text: '(?m)^#\[\s*\\?(?:\w+\\)*(?<short>MigrateDestination)\s*\((?=(?:\s*|(?:[^\[\]()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])id\s*:\s*)[''"](?<pid>[^''"]+)[''"])(?=(?:[^\[\]()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])destination_module\s*:\s*[''"](?<module>\w+)[''"])'}
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - node: {type: drupal.discovered_plugin}
+  - attribute: {name: destination_module, template: '{module}'}
+  confidence: declared
+
+- rule: migrate_destination_module_from_annotation
+  reads: file
+  in: [plugin_classes]
+  match: &destination_annotation {file: '**', filetype: drupal_php_text, reads_sections: [block_comment], text: '(?m)^[ \t]*\*[ \t]*@(?<short>MigrateDestination)\((?=(?:\s*|(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])id\s*=\s*)"(?<pid>[^"]+)")(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])destination_module\s*=\s*"(?<module>\w+)")'}
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - node: {type: drupal.discovered_plugin}
+  - attribute: {name: destination_module, template: '{module}'}
+  confidence: declared
+
+- rule: plugin_destination_module_from_attribute
+  reads: file
+  in: [plugin_classes]
+  match: *destination_attribute
+  id: &class_id {template: '{psr4_class}'}
+  line: {capture: module}
+  emits: &to_module [{edge: {kind: plugin_destination_module, from: this_node, to: {template: '{module}', types: [drupal.module]}}}]
+  confidence: declared
+
+- rule: plugin_destination_module_from_annotation
+  reads: file
+  in: [plugin_classes]
+  match: *destination_annotation
+  id: *class_id
+  line: {capture: module}
+  emits: *to_module
+  confidence: declared

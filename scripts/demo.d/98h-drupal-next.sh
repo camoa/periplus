@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The bundled Drupal rutters drupal_more@0.1.0 and drupal_next@0.1.0, pinned with their
+# The bundled Drupal rutters drupal_more@0.1.1 and drupal_next@0.1.1, pinned with their
 # dependencies. A module holds an entity class whose annotation names a storage handler and whose
 # baseFieldDefinitions declares one field, and a class calling ->hasPermission('view content').
 # The site config holds a Next.js site and a per-bundle Next.js config for node.article, and a
@@ -86,14 +86,14 @@ TS
 cat >"$site/.periplus/settings.yml" <<'YML'
 periplus_version: 0
 packs:
-  - drupal_basic@0.3.0
-  - php_basic@0.2.0
+  - drupal_basic@0.4.0
+  - php_basic@0.3.0
   - advancedqueue_basic@0.0.1
-  - typescript@0.1.0
+  - typescript@0.2.0
   - react@0.1.0
-  - nextjs@0.2.0
-  - drupal_more@0.1.0
-  - drupal_next@0.1.0
+  - nextjs@0.2.1
+  - drupal_more@0.1.1
+  - drupal_next@0.1.1
 values:
   typescript_alias_root: frontend
 YML

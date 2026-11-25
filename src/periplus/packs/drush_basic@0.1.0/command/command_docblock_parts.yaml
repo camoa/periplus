@@ -1,0 +1,336 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# What an annotated command's docblock declares beside its name, read as text inside the docblock
+# that holds its @command tag: each @option <name> tag as a drush.command_option <command>|<name>,
+# and each @param tag's variable, other than $options, as a drush.command_argument
+# <command>|<name>, as the annotated-command library takes a command's arguments from its method's
+# parameters. A tag written before @command, as Drush's generator writes them, is read by looking
+# ahead to the @command of the same docblock; a tag written after it is read by position, one rule
+# pair per position, up to the sixth option and the fourth argument. Declared: the tag states it.
+#
+# Limits: after @command, a seventh option or a fifth argument gives nothing; an option declared
+# only in the $options default array, with no @option tag, gives nothing.
+
+rules:
+# A tag before the docblock's @command.
+- rule: command_option_before_command
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@option[ \t]+\$?(?<option>[\w-]+)(?=(?:(?!\*/)[\s\S])*?@command[ \t]+(?<command>[\w:.-]+))'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{node: {type: drush.command_option}}]
+  confidence: declared
+
+- rule: command_option_before_command_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@option[ \t]+\$?(?<option>[\w-]+)(?=(?:(?!\*/)[\s\S])*?@command[ \t]+(?<command>[\w:.-]+))'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{edge: {kind: option_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+- rule: command_argument_before_command
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)(?=(?:(?!\*/)[\s\S])*?@command[ \t]+(?<command>[\w:.-]+))'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{node: {type: drush.command_argument}}]
+  confidence: declared
+
+- rule: command_argument_before_command_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)(?=(?:(?!\*/)[\s\S])*?@command[ \t]+(?<command>[\w:.-]+))'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{edge: {kind: argument_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @option, position 1.
+- rule: command_option_1
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{node: {type: drush.command_option}}]
+  confidence: declared
+
+- rule: command_option_1_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{edge: {kind: option_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @option, position 2.
+- rule: command_option_2
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){1}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{node: {type: drush.command_option}}]
+  confidence: declared
+
+- rule: command_option_2_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){1}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{edge: {kind: option_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @option, position 3.
+- rule: command_option_3
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){2}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{node: {type: drush.command_option}}]
+  confidence: declared
+
+- rule: command_option_3_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){2}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{edge: {kind: option_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @option, position 4.
+- rule: command_option_4
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){3}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{node: {type: drush.command_option}}]
+  confidence: declared
+
+- rule: command_option_4_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){3}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{edge: {kind: option_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @option, position 5.
+- rule: command_option_5
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){4}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{node: {type: drush.command_option}}]
+  confidence: declared
+
+- rule: command_option_5_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){4}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{edge: {kind: option_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @option, position 6.
+- rule: command_option_6
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){5}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{node: {type: drush.command_option}}]
+  confidence: declared
+
+- rule: command_option_6_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@option[ \t]+\$?\S+){5}(?:(?!\*/)[\s\S])*?@option[ \t]+\$?(?<option>[\w-]+)'
+  id: {template: '{command}|{option}'}
+  line: {capture: option}
+  emits: [{edge: {kind: option_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @param, position 1.
+- rule: command_argument_1
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{node: {type: drush.command_argument}}]
+  confidence: declared
+
+- rule: command_argument_1_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{edge: {kind: argument_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @param, position 2.
+- rule: command_argument_2
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)\S+){1}(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{node: {type: drush.command_argument}}]
+  confidence: declared
+
+- rule: command_argument_2_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)\S+){1}(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{edge: {kind: argument_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @param, position 3.
+- rule: command_argument_3
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)\S+){2}(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{node: {type: drush.command_argument}}]
+  confidence: declared
+
+- rule: command_argument_3_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)\S+){2}(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{edge: {kind: argument_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared
+
+# @param, position 4.
+- rule: command_argument_4
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)\S+){3}(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{node: {type: drush.command_argument}}]
+  confidence: declared
+
+- rule: command_argument_4_edges
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@command[ \t]+(?<command>[\w:.-]+)(?:(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)\S+){3}(?:(?!\*/)[\s\S])*?@param[ \t]+(?:[^\s$]+[ \t]+)?\$(?!options\b)(?<argument>\w+)'
+  id: {template: '{command}|{argument}'}
+  line: {capture: argument}
+  emits: [{edge: {kind: argument_of_command, from: this_node, to: {template: '{command}', type: drush.command}}}]
+  confidence: declared

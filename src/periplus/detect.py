@@ -66,6 +66,8 @@ __all__ = [
     "detect_packs",
     "place",
     "place_folders",
+    "root_names",
+    "root_names_in",
 ]
 
 #: The manifest key a pack lists, per folder, the other places a repository may keep it under.
@@ -133,6 +135,30 @@ def place_folders(
     """Each folder that the pinned packs, or a pack beneath them, list under ``folder_candidates``,
     placed in the repository at ``root``, sorted by folder. Never raises."""
     return _place(root, _loaded(candidates, pins))[0]
+
+
+def root_names(
+    candidates: Sequence[PackCandidate], pins: Sequence[str]
+) -> tuple[tuple[str, str], ...]:
+    """Each settings value a path value's ``root_name`` names in the pinned packs or a pack beneath
+    them, with the description a pack declares for it, sorted by name. Never raises."""
+    packs = _loaded(candidates, pins)
+    described: dict[str, str] = {}
+    named: set[str] = set()
+    for pack in packs:
+        document = pack.manifest.document
+        values = document.get("values")
+        for name, text in values.items() if isinstance(values, Mapping) else ():
+            described.setdefault(str(name), str(text))
+        files = document.get("files")
+        types = files.get("types") if isinstance(files, Mapping) else None
+        for spec in types.values() if isinstance(types, Mapping) else ():
+            paths = spec.get("path_values") if isinstance(spec, Mapping) else None
+            for value in paths.values() if isinstance(paths, Mapping) else ():
+                name = value.get("root_name") if isinstance(value, Mapping) else None
+                if isinstance(name, str):
+                    named.add(name)
+    return tuple((name, described.get(name, "")) for name in sorted(named))
 
 
 def _loaded(candidates: Sequence[PackCandidate], pins: Sequence[str]) -> tuple[LoadedPack, ...]:
@@ -398,3 +424,14 @@ def place(
     over the search path ``detect`` reads."""
     candidates = resolve(start=start, env=env, dependencies=dependencies).candidates
     return place_folders(start, candidates, [one.pin for one in detected])
+
+
+def root_names_in(
+    start: Path,
+    env: Mapping[str, str],
+    dependencies: tuple[DependencyStatus, ...],
+    detected: Sequence[Detection],
+) -> tuple[tuple[str, str], ...]:
+    """The command's entry point for ``root_names``, over the search path ``detect`` reads."""
+    candidates = resolve(start=start, env=env, dependencies=dependencies).candidates
+    return root_names(candidates, [one.pin for one in detected])

@@ -1,0 +1,128 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A migration of core's migrate module: each file in a module's migrations folder, where the
+# migrate module discovers them, as a drupal.migration node named by its file name, which Drupal's
+# convention keeps equal to its id key, with its label and its source's source_module as
+# attributes. Its plugins, each by the plugin id the file writes, as drupal.discovered_plugin
+# <attribute class>::<id>, the node the plugin's class gets from its MigrateSource, MigrateProcess
+# or MigrateDestination attribute or annotation:
+# - source.plugin, as migration_source;
+# - each process plugin written as process.<field>.plugin or as an item of a list of steps,
+#   process.<field>.*.plugin, and each one a sub_process step runs under its own process key, one
+#   level down, as migration_process_plugin;
+# - each migration a migration_lookup step, or the older migration step, names under its migration
+#   key, as one id or a list, at either of those places, as migration_looks_up;
+# - destination.plugin, as migration_destination, kept whole, as entity:node; a destination
+#   entity:<type>, or another entity_<x>:<type>, also gives migration_destination_entity_type to
+#   the entity type <type>, and a destination config's config_name gives migration_writes_config;
+# - each migration under migration_dependencies.required or .optional, as migration_requires or
+#   migration_optionally_requires;
+# - each item of migration_tags, as a drupal.migration_tag node by migration_tagged.
+# A plugin, migration, configuration or entity type the map does not hold, as a core plugin, ends
+# at a referenced node: a data rule's end takes no on_miss. migrate_plus's migrations kept as configuration are read by
+# migrate_plus_basic.
+#
+# Limits: a process step written as text alone, as title: title, runs core's get plugin, which the
+# file does not name, so it gives no edge; a process plugin nested deeper than one sub_process
+# gives none; a migration key of any process step is read as a lookup, as core's lookup plugins are
+# the ones that write it; an id key that differs from the file name is not
+# read.
+
+node_types:
+- name: drupal.migration
+  description: "a migration of core's migrate module, read from a module's migrations/<id>.yml file, or from migrate_plus's configuration"
+  id_namespace: drupal.migration
+- name: drupal.migration_tag
+  description: "a migration tag, as Drupal 7, which migrations list under migration_tags and drush migrate:import --tag selects"
+  id_namespace: drupal.migration_tag
+
+attributes:
+- name: source_module
+  on: [drupal.migration, drupal.discovered_plugin]
+  description: "the module of the source site a migration's source plugin reads, as a migration's or a migrate source plugin's source_module key writes it"
+
+edge_kinds:
+- kind: migration_source
+  cause: from
+  description: "the migration reads its rows with that source plugin, by the id source.plugin writes"
+  from: drupal.migration
+  to: drupal.discovered_plugin
+- kind: migration_process_plugin
+  cause: from
+  description: "the migration's process section runs that process plugin, by the id a step's plugin key writes"
+  from: drupal.migration
+  to: drupal.discovered_plugin
+- kind: migration_destination
+  cause: from
+  description: "the migration saves its rows with that destination plugin, by the id destination.plugin writes, as entity:node"
+  from: drupal.migration
+  to: drupal.discovered_plugin
+- kind: migration_destination_entity_type
+  cause: from
+  description: "the migration saves entities of that type: its destination plugin is entity:<type> or another entity_<x>:<type>"
+  from: drupal.migration
+  to: drupal.entity_type
+- kind: migration_writes_config
+  cause: from
+  description: "the migration's config destination saves that configuration object, by its config_name key"
+  from: drupal.migration
+  to: drupal.config_object
+- kind: migration_requires
+  cause: none
+  description: "the migration lists that migration under migration_dependencies.required: it runs only after that one"
+  from: drupal.migration
+  to: drupal.migration
+- kind: migration_optionally_requires
+  cause: none
+  description: "the migration lists that migration under migration_dependencies.optional: it runs after that one when that one exists"
+  from: drupal.migration
+  to: drupal.migration
+- kind: migration_looks_up
+  cause: from
+  description: "the migration's process looks up ids that migration saved, by a migration_lookup or migration step's migration key"
+  from: drupal.migration
+  to: drupal.migration
+- kind: migration_tagged
+  cause: none
+  description: "the migration lists that tag under migration_tags"
+  from: drupal.migration
+  to: drupal.migration_tag
+
+rules:
+- rule: migration_from_file
+  reads: file
+  in: [migrations]
+  match: {file: '*', filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - node: {type: drupal.migration}
+  - attribute: {name: label, from: {key: label}}
+  - attribute: {name: source_module, from: {key: source.source_module}}
+  confidence: declared
+
+- rule: migration_from_file_edges
+  reads: file
+  in: [migrations]
+  match: {file: '*', filetype: yaml}
+  id: {from: file_stem}
+  emits: &migration_edges
+  - edge: {kind: migration_source, from: this_node, to: {from: {key: source.plugin}, pattern: '^(?<plugin>.+)$', template: 'MigrateSource::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.process.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.process.*.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.*.process.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.*.process.*.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.process.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.process.*.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.*.process.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.*.process.*.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_destination, from: this_node, to: {from: {key: destination.plugin}, pattern: '^(?<plugin>.+)$', template: 'MigrateDestination::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_destination_entity_type, from: this_node, to: {from: {key: destination.plugin}, pattern: '^entity(?:_[a-z_]+)?:(?<type>[a-z0-9_]+)$', template: '{type}', type: drupal.entity_type}}
+  - edge: {kind: migration_writes_config, from: this_node, to: {from: {key: destination.config_name}, type: drupal.config_object}}
+  - edge: {kind: migration_requires, from: this_node, to: {from: {key: migration_dependencies.required}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_optionally_requires, from: this_node, to: {from: {key: migration_dependencies.optional}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_tagged, from: this_node, to: {from: {key: migration_tags}, each: true, type: drupal.migration_tag}}
+  confidence: declared

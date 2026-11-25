@@ -1,0 +1,97 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A media source plugin declared by the MediaSource attribute, or by its subclass OEmbedMediaSource,
+# on its class. Two rules per attribute because a rule that emits an edge emits no node. An id that
+# is not a text literal makes no plugin and is listed under skipped in the map report.
+
+rules:
+- rule: media_source_from_attribute
+  reads: file
+  in:
+  - media_source_classes
+  match:
+    attribute: Drupal\media\Attribute\MediaSource
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.media_source
+  confidence: declared
+- rule: media_source_from_attribute_edges
+  reads: file
+  in:
+  - media_source_classes
+  match:
+    attribute: Drupal\media\Attribute\MediaSource
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+- rule: media_source_from_oembed_attribute
+  reads: file
+  in:
+  - media_source_classes
+  match:
+    attribute: Drupal\media\Attribute\OEmbedMediaSource
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.media_source
+  confidence: declared
+- rule: media_source_from_oembed_attribute_edges
+  reads: file
+  in:
+  - media_source_classes
+  match:
+    attribute: Drupal\media\Attribute\OEmbedMediaSource
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+
+# The media source's label and description, each written as text or as new TranslatableMarkup('...'), as
+# attributes of the node the rule above makes. Read as text, since an attribute rule reads only a
+# text literal; the MediaSource attribute is known by its name in this folder.
+# A value that is not text, such as a constant, gives nothing.
+- rule: media_source_words_from_attribute
+  reads: file
+  in: [media_source_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?m)^#\[\s*(?:\\?Drupal\\media\\Attribute\\)?(?:OEmbed)?MediaSource\s*\((?=(?:(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])id\s*:\s*)[''\"](?<pid>[^''\"]+)[''\"])(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])(?:label|description)\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?[''\"])(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])label\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q0>[''\"])(?<label>(?:(?!(?P=q0))[^\\]|\\.)*)(?P=q0)))?(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])description\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q1>[''\"])(?<description>(?:(?!(?P=q1))[^\\]|\\.)*)(?P=q1)))?'
+  id: {template: '{pid}'}
+  emits:
+  - node: {type: drupal.media_source}
+  - attribute: {name: label, template: '{label}'}
+  - attribute: {name: description, template: '{description}'}
+  confidence: declared

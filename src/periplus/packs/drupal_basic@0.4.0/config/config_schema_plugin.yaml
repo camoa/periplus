@@ -1,0 +1,75 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A configuration schema key named <family>.<plugin id> gives the shape of one plugin's
+# configuration: Drupal reads a plugin's settings through a dynamic type such as
+# action.configuration.[%parent.plugin], which it fills with the plugin id, so the key
+# action.configuration.my_action describes the Action plugin my_action. A map rule joins a key
+# whose family the table config_schema_plugin_nodes in pack.yaml lists to the plugin of that id
+# when the map holds it, a schema_for_plugin edge at the key's line; the table gives the start
+# of the plugin's id for each family. A key written for a plugin's derivatives, as
+# block.settings.my_block:* or views.argument_validator.entity:node, joins the base plugin, the id
+# before the first colon.
+# Inferred: the link is Drupal's naming convention, not a declaration.
+#
+# The table's families, from core's own schema files, each with the dynamic type that fills it
+# and the plugin it names:
+#
+# | family                     | filled by, in core                         | plugin                     |
+# |----------------------------|--------------------------------------------|----------------------------|
+# | action.configuration       | action.configuration.[%parent.plugin]      | Action                     |
+# | block.settings             | block.settings.[id], [%parent.plugin]      | Block                      |
+# | condition.plugin           | condition.plugin.[id]                      | Condition                  |
+# | editor.settings            | editor.settings.[%parent.editor]           | Editor                     |
+# | entity_reference_selection | entity_reference_selection.[%parent.handler] | EntityReferenceSelection |
+# | field.field_settings       | field.field_settings.[%parent.field_type]  | FieldType                  |
+# | field.storage_settings     | field.storage_settings.[%parent.type]      | FieldType                  |
+# | field.value                | field.value.[%parent.%parent.field_type]   | FieldType                  |
+# | field.formatter.settings   | field.formatter.settings.[%parent.type]    | FieldFormatter             |
+# | field.widget.settings      | field.widget.settings.[%parent.type]       | FieldWidget                |
+# | filter_settings            | filter_settings.[%parent.id]               | Filter                     |
+# | image.effect               | image.effect.[%parent.id]                  | ImageEffect                |
+# | layout_plugin.settings     | layout_plugin.settings.[%parent.id]        | Layout                     |
+# | media.source               | media.source.[%parent.source]              | MediaSource                |
+# | search.plugin              | search.plugin.[%parent.plugin]             | Search                     |
+# | workflow.type_settings     | workflow.type_settings.[%parent.type]      | WorkflowType               |
+# | views.access               | views.access.[%parent.type]                | ViewsAccess                |
+# | views.area                 | views.area.[plugin_id]                     | ViewsArea                  |
+# | views.argument             | views.argument.[plugin_id]                 | ViewsArgument              |
+# | views.argument_default     | views.argument_default.[%parent.default_argument_type] | ViewsArgumentDefault |
+# | views.argument_validator   | views.argument_validator.[%parent.validate.type] | ViewsArgumentValidator |
+# | views.cache                | views.cache.[type]                         | ViewsCache                 |
+# | views.display              | views.display.[%parent.display_plugin]     | ViewsDisplay               |
+# | views.display_extender     | views.display_extender.[%key]              | ViewsDisplayExtender       |
+# | views.exposed_form         | views.exposed_form.[%parent.type]          | ViewsExposedForm           |
+# | views.field                | views.field.[plugin_id]                    | ViewsField                 |
+# | views.filter               | views.filter.[plugin_id]                   | ViewsFilter                |
+# | views.pager                | views.pager.[%parent.type]                 | ViewsPager                 |
+# | views.query                | views.query.[%parent.type]                 | ViewsQuery                 |
+# | views.relationship         | views.relationship.[plugin_id]             | ViewsRelationship          |
+# | views.row                  | views.row.[%parent.type]                   | ViewsRow                   |
+# | views.sort                 | views.sort.[plugin_id]                     | ViewsSort                  |
+# | views.style                | views.style.[%parent.type]                 | ViewsStyle                 |
+#
+# Limits: ckeditor5.plugin.<id> is left out, since a CKEditor 5 plugin is declared in a
+# *.ckeditor5.yml file this pack does not map as a plugin; so are views.filter_value,
+# views.sort_expose and views.filter.group_item, which describe a part of a views plugin's
+# options, and a contributed family, which its module's own pack adds to the table under
+# add_table_rows. A plugin id written with a colon of its own, as entity:delete_action, is read as
+# its base before the colon.
+
+edge_kinds:
+- kind: schema_for_plugin
+  cause: none
+  description: "the configuration schema key <family>.<plugin id> gives the shape of that plugin's configuration, by Drupal's naming convention"
+  from: drupal.config_schema
+  to: drupal.plugin
+
+rules:
+- rule: schema_for_plugin_by_family
+  reads: map
+  match:
+    node_type: drupal.config_schema
+    where: [{id_matches: '^drupal\.config_schema::(?<family>.+)\.(?<id>[^.:*]+)(?::[^.]*)?$'}]
+    follow: [{in_table: {table: config_schema_plugin_nodes, capture: family, value: plugin}}, {node: '{plugin}::{id}'}]
+  emits: [{edge: {kind: schema_for_plugin, from: this_node, to: matched_node}}]
+  confidence: inferred

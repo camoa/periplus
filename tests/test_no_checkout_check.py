@@ -19,7 +19,7 @@ def test_the_no_checkout_check_flags_root_files_absolute_paths_and_windows_homes
         "6. Read the rule format in src/periplus/rutters/php/rutter.yaml.\n"
         "7. Then open ~/workspace/periplus/rutter.yaml.\n"
         "8. Or open $HOME/workspace/periplus/rutter.yaml.\n"
-        "9. Or open periplus/src/periplus/packs/php_basic@0.2.0/pack.yaml.\n"
+        "9. Or open periplus/src/periplus/packs/php_basic@0.3.0/pack.yaml.\n"
         "10. Check pyproject.toml for the version.\n"
         "11. Or copy it to /tmp./srv/map.json.\n"
     )
@@ -32,7 +32,7 @@ def test_the_no_checkout_check_flags_root_files_absolute_paths_and_windows_homes
     assert "periplus-bad: src/periplus/rutters/php/rutter.yaml" in flagged
     assert "periplus-bad: ~/workspace/periplus/rutter.yaml" in flagged
     assert "periplus-bad: $HOME/workspace/periplus/rutter.yaml" in flagged
-    assert "periplus-bad: periplus/src/periplus/packs/php_basic@0.2.0/pack.yaml" in flagged
+    assert "periplus-bad: periplus/src/periplus/packs/php_basic@0.3.0/pack.yaml" in flagged
     assert "periplus-bad: pyproject.toml" in flagged
     assert "periplus-bad: /tmp./srv/map.json" in flagged
 

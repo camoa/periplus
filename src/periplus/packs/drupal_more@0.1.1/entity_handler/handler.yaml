@@ -1,0 +1,41 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The handler classes an entity annotation names, one has_handler edge per entry of handlers whose
+# value is quoted text, such as storage, access, list_builder or views_data, and per entry of a
+# group inside handlers, such as each form operation inside "form" and each route provider inside
+# "route_provider". The class is the value, a leading backslash dropped, and the edge sits at the
+# entry's key line. An entry whose value is not quoted text makes nothing and is listed under
+# skipped.
+
+rules:
+- rule: handler
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ContentEntityType, each: 'handlers.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id: {template: '{enclosing_type}'}
+  emits: [{edge: {kind: has_handler, from: this_node, to: {template: '{value}', normalize: [{replace: '^\\', with: ''}]}}}]
+  confidence: declared
+
+- rule: grouped_handler
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ContentEntityType, each: 'handlers.*.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id: {template: '{enclosing_type}'}
+  emits: [{edge: {kind: has_handler, from: this_node, to: {template: '{value}', normalize: [{replace: '^\\', with: ''}]}}}]
+  confidence: declared
+
+- rule: config_handler
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ConfigEntityType, each: 'handlers.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id: {template: '{enclosing_type}'}
+  emits: [{edge: {kind: has_handler, from: this_node, to: {template: '{value}', normalize: [{replace: '^\\', with: ''}]}}}]
+  confidence: declared
+
+- rule: config_grouped_handler
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ConfigEntityType, each: 'handlers.*.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id: {template: '{enclosing_type}'}
+  emits: [{edge: {kind: has_handler, from: this_node, to: {template: '{value}', normalize: [{replace: '^\\', with: ''}]}}}]
+  confidence: declared

@@ -1,0 +1,50 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Foo::class, \A\B\Foo::class or Lib\Foo::class inside a function or method: a references_class
+# edge from it to the class the name names, resolved as PHP resolves a class name. Outside any
+# method, in a class's attribute, a class constant or a property default, the edge starts from the
+# class-like around it. A class the map does not hold is unresolved. Foo::SOME_CONST and
+# \A\B\Foo::SOME_CONST make nothing.
+#
+# Limits: self::class, static::class, parent::class and $x::class make nothing. A ::class outside
+# any class-like, function or method lists a skipped row: no enclosing declaration is mapped.
+edge_kinds:
+
+- kind: references_class
+  cause: touch
+  description: "the function, method or class-like names that class, interface, trait or enum as Foo::class"
+  from: [php.function, php.method, php.class_like]
+  to: php.class_like
+
+rules:
+
+# \A\B\Foo::class and Lib\Foo::class. The first condition passes over a scope that is not a
+# qualified name; the second keeps ::class, the name child after the qualified one.
+- rule: references_class_qualified
+  reads: file
+  in: [source]
+  match:
+    reference: class_constant_access_expression
+    name_child: [qualified_name]
+    filetype: php
+    where:
+    - name_matches: {child: qualified_name, pattern: '.+'}
+    - name_matches: {child: name, pattern: '(?i:class)'}
+  emits: [{edge: {kind: references_class, from: enclosing_declaration, to: {types: [php.class_like], on_miss: unresolved}}}]
+  confidence: declared
+
+# Foo::class. The tree gives Foo::class and Foo::SOME_CONST the same shape, two name children with
+# no field; the condition keeps ::class, the second. After a qualified name there is one name
+# child, so this rule and the one above never fire on one expression.
+- rule: references_class_plain
+  reads: file
+  in: [source]
+  match:
+    reference: class_constant_access_expression
+    name_child: [name]
+    filetype: php
+    skip_names: [self, static, parent]
+    where:
+    - name_matches: {child: name, nth: 2, pattern: '(?i:class)'}
+  emits: [{edge: {kind: references_class, from: enclosing_declaration, to: {types: [php.class_like], on_miss: unresolved}}}]
+  confidence: declared

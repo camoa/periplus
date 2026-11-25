@@ -1,0 +1,49 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# class_alias('A\Original', 'A\Alias') gives the class A\Original a second name, A\Alias, for
+# every file that runs after it. The alias is a php.class_alias node under its full name, at the
+# call's line, with an inherits edge to the class it names. So a type, a call or a constant
+# written through the alias is a known name: a lookup that walks inherits, as every member and
+# constant lookup of the rutters does, finds A\Original's members, and a class that extends the
+# alias reaches them too. Each argument is a text literal, single or double quoted, or a fully
+# qualified \A\Original::class; a leading backslash is dropped and a doubled one read as one.
+# Declared: the call states both names. A call inside an if still declares the alias, though it
+# holds only when the condition does.
+#
+# Limits: a short X::class argument, which only the file's imports resolve, a variable, a constant
+# or a joined text gives nothing, and so does a call with a third argument that is not a literal.
+# inherits from the alias is a lookup step: the alias is the same class, not a subclass.
+
+node_types:
+- name: php.class_alias
+  description: "a second name class_alias() gives a class, under its full name; its inherits edge ends at the class"
+  parent: php.class_like
+
+rules:
+- rule: class_alias_name
+  reads: file
+  in: [source]
+  match: &class_alias
+    declaration: function_call_expression
+    name_child: function
+    filetype: php
+    where: [{name_matches: {child: function, pattern: '\\?(?i:class_alias)'}}]
+  id:
+    from: arguments
+    pattern: &alias_arguments '^\(\s*(?:[''"]\\*|\\)(?<original>[A-Za-z_][\w\\]*?)(?:[''"]|::class)\s*,\s*(?:[''"]\\*|\\)(?<alias>[A-Za-z_][\w\\]*?)(?:[''"]|::class)\s*(?:,\s*(?:TRUE|true|FALSE|false)\s*)?\)$'
+    template: '{alias}'
+    normalize: [{replace: '\\\\', with: '\'}]
+  emits: [{node: {type: php.class_alias}}]
+  confidence: declared
+
+- rule: class_alias_of
+  reads: file
+  in: [source]
+  match: *class_alias
+  id:
+    from: arguments
+    pattern: *alias_arguments
+    template: '{original}'
+    normalize: [{replace: '\\\\', with: '\'}]
+  emits: [{edge: {kind: inherits, from: {declared: php.class_alias}, to: this_node}}]
+  confidence: declared

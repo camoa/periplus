@@ -1,0 +1,86 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A new expression, new Foo(), new \Lib\Foo(), new self() and new static(), gives an instantiates
+# edge from the function or method around it to the class it creates. A written class name
+# resolves through the namespace and the imports, as a static call's class does; a class the map
+# does not hold stays unresolved under its full name. self and static name the enclosing class,
+# inferred, since PHP binds static to the class the call runs on.
+#
+# Limits: new parent() makes nothing. A class name held in a variable, new $class(), gets no
+# edge: inside a class method it keeps a php.call_site node marked resolution: runtime, as
+# types/find_runtime_calls.yaml does for a variable callee. A new in an attribute, as
+# label: new TranslatableMarkup('x'), makes nothing and lists no row: the attribute's reader, not
+# the class, creates that object. A new outside any function, method or attribute lists the
+# skipped row "no enclosing declaration is mapped". An anonymous class, new class {},
+# and a class name built by an expression, new ($x)() or new $this->cls(), make nothing.
+edge_kinds:
+
+- kind: instantiates
+  cause: from
+  description: "the function or method creates an object of that class with new; new self() and new static() name the enclosing class"
+  from: [php.function, php.method]
+  to: php.class_like
+
+rules:
+
+- rule: instantiates_class
+  reads: file
+  in: [source]
+  match:
+    reference: object_creation_expression
+    name_child: [name]
+    filetype: php
+    where: [{name_matches: {child: name, pattern: '\w+'}}, &outside_attribute {not_within: [attribute_list]}]
+    skip_names: [self, static, parent]
+  emits: [{edge: {kind: instantiates, from: enclosing_declaration, to: {types: [php.class], on_miss: unresolved}}}]
+  confidence: declared
+
+# The where keeps this rule off a new of a plain name, which would otherwise list a skipped row.
+- rule: instantiates_qualified_class
+  reads: file
+  in: [source]
+  match:
+    reference: object_creation_expression
+    name_child: [qualified_name]
+    filetype: php
+    where: [{name_matches: {child: qualified_name, pattern: '.+'}}, *outside_attribute]
+  emits: [{edge: {kind: instantiates, from: enclosing_declaration, to: {types: [php.class], on_miss: unresolved}}}]
+  confidence: declared
+
+- rule: instantiates_own_class
+  reads: file
+  in: [source]
+  match:
+    declaration: object_creation_expression
+    name_child: [name]
+    filetype: php
+    where: [{name_matches: {child: name, pattern: 'self|static'}}]
+  id: {from: [enclosing_type, enclosing_method], template: '{enclosing_type}::{enclosing_method}'}
+  emits: [{edge: {kind: instantiates, from: enclosing_method, to: enclosing_class}}]
+  confidence: inferred
+
+- rule: find_runtime_creation
+  reads: file
+  in: [source]
+  match: &runtime_new
+    declaration: object_creation_expression
+    name_child: [variable_name]
+    filetype: php
+  id: &runtime_new_id
+    from: [enclosing_type, enclosing_method, declared_name]
+    template: "{enclosing_type}::{enclosing_method}::new {declared_name}"
+  emits:
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+# The twin, as runtime_function_call_method: the marked site to and from the method around it.
+- rule: runtime_creation_method
+  reads: file
+  in: [source]
+  match: *runtime_new
+  id: *runtime_new_id
+  emits:
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared

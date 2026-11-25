@@ -1,0 +1,61 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A migration group, read from its configuration, migrate_plus.migration_group.<id>, named by
+# <id>, with its label; and the group a migration names under migration_group, in a
+# migrate_plus.migration.<id> config file or a core migrations file. A group no mapped file
+# declares ends at a referenced node.
+
+node_types:
+- name: migrate_plus.migration_group
+  description: "a migrate_plus migration group, read from its migrate_plus.migration_group.<id> configuration and named by <id>"
+  id_namespace: migrate_plus.migration_group
+
+edge_kinds:
+- kind: group_kept_in_config
+  cause: none
+  description: "the migration group is stored as that configuration object"
+  from: migrate_plus.migration_group
+  to: drupal.config_object
+- kind: migration_in_group
+  cause: none
+  description: "the migration names that group under migration_group"
+  from: drupal.migration
+  to: migrate_plus.migration_group
+
+rules:
+- rule: migration_group_from_config
+  reads: file
+  in: [config, module_config]
+  match: {file: 'migrate_plus.migration_group.*', filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^migrate_plus\.migration_group\.', with: ''}]}
+  emits:
+  - node: {type: migrate_plus.migration_group}
+  - attribute: {name: label, from: {key: label}}
+  confidence: declared
+
+- rule: migration_group_from_config_edges
+  reads: file
+  in: [config, module_config]
+  match: {file: 'migrate_plus.migration_group.*', filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^migrate_plus\.migration_group\.', with: ''}]}
+  emits:
+  - edge: {kind: group_kept_in_config, from: this_node, to: {from: {key: id}, pattern: '^(?<id>.+)$', template: 'migrate_plus.migration_group.{id}', type: drupal.config_object}}
+  confidence: declared
+
+- rule: config_migration_in_group
+  reads: file
+  in: [config, module_config]
+  match: {file: 'migrate_plus.migration.*', filetype: yaml}
+  id: {from: file_stem, normalize: [{replace: '^migrate_plus\.migration\.', with: ''}]}
+  emits:
+  - edge: {kind: migration_in_group, from: this_node, to: {from: {key: migration_group}, type: migrate_plus.migration_group}}
+  confidence: declared
+
+- rule: file_migration_in_group
+  reads: file
+  in: [migrations]
+  match: {file: '*', filetype: yaml}
+  id: {from: file_stem}
+  emits:
+  - edge: {kind: migration_in_group, from: this_node, to: {from: {key: migration_group}, type: migrate_plus.migration_group}}
+  confidence: declared

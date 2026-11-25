@@ -1,0 +1,90 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A role held in a class constant and tested with in_array against a user's roles, as
+# role_in_array.yaml reads a quoted role: a checks_role edge from the method or function around
+# the call to user.role.<text>, where <text> is the text the constant is declared with
+# (constant/constant_text.yaml), an unresolved role when no mapped file declares that role, at the
+# call's line. Each call is role_in_array.yaml's drupal.role_call node. Inferred: the role is read
+# one hop away, through the constant. Three forms, one rule each:
+# - in_array(self::X, $account->getRoles()) or static::X in a method: a map rule takes the class
+#   around the call and X from the call as written, walks from that class to its parents and
+#   interfaces and reads the text of the nearest one that declares X.
+# - in_array(Owner::X, $account->getRoles()): the call's argument stands for the text Owner
+#   declares X with, when a mapped file declares it (constant_access in pack.yaml), as a
+#   names_checked_role_by_constant edge to the role-name hub; a constant of core or contrib, or
+#   one only a parent of Owner declares, leaves a skipped row.
+# - in_array(self::X, $roles): as the first form, joined only when every value the method assigns
+#   $roles is a getRoles() call, as role_in_array.yaml reads a variable.
+#
+# in_array(Owner::X, $roles), parent::X, and a constant held in a variable give nothing here.
+
+edge_kinds:
+- kind: names_checked_role_by_constant
+  cause: none
+  description: "step to checks_role: the method or function calls in_array() on a getRoles() list with a class constant that holds that role name"
+  from: [php.method, php.function]
+  to: drupal.role_name
+
+rules:
+- rule: code_checks_role_by_constant_in_roles_list
+  reads: map
+  match:
+    node_type: drupal.role_call
+    where: [{id_matches: '(?s)^drupal\.role_call::(?<caller>php\.method::(?<class>[^|]+)::\w+)\|\\?in_array\(\s*(?:self|static)::(?<constant>[A-Z_][A-Z0-9_]*)\s*,\s*[^,]*->getRoles\(\s*(?:TRUE|FALSE|true|false)?\s*\)\s*(?:,\s*(?:TRUE|FALSE|true|false)\s*)?,?\s*\)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.class_constant::{declarer}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<role>.+)$'
+    - node: '{caller}'
+  emits: [{edge: {kind: checks_role, from: matched_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: owner_constant_checked_in_roles_list
+  reads: file
+  in: [source]
+  match:
+    reference: function_call_expression
+    name_child: function
+    filetype: php
+    where:
+    - {name_matches: {child: function, pattern: '\\?in_array'}}
+    - {name_matches: {child: arguments, pattern: '(?s)\(\s*\\?(?:[A-Za-z_]\w*\\)*[A-Za-z_]\w*::[A-Z_][A-Z0-9_]*\s*,\s*[^,]*->getRoles\(\s*(?:TRUE|FALSE|true|false)?\s*\)\s*(?:,\s*(?:TRUE|FALSE|true|false)\s*)?,?\s*\)'}}
+    - {name_matches: {child: arguments, pattern: '(?s)\(\s*(?!(?:self|static|parent)::).*'}}
+  emits: [{edge: {kind: names_checked_role_by_constant, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.role_name]}}}]
+  confidence: inferred
+
+# From the method or function: each link its file rule wrote, at the link's line, as role_call.yaml
+# joins.
+- rule: code_checks_role_by_owner_constant
+  reads: map
+  match:
+    node_type: php.callable
+    follow: [{edge: names_checked_role_by_constant}, {place: edge}, {id_matches: '^drupal\.role_name::(?<role>.+)$'}]
+  emits: [{edge: {kind: checks_role, from: this_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: code_checks_role_constant_in_roles_variable
+  reads: map
+  match:
+    node_type: drupal.role_call
+    where: [{id_matches: '(?s)^drupal\.role_call::(?<caller>php\.method::(?<owner>(?<class>[^|]+)::\w+))\|\\?in_array\(\s*(?:self|static)::(?<constant>[A-Z_][A-Z0-9_]*)\s*,\s*\$(?<variable>\w+)\s*(?:,\s*(?:TRUE|FALSE|true|false)\s*)?,?\s*\)$'}]
+    follow:
+    - node: 'php.local_variable::{owner}::${variable}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::[^=]*=[^=]*->getRoles\(\s*(?:TRUE|FALSE|true|false)?\s*\)$'
+    - node: 'php.type::{class}'
+    - ancestors: [inherits, implements]
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.class_constant::{declarer}::{constant}'
+    - edge: has_constant_text
+    - id_matches: '^drupal\.constant_text::(?<role>.+)$'
+    - node: '{caller}'
+    unless_matched:
+    - - node: 'php.local_variable::{owner}::${variable}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::[^=]*=(?![^=]*->getRoles\(\s*(?:TRUE|FALSE|true|false)?\s*\)$)'
+  emits: [{edge: {kind: checks_role, from: matched_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: inferred

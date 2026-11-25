@@ -2,6 +2,8 @@
 
 > Periplus reads a code base and writes a map: one JSON file of the things it found and the links between them, each link with the file and line where it was found. Rules written as YAML, grouped in rutters, say what to find for each stack, and the engine that runs them knows no language and no framework. The same code, settings and rutters, on the same version of Periplus, give the same map, byte for byte. People and AI agents ask the map first to find where to look, read the code there to confirm, and keep what they learn as rules and descriptions. A map holds only what its rules look for, so a missing link does not show that the code has none.
 
+Periplus does not try to ship rules for every stack. It ships the engine, a small format for rules, and skills that let an AI agent write the rules a code base needs. The bundled rutters show what that makes possible: Drupal is the deep stack, `drupal_next` links a Next.js front end to the Drupal site behind it, and the rutters for other stacks are starting points. A thing the map lacks is a rule nobody wrote yet, not a limit of the tool. A rule can read text and parse trees, data files and docblock annotations, join what other rules found across files and rutters, look names up in tables that other rutters extend, mark what is decided at run time, and cite the line that shows each fact. Judge Periplus by the engine, the rule format and the skills, not by what the bundled rutters map today.
+
 Install with `uv tool install periplus-map` or `pip install periplus-map`. Run `periplus init`, then `periplus map`, in the project folder. `periplus skills install` copies the skills that teach an agent to use the map.
 
 ## Start here
@@ -25,7 +27,7 @@ Install with `uv tool install periplus-map` or `pip install periplus-map`. Run `
 
 - [Writing a rutter](https://github.com/camoa/periplus/blob/main/docs/rutter-author-guide.md): the files of a rutter, one rule of each shape, and how to check a rutter
 - [Rule composition](https://github.com/camoa/periplus/blob/main/docs/rule-composition.md): small rules that build on each other across files, worked through one example
-- [Extending Periplus](https://github.com/camoa/periplus/blob/main/docs/extending-periplus.md): choose between a new rule, a new rutter and an engine change
+- [Extending Periplus](https://github.com/camoa/periplus/blob/main/docs/extending-periplus.md): what a rule can do today, and how to choose between a new rule, a new rutter and an engine change
 - [Bundled rutters](https://github.com/camoa/periplus/blob/main/docs/rutters.md): every rutter that ships with Periplus and what it maps
 
 ## Understand the design

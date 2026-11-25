@@ -1,0 +1,106 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A call that runs a hook, as an invokes_hook edge from the method or function around the call to
+# the hook, named without its hook_ prefix. ModuleHandlerInterface and ThemeManagerInterface run a
+# hook by its name, written as the call's text argument:
+#
+#   invoke($module, 'x'), invokeAll('x'), invokeAllWith('x', ...), invokeDeprecated($m, $module,
+#   'x') and invokeAllDeprecated($m, 'x') on a module handler, and invoke($theme, 'x') and
+#   invokeAllWith('x', ...) on a theme manager, run hook x;
+#   alter('x') on either, alterDeprecated($m, 'x') on a module handler and alterForTheme($theme,
+#   'x') on a theme manager run hook x_alter; alter(['x', 'y']) runs x_alter and y_alter, as
+#   hook/hook_alter_list.yaml reads.
+#
+# The object is known by its name, as config/config_call.yaml knows a config factory: an object
+# written ending in moduleHandler, module_handler, themeManager or theme_manager, with or without
+# (), as $this->moduleHandler, $module_handler, $this->moduleHandler() and
+# \Drupal::moduleHandler(); \Drupal::theme(); and the container's get('module_handler') or
+# get('theme.manager'), or \Drupal::service() of either id. Inferred: the object's name, not its
+# type, says what it is. A hook in a variable, a constant or a joined text gives no edge here;
+# hook/hook_invoke_runtime.yaml marks the call. hasImplementations() runs no hook and gives
+# nothing.
+#
+# The hook ends at the drupal.hook node the implementations reach, by a function's name or a Hook
+# attribute, so a hook's invokers and implementers meet at one node.
+
+edge_kinds:
+- kind: invokes_hook
+  cause: from
+  description: "the function or method runs that hook through a module handler or theme manager, as invokeAll('x') or alter('x') for x_alter; the object is known by its name"
+  from: [php.method, php.function]
+  to: drupal.hook
+
+rules:
+# invokeAll('x') and invokeAllWith('x', ...): the first argument.
+- rule: hook_invoked_first_argument
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: &runner '(?s).*(?:[mM]oduleHandler|module_handler|[tT]hemeManager|theme_manager)(?:\(\))?|\\?Drupal::theme\(\)|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\(\s*[''"](?:module_handler|theme\.manager)[''"]\s*\)|\\?Drupal::service\(\s*[''"](?:module_handler|theme\.manager)[''"]\s*\)'}
+    - name_matches: {child: name, pattern: 'invokeAll|invokeAllWith'}
+  emits: [{edge: {kind: invokes_hook, from: enclosing_declaration, to: {from: {argument: 0}, types: [drupal.hook]}}}]
+  confidence: inferred
+
+# invoke($module, 'x') and invokeAllDeprecated($message, 'x'): the second argument.
+- rule: hook_invoked_second_argument
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *runner}
+    - name_matches: {child: name, pattern: 'invoke|invokeAllDeprecated'}
+  emits: [{edge: {kind: invokes_hook, from: enclosing_declaration, to: {from: {argument: 1}, types: [drupal.hook]}}}]
+  confidence: inferred
+
+# invokeDeprecated($message, $module, 'x'): the third argument.
+- rule: hook_invoked_third_argument
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *runner}
+    - name_matches: {child: name, pattern: invokeDeprecated}
+  emits: [{edge: {kind: invokes_hook, from: enclosing_declaration, to: {from: {argument: 2}, types: [drupal.hook]}}}]
+  confidence: inferred
+
+# alter('x'): hook x_alter, from the first argument.
+- rule: hook_altered_first_argument
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *runner}
+    - name_matches: {child: name, pattern: alter}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<type>\w+)[''"]\s*[,)].*'}
+  emits: [{edge: {kind: invokes_hook, from: enclosing_declaration, to: {template: '{type}_alter', types: [drupal.hook]}}}]
+  confidence: inferred
+
+# alterDeprecated($message, 'x') and alterForTheme($theme, 'x'): hook x_alter, from the second
+# argument. The first argument is read past one level of parentheses, as
+# $this->themeManager->getActiveTheme().
+- rule: hook_altered_second_argument
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *runner}
+    - name_matches: {child: name, pattern: 'alterDeprecated|alterForTheme'}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*(?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))+,\s*[''"](?<type>\w+)[''"]\s*[,)].*'}
+  emits: [{edge: {kind: invokes_hook, from: enclosing_declaration, to: {template: '{type}_alter', types: [drupal.hook]}}}]
+  confidence: inferred

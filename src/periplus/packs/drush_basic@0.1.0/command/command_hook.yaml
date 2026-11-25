@@ -1,0 +1,102 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A hook method of a command file, which Drush runs around a command: hooks_command from the
+# method to the command, holding the hook type as written in the edge attribute hook_type. The
+# annotated-command library attaches a hook to the command its target names, or, with no target,
+# to every command defined in the same class:
+# - #[CLI\Hook(type: X, target: 'cmd')] and the docblock tag @hook <type> cmd give the edge to
+#   cmd, declared, a command no mapped file declares, as a core Drush command, ending at a
+#   referenced node;
+# - #[CLI\Hook(type: X)] with no target, and @hook <type> with no target, keep the method as an
+#   internal drush.class_hook, and a map rule gives the edge to each command whose command_class is
+#   the method's class, inferred.
+# The attribute is read as text, written CLI\Hook, Hook or Drush\Attributes\Hook, up to the
+# function keyword of the method it sits on, in a class under src by Drupal's PSR-4 layout.
+#
+# An on-event hook, type HookManager::ON_EVENT or @hook on-event, names a custom event, not a
+# command, as its target, and gives nothing.
+#
+# Limits: a target written as the command method's name, holding a capital, as an @annotation or
+# as *, gives nothing; a hook method of a class that defines no command and names no target gives
+# nothing; a type or target that is not written as above gives nothing.
+
+node_types:
+- name: drush.class_hook
+  description: "internal: a Drush hook method with no target, named <class>::<method>|<hook type>, before the map joins it to its class's commands"
+  id_namespace: drush.class_hook
+  internal: true
+
+rules:
+- rule: hook_attribute_with_target
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[\s*(?:CLI\\|\\?Drush\\Attributes\\)?Hook\(\s*type:\s*(?<type>(?![\w\\]*::ON_EVENT\b)[\w\\:]+)\s*,\s*target:\s*[''"](?<target>[a-z0-9][a-z0-9_:.-]*)[''"]\s*\)\s*\]\s*(?:#\[[^\]]*\]\s*)*(?:(?:public|protected|private|static|final)\s+)*function\s+(?<method>\w+)'
+  id: {template: '{target}'}
+  line: {capture: type}
+  emits:
+  - edge:
+      kind: hooks_command
+      from: {template: '{psr4_class}::{method}', types: [php.method]}
+      to: this_node
+      attributes: {hook_type: {template: '{type}'}}
+  confidence: declared
+
+- rule: hook_docblock_with_target
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@hook[ \t]+(?<type>(?!on-event\b)[\w-]+)[ \t]+(?<target>[a-z0-9][a-z0-9_:.-]*)[ \t]*\n(?:[^*]|\*(?!/))*\*/\s*(?:#\[[^\]]*\]\s*)*(?:(?:public|protected|private|static|final)\s+)*function\s+(?<method>\w+)'
+  id: {template: '{target}'}
+  line: {capture: type}
+  emits:
+  - edge:
+      kind: hooks_command
+      from: {template: '{psr4_class}::{method}', types: [php.method]}
+      to: this_node
+      attributes: {hook_type: {template: '{type}'}}
+  confidence: declared
+
+- rule: hook_attribute_without_target
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '#\[\s*(?:CLI\\|\\?Drush\\Attributes\\)?Hook\(\s*type:\s*(?<type>(?![\w\\]*::ON_EVENT\b)[\w\\:]+)\s*\)\s*\]\s*(?:#\[[^\]]*\]\s*)*(?:(?:public|protected|private|static|final)\s+)*function\s+(?<method>\w+)'
+  id: {template: '{psr4_class}::{method}|{type}'}
+  line: {capture: type}
+  emits: [{node: {type: drush.class_hook}}]
+  confidence: declared
+
+- rule: hook_docblock_without_target
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '@hook[ \t]+(?<type>(?!on-event\b)[\w-]+)[ \t]*\n(?:[^*]|\*(?!/))*\*/\s*(?:#\[[^\]]*\]\s*)*(?:(?:public|protected|private|static|final)\s+)*function\s+(?<method>\w+)'
+  id: {template: '{psr4_class}::{method}|{type}'}
+  line: {capture: type}
+  emits: [{node: {type: drush.class_hook}}]
+  confidence: declared
+
+- rule: class_hook_of_command
+  reads: map
+  match:
+    node_type: drush.class_hook
+    where: [{id_matches: '^drush\.class_hook::(?<class>.+)::(?<method>\w+)\|(?<type>.+)$'}]
+    follow: [{node: 'php.type::{class}'}, {incoming_edge: command_class}]
+  emits:
+  - edge:
+      kind: hooks_command
+      from: {template: '{class}::{method}', types: [php.method]}
+      to: matched_node
+      attributes: {hook_type: {template: '{type}'}}
+  confidence: inferred

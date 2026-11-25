@@ -1,0 +1,41 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A hook a module documents in its <module>.api.php file, by Drupal's convention: a function named
+# hook_ then the hook's name, as function hook_x_alter(array &$info), documents hook x_alter. The
+# function, which php_basic maps and which never runs, gets a documents_hook edge to the hook node
+# the implementations and the invocations reach, and the hook node gets the function's place.
+# Two rules because a rule that emits an edge emits no node. The ending api.php, which pack.yaml
+# claims on its own, keeps the rules to those files.
+#
+# A name with a placeholder keeps it, as written: hook_ENTITY_TYPE_insert documents the hook node
+# ENTITY_TYPE_insert, which an implementation named for one type, such as node_insert, reaches
+# through hook_instance.yaml's instance_of_hook.
+# hook/hook_known.yaml reads the same functions as text, to tell a known hook from a name match.
+
+edge_kinds:
+- kind: documents_hook
+  cause: none
+  description: "the function in an *.api.php file documents that hook: its name is hook_ then the hook's name, and the file never runs"
+  from: php.function
+  to: drupal.hook
+
+rules:
+- rule: hook_from_api_file
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: api.php}
+  id: {from: declared_name, pattern: '^hook_(?<hook>\w+)$', template: '{hook}'}
+  emits: [{node: {type: drupal.hook}}]
+  confidence: declared
+
+- rule: api_function_documents_hook
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, filetype: php, ending: api.php}
+  id: {from: declared_name, pattern: '^hook_(?<hook>\w+)$', template: '{hook}'}
+  emits:
+  - edge:
+      kind: documents_hook
+      from: {declared: php.function}
+      to: this_node
+  confidence: declared

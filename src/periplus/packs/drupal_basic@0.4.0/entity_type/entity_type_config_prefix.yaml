@@ -1,0 +1,78 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A config entity type stores its entities as configuration named <provider>.<config_prefix>.<id>,
+# or <provider>.<entity type id>.<id> when it declares no config_prefix: a config_name_prefix edge
+# from the type to the drupal.config_prefix node <provider>.<prefix>., with its trailing dot. The
+# provider is the module whose namespace holds the entity class, Drupal\<module>\..., as core's
+# discovery sets it, read from the file's path by Drupal's PSR-4 layout. Inferred: core's naming
+# rule, not the file, joins the provider and the prefix. The edge sits at the config_prefix line,
+# or at the id line when there is none. Read as text, so the annotation's or attribute's id is a
+# text in quotes; the id and config_prefix are found as the keys id and config_prefix anywhere
+# before the annotation's comment ends, or the attribute's )] closes.
+
+edge_kinds:
+- kind: config_name_prefix
+  cause: none
+  description: "the config entity type stores each entity as configuration whose name starts with that prefix, <provider module>.<config_prefix>."
+  from: drupal.entity_type
+  to: drupal.config_prefix
+
+rules:
+# @ConfigEntityType(id = "my_type", ..., config_prefix = "type").
+- rule: config_prefix_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '*'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?s)@ConfigEntityType\((?=(?:(?!\*/).)*?(?<![\w"])id\s*=\s*"(?<id>[^"]+)")(?:(?!\*/).)*?(?<![\w"])config_prefix\s*=\s*"(?<prefix>[^"]+)"'
+  values: &provider
+    provider: {template: '{psr4_class}', normalize: [{replace: '^Drupal\\(?:Tests\\)?', with: ''}, {replace: '\\.*$', with: ''}]}
+  id: {template: '{id}'}
+  line: {capture: prefix}
+  emits: [{edge: {kind: config_name_prefix, from: this_node, to: {template: '{provider}.{prefix}.', types: [drupal.config_prefix]}}}]
+  confidence: inferred
+
+# @ConfigEntityType(id = "my_type", ...) with no config_prefix: the prefix is the id.
+- rule: config_prefix_default_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '*'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?s)@ConfigEntityType\((?!(?:(?!\*/).)*?(?<![\w"])config_prefix\s*=)(?:(?!\*/).)*?(?<![\w"])id\s*=\s*"(?<id>[^"]+)"'
+  values: *provider
+  id: {template: '{id}'}
+  line: {capture: id}
+  emits: [{edge: {kind: config_name_prefix, from: this_node, to: {template: '{provider}.{id}.', types: [drupal.config_prefix]}}}]
+  confidence: inferred
+
+# #[ConfigEntityType(id: 'my_type', ..., config_prefix: 'type')].
+- rule: config_prefix_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '*'
+    filetype: drupal_php_text
+    text: '(?s)#\[\s*\\?(?:Drupal\\Core\\Entity\\Attribute\\)?ConfigEntityType\s*\((?=(?:(?!\)\s*\]).)*?(?<![\w$>''"])id\s*:\s*[''"](?<id>[^''"]+)[''"])(?:(?!\)\s*\]).)*?(?<![\w$>''"])config_prefix\s*:\s*[''"](?<prefix>[^''"]+)[''"]'
+  values: *provider
+  id: {template: '{id}'}
+  line: {capture: prefix}
+  emits: [{edge: {kind: config_name_prefix, from: this_node, to: {template: '{provider}.{prefix}.', types: [drupal.config_prefix]}}}]
+  confidence: inferred
+
+# #[ConfigEntityType(id: 'my_type', ...)] with no config_prefix.
+- rule: config_prefix_default_from_attribute
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '*'
+    filetype: drupal_php_text
+    text: '(?s)#\[\s*\\?(?:Drupal\\Core\\Entity\\Attribute\\)?ConfigEntityType\s*\((?!(?:(?!\)\s*\]).)*?(?<![\w$>''"])config_prefix\s*:)(?:(?!\)\s*\]).)*?(?<![\w$>''"])id\s*:\s*[''"](?<id>[^''"]+)[''"]'
+  values: *provider
+  id: {template: '{id}'}
+  line: {capture: id}
+  emits: [{edge: {kind: config_name_prefix, from: this_node, to: {template: '{provider}.{id}.', types: [drupal.config_prefix]}}}]
+  confidence: inferred

@@ -45,12 +45,61 @@ Install Periplus and its skills, then ask the agent to set Periplus up in the pr
 map. The setup skill pins the rutters, sets where the code is, builds the map and says what it
 holds. See [Using the map with an AI agent](using-the-map-with-an-agent.md#things-you-can-ask).
 
+### How do I upgrade Periplus?
+
+Run `periplus upgrade`. It asks PyPI for the newest version, finds how Periplus was installed, and
+runs the matching command. It also refreshes the skills in `~/.claude/skills` when they are
+installed. Then run `periplus update` in each project to move its rutter pins, and map again.
+`periplus upgrade --check` says what it would run and changes nothing. See
+[Install Periplus](../README.md#1-install-periplus).
+
 ### How does it know which rutters my project needs?
 
 `periplus init` pins each bundled rutter whose detector matches a file in the project, and prints
 the file. A stack kept in a subfolder, such as a front end in `frontend/`, is not detected: pin
 it by hand under `packs` in `.periplus/settings.yml`. When nothing matches, `init` says so. When no rutter covers a
 stack, its files are not in the map until someone writes one. See [Get started](../README.md#2-pin-a-rutter).
+
+### Does the Drupal rutter read Drupal core and contributed modules?
+
+Partly. From core, `drupal_basic` reads only the `*.services.yml` files. From
+contributed modules, it reads their `*.services.yml` files, the hook names their `*.api.php`
+files define, and their event names. So a service your code injects, such as `config.factory`,
+is a mapped thing with its file. Core's and contributed modules' PHP is not read.
+
+It looks for core in the folder `core`, by default `web/core`. `periplus init` writes
+`docroot/core` or `core` when it finds one of those instead. Contributed modules are in the folder
+`contrib_module`, by default `web/modules/contrib`. When a site keeps them elsewhere, set both in
+`.periplus/settings.yml`:
+
+```yaml
+folders:
+  core: drupal/core
+  contrib_module: vendor-modules
+```
+
+### How do I map a Drupal module that is its own repository?
+
+Map it in its own folder, and give the rules its machine name. The rules name a module by the
+folder it sits in, so without the name a map made inside the module's own folder misses some
+links.
+
+1. Run `periplus init` in the module's folder. It detects a module, theme or install profile by
+   the `*.info.yml` file at its root, and prints the rutters it pins and the value
+   `drupal_extension` to set.
+2. Add the folder and the machine name, the name of the `*.info.yml` file, to its
+   `.periplus/settings.yml`:
+
+```yaml
+folders:
+  custom_module: .
+values:
+  drupal_extension: my_module
+```
+
+3. Run `periplus map` in that folder. For a theme, write `custom_theme: .` in place of
+   `custom_module: .`. The map then holds the same ids it would hold with the module in a
+   site's `web/modules/custom` folder.
 
 ### Can I add or remove a rutter myself?
 
@@ -87,6 +136,19 @@ No. The map holds what its rutters look for. A link that no rule reads is not in
 an answer looks incomplete, the cause is often a missing rule. See [Judging a
 map](mapping-quality.md).
 
+### Why does the map not cover my stack, or all of my framework?
+
+Periplus does not try to ship rules for every stack, and no tool can. It ships the engine, the
+rule format, and skills that let an AI agent write the rules your code needs. Drupal is the deep
+stack, chosen because one Drupal site mixes PHP, YAML configuration, templates and plugins. The
+rutters for other stacks are starting points, and [Bundled rutters](rutters.md) marks each one.
+
+A thing the map lacks is a rule nobody wrote yet. Ask the agent what the map is missing, then ask
+it to write the rules. The `periplus-gaps` and `periplus-rutter` skills guide it. The rules stay
+in your project's rutter, and every later map holds what they find. [The evals page](evals.md)
+describes an agent that adds such rules at the end of a job. See
+[Extending Periplus](extending-periplus.md).
+
 ### If the map shows no link, does that mean there is none?
 
 No. It means no rule found one. Check the code before you rely on "none", and turn what you find
@@ -115,8 +177,10 @@ confirm a line or judge it. See [Using the map with an AI agent](using-the-map-w
 ### How do I know a map is good enough?
 
 Read its marks: things in state `referenced` or `unresolved`, rule matches the map report lists
-as skipped, and files no rule read. Each is a gap a rule could close. Then use the map on real
-questions, and compare its answers with the code. See [Judging a map](mapping-quality.md).
+as skipped, and files no rule read. Each is a gap a rule could close. Read each link's
+confidence too: in a Drupal map, a `named_like_hook` link is weaker than an `implements_hook`
+link. Then use the map on real questions, and compare its answers with the code. See
+[Judging a map](mapping-quality.md).
 
 ### What happens when the code changes?
 
@@ -277,8 +341,10 @@ again. Periplus then runs the rule with no AI. The same code, settings and rutte
 of Periplus, give the same map on every run.
 See [Writing a rutter](rutter-author-guide.md).
 
-### How do I share a rule that others would want?
+### Can I contribute a rutter?
 
+Yes, when it is general: rules for a language, a framework, a platform or common software that
+other projects use too. A rule for one project's own conventions stays in that project's rutter.
 Open a pull request with the rutter, its list of known gaps, and small tests, as
 [CONTRIBUTING.md](../CONTRIBUTING.md) describes. To report a wrong map, open an issue with a
 small case anybody can run.

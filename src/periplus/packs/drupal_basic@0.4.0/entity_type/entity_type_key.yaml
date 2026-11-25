@@ -1,0 +1,127 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The keys of an entity type's definition that name another thing, read by
+# entity_type_entry_attribute.yaml and entity_type_entry_annotation.yaml, joined to the entity type
+# through entity_type_of_class, each edge at the key's line: admin_permission and
+# collection_permission to the permission, bundle_entity_type and bundle_of to the other entity
+# type, field_ui_base_route to the route, and each link template to the path it holds, a
+# has_link_template edge holding the template's name in the edge attribute rel. A permission,
+# entity type, route or path that no mapped file declares ends at a referenced node. Declared:
+# the definition names each one. config_prefix and permission_granularity are attributes of the
+# entity type node (config_entity_type_*.yaml, content_entity_type_*.yaml).
+
+edge_kinds:
+- kind: has_admin_permission
+  cause: none
+  description: "the entity type's admin_permission names that permission, which allows every operation on its entities"
+  from: drupal.entity_type
+  to: drupal.permission
+- kind: has_collection_permission
+  cause: none
+  description: "the entity type's collection_permission names that permission, which opens its collection page"
+  from: drupal.entity_type
+  to: drupal.permission
+- kind: has_bundle_entity_type
+  cause: none
+  description: "the entity type's bundles are entities of that config entity type, by its bundle_entity_type key"
+  from: drupal.entity_type
+  to: drupal.entity_type
+- kind: bundle_entity_type_of
+  cause: none
+  description: "the config entity type's entities are the bundles of that entity type, by its bundle_of key"
+  from: drupal.entity_type
+  to: drupal.entity_type
+- kind: has_field_ui_base_route
+  cause: none
+  description: "the entity type's field_ui_base_route names that route, where Field UI adds its field pages"
+  from: drupal.entity_type
+  to: drupal.route
+- kind: has_link_template
+  cause: none
+  description: "the entity type's links name that path under a link template, such as canonical or edit-form; the edge attribute rel holds the name"
+  from: drupal.entity_type
+  to: drupal.url_path
+
+edge_attributes:
+- name: rel
+  on: [has_link_template, route_from_link_template]
+  description: "the name of the entity type's link template, such as canonical or edit-form"
+
+rules:
+- rule: entity_type_admin_permission
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|admin_permission$'}]
+    follow:
+    - edge: entry_value
+    - id_matches: '^drupal\.entry_value::(?<value>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_admin_permission, from: matched_node, to: {template: '{value}', types: [drupal.permission]}}}]
+  confidence: declared
+
+- rule: entity_type_collection_permission
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|collection_permission$'}]
+    follow:
+    - edge: entry_value
+    - id_matches: '^drupal\.entry_value::(?<value>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_collection_permission, from: matched_node, to: {template: '{value}', types: [drupal.permission]}}}]
+  confidence: declared
+
+- rule: entity_type_bundle_entity_type
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|bundle_entity_type$'}]
+    follow:
+    - edge: entry_value
+    - id_matches: '^drupal\.entry_value::(?<value>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_bundle_entity_type, from: matched_node, to: {template: '{value}', types: [drupal.entity_type]}}}]
+  confidence: declared
+
+- rule: entity_type_bundle_of
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|bundle_of$'}]
+    follow:
+    - edge: entry_value
+    - id_matches: '^drupal\.entry_value::(?<value>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: bundle_entity_type_of, from: matched_node, to: {template: '{value}', types: [drupal.entity_type]}}}]
+  confidence: declared
+
+- rule: entity_type_field_ui_base_route
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|field_ui_base_route$'}]
+    follow:
+    - edge: entry_value
+    - id_matches: '^drupal\.entry_value::(?<value>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_field_ui_base_route, from: matched_node, to: {template: '{value}', types: [drupal.route]}}}]
+  confidence: declared
+
+- rule: entity_type_link_template
+  reads: map
+  match:
+    node_type: drupal.entity_type_entry
+    where: [{id_matches: '^drupal\.entity_type_entry::(?<owner>[^|]+)\|links\|(?<rel>[^|]+)\|[^|]+$'}]
+    follow:
+    - edge: link_template_path
+    - id_matches: '^drupal\.url_path::(?<path>.+)$'
+    - node: 'php.type::{owner}'
+    - edge: entity_type_of_class
+  emits: [{edge: {kind: has_link_template, from: matched_node, to: {template: '{path}', types: [drupal.url_path]}, attributes: {rel: {template: '{rel}'}}}}]
+  confidence: declared

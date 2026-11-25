@@ -1,0 +1,108 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Code that tests a role with in_array against a user's roles, as hasRole() does inside: a
+# checks_role edge from the method or function around the call to user.role.<name>, an unresolved
+# role when no mapped file declares it, at the call's line. The role is the first argument, a
+# quoted name of lowercase letters, digits and underscores. Each in_array() call whose first
+# argument is a quoted text or a class constant is role_call.yaml's drupal.role_call node at its
+# line; role_constant_in_array.yaml reads the constant forms. Two forms here:
+# - in_array('x', $account->getRoles()): the roles list is written in the call. The rule writes
+#   role_call.yaml's names_checked_role edge, and code_checks_role ends it at the role, declared,
+#   as for hasRole('x').
+# - $roles = $account->getRoles(); ... in_array('x', $roles): a names_role_in_variable edge to the
+#   role-name hub, holding the variable's name. A map rule follows php_basic's local variable of
+#   that name in the same method or function to its assigned value, and gives checks_role only
+#   when every value assigned to it there is a getRoles() call. Inferred: the variable is read by
+#   name, not traced.
+#
+# !in_array(...) tests the role too and counts. A role given as a variable, a list held in a
+# property, a variable that is also a parameter, and a variable assigned only inside a closure
+# give nothing here.
+
+edge_kinds:
+- kind: names_role_in_variable
+  cause: none
+  description: "step to checks_role: the method or function calls in_array() with that role name as text and a variable that may hold the user's roles; the call as written is its attribute call"
+  from: [php.method, php.function]
+  to: drupal.role_name
+
+rules:
+- rule: role_in_array_call_in_method
+  reads: file
+  in: [source]
+  match:
+    declaration: function_call_expression
+    name_child: function
+    filetype: php
+    where: [&in_array {name_matches: {child: function, pattern: '\\?in_array'}}, &first_text_or_constant {name_matches: {child: arguments, pattern: '(?s)\(\s*(?:[''"]|\\?[A-Za-z_][\w\\]*::).*'}}, {within: [method_declaration]}]
+  id:
+    from: [enclosing_type, enclosing_method, declared_name, arguments]
+    template: 'php.method::{enclosing_type}::{enclosing_method}|{declared_name}{arguments}'
+  emits: &call_node [{node: {type: drupal.role_call}}]
+  confidence: declared
+
+- rule: role_in_array_call_in_function
+  reads: file
+  in: [source]
+  match:
+    declaration: function_call_expression
+    name_child: function
+    filetype: php
+    holder: function_definition
+    where: [*in_array, *first_text_or_constant]
+  id:
+    from: [enclosing_type, declared_name, arguments]
+    template: 'php.function::{enclosing_type}|{declared_name}{arguments}'
+  emits: *call_node
+  confidence: declared
+
+- rule: role_checked_in_roles_list
+  reads: file
+  in: [source]
+  match:
+    reference: function_call_expression
+    name_child: function
+    filetype: php
+    where:
+    - &in_array_call {name_matches: {child: function, pattern: '(?<call>\\?in_array)'}}
+    - {name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<role>[a-z][a-z0-9_]*)[''"]\s*,\s*[^,]*->getRoles\(\s*(?:TRUE|FALSE|true|false)?\s*\)\s*(?:,\s*(?:TRUE|FALSE|true|false)\s*)?,?\s*\)'}}
+    - &arguments {name_matches: {child: arguments, pattern: '(?s)(?<arguments>.*)'}}
+  emits: [{edge: {kind: names_checked_role, from: enclosing_declaration, to: {template: '{role}', type: drupal.role_name}}}]
+  confidence: declared
+
+- rule: role_checked_in_variable
+  reads: file
+  in: [source]
+  match:
+    reference: function_call_expression
+    name_child: function
+    filetype: php
+    where:
+    - *in_array_call
+    - {name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<role>[a-z][a-z0-9_]*)[''"]\s*,\s*\$(?<var>\w+)\s*(?:,\s*(?:TRUE|FALSE|true|false)\s*)?,?\s*\)'}}
+    - *arguments
+  emits: [{edge: {kind: names_role_in_variable, from: enclosing_declaration, to: {template: '{role}', type: drupal.role_name}, attributes: {variable: {template: '{var}'}, call: {template: '{call}{arguments}'}}}}]
+  confidence: inferred
+
+- rule: code_checks_role_in_roles_variable
+  reads: map
+  match:
+    node_type: drupal.role_call
+    where: [{id_matches: '(?s)^drupal\.role_call::(?<caller>php\.(?:method|function)::(?<owner>[^|]+))\|(?<text>\\?in_array\(\s*[''"][^''"]*[''"]\s*,\s*\$(?<variable>\w+).*)$'}]
+    follow:
+    - node: '{caller}'
+    - edge: names_role_in_variable
+    - edge_attribute: call
+    - id_matches: '^drupal\.role_name::(?<role>.+)$'
+    - node: 'php.local_variable::{owner}::${variable}'
+    - edge: local_assigned
+    - id_matches: '(?s)^php\.local_value::[^=]*=[^=]*->getRoles\(\s*(?:TRUE|FALSE|true|false)?\s*\)$'
+    - node: 'drupal.role_call::{caller}|{call}'
+    - id_matches: '(?s)^drupal\.role_call::{caller}\|{text}$'
+    - node: '{caller}'
+    unless_matched:
+    - - node: 'php.local_variable::{owner}::${variable}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::[^=]*=(?![^=]*->getRoles\(\s*(?:TRUE|FALSE|true|false)?\s*\)$)'
+  emits: [{edge: {kind: checks_role, from: matched_node, to: {template: 'user.role.{role}', types: [drupal.role], on_miss: unresolved}}}]
+  confidence: inferred

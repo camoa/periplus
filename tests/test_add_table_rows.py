@@ -278,7 +278,7 @@ def test_a_project_pack_adds_rows_to_a_bundled_pack_s_table(tmp_path: Path) -> N
         {
             ".periplus/packs/mine@0.0.1/pack.yaml": _extender("mine", "drupal_basic", rows),
             ".periplus/settings.yml": "periplus_version: 0\n"
-            "packs: [drupal_basic@0.3.0, mine@0.0.1]\n",
+            "packs: [drupal_basic@0.4.0, mine@0.0.1]\n",
             f"{MODULE}/mymodule.info.yml": (
                 "name: My module\ntype: module\ncore_version_requirement: ^10\n"
             ),

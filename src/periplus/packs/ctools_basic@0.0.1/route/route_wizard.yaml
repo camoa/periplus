@@ -1,0 +1,121 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The route defaults ctools reads, from a module's routing file. ctools' route enhancer gives a
+# route with no _controller its wizard controller when the route has _wizard or _entity_wizard.
+# - _wizard: '\Drupal\mymod\Wizard\MyWizard' names the form wizard class the route shows, a
+#   uses_wizard edge to the class; a leading backslash is dropped.
+# - _entity_wizard: 'type.operation' names an entity type, a shows_entity_wizard edge, and the
+#   wizard class that entity type declares for the operation under its handlers' wizard group,
+#   a uses_entity_wizard edge, joined in the map through the entity type's handler entries
+#   (drupal_basic's entity_type/entity_type_entry.yaml), so it needs the entity type's class in
+#   the map, as uses_entity_form does.
+# - tempstore_id, as a default or on a route parameter of type tempstore, names the shared
+#   tempstore collection the wizard or ctools' tempstore parameter converter keeps its values in:
+#   the route's tempstore_id attribute and a uses_tempstore edge to a ctools.tempstore node of
+#   that id, which every route naming the same id shares.
+# Declared: the routing file names each of them. Two rules for the routing file, because a rule
+# that emits an edge emits no node.
+
+node_types:
+- name: ctools.tempstore
+  description: "a shared tempstore collection, named by the tempstore_id a route gives ctools' wizard or tempstore parameter converter"
+  id_namespace: ctools.tempstore
+- name: ctools.entity_wizard_ref
+  description: "internal: an _entity_wizard value as written, type.operation"
+  id_namespace: ctools.entity_wizard_ref
+  internal: true
+
+attributes:
+- name: tempstore_id
+  on: [drupal.route]
+  description: "the shared tempstore collection a ctools wizard route keeps its values in, as its tempstore_id default names it"
+
+edge_kinds:
+- kind: uses_wizard
+  description: "the route's _wizard default names that ctools form wizard class, which ctools' wizard controller shows"
+  from: drupal.route
+  to: php.class
+  realizes: to
+- kind: shows_entity_wizard
+  cause: from
+  description: "the route's _entity_wizard default names that entity type and an operation; the route shows the wizard the entity type declares for it"
+  from: drupal.route
+  to: drupal.entity_type
+- kind: names_entity_wizard
+  cause: none
+  description: "step to uses_entity_wizard: the route's _entity_wizard value as written"
+  from: drupal.route
+  to: ctools.entity_wizard_ref
+- kind: uses_entity_wizard
+  description: "the route's _entity_wizard operation is answered by that wizard class, which the entity type declares under its handlers' wizard group"
+  from: drupal.route
+  to: php.class
+  realizes: to
+- kind: uses_tempstore
+  cause: from
+  description: "the route's tempstore_id, as a default or on a tempstore route parameter, names that shared tempstore collection"
+  from: drupal.route
+  to: ctools.tempstore
+
+rules:
+- rule: route_tempstore_id
+  reads: file
+  in: [module_root]
+  match: &route
+    file: '*.routing'
+    filetype: yaml
+    each: '*'
+    where:
+    - has_key:
+        path: path
+  id: {from: key}
+  emits:
+  - node: {type: drupal.route}
+  - attribute: {name: tempstore_id, from: {key: defaults.tempstore_id}}
+  confidence: declared
+
+- rule: route_wizard_defaults
+  reads: file
+  in: [module_root]
+  match: *route
+  id: {from: key}
+  emits:
+  - edge:
+      kind: uses_wizard
+      from: this_node
+      to: {from: {key: defaults._wizard}, pattern: '^\\?(?<wizard>[^\\].*)$', template: '{wizard}'}
+  - edge:
+      kind: shows_entity_wizard
+      from: this_node
+      to: {from: {key: defaults._entity_wizard}, pattern: '^(?<type>[^.\s]+)\..*$', template: '{type}'}
+  - edge:
+      kind: names_entity_wizard
+      from: this_node
+      to: {from: {key: defaults._entity_wizard}}
+  - edge:
+      kind: uses_tempstore
+      from: this_node
+      to: {from: {key: defaults.tempstore_id}}
+  - edge:
+      kind: uses_tempstore
+      from: this_node
+      to: {from: {key: options.parameters.*.tempstore_id}}
+  confidence: declared
+
+# _entity_wizard: 'my_type.add' to the wizard class my_type declares for add.
+- rule: route_uses_entity_wizard
+  reads: map
+  match:
+    node_type: drupal.route
+    follow:
+    - edge: names_entity_wizard
+    - place: edge
+    - id_matches: '^ctools\.entity_wizard_ref::(?<type>[^.]+)\.(?<operation>[^.]+)$'
+    - node: 'drupal.entity_type::{type}'
+    - incoming_edge: entity_type_of_class
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'drupal.entity_type_entry::{owner}|wizard|{operation}'
+    - edge: entry_names_class
+    - id_matches: '^drupal\.class_ref::(?<handler>.+)$'
+  emits: [{edge: {kind: uses_entity_wizard, from: this_node, to: {template: '{handler}', types: [php.class]}}}]
+  confidence: declared

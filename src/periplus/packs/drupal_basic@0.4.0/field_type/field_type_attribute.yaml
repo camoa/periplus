@@ -1,0 +1,70 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A field type plugin, named by its plugin id; plugin_class joins it to its class.
+
+node_types:
+- name: drupal.field_type
+  description: "A field type plugin, named by the plugin id in the FieldType attribute or annotation on its class"
+  parent: drupal.plugin
+  id_namespace: drupal.plugin.field_type
+
+# A field type declared by the FieldType attribute on its class, the twin of the
+# annotation rule. Two rules because a rule that emits an edge emits no node. An id that is not a
+# text literal makes no field type and is listed under skipped.
+
+rules:
+- rule: field_type_from_attribute
+  reads: file
+  in:
+  - field_type_classes
+  match:
+    attribute: Drupal\Core\Field\Attribute\FieldType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.field_type
+  confidence: declared
+- rule: field_type_from_attribute_edges
+  reads: file
+  in:
+  - field_type_classes
+  match:
+    attribute: Drupal\Core\Field\Attribute\FieldType
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+
+# The field type's label, description and category, each written as text or as new TranslatableMarkup('...'), as
+# attributes of the node the rule above makes. Read as text, since an attribute rule reads only a
+# text literal; the FieldType attribute is known by its name in this folder.
+# A value that is not text, such as a constant, gives nothing.
+- rule: field_type_words_from_attribute
+  reads: file
+  in: [field_type_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?m)^#\[\s*(?:\\?Drupal\\Core\\Field\\Attribute\\)?FieldType\s*\((?=(?:(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])id\s*:\s*)[''\"](?<pid>[^''\"]+)[''\"])(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])(?:label|description|category)\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?[''\"])(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])label\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q0>[''\"])(?<label>(?:(?!(?P=q0))[^\\]|\\.)*)(?P=q0)))?(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])description\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q1>[''\"])(?<description>(?:(?!(?P=q1))[^\\]|\\.)*)(?P=q1)))?(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])category\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q2>[''\"])(?<category>(?:(?!(?P=q2))[^\\]|\\.)*)(?P=q2)))?'
+  id: {template: '{pid}'}
+  emits:
+  - node: {type: drupal.field_type}
+  - attribute: {name: label, template: '{label}'}
+  - attribute: {name: description, template: '{description}'}
+  - attribute: {name: category, template: '{category}'}
+  confidence: declared

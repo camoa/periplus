@@ -1,0 +1,84 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A class that Drupal builds by autowiring without a service entry: one that uses core's
+# Drupal\Core\DependencyInjection\AutowireTrait, or descends from FormBase or ControllerBase, which
+# use it since Drupal 10.2, itself or through a mapped ancestor, and that declares no create() of
+# its own or on a mapped ancestor. The trait's create() asks the container for each constructor
+# parameter's type as a service id, or for the service an #[Autowire] attribute names
+# (AutowiredInstanceTrait). Each such parameter of the class's own constructor gives an
+# autowires_service edge from the class, at the parameter's line, with the same matches and the
+# same edge attribute autowired_by as service/service_autowire.yaml: a service id or alias the map
+# holds, inferred; else the type as a service id, marked unresolved, inferred; an Autowire or
+# AutowireServiceClosure attribute's service, declared, at the attribute's line.
+#
+# Limits: a class whose create() comes from a core base other than FormBase and ControllerBase, such
+# as ConfigFormBase, writes its own wiring and gets nothing here. A plugin that core's PluginBase
+# builds by autowiring, a trait of another library, and a constructor the class inherits give no
+# edge here; drush_basic reads Drush's AutowireTrait the same way (command/command_autowire.yaml). A create() on a mapped ancestor above the class that
+# uses the trait still counts as the class's own.
+
+edge_kinds:
+- kind: autowires_service
+  cause: from
+  description: "Drupal builds the class by autowiring, and its constructor gets that service: the parameter's type names it, or an Autowire attribute does"
+  from: php.class
+  to: drupal.service
+
+rules:
+- rule: class_autowired_parameter_by_id
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: &parameter '^drupal\.constructor_parameter::(?<class>[^:]+)::__construct::\$(?<param>\w+)::(?<type>[^:]+)$'}]
+    unless: &not_autowired
+    - [{node: 'php.property::{class}::${param}'}, {edge: has_attribute}, {id_matches: &di_attribute '^php\.type::Symfony\\Component\\DependencyInjection\\Attribute\\'}]
+    - [{node: 'php.parameter::{class}::${param}'}, {edge: has_attribute}, {id_matches: *di_attribute}]
+    - &own_create [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<owner>.+)$'}, {node: 'php.method::{owner}::create'}]
+    follow:
+    - node: 'drupal.service::{type}'
+    - &trait_1 {node: 'php.type::{class}'}
+    - &trait_2 {ancestors: [inherits, mixes_in]}
+    - &trait_3 {id_matches: '^php\.type::(?:Drupal\\Core\\DependencyInjection\\AutowireTrait|Drupal\\Core\\Form\\FormBase|Drupal\\Core\\Controller\\ControllerBase)$'}
+    - &the_class {node: 'php.type::{class}'}
+  emits: [{edge: {kind: autowires_service, from: matched_node, to: {template: '{type}', types: [drupal.service]}, attributes: {autowired_by: {template: 'type is the service id or alias'}}}}]
+  confidence: inferred
+
+- rule: class_autowired_parameter_unresolved
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: *not_autowired
+    follow: [*trait_1, *trait_2, *trait_3, *the_class]
+    unless_matched: [[{node: 'drupal.service::{type}'}]]
+  emits: [{edge: {kind: autowires_service, from: matched_node, to: {template: '{type}', types: [drupal.service], on_miss: unresolved}, attributes: {autowired_by: {template: 'type is the service id or alias'}}}}]
+  confidence: inferred
+
+- rule: class_autowired_attribute_on_property
+  reads: map
+  match:
+    node_type: php.property
+    where: [{id_matches: '^php\.property::(?<class>[^:]+)::\$\w+$'}]
+    unless: [*own_create]
+    follow:
+    - &named {edge: autowire_names_service}
+    - &placed {place: edge}
+    - &named_id {id_matches: '^drupal\.service::(?<target>.+)$'}
+    - *trait_1
+    - *trait_2
+    - *trait_3
+    - *the_class
+  emits: &attribute_injection [{edge: {kind: autowires_service, from: matched_node, to: {template: '{target}', types: [drupal.service]}, attributes: {autowired_by: {template: 'Autowire attribute'}}}}]
+  confidence: declared
+
+# A plain parameter's attribute starts at php.parameter::<class>::$<name>, with no method part,
+# which no rule finds, so this starts at the typed constructor parameter.
+- rule: class_autowired_attribute_on_parameter
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: [*own_create]
+    follow: [{node: 'php.parameter::{class}::${param}'}, *named, *placed, *named_id, *trait_1, *trait_2, *trait_3, *the_class]
+  emits: *attribute_injection
+  confidence: declared

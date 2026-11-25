@@ -54,7 +54,7 @@ class Alone {
 def _map(root: Path, files: dict[str, str]) -> tuple[dict[str, Any], MapReport]:
     settings = root / ".periplus" / "settings.yml"
     settings.parent.mkdir(parents=True)
-    settings.write_text("periplus_version: 0\npacks: [php_basic@0.2.0]\n")
+    settings.write_text("periplus_version: 0\npacks: [php_basic@0.3.0]\n")
     for name, text in files.items():
         path = root / "src" / name
         path.parent.mkdir(parents=True, exist_ok=True)

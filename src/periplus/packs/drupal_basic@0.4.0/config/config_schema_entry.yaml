@@ -1,0 +1,67 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The type each entry of a configuration schema key names, read from config/schema/*.schema.yml,
+# at the entry's line: an entry of the key's mapping, the item of its sequence, and so on down
+# to three levels (mapping.*.type, sequence.type, mapping.*.mapping.*.type,
+# mapping.*.sequence.type, sequence.mapping.*.type, mapping.*.sequence.mapping.*.type,
+# mapping.*.mapping.*.mapping.*.type, mapping.*.mapping.*.sequence.type,
+# mapping.*.sequence.sequence.type).
+# - A type written whole, as mymod.item or text_format, is a schema_entry_type edge to the
+#   drupal.config_schema node of that name: mapped when a schema file the map reads declares the
+#   key, referenced otherwise. Core's base types, as string, boolean and label, are kept too: they
+#   are keys of core's core.data_types.schema.yml, and a rule that left them out would fire on
+#   every key whose entries are all base types and list it as skipped.
+# - A type with a part in brackets, as condition.plugin.[id] or field.formatter.settings.[%parent.type],
+#   is filled by Drupal from the configuration it describes, so its full name is known only when
+#   that configuration is read. It is a schema_entry_dynamic_type edge to a
+#   drupal.config_schema_dynamic_type node named as written, which every schema key writing the
+#   same type shares. No concrete schema key is guessed.
+#
+# Limits: deeper entries, and a sequence written in the older list form, give nothing. The
+# family a dynamic type falls back to, as condition.plugin.* for condition.plugin.[id], is not
+# linked: a data rule cannot name a node by an entry's value, and a map rule's edge would sit at
+# the schema key's line, not the entry's.
+
+node_types:
+- name: drupal.config_schema_dynamic_type
+  description: "a configuration schema type written with a part in brackets that Drupal fills from the configuration, as condition.plugin.[id]; named as written"
+  id_namespace: drupal.config_schema_dynamic_type
+
+edge_kinds:
+- kind: schema_entry_type
+  cause: none
+  description: "an entry of the configuration schema key's mapping or sequence has that schema type"
+  from: drupal.config_schema
+  to: drupal.config_schema
+- kind: schema_entry_dynamic_type
+  cause: none
+  description: "an entry of the configuration schema key has that type, whose bracketed part Drupal fills from the configuration when it reads it"
+  from: drupal.config_schema
+  to: drupal.config_schema_dynamic_type
+
+rules:
+- rule: config_schema_entry_type
+  reads: file
+  in: [config_schema]
+  match: {file: '*.schema', filetype: yaml, each: '*'}
+  id: {from: key}
+  emits:
+  - edge: {kind: schema_entry_type, from: this_node, to: {from: {key: 'mapping.*.type'}, pattern: &static '^(?<name>[^\[\]]+)$', template: '{name}'}}
+  - edge: {kind: schema_entry_type, from: this_node, to: {from: {key: 'sequence.type'}, pattern: *static, template: '{name}'}}
+  - edge: {kind: schema_entry_type, from: this_node, to: {from: {key: 'mapping.*.mapping.*.type'}, pattern: *static, template: '{name}'}}
+  - edge: {kind: schema_entry_type, from: this_node, to: {from: {key: 'mapping.*.sequence.type'}, pattern: *static, template: '{name}'}}
+  - edge: {kind: schema_entry_type, from: this_node, to: {from: {key: 'sequence.mapping.*.type'}, pattern: *static, template: '{name}'}}
+  - edge: {kind: schema_entry_type, from: this_node, to: {from: {key: 'mapping.*.sequence.mapping.*.type'}, pattern: *static, template: '{name}'}}
+  - edge: {kind: schema_entry_type, from: this_node, to: {from: {key: 'mapping.*.mapping.*.mapping.*.type'}, pattern: *static, template: '{name}'}}
+  - edge: {kind: schema_entry_type, from: this_node, to: {from: {key: 'mapping.*.mapping.*.sequence.type'}, pattern: *static, template: '{name}'}}
+  - edge: {kind: schema_entry_type, from: this_node, to: {from: {key: 'mapping.*.sequence.sequence.type'}, pattern: *static, template: '{name}'}}
+  - edge: {kind: schema_entry_dynamic_type, from: this_node, to: {from: {key: 'mapping.*.type'}, pattern: &dynamic '^(?<name>.*\[.*)$', template: '{name}'}}
+  - edge: {kind: schema_entry_dynamic_type, from: this_node, to: {from: {key: 'sequence.type'}, pattern: *dynamic, template: '{name}'}}
+  - edge: {kind: schema_entry_dynamic_type, from: this_node, to: {from: {key: 'mapping.*.mapping.*.type'}, pattern: *dynamic, template: '{name}'}}
+  - edge: {kind: schema_entry_dynamic_type, from: this_node, to: {from: {key: 'mapping.*.sequence.type'}, pattern: *dynamic, template: '{name}'}}
+  - edge: {kind: schema_entry_dynamic_type, from: this_node, to: {from: {key: 'sequence.mapping.*.type'}, pattern: *dynamic, template: '{name}'}}
+  - edge: {kind: schema_entry_dynamic_type, from: this_node, to: {from: {key: 'mapping.*.sequence.mapping.*.type'}, pattern: *dynamic, template: '{name}'}}
+  - edge: {kind: schema_entry_dynamic_type, from: this_node, to: {from: {key: 'mapping.*.mapping.*.mapping.*.type'}, pattern: *dynamic, template: '{name}'}}
+  - edge: {kind: schema_entry_dynamic_type, from: this_node, to: {from: {key: 'mapping.*.mapping.*.sequence.type'}, pattern: *dynamic, template: '{name}'}}
+  - edge: {kind: schema_entry_dynamic_type, from: this_node, to: {from: {key: 'mapping.*.sequence.sequence.type'}, pattern: *dynamic, template: '{name}'}}
+  confidence: declared

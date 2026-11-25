@@ -1,0 +1,36 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A module, named by its info file.
+
+node_types:
+- name: drupal.module
+  description: "A Drupal module, named by its info.yml file whose type is module"
+  id_namespace: drupal.module
+
+attributes:
+- name: core_version_requirement
+  on: [drupal.module, drupal.theme]
+  description: "the Drupal core versions the module's or theme's info file says it works with, as written, as ^10.3 || ^11"
+- name: package
+  on: [drupal.module, drupal.theme]
+  description: "the package the info file groups the module or theme under on the Extend page, as written"
+- name: lifecycle
+  on: [drupal.module, drupal.theme]
+  description: "the lifecycle the info file gives: stable, experimental, deprecated or obsolete, as written"
+
+edge_kinds:
+- kind: recommends_module
+  cause: none
+  description: "the module's info file lists that module under recommends: suggested, not required"
+  from: drupal.module
+  to: drupal.module
+- kind: test_depends_on_module
+  cause: none
+  description: "the module's info file lists that module under test_dependencies: its tests need it"
+  from: drupal.module
+  to: drupal.module
+- kind: configure_route
+  cause: none
+  description: "the module's info file names that route under configure, its settings page"
+  from: drupal.module
+  to: drupal.route

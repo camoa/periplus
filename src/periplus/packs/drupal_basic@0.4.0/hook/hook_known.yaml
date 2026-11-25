@@ -1,0 +1,201 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Whether a hook found by a function's name is known to exist. hook.yaml and
+# hook_theme_include.yaml read a hook from any function whose name starts with its extension's
+# name, so a helper such as mymodule_build_list reads as a hook build_list. These rules tell a
+# known hook from a name match. A hook is known when:
+# - the table hook_names in pack.yaml lists it: every hook_NAME of Drupal core's *.api.php files,
+#   and the rows a loaded rutter adds for a tool, as drush_basic adds deploy_NAME;
+# - its name fits a placeholder form of core: form_FORM_ID_alter, preprocess_HOOK and the others
+#   in the pattern below, each placeholder any word; or <type>_<operation> of a hook_ENTITY_TYPE_
+#   form, where <type> is an entity type the table entity_type_ids lists, or one the map holds
+#   with a class, a bundle or a field storage, as an ECK type from its exported configuration.
+#   block_view is left out: core's block view builder runs block_view_alter, not block_view;
+# - a *.api.php file defines hook_NAME: a custom module's or theme's, or a contributed module's
+#   or theme's under the folders contrib_module and contrib_theme, in the project's own folder, a
+#   folder directly inside it or a folder under its modules folder. Only the names are read; no
+#   other contributed code is mapped. A name with placeholders, written in capitals as
+#   hook_mymodule_TYPE_alter or hook_ENTITY_TYPE_sync, is a pattern: the placeholder stands for
+#   one or more words, with up to four words before it and three after;
+# - custom code invokes it by a quoted name: invokeAll('NAME'), invokeAllWith('NAME'),
+#   invoke($module, 'NAME'), invokeAllDeprecated($message, 'NAME'),
+#   invokeDeprecated($message, $module, 'NAME'), module_invoke_all('NAME') and
+#   module_invoke($module, 'NAME'); or alters it: alter('NAME'), alter(['NAME', ...]),
+#   alterForTheme($theme, 'NAME'), alterDeprecated($message, 'NAME') and drupal_alter('NAME'),
+#   each NAME giving NAME_alter; or the map holds an invokes_hook edge to it, as hook_invoke.yaml
+#   and hook_alter_list.yaml make, or a registers_alter_hook edge, a plugin manager's
+#   alterInfo('x') naming x_alter;
+# - the map holds a documents_hook edge to it, from a mapped *.api.php file;
+# - a method implements it by a Hook attribute;
+# - a docblock says Implements hook_NAME()., the line Drupal's coding standard asks of every hook
+#   implementation, in any file of the project's own code. A placeholder in capitals, as in
+#   Implements hook_form_FORM_ID_alter(), gives no name: the pattern above covers those forms.
+# A hook none of these names is no evidence of a hook, only of a name. hook_by_name_only takes
+# back, before the map rules run, the drupal.hook node and the implements_hook and
+# hook_acts_on_entity_type links that hook.yaml and hook_theme_include.yaml gave it at each such
+# function. function_named_like_hook then links each function to the hook as a referenced end, by
+# named_like_hook, confidence mentioned, and marks it hook_known: no, printed
+# [hook by name only]. A missing docblock is a reason for the weak link, not proof the
+# function is no hook: a module may implement a contributed module's hook that is not on disk.
+# The withholding reads the map the file rules made, so a hook only a map rule names, by a typed
+# invocation (hook_invoke_typed.yaml) or an instance of a placeholder hook, counts through the
+# patterns and names above, not through its edge.
+#
+# A contributed module's hook is known only when that module's code is on disk in the configured
+# folder, or the implementation's docblock names it. Without either, its implementations get the
+# named_like_hook link: that is the map saying what the code on disk shows, and no table row
+# stands in for it.
+#
+# A placeholder takes any word, so a helper named form_x_alter, preprocess_x or query_x_alter
+# reads as known. A name with two placeholders in an *.api.php file, and a hook named by a
+# variable, a constant or a joined text, give no pattern and no name.
+
+node_types:
+- name: drupal.hook_name
+  id_namespace: drupal.hook_name
+  internal: true
+  description: "internal: a hook name an *.api.php file defines, custom code invokes or an Implements docblock names, kept so a map rule can tell a known hook from a name match"
+
+attributes:
+- name: hook_known
+  on: [php.function]
+  mark: hook by name only
+  description: "no on a function only named like a hook, joined to it by named_like_hook: no core table, api file, invocation, Hook attribute or Implements docblock names that hook"
+
+rules:
+- rule: hook_defined_in_api_file
+  reads: file
+  in: [source, contrib_source]
+  match: {file: '*', filetype: drupal_php_text, ending: api.php, text: '(?m)^function\s+hook_(?<hook>\w+)\s*\('}
+  id: {template: '{hook}', normalize: [{replace: '[A-Z][A-Z0-9]*(?:_[A-Z][A-Z0-9]*)*', with: '|'}]}
+  line: {capture: hook}
+  emits: [{node: {type: drupal.hook_name}}]
+  confidence: declared
+
+- rule: hook_invoked_by_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?:->\s*(?:invokeAll(?:With)?\(|invoke\(\s*(?:''[^'']*''|"[^"]*"|[^,()''"]+),|invokeAllDeprecated\(\s*(?:''[^'']*''|"[^"]*"|[^,()''"]+),|invokeDeprecated\(\s*(?:''[^'']*''|"[^"]*"|[^,()''"]+),\s*(?:''[^'']*''|"[^"]*"|[^,()''"]+),)|\bmodule_invoke_all\(|\bmodule_invoke\(\s*(?:''[^'']*''|"[^"]*"|[^,()''"]+),)\s*[''"](?<hook>\w+)[''"]'
+  id: {template: '{hook}'}
+  line: {capture: hook}
+  emits: [{node: {type: drupal.hook_name}}]
+  confidence: declared
+
+- rule: hook_alter_invoked_by_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?:->\s*(?:alter\(|alterForTheme\(\s*(?:''[^'']*''|"[^"]*"|[^,()''"]+),|alterDeprecated\(\s*(?:''[^'']*''|"[^"]*"|[^,()''"]+),)|\bdrupal_alter\()\s*[''"](?<type>\w+)[''"]'
+  id: {template: '{type}_alter'}
+  line: {capture: type}
+  emits: [{node: {type: drupal.hook_name}}]
+  confidence: declared
+
+- rule: hook_alter_list_item_invoked_by_name
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [string]
+    text: '(?<=[\[,\s])(?<!\w\[)(?<!\]\[)[''"](?<type>\w+)[''"](?=\s*[,\]])'
+  values:
+    list: {from: {enclosing: alter_list, capture: mark}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{list}|{type}_alter', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  line: {capture: type}
+  emits: [{node: {type: drupal.hook_name}}]
+  confidence: declared
+
+# Implements hook_x(). in a docblock: a lower-case name only.
+- rule: hook_named_by_implements_docblock
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '\*\s*Implements\s+hook_(?<hook>[a-z0-9_]+)\(\)'
+  id: {template: '{hook}'}
+  line: {capture: hook}
+  emits: [{node: {type: drupal.hook_name}}]
+  confidence: declared
+
+- rule: hook_by_name_only
+  reads: map
+  match:
+    node_type: drupal.hook
+    where:
+    - id_matches: '^drupal\.hook::(?!(?:block_build_\w+_alter|block_view_\w+_alter|entity_query_\w+_alter|entity_query_tag__\w+__\w+_alter|entity_query_tag__\w+_alter|field_widget_complete_\w+_form_alter|field_widget_single_element_\w+_form_alter|form_\w+_alter|jsonapi_\w+_filter_access|language_fallback_candidates_\w+_alter|migrate_\w+_prepare_row|plugin_filter_\w+__\w+_alter|plugin_filter_\w+_alter|preprocess_\w+|query_\w+_alter|theme_suggestions_\w+|theme_suggestions_\w+_alter)$)(?<hook>(?:(?!block_view$)(?=(?<etype>\w+?)_(?:access|build_defaults_alter|create|create_access|delete|duplicate|field_values_init|form_mode_alter|insert|load|predelete|prepare_form|presave|revision_create|revision_delete|storage_load|translation_create|translation_delete|translation_insert|update|view|view_alter|view_mode_alter)$)|)\w+)$'
+    - id_matches: '^drupal\.hook::(?=\w+?(?<p0s1s>(?:_[^_]+){1})$)?'
+    - id_matches: '^drupal\.hook::(?=\w+?(?<p0s2s>(?:_[^_]+){2})$)?'
+    - id_matches: '^drupal\.hook::(?=\w+?(?<p0s3s>(?:_[^_]+){3})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p1s0p>(?:[^_]+_){1})\w+?$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p1s1p>(?:[^_]+_){1})\w+?(?<p1s1s>(?:_[^_]+){1})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p1s2p>(?:[^_]+_){1})\w+?(?<p1s2s>(?:_[^_]+){2})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p1s3p>(?:[^_]+_){1})\w+?(?<p1s3s>(?:_[^_]+){3})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p2s0p>(?:[^_]+_){2})\w+?$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p2s1p>(?:[^_]+_){2})\w+?(?<p2s1s>(?:_[^_]+){1})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p2s2p>(?:[^_]+_){2})\w+?(?<p2s2s>(?:_[^_]+){2})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p2s3p>(?:[^_]+_){2})\w+?(?<p2s3s>(?:_[^_]+){3})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p3s0p>(?:[^_]+_){3})\w+?$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p3s1p>(?:[^_]+_){3})\w+?(?<p3s1s>(?:_[^_]+){1})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p3s2p>(?:[^_]+_){3})\w+?(?<p3s2s>(?:_[^_]+){2})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p3s3p>(?:[^_]+_){3})\w+?(?<p3s3s>(?:_[^_]+){3})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p4s0p>(?:[^_]+_){4})\w+?$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p4s1p>(?:[^_]+_){4})\w+?(?<p4s1s>(?:_[^_]+){1})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p4s2p>(?:[^_]+_){4})\w+?(?<p4s2s>(?:_[^_]+){2})$)?'
+    - id_matches: '^drupal\.hook::(?=(?<p4s3p>(?:[^_]+_){4})\w+?(?<p4s3s>(?:_[^_]+){3})$)?'
+    - not_in_table: {table: hook_names, capture: hook}
+    - not_in_table: {table: entity_type_ids, capture: etype}
+    unless:
+    - [{node: 'drupal.hook_name::{hook}'}]
+    - [{node: 'drupal.hook_name::|{p0s1s}'}]
+    - [{node: 'drupal.hook_name::|{p0s2s}'}]
+    - [{node: 'drupal.hook_name::|{p0s3s}'}]
+    - [{node: 'drupal.hook_name::{p1s0p}|'}]
+    - [{node: 'drupal.hook_name::{p1s1p}|{p1s1s}'}]
+    - [{node: 'drupal.hook_name::{p1s2p}|{p1s2s}'}]
+    - [{node: 'drupal.hook_name::{p1s3p}|{p1s3s}'}]
+    - [{node: 'drupal.hook_name::{p2s0p}|'}]
+    - [{node: 'drupal.hook_name::{p2s1p}|{p2s1s}'}]
+    - [{node: 'drupal.hook_name::{p2s2p}|{p2s2s}'}]
+    - [{node: 'drupal.hook_name::{p2s3p}|{p2s3s}'}]
+    - [{node: 'drupal.hook_name::{p3s0p}|'}]
+    - [{node: 'drupal.hook_name::{p3s1p}|{p3s1s}'}]
+    - [{node: 'drupal.hook_name::{p3s2p}|{p3s2s}'}]
+    - [{node: 'drupal.hook_name::{p3s3p}|{p3s3s}'}]
+    - [{node: 'drupal.hook_name::{p4s0p}|'}]
+    - [{node: 'drupal.hook_name::{p4s1p}|{p4s1s}'}]
+    - [{node: 'drupal.hook_name::{p4s2p}|{p4s2s}'}]
+    - [{node: 'drupal.hook_name::{p4s3p}|{p4s3s}'}]
+    - [{node: 'drupal.entity_type::{etype}'}, {edge: entity_class}]
+    - [{node: 'drupal.entity_type::{etype}'}, {incoming_edge: bundle_of}]
+    - [{node: 'drupal.entity_type::{etype}'}, {incoming_edge: storage_of}]
+    - [{incoming_edge: implements_hook}, {id_matches: '^php\.method::'}]
+    - [{incoming_edge: invokes_hook}]
+    - [{incoming_edge: registers_alter_hook}]
+    - [{incoming_edge: documents_hook}]
+  emits: [{withhold: this_node}]
+  confidence: inferred
+
+# The function whose hook link hook_by_name_only took back: a named_like_hook link to the hook.
+# A function a form adds as a #submit or #validate handler gets none: form/form_handler.yaml took
+# its hook back as no hook at all.
+- rule: function_named_like_hook
+  reads: map
+  match:
+    node_type: drupal.hook_by_name
+    where: [{id_matches: '^drupal\.hook_by_name::(?<fn>\w+)\|(?<hook>\w+)$'}]
+    follow: [{node: 'php.function::{fn}'}]
+    unless:
+    - [{node: 'php.function::{fn}'}, {edge: implements_hook}, {id_matches: '^drupal\.hook::{hook}$'}]
+    - [{node: 'drupal.form_handler_name::{fn}'}]
+  emits:
+  - edge: {kind: named_like_hook, from: matched_node, to: {template: '{hook}', types: [drupal.hook]}}
+  - attribute: {name: hook_known, template: 'no', target: matched_node}
+  confidence: mentioned

@@ -47,7 +47,7 @@ BUNDLED_PACK_NAMES = tuple(
 
 #: A rutter small enough to read, for the one test that names a pack's files.
 CLEAN_RUTTER = "js_basic"
-CLEAN_RUTTER_DIRECTORY = "js_basic@0.0.1"
+CLEAN_RUTTER_DIRECTORY = "js_basic@0.0.2"
 
 
 def _yaml() -> YAML:

@@ -1,0 +1,443 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A PHP function or method that names a service or an entity type by a text literal in a call. The
+# end is the call's first argument as written: a constant gives no edge and goes under skipped. A
+# variable, or a concatenation holding one, is built at run time: in a method,
+# call/runtime_argument.yaml keeps the call as a php.call_site marked resolution runtime, with no
+# edge. A service or an entity type that no mapped file declares, such as node, or config.factory
+# when core's services files are not in the tree, ends at a referenced node: core's and
+# contributed modules' PHP is outside the mapped code. A misspelled name reads referenced too.
+#
+# Limits:
+# - Drupal is matched as written, with or without a leading backslash. An unqualified Drupal:: in
+#   a namespace with no use of Drupal also matches.
+# - getStorage, getViewBuilder, getListBuilder, getFormObject and getAccessControlHandler count
+#   only when their object is written ending in entityTypeManager, as $this->entityTypeManager or
+#   \Drupal::entityTypeManager(); written $entity_type_manager; or written as the container's
+#   get('entity_type.manager') or \Drupal::service('entity_type.manager') with no space or line
+#   break inside. A manager under another name, reached through a property or promoted parameter
+#   of $this whose declared type is EntityTypeManager or EntityTypeManagerInterface, as
+#   $this->etm, joins by that type; one with no declared type, and a local variable such as $etm,
+#   make nothing. getDefinition, hasDefinition and getHandler are read by
+#   call/entity_definition_call.yaml.
+# - A \Drupal:: shortcut such as \Drupal::currentUser(), and a static call on an entity class such
+#   as User::load(1), give an edge only for a name pack.yaml's tables list. An entity class is
+#   listed by its full name and resolved through the file's use statements, so a project class
+#   named as a core one, such as Drupal\mymod\Node, gives none.
+# - get on the service container counts only when its object is written $container,
+#   $this->container, \Drupal::getContainer(), or getContainer() on $this, static or self, through
+#   -> or ?->. A container under another name and another letter case, such as ->GET('x'), make
+#   nothing, and a $container or $this->container that is not Drupal's service container gives a
+#   false service.
+
+# A call on a property of $this to a manager method that takes an entity type id, with its
+# argument list as written: <class>::<method>::$this-><name>-><called method>(<arguments>).
+node_types:
+- name: drupal.manager_call
+  description: "a call such as $this->etm->getStorage('node') on a property of $this, kept with its arguments so a map rule can read the property's declared type"
+  id_namespace: drupal.manager_call
+
+edge_kinds:
+- kind: manager_call_in
+  cause: none
+  description: "the manager call sits in that method"
+  from: drupal.manager_call
+  to: php.method
+- kind: uses_service
+  cause: from
+  description: "the function or method gets that service by its id, from the service container or by a Drupal:: shortcut such as Drupal::currentUser()"
+  from: [php.function, php.method]
+  to: drupal.service
+- kind: uses_entity_type
+  cause: from
+  description: "the function or method names that entity type in a call, as getStorage('node'), entityQuery('node') or Node::load()"
+  from: [php.function, php.method]
+  to: drupal.entity_type
+
+rules:
+# \Drupal::service('my_module.helper'). An argument X::class is passed over: it holds no text this
+# rule can read, and call/service_class_constant.yaml gives its edge.
+- rule: service_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: service}
+    - name_matches: {child: arguments, pattern: '(?s)\((?!\s*\\?[A-Za-z_][\w\\]*::class\s*\)).*'}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.service]}
+  confidence: declared
+
+# $container->get('my_module.helper') in create(), $this->container->get('path.current') in a
+# test, and $this->getContainer()->get('x'), static::getContainer() or self::getContainer().
+# Inferred: the object's name, not its type, says it is the service container.
+- rule: container_get_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: &container_object '\$container|\$this->(?:container|getContainer\(\))|(?:\\?Drupal|static|self)::getContainer\(\)'}
+    - name_matches: {child: name, pattern: get}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.service]}
+  confidence: inferred
+
+# $container?->get('my_module.helper'), as container_get_call.
+- rule: container_nullsafe_get_call
+  reads: file
+  in: [source]
+  match:
+    reference: nullsafe_member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *container_object}
+    - name_matches: {child: name, pattern: get}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.service]}
+  confidence: inferred
+
+# \Drupal::entityQuery('node') and \Drupal::entityQueryAggregate('node').
+- rule: entity_query_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: 'entityQuery(?:Aggregate)?'}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: declared
+
+# $this->entityTypeManager->getStorage('node'). Inferred: the object's name, not its type, says it
+# is the entity type manager.
+- rule: storage_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: &manager_object '(?s).*entityTypeManager(?:\(\))?'}
+    - name_matches: {child: name, pattern: getStorage}
+    - name_matches: {child: arguments, pattern: &literal_first '(?s)\((?!\s*[^,$]*\$).*'}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+# getStorage($type) in a function of a plain .php file, or outside any function: no rule marks it
+# resolution runtime, so it stays under skipped. In a method or a module-family function
+# call/runtime_argument.yaml and call/runtime_argument_in_function.yaml mark it.
+- rule: storage_call_unmarked
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    ending: [php]
+    where:
+    - name_matches: {child: object, pattern: *manager_object}
+    - name_matches: {child: name, pattern: getStorage}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[^,$]*\$.*'}
+    - {not_within: [method_declaration]}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+# $this->entityTypeManager?->getStorage('node').
+- rule: storage_nullsafe_call
+  reads: file
+  in: [source]
+  match:
+    reference: nullsafe_member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *manager_object}
+    - name_matches: {child: name, pattern: getStorage}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+# $this->entityTypeManager->getViewBuilder('node'), and getListBuilder, getFormObject and
+# getAccessControlHandler, which take an entity type id first as getStorage does. Inferred, as
+# storage_call.
+- rule: entity_handler_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: *manager_object}
+    - name_matches: {child: name, pattern: 'getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+# $this->container->get('entity_type.manager')->getStorage('node') in a test, and the same on
+# $container, \Drupal::getContainer() or \Drupal::service('entity_type.manager'), for getStorage and
+# the four handler methods above. Inferred: the container is known by its name, as in
+# container_get_call.
+- rule: container_entity_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\([''"]entity_type\.manager[''"]\)|\\?Drupal::service\([''"]entity_type\.manager[''"]\)'}
+    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+# $entity_type_manager->getStorage('user'), a local variable or parameter named in snake case.
+# Inferred: the variable's name says it is the entity type manager.
+- rule: local_manager_entity_call
+  reads: file
+  in: [source]
+  match:
+    reference: member_call_expression
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$entity_type_manager'}
+    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {from: {argument: 0}, types: [drupal.entity_type]}
+  confidence: inferred
+
+# $this->etm->getStorage('node') and the four handler methods, on any property of $this, as a
+# drupal.manager_call node that carries the argument list, and its edge to the method around it.
+# entity_call_through_typed_manager reads the property's declared type.
+- rule: manager_call
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &manager_where
+    - name_matches: {child: object, pattern: '\$this->\w+'}
+    - name_matches: {child: name, pattern: 'getStorage|getViewBuilder|getListBuilder|getFormObject|getAccessControlHandler'}
+  id: &manager_id
+    from: [enclosing_type, enclosing_method, declared_name, name, arguments]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}{arguments}"
+  emits: [{node: {type: drupal.manager_call}}]
+  confidence: declared
+
+- rule: manager_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: *manager_where
+  id: *manager_id
+  emits: [{edge: {kind: manager_call_in, from: this_node, to: enclosing_method}}]
+  confidence: declared
+
+# $this->etm?->getStorage('node'), as manager_call.
+- rule: manager_nullsafe_call
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where: *manager_where
+  id: *manager_id
+  emits: [{node: {type: drupal.manager_call}}]
+  confidence: declared
+
+- rule: manager_nullsafe_call_in
+  reads: file
+  in: [source]
+  match:
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    where: *manager_where
+  id: *manager_id
+  emits: [{edge: {kind: manager_call_in, from: this_node, to: enclosing_method}}]
+  confidence: declared
+
+# A manager call to the entity type its first argument names in quotes, when the call's class or
+# its nearest ancestor that declares the property types it EntityTypeManager or
+# EntityTypeManagerInterface: on the property or on a promoted constructor parameter. The edge runs
+# from the method around the call, at the call's line. Inferred, as storage_call: the declared type
+# is a claim about what runs.
+- rule: entity_call_through_typed_manager
+  reads: map
+  match:
+    node_type: drupal.manager_call
+    where: [{id_matches: '^drupal\.manager_call::(?<call>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->\w+\(\s*[''"](?<entity>\w+)[''"]\s*(?:,.*)?\))$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_typed_as
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::\\?(?:Drupal\\Core\\Entity\\)?EntityTypeManager(?:Interface)?$'
+    - node: 'drupal.manager_call::{call}'
+    - edge: manager_call_in
+  emits: [{edge: {kind: uses_entity_type, from: matched_node, to: {template: "{entity}", types: [drupal.entity_type]}}}]
+  confidence: inferred
+
+# \Drupal::logger('my_module'), \Drupal::currentUser() and the other shortcuts, to the service the
+# table shortcut_services gives for the method's name. Inferred: the table, not the file, names the
+# service. The methods other rules read, and getContainer, are left to them; setContainer and
+# unsetContainer set the container and name no service. A method the table does not list, such as
+# \Drupal::root(), makes nothing and lists no row.
+- rule: drupal_shortcut_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: '(?!(?:service|getContainer|setContainer|unsetContainer|cache|entityQuery(?:Aggregate)?)$)(?<shortcut>\w+)'}
+    - in_table: {table: shortcut_services, capture: shortcut}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: shortcut_services], types: [drupal.service]}
+  confidence: inferred
+
+# \Drupal::cache() with no argument, to the service cache.default. Inferred, as drupal_shortcut_call.
+- rule: drupal_cache_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: cache}
+    - name_matches: {child: arguments, pattern: '\(\s*\)'}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {template: cache.default, types: [drupal.service]}
+  confidence: inferred
+
+# \Drupal::cache('render'), to the service cache.render: the bin the quoted argument names, after
+# cache. A variable bin is kept by call/runtime_argument.yaml.
+- rule: drupal_cache_bin_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?Drupal'}
+    - name_matches: {child: name, pattern: cache}
+    - name_matches: {child: arguments, pattern: '\(\s*[''"](?<bin>[\w.]+)[''"]\s*\)'}
+  emits:
+  - edge:
+      kind: uses_service
+      from: enclosing_declaration
+      to: {template: 'cache.{bin}', types: [drupal.service]}
+  confidence: inferred
+
+# User::load(1), Node::loadMultiple() and Term::create([...]): uses_entity_type from the method or
+# function around the call to the entity type the table entity_classes gives for the class. The
+# class is resolved through the file's use statements and namespace, and its whole name is looked
+# up: the end's separator, a space, is in no class name. So a module's own User class gives no
+# edge to core's user, and an import that renames a class still finds it. A rutter that depends on
+# this one adds its module's classes to the table under add_table_rows. Inferred: the table, not
+# the file, names the entity type. static::, self:: and parent:: are not read. A class the table
+# does not hold makes nothing and lists no row: a module's own entity class is read by
+# call/entity_class_call.yaml, and a class that is no entity is not this rule's business.
+- rule: entity_class_static_call
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: scope
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?(?:\w+\\)*[A-Z]\w*'}
+    - name_matches: {child: name, pattern: 'load|loadMultiple'}
+    - &entity_class_listed {in_table: {table: entity_classes, fill: qualified_name}}
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: entity_classes], separator: ' ', types: [drupal.entity_type]}
+  confidence: inferred
+
+# Term::create([...]), as entity_class_static_call. An entity's create() takes an array of values
+# or nothing, so create('/path'), create($path . '?x'), create($container) and
+# create($this->container), the factory methods of a request, a form, a controller or a plugin,
+# are not read.
+- rule: entity_class_static_create
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: scope
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: '\\?(?:\w+\\)*[A-Z]\w*'}
+    - name_matches: {child: name, pattern: 'create'}
+    - name_matches: {child: arguments, pattern: '(?s)\((?!\s*(?:[''"]|\$container\b|\$this->container\b|\$\w+\s*\.)).*\)'}
+    - *entity_class_listed
+  emits:
+  - edge:
+      kind: uses_entity_type
+      from: enclosing_declaration
+      to: {resolve: [lookup_last_segment_in: entity_classes], separator: ' ', types: [drupal.entity_type]}
+  confidence: inferred

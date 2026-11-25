@@ -26,15 +26,16 @@ the given schemas", which names no key at all — so the sub-errors ``jsonschema
 ``ValidationError.context`` are rendered beneath their parent, sorted by the same key.
 Validate has to name what failed, and a line naming only the branch does not.
 
-**Once the pack's files pass their schema, it runs the checks ``periplus map`` runs.** It calls
-``engine.check.checked`` on the pack and the packs it depends on, with the project's settings
-values when a settings file resolves, so a problem ``map`` would refuse the pack for, in it or in
-a dependency, is reported here with the same code and message. Inside a project that pins the
-pack, or a pack that depends on it, a value the pack declares that the settings do not give is
-refused as ``map`` refuses it; elsewhere no value is asked for. When that project's pinned packs
-all resolve their dependencies, folders resolve against every pinned pack, as ``map`` resolves
-them, and the rows those packs add to tables are checked against each other as ``map`` checks
-them; otherwise against the pack and the packs it depends on.
+**It runs the checks ``periplus map`` runs.** It calls ``engine.check.checked`` with the
+project's settings values when a settings file resolves, so a problem ``map`` would refuse the
+pack for is reported here with the same code and message. Inside a project that pins the pack, or
+a pack that depends on it, and whose pinned packs all resolve their dependencies, it checks every
+pinned pack, as ``map`` does, and resolves folders against them; otherwise it checks the pack and
+the packs it depends on. Inside such a project a value the pack declares that the settings do not
+give is refused as ``map`` refuses it; elsewhere no value is asked for. A pack that fails its
+schema is refused by ``map`` before its rules are checked, so its schema errors are listed once,
+the text form says that, and the other packs' problems are still reported. Folders resolve only
+against packs that pass their schema, and only when the named pack passes its own.
 """
 
 from __future__ import annotations
@@ -116,6 +117,7 @@ class SchemaError:
     message: str
     context: tuple[SchemaError, ...] = field(default_factory=tuple)
     best: str = ""
+    hint: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,39 +191,35 @@ def validate(
     unreadable: list[Problem] = []
     checked, errors = _check_directory(pack, unreadable)
     problems.extend(unreadable)
-    if not errors and not unreadable:
-        # Imported here: `periplus.engine.check` imports this module.
-        from periplus.engine.check import _folder_conflicts, _schema_problems, reachable
-        from periplus.engine.check import checked as engine_checked
-        from periplus.engine.packload import _tables
+    # Imported here: `periplus.engine.check` imports this module.
+    from periplus.engine.check import _folder_conflicts, _schema_problems, reachable
+    from periplus.engine.check import checked as engine_checked
 
-        in_project = any(
-            s.kind == "project" and s.status == "used" for s in resolution.settings_sources
-        )
-        values, origins = settings_values(resolution.settings)
-        pinned, unresolved = resolve_pack_order(resolution.packs, resolution.candidates)
-        # One directory, one parse: a pinned pack `order` already loaded is that object.
-        loaded = {pack.path: pack for pack in order}
-        pinned = tuple(loaded.get(pack.path, pack) for pack in pinned)
-        named = any(pack.path == path for pack in pinned)
-        rule_set, refused = engine_checked(
-            order, values, origins, require_values=in_project and named
-        )
-        problems.extend(refused)
-        if in_project and named and not unresolved:
-            # Map refuses rows its pinned packs add that disagree, which the pack alone cannot.
-            _, failed = _schema_problems(pinned)
-            rows: list[Problem] = []
-            _tables([p for p in pinned if not reachable(p, pinned) & failed], rows)
-            problems.extend(r for r in rows if r not in problems)
-        if rule_set is not None:
-            folder_packs = pinned if in_project and named and not unresolved else order
-            overrides = folder_overrides(resolution.settings)
-            # Map refuses a folder conflict before it resolves any folder.
-            conflicts = _folder_conflicts(folder_packs)
-            problems.extend(c for c in conflicts if c not in problems)
-            if not conflicts:
-                problems.extend(folder_problems(rule_set, folder_packs, overrides))
+    in_project = any(
+        s.kind == "project" and s.status == "used" for s in resolution.settings_sources
+    )
+    values, origins = settings_values(resolution.settings)
+    pinned, unresolved = resolve_pack_order(resolution.packs, resolution.candidates)
+    # One directory, one parse: a pinned pack `order` already loaded is that object.
+    loaded = {pack.path: pack for pack in order}
+    pinned = tuple(loaded.get(pack.path, pack) for pack in pinned)
+    named = any(pack.path == path for pack in pinned)
+    # Map checks every pinned pack when they all resolve, and this run checks what map checks.
+    scope = pinned if in_project and named and not unresolved else order
+    rule_set, refused = engine_checked(scope, values, origins, require_values=in_project and named)
+    # A schema error of the pack itself is listed once, under the schema errors.
+    problems.extend(
+        p
+        for p in refused
+        if p not in problems
+        and not (p.code == ExitCode.SCHEMA_INVALID and p.detail.get("pack") == pack.name.pack)
+    )
+    if rule_set is not None and not errors and not unreadable:
+        _, failed = _schema_problems(scope)
+        sound = [p for p in scope if not reachable(p, scope) & failed]
+        # Map refuses a folder conflict before it resolves any folder.
+        if not _folder_conflicts(sound):
+            problems.extend(folder_problems(rule_set, sound, folder_overrides(resolution.settings)))
     return _report(requested, path, checked, errors, problems, version)
 
 
@@ -563,7 +561,16 @@ def _error(file: str, error: ValidationError) -> SchemaError:
         message=error.message,
         context=tuple(sorted((_error(file, sub) for sub in error.context), key=_sort_key)),
         best=_best(error),
+        hint=_hint(error.json_path),
     )
+
+
+def _hint(pointer: str) -> str:
+    """The shape to write where the schema error is in the boundary block, else ``""``."""
+    # Imported here: `periplus.engine.packload` imports this module.
+    from periplus.engine.packload import _BOUNDARY_SHAPE
+
+    return f"write {_BOUNDARY_SHAPE}" if pointer.startswith("$.boundary") else ""
 
 
 def _best(error: ValidationError) -> str:
@@ -603,7 +610,11 @@ def render_text(report: ValidationReport) -> str:
     lines += _section("Pack", _pack_lines(report))
     lines += _section("Checked", [_escape(name) for name in report.checked])
     lines += _section("Schema errors", _error_lines(report.errors, ""))
-    lines += _section("Problems", _problem_lines(report.problems))
+    refused = [
+        "periplus map refuses this pack for its schema errors, before it runs the rule checks "
+        "on it; fix them and run validate again"
+    ]
+    lines += _section("Problems", _problem_lines(report.problems) + refused * bool(report.errors))
     return "\n".join(lines) + "\n"
 
 
@@ -631,9 +642,10 @@ def _error_lines(errors: Iterable[SchemaError], indent: str) -> list[str]:
     lines: list[str] = []
     for error in errors:
         located = f"{_escape(error.file)}  " if not indent else ""
+        hint = f"; {_escape(error.hint)}" if error.hint and not indent else ""
         lines.append(
             f"{indent}{located}{_escape(error.pointer)}  "
-            f"{_escape(error.keyword)}  {_escape(error.message)}"
+            f"{_escape(error.keyword)}  {_escape(error.message)}{hint}"
         )
         lines += _error_lines(error.context, f"{indent}  ")
     return lines
@@ -692,6 +704,7 @@ def _json_error(error: SchemaError) -> dict[str, object]:
         "pointer": error.pointer,
         "keyword": error.keyword,
         "message": error.message,
+        "hint": error.hint,
         "context": [_json_error(sub) for sub in error.context],
     }
 

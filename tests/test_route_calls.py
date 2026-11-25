@@ -32,7 +32,7 @@ def _plant(root: Path, controller_body: str, module_body: str = "") -> None:
     (root / MODULE / "src" / "Controller").mkdir(parents=True)
     (root / ".periplus").mkdir()
     (root / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n"
     )
     (root / MODULE / "mymod.info.yml").write_text("name: My module\ntype: module\n")
     (root / MODULE / "mymod.routing.yml").write_text(ROUTING)
@@ -102,9 +102,17 @@ def test_variable_name_is_skipped_and_undeclared_route_is_referenced_c3(tmp_path
     report, edges, nodes = _map(tmp_path)
     assert edges == [(METHOD_ID, "drupal.route::other.route", ("declared",))]
     assert nodes.get("drupal.route::other.route") == "referenced"
-    assert [
-        (row[3], row[2].endswith("route_call_from_url")) for row in report.skipped
-    ] == [("argument 0 is not a text literal", True)]
+    # The run-time twin marks the variable call, so the literal rule leaves no skipped row.
+    assert report.skipped == ()
+    document = json.loads(Path(report.map_path).read_text())
+    marked = [
+        (n["id"], [loc["line"] for loc in n["locations"]])
+        for n in document["nodes"]
+        if n.get("attributes", {}).get("resolution") == "runtime"
+    ]
+    assert marked == [
+        ("php.call_site::Drupal\\mymod\\Controller\\LinkController::page::Url::fromRoute", [7])
+    ]
 
 
 def test_a_route_call_in_a_trait_links_from_the_trait_method(tmp_path):

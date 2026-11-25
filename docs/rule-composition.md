@@ -43,7 +43,7 @@ The project pins the bundled `js_basic` rutter and its own rutter, `invoice_rout
 ```yaml .periplus/settings.yml
 periplus_version: 0
 packs:
-  - js_basic@0.0.1
+  - js_basic@0.0.2
   - invoice_routes@0.1.0
 ```
 
@@ -226,6 +226,26 @@ read, changed or removed alone, and the map report shows what each one added. A 
 the types another rutter declares: `invoice_routes` names `js.function` and copies none of the
 rules of `js_basic`.
 
+## One thing, many ways to write it
+
+Code says the same thing in several ways, and the ways change as a framework grows. Small rules
+handle this well: each way of writing is one rule, and every rule ends at the same thing in the
+map.
+
+Drupal hooks show it. A module can implement a hook in more than one way:
+
+- a function named after the module and the hook, the older way;
+- a method that carries a `#[Hook]` attribute, the newer way;
+- a class that carries the attribute;
+- a function kept as a shim, marked `#[LegacyHook]`, that calls the class.
+
+The Drupal rutter has one small rule for each. Other small rules find the call that runs the hook
+and the function that documents it in an `api.php` file. All of them end at one hook. So "who
+implements this hook" has one answer, whichever way each module wrote it.
+
+When a framework adds a way of writing, you add one rule file. No other rule changes, and
+`periplus diff` on the two maps shows what the new rule added.
+
 ## What a map rule can and cannot read
 
 From [Map rules](rutter-author-guide-map-rules.md):
@@ -237,7 +257,9 @@ From [Map rules](rutter-author-guide-map-rules.md):
 - A node a map rule makes is read only when a file rule found the same id. A node that is only
   referenced is never a start for `node_type`.
 - It emits edges whose ends are `this_node`, `matched_node` or one template end, or one node, or
-  declared attributes. It never emits an attribute beside a node.
+  declared attributes. Beside a node it emits only `resolution: runtime`.
+- What a fire makes sits at each location of the node it matched, or, after a `place: edge`
+  step, at each location of the edge that step walked.
 - No `follow` step reads a node attribute. `edge_attribute` reads only values file rules wrote.
 - An `unless` or `unless_matched` chain sees the map as it stood when the pass began, so an edge a
   later pass makes does not take back what the rule already made.

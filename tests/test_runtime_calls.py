@@ -7,7 +7,7 @@ from typing import Any
 from periplus.map import run
 from periplus.preflight import check_runtime_dependencies
 
-PACK = "php_basic@0.2.0"
+PACK = "php_basic@0.3.0"
 METHOD = "php.method::App\\Page::run"
 
 DIRECT = """<?php
@@ -153,9 +153,17 @@ def test_no_calls_edge_leaves_a_marked_site_of_any_shape_wo2(tmp_path: Path) -> 
 
 def test_literal_named_calls_get_no_marked_site_wo2(tmp_path: Path) -> None:
     document = _map_files(tmp_path, {"Page.php": LITERAL_SHAPES})
-    assert [n["id"] for n in document["nodes"] if _resolution(n) == "runtime"] == []
+    # No rule for a variable method name marks a site. $obj?->go() is marked only because $obj
+    # is a parameter nothing types, by untyped_parameter_call_runtime.
+    marked = [n for n in document["nodes"] if _resolution(n) == "runtime"]
+    assert [(n["id"], [p["rule"] for p in n["provenance"]]) for n in marked] == [
+        (
+            "php.call_site::App\\Page::run::$obj?->go",
+            ["find_variable_nullsafe_call", "untyped_parameter_call_runtime"],
+        )
+    ]
     # self::go() keeps the unmarked site that relative_scope_calls.yaml gives it, and $this->go()
-    # the one this_calls.yaml gives it; $obj?->go() the unmarked site variable_calls.yaml gives it.
+    # the one this_calls.yaml gives it; $obj?->go() the site variable_calls.yaml gives it.
     assert sorted(s["id"] for s in _sites(document)) == [
         "php.call_site::App\\Page::run::$obj?->go",
         "php.call_site::App\\Page::run::$this->go",

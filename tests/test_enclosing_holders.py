@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from test_demo_b_support import clean_map, edge_set, map_site, plant, settings
+from test_demo_b_support import clean_map, edge_set, plant, settings
 
 PACK = """\
 pack: probe
@@ -205,7 +205,7 @@ class Shapes
 
 
 def _shapes(root: Path) -> Any:
-    plant(root, {**settings("php_basic@0.2.0"), "src/Shapes.php": SHAPES})
+    plant(root, {**settings("php_basic@0.3.0"), "src/Shapes.php": SHAPES})
     _, document = clean_map(root)
     return document
 
@@ -362,33 +362,108 @@ def test_a_third_party_rutter_tests_what_lies_between_a_match_and_its_holder(
     assert report.skipped == ()
 
 
-def test_a_condition_in_a_reference_rule_is_refused(tmp_path: Path) -> None:
-    """within and not_within are conditions of a tree declaration rule only."""
-    rules = """\
-edge_kinds:
-- {kind: own_calls, from: [own.unit], to: [own.unit]}
+REFERENCES = """\
 node_types:
 - {name: own.unit, id_namespace: own.unit}
+- {name: own.box, id_namespace: own.box}
+edge_kinds:
+- {kind: own_makes, from: [own.unit], to: [own.box]}
+- {kind: own_makes_late, from: [own.unit], to: [own.box]}
 rules:
-- rule: ref_within
+- rule: box_class
   reads: file
   in: [source]
-  match: {reference: function_call_expression, name_child: function, filetype: php,
+  match: {declaration: class_declaration, name_child: name, body_child: declaration_list,
+    filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: own.box}}]
+  confidence: declared
+- rule: unit_method
+  reads: file
+  in: [source]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id: {from: [enclosing_type, declared_name], template: '{enclosing_type}::{declared_name}'}
+  emits: [{node: {type: own.unit}}]
+  confidence: declared
+- rule: makes_outside_labels
+  reads: file
+  in: [source]
+  match: {reference: object_creation_expression, name_child: [name], filetype: php,
+    where: [{not_within: [attribute_list]}]}
+  emits: [{edge: {kind: own_makes, from: enclosing_declaration,
+    to: {types: [own.box], on_miss: unresolved}}}]
+  confidence: declared
+- rule: makes_in_closures
+  reads: file
+  in: [source]
+  match: {reference: object_creation_expression, name_child: [name], filetype: php,
     where: [{within: [anonymous_function]}]}
-  emits: [{edge: {kind: own_calls, from: enclosing_class, to: enclosing_class}}]
+  emits: [{edge: {kind: own_makes_late, from: enclosing_declaration,
+    to: {types: [own.box], on_miss: unresolved}}}]
   confidence: declared
 """
+
+REFERENCES_SOURCE = """\
+<?php
+#[Label(new Tag('crate'))]
+class Crate
+{
+    public function run()
+    {
+        new Crate();
+        $f = function () {
+            new Lid();
+        };
+    }
+}
+"""
+
+
+def test_a_reference_rule_passes_over_a_match_its_within_conditions_leave_out(
+    tmp_path: Path,
+) -> None:
+    """within and not_within on a reference rule read the tree nodes from the match up to its
+    nearest holder, as on a declaration rule. new Tag in the class's attribute has no method to
+    start an edge, and not_within passes it over with no skipped row; within keeps the closure's
+    new Lid alone."""
+    plant(
+        tmp_path,
+        {
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [own@0.0.1]\n",
+            ".periplus/packs/own@0.0.1/pack.yaml": PACK.replace("pack: probe", "pack: own"),
+            ".periplus/packs/own@0.0.1/rules/own.yaml": REFERENCES,
+            "src/Crate.php": REFERENCES_SOURCE,
+        },
+    )
+    report, document = clean_map(tmp_path)
+    assert report.skipped == ()
+    assert edge_set(document, "own_makes") == {
+        ("own_makes", "own.unit::Crate::run", "own.box::Crate"),
+        ("own_makes", "own.unit::Crate::run", "own.box::Lid"),
+    }
+    assert edge_set(document, "own_makes_late") == {
+        ("own_makes_late", "own.unit::Crate::run", "own.box::Lid"),
+    }
+
+
+def test_without_the_condition_the_reference_outside_any_method_lists_its_row(
+    tmp_path: Path,
+) -> None:
+    """The same rule with no where lists new Tag as a match it could not finish."""
+    rules = REFERENCES.replace("\n    where: [{not_within: [attribute_list]}]}", "}")
     plant(
         tmp_path,
         {
             ".periplus/settings.yml": "periplus_version: 0\npacks: [own@0.0.1]\n",
             ".periplus/packs/own@0.0.1/pack.yaml": PACK.replace("pack: probe", "pack: own"),
             ".periplus/packs/own@0.0.1/rules/own.yaml": rules,
-            "src/Box.php": THIRD_SOURCE,
+            "src/Crate.php": REFERENCES_SOURCE,
         },
     )
-    report, _ = map_site(tmp_path)
-    assert "ref_within" not in [rule for _, rule, _ in report.executed]
+    report, _ = clean_map(tmp_path)
+    assert report.skipped == (
+        ("src/Crate.php", 2, "makes_outside_labels", "no enclosing declaration is mapped"),
+    )
 
 
 def test_the_map_is_the_same_bytes_from_two_folders(tmp_path: Path) -> None:

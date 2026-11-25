@@ -414,3 +414,118 @@ def test_a_fill_the_rule_kind_does_not_provide_is_refused(tmp_path: Path) -> Non
         "cannot be executed: in_table names the fill enclosing_type, which this kind of rule does "
         "not give a table condition"
     ]
+
+
+#: ``made`` keeps a static call whose class, resolved through the file's imports, is a key of the
+#: table ``known``, keyed by full names.
+RESOLVED_OWNER = OWNER.replace(
+    "  builtins: {alpha: alpha, beta: beta}\n", "  known: {'Lib\\Box': box}\n"
+).replace(
+    "  written_names: [name, qualified_name, namespace_name]\n",
+    "  written_names: [name, qualified_name, namespace_name]\n"
+    "  resolve: [{full_if_prefixed: '\\'}, bound_first_segment, {prefix_with: namespace}]\n",
+)
+RESOLVED_RULES = """\
+node_types:
+- {name: own.method, id_namespace: own.method}
+- {name: own.kind, id_namespace: own.kind}
+- {name: own.cls, id_namespace: own.cls}
+edge_kinds:
+- {kind: made, from: own.method, to: own.kind}
+imports:
+- ast: namespace_use_declaration
+  group_ast: namespace_use_group
+  clause: namespace_use_clause
+  facts: {alias: alias}
+  bind: {name: [alias, last_segment], prefix_from_group: true, strip_prefix: '\\'}
+rules:
+- rule: cls
+  reads: file
+  in: [code]
+  match: {declaration: class_declaration, name_child: name, body_child: declaration_list,
+    filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: own.cls}}]
+  confidence: declared
+- rule: method
+  reads: file
+  in: [code]
+  match: {declaration: method_declaration, name_child: name, filetype: php}
+  id: {from: [enclosing_type, declared_name], template: '{enclosing_type}.{declared_name}'}
+  emits: [{node: {type: own.method}}]
+  confidence: declared
+- rule: made
+  reads: file
+  in: [code]
+  match: {reference: scoped_call_expression, name_child: scope, filetype: php,
+    where: [{in_table: {table: known, fill: qualified_name}}]}
+  emits:
+  - edge: {kind: made, from: enclosing_declaration,
+      to: {resolve: [lookup_last_segment_in: known], separator: ' ', types: [own.kind]}}
+  confidence: declared
+"""
+RESOLVED_SOURCE = """\
+<?php
+
+namespace App;
+
+use Lib\\Box as Crate;
+
+class Run
+{
+    function go()
+    {
+        Crate::make();
+        Box::make();
+        Other::make();
+    }
+}
+"""
+
+
+def _resolved_project(root: Path, rules: str = RESOLVED_RULES) -> None:
+    plant(
+        root,
+        {
+            ".periplus/packs/own@0.0.1/pack.yaml": RESOLVED_OWNER,
+            ".periplus/packs/own@0.0.1/rules/own.yaml": rules,
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [own@0.0.1]\n",
+            "src/a.php": RESOLVED_SOURCE,
+        },
+    )
+
+
+def test_a_reference_rule_tests_the_resolved_name_fill(tmp_path: Path) -> None:
+    """Crate resolves through the import to Lib\\Box, a key of the table, and gives the edge.
+    Box resolves to App\\Box and Other to App\\Other: neither is a key, so each makes nothing and
+    lists no row, where the written text Crate would have matched no key at all."""
+    _resolved_project(tmp_path)
+    report = _run(tmp_path)
+    assert report.problems == () and report.skipped == (), report
+    document = json.loads((tmp_path / "map.json").read_text())
+    assert {(e["from"], e["to"]) for e in document["edges"] if e["kind"] == "made"} == {
+        ("own.method::App\\Run.go", "own.kind::box")
+    }
+
+
+def test_without_the_condition_the_calls_off_the_table_list_rows(tmp_path: Path) -> None:
+    _resolved_project(
+        tmp_path,
+        RESOLVED_RULES.replace(
+            ",\n    where: [{in_table: {table: known, fill: qualified_name}}]}", "}"
+        ),
+    )
+    report = _run(tmp_path)
+    assert [(line, why) for _, line, _, why in report.skipped] == [
+        (12, "no resolution step holds for scope"),
+        (13, "no resolution step holds for scope"),
+    ]
+
+
+def test_the_resolved_name_fill_is_refused_on_a_declaration_rule(tmp_path: Path) -> None:
+    _fill_project(tmp_path, "{table: builtins, fill: qualified_name}")
+    assert [p.message for p in _run(tmp_path).problems] == [
+        f"own/rules/own.yaml: the rule {rule} cannot be executed: {key} names the fill "
+        "qualified_name, which this kind of rule does not give a table condition"
+        for rule, key in (("local", "not_in_table"), ("shared", "in_table"))
+    ]

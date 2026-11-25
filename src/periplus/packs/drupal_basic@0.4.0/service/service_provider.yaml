@@ -1,0 +1,112 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A module's service provider, the class <Module>ServiceProvider that Drupal finds by its name and
+# runs while it builds the container: register() and alter() receive the container builder as
+# $container. Each call on it that names a service id in quotes links the method around the call
+# to that service, at the call's line, declared:
+# - removeDefinition('x') and removeAlias('x'), as removes_service;
+# - getDefinition('x') and findDefinition('x'), which a provider calls to change the definition,
+#   as reads_service_definition;
+# - register('x', ...), setDefinition('x', ...) and setAlias('x', ...), as registers_service, and
+#   setAlias('x', 'y') or setAlias('x', new Alias('y')) also as an alias_of_service edge from x to
+#   y;
+# - has('x'), hasDefinition('x') and hasAlias('x'), as checks_service.
+# A service no mapped file declares, such as one this provider registers or core's, ends at a
+# referenced node.
+#
+# Limits: only a file named *ServiceProvider.php is read, and only the object written $container.
+# An id in a variable, a constant or X::class gives no edge, and so does the class register() or
+# setDefinition() gives the service.
+
+edge_kinds:
+- kind: removes_service
+  cause: from
+  description: "the service provider method removes that service or alias from the container while Drupal builds it"
+  from: php.method
+  to: drupal.service
+- kind: reads_service_definition
+  cause: from
+  description: "the service provider method gets that service's definition from the container builder, to change it"
+  from: php.method
+  to: drupal.service
+- kind: registers_service
+  cause: from
+  description: "the service provider method registers that service or alias in the container builder"
+  from: php.method
+  to: drupal.service
+- kind: checks_service
+  cause: from
+  description: "the service provider method tests whether the container builder holds that service or alias"
+  from: php.method
+  to: drupal.service
+
+rules:
+- rule: provider_removes_service
+  reads: file
+  in: [source]
+  match:
+    file: '*ServiceProvider'
+    filetype: drupal_php_text
+    text: '\$container->(?:removeDefinition|removeAlias)\(\s*[''"](?<service>[^''"$]+)[''"]'
+  values: &method_value
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{service}'}
+  line: {capture: service}
+  emits:
+  - edge: {kind: removes_service, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}
+  confidence: declared
+
+- rule: provider_reads_service_definition
+  reads: file
+  in: [source]
+  match:
+    file: '*ServiceProvider'
+    filetype: drupal_php_text
+    text: '\$container->(?:getDefinition|findDefinition)\(\s*[''"](?<service>[^''"$]+)[''"]'
+  values: *method_value
+  id: {template: '{service}'}
+  line: {capture: service}
+  emits:
+  - edge: {kind: reads_service_definition, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}
+  confidence: declared
+
+- rule: provider_registers_service
+  reads: file
+  in: [source]
+  match:
+    file: '*ServiceProvider'
+    filetype: drupal_php_text
+    text: '\$container->(?:register|setDefinition|setAlias)\(\s*[''"](?<service>[^''"$]+)[''"]'
+  values: *method_value
+  id: {template: '{service}'}
+  line: {capture: service}
+  emits:
+  - edge: {kind: registers_service, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}
+  confidence: declared
+
+- rule: provider_sets_alias
+  reads: file
+  in: [source]
+  match:
+    file: '*ServiceProvider'
+    filetype: drupal_php_text
+    text: '\$container->setAlias\(\s*[''"](?<service>[^''"$]+)[''"]\s*,\s*(?:new\s+\\?(?:[\w\\]*\\)?Alias\(\s*)?[''"](?<target>[^''"$]+)[''"]'
+  id: {template: '{service}'}
+  line: {capture: service}
+  emits:
+  - edge: {kind: alias_of_service, from: this_node, to: {template: '{target}'}}
+  confidence: declared
+
+- rule: provider_checks_service
+  reads: file
+  in: [source]
+  match:
+    file: '*ServiceProvider'
+    filetype: drupal_php_text
+    text: '\$container->(?:has|hasDefinition|hasAlias)\(\s*[''"](?<service>[^''"$]+)[''"]'
+  values: *method_value
+  id: {template: '{service}'}
+  line: {capture: service}
+  emits:
+  - edge: {kind: checks_service, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}
+  confidence: declared

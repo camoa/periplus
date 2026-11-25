@@ -1,0 +1,63 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An alter call given a list of types, as hook/hook_invoke.yaml reads one type:
+#
+#   $this->moduleHandler->alter(['x', 'y'], $data);
+#
+# runs hook x_alter and hook y_alter, one invokes_hook edge for each quoted text in the list, at
+# its line. alterDeprecated($message, [...]) and alterForTheme($theme, [...]) read the list the
+# same way. The object is a module handler or a theme manager by its name, as the span
+# runner_alter_list in pack.yaml gives it. An item that is not a whole quoted text, as
+# 'form_' . $form_id or $type, gives nothing.
+#
+# Read as text, because a tree rule reads a call's argument only when it is one text. In a class
+# under src, the edge starts at the named method around the list, its class named from the file's
+# path by Drupal's PSR-4 layout, so the rule is inferred twice over, and a file whose class is
+# named otherwise gives an edge from a method that does not exist. In a module, install, inc,
+# theme or profile file, it starts at the named function around the list; a list in a method of a
+# class kept there gives nothing.
+
+rules:
+- rule: hook_altered_by_list_in_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [php, api.php]
+    reads_sections: [string]
+    text: &item '(?<=[\[,\s])(?<!\w\[)(?<!\]\[)[''"](?<type>\w+)[''"](?=\s*[,\]])'
+  values:
+    list: &list {from: {enclosing: runner_alter_list, capture: mark}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: &type_id {template: '{list}|{type}_alter', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  line: {capture: type}
+  emits:
+  - edge:
+      kind: invokes_hook
+      from: {template: '{psr4_class}::{method}', types: [php.method]}
+      to: this_node
+  confidence: inferred
+
+- rule: hook_altered_by_list_in_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    reads_sections: [string]
+    text: *item
+  values:
+    list: *list
+    name: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+  id: *type_id
+  line: {capture: type}
+  emits:
+  - edge:
+      kind: invokes_hook
+      from: {template: '{fn}', types: [php.function]}
+      to: this_node
+  confidence: inferred

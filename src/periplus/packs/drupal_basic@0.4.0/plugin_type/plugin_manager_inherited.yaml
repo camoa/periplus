@@ -1,0 +1,181 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A plugin manager that names no plugin type itself, because it inherits its constructor, or its
+# constructor passes its arguments on, as parent::__construct($namespaces, $cache, $handler) does
+# under core's ActionManager. plugin_type/plugin_manager.yaml reads the type from the quoted
+# folder and the class names a constructor gives parent::__construct, so such a class gets none.
+# Drupal builds it with the parent's constructor, which names the folder and the attribute or
+# annotation class, so it manages the parent's plugin type:
+# - a parent the map holds, or its nearest ancestor, whose constructor manages a plugin type gives
+#   an inherits_plugin_type edge from the class to that type, holding the folder in the edge
+#   attribute subdirectory, as manages_plugin_type does; so does a parent that inherits one;
+# - a parent that is one of core's concrete plugin managers, a row of the tables
+#   core_manager_folders, core_manager_attributes and core_manager_annotations in pack.yaml, gives
+#   the type that manager's constructor names: its attribute class and, when it names one, its
+#   annotation class.
+#   The rows are each core 11.4 class outside tests that calls parent::__construct with a quoted
+#   folder and names its attribute or annotation class as written there; managers that build the
+#   folder at run time, as the migrate and views managers do, are not rows;
+# - a parent whose name ends in PluginManager, outside Drupal\Core, that the map does not hold and
+#   no row names: the edge ends at an unresolved plugin type named by the parent, since the type is
+#   in a constructor the map cannot read.
+# Only a class that declares no constructor, or whose constructor calls parent::__construct, builds
+# with its parent's constructor; one whose constructor does not, as core's TypedConfigManager under
+# TypedDataManager, gets nothing here. Two text rules mark the class that does, in a file under src,
+# by Drupal's PSR-4 layout. A class whose own constructor manages a plugin type keeps only its own. The alter hook and the
+# cache key a parent's constructor registers, plugin_alter_hook and plugin_cache_key, are written
+# on the class too, unless the class registers its own. Inferred: the parent, not the class's own
+# code, names the type.
+#
+# Limits: the plugin interface a mapped parent names stays on the parent's constructor
+# (names_plugin_interface) and on the type (plugin_type_interface); a core parent's alter hook and
+# cache key are not written.
+
+edge_kinds:
+- kind: inherits_plugin_type
+  cause: from
+  description: "the manager class names no plugin type itself and builds with its parent manager's constructor, which manages that type; unresolved, named by the parent, when that constructor is unread"
+  from: php.class
+  to: drupal.plugin_type
+- kind: manager_value_of_class
+  cause: none
+  description: "internal: the plugin manager class declares that alter hook or cache key value"
+  from: drupal.plugin_manager_value
+  to: php.class_like
+
+edge_attributes:
+- name: subdirectory
+  on: [manages_plugin_type, inherits_plugin_type, names_class_to_parent_constructor]
+  description: "the folder below each module's src that the manager's constructor discovers its plugins in, as Plugin/Action"
+
+rules:
+# The class builds with its parent's constructor: its file declares no constructor, or calls
+# parent::__construct.
+- rule: class_without_constructor
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\A(?![\s\S]*\bfunction\s+__construct\s*\()'}
+  id: {template: '{psr4_class}::parent_constructor'}
+  emits: [{node: {type: drupal.plugin_manager_value}}]
+  confidence: declared
+
+- rule: constructor_calls_parent_constructor
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\bparent::__construct\s*\('}
+  id: {template: '{psr4_class}::parent_constructor'}
+  emits: [{node: {type: drupal.plugin_manager_value}}]
+  confidence: declared
+
+# The manager value joined to its class, for the attribute rules at the end.
+- rule: manager_value_of_class
+  reads: map
+  match:
+    node_type: drupal.plugin_manager_value
+    where: [{id_matches: '^drupal\.plugin_manager_value::(?<class>[^:]+)::(?:alter|cache)::'}]
+    follow: [{node: 'php.type::{class}'}]
+  emits: [{edge: {kind: manager_value_of_class, from: this_node, to: matched_node}}]
+  confidence: declared
+
+# A parent the map holds, or its nearest ancestor, whose constructor manages a plugin type.
+- rule: inherits_plugin_type_from_mapped_manager
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<class>.+)$'}]
+    follow:
+    - node: 'drupal.plugin_manager_value::{class}::parent_constructor'
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<parent>.+)$'
+    - node: 'php.method::{parent}::__construct'
+    - edge: manages_plugin_type
+    - edge_attribute: subdirectory
+    unless: &own_type [[{node: 'php.method::{class}::__construct'}, {edge: manages_plugin_type}]]
+  emits: [{edge: {kind: inherits_plugin_type, from: this_node, to: matched_node, attributes: {subdirectory: {template: '{subdirectory}'}}}}]
+  confidence: inferred
+
+# A parent that itself inherits its plugin type.
+- rule: inherits_plugin_type_from_inheriting_manager
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<class>.+)$'}]
+    follow:
+    - node: 'drupal.plugin_manager_value::{class}::parent_constructor'
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - ancestors: [inherits]
+    - edge: inherits_plugin_type
+    unless: *own_type
+  emits: [{edge: {kind: inherits_plugin_type, from: this_node, to: matched_node}}]
+  confidence: inferred
+
+# Core's concrete plugin managers: the parent's row in core_manager_folders gives the folder, and
+# its rows in core_manager_attributes and core_manager_annotations the classes its constructor
+# names, one edge each.
+- &core_row
+  rule: extends_core_manager_attribute
+  reads: map
+  match: &core_match
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<class>.+)$'}]
+    follow: [{node: 'drupal.plugin_manager_value::{class}::parent_constructor'}, {node: 'php.type::{class}'}, {edge: inherits}, {id_matches: '^php\.type::(?<parent>.+)$'}, {in_table: {table: core_manager_folders, capture: parent, value: folder}}, {in_table: {table: core_manager_attributes, capture: parent, value: named}}]
+    unless: *own_type
+  emits: [{edge: {kind: inherits_plugin_type, from: this_node, to: {template: '{named}', types: [drupal.plugin_type]}, attributes: {subdirectory: {template: '{folder}'}}}}]
+  confidence: inferred
+- {<<: *core_row, rule: extends_core_manager_annotation, match: {<<: *core_match, follow: [{node: 'drupal.plugin_manager_value::{class}::parent_constructor'}, {node: 'php.type::{class}'}, {edge: inherits}, {id_matches: '^php\.type::(?<parent>.+)$'}, {in_table: {table: core_manager_folders, capture: parent, value: folder}}, {in_table: {table: core_manager_annotations, capture: parent, value: named}}]}}
+
+# A parent outside Drupal\Core named like a plugin manager that the map does not hold and no row
+# names. A parent named only ...Manager, as a language manager, may be no plugin manager at all.
+- rule: inherits_plugin_type_unread
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<class>.+)$'}]
+    follow:
+    - node: 'drupal.plugin_manager_value::{class}::parent_constructor'
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - id_matches: '^php\.type::(?!Drupal\\Core\\)(?<parent>(?:[\w\\]*\\)?\w*PluginManager)$'
+    unless: *own_type
+    unless_matched:
+    - [{edge: contains}]
+    - [{in_table: {table: core_manager_folders, capture: parent}}]
+  emits: [{edge: {kind: inherits_plugin_type, from: this_node, to: {template: '{parent}', types: [drupal.plugin_type], on_miss: unresolved}}}]
+  confidence: inferred
+
+# The alter hook and the cache key of the nearest ancestor that registers one, on a class that
+# registers none.
+- rule: inherits_plugin_alter_hook
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<class>.+)$'}]
+    follow:
+    - node: 'drupal.plugin_manager_value::{class}::parent_constructor'
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - ancestors: [inherits]
+    - incoming_edge: manager_value_of_class
+    - id_matches: '::alter::(?<hook>\w+)$'
+    unless: [[{incoming_edge: manager_value_of_class}, {id_matches: '::alter::'}]]
+  emits: [{attribute: {name: plugin_alter_hook, template: '{hook}_alter'}}]
+  confidence: inferred
+
+- rule: inherits_plugin_cache_key
+  reads: map
+  match:
+    node_type: php.class
+    where: [{id_matches: '^php\.type::(?<class>.+)$'}]
+    follow:
+    - node: 'drupal.plugin_manager_value::{class}::parent_constructor'
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - ancestors: [inherits]
+    - incoming_edge: manager_value_of_class
+    - id_matches: '::cache::(?<key>.+)$'
+    unless: [[{incoming_edge: manager_value_of_class}, {id_matches: '::cache::'}]]
+  emits: [{attribute: {name: plugin_cache_key, template: '{key}'}}]
+  confidence: inferred

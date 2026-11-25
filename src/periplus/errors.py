@@ -281,6 +281,12 @@ class ExitCode(IntEnum):
     #: beside the map, or a record of another map. Remedy: run ``periplus map``.
     MAP_STALE = 34
 
+    #: ``periplus upgrade`` did not upgrade: PyPI could not be read, the install kind is not one it
+    #: knows, the upgrade command failed or left the version as it was, or the skills were not
+    #: refreshed. Returned by ``upgrade.upgrade``. Remedy: read the message, then upgrade with the
+    #: tool that installed Periplus.
+    UPGRADE_FAILED = 35
+
     #: The reader of standard output closed it early, as ``| head`` does. 128 plus the number of
     #: SIGPIPE, the status a shell reports for a command that pipe ended. Returned by ``cli.main``.
     OUTPUT_CLOSED = 141

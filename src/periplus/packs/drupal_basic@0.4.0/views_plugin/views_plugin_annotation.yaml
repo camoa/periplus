@@ -1,0 +1,86 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A views field, filter or style plugin declared by its annotation, @ViewsField("x"), or with the
+# key id, @ViewsStyle(id = "x", ...), the twin of the attribute rules: one plugin declared both
+# ways is one node. Read as text inside the docblock; plugin_class joins it to the class the file
+# holds, by Drupal's PSR-4 layout.
+
+rules:
+- rule: views_field_from_annotation
+  reads: file
+  in: [views_field_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: &field '(?m)^[ \t]*\*[ \t]*@ViewsField\((?:\s*(?=")|(?:(?!\*/|\n[ \t]*\*[ \t]*@[A-Z])[\s\S])*?(?<![\w$])id\s*=\s*(?="))"(?<pid>[^"]+)"'
+  id: {template: '{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.views_field_plugin}}]
+  confidence: declared
+- rule: views_field_from_annotation_edges
+  reads: file
+  in: [views_field_classes]
+  match: {file: '**', filetype: drupal_php_text, reads_sections: [block_comment], text: *field}
+  id: {template: '{pid}'}
+  line: {capture: pid}
+  emits: [{edge: {kind: plugin_class, from: this_node, to: {template: '{psr4_class}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: views_filter_from_annotation
+  reads: file
+  in: [views_filter_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: &filter '(?m)^[ \t]*\*[ \t]*@ViewsFilter\((?:\s*(?=")|(?:(?!\*/|\n[ \t]*\*[ \t]*@[A-Z])[\s\S])*?(?<![\w$])id\s*=\s*(?="))"(?<pid>[^"]+)"'
+  id: {template: '{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.views_filter_plugin}}]
+  confidence: declared
+- rule: views_filter_from_annotation_edges
+  reads: file
+  in: [views_filter_classes]
+  match: {file: '**', filetype: drupal_php_text, reads_sections: [block_comment], text: *filter}
+  id: {template: '{pid}'}
+  line: {capture: pid}
+  emits: [{edge: {kind: plugin_class, from: this_node, to: {template: '{psr4_class}', types: [php.class]}}}]
+  confidence: declared
+
+- rule: views_style_from_annotation
+  reads: file
+  in: [views_style_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: &style '(?m)^[ \t]*\*[ \t]*@ViewsStyle\((?:\s*(?=")|(?:(?!\*/|\n[ \t]*\*[ \t]*@[A-Z])[\s\S])*?(?<![\w$])id\s*=\s*(?="))"(?<pid>[^"]+)"'
+  id: {template: '{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.views_style_plugin}}]
+  confidence: declared
+- rule: views_style_from_annotation_edges
+  reads: file
+  in: [views_style_classes]
+  match: {file: '**', filetype: drupal_php_text, reads_sections: [block_comment], text: *style}
+  id: {template: '{pid}'}
+  line: {capture: pid}
+  emits: [{edge: {kind: plugin_class, from: this_node, to: {template: '{psr4_class}', types: [php.class]}}}]
+  confidence: declared
+
+# The style's title, as text or @Translation("..."), as an attribute of its node.
+- rule: views_style_words_from_annotation
+  reads: file
+  in: [views_style_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@ViewsStyle\((?=(?:\s*|(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])id\s*=\s*)"(?<pid>[^"]+)")(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])(?:title)\s*=\s*(?:@Translation\(\s*)?")(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])title\s*=\s*(?:@Translation\(\s*)?"(?<title>[^"]*)"))?'
+  id: {template: '{pid}'}
+  line: {capture: pid}
+  emits:
+  - node: {type: drupal.views_style_plugin}
+  - attribute: {name: title, template: '{title}'}
+  confidence: declared

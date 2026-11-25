@@ -1,0 +1,65 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A template that calls a filter, as {{ price|money }}, or a function, as {{ total() }}, inside
+# {{ }} or {% %}: an internal drupal.twig_callable_site node at the line of the call,
+# <template>|filter|<name> or <template>|function|<name>. A map rule turns it into
+# template_uses_twig_filter or template_uses_twig_function, at that line, only when a Twig
+# extension of the mapped code provides the name, so |t, |raw and attach_library() give nothing.
+# A function name after a dot, as node.label(), is a method and gives nothing; one right after a
+# pipe is a filter. A filter or function after a hash in the same print or tag, as
+# {{ {a: 1}|money }}, and one in a Twig comment give nothing.
+
+node_types:
+- name: drupal.twig_callable_site
+  description: "internal: a filter or function call in one template, at its line, before the map joins it to the extension that provides it"
+  id_namespace: drupal.twig_callable_site
+  internal: true
+
+rules:
+- rule: template_filter_call_site
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '\|\s*(?<callable>[A-Za-z_]\w*)'}
+  values:
+    in_twig: {from: {enclosing: twig_expression, capture: mark}}
+  id: {template: '{in_twig}|{template_name}|filter|{callable}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{node: {type: drupal.twig_callable_site}}]
+  confidence: declared
+
+- rule: template_function_call_site
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*.html', filetype: drupal_template_text, text: '(?:^|[^\w.|''"])(?<callable>[A-Za-z_]\w*)\s*\('}
+  values:
+    in_twig: {from: {enclosing: twig_expression, capture: mark}}
+  id: {template: '{in_twig}|{template_name}|function|{callable}', normalize: [{replace: '^[^|]*\|', with: ''}]}
+  emits: [{node: {type: drupal.twig_callable_site}}]
+  confidence: declared
+
+- rule: template_uses_twig_filter
+  reads: map
+  match:
+    node_type: drupal.twig_callable_site
+    where: [{id_matches: '^drupal\.twig_callable_site::(?<template>[^|]+)\|filter\|(?<callable>.+)$'}]
+    follow:
+    - node: 'drupal.twig_callable::filter|{callable}'
+    - &provider {edge: twig_callable_in_class}
+    - &extension_ancestors {ancestors: [inherits]}
+    - &twig_extension {id_matches: '^php\.type::Twig\\Extension\\AbstractExtension$'}
+    - &template {node: 'drupal.template::{template}'}
+  emits: [{edge: {kind: template_uses_twig_filter, from: matched_node, to: {template: '{callable}', type: twig.filter}}}]
+  confidence: inferred
+
+- rule: template_uses_twig_function
+  reads: map
+  match:
+    node_type: drupal.twig_callable_site
+    where: [{id_matches: '^drupal\.twig_callable_site::(?<template>[^|]+)\|function\|(?<callable>.+)$'}]
+    follow:
+    - node: 'drupal.twig_callable::function|{callable}'
+    - *provider
+    - *extension_ancestors
+    - *twig_extension
+    - *template
+  emits: [{edge: {kind: template_uses_twig_function, from: matched_node, to: {template: '{callable}', type: twig.function}}}]
+  confidence: inferred

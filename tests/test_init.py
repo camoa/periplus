@@ -332,7 +332,7 @@ def test_it_prefills_the_packs_it_was_given_into_the_settings_it_writes(tmp_path
     """Init in a matching fixture writes the pack name.
 
     Loaded back rather than searched for as a substring. `packs:` appears in the shipped stub as a
-    commented reference block naming `drupal_basic@0.3.0`, so a test asserting the text is in the
+    commented reference block naming `drupal_basic@0.4.0`, so a test asserting the text is in the
     file passes against a run that wrote nothing at all -- and against one that wrote a pin inside a
     comment, which is the failure that looks most like success. What
     "writes the pack name" means is that the settings loader reads it back as a declared value, and
@@ -342,7 +342,7 @@ def test_it_prefills_the_packs_it_was_given_into_the_settings_it_writes(tmp_path
     adding to it would satisfy everything above while throwing away the file's other declared key
     and all of its reference prose.
     """
-    report = initialise_project(tmp_path, packs=("drupal_basic@0.3.0", "acme@1.0.0"))
+    report = initialise_project(tmp_path, packs=("drupal_basic@0.4.0", "acme@1.0.0"))
 
     assert report.created is True
     assert report.problems == ()
@@ -351,7 +351,7 @@ def test_it_prefills_the_packs_it_was_given_into_the_settings_it_writes(tmp_path
     document = load_settings_document(_settings(tmp_path))
     packs = document.get("packs")
     assert packs is not None, "the settings file declares no `packs:`, so nothing was prefilled"
-    assert list(packs) == ["drupal_basic@0.3.0", "acme@1.0.0"]
+    assert list(packs) == ["drupal_basic@0.4.0", "acme@1.0.0"]
     assert document.get("periplus_version") == 0
     assert b"\r\n" not in _settings(tmp_path).read_bytes()
 
@@ -430,3 +430,21 @@ def test_what_resolves_is_what_the_settings_file_says_and_not_what_was_detected(
     assert edited.packs.value == ("edited@9.9.9",), (
         "editing the file did not change what resolves, so the value was never the file's"
     )
+
+
+def test_the_render_names_each_root_name_value_and_where_to_set_it(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    report = InitReport(
+        root=tmp_path,
+        settings=settings,
+        created=True,
+        problems=(),
+        root_names=(("unit_name", "The unit's name.\x1b"),),
+    )
+
+    lines = render_text(report).splitlines()
+
+    assert (
+        "  value     unit_name: The unit's name.\\x1b Set it under values in "
+        f"{PROJECT_MARKER}/{SETTINGS_FILENAME} when this folder is that one unit."
+    ) in lines

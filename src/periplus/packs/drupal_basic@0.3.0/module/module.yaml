@@ -1,8 +1,0 @@
-$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
-
-# A module, named by its info file.
-
-node_types:
-- name: drupal.module
-  description: "A Drupal module, named by its info.yml file whose type is module"
-  id_namespace: drupal.module

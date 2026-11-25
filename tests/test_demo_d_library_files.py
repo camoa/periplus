@@ -10,7 +10,7 @@ from periplus.map import MapReport, run
 from periplus.preflight import check_runtime_dependencies
 
 FOLDER = "web/modules/custom/mymodule"
-JS_PACKS = "  - drupal_basic@0.3.0\n  - js_basic@0.0.1\n  - drupal_js_basic@0.0.1\n"
+JS_PACKS = "  - drupal_basic@0.4.0\n  - js_basic@0.0.2\n  - drupal_js_basic@0.1.0\n"
 
 LOCAL_PACK = """\
 pack: localjs
@@ -133,7 +133,7 @@ def test_a_script_key_from_the_drupal_root_ends_at_the_modules_own_script_when_m
     }
 
 
-def test_a_remote_script_makes_no_node_and_a_library_listing_only_urls_gives_one_skipped_row(
+def test_a_remote_script_makes_no_node_and_a_library_listing_only_urls_gives_no_row(
     tmp_path: Path,
 ) -> None:
     module = _plant(
@@ -153,9 +153,9 @@ def test_a_remote_script_makes_no_node_and_a_library_listing_only_urls_gives_one
     assert {to for _, to in _edge_set(document, "library_includes_script")} == {
         f"js.file::{FOLDER}/js/form.js"
     }
-    assert [(rule, file) for file, _, rule, _ in report.skipped] == [
-        ("library_script", f"{FOLDER}/mymodule.libraries.yml")
-    ]
+    # The rule's own filter removed the URLs, and it made a link elsewhere in the map.
+    assert report.skipped == ()
+    assert report.made_nothing == ()
 
 
 def test_a_library_attached_from_php_is_mapped_and_links_to_the_method_that_attaches_it(
@@ -198,16 +198,17 @@ def test_a_protocol_relative_address_makes_no_stylesheet_node_and_a_root_key_end
     assert not any("example.com" in n["id"] for n in document["nodes"])
 
 
-def test_a_library_listing_only_a_stylesheet_url_gives_one_skipped_row(tmp_path: Path) -> None:
+def test_a_library_listing_only_a_stylesheet_url_lists_its_rule_as_made_nothing(
+    tmp_path: Path,
+) -> None:
     _plant(
         tmp_path,
         JS_PACKS,
         "remote:\n  css:\n    theme:\n      https://example.com/cdn.css: {type: external}\n",
     )
     report, document = _map(tmp_path)
-    assert [(rule, file) for file, _, rule, _ in report.skipped] == [
-        ("library_stylesheet", f"{FOLDER}/mymodule.libraries.yml")
-    ]
+    assert report.skipped == ()
+    assert report.made_nothing == (("drupal_js_basic", "library_stylesheet"),)
     assert _edge_set(document, "library_includes_stylesheet") == set()
 
 
@@ -231,7 +232,7 @@ def test_a_project_local_pack_writes_the_same_file_links_as_the_bundled_rutters(
 
     _, bundled = _map(tmp_path, "bundled.json")
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - js_basic@0.0.1\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n  - js_basic@0.0.2\n"
         "  - localjs@0.0.1\n"
     )
     _, local = _map(tmp_path, "local.json")

@@ -260,7 +260,7 @@ def test_a_declaration_and_a_reference_rule_list_the_end_they_cannot_make(tmp_pa
     pack = tmp_path / ".periplus" / "packs" / "probe@0.0.1"
     (pack / "rules").mkdir(parents=True)
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [php_basic@0.2.0, probe@0.0.1]\n"
+        "periplus_version: 0\npacks: [php_basic@0.3.0, probe@0.0.1]\n"
     )
     (pack / "pack.yaml").write_text(
         "pack: probe\nversion: 0.0.1\ndepends: [php_basic]\nfolders:\n  code: ./src\n"
@@ -286,11 +286,13 @@ def test_a_declaration_and_a_reference_rule_list_the_end_they_cannot_make(tmp_pa
     assert not [e for e in edges if e[0] in ("inside", "calls_bound")], edges
 
 
-def test_a_data_rule_is_silent_on_an_absent_key_and_lists_a_fire_that_made_nothing(
+def test_a_data_rule_is_silent_on_an_absent_key_and_on_a_value_its_own_filter_removes(
     tmp_path: Path,
 ) -> None:
-    """An entry without the optional keys states no edge and leaves no row; an entry whose key
-    holds a value that the edge's where filters out made nothing, and leaves one row."""
+    """An entry without the optional keys states no edge and leaves no row. An entry whose only
+    value the edge's where filters out leaves no row either: the filter says the rule has no
+    business there. An entry whose needs holds a mapping, beside a filtered wants, still lists
+    the needs row."""
     pack = tmp_path / ".periplus" / "packs" / "cfgs@0.0.1"
     (pack / "rules").mkdir(parents=True)
     (tmp_path / ".periplus" / "settings.yml").write_text(
@@ -320,10 +322,14 @@ rules:
 """
     )
     (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "a.cfg").write_text("a:\n  needs: b\nb: {}\nc:\n  wants: y\n")
+    (tmp_path / "src" / "a.cfg").write_text(
+        "a:\n  needs: b\nb: {}\nc:\n  wants: y\nd:\n  needs: {x: 1}\n  wants: y\n"
+    )
     report, document = _map(tmp_path)
     assert report.problems == () and report.not_executed == (), report
-    assert report.skipped == (("src/a.cfg", 4, "deps", "fired and emitted nothing"),), report
+    assert report.skipped == (("src/a.cfg", 6, "deps", "edge needs: no value for key needs"),), (
+        report
+    )
     edges = {(e["kind"], e["from"], e["to"]) for e in document["edges"]}
     assert edges == {("needs", "cfgs.entry::a", "cfgs.entry::b")}, edges
 
@@ -377,7 +383,7 @@ def test_a_declaration_with_no_written_name_then_an_absent_id_source_still_maps(
     pack = tmp_path / ".periplus" / "packs" / "probe@0.0.1"
     (pack / "rules").mkdir(parents=True)
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [php_basic@0.2.0, probe@0.0.1]\n"
+        "periplus_version: 0\npacks: [php_basic@0.3.0, probe@0.0.1]\n"
     )
     (pack / "pack.yaml").write_text(
         "pack: probe\nversion: 0.0.1\ndepends: [php_basic]\nfolders:\n  code: ./src\n"
@@ -598,3 +604,174 @@ def test_an_open_that_takes_its_own_opening_token_ends_at_the_first_inner_close(
     """The open takes ``<fn a``, so the count starts one short: the inner ``</fn>`` ends it."""
     text = "<fn a><fn b></fn>X</fn>"
     assert _spans_of(text, "<fn\\s+a", ["<fn\\b", "</fn>"]) == [(0, 17)]
+
+
+def test_a_data_edge_its_filter_lets_through_and_that_cannot_be_made_keeps_the_row(
+    tmp_path: Path,
+) -> None:
+    """The pattern lets xa through, so the fire is not one its filter removed; its optional capture
+    took no text, so the template has no value, no edge is made, and the edge lists its row. y
+    fails the pattern and lists none."""
+    pack = tmp_path / ".periplus" / "packs" / "cfgs@0.0.1"
+    (pack / "rules").mkdir(parents=True)
+    (tmp_path / ".periplus" / "settings.yml").write_text(
+        "periplus_version: 0\npacks: [cfgs@0.0.1]\n"
+    )
+    (pack / "pack.yaml").write_text(
+        "pack: cfgs\nversion: 0.0.1\ndepends: []\nfolders:\n  src: ./src\nfiles:\n  types:\n"
+        "    cfg: {endings: [cfg], reader: data, format: yaml}\n"
+    )
+    (pack / "rules" / "cfgs.yaml").write_text(
+        """\
+node_types:
+- {name: cfgs.entry, id_namespace: cfgs.entry}
+edge_kinds:
+- {kind: wants, from: cfgs.entry, to: cfgs.entry}
+rules:
+- rule: deps
+  reads: file
+  in: [src]
+  match: {file: '*', filetype: cfg, each: '*'}
+  id: {from: key}
+  emits:
+  - edge: {kind: wants, from: this_node,
+      to: {from: {key: wants}, pattern: '^x(?<n>[0-9])?', template: '{n}'}}
+  confidence: declared
+"""
+    )
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.cfg").write_text("c:\n  wants: xa\nd:\n  wants: y\n")
+    report, document = _map(tmp_path)
+    assert report.problems == () and report.not_executed == (), report
+    assert report.skipped == (("src/a.cfg", 1, "deps", "edge wants: no value for key wants"),), (
+        report
+    )
+    assert document["edges"] == []
+
+
+def _cfgs(root: Path, end: str, source: str) -> tuple[MapReport, dict[str, Any]]:
+    """Map one cfg file with one data rule whose wants edge has the end ``end``."""
+    pack = root / ".periplus" / "packs" / "cfgs@0.0.1"
+    (pack / "rules").mkdir(parents=True)
+    (root / ".periplus" / "settings.yml").write_text("periplus_version: 0\npacks: [cfgs@0.0.1]\n")
+    (pack / "pack.yaml").write_text(
+        "pack: cfgs\nversion: 0.0.1\ndepends: []\nfolders:\n  src: ./src\nfiles:\n  types:\n"
+        "    cfg: {endings: [cfg], reader: data, format: yaml}\n"
+    )
+    (pack / "rules" / "cfgs.yaml").write_text(
+        "node_types:\n- {name: cfgs.entry, id_namespace: cfgs.entry}\nedge_kinds:\n"
+        "- {kind: wants, from: cfgs.entry, to: cfgs.entry}\nrules:\n- rule: deps\n"
+        "  reads: file\n  in: [src]\n  match: {file: '*', filetype: cfg, each: '*'}\n"
+        f"  id: {{from: key}}\n  emits:\n  - edge: {{kind: wants, from: this_node, to: {end}}}\n"
+        "  confidence: declared\n"
+    )
+    (root / "src").mkdir()
+    (root / "src" / "a.cfg").write_text(source)
+    report, document = _map(root)
+    assert report.problems == () and report.not_executed == (), report
+    return report, document
+
+
+LIST_END = "{from: [{each: 'items.*'}], template: '{key}'"
+
+
+@pytest.mark.parametrize(
+    ("end", "source", "keys"),
+    [
+        # A list item that is a mapping has no text for a glob or a listed_at to test.
+        (f"{LIST_END}, where: [{{matches: 'x*'}}]}}", "a: {items: [{src: x1}]}\n", "items.*"),
+        (
+            f"{LIST_END}, where: [{{listed_at: allowed}}]}}",
+            "a: {items: [{src: x1}], allowed: [x1]}\n",
+            "items.*",
+        ),
+        # The same item with no filter gives no edge to a node named None.
+        (f"{LIST_END}}}", "a: {items: [{src: x1}]}\n", "items.*"),
+        # A fixed part the entry lacks leaves the template without a value.
+        (
+            "{from: [{key: tag}, {each: 'items.*'}], template: '{tag}.{key}',"
+            " where: [{matches: 'x*'}]}",
+            "a: {items: [x1]}\n",
+            "tag, items.*",
+        ),
+        # A template naming a value no part or path value gives.
+        (
+            f"{LIST_END[:-1]}.{{nope}}', where: [{{matches: 'x*'}}]}}",
+            "a: {items: [x1]}\n",
+            "items.*",
+        ),
+        # The key form: an item that is not text, beside a glob.
+        (
+            "{from: {key: wants}, each: true, where: [{matches: 'x*'}]}",
+            "a: {wants: [{x: 1}]}\n",
+            "wants",
+        ),
+    ],
+)
+def test_a_value_lost_to_another_cause_than_the_filter_lists_its_row(
+    tmp_path: Path, end: str, source: str, keys: str
+) -> None:
+    report, document = _cfgs(tmp_path, end, source)
+    assert report.skipped == (("src/a.cfg", 1, "deps", f"edge wants: no value for key {keys}"),)
+    assert document["edges"] == []
+
+
+def test_an_edge_that_loses_a_value_lists_its_row_beside_an_edge_that_emits(tmp_path: Path) -> None:
+    """needs makes its edge; wants keeps xa by its pattern and its template then has no value, so
+    wants lists its own row though the fire made an edge."""
+    end = "{from: {key: wants}, pattern: '^x(?<n>[0-9])?', template: '{n}'}}\n  - edge: " + (
+        "{kind: wants, from: this_node, to: {from: {key: needs}}"
+    )
+    report, document = _cfgs(tmp_path, end, "a: {needs: b, wants: xa}\nb: {}\n")
+    assert report.skipped == (("src/a.cfg", 1, "deps", "edge wants: no value for key wants"),)
+    assert [(e["from"], e["to"]) for e in document["edges"]] == [("cfgs.entry::a", "cfgs.entry::b")]
+
+
+def test_a_rule_whose_filter_fits_no_value_anywhere_is_listed_as_made_nothing(
+    tmp_path: Path,
+) -> None:
+    """The pattern fits neither b nor c: each fire is silent, and the report lists the rule once,
+    in its text and in its JSON form, beside the rules that fired zero times."""
+    from periplus.map import render_json, render_text
+
+    end = "{from: {key: wants}, pattern: '^zz(?<n>.+)', template: '{n}'}"
+    report, _ = _cfgs(tmp_path, end, "a: {wants: b}\nd: {wants: c}\n")
+    assert report.skipped == ()
+    assert report.made_nothing == (("cfgs", "deps"),)
+    assert "Rules that fired and made nothing:\n  cfgs deps\n" in render_text(report)
+    assert json.loads(render_json(report))["made_nothing"] == [{"pack": "cfgs", "rule": "deps"}]
+
+
+@pytest.mark.parametrize(
+    ("end", "source"),
+    [
+        # One fire makes an edge.
+        (
+            "{from: {key: wants}, pattern: '^z(?<n>.+)', template: '{n}'}",
+            "a: {wants: b}\nd: {wants: zb}\nb: {}\n",
+        ),
+        # One fire is filtered away and another lists a row, which is the hint already.
+        (
+            "{from: {key: wants}, pattern: '^z(?<n>[0-9])?', template: '{n}'}",
+            "a: {wants: b}\nd: {wants: za}\n",
+        ),
+    ],
+)
+def test_a_rule_that_made_something_or_listed_a_row_is_not_listed_as_made_nothing(
+    tmp_path: Path, end: str, source: str
+) -> None:
+    report, _ = _cfgs(tmp_path, end, source)
+    assert report.made_nothing == ()
+
+
+def test_a_listed_at_path_no_entry_holds_is_silent_per_entry_and_lists_the_rule_once(
+    tmp_path: Path,
+) -> None:
+    """An entry without the listed_at list leaves no row, as a filter removing every end does; a
+    misspelt path that no entry holds removes every value everywhere, so the rule is listed once
+    as made nothing."""
+    end = f"{LIST_END}, where: [{{listed_at: alowed}}]}}"
+    report, document = _cfgs(tmp_path, end, "a: {items: [x, y], allowed: [x]}\n")
+    assert report.skipped == ()
+    assert document["edges"] == []
+    assert report.made_nothing == (("cfgs", "deps"),)

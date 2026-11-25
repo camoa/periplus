@@ -1,0 +1,66 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# An enforced dependency of a configuration file, listed under dependencies.enforced: Drupal deletes
+# the configuration when that module, theme or configuration goes, even when nothing else in the
+# file needs it. config_object.yaml already gives each one its depends_on_module, depends_on_theme
+# or config_depends edge, at the item's line; these rules read the same item as text and add the
+# edge attribute enforced: true to that edge, so a reader tells an enforced dependency from a
+# calculated one. Read in the indentation Drupal exports: dependencies at the top, enforced two
+# spaces in, each list four, each item six.
+#
+# Limits: a file written in another indentation, or with a list written inline, as module: [node],
+# gets the dependency edge without the attribute.
+
+edge_attributes:
+- name: enforced
+  on: [depends_on_module, depends_on_theme, config_depends]
+  description: "true when the configuration file lists the dependency under dependencies.enforced, so Drupal removes the file with it"
+
+rules:
+- rule: enforced_module_dependency
+  reads: file
+  in: [config, module_config]
+  match:
+    file: '*'
+    filetype: drupal_yml_text
+    text: '(?m)^ {6}- +[''"]?(?<item>[^\s''"#]+)'
+  values: &enforced
+    block: {from: {enclosing: dependencies_block, capture: mark}}
+    enforced: {from: {enclosing: enforced_block, capture: mark}}
+    list: {from: {enclosing: enforced_list, capture: list}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    module: {template: '{list}', normalize: [{replace: '^(?!module$).*$', with: ''}]}
+    theme: {template: '{list}', normalize: [{replace: '^(?!theme$).*$', with: ''}]}
+    config: {template: '{list}', normalize: [{replace: '^(?!config$).*$', with: ''}]}
+  id: {template: '{item}|{block}{enforced}{module}', normalize: [{replace: '\|dependenciesenforcedmodule$', with: ''}]}
+  line: {capture: item}
+  emits:
+  - edge: {kind: depends_on_module, from: {template: '{file_stem}', types: [drupal.config_object]}, to: this_node, attributes: {enforced: {template: 'true'}}}
+  confidence: declared
+
+- rule: enforced_theme_dependency
+  reads: file
+  in: [config, module_config]
+  match:
+    file: '*'
+    filetype: drupal_yml_text
+    text: '(?m)^ {6}- +[''"]?(?<item>[^\s''"#]+)'
+  values: *enforced
+  id: {template: '{item}|{block}{enforced}{theme}', normalize: [{replace: '\|dependenciesenforcedtheme$', with: ''}]}
+  line: {capture: item}
+  emits:
+  - edge: {kind: depends_on_theme, from: {template: '{file_stem}', types: [drupal.config_object]}, to: this_node, attributes: {enforced: {template: 'true'}}}
+  confidence: declared
+
+- rule: enforced_config_dependency
+  reads: file
+  in: [config, module_config]
+  match:
+    file: '*'
+    filetype: drupal_yml_text
+    text: '(?m)^ {6}- +[''"]?(?<item>[^\s''"#]+)'
+  values: *enforced
+  id: {template: '{item}|{block}{enforced}{config}', normalize: [{replace: '\|dependenciesenforcedconfig$', with: ''}]}
+  line: {capture: item}
+  emits:
+  - edge: {kind: config_depends, from: {template: '{file_stem}', types: [drupal.config_object]}, to: this_node, attributes: {enforced: {template: 'true'}}}
+  confidence: declared

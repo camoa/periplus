@@ -82,6 +82,17 @@ _NESTED = r'@[\w{}]+\([\s*]*"([^"]*)"[\s*]*\)'
 #: What is stripped around a key or a value of an annotation body: space and the docblock's stars.
 _MARGIN = " \t\r\n*"
 
+#: One entry of a group of an annotation body: its key, ``None`` when it is not key = value; its
+#: value's text, ``None`` when that is not read; its key's line; and whether its value is a group.
+GroupEntry = tuple[str | None, str | None, int, bool]
+
+#: The groups of an annotation body, as ``_groups`` reads them: the entries of each by its key
+#: path, and where reading stopped, as the paths of the groups open there and the line.
+Groups = tuple[
+    dict[tuple[str, ...], list[GroupEntry]],
+    tuple[tuple[tuple[str, ...], ...], int] | None,
+]
+
 #: One span of a text file: its name, its start and end offsets, and its opening's captures.
 Span = tuple[str, int, int, dict[str, str]]
 
@@ -163,12 +174,15 @@ def run_file_rules(
     set[str],
     list[str],
     list[Skipped],
+    set[tuple[str, str]],
 ]:
     """Run every supported rule; return the nodes, the edges, each rule's fires and files read.
 
     Then the candidate files the selection read and the ones it removed, the files read as a parse
-    tree whose tree holds an error, and last the skipped matches, sorted. A rule that holds
-    ``declaration``, ``attribute`` or ``annotation`` reads the tree, and a file is parsed once.
+    tree whose tree holds an error, the skipped matches, sorted, and last each data rule, by pack
+    and name, with a fire whose edges' own filters removed every value they reached. A rule that
+    holds ``declaration``, ``attribute`` or ``annotation`` reads the tree, and a file is parsed
+    once.
 
     A fire is one matched file, or one entry under the rule's ``each``, that meets the rule's
     ``where``; a binding rule's fire is one binding it gives. Binding rules run first, so a file's
@@ -198,6 +212,7 @@ def run_file_rules(
     bound: dict[str, list[tuple[int, str, str]]] = {}
     read: set[str] = set()
     removed: set[str] = set()
+    filtered: set[tuple[str, str]] = set()
     skipped: list[Skipped] = []
     selected: dict[tuple[str, str], set[str]] = {}
     file_types = FileTypes.build(packs, selection.extensions)
@@ -317,7 +332,8 @@ def run_file_rules(
                 node_id = _reshape(node_id, rule.normalize, values=values)
                 fire = (key, line)
                 lists = (nodes, edges, skipped)
-                _found(rule, rule_set, file, node_id, fire, scope, *lists, paths[own])
+                if _found(rule, rule_set, file, node_id, fire, scope, *lists, paths[own]):
+                    filtered.add((rule.pack, rule.name))
         watch.end()
         # A step runs only where the rule fires, so a file it fired nothing on lists no row.
         ends = [start for _, _, start in unfilled[1:]] + [fired] if unfilled else []
@@ -327,7 +343,7 @@ def run_file_rules(
         fires[(rule.pack, rule.name)] = fired
     broken = sorted(file for file, parsed in trees.items() if parsed.broken)
     opened = sorted({*contents, *trees, *texts})
-    return nodes, edges, fires, opened, read, removed, broken, sorted(skipped)
+    return nodes, edges, fires, opened, read, removed, broken, sorted(skipped), filtered
 
 
 def run_map_rules(
@@ -351,11 +367,17 @@ def run_map_rules(
 
     A fire is one matched node that each ``where`` pattern fits and from which no ``unless`` chain
     reaches a node, with one node its ``follow`` reaches, that makes a node or edge record no pass
-    made before. A fire makes one record at each location of the matched node. An ``unless`` chain
+    made before. A fire makes one record at each location of the matched node, or, when a ``place``
+    step placed its result, at each location of the edge that step walked. An ``unless`` chain
     reads the pass's map too, so an edge a later pass makes does not take back an earlier fire.
     An ``unless_matched`` chain runs from the node ``follow`` reached, with its captures, and when
     it reaches a node that one result makes nothing. An ``edge_attribute`` step reads the values
     the file rules wrote on an edge, never a map rule's, so its values are finite too.
+
+    A rule that marks its node ``resolution`` runs only in one last pass, after a pass of the
+    others added nothing, and reads the map as it stood then: a mark is never taken back, so it
+    must not be made before a pass that would resolve the place. One pass, not passes, because
+    such rules may read each other's nodes where a file rule found the same id.
     """
     rules = [
         rule
@@ -364,11 +386,14 @@ def run_map_rules(
     ]
     if not rules:
         return [], [], {}, [], []
+    marking = [rule for rule in rules if any(name == "resolution" for name, _ in rule.templates)]
+    active, last = [rule for rule in rules if rule not in marking], False
     found = {node.id for node in nodes}
     ends = [_landed_end(edge, found) for edge in edges]
     known = found | {end for edge in ends for end in (edge.source, edge.target)}
     # Only the file rules' values: a value a map rule wrote, read back, could grow every pass.
     held = _edge_values_of(ends)
+    placing = any(_places(rule.follow) for rule in rules)
     made_nodes: list[FoundNode] = []
     made_edges: list[FoundEdge] = []
     seen: set[FoundNode | FoundEdge] = set()
@@ -385,10 +410,16 @@ def run_map_rules(
                 places.setdefault(node.id, set()).add((node.file, node.line))
         found = set(typed)
         out: dict[tuple[str, str, str], set[str]] = {}
+        # The places of each edge a step walks, by kind, from and to, for a place step.
+        walked: dict[tuple[str, str, str], set[tuple[str, int]]] = {}
         for edge in (*ends, *(_landed_end(edge, found) for edge in made_edges)):
             if edge.source in known and edge.target in known:
                 out.setdefault(("edge", edge.kind, edge.source), set()).add(edge.target)
                 out.setdefault(("incoming_edge", edge.kind, edge.target), set()).add(edge.source)
+                if placing:
+                    walked.setdefault((edge.kind, edge.source, edge.target), set()).add(
+                        (edge.file, edge.line)
+                    )
         by_type: dict[str, set[str]] = {}
         for node_id, names in typed.items():
             for name in names:
@@ -397,7 +428,7 @@ def run_map_rules(
         candidates: dict[str, list[str]] = {}
         added: list[FoundNode | FoundEdge] = []
         fired: list[tuple[str, str, int]] = []
-        for rule in rules:
+        for rule in active:
             count = 0
             if rule.matches_type not in candidates:
                 allowed = (t for t in by_type if _allows(rule_set, t, (rule.matches_type,)))
@@ -413,7 +444,7 @@ def run_map_rules(
                 misses: set[str] = set()
                 followed = _follow(rule.follow, node_id, values, known, out, misses, held)
                 missed.update((rule.name, node_id, miss) for miss in misses)
-                for reached, captured in followed:
+                for reached, captured, placed in followed:
                     if any(
                         _follow(chain, reached, dict(captured), known, out, None, held)
                         for chain in rule.unless_matched
@@ -421,7 +452,7 @@ def run_map_rules(
                         continue
                     made = [
                         record
-                        for place in sorted(places[node_id])
+                        for place in sorted(walked[placed] if placed else places[node_id])
                         for record in _made(
                             rule, rule_set, node_id, reached, captured, place, typed, skips
                         )
@@ -434,16 +465,20 @@ def run_map_rules(
                 fired.append((rule.pack, rule.name, count))
                 fires[(rule.pack, rule.name)] += count
         passes.append((len(passes) + 1, tuple(fired)))
-        if not added:
-            return (
-                made_nodes,
-                made_edges,
-                fires,
-                passes,
-                sorted({*_unread(rules, rule_set, made_nodes, known, missed, places), *skips}),
-            )
         made_nodes.extend(record for record in added if isinstance(record, FoundNode))
         made_edges.extend(record for record in added if isinstance(record, FoundEdge))
+        if added and not last:
+            continue
+        if marking and not last:
+            active, last = marking, True
+            continue
+        return (
+            made_nodes,
+            made_edges,
+            fires,
+            passes,
+            sorted({*_unread(rules, rule_set, made_nodes, known, missed, places), *skips}),
+        )
 
 
 def withhold_found(
@@ -486,7 +521,8 @@ def withhold_found(
                 for chain in rule.unless
             ):
                 continue
-            for reached, captured in _follow(rule.follow, node_id, values, known, out, None, held):
+            followed = _follow(rule.follow, node_id, values, known, out, None, held)
+            for reached, captured, _ in followed:
                 if any(
                     _follow(chain, reached, dict(captured), known, out, None, held)
                     for chain in rule.unless_matched
@@ -628,23 +664,29 @@ def _follow(
     misses: set[str] | None = None,
     held: _EdgeValues | None = None,
     walked: tuple[str, str, str] | None = None,
-) -> list[tuple[str, dict[str, str]]]:
+    placed: tuple[str, str, str] | None = None,
+) -> list[tuple[str, dict[str, str], tuple[str, str, str] | None]]:
     """Each id the steps reach from the id ``at``, in order, with the values its ``id_matches``
-    steps captured. ``out`` holds the ids an ``edge`` or ``incoming_edge`` step of a kind reaches
-    from an id. An ``ancestors`` step runs the steps after it from ``at``, else from the nearest
-    ids its kinds reach, breadth first, that give any. A ``try`` step runs its steps and the steps
-    after it from ``at``, else the steps after it from ``at`` with the values it had. An
+    steps captured and the edge its last ``place`` step placed the result at, or ``None``. ``out``
+    holds the ids an ``edge`` or ``incoming_edge`` step of a kind reaches from an id. An
+    ``ancestors`` step runs the steps after it from ``at``, else from the nearest ids its kinds
+    reach, breadth first, that give any. A ``try`` step runs its steps and the steps after it from
+    ``at``, else the steps after it from ``at`` with the values and place it had. An
     ``id_matches`` step fills each ``{name}`` with that value as literal text. An
     ``edge_attribute`` step runs the steps after it once for each text ``held`` gives that
     attribute on the edge ``walked``, the kind, from and to of the edge the step before walked,
-    with that text under the attribute's name. ``misses`` collects each id a ``node`` step names
-    that is not known."""
+    with that text under the attribute's name; a ``place`` step places the result at that edge.
+    Both pass that edge on, so either may follow the other. An ``in_table`` step stays at ``at``
+    when the value of its capture is a key of its table, with the table's value for that key under
+    its own name when it gives one, and reaches nothing otherwise.
+    ``misses`` collects each id a ``node`` step names that is not known."""
     if not steps:
-        return [(at, values)]
+        return [(at, values, placed)]
     (name, value), rest = steps[0], steps[1:]
+    more = (known, out, misses, held)
     if name == "try":
-        tried = _follow((*value, *rest), at, values, known, out, misses, held)
-        return tried or _follow(rest, at, values, known, out, misses, held)
+        tried = _follow((*value, *rest), at, values, *more, None, placed)
+        return tried or _follow(rest, at, values, *more, None, placed)
     if name in ("edge", "incoming_edge"):
         return [
             r
@@ -653,28 +695,33 @@ def _follow(
                 rest,
                 to,
                 values,
-                known,
-                out,
-                misses,
-                held,
+                *more,
                 (value, at, to) if name == "edge" else (value, to, at),
+                placed,
             )
         ]
+    if name == "place":
+        return _follow(rest, at, values, *more, walked, walked)
     if name == "edge_attribute":
         texts = (held or {}).get((*walked, value), set()) if walked else set()
         return [
             r
             for text in sorted(texts)
-            for r in _follow(rest, at, {**values, value: text}, known, out, misses, held)
+            for r in _follow(rest, at, {**values, value: text}, *more, walked, placed)
         ]
+    if name == "in_table":
+        capture, under, table = value
+        key = values.get(capture)
+        if key not in table:
+            return []
+        got = {**values, under: table[key]} if under else values
+        return _follow(rest, at, got, *more, None, placed)
     if name == "node":
         to = _fill(value, values)
         if to is not None and to not in known and misses is not None:
             misses.add(to)
         return (
-            _follow(rest, to, values, known, out, misses, held)
-            if to is not None and to in known
-            else []
+            _follow(rest, to, values, *more, None, placed) if to is not None and to in known else []
         )
     if name == "id_matches":
         expression, pattern = value
@@ -682,12 +729,10 @@ def _follow(
         captured = None if filled is None else _captured((IdMatches(filled),), at, dict(values))
         if captured is None:
             return []
-        return _follow(rest, at, captured, known, out, misses, held)
+        return _follow(rest, at, captured, *more, None, placed)
     level, seen = [at], {at}
     while level:
-        reached = [
-            r for here in level for r in _follow(rest, here, values, known, out, misses, held)
-        ]
+        reached = [r for here in level for r in _follow(rest, here, values, *more, None, placed)]
         if reached:
             return reached
         level = sorted(
@@ -695,6 +740,11 @@ def _follow(
         )
         seen.update(level)
     return []
+
+
+def _places(steps: Sequence[tuple[str, Any]]) -> bool:
+    """Whether a ``place`` step sits among the steps, inside a ``try`` at any depth."""
+    return any(name == "place" or (name == "try" and _places(value)) for name, value in steps)
 
 
 def _made(
@@ -718,8 +768,11 @@ def _made(
         if filled is None:
             return []
         node_id = f"{namespace_of(rule_set.types, rule.node_type)}::{filled}"
+        marks = _read_attributes(rule.templates, values, line)
         return [
-            FoundNode(node_id, rule.node_type, file, line, rule.pack, rule.name, rule.confidence)
+            FoundNode(
+                node_id, rule.node_type, file, line, rule.pack, rule.name, rule.confidence, marks
+            )
         ]
     ends = {"this_node": this, "matched_node": reached}
     made: list[FoundNode | FoundEdge] = []
@@ -741,6 +794,22 @@ def _made(
                 )
             )
             continue
+        if spec.to_type.startswith("{"):
+            # A type from a table value: the pack check has checked every row of that table, and
+            # the load bound the value outside any try with no later step taking its name.
+            typed_as = _fill(spec.to_type, values)
+            rows = {
+                row
+                for name, value in rule.follow
+                if name == "in_table" and f"{{{value[1]}}}" == spec.to_type
+                for row in value[2].values()
+            }
+            if typed_as is None or typed_as not in rows:
+                raise RuntimeError(
+                    f"engine fault: the rule {rule.pack}/{rule.name} reached the end type "
+                    f"{typed_as}, which is no checked row of its table"
+                )
+            spec = replace(spec, to_type=typed_as, types=(typed_as,))
         composed = _fill(spec.template, values)
         if composed is not None:
             whole = ends[spec.start or spec.finish]
@@ -1089,15 +1158,20 @@ def _path_values(
     pattern's captures and the settings values; one whose pattern does not match is absent.
 
     A value ``relative_to`` a folder searches the path below the deepest directory of that folder
-    that holds the file, and is absent when none does.
+    that holds the file, and is absent when none does. A value with a ``root_name`` the settings
+    give searches a path that starts at the project folder with that name and a slash before it.
     """
     found: dict[str, str] = {}
     for value in info.path_values:
         path: str | None = file
+        deepest: str | None = ""
         if value.relative_to:
             holders = [d for d in folders.get(value.relative_to, ()) if _below(file, d)]
             deepest = max(holders, key=len, default=None)
             path = None if deepest is None else file.removeprefix(deepest.rstrip("/") + "/")
+        root = value.root_name
+        if path and deepest in ("", ".") and root is not None and root in rule_set.values:
+            path = f"{rule_set.values[root]}/{path}"
         match = value.pattern.search(path) if value.pattern is not None and path else None
         if match is not None:
             captured = {k: v for k, v in match.groupdict().items() if v is not None}
@@ -1108,8 +1182,9 @@ def _path_values(
 
 
 def _below(file: str, directory: str) -> bool:
-    """Whether the file sits at any depth below the directory; ``.`` holds every file."""
-    return directory == "." or file.startswith(f"{directory.rstrip('/')}/")
+    """Whether the file sits at any depth below the directory; the project folder, written ``""``
+    or ``.``, holds every file."""
+    return directory in ("", ".") or file.startswith(f"{directory.rstrip('/')}/")
 
 
 def _declarations(
@@ -1440,6 +1515,14 @@ def _annotations(
     read. A match whose id key is missing, or whose value is not read, makes nothing and is listed
     in ``skipped`` unless the rule is an edge rule whose twin node rule lists it. A node and its
     edges sit at the line of the annotation's name, an attribute at the line of its key.
+
+    With ``each``, each entry of the groups its key path fits whose value is quoted text is a
+    match at the line of its key, its id and a ``template`` edge end filled from its key, its value,
+    ``enclosing_type`` and, for a star before the last, ``group``. An entry whose value is a group
+    makes nothing; one that is not key = value or whose value is not quoted text is listed in
+    ``skipped``. When reading stops inside a group the path reads, or one above it, or before any
+    group the path fits, the entries read before stay and ``skipped`` lists where it stopped. A
+    path the annotation does not hold makes nothing.
     """
     holders = _holder_rules(rule_set, rule.filetype, within)
     types = rule_set.types
@@ -1448,80 +1531,155 @@ def _annotations(
         comment = match.prev_sibling
         if comment is None or comment.type != grammar.comment:
             continue
-        for line, entries in _annotation(comment, rule.annotation, grammar.separator):
+        keys = {rule.id_argument, *(k for _, k in rule.attributes)}
+        keys |= {k for spec in rule.edges for _, k in spec.attributes}
+        keys |= {spec.key for spec in rule.edges if spec.finish == "annotation_key"}
+        dotted = sorted(k for k in keys if "." in k)
+        read_groups = rule.each is not None or bool(dotted)
+        for line, entries, groups in _annotation(
+            comment, rule.annotation, grammar.separator, read_groups
+        ):
             if entries is None:
                 if not rule.twin_type:
                     skipped.append((file, line, rule.name, "the annotation never closes"))
                 continue
-            node_id = ""
-            if rule.id_argument:
-                value = entries.get(rule.id_argument, (None, line))[0]
-                if value is None:
-                    absent = rule.id_argument not in entries
-                    state = "is missing" if absent else "is not quoted text"
-                    if not rule.twin_type:
-                        skipped.append((file, line, rule.name, f"key {rule.id_argument} {state}"))
-                    continue
-                node_id = value
-            fired += 1
-            before, written = len(nodes) + len(edges), len(skipped)
-            if rule.node_type:
-                read = ((name, *entries[key]) for name, key in rule.attributes if key in entries)
-                nodes.append(
-                    FoundNode(
-                        id=f"{namespace_of(types, rule.node_type)}::{node_id}",
-                        type=rule.node_type,
-                        file=file,
-                        line=line,
-                        pack=rule.pack,
-                        rule=rule.name,
-                        confidence=rule.confidence,
-                        attributes=tuple(a for a in read if a[1] is not None),
+            if groups is not None and dotted:
+                entries = {**entries, **_dotted(groups[0], dotted)}
+            places: list[tuple[int, dict[str, str]]] = [(line, {})]
+            if groups is not None and rule.each is not None:
+                places, wanted = [], tuple(rule.each.split("."))[:-1]
+                reached, broken = groups
+                paths = [p for p in reached if _fits(p, wanted)]
+                for path in paths:
+                    star = {"group": path[wanted.index("*")]} if "*" in wanted else {}
+                    group = ".".join(path)
+                    for key, value, at, nested_group in reached[path]:
+                        if key is not None and value is not None:
+                            places.append((at, {"key": key, "value": value, **star}))
+                        elif rule.twin_type or nested_group:
+                            continue
+                        elif key is None:
+                            bad = f"group {group} holds an entry that is not key = value"
+                            skipped.append((file, at, rule.name, bad))
+                        else:
+                            bad = f"entry {key} of group {group} is not quoted text"
+                            skipped.append((file, at, rule.name, bad))
+                if broken is not None and not rule.twin_type:
+                    open_paths, at = broken
+                    reading = any(
+                        p and len(p) <= len(wanted) and _fits(p, wanted[: len(p)])
+                        for p in open_paths
                     )
-                )
-            for spec in rule.edges:
-                kind = rule_set.edge_kinds[spec.kind]
-                ends: list[str | None] = []
-                for end, allowed in ((spec.start, kind.from_types), (spec.finish, kind.to_types)):
-                    if end == "this_node":
-                        allowed = (rule.twin_type,) if rule.twin_type else allowed
-                        ends.append(f"{next(iter(namespaces(types, allowed)), None)}::{node_id}")
-                    else:
-                        # The declaration's first child has the declaration itself as its nearest
-                        # enclosing type.
-                        first = match.children[0]
-                        held = _holder(first, holders, rule_set, grammar, parsed, allowed)
-                        ends.append(held[1] if held else None)
-                    if not ends[-1]:
-                        lacking = f"edge {spec.kind}: no value for {end}"
-                        skipped.append((file, line, rule.name, lacking))
-                source, target = ends
-                if source and target:
-                    keyed = ((n, entries.get(key, (None, 0))[0]) for n, key in spec.attributes)
-                    edges.append(
-                        FoundEdge(
-                            spec.kind,
-                            source,
-                            target,
-                            file,
-                            line,
-                            rule.pack,
-                            rule.name,
-                            rule.confidence,
-                            attributes=tuple((n, v) for n, v in keyed if v is not None),
+                    if reading or not paths:
+                        inner = next((p for p in reversed(open_paths) if p), ())
+                        state = f"group {'.'.join(inner)} does not close" if inner else ""
+                        state = state or "the annotation never closes"
+                        skipped.append((file, at, rule.name, state))
+                owner = _holder(match.children[0], holders, rule_set, grammar, parsed)
+                if places and owner is not None:
+                    places = [(at, {**names, "enclosing_type": owner[0]}) for at, names in places]
+            for line, names in places:
+                node_id = ""
+                if rule.id_template:
+                    filled = _fill(rule.id_template, names)
+                    filled = _reshape(filled, rule.normalize, values=names) if filled else filled
+                    if not filled:
+                        given = {name for name, value in names.items() if value}
+                        named = set(PLACEHOLDER.findall(rule.id_template))
+                        lacking = ", ".join(sorted(named - given))
+                        if not rule.twin_type:
+                            skipped.append((file, line, rule.name, f"id: no value for {lacking}"))
+                        continue
+                    node_id = filled
+                elif rule.id_argument:
+                    value = entries.get(rule.id_argument, (None, line))[0]
+                    if value is None:
+                        absent = rule.id_argument not in entries
+                        state = "is missing" if absent else "is not quoted text"
+                        if not rule.twin_type:
+                            row = f"key {rule.id_argument} {state}"
+                            skipped.append((file, line, rule.name, row))
+                        continue
+                    node_id = value
+                fired += 1
+                before, written = len(nodes) + len(edges), len(skipped)
+                if rule.node_type:
+                    read = (
+                        (name, *entries[key]) for name, key in rule.attributes if key in entries
+                    )
+                    nodes.append(
+                        FoundNode(
+                            id=f"{namespace_of(types, rule.node_type)}::{node_id}",
+                            type=rule.node_type,
+                            file=file,
+                            line=line,
+                            pack=rule.pack,
+                            rule=rule.name,
+                            confidence=rule.confidence,
+                            attributes=tuple(a for a in read if a[1] is not None),
                         )
                     )
-            if len(nodes) + len(edges) == before and len(skipped) == written:
-                skipped.append((file, line, rule.name, "fired and emitted nothing"))
+                for spec in rule.edges:
+                    kind = rule_set.edge_kinds[spec.kind]
+                    ends: list[str | None] = []
+                    pairs = ((spec.start, kind.from_types), (spec.finish, kind.to_types))
+                    for end, allowed in pairs:
+                        namespace = next(iter(namespaces(types, allowed)), None)
+                        if end == "this_node":
+                            twin = (rule.twin_type,) if rule.twin_type else allowed
+                            ends.append(f"{next(iter(namespaces(types, twin)), None)}::{node_id}")
+                        elif end == "annotation_key":
+                            named_id = entries.get(spec.key, (None, 0))[0]
+                            absent = spec.key not in entries
+                            ends.append(None if named_id is None else f"{namespace}::{named_id}")
+                            # A twin node rule reads no such key, so the edge rule lists it.
+                            if named_id is None:
+                                state = "is missing" if absent else "is not quoted text"
+                                skipped.append((file, line, rule.name, f"key {spec.key} {state}"))
+                            continue
+                        elif end == "template":
+                            filled = _fill(spec.template, names)
+                            if filled:
+                                filled = _reshape(filled, spec.normalize, values=names)
+                            whole = filled if spec.full_id else f"{namespace}::{filled}"
+                            ends.append(whole if filled else None)
+                        else:
+                            # The declaration's first child has the declaration itself as its
+                            # nearest enclosing type.
+                            first = match.children[0]
+                            held = _holder(first, holders, rule_set, grammar, parsed, allowed)
+                            ends.append(held[1] if held else None)
+                        if not ends[-1]:
+                            lacking = f"edge {spec.kind}: no value for {end}"
+                            skipped.append((file, line, rule.name, lacking))
+                    source, target = ends
+                    if source and target:
+                        keyed = ((n, entries.get(key, (None, 0))[0]) for n, key in spec.attributes)
+                        edges.append(
+                            FoundEdge(
+                                spec.kind,
+                                source,
+                                target,
+                                file,
+                                line,
+                                rule.pack,
+                                rule.name,
+                                rule.confidence,
+                                attributes=tuple((n, v) for n, v in keyed if v is not None),
+                            )
+                        )
+                if len(nodes) + len(edges) == before and len(skipped) == written:
+                    skipped.append((file, line, rule.name, "fired and emitted nothing"))
     return fired
 
 
 def _annotation(
-    comment: Node, name: str, separator: str
-) -> list[tuple[int, dict[str, tuple[str | None, int]] | None]]:
+    comment: Node, name: str, separator: str, groups: bool = False
+) -> list[tuple[int, dict[str, tuple[str | None, int]] | None, Groups | None]]:
     """Each annotation of the name in the comment: the line of its name, and each key at the top
     level of its body with its value and its line; ``None`` in place of the keys when the body or a
-    quoted text in it never closes.
+    quoted text in it never closes. With ``groups``, last, the body's groups as ``_groups`` reads
+    them, else ``None``.
 
     The name follows an at sign at the start of a line, after the comment's own leading star and
     spaces, and an opening parenthesis follows it. The body runs to the matching closing
@@ -1530,7 +1688,7 @@ def _annotation(
     """
     text = text_of(comment)
     first = line_of(comment)
-    found: list[tuple[int, dict[str, tuple[str | None, int]] | None]] = []
+    found: list[tuple[int, dict[str, tuple[str | None, int]] | None, Groups | None]] = []
     done = 0
     nested = re.compile(_NESTED.format(re.escape(separator)))
     for start in re.finditer(rf"^[ \t]*(?:/\*+|\*)?[ \t]*@({re.escape(name)})\(", text, re.M):
@@ -1566,8 +1724,108 @@ def _annotation(
                     break
                 begin = index + 1
             index += 1
-        found.append((line, entries if done < len(text) else None))
+        inside = _groups(text, start.end(), first, nested) if groups else None
+        found.append((line, entries if done < len(text) else None, inside))
     return found
+
+
+def _groups(text: str, begin: int, first: int, nested: re.Pattern[str]) -> Groups:
+    """The groups of the annotation body that starts at ``begin`` in the comment's text, whose
+    first line is ``first``: each group read, by its key path, with each entry read before the
+    reading stopped; and where it stopped, or ``None`` when the body closes.
+
+    A group is the value of a key written in braces, its entries split at commas outside quoted
+    text and nested marks, an empty one, as after a trailing comma, left out. An entry is its key,
+    quoted or a bare word, its value and the line of its key. The value is quoted text without its
+    quotes, or the text of a nested annotation that holds one quoted text, else ``None``. An entry
+    that is not key = value has no key. Reading stops at a closing mark that is not the one the
+    innermost open group needs, or at the end of the text, with the paths of the groups open
+    there, the body's own empty path first, and the mark's line.
+    """
+    found: dict[tuple[str, ...], list[GroupEntry]] = {}
+    # Each open group: its path, None inside a nested annotation, the mark that closes it, the
+    # start of its current entry, and the end of the last group closed inside that entry.
+    open_: list[tuple[tuple[str, ...] | None, str, int, int]] = [((), ")", begin, -1)]
+    index = begin
+    while index < len(text):
+        char = text[index]
+        path, closing, start, inner = open_[-1]
+        if char == '"':
+            index = text.find('"', index + 1)
+            if index < 0:
+                break
+        elif char in "({":
+            key, equals, _ = text[start:index].partition("=")
+            name = _entry_key(key) if equals and char == "{" and path is not None else None
+            inside = (*path, name) if path is not None and name else None
+            open_.append((inside, "}" if char == "{" else ")", index + 1, -1))
+        elif char in ",)}" and (char == "," or char == closing):
+            if path is not None:
+                entry = _entry(text, start, index, inner, first, nested)
+                if entry is not None:
+                    found.setdefault(path, []).append(entry)
+            if char == ",":
+                open_[-1] = (path, closing, index + 1, -1)
+            else:
+                open_.pop()
+                if not open_:
+                    return found, None
+                outer = open_[-1]
+                open_[-1] = (outer[0], outer[1], outer[2], index + 1)
+        elif char in ")}":
+            break
+        index += 1
+    stopped = tuple(p for p, _, _, _ in open_ if p is not None)
+    return found, (stopped, first + text.count("\n", 0, min(index, len(text))))
+
+
+def _fits(path: tuple[str, ...], wanted: tuple[str, ...]) -> bool:
+    """Whether the group's key path is the wanted one, a star standing for any key."""
+    if len(path) != len(wanted):
+        return False
+    return all(w in ("*", p) for p, w in zip(path, wanted, strict=True))
+
+
+def _dotted(
+    groups: Mapping[tuple[str, ...], list[GroupEntry]], keys: Sequence[str]
+) -> dict[str, tuple[str | None, int]]:
+    """Each dotted key that names an entry of a group, with its value, as ``_groups`` reads it,
+    and its line; the last such entry wins, as at the top level of the body."""
+    found: dict[str, tuple[str | None, int]] = {}
+    for dotted in keys:
+        *path, last = dotted.split(".")
+        for key, value, line, _ in groups.get(tuple(path), ()):
+            if key == last:
+                found[dotted] = (value, line)
+    return found
+
+
+def _entry_key(written: str) -> str | None:
+    """The key as written before an entry's equals sign, quoted or a bare word; ``None`` for
+    anything else."""
+    key = written.strip(_MARGIN)
+    read = _QUOTED.fullmatch(key) or re.fullmatch(r"(\w+)", key)
+    return read.group(1) if read else None
+
+
+def _entry(
+    text: str, start: int, end: int, inner: int, first: int, nested: re.Pattern[str]
+) -> GroupEntry | None:
+    """The entry written from ``start`` to ``end`` as ``_groups`` reads it, ``inner`` the end of
+    the last group closed inside it or -1; ``None`` for an empty one."""
+    written = text[start:end]
+    if not written.strip(_MARGIN):
+        return None
+    at = start + len(written) - len(written.lstrip(_MARGIN))
+    line = first + text.count("\n", 0, at)
+    key, equals, value = written.partition("=")
+    name, value = _entry_key(key), value.strip(_MARGIN)
+    if not equals or name is None or not value:
+        return None, None, line, False
+    if inner >= 0 and text[inner:end].strip(_MARGIN):
+        return None, None, line, False
+    read = _QUOTED.fullmatch(value) or nested.fullmatch(value)
+    return name, read.group(1) if read else None, line, inner >= 0 and value[0] == "{"
 
 
 def _fires(
@@ -1582,8 +1840,9 @@ def _fires(
     each ``name_matches`` child, whose whole text matches that condition's pattern, has among the
     tree nodes ``_holder_walk`` passes one of each ``within`` condition's types and none of the
     ``not_within`` types, and passes each ``in_table`` and ``not_in_table`` condition on the text
-    of its name child, on a capture of those patterns, or on ``enclosing_type``, the full name
-    ``_holder`` gives the node's nearest enclosing type among ``holders``."""
+    of its name child, on a capture of those patterns, on ``enclosing_type``, the full name
+    ``_holder`` gives the node's nearest enclosing type among ``holders``, or on a reference
+    rule's ``qualified_name``, its name child resolved as a written name."""
     if not (
         all(any(c.type == kind for c in node.children) for kind in rule.has_child)
         and all(
@@ -1605,7 +1864,12 @@ def _fires(
     if not any(isinstance(c, InTable) and c.fill for c in rule.where):
         return True
     holder = _holder(node, holders, rule_set, grammar, parsed)
-    return _fills_in_tables(rule.where, {} if holder is None else {"enclosing_type": holder[0]})
+    fills = {} if holder is None else {"enclosing_type": holder[0]}
+    if rule.reference and named is not None and named.type in grammar.written:
+        resolved = parsed.resolve(named, grammar)
+        if resolved is not None:
+            fills["qualified_name"] = resolved
+    return _fills_in_tables(rule.where, fills)
 
 
 def _name_groups(rule: Rule, node: Node) -> dict[str, str]:
@@ -2038,15 +2302,17 @@ def _found(
     edges: list[FoundEdge],
     skipped: list[Skipped],
     paths: Mapping[str, str],
-) -> None:
-    """The node or the edges one fire of the rule finds, appended to ``nodes`` or ``edges``.
+) -> bool:
+    """The node or the edges one fire of the rule finds, appended to ``nodes`` or ``edges``;
+    whether the edges' own filters removed every value they reached, so the fire lists no row.
 
     ``entry`` is the fire's key, ``None`` for a whole file, and its line. ``paths`` holds the
     file's path values, which an edge template may name. A fire that makes no edge though a key
-    path of one of its edges reached a value, and lists no edge, is listed in ``skipped``. An edge
-    whose key path reached a value and gave no end is listed only when it has no ``where``,
-    ``pattern`` or ``listed_at``, which choose between edges; a key path that reaches nothing
-    states no edge.
+    path of one of its edges reached a value, and lists no edge, is listed in ``skipped``, unless
+    each such edge's ``where``, ``pattern`` or ``listed_at`` removed every value it reached. An edge
+    whose key path reached a value and gave no end is listed when it has no ``where``, ``pattern``
+    or ``listed_at``, which choose between edges, or when it lost a value as ``_ends`` says; a key
+    path that reaches nothing states no edge.
     """
     line = entry[1]
     types = rule_set.types
@@ -2065,20 +2331,25 @@ def _found(
                 attributes=tuple(a for a in found if a is not None),
             )
         )
-    before, stated, written = len(edges), False, len(skipped)
+    before, stated, written, removed = len(edges), False, len(skipped), False
     for spec in rule.edges:
-        ends = _ends(spec, data, entry, paths)
+        lost: list[bool] = []
+        ends = _ends(spec, data, entry, paths, lost)
         sources = [path for mode, path in spec.parts if mode not in ("entry", "file")] or [spec.key]
         reached = any(resolve_path(data, path) for path in sources)
-        stated = stated or reached
         filtered = spec.matches or spec.pattern or spec.listed_at or spec.not_matches
-        if reached and not ends and not filtered:
+        # A value the edge's own filter removed is not one the rule failed to build. A filtered
+        # edge with an end makes its edge: a type with no id namespace is refused at load.
+        stated = stated or (reached and (not filtered or bool(lost)))
+        removed = removed or bool(reached and filtered and not ends and not lost)
+        if reached and not ends and (not filtered or lost):
             row = f"edge {spec.kind}: no value for key {', '.join(sources)}"
             skipped.append((file, line, rule.name, row))
         for end, at, held in ends:
             edges.extend(_edges(rule, rule_set, spec, file, node_id, [(end, at)], None, held))
     if stated and len(edges) == before and len(skipped) == written:
         skipped.append((file, line, rule.name, "fired and emitted nothing"))
+    return removed and len(edges) == before and len(skipped) == written
 
 
 def _edges(
@@ -2516,12 +2787,18 @@ _End = tuple[str, int, tuple[tuple[str, Any], ...]]
 
 
 def _ends(
-    spec: EdgeSpec, data: dict[str, Entry], entry: tuple[str | None, int], paths: Mapping[str, str]
+    spec: EdgeSpec,
+    data: dict[str, Entry],
+    entry: tuple[str | None, int],
+    paths: Mapping[str, str],
+    lost: list[bool] | None = None,
 ) -> list[_End]:
     """Each end value the edge names, with the line of the key or item that states it and the
-    edge's attributes there. A template may also name the file's path values."""
+    edge's attributes there. A template may also name the file's path values. ``lost`` gains an
+    item for each value left out for a cause other than the edge's own filter."""
+    lost = [] if lost is None else lost
     if spec.parts:
-        return _composed(spec, data, entry, paths)
+        return _composed(spec, data, entry, paths, lost)
     ends = []
     for hit, item_hit in _paired_hits(data, spec.key):
         given = _edge_values(spec.attributes, data, item_hit)
@@ -2530,7 +2807,10 @@ def _ends(
             items = list(hit.value.values())
         for item in [Hit(i.value, i.line, None) for i in items] if items else [hit]:
             raw = _text(item.value)
-            if raw is None or (spec.matches is not None and not fnmatchcase(raw, spec.matches)):
+            if raw is None:
+                lost.append(True)
+                continue
+            if spec.matches is not None and not fnmatchcase(raw, spec.matches):
                 continue
             name = spec.key.rsplit(".", 1)[-1]
             if spec.pattern is None:
@@ -2548,6 +2828,8 @@ def _ends(
                 )
                 if end is not None:
                     ends.append((end, item.line, given))
+                else:
+                    lost.append(True)
     return ends
 
 
@@ -2587,12 +2869,19 @@ def _edge_values(
 
 
 def _composed(
-    spec: EdgeSpec, data: dict[str, Entry], entry: tuple[str | None, int], paths: Mapping[str, str]
+    spec: EdgeSpec,
+    data: dict[str, Entry],
+    entry: tuple[str | None, int],
+    paths: Mapping[str, str],
+    lost: list[bool],
 ) -> list[_End]:
     """The list form: one template over several key sources, one edge per matched each entry.
 
     An ``entry`` part is the fire's own key, at its line; a whole-file fire has none. With
-    ``listed_at``, an end that is not an item of the list at that key path gives no edge.
+    ``listed_at``, an end that is not an item of the list at that key path gives no edge. A fixed
+    part the file lacks, an each item that is neither a key nor text, and a template left without a
+    value each lose the value into ``lost``; a ``listed_at`` path the file lacks lists nothing, so
+    it removes every end as a filter does.
     """
     fixed: dict[str, str] = {}
     each: list[tuple[Hit, Hit | None]] | None = None
@@ -2614,6 +2903,7 @@ def _composed(
             fixed[path.rsplit(".", 1)[-1]] = str(_text(hits[0].value))
             line = line or hits[0].line
         else:
+            lost.append(True)
             return []
     listed = None
     if spec.listed_at is not None:
@@ -2622,13 +2912,19 @@ def _composed(
     for hit, item in each if each is not None else [(Hit(None, line, None), None)]:
         values = {**paths, **fixed}
         if each is not None:
-            values["key"] = hit.key if hit.key is not None else str(_text(hit.value))
+            key = hit.key if hit.key is not None else _text(hit.value)
+            if key is None:
+                lost.append(True)
+                continue
+            values["key"] = str(key)
             if (spec.matches is not None and not fnmatchcase(values["key"], spec.matches)) or any(
                 fnmatchcase(values["key"], glob) for glob in spec.not_matches
             ):
                 continue
         end = _fill(spec.template, values)
-        if end is not None and (listed is None or end in listed):
+        if end is None:
+            lost.append(True)
+        elif listed is None or end in listed:
             ends.append((end, hit.line, _edge_values(spec.attributes, data, item)))
     return ends
 

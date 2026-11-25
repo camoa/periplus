@@ -16,7 +16,7 @@ def _plant(root: Path) -> None:
     (module / "js").mkdir(parents=True)
     (root / ".periplus").mkdir()
     (root / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - drupal_js_basic@0.0.1\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n  - drupal_js_basic@0.1.0\n"
     )
     (module / "mymodule.info.yml").write_text(
         "name: My module\ntype: module\ncore_version_requirement: ^10\n"
@@ -101,7 +101,7 @@ def test_a_pack_that_declares_the_type_yml_again_in_full_keeps_the_library_edges
         "          template: '{s}'\n"
     )
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n  - drupal_js_basic@0.0.1\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n  - drupal_js_basic@0.1.0\n"
         "  - local@0.0.1\n"
     )
     document = _map(tmp_path)

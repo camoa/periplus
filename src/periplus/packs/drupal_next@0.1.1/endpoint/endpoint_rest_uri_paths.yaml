@@ -1,0 +1,26 @@
+$schema: https://periplus.dev/schema/0/pack-file.schema.json
+
+# Each path in a REST resource's docblock uri_paths, such as canonical or create, as an endpoint
+# at the entry's line, with an edge to the resource its id names. A path's parameters are written
+# {}, and a trailing slash is dropped. An entry whose value is not quoted text makes nothing and is
+# listed under skipped. Both rules are inferred: the map cannot tell whether the plugin is enabled,
+# so a path here is declared and not known to be served.
+
+rules:
+- rule: endpoint_from_rest_resource_uri_path
+  reads: file
+  in: [rest_resource_classes]
+  match: &uri_path {annotation: RestResource, each: 'uri_paths.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id: &endpoint
+    template: 'drupal{value}'
+    normalize: [{replace: '\{[^}]+\}', with: '{}'}, {replace: '(?<=.)/$', with: ''}]
+  emits: [{node: {type: drupal_next.endpoint}}]
+  confidence: inferred
+
+- rule: endpoint_served_by_rest_resource_uri_path
+  reads: file
+  in: [rest_resource_classes]
+  match: *uri_path
+  id: *endpoint
+  emits: [{edge: {kind: endpoint_served_by_rest_resource, from: this_node, to: {from: {annotation_key: id}}}}]
+  confidence: inferred

@@ -1,0 +1,84 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each script and stylesheet a module's or theme's folder holds, as script_in_module,
+# script_in_theme, stylesheet_in_module or stylesheet_in_theme to the module or theme of the
+# nearest folder above it that holds an info file, found by drupal_basic's
+# module/member_folder.yaml. The folder decides, so a file two libraries list, or a library of
+# another extension lists by its path, still belongs to the extension that holds it. A
+# claim is named <folder>|script|<file path> or <folder>|stylesheet|<file path>, the walk starting
+# at the folder that holds the file.
+
+edge_kinds:
+- kind: script_in_module
+  description: "the script sits in that module's folder, the nearest folder above it with an info file"
+  from: js.file
+  to: drupal.module
+  groups: true
+- kind: script_in_theme
+  description: "the script sits in that theme's folder, the nearest folder above it with an info file"
+  from: js.file
+  to: drupal.theme
+  groups: true
+- kind: stylesheet_in_module
+  description: "the stylesheet sits in that module's folder, the nearest folder above it with an info file"
+  from: css.file
+  to: drupal.module
+  groups: true
+- kind: stylesheet_in_theme
+  description: "the stylesheet sits in that theme's folder, the nearest folder above it with an info file"
+  from: css.file
+  to: drupal.theme
+  groups: true
+
+rules:
+- rule: script_claim
+  reads: file
+  in: [js_source]
+  match: {declaration: program, filetype: javascript}
+  id: {from: [script_dir, script], template: '{script_dir}|script|{script}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: stylesheet_claim
+  reads: file
+  in: [module_root, theme_root]
+  match: {file: '*', filetype: css_text}
+  id: {template: '{stylesheet_dir}|stylesheet|{stylesheet}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: script_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::[^|]+\|script\|(?<path>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: script_in_module, from: {template: '{path}', type: js.file}, to: matched_node}}]
+  confidence: declared
+
+- rule: script_in_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::[^|]+\|script\|(?<path>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: script_in_theme, from: {template: '{path}', type: js.file}, to: matched_node}}]
+  confidence: declared
+
+- rule: stylesheet_in_module
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::[^|]+\|stylesheet\|(?<path>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_module}]
+  emits: [{edge: {kind: stylesheet_in_module, from: {template: '{path}', type: css.file}, to: matched_node}}]
+  confidence: declared
+
+- rule: stylesheet_in_theme
+  reads: map
+  match:
+    node_type: drupal.member_claim
+    where: [{id_matches: '^[^:]+::[^|]+\|stylesheet\|(?<path>.+)$'}]
+    follow: [{edge: claim_in_folder}, {edge: folder_of_theme}]
+  emits: [{edge: {kind: stylesheet_in_theme, from: {template: '{path}', type: css.file}, to: matched_node}}]
+  confidence: declared

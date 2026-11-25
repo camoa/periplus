@@ -1,0 +1,75 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method, function or class that holds a string literal equal to a role's machine name, as a
+# mentions_role edge to user.role.<name>, with confidence mentioned: a list of role names in a
+# constant, a map from a status to a role, $roles[] = 'x'. The code names the role as text, and the
+# map does not know what it does with the name. The edge sits at the literal's line. The literal is
+# the internal site node of mention/php_literal.yaml, so only a name with an underscore or another
+# separator and 8 characters or more counts: late_payer does, auditor does not. A literal joins
+# only a role a mapped config file declares. Where the same method or function already names the
+# role in hasRole(), addRole(), removeRole() or in_array(), the mention adds nothing.
+#
+# A role whose name is also a bundle of a node, taxonomy term, custom block, media, paragraph,
+# comment, profile or config page type gets no mention: a profile type per role is common, and the
+# text alone cannot say which of the two it names. A literal the same method, function or class
+# writes as an array key (role_key.yaml) gives no mention, even where it also writes it as a
+# value there. A literal that only happens to equal a role's name as a value, such as a user name,
+# still reads as a mention, in tests too: supporting code is mapped like the rest.
+
+edge_kinds:
+- kind: mentions_role
+  cause: touch
+  from: [php.method, php.function, php.class_like]
+  to: drupal.role
+  description: "the code holds a text equal to that role's machine name; it names the role as text, and what it does with it is not known"
+
+rules:
+- rule: code_mentions_role
+  reads: map
+  match:
+    node_type: drupal.literal_site
+    where: [{id_matches: '^drupal\.literal_site::(?<owner>[^|]+)\|(?<text>[^|]+)$'}]
+    follow:
+    - node: 'drupal.config::user.role.{text}'
+    unless_matched:
+    - [{node: 'drupal.bundle::node.{text}'}]
+    - [{node: 'drupal.bundle::taxonomy_term.{text}'}]
+    - [{node: 'drupal.bundle::block_content.{text}'}]
+    - [{node: 'drupal.bundle::media.{text}'}]
+    - [{node: 'drupal.bundle::paragraph.{text}'}]
+    - [{node: 'drupal.bundle::comment.{text}'}]
+    - [{node: 'drupal.bundle::profile.{text}'}]
+    - [{node: 'drupal.bundle::config_pages.{text}'}]
+    - [{node: 'drupal.role_name::{text}'}, {incoming_edge: names_checked_role}, {id_matches: '^php\.(?:method|function)::{owner}$'}]
+    - [{node: 'drupal.role_name::{text}'}, {incoming_edge: names_changed_role}, {id_matches: '^php\.(?:method|function)::{owner}$'}]
+    - - node: 'drupal.role_name::{text}'
+      - incoming_edge: names_role_in_variable
+      - edge_attribute: variable
+      - id_matches: '^php\.(?:method|function)::{owner}$'
+      - node: 'php.local_variable::{owner}::${variable}'
+      - edge: local_assigned
+      - id_matches: '(?s)^php\.local_value::[^=]*=[^=]*->getRoles\(\s*(?:TRUE|FALSE|true|false)?\s*\)$'
+    - [{node: 'drupal.literal::{text}'}, {incoming_edge: names_literal_key}, {id_matches: '^php\.(?:method|function)::{owner}$'}]
+  emits: [{edge: {kind: mentions_role, from: {template: '{owner}', types: [php.method, php.function]}, to: matched_node}}]
+  confidence: mentioned
+
+# A literal in a class constant or a property default links from the class.
+- rule: class_mentions_role
+  reads: map
+  match:
+    node_type: drupal.class_literal_site
+    where: [{id_matches: '^drupal\.class_literal_site::(?<owner>[^|]+)\|(?<text>[^|]+)$'}]
+    follow:
+    - node: 'drupal.config::user.role.{text}'
+    unless_matched:
+    - [{node: 'drupal.bundle::node.{text}'}]
+    - [{node: 'drupal.bundle::taxonomy_term.{text}'}]
+    - [{node: 'drupal.bundle::block_content.{text}'}]
+    - [{node: 'drupal.bundle::media.{text}'}]
+    - [{node: 'drupal.bundle::paragraph.{text}'}]
+    - [{node: 'drupal.bundle::comment.{text}'}]
+    - [{node: 'drupal.bundle::profile.{text}'}]
+    - [{node: 'drupal.bundle::config_pages.{text}'}]
+    - [{node: 'drupal.literal::{text}'}, {incoming_edge: names_literal_key}, {id_matches: '^php\.type::{owner}$'}]
+  emits: [{edge: {kind: mentions_role, from: {template: '{owner}', types: [php.class_like]}, to: matched_node}}]
+  confidence: mentioned

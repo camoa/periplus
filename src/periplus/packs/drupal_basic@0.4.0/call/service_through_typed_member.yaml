@@ -1,0 +1,228 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A method call on an object whose declared type names a service, as $this->aliasTypeManager->
+# createInstance('x') or $manager->getDefinitions(): calls_service from the method around the call
+# to that service, at the call's line. The declared type is read the way php_basic's call rules read
+# it: on the property, a promoted constructor parameter or a @var docblock; the parameter an untyped
+# property is assigned from; or the method's own parameter. The type names a service in three ways,
+# tried in this order, as the service rules read a constructor's parameter types:
+# - a service whose id is the type, as an autowired class registered under its own name;
+# - an alias whose id is the type, as Drupal\mymod\FooInterface: '@mymod.foo', to the service it
+#   aliases;
+# - the class of exactly one service, by its class key. Two or more services built from one class
+#   give no edge: the type does not say which one the object is.
+# Inferred: the declared type is a claim about what the object holds, not the container call that
+# gives it, which is uses_service's fact. A type no mapped services file names, as a core interface
+# such as EntityTypeManagerInterface in a map that holds no core services file, gives no edge; the
+# call keeps php_basic's calls edge, unresolved when the map holds no class declaring the method.
+#
+# A property the class ever assigns an object it builds itself, $this->m = new Mailer(...) or
+# $this->m = $this->createMock(Mailer::class), as a unit test does, holds that object and not the
+# service: no edge. $this->m = $this->container->get('x') is not such a value.
+#
+# Limits: a call in a plain function, a nullsafe call ?->, and a property only a child class
+# assigns give no edge here.
+
+edge_kinds:
+- kind: calls_service
+  cause: from
+  description: "the method or function calls a method on that service, through a property, parameter or local variable that holds it"
+  from: [php.method, php.function]
+  to: drupal.service
+
+rules:
+# Walk 1: the property's declared type.
+- rule: service_by_id_through_typed_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->\w+)$'}]
+    follow: &typed_property
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_typed_as
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::\\?(?<type>[A-Za-z_][\w\\]*)$'
+    - node: 'drupal.service::{type}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched:
+    - &is_alias [{node: 'drupal.service::{type}'}, {edge: alias_of_service}]
+    - &built_here [{node: 'php.member_assignment::{owner}::$this->{member}'}, {edge: assigned_value}, {id_matches: '=\s*(?:new\s|\$this->\w+\()'}]
+  emits: &to_type [{edge: {kind: calls_service, from: matched_node, to: {template: '{type}', types: [drupal.service]}}}]
+  confidence: inferred
+
+- rule: service_by_alias_through_typed_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->\w+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_typed_as
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::\\?(?<type>[A-Za-z_][\w\\]*)$'
+    - node: 'drupal.service::{type}'
+    - edge: alias_of_service
+    - id_matches: '^drupal\.service::(?<svc>.+)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: [*built_here]
+  emits: &to_service [{edge: {kind: calls_service, from: matched_node, to: {template: '{svc}', types: [drupal.service]}}}]
+  confidence: inferred
+
+- rule: service_by_class_through_typed_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->\w+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - edge: property_typed_as
+    - id_matches: '^php\.property_type::[^:]+::\$\w+::\\?(?<type>[A-Za-z_][\w\\]*)$'
+    - node: 'php.type::{type}'
+    - incoming_edge: service_class
+    - id_matches: '^drupal\.service::(?<svc>.+)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched:
+    - &named [{node: 'drupal.service::{type}'}]
+    - &shared [{node: 'php.type::{type}'}, {incoming_edge: service_class}, {id_matches: '^drupal\.service::(?!{svc}$)'}]
+    - *built_here
+  emits: *to_service
+  confidence: inferred
+
+# Walk 2: an untyped property assigned from a typed parameter, $this->m = $m.
+- rule: service_by_id_through_assigned_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->\w+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - node: 'php.member_assignment::{owner}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
+    - node: 'php.parameter::{owner}::{setter}::${parameter}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::\\?(?<type>[A-Za-z_][\w\\]*)$'
+    - node: 'drupal.service::{type}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: [*is_alias, *built_here]
+  emits: *to_type
+  confidence: inferred
+
+- rule: service_by_alias_through_assigned_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->\w+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - node: 'php.member_assignment::{owner}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
+    - node: 'php.parameter::{owner}::{setter}::${parameter}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::\\?(?<type>[A-Za-z_][\w\\]*)$'
+    - node: 'drupal.service::{type}'
+    - edge: alias_of_service
+    - id_matches: '^drupal\.service::(?<svc>.+)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: [*built_here]
+  emits: *to_service
+  confidence: inferred
+
+- rule: service_by_class_through_assigned_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->\w+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - ancestors: [inherits]
+    - id_matches: '^php\.type::(?<owner>.+)$'
+    - node: 'php.property::{owner}::${member}'
+    - node: 'php.member_assignment::{owner}::$this->{member}'
+    - edge: assigned_value
+    - id_matches: '^php\.member_assignment_value::[^:]+::(?<setter>[^:]+)::\$this->\w+=\$(?<parameter>\w+)$'
+    - node: 'php.parameter::{owner}::{setter}::${parameter}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::\\?(?<type>[A-Za-z_][\w\\]*)$'
+    - node: 'php.type::{type}'
+    - incoming_edge: service_class
+    - id_matches: '^drupal\.service::(?<svc>.+)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless_matched: [*named, *shared, *built_here]
+  emits: *to_service
+  confidence: inferred
+
+# Walk 3: the method's own typed parameter, $manager->getDefinitions(), unless the body assigns it.
+- rule: service_by_id_through_typed_parameter
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)->\w+)$'}]
+    follow:
+    - node: 'php.parameter::{class}::{meth}::${var}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::\\?(?<type>[A-Za-z_][\w\\]*)$'
+    - node: 'drupal.service::{type}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless: &assigned_in_body [[{node: 'php.local_variable::{class}::{meth}::${var}'}]]
+    unless_matched: [*is_alias]
+  emits: *to_type
+  confidence: inferred
+
+- rule: service_by_alias_through_typed_parameter
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)->\w+)$'}]
+    follow:
+    - node: 'php.parameter::{class}::{meth}::${var}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::\\?(?<type>[A-Za-z_][\w\\]*)$'
+    - node: 'drupal.service::{type}'
+    - edge: alias_of_service
+    - id_matches: '^drupal\.service::(?<svc>.+)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless: *assigned_in_body
+  emits: *to_service
+  confidence: inferred
+
+- rule: service_by_class_through_typed_parameter
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<class>[^:]+)::(?<meth>[^:]+)::\$(?<var>(?!this->)\w+)->\w+)$'}]
+    follow:
+    - node: 'php.parameter::{class}::{meth}::${var}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::\\?(?<type>[A-Za-z_][\w\\]*)$'
+    - node: 'php.type::{type}'
+    - incoming_edge: service_class
+    - id_matches: '^drupal\.service::(?<svc>.+)$'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless: *assigned_in_body
+    unless_matched: [*named, *shared]
+  emits: *to_service
+  confidence: inferred

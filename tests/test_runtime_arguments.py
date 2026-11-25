@@ -32,7 +32,7 @@ def _plant(root: Path, body: str) -> None:
     (root / MODULE / "src/Controller").mkdir(parents=True)
     (root / ".periplus").mkdir()
     (root / ".periplus/settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - drupal_basic@0.3.0\n"
+        "periplus_version: 0\npacks:\n  - drupal_basic@0.4.0\n"
     )
     (root / MODULE / "mymod.info.yml").write_text("name: My module\ntype: module\n")
     (root / MODULE / "mymod.routing.yml").write_text(ROUTING)
@@ -167,12 +167,28 @@ def test_each_of_the_nine_twin_rules_fires_on_a_variable_only_c3(tmp_path):
     source = HEAD + NINE
     expected = sorted(_line_of(source, f"$r{n:02d} =") for n in range(1, 10))
 
-    assert _marked_lines(document) == expected
+    # $container is a parameter nothing types, so php_basic's untyped_parameter_call_runtime marks
+    # the site variable_calls.yaml gives each of its two calls, at all three lines of each.
+    untyped = "untyped_parameter_call_runtime"
+    twins = [n for n in _marked(document) if all(p["rule"] != untyped for p in n["provenance"])]
+    assert _marked_lines({"nodes": twins}) == expected
+    prefix = METHOD_ID.replace("php.method::", "php.call_site::") + "::"
+    assert {
+        n["id"]: _lines(n["locations"])
+        for n in _marked(document)
+        if any(p["rule"] == untyped for p in n["provenance"])
+    } == {
+        prefix + call: {_line_of(source, f"${name} = $container{arrow}get(") for name in names}
+        for call, arrow, names in (
+            ("$container->get", "->", ("r05", "l05", "c05")),
+            ("$container?->get", "?->", ("r06", "l06", "c06")),
+        )
+    }
     in_edges = _edges(document, "call_site_in")
-    # The nine marked sites, $this->redirect and $this->t, and the unmarked sites php_basic's
+    # The nine marked sites, $this->redirect and $this->t, and the sites php_basic's
     # variable_calls.yaml gives $container->get and $container?->get.
     assert len(in_edges) == 13
     assert {e["to"] for e in in_edges} == {METHOD_ID}
     marked_ids = {n["id"] for n in _marked(document)}
     leaving = [e for e in document["edges"] if e["from"] in marked_ids]
-    assert [(e["kind"], e["to"]) for e in leaving] == [("call_site_in", METHOD_ID)] * 9
+    assert [(e["kind"], e["to"]) for e in leaving] == [("call_site_in", METHOD_ID)] * 11

@@ -1,0 +1,43 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The keys of an entity type's definition that name another thing, each read at its own line as an
+# internal drupal.entity_type_entry node, <class>|<key>, where <class> is the class the file holds
+# by Drupal's PSR-4 layout. A handler is <class>|handlers|<key>, or <class>|<group>|<key> inside a
+# group such as form or route_provider, with an entry_names_class edge to the handler class's
+# internal drupal.class_ref node. A link template is <class>|links|<name>|<route name part>, the
+# name with each dash written as an underscore, with a link_template_path edge to the path's
+# drupal.url_path node. admin_permission, collection_permission, bundle_entity_type, bundle_of and
+# field_ui_base_route are <class>|<key>, with an entry_value edge to an internal drupal.entry_value
+# node of the value as written. <class>|content_entity_type marks a content entity type, and
+# <class>|entity_keys|bundle a definition whose entity_keys name a bundle key. The attribute form
+# is read by entity_type_entry_attribute.yaml, the docblock annotation by
+# entity_type_entry_annotation.yaml; both give one node for one key. The map rules of
+# entity_handler.yaml, entity_type_key.yaml and route/route_link_template.yaml join each entry to
+# its entity type through entity_type_of_class, so each edge they give sits at the key's line.
+
+node_types:
+- name: drupal.entity_type_entry
+  description: "internal: one key of an entity type's definition, <class>|<key>, at the key's line"
+  id_namespace: drupal.entity_type_entry
+  internal: true
+- name: drupal.entry_value
+  description: "internal: the text value of a key of an entity type's definition, as written"
+  id_namespace: drupal.entry_value
+  internal: true
+
+edge_kinds:
+- kind: entry_names_class
+  cause: none
+  description: "step to the handler edges: the entity type's definition names that class under this key"
+  from: drupal.entity_type_entry
+  to: drupal.class_ref
+- kind: entry_value
+  cause: none
+  description: "step to the entity type key edges: the key holds this text"
+  from: drupal.entity_type_entry
+  to: drupal.entry_value
+- kind: link_template_path
+  cause: none
+  description: "step to has_link_template: the link template holds this path"
+  from: drupal.entity_type_entry
+  to: drupal.url_path

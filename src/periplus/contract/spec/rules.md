@@ -119,8 +119,18 @@ The schema refuses a rule that emits both. Before the split, all three said line
 An edge rule still computes an id — it needs one to name its endpoint. It just does not emit
 a node with it.
 
+A map rule's fire sits at each location of the node it matched. A `place: edge` follow step,
+right after a step that walks an edge, sits it at each location of that edge instead, so a fact
+a file rule found on one line keeps that line. It sits in `follow` only, and a rule that
+withholds takes none.
+
 A map rule may write declared attributes beside its edges. They land on a node another rule
 found, at that node's own place, so no location is stamped twice.
+
+Beside the one node it emits, a map rule writes only `resolution: runtime`, the mark a file rule
+writes beside its node, and the map stores the two alike. A map rule that writes `resolution` with
+no node of its own is not executed. Such a rule runs in one last pass, after a pass of the other
+map rules adds nothing, and reads the map as it stood then: a mark is never taken back.
 
 ---
 
@@ -133,6 +143,11 @@ pack       config = ./config/sync
 rule       in: [config, module_config]
 settings   config = ./drupal-app/config/default
 ```
+
+A path value may name, with `root_name`, a settings value that stands for the project folder's
+name. When the project folder is itself one unit, as one module, the value is put before each
+path that starts at the project folder, so the ids are the ones the unit gets inside a larger
+project.
 
 > Three real Drupal sites keep exported config in three different places, and one of them is
 > computed in PHP at runtime: `dirname($app_root) . '/config/default'`. With the path in the
@@ -264,6 +279,14 @@ from end of each edge such a rule emits. Before any source file is read, the rul
 it emits no node, when a named pack is not one its pack depends on, or when the named pack has no
 reference rule of the same file type that could start at the type.
 
+An annotation rule reads the keys at the top level of the annotation's body. With
+`match.each: <key>.<key>.*` it fires once for each entry of the group that path names, and one
+more star, as `parts.*.*`, stands for any group's key. Its templates name `key`, `value`,
+`enclosing_type` and, with the second star, `group`, and nothing else. The id and a `to:
+{template}` end take `normalize`. An `annotation_key` with dots names an entry inside a group,
+and an edge's `to: {from: {annotation_key: <key>}}` is the id that key's value names. A path or a
+template outside those limits is refused at load.
+
 A declaration rule's `name_child` list is a path of one step or more, each step a field or else
 the first named child of that node type; `[name]` reaches a name that has no field. A reference
 rule's list is one field or two, the name and a member. An empty step, or an empty string
@@ -276,6 +299,12 @@ its first child of that node type. So one rule can test a call's class and its m
 counted from 1, and reads no field. A match without that child, or whose child does not match,
 makes nothing and is not a fire.
 
+`within: [<node type>, ...]` and `not_within: [<node type>, ...]`, on a tree declaration or
+reference rule, test the tree nodes from the match's parent up to its nearest holder, that holder
+included: `within` passes a match when one of them has one of the types, and `not_within` when none
+has. A match they leave out makes nothing, is not listed and is not a fire. The type names are not
+checked against the grammar at load.
+
 `in_table: <table>` holds when a name is a key of the table, and `not_in_table: <table>` when it is
 not; the values are not read. The name is the first `name_child` field's text on a tree declaration
 or reference rule, the whole node id on a map rule, and the entry's key or else the file's stem on
@@ -286,8 +315,19 @@ dotted name. The table is found as a lookup step finds one, with the rows `add_t
 table none of those packs declares, or a capture no pattern of the `where` defines, refuses the
 rule. On a tree declaration or reference rule, `{table: <table>, fill: enclosing_type}` tests the
 full name of the type that holds the match, and with `pattern` and `capture` a capture of that
-pattern searched in it. On a declaration rule whose `name_child` is a list, a condition with no
+pattern searched in it. On a reference rule, `fill: qualified_name` tests its first `name_child`
+resolved through the file's imports, the name its edge end reads. On a declaration rule whose
+`name_child` is a list, a condition with no
 capture and no fill is refused. The table is data: the engine holds no list of names.
+
+A map rule's `follow` takes the same test as a step, `in_table: {table: <table>, capture: <name>}`:
+the walk goes on only when the capture is a key. With `value: <new name>` the step also brings the
+table's value for that key into the captures, so a later `node` step or template can name it. A
+new name a step before it already captures refuses the rule. A template end may name such a value
+as the one item of its types, `types: ['{sort}']`. The set of types stays known before any file
+is read, because every value of the table, the rows `add_table_rows` adds included, must be a
+type the pack may name and one the edge kind allows at that end. A row that is not refuses the
+map and names the row and the pack that added it.
 
 ---
 
@@ -383,6 +423,10 @@ name_child                   a field name in one pack, a node type in another
 
 So: the meta-schema rejects unknown keys, the engine reports every rule that fired zero times,
 and a rule shape it cannot execute is named rather than skipped.
+
+A filter is not silence. A data rule's `where`, `pattern` or `listed_at` that leaves a value out
+chose to, so that value lists no row. A data rule whose filters left out every value it reached,
+in the whole map, is named once in the report, under `made_nothing`.
 
 **And the map does the same.** A rule that looked and failed emits a node recording what it
 searched for and what it found — not a warning, and never an edge to a name it could not

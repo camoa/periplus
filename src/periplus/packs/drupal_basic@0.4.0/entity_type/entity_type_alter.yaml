@@ -1,0 +1,597 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A change an entity type alter hook makes to an entity type. Core runs hook_entity_type_build and
+# hook_entity_type_alter on the array of entity type objects, keyed by entity type id; a module
+# changes one with its setters. Inside a method or function that implements either hook, each of
+#
+#   $entity_types['node']->setClass(X::class)                 entity_class
+#   ->setStorageClass(X), ->setAccessClass(X),                 has_storage_handler, has_access_handler,
+#   ->setListBuilderClass(X), ->setViewBuilderClass(X)         has_list_builder, has_view_builder
+#   ->setFormClass('edit', X)                                  has_form_handler, entry edit
+#   ->setHandlerClass('access', X) and the other keys          the kind of that key, or
+#                                                              has_entity_handler with the key as entry
+#   ->setLinkTemplate('edit-form', '/path')                    has_link_template, entry the name
+#   ->set('admin_permission', 'administer x')                  has_admin_permission
+#   ->addConstraint('X')                                       constraint
+#
+# gives alters_entity_type from the method or function to the entity type, at the call's line, with
+# the edge attributes replaces, the kind entity_type/entity_handler.yaml and
+# entity_type/entity_type_key.yaml give the same fact when the entity type's own definition states
+# it, entry, the form operation, handler key or link template name, and value, the link template's
+# path, the permission or the constraint. A setter that names a class also gives
+# sets_entity_type_class to that class, X::class resolved through the file's use statements and
+# namespace, a quoted name read as a full name. A link template whose path is quoted text gives the
+# route entity.<type>.<name, each dash an underscore> that path, route_serves_path, when the map
+# holds that route. Inferred: the hook, not the line, says the object is that entity type.
+#
+# The object is an item of the array, $entity_types['node'], with each later setter of the same
+# statement, or a local variable the method or function assigns that item, $type =
+# $entity_types['node'];, until the block that assigns it closes. Each change is read as text into
+# an internal drupal.entity_type_alter_site node, <method or function id>|$<array>|<type>|
+# <replaces>|=<entry>|=<value>; the map rules join it to the hook only when the array is a parameter
+# of that method or function. The spans entity_type_receiver and entity_type_local in pack.yaml give
+# the object.
+#
+# A setter on any other variable, as the value of a loop over the array, or on an item whose key is
+# a variable, $entity_types[$id], names an entity type known only at run time: a php.call_site
+# <method or function>::<object>-><setter>(runtime entity type) marked resolution runtime, kept only
+# inside an implementation of either hook, so a field definition's or a service definition's
+# setClass elsewhere gets no mark.
+#
+# Limits: a setter after a call on another variable in the same statement's arguments reads that
+# variable as its object; a local assigned the item inside a block other than the one it is used in
+# is not read; a handler class held in a variable, or written self::class, gives the change without
+# the class.
+
+node_types:
+- name: drupal.entity_type_alter_site
+  description: "internal: one change an entity type alter hook makes, <method or function id>|$<array>|<entity type>|<replaces>|=<entry>|=<value>, at its line"
+  id_namespace: drupal.entity_type_alter_site
+  internal: true
+- name: drupal.entity_type_alias_call
+  description: "internal: a setter called on a local variable assigned an item of the entity types array, so the run-time mark is taken back there"
+  id_namespace: drupal.entity_type_alias_call
+  internal: true
+
+edge_kinds:
+- kind: alters_entity_type
+  cause: from
+  description: "in hook_entity_type_alter or hook_entity_type_build, the method or function changes that entity type; replaces names the handler kind it sets, as has_form_handler"
+  from: [php.method, php.function]
+  to: drupal.entity_type
+- kind: sets_entity_type_class
+  cause: touch
+  description: "in an entity type alter hook, the method or function makes that class an entity type's class or handler; the edge attributes name the entity type and the handler kind"
+  from: [php.method, php.function]
+  to: php.class
+- kind: entity_type_alter_class
+  cause: none
+  description: "internal: the entity type change names that class"
+  from: drupal.entity_type_alter_site
+  to: drupal.class_ref
+
+edge_attributes:
+- name: replaces
+  on: [alters_entity_type, sets_entity_type_class]
+  description: "the kind of the fact the alter hook sets, as the entity type's definition would state it: has_form_handler, entity_class, has_link_template, has_admin_permission or constraint"
+- name: value
+  on: [alters_entity_type]
+  description: "what the alter hook sets that is not a class: a link template's path, a permission or a constraint's name, as written"
+- name: entity_type
+  on: [sets_entity_type_class]
+  description: "the entity type whose class or handler the alter hook sets to this class"
+
+rules:
+# --- The changes, read as text ------------------------------------------------------------------
+
+# A setter that names a class, on an item of the array, $entity_types['node']->setClass(X::class),
+# in a method of a class under src. The anchors hold the values the other rules share.
+- rule: entity_type_alter_class_in_method
+  reads: file
+  in: [source]
+  match: &class_method
+    file: '**'
+    filetype: drupal_php_text
+    text: &class_text '->\s*(?:(?<one>setClass|setStorageClass|setAccessClass|setListBuilderClass|setViewBuilderClass)\(|(?<two>setFormClass|setHandlerClass)\(\s*[''"](?<key>[\w-]+)[''"]\s*,)\s*(?:(?!(?:self|static|parent)::)(?<cls>\\?[A-Za-z_][\w\\]*)::class|(?<q>[''"])\\{0,2}(?<qcls>[A-Za-z_]\w*(?:\\{1,2}\w+)+)(?P=q))\s*[,)]'
+  values: &class_item_method
+    method: &method {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    rk: &rk {from: {enclosing: entity_type_receiver, capture: rk}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: &item_array {template: '{rk}', normalize: [{replace: '^(?!\$\w+\[\s*[''"]).*$', with: ''}, {replace: '\[.*$', with: ''}, {replace: '^\$', with: ''}]}
+    etype: &item_etype {template: '{rk}', normalize: [{replace: '^(?!\$\w+\[\s*[''"]).*$', with: ''}, {replace: '^\$\w+\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+    replaces: &class_replaces
+      template: '{one}{two}|{key}'
+      normalize:
+      - {replace: '^setClass\|$', with: 'entity_class'}
+      - {replace: '^setStorageClass\|$', with: 'has_storage_handler'}
+      - {replace: '^setAccessClass\|$', with: 'has_access_handler'}
+      - {replace: '^setListBuilderClass\|$', with: 'has_list_builder'}
+      - {replace: '^setViewBuilderClass\|$', with: 'has_view_builder'}
+      - {replace: '^setFormClass\|.*$', with: 'has_form_handler'}
+      - {replace: '^setHandlerClass\|access$', with: 'has_access_handler'}
+      - {replace: '^setHandlerClass\|storage$', with: 'has_storage_handler'}
+      - {replace: '^setHandlerClass\|list_builder$', with: 'has_list_builder'}
+      - {replace: '^setHandlerClass\|view_builder$', with: 'has_view_builder'}
+      - {replace: '^setHandlerClass\|.*$', with: 'has_entity_handler'}
+    entry: &class_entry
+      template: '{one}{two}={key}'
+      normalize:
+      - {replace: '^(?:setClass|setStorageClass|setAccessClass|setListBuilderClass|setViewBuilderClass)=$', with: '='}
+      - {replace: '^setHandlerClass=(?:access|storage|list_builder|view_builder)$', with: '='}
+      - {replace: '^set(?:Form|Handler)Class(?==)', with: ''}
+    qc: &quoted_class {template: '{qcls}', normalize: [{replace: '\\\\', with: '\'}]}
+  id: &class_method_id {template: 'php.method::{psr4_class}::{method}|${arr}|{etype}|{replaces}|{entry}|='}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_class_item_method_named
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: *class_text
+  values:
+    method: *method
+    rk: *rk
+    arr: *item_array
+    etype: *item_etype
+    replaces: *class_replaces
+    entry: *class_entry
+    qc: *quoted_class
+  id: {template: 'php.method::{psr4_class}::{method}|${arr}|{etype}|{replaces}|{entry}|='}
+  emits:
+  - edge: {kind: entity_type_alter_class, from: this_node, to: {template: '{cls}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', types: [drupal.class_ref]}}
+  - edge: {kind: entity_type_alter_class, from: this_node, to: {template: '{qc}', types: [drupal.class_ref]}}
+  confidence: inferred
+
+- rule: entity_type_alter_value_item_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->\s*(?:(?<lt>setLinkTemplate)\(\s*[''"](?<rel>[\w-]+)[''"]\s*,|(?<ap>set)\(\s*[''"]admin_permission[''"]\s*,|(?<ac>addConstraint)\()\s*[''"](?<val>[^''"|]+)[''"]'
+  values:
+    method: *method
+    rk: *rk
+    arr: *item_array
+    etype: *item_etype
+    replaces: {template: '{lt}{ap}{ac}', normalize: [{replace: '^setLinkTemplate$', with: 'has_link_template'}, {replace: '^set$', with: 'has_admin_permission'}, {replace: '^addConstraint$', with: 'constraint'}]}
+    entry: {template: '{lt}{ap}{ac}={rel}', normalize: [{replace: '^\w+(?==)', with: ''}]}
+  id: {template: 'php.method::{psr4_class}::{method}|${arr}|{etype}|{replaces}|{entry}|={val}'}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_route_item_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->\s*setLinkTemplate\(\s*[''"](?<rel>[\w-]+)[''"]\s*,\s*[''"](?<val>/[^''"|]*)[''"]\s*\)'
+  values:
+    method: *method
+    rk: *rk
+    arr: *item_array
+    etype: *item_etype
+    relu: {template: '{rel}', normalize: [{replace: '-', with: '_'}]}
+  id: {template: 'php.method::{psr4_class}::{method}|${arr}|{etype}|route|=entity.{etype}.{relu}|={val}'}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_class_item_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: *class_text
+  values:
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    arr: *item_array
+    etype: *item_etype
+    replaces: *class_replaces
+    entry: *class_entry
+    qc: *quoted_class
+  id: {template: 'php.function::{fn}|${arr}|{etype}|{replaces}|{entry}|='}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_class_item_function_named
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: *class_text
+  values:
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    arr: *item_array
+    etype: *item_etype
+    replaces: *class_replaces
+    entry: *class_entry
+    qc: *quoted_class
+  id: {template: 'php.function::{fn}|${arr}|{etype}|{replaces}|{entry}|='}
+  emits:
+  - edge: {kind: entity_type_alter_class, from: this_node, to: {template: '{cls}', resolve: [full_if_prefixed: "\\", bound_first_segment], separator: '\', types: [drupal.class_ref]}}
+  - edge: {kind: entity_type_alter_class, from: this_node, to: {template: '{qc}', types: [drupal.class_ref]}}
+  confidence: inferred
+
+- rule: entity_type_alter_value_item_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '->\s*(?:(?<lt>setLinkTemplate)\(\s*[''"](?<rel>[\w-]+)[''"]\s*,|(?<ap>set)\(\s*[''"]admin_permission[''"]\s*,|(?<ac>addConstraint)\()\s*[''"](?<val>[^''"|]+)[''"]'
+  values:
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    arr: *item_array
+    etype: *item_etype
+    replaces: {template: '{lt}{ap}{ac}', normalize: [{replace: '^setLinkTemplate$', with: 'has_link_template'}, {replace: '^set$', with: 'has_admin_permission'}, {replace: '^addConstraint$', with: 'constraint'}]}
+    entry: {template: '{lt}{ap}{ac}={rel}', normalize: [{replace: '^\w+(?==)', with: ''}]}
+  id: {template: 'php.function::{fn}|${arr}|{etype}|{replaces}|{entry}|={val}'}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_route_item_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '->\s*setLinkTemplate\(\s*[''"](?<rel>[\w-]+)[''"]\s*,\s*[''"](?<val>/[^''"|]*)[''"]\s*\)'
+  values:
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    arr: *item_array
+    etype: *item_etype
+    relu: {template: '{rel}', normalize: [{replace: '-', with: '_'}]}
+  id: {template: 'php.function::{fn}|${arr}|{etype}|route|=entity.{etype}.{relu}|={val}'}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_class_local_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: *class_text
+  values:
+    method: *method
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+    replaces: *class_replaces
+    entry: *class_entry
+    qc: *quoted_class
+  id: {template: 'php.method::{psr4_class}::{method}|${arr}|{etype}|{replaces}|{entry}|='}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_class_local_method_named
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: *class_text
+  values:
+    method: *method
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+    replaces: *class_replaces
+    entry: *class_entry
+    qc: *quoted_class
+  id: {template: 'php.method::{psr4_class}::{method}|${arr}|{etype}|{replaces}|{entry}|='}
+  emits:
+  - edge: {kind: entity_type_alter_class, from: this_node, to: {template: '{cls}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: psr4_namespace], separator: '\', types: [drupal.class_ref]}}
+  - edge: {kind: entity_type_alter_class, from: this_node, to: {template: '{qc}', types: [drupal.class_ref]}}
+  confidence: inferred
+
+- rule: entity_type_alter_value_local_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->\s*(?:(?<lt>setLinkTemplate)\(\s*[''"](?<rel>[\w-]+)[''"]\s*,|(?<ap>set)\(\s*[''"]admin_permission[''"]\s*,|(?<ac>addConstraint)\()\s*[''"](?<val>[^''"|]+)[''"]'
+  values:
+    method: *method
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+    replaces: {template: '{lt}{ap}{ac}', normalize: [{replace: '^setLinkTemplate$', with: 'has_link_template'}, {replace: '^set$', with: 'has_admin_permission'}, {replace: '^addConstraint$', with: 'constraint'}]}
+    entry: {template: '{lt}{ap}{ac}={rel}', normalize: [{replace: '^\w+(?==)', with: ''}]}
+  id: {template: 'php.method::{psr4_class}::{method}|${arr}|{etype}|{replaces}|{entry}|={val}'}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_route_local_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->\s*setLinkTemplate\(\s*[''"](?<rel>[\w-]+)[''"]\s*,\s*[''"](?<val>/[^''"|]*)[''"]\s*\)'
+  values:
+    method: *method
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+    relu: {template: '{rel}', normalize: [{replace: '-', with: '_'}]}
+  id: {template: 'php.method::{psr4_class}::{method}|${arr}|{etype}|route|=entity.{etype}.{relu}|={val}'}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alias_call_method
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '->\s*(?<setter>setClass|setStorageClass|setAccessClass|setListBuilderClass|setViewBuilderClass|setFormClass|setHandlerClass|setLinkTemplate|addConstraint|set(?=\(\s*[''"]admin_permission[''"]))\('
+  values:
+    method: *method
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+  id: {template: '{arr}#{psr4_class}::{method}::{rk}->{setter}', normalize: [{replace: '^\w+#', with: ''}]}
+  emits: [{node: {type: drupal.entity_type_alias_call}}]
+  confidence: inferred
+
+- rule: entity_type_alter_class_local_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: *class_text
+  values:
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+    replaces: *class_replaces
+    entry: *class_entry
+    qc: *quoted_class
+  id: {template: 'php.function::{fn}|${arr}|{etype}|{replaces}|{entry}|='}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_class_local_function_named
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: *class_text
+  values:
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+    replaces: *class_replaces
+    entry: *class_entry
+    qc: *quoted_class
+  id: {template: 'php.function::{fn}|${arr}|{etype}|{replaces}|{entry}|='}
+  emits:
+  - edge: {kind: entity_type_alter_class, from: this_node, to: {template: '{cls}', resolve: [full_if_prefixed: "\\", bound_first_segment], separator: '\', types: [drupal.class_ref]}}
+  - edge: {kind: entity_type_alter_class, from: this_node, to: {template: '{qc}', types: [drupal.class_ref]}}
+  confidence: inferred
+
+- rule: entity_type_alter_value_local_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '->\s*(?:(?<lt>setLinkTemplate)\(\s*[''"](?<rel>[\w-]+)[''"]\s*,|(?<ap>set)\(\s*[''"]admin_permission[''"]\s*,|(?<ac>addConstraint)\()\s*[''"](?<val>[^''"|]+)[''"]'
+  values:
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+    replaces: {template: '{lt}{ap}{ac}', normalize: [{replace: '^setLinkTemplate$', with: 'has_link_template'}, {replace: '^set$', with: 'has_admin_permission'}, {replace: '^addConstraint$', with: 'constraint'}]}
+    entry: {template: '{lt}{ap}{ac}={rel}', normalize: [{replace: '^\w+(?==)', with: ''}]}
+  id: {template: 'php.function::{fn}|${arr}|{etype}|{replaces}|{entry}|={val}'}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alter_route_local_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '->\s*setLinkTemplate\(\s*[''"](?<rel>[\w-]+)[''"]\s*,\s*[''"](?<val>/[^''"|]*)[''"]\s*\)'
+  values:
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+    relu: {template: '{rel}', normalize: [{replace: '-', with: '_'}]}
+  id: {template: 'php.function::{fn}|${arr}|{etype}|route|=entity.{etype}.{relu}|={val}'}
+  emits: [{node: {type: drupal.entity_type_alter_site}}]
+  confidence: inferred
+
+- rule: entity_type_alias_call_function
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '->\s*(?<setter>setClass|setStorageClass|setAccessClass|setListBuilderClass|setViewBuilderClass|setFormClass|setHandlerClass|setLinkTemplate|addConstraint|set(?=\(\s*[''"]admin_permission[''"]))\('
+  values:
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    la: {from: {enclosing: entity_type_local, capture: la}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+    arr: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^=]*=[^=]*=\s*\$', with: ''}, {replace: '\[.*$', with: ''}]}
+    etype: {template: '{rk}={la}', normalize: [{replace: '^(\$\w+)=(?!\1\s*=).*$', with: ''}, {replace: '^[^\[]*\[\s*[''"]', with: ''}, {replace: '[''"]\s*\]$', with: ''}]}
+  id: {template: '{arr}#{fn}::{rk}->{setter}', normalize: [{replace: '^\w+#', with: ''}]}
+  emits: [{node: {type: drupal.entity_type_alias_call}}]
+  confidence: inferred
+
+- rule: entity_type_alter_runtime_method
+  reads: file
+  in: [source]
+  match: &runtime_method
+    file: '**'
+    filetype: drupal_php_text
+    text: '->\s*(?<setter>setClass|setStorageClass|setAccessClass|setListBuilderClass|setViewBuilderClass|setFormClass|setHandlerClass|setLinkTemplate|addConstraint|set(?=\(\s*[''"]admin_permission[''"]))\('
+  values: &runtime_method_values
+    method: *method
+    rk: *rk
+    rv: {template: '{rk}', normalize: [{replace: '^\$\w+\[\s*[''"].*$', with: ''}]}
+  id: {template: '{psr4_class}::{method}::{rv}->{setter}(runtime entity type)'}
+  emits:
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: entity_type_alter_runtime_method_in
+  reads: file
+  in: [source]
+  match: *runtime_method
+  values: *runtime_method_values
+  id: {template: '{psr4_class}::{method}::{rv}->{setter}(runtime entity type)'}
+  emits:
+  - edge: {kind: has_call_site, from: {template: '{psr4_class}::{method}', types: [php.method]}, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: {template: '{psr4_class}::{method}', types: [php.method]}}
+  confidence: declared
+
+- rule: entity_type_alter_runtime_function
+  reads: file
+  in: [source]
+  match: &runtime_function
+    file: '**'
+    filetype: drupal_php_text
+    ending: [module, install, inc, theme, profile]
+    text: '->\s*(?<setter>setClass|setStorageClass|setAccessClass|setListBuilderClass|setViewBuilderClass|setFormClass|setHandlerClass|setLinkTemplate|addConstraint|set(?=\(\s*[''"]admin_permission[''"]))\('
+  values: &runtime_function_values
+    name: *method
+    in_class: {from: {enclosing: class_like_body, capture: class}}
+    fn: {template: '{in_class}|{name}', normalize: [{replace: '^[^|]+\|.*$', with: ''}, {replace: '^\|', with: ''}]}
+    rk: *rk
+    rv: {template: '{rk}', normalize: [{replace: '^\$\w+\[\s*[''"].*$', with: ''}]}
+  id: {template: '{fn}::{rv}->{setter}(runtime entity type)'}
+  emits:
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: entity_type_alter_runtime_function_in
+  reads: file
+  in: [source]
+  match: *runtime_function
+  values: *runtime_function_values
+  id: {template: '{fn}::{rv}->{setter}(runtime entity type)'}
+  emits:
+  - edge: {kind: has_call_site, from: {template: '{fn}', types: [php.function]}, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: {template: '{fn}', types: [php.function]}}
+  confidence: declared
+
+# --- The run-time mark is kept only in an entity type alter hook, and not on a local alias -------
+
+- rule: entity_type_runtime_outside_alter_method
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<cls>[^:]+)::(?<m>\w+)::[^:]*\(runtime entity type\)$'}]
+    unless: [[{node: 'php.method::{cls}::{m}'}, {edge: implements_hook}, &alter_hook {id_matches: '^drupal\.hook::entity_type_(?:alter|build)$'}]]
+  emits: [{withhold: this_node}]
+  confidence: declared
+
+- rule: entity_type_runtime_outside_alter_function
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<fn>\w+)::\$[^:]*\(runtime entity type\)$'}]
+    unless: [[{node: 'php.function::{fn}'}, {edge: implements_hook}, *alter_hook]]
+  emits: [{withhold: this_node}]
+  confidence: declared
+
+- rule: entity_type_runtime_on_local_alias
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>.+)\(runtime entity type\)$'}]
+    follow: [{node: 'drupal.entity_type_alias_call::{site}'}]
+  emits: [{withhold: this_node}]
+  confidence: declared
+
+# --- The joins ------------------------------------------------------------------------------------
+
+# Each change in a method or function that implements either hook, on its own parameter.
+- rule: alters_entity_type
+  reads: map
+  match:
+    node_type: drupal.entity_type_alter_site
+    where: [{id_matches: '^drupal\.entity_type_alter_site::(?<owner>php\.\w+::(?<name>[^|]+))\|(?<var>\$\w+)\|(?<etype>[^|]+)\|(?<replaces>(?!route\|)\w+)\|=(?<entry>[^|]+)?\|=(?<value>[^|]+)?$'}]
+    follow:
+    - {try: [{edge: entity_type_alter_class}, {id_matches: '^drupal\.class_ref::(?<cls>.+)$'}]}
+    - {node: 'php.parameter::{name}::{var}'}
+    - &owner {node: '{owner}'}
+    - {edge: implements_hook}
+    - *alter_hook
+    - *owner
+  emits:
+  - edge: {kind: alters_entity_type, from: matched_node, to: {template: '{etype}', types: [drupal.entity_type]}, attributes: {replaces: {template: '{replaces}'}, entry: {template: '{entry}'}, value: {template: '{value}'}}}
+  - edge: {kind: sets_entity_type_class, from: matched_node, to: {template: '{cls}', types: [php.class]}, attributes: {replaces: {template: '{replaces}'}, entity_type: {template: '{etype}'}}}
+  confidence: inferred
+
+# A link template's path given to the route the map holds for it.
+- rule: altered_link_template_serves_route
+  reads: map
+  match:
+    node_type: drupal.entity_type_alter_site
+    where: [{id_matches: '^drupal\.entity_type_alter_site::(?<owner>php\.\w+::(?<name>[^|]+))\|(?<var>\$\w+)\|[^|]+\|route\|=(?<route>[^|]+)\|=(?<path>/[^|]*)$'}]
+    follow:
+    - {node: 'php.parameter::{name}::{var}'}
+    - *owner
+    - {edge: implements_hook}
+    - *alter_hook
+    - {node: 'drupal.route::{route}'}
+  emits: [{edge: {kind: route_serves_path, from: matched_node, to: {template: '{path}', types: [drupal.url_path]}}}]
+  confidence: inferred

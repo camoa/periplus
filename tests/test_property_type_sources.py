@@ -212,7 +212,7 @@ def test_a_nullable_typed_or_promoted_property_gives_a_call_and_a_nullable_scala
     giving calls_through_typed_property's edge; ?int and ?string give no edge and no skipped row."""
     (tmp_path / ".periplus").mkdir()
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks: [php_basic@0.2.0]\n"
+        "periplus_version: 0\npacks: [php_basic@0.3.0]\n"
     )
     (tmp_path / "Page.php").write_text(NULLABLE)
     report = run(

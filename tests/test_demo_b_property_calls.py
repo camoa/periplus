@@ -40,7 +40,7 @@ def _drupal_site(root: Path) -> None:
     plant(
         root,
         {
-            **settings("drupal_basic@0.3.0"),
+            **settings("drupal_basic@0.4.0"),
             f"{MODULE}/my_module.services.yml": SERVICES,
             f"{src}/Helper.php": _php(NS, _class("Helper", _method("run"))),
             f"{src}/Tool.php": _php(NS, _class("Tool", _method("go") + "\n" + _method("work"))),
@@ -179,7 +179,7 @@ def test_a_call_through_a_property_a_parent_assigns_ends_on_the_type_it_was_assi
     states = {(n["type"], n["state"]) for n in document["nodes"] if n["type"] in parts}
     assert states == {(kind, "mapped") for kind in parts}
 
-    first, second = report.map_passes
+    first, second, last = report.map_passes
     assert sorted(first[1]) == [
         ("drupal_basic", "calls_through_service_property", 1),
         ("drupal_basic", "class_in_module", 8),
@@ -187,6 +187,8 @@ def test_a_call_through_a_property_a_parent_assigns_ends_on_the_type_it_was_assi
         ("php_basic", "calls_through_property_assigned_here", 2),
     ]
     assert second == (2, ())
+    # The marking rules' own last pass, after a pass that added nothing; it marks nothing here.
+    assert last == (3, ())
 
 
 def test_a_property_assigned_in_the_calling_class_gives_an_edge_a_parent_declaration_does_not(
@@ -232,7 +234,7 @@ def test_a_property_typed_as_a_union_of_one_class_gives_a_call_and_of_two_gives_
     plant(
         tmp_path,
         {
-            **settings("php_basic@0.2.0"),
+            **settings("php_basic@0.3.0"),
             "src/Service/Helper.php": _php("App\\Service", _class("Helper", methods)),
             "src/Service/Other.php": _php(
                 "App\\Service", _class("Other", "    public function c() {}\n")

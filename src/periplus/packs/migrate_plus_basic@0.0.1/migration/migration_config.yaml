@@ -1,0 +1,54 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A migration kept as configuration, migrate_plus.migration.<id>, in the site's configuration or
+# a module's config/install or config/optional, as drupal_basic's drupal.migration <id>, so it meets
+# the migrations another migration names; with its label and source_module, a
+# migration_kept_in_config edge to its config object, and the edges drupal_basic's
+# migration/migration.yaml gives a migrations file, read the same way.
+
+edge_kinds:
+- kind: migration_kept_in_config
+  cause: none
+  description: "the migration is stored as that migrate_plus.migration.<id> configuration object"
+  from: drupal.migration
+  to: drupal.config_object
+
+rules:
+- rule: migration_from_config
+  reads: file
+  in: [config, module_config]
+  match: {file: 'migrate_plus.migration.*', filetype: yaml}
+  id: &migration_id {from: file_stem, normalize: [{replace: '^migrate_plus\.migration\.', with: ''}]}
+  emits:
+  - node: {type: drupal.migration}
+  - attribute: {name: label, from: {key: label}}
+  - attribute: {name: source_module, from: {key: source.source_module}}
+  confidence: declared
+
+- rule: migration_from_config_edges
+  reads: file
+  in: [config, module_config]
+  match: {file: 'migrate_plus.migration.*', filetype: yaml}
+  id: *migration_id
+  emits:
+  - edge: {kind: migration_kept_in_config, from: this_node, to: {from: {key: id}, pattern: '^(?<id>.+)$', template: 'migrate_plus.migration.{id}', type: drupal.config_object}}
+  - edge: {kind: migration_source, from: this_node, to: {from: {key: source.plugin}, pattern: '^(?<plugin>.+)$', template: 'MigrateSource::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.process.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.process.*.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.*.process.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_process_plugin, from: this_node, to: {from: {key: 'process.*.*.process.*.*.plugin'}, pattern: '^(?<plugin>.+)$', template: 'MigrateProcess::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.process.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.process.*.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.*.process.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_looks_up, from: this_node, to: {from: {key: 'process.*.*.process.*.*.migration'}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_destination, from: this_node, to: {from: {key: destination.plugin}, pattern: '^(?<plugin>.+)$', template: 'MigrateDestination::{plugin}', type: drupal.discovered_plugin}}
+  - edge: {kind: migration_destination_entity_type, from: this_node, to: {from: {key: destination.plugin}, pattern: '^entity(?:_[a-z_]+)?:(?<type>[a-z0-9_]+)$', template: '{type}', type: drupal.entity_type}}
+  - edge: {kind: migration_writes_config, from: this_node, to: {from: {key: destination.config_name}, type: drupal.config_object}}
+  - edge: {kind: migration_requires, from: this_node, to: {from: {key: migration_dependencies.required}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_optionally_requires, from: this_node, to: {from: {key: migration_dependencies.optional}, each: true, type: drupal.migration}}
+  - edge: {kind: migration_tagged, from: this_node, to: {from: {key: migration_tags}, each: true, type: drupal.migration_tag}}
+  confidence: declared

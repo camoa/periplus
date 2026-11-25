@@ -1,0 +1,238 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The twins of variable_calls.yaml for a call in a plain function, such as a hook in a .module
+# file. The first rule makes a function hold what its body holds, as a class does, so the enclosing
+# type of a call in it is the function and each id here is the method twin's without the method
+# part. A call $x->m() or $x?->m() keeps a php.call_site <function>::$x->m, or <function>::$x?->m,
+# joined to and from the function, whether or not a rule types $x. A parameter of the function is a
+# php.parameter <function>::$x, and one typed by a class name, Foo $x or ?Foo $x, gets the
+# php.parameter_type <function>::$x::Foo and the edge to it. The map rules give a call on such a
+# parameter its calls edge, inferred, from the function to the method on the type or its nearest
+# ancestor through extends; a method no class in the map declares, or a type outside the map, lands
+# unresolved under the parameter's type. A closure or arrow function in the function makes no
+# parameter node for its own parameters, and a call $x->m() or $x?->m() in it keeps a
+# php.call_site <function>::closure()::$x->m, or ?->m, joined to and from the function, with no
+# calls edge from this file.
+#
+# A parameter assigned anywhere in the function body gets no edge here, as the map does not know
+# which value holds at the call. No rule here reads a call at file level, outside any function, or
+# a union type. A variable method name, $x->$name(), is types/find_runtime_calls.yaml's.
+
+rules:
+
+# body names no tree node, so a function's body ends no walk for enclosing_method inside a method.
+- rule: php_function_holds_body
+  reads: file
+  in: [source]
+  match: {declaration: function_definition, name_child: name, body_child: body, filetype: php}
+  id: {from: qualified_name}
+  emits: [{node: {type: php.function}}]
+  confidence: declared
+
+# Each rule below carries holder: function_definition, so a method's call or parameter stays the
+# method twin's alone.
+- rule: find_variable_call_in_function
+  reads: file
+  in: [source]
+  match: &variable_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    holder: function_definition
+    where:
+    - name_matches: {child: object, pattern: &plain_variable '\$(?!this$)\w+'}
+    - name_matches: {child: name, pattern: '\w+'}
+    - not_within: &closures [anonymous_function, arrow_function]
+  id: &variable_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::{declared_name}->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: variable_call_in_function_in
+  reads: file
+  in: [source]
+  match: *variable_match
+  id: *variable_id
+  emits: &site_edges
+  - edge: {kind: has_call_site, from: enclosing_class, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_class}
+  confidence: declared
+
+- rule: find_variable_nullsafe_call_in_function
+  reads: file
+  in: [source]
+  match: &nullsafe_match
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    holder: function_definition
+    where:
+    - name_matches: {child: object, pattern: *plain_variable}
+    - name_matches: {child: name, pattern: '\w+'}
+    - not_within: *closures
+  id: &nullsafe_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::{declared_name}?->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: variable_nullsafe_call_in_function_in
+  reads: file
+  in: [source]
+  match: *nullsafe_match
+  id: *nullsafe_id
+  emits: *site_edges
+  confidence: declared
+
+# The twins of the four rules above for a call in a closure or arrow function.
+- rule: find_closure_variable_call_in_function
+  reads: file
+  in: [source]
+  match: &closure_variable_match
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    holder: function_definition
+    where:
+    - name_matches: {child: object, pattern: *plain_variable}
+    - name_matches: {child: name, pattern: '\w+'}
+    - within: *closures
+  id: &closure_variable_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::closure()::{declared_name}->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: closure_variable_call_in_function_in
+  reads: file
+  in: [source]
+  match: *closure_variable_match
+  id: *closure_variable_id
+  emits: *site_edges
+  confidence: declared
+
+- rule: find_closure_variable_nullsafe_call_in_function
+  reads: file
+  in: [source]
+  match: &closure_nullsafe_match
+    declaration: nullsafe_member_call_expression
+    name_child: object
+    filetype: php
+    holder: function_definition
+    where:
+    - name_matches: {child: object, pattern: *plain_variable}
+    - name_matches: {child: name, pattern: '\w+'}
+    - within: *closures
+  id: &closure_nullsafe_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::closure()::{declared_name}?->{name}"
+  emits: [{node: {type: php.call_site}}]
+  confidence: declared
+
+- rule: closure_variable_nullsafe_call_in_function_in
+  reads: file
+  in: [source]
+  match: *closure_nullsafe_match
+  id: *closure_nullsafe_id
+  emits: *site_edges
+  confidence: declared
+
+# find_parameter names enclosing_method, which a function lacks.
+- rule: find_function_parameter
+  reads: file
+  in: [source]
+  match:
+    declaration: simple_parameter
+    name_child: name
+    filetype: php
+    holder: function_definition
+    where: [{not_within: *closures}]
+  id: &parameter_id
+    from: [enclosing_type, declared_name]
+    template: "{enclosing_type}::{declared_name}"
+  emits: [{node: {type: php.parameter}}]
+  confidence: declared
+
+# The type node has the id find_parameter_type, or the nullable twin, mints for the function
+# holder, which the {declared: php.parameter_type} end below reaches.
+- rule: find_function_parameter_type
+  reads: file
+  in: [source]
+  match: &typed_match
+    declaration: simple_parameter
+    name_child: name
+    filetype: php
+    holder: function_definition
+    where: [{has_child: named_type}, {not_within: *closures}]
+  id: &type_id
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+  emits: [{node: {type: php.parameter_type}}]
+  confidence: declared
+
+- rule: function_parameter_typed_as
+  reads: file
+  in: [source]
+  match: *typed_match
+  id: *parameter_id
+  emits: &typed_as [{edge: {kind: parameter_typed_as, from: this_node, to: {declared: php.parameter_type}}}]
+  confidence: declared
+
+- rule: find_function_nullable_parameter_type
+  reads: file
+  in: [source]
+  match: &nullable_match
+    declaration: simple_parameter
+    name_child: name
+    filetype: php
+    holder: function_definition
+    where: [{has_child: optional_type}, {not_within: *closures}]
+  id: *type_id
+  emits: [{node: {type: php.parameter_type}}]
+  confidence: declared
+
+# The id reads the type, as nullable_parameter_typed_as does, so ?array, which holds no class name,
+# makes no edge and no row; normalize drops it again, leaving the parameter's id.
+- rule: function_nullable_parameter_typed_as
+  reads: file
+  in: [source]
+  match: *nullable_match
+  id:
+    from: [enclosing_type, declared_name, {qualified: type}]
+    template: "{enclosing_type}::{declared_name}::{type}"
+    normalize: [{replace: '::[^:]+$', with: ''}]
+  emits: *typed_as
+  confidence: declared
+
+# One :: before the variable, so a method's call site, <class>::<method>::$x->m, never matches.
+- rule: calls_through_function_parameter
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<function>[^:]+)::\$(?<var>(?!this->)\w+)->(?<method>\w+))$'}]
+    follow: &parameter_walk
+    - node: 'php.parameter::{function}::${var}'
+    - edge: parameter_typed_as
+    - id_matches: '^php\.parameter_type::[^:]+::\$\w+::(?<type>(?<declarer>\\?[A-Za-z_][\w\\]*))$'
+    - try:
+      - node: 'php.type::{type}'
+      - ancestors: [inherits]
+      - id_matches: '^php\.type::(?<declarer>.+)$'
+      - node: 'php.method::{declarer}::{method}'
+    - node: 'php.call_site::{site}'
+    - edge: call_site_in
+    unless: &assigned_in_body
+    - [{node: 'php.local_variable::{function}::${var}'}]
+  emits: &calls_edge [{edge: {kind: calls, from: matched_node, to: {template: '{declarer}::{method}', types: [php.method], on_miss: unresolved}}}]
+  confidence: inferred
+
+- rule: calls_through_function_parameter_nullsafe
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: '^php\.call_site::(?<site>(?<function>[^:]+)::\$(?<var>(?!this\?->)\w+)\?->(?<method>\w+))$'}]
+    follow: *parameter_walk
+    unless: *assigned_in_body
+  emits: *calls_edge
+  confidence: inferred

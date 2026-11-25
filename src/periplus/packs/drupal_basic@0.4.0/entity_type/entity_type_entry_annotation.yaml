@@ -1,0 +1,193 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# The keys of a ContentEntityType or ConfigEntityType docblock annotation, read from the
+# annotation on the class of a file in an entity type folder, into the internal entries
+# entity_type_entry.yaml describes. A handler is each entry of handlers whose value is quoted text,
+# and each entry of a group inside handlers, such as form or route_provider, the group's key in
+# the id; its class is the value, a leading backslash dropped. A link template is each entry of
+# links, the name with each dash written as an underscore in the id's last part. Each entry sits
+# at its key's line, and an entry whose value is not quoted text makes nothing and is listed
+# under skipped. Two rules for each shape and each annotation, because a rule that emits an edge
+# emits no node. admin_permission and the other keys that name one thing, ContentEntityType itself
+# and a bundle key are read as text in the block comment, at their value's line.
+
+rules:
+# ContentEntityType: handlers = {"list_builder" = "Drupal\mymod\MyListBuilder"}.
+- rule: entity_handler_entry_content_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ContentEntityType, each: 'handlers.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|handlers|{key}'
+  emits:
+  - node: {type: drupal.entity_type_entry}
+  confidence: declared
+
+- rule: entity_handler_entry_class_content_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ContentEntityType, each: 'handlers.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|handlers|{key}'
+  emits:
+  - edge: {kind: entry_names_class, from: this_node, to: {template: '{value}', normalize: [{replace: '^\\', with: ''}]}}
+  confidence: declared
+
+# ContentEntityType: handlers = {"form" = {"default" = "Drupal\mymod\Form\MyForm"}}.
+- rule: grouped_handler_entry_content_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ContentEntityType, each: 'handlers.*.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|{group}|{key}'
+  emits:
+  - node: {type: drupal.entity_type_entry}
+  confidence: declared
+
+- rule: grouped_handler_entry_class_content_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ContentEntityType, each: 'handlers.*.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|{group}|{key}'
+  emits:
+  - edge: {kind: entry_names_class, from: this_node, to: {template: '{value}', normalize: [{replace: '^\\', with: ''}]}}
+  confidence: declared
+
+# ContentEntityType: links = {"canonical" = "/my/item/{my_item}"}.
+- rule: entity_link_entry_content_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ContentEntityType, each: 'links.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|links|{key}|{key}'
+    normalize: [{replace: '-(?=[^|]*$)', with: _}]
+  emits:
+  - node: {type: drupal.entity_type_entry}
+  confidence: declared
+
+- rule: entity_link_entry_path_content_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ContentEntityType, each: 'links.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|links|{key}|{key}'
+    normalize: [{replace: '-(?=[^|]*$)', with: _}]
+  emits:
+  - edge: {kind: link_template_path, from: this_node, to: {template: '{value}'}}
+  confidence: declared
+
+# ConfigEntityType: handlers = {"list_builder" = "Drupal\mymod\MyListBuilder"}.
+- rule: entity_handler_entry_config_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ConfigEntityType, each: 'handlers.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|handlers|{key}'
+  emits:
+  - node: {type: drupal.entity_type_entry}
+  confidence: declared
+
+- rule: entity_handler_entry_class_config_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ConfigEntityType, each: 'handlers.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|handlers|{key}'
+  emits:
+  - edge: {kind: entry_names_class, from: this_node, to: {template: '{value}', normalize: [{replace: '^\\', with: ''}]}}
+  confidence: declared
+
+# ConfigEntityType: handlers = {"form" = {"default" = "Drupal\mymod\Form\MyForm"}}.
+- rule: grouped_handler_entry_config_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ConfigEntityType, each: 'handlers.*.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|{group}|{key}'
+  emits:
+  - node: {type: drupal.entity_type_entry}
+  confidence: declared
+
+- rule: grouped_handler_entry_class_config_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ConfigEntityType, each: 'handlers.*.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|{group}|{key}'
+  emits:
+  - edge: {kind: entry_names_class, from: this_node, to: {template: '{value}', normalize: [{replace: '^\\', with: ''}]}}
+  confidence: declared
+
+# ConfigEntityType: links = {"canonical" = "/my/item/{my_item}"}.
+- rule: entity_link_entry_config_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ConfigEntityType, each: 'links.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|links|{key}|{key}'
+    normalize: [{replace: '-(?=[^|]*$)', with: _}]
+  emits:
+  - node: {type: drupal.entity_type_entry}
+  confidence: declared
+
+- rule: entity_link_entry_path_config_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: {annotation: ConfigEntityType, each: 'links.*', filetype: php, where: [{applies_to: class_declaration}]}
+  id:
+    template: '{enclosing_type}|links|{key}|{key}'
+    normalize: [{replace: '-(?=[^|]*$)', with: _}]
+  emits:
+  - edge: {kind: link_template_path, from: this_node, to: {template: '{value}'}}
+  confidence: declared
+
+# admin_permission = "administer things", and the other keys whose value names one thing.
+- rule: entity_key_entry_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: &key
+    file: '*'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?<!")\b(?<key>admin_permission|collection_permission|bundle_entity_type|bundle_of|field_ui_base_route)\s*=\s*"(?<value>[^"\n]+)"'
+  id: {template: '{psr4_class}|{key}'}
+  line: {capture: value}
+  emits: [{node: {type: drupal.entity_type_entry}}]
+  confidence: declared
+
+- rule: entity_key_entry_value_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match: *key
+  id: {template: '{value}'}
+  line: {capture: value}
+  emits:
+  - edge: {kind: entry_value, from: {template: '{psr4_class}|{key}', types: [drupal.entity_type_entry]}, to: this_node}
+  confidence: declared
+
+# @ContentEntityType(: a content entity type, which core gives a view builder by default.
+- rule: content_entity_type_entry_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '*'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*?[ \t]*@(?<mark>ContentEntityType)\('
+  id: {template: '{psr4_class}|content_entity_type'}
+  emits: [{node: {type: drupal.entity_type_entry}}]
+  confidence: declared
+
+# entity_keys = {"bundle" = "type"}: the entity type has bundles.
+- rule: bundle_key_entry_from_annotation
+  reads: file
+  in: [entity_type_classes]
+  match:
+    file: '*'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '\bentity_keys\s*=\s*\{[^}]*"(?<key>bundle)"\s*=\s*"[^"\s]+"'
+  id: {template: '{psr4_class}|entity_keys|bundle'}
+  emits: [{node: {type: drupal.entity_type_entry}}]
+  confidence: declared

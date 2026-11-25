@@ -1,0 +1,140 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A route subscriber: a class that extends RouteSubscriberBase alters the routes its alterRoutes
+# method picks from the route collection. The class takes the event subscriber role from the
+# boundary block in pack.yaml; here it gets an alters_routes edge to a drupal.route_alter node
+# marked resolution runtime, the mark that it picks routes at run time. Inferred: the base class,
+# not the file, says the class alters routes.
+#
+# A route alterRoutes names by a text literal, as $collection->get('x'), ->remove('x') or
+# ->add('x', $route) on a variable, is an alters_route edge from the class to the route x, at the
+# call's line. When alterRoutes names routes by literals and makes no run-time pick, the mark is
+# taken back with its alters_routes edge: the alters_route edges say which routes it alters. A
+# run-time pick is get, remove or add on a variable with any other first argument, or all,
+# getIterator or addCollection on a variable. A class whose alterRoutes names no route by a
+# literal keeps the mark. Inferred: the method's name and the variable's place, not its type, say
+# it is the route collection.
+#
+# Limits: the base is read as written after extends, short or qualified, so a class that extends
+# another of the project's route subscribers gets no mark and no alters_route edge. A get('x') on
+# another variable inside alterRoutes reads as a route name too. A loop over the collection
+# itself, foreach ($collection as ...), is not read as a run-time pick, so a class that also names
+# routes by literals loses its mark there.
+
+node_types:
+- name: drupal.route_alter
+  description: "a mark that a route subscriber alters routes it picks at run time; which routes is not written as a name"
+  id_namespace: drupal.route_alter
+- name: drupal.route_alter_name
+  description: "internal: one route a method names by a literal in get, remove or add on a variable, <class>::<method>|<route>, at the call's line"
+  id_namespace: drupal.route_alter_name
+  internal: true
+- name: drupal.route_collection_call
+  description: "internal: a method that names a route by a literal, <class>::<method>|named, or picks one at run time, <class>::<method>|computed"
+  id_namespace: drupal.route_collection_call
+  internal: true
+
+edge_kinds:
+- kind: alters_routes
+  cause: to
+  description: "the class extends RouteSubscriberBase, read as written after extends, so it alters routes its alterRoutes method picks"
+  from: php.class
+  to: drupal.route_alter
+- kind: alters_route
+  cause: to
+  description: "the route subscriber's alterRoutes names that route by a text literal in get, remove or add on the route collection"
+  from: php.class
+  to: drupal.route
+
+rules:
+- rule: route_alter_from_base
+  reads: file
+  in: [source]
+  match: &route_subscriber
+    declaration: class_declaration
+    name_child: name
+    filetype: php
+    where:
+    - name_matches: {child: base_clause, pattern: 'extends\s+\\?(?:Drupal\\Core\\Routing\\)?RouteSubscriberBase'}
+  id: {from: qualified_name}
+  emits:
+  - node: {type: drupal.route_alter}
+  - attribute: {name: resolution, template: runtime}
+  confidence: inferred
+
+- rule: route_alter_from_base_edges
+  reads: file
+  in: [source]
+  match: *route_subscriber
+  id: {from: qualified_name}
+  emits: [{edge: {kind: alters_routes, from: {declared: php.class}, to: this_node}}]
+  confidence: inferred
+
+# $collection->get('x'), ->remove('x') and ->add('x', ...): the route x.
+- rule: route_named_in_collection_call
+  reads: file
+  in: [source]
+  match: &named_call
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$\w+'}
+    - name_matches: {child: name, pattern: 'get|remove|add'}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[''"][\w.\-]+[''"]\s*[,)].*'}
+  id:
+    from: [enclosing_type, enclosing_method, arguments]
+    template: '{enclosing_type}::{enclosing_method}|{arguments}'
+    normalize:
+    - {replace: '\|\(\s*[''"]', with: '|'}
+    - {replace: '(?s)[''"].*$', with: ''}
+  emits: [{node: {type: drupal.route_alter_name}}]
+  confidence: declared
+
+- rule: route_collection_named
+  reads: file
+  in: [source]
+  match: *named_call
+  id: {from: [enclosing_type, enclosing_method], template: '{enclosing_type}::{enclosing_method}|named'}
+  emits: [{node: {type: drupal.route_collection_call}}]
+  confidence: declared
+
+# get, remove or add with another first argument, and all, getIterator or addCollection.
+- rule: route_collection_computed
+  reads: file
+  in: [source]
+  match:
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where:
+    - name_matches: {child: object, pattern: '\$\w+'}
+    - name_matches: {child: name, pattern: 'get|remove|add|all|getIterator|addCollection'}
+    - name_matches: {child: arguments, pattern: '(?s)\((?:\s*\)|\s*[^\s''"].*)'}
+  id: {from: [enclosing_type, enclosing_method], template: '{enclosing_type}::{enclosing_method}|computed'}
+  emits: [{node: {type: drupal.route_collection_call}}]
+  confidence: declared
+
+- rule: route_altered_by_name
+  reads: map
+  match:
+    node_type: drupal.route_alter_name
+    where: [{id_matches: '^drupal\.route_alter_name::(?<class>[^|]+)::alterRoutes\|(?<route>[^|]+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - id_matches: '^php\.type::Drupal\\Core\\Routing\\RouteSubscriberBase$'
+    - node: 'php.type::{class}'
+  emits: [{edge: {kind: alters_route, from: matched_node, to: {template: '{route}', types: [drupal.route]}}}]
+  confidence: inferred
+
+# Before the passes: the mark of a subscriber whose alterRoutes names its routes by literals only.
+- rule: route_alter_by_name_only
+  reads: map
+  match:
+    node_type: drupal.route_alter
+    where: [{id_matches: '^drupal\.route_alter::(?<class>.+)$'}]
+    follow: [{node: 'drupal.route_collection_call::{class}::alterRoutes|named'}]
+    unless: [[{node: 'drupal.route_collection_call::{class}::alterRoutes|computed'}]]
+  emits: [{withhold: this_node}]
+  confidence: inferred

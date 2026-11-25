@@ -1,0 +1,10 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# More Drupal PHP reading, on drupal_basic's PHP text type: base fields an entity class defines,
+# the PHP that reads and writes a field by name, and the handler classes an entity type names.
+# It adds no file type, no path value and no folder; drupal_basic's source and entity_type_classes
+# folders, its drupal_php_text type and its psr4_class value serve every rule.
+
+pack: drupal_more
+version: 0.1.1
+depends: [drupal_basic, advancedqueue_basic]

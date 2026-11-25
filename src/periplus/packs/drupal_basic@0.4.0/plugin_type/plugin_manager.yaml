@@ -1,0 +1,341 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A plugin manager: a class whose constructor calls parent::__construct as a DefaultPluginManager
+# subclass does, with the discovery subfolder in quotes first, the plugin interface written
+# Name::class fourth, the attribute class written Name::class fifth and the annotation class sixth,
+# as text or Name::class; before core's attributes, the annotation class came fifth, as text or
+# Name::class, which the fifth-argument rule reads as it reads an attribute class. The constructor
+# manages the plugin type of each class it names, an edge that holds the subfolder in the edge
+# attribute subdirectory, and the map rule plugin_type_interface joins each such type to the
+# interface. Inferred: the argument's position, not a name, says what it is. A class outside the
+# mapped code ends at a referenced plugin type.
+#
+# The positions are DefaultPluginManager::__construct's own. A class whose direct parent is another
+# class, which may take its arguments in another order, keeps no plugin type from a position that
+# is not an Attribute or Annotation class: the withholding rule below takes it back. There, any
+# argument Name::class whose full name has an Attribute or Annotation namespace segment names the
+# plugin type, and one whose name ends in Interface the plugin interface, whatever its position;
+# the plugin interface rule also reads only a name ending in Interface. Inferred: the name, not the
+# position, says what it is.
+#
+# The manager's other declarations: $this->alterInfo('x') writes plugin_alter_hook x_alter and
+# $this->setCacheBackend($cache, 'x') writes plugin_cache_key x on the manager class, the hook's
+# own link being the hook rules'; getFallbackPluginId() returning 'x' gives falls_back_to_plugin
+# from that method to the plugin x of the manager's plugin type.
+#
+# Limits: a manager that names its attribute class as text, an annotation class in double quotes,
+# or that builds its discovery itself, such as from YAML files, gives no edge. A hook name, cache
+# key or fallback id that is not a quoted literal gives nothing.
+
+node_types:
+- name: drupal.plugin_manager_value
+  description: "Internal: a value a plugin manager class declares, <class>::<alter|cache|fallback>::<value>, at its line"
+  id_namespace: drupal.plugin_manager_value
+  internal: true
+- name: drupal.plugin_manager_argument
+  description: "Internal: a class a plugin manager's parent::__construct call names as Name::class, by its full name"
+  id_namespace: drupal.plugin_manager_argument
+  internal: true
+
+edge_kinds:
+- kind: names_class_to_parent_constructor
+  cause: none
+  description: "internal: the plugin manager's constructor names that class as Name::class to parent::__construct, at any position"
+  from: php.method
+  to: drupal.plugin_manager_argument
+- kind: plugin_type_interface
+  cause: none
+  description: "the plugin type's manager names that interface, which each plugin of the type implements, fourth to parent::__construct"
+  from: drupal.plugin_type
+  to: php.class_like
+- kind: names_plugin_interface
+  cause: none
+  description: "the plugin manager's constructor names that interface fourth to parent::__construct, the interface its plugins implement"
+  from: php.method
+  to: php.class_like
+- kind: falls_back_to_plugin
+  cause: to
+  description: "the plugin manager's getFallbackPluginId returns that plugin's id, the plugin it makes when a requested one is missing"
+  from: php.method
+  to: drupal.discovered_plugin
+
+attributes:
+- name: plugin_alter_hook
+  on: [php.class]
+  description: "the alter hook a plugin manager registers with $this->alterInfo('x'): x_alter"
+- name: plugin_cache_key
+  on: [php.class]
+  description: "the cache key a plugin manager stores its definitions under, with $this->setCacheBackend($cache, 'x')"
+
+rules:
+- rule: manager_of_plugin_type
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: parent}
+    - name_matches: {child: name, pattern: __construct}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<subdir>[^''"]*)[''"]\s*,[^,]*,[^,]*,[^,]*,\s*(?<attr>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: manages_plugin_type
+      from: enclosing_declaration
+      to: {template: '{attr}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.plugin_type]}
+      attributes: {subdirectory: {template: '{subdir}'}}
+  confidence: inferred
+
+# The annotation class as text in single quotes, sixth after the attribute class or fifth before
+# core's attributes: a full class name.
+- rule: manager_of_annotation_plugin_type
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: parent}
+    - name_matches: {child: name, pattern: __construct}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<subdir>[^''"]*)[''"]\s*,[^,]*,[^,]*,[^,]*,(?:[^,]*,)?\s*''\\?(?<annotation>[A-Za-z_][\w\\]*)''\s*(?:,.*)?\)'}
+  emits:
+  - edge:
+      kind: manages_plugin_type
+      from: enclosing_declaration
+      to: {template: '{annotation}', types: [drupal.plugin_type]}
+      attributes: {subdirectory: {template: '{subdir}'}}
+  confidence: inferred
+
+# The annotation class written Name::class sixth.
+- rule: manager_of_annotation_class_plugin_type
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: parent}
+    - name_matches: {child: name, pattern: __construct}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<subdir>[^''"]*)[''"]\s*,[^,]*,[^,]*,[^,]*,[^,]*,\s*(?<annotation>\\?[A-Za-z_][\w\\]*)::class.*'}
+  emits:
+  - edge:
+      kind: manages_plugin_type
+      from: enclosing_declaration
+      to: {template: '{annotation}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.plugin_type]}
+      attributes: {subdirectory: {template: '{subdir}'}}
+  confidence: inferred
+
+- rule: manager_names_plugin_interface
+  reads: file
+  in: [source]
+  match:
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: parent}
+    - name_matches: {child: name, pattern: __construct}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[''"][^''"]*[''"]\s*,[^,]*,[^,]*,\s*(?<interface>\\?[A-Za-z_][\w\\]*Interface)::class.*'}
+  emits:
+  - edge:
+      kind: names_plugin_interface
+      from: enclosing_declaration
+      to: {template: '{interface}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [php.class_like]}
+  confidence: inferred
+
+# The interface joined to each plugin type at the line of parent::__construct, through an internal
+# node there.
+- rule: manager_parent_construct
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bparent::__construct\(\s*[''"][^''"]*[''"]\s*,'
+  id: {template: '{psr4_class}::construct::parent'}
+  emits: [{node: {type: drupal.plugin_manager_value}}]
+  confidence: declared
+
+- rule: plugin_type_interface
+  reads: map
+  match:
+    node_type: drupal.plugin_manager_value
+    where: [{id_matches: '^drupal\.plugin_manager_value::(?<class>[^:]+)::construct::parent$'}]
+    follow:
+    - node: 'php.method::{class}::__construct'
+    - edge: names_plugin_interface
+    - id_matches: '^php\.type::(?<interface>.+)$'
+    - node: 'php.method::{class}::__construct'
+    - edge: manages_plugin_type
+  emits: [{edge: {kind: plugin_type_interface, from: matched_node, to: {template: '{interface}', types: [php.class_like]}}}]
+  confidence: inferred
+
+# Each Name::class argument of parent::__construct, fourth to eighth, after the quoted subfolder.
+- &class_argument
+  rule: parent_construct_class_argument_4
+  reads: file
+  in: [source]
+  match: &class_argument_match
+    reference: scoped_call_expression
+    name_child: [scope, name]
+    filetype: php
+    where:
+    - name_matches: {child: scope, pattern: parent}
+    - name_matches: {child: name, pattern: __construct}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<subdir>[^''"]*)[''"]\s*,(?:[^,]*,){2}\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\b.*'}
+  emits:
+  - edge:
+      kind: names_class_to_parent_constructor
+      from: enclosing_declaration
+      to: {template: '{class}', resolve: [full_if_prefixed: "\\", bound_first_segment, prefix_with: namespace], types: [drupal.plugin_manager_argument]}
+      attributes: {subdirectory: {template: '{subdir}'}}
+  confidence: declared
+- {<<: *class_argument, rule: parent_construct_class_argument_5, match: {<<: *class_argument_match, where: [{name_matches: {child: scope, pattern: parent}}, {name_matches: {child: name, pattern: __construct}}, {name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<subdir>[^''"]*)[''"]\s*,(?:[^,]*,){3}\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\b.*'}}]}}
+- {<<: *class_argument, rule: parent_construct_class_argument_6, match: {<<: *class_argument_match, where: [{name_matches: {child: scope, pattern: parent}}, {name_matches: {child: name, pattern: __construct}}, {name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<subdir>[^''"]*)[''"]\s*,(?:[^,]*,){4}\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\b.*'}}]}}
+- {<<: *class_argument, rule: parent_construct_class_argument_7, match: {<<: *class_argument_match, where: [{name_matches: {child: scope, pattern: parent}}, {name_matches: {child: name, pattern: __construct}}, {name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<subdir>[^''"]*)[''"]\s*,(?:[^,]*,){5}\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\b.*'}}]}}
+- {<<: *class_argument, rule: parent_construct_class_argument_8, match: {<<: *class_argument_match, where: [{name_matches: {child: scope, pattern: parent}}, {name_matches: {child: name, pattern: __construct}}, {name_matches: {child: arguments, pattern: '(?s)\(\s*[''"](?<subdir>[^''"]*)[''"]\s*,(?:[^,]*,){6}\s*(?<class>\\?[A-Za-z_][\w\\]*)::class\b.*'}}]}}
+
+# A direct parent other than DefaultPluginManager: a positional plugin type that is not an Attribute
+# or Annotation class is taken back at the line of parent::__construct.
+- rule: positional_plugin_type_under_other_parent
+  reads: map
+  match:
+    node_type: drupal.plugin_manager_value
+    where: [{id_matches: '^drupal\.plugin_manager_value::(?<class>[^:]+)::construct::parent$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - id_matches: &other_parent '^php\.type::(?!Drupal\\Core\\Plugin\\DefaultPluginManager$)'
+    - node: 'php.method::{class}::__construct'
+    - edge: manages_plugin_type
+    - id_matches: '^drupal\.plugin_type::(?!.*\\(?:Attribute|Annotation)\\)'
+  emits: [{withhold: matched_node}]
+  confidence: inferred
+
+# Under such a parent, the plugin type is each argument in an Attribute or Annotation namespace...
+- rule: manager_of_plugin_type_by_namespace
+  reads: map
+  match:
+    node_type: drupal.plugin_manager_value
+    where: [{id_matches: '^drupal\.plugin_manager_value::(?<class>[^:]+)::construct::parent$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - id_matches: *other_parent
+    - node: 'php.method::{class}::__construct'
+    - edge: names_class_to_parent_constructor
+    - edge_attribute: subdirectory
+    - id_matches: '^drupal\.plugin_manager_argument::(?<type>.*\\(?:Attribute|Annotation)\\[^\\]+)$'
+    - node: 'php.method::{class}::__construct'
+  emits: [{edge: {kind: manages_plugin_type, from: matched_node, to: {template: '{type}', types: [drupal.plugin_type]}, attributes: {subdirectory: {template: '{subdirectory}'}}}}]
+  confidence: inferred
+
+# ...the plugin interface each argument whose name ends in Interface...
+- rule: manager_names_plugin_interface_by_name
+  reads: map
+  match:
+    node_type: drupal.plugin_manager_value
+    where: [{id_matches: '^drupal\.plugin_manager_value::(?<class>[^:]+)::construct::parent$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - id_matches: *other_parent
+    - node: 'php.method::{class}::__construct'
+    - edge: names_class_to_parent_constructor
+    - id_matches: '^drupal\.plugin_manager_argument::(?<interface>.+Interface)$'
+    - node: 'php.method::{class}::__construct'
+  emits: [{edge: {kind: names_plugin_interface, from: matched_node, to: {template: '{interface}', types: [php.class_like]}}}]
+  confidence: inferred
+
+# ...and each such type has each such interface, when the map holds the interface.
+- rule: plugin_type_interface_by_name
+  reads: map
+  match:
+    node_type: drupal.plugin_manager_value
+    where: [{id_matches: '^drupal\.plugin_manager_value::(?<class>[^:]+)::construct::parent$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: inherits
+    - id_matches: *other_parent
+    - node: 'php.method::{class}::__construct'
+    - edge: names_class_to_parent_constructor
+    - id_matches: '^drupal\.plugin_manager_argument::(?<type>.*\\(?:Attribute|Annotation)\\[^\\]+)$'
+    - node: 'php.method::{class}::__construct'
+    - edge: names_class_to_parent_constructor
+    - id_matches: '^drupal\.plugin_manager_argument::(?<interface>.+Interface)$'
+    - node: 'php.type::{interface}'
+  emits: [{edge: {kind: plugin_type_interface, from: {template: '{type}', types: [drupal.plugin_type]}, to: matched_node}}]
+  confidence: inferred
+
+# $this->alterInfo('pathauto_alias_types'), $this->setCacheBackend($cache_backend, 'key') and
+# getFallbackPluginId() { return 'broken'; } in a class under src.
+- rule: manager_alter_info
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\$this->alterInfo\(\s*[''"](?<hook>\w+)[''"]\s*\)'
+  id: {template: '{psr4_class}::alter::{hook}'}
+  line: {capture: hook}
+  emits: [{node: {type: drupal.plugin_manager_value}}]
+  confidence: declared
+
+- rule: manager_cache_key
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\$this->setCacheBackend\(\s*\$\w+\s*,\s*[''"](?<key>[^''"$]+)[''"]'
+  id: {template: '{psr4_class}::cache::{key}'}
+  line: {capture: key}
+  emits: [{node: {type: drupal.plugin_manager_value}}]
+  confidence: declared
+
+- rule: manager_fallback_plugin_id
+  reads: file
+  in: [source]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '\bfunction\s+getFallbackPluginId\s*\([^)]*\)[^{;]*\{\s*return\s+[''"](?<plugin>[^''"]+)[''"]\s*;'
+  id: {template: '{psr4_class}::fallback::{plugin}'}
+  line: {capture: plugin}
+  emits: [{node: {type: drupal.plugin_manager_value}}]
+  confidence: declared
+
+- rule: manager_alter_hook_on_class
+  reads: map
+  match:
+    node_type: drupal.plugin_manager_value
+    where: [{id_matches: '^drupal\.plugin_manager_value::(?<class>[^:]+)::alter::(?<hook>\w+)$'}]
+    follow: [{node: 'php.type::{class}'}]
+  emits: [{attribute: {name: plugin_alter_hook, template: '{hook}_alter', target: matched_node}}]
+  confidence: declared
+
+- rule: manager_cache_key_on_class
+  reads: map
+  match:
+    node_type: drupal.plugin_manager_value
+    where: [{id_matches: '^drupal\.plugin_manager_value::(?<class>[^:]+)::cache::(?<key>.+)$'}]
+    follow: [{node: 'php.type::{class}'}]
+  emits: [{attribute: {name: plugin_cache_key, template: '{key}', target: matched_node}}]
+  confidence: declared
+
+# The fallback plugin, of each plugin type the class's constructor manages, by the type's short name.
+- rule: manager_falls_back_to_plugin
+  reads: map
+  match:
+    node_type: drupal.plugin_manager_value
+    where: [{id_matches: '^drupal\.plugin_manager_value::(?<class>[^:]+)::fallback::(?<plugin>.+)$'}]
+    follow:
+    - node: 'php.method::{class}::__construct'
+    - edge: manages_plugin_type
+    - id_matches: '^drupal\.plugin_type::(?:.*\\)?(?<short>\w+)$'
+    - node: 'php.method::{class}::getFallbackPluginId'
+  emits: [{edge: {kind: falls_back_to_plugin, from: matched_node, to: {template: '{short}::{plugin}', types: [drupal.discovered_plugin], on_miss: unresolved}}}]
+  confidence: inferred

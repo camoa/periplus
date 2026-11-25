@@ -1,0 +1,241 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A class Drupal builds through its static create(ContainerInterface $container, ...), the factory
+# of a form, a controller, a plugin of ContainerFactoryPluginInterface or a deriver, and a call on
+# a service that create() hands it. Drupal's convention has two ways of writing it:
+# - return new static(..., $container->get('x'), ...) or new self(...): the Nth argument is the
+#   service x, the constructor's Nth parameter gets it, and the constructor stores it,
+#   $this->p = $param, or holds it as a promoted parameter, __construct(protected Foo $p);
+# - $instance = parent::create($container) or new static(...), then $instance->p =
+#   $container->get('x'), and return $instance.
+# \Drupal::service('x') in place of $container->get('x') counts the same.
+#
+# Each call $this->p->m() in a method of that class, or of a child that has no create() of its
+# own, gives calls_service from the method to x, at the call's line. The class gets
+# creates_with_service to x at the line that names it. Declared: create()'s $container parameter
+# is typed ContainerInterface, and the code names the service, the position and the property; it
+# is stronger evidence than call/service_through_typed_member.yaml's type match. Where both give
+# the same service, the map holds one edge with both rules' provenance rows.
+#
+# A rule reads no position of a child, so position is read as text, one rule per place, 0 to 11,
+# as service/service_positional_autowire.yaml reads the constructor's parameters. An argument is
+# read whole only when it is the call alone: $container->get('x')->get('y') hands its result, not
+# x, and gives nothing.
+#
+# A property the class also assigns any other value, anywhere, gives no edge: the map does not
+# know which value holds at the call. A setter's variable must hold parent::create(...),
+# static::create(...), self::create(...), new static(...) or new self(...), and nothing else.
+#
+# Limits: a service named X::class, a create() whose container parameter is not named $container,
+# a constructor that hands a parameter to parent::__construct(), a call through a property only a
+# parent's constructor stores, and a parameter past the twelfth give no edge here. A class built
+# with new elsewhere, as in a test, is not seen: the edge says what create() gives.
+
+node_types:
+- name: drupal.create_argument
+  description: "internal: an argument of new static() or new self(), <class>::<method>|<position>, that gets a service from the container"
+  id_namespace: drupal.create_argument
+  internal: true
+- name: drupal.container_service
+  description: "internal: a service id an argument or a setter gets from the container, before the map joins it to the service"
+  id_namespace: drupal.container_service
+  internal: true
+- name: drupal.create_property
+  description: "internal: a property a method sets on a variable's object to a service from the container, <class>::<method>|<property>"
+  id_namespace: drupal.create_property
+  internal: true
+- name: drupal.create_property_value
+  description: "internal: the variable and service of a create_property, <variable>|<service>"
+  id_namespace: drupal.create_property_value
+  internal: true
+
+edge_kinds:
+- kind: create_argument_service
+  cause: none
+  description: "internal: the argument gets that service from the container"
+  from: drupal.create_argument
+  to: drupal.container_service
+- kind: create_property_service
+  cause: none
+  description: "internal: the property is set on that variable's object to that service"
+  from: drupal.create_property
+  to: drupal.create_property_value
+- kind: creates_with_service
+  cause: from
+  description: "the class's create() gets that service from the container and hands it to the new object, as a constructor argument or by setting a property"
+  from: php.class
+  to: drupal.service
+
+rules:
+
+- &argument_node
+  rule: create_argument_at_0
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\(\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}
+  values: &method_value
+    method: {from: {enclosing: named_function, capture: function}, join: '|', normalize: [{replace: '^.*\|', with: ''}]}
+  id: {template: '{psr4_class}::{method}|0'}
+  line: {capture: svc}
+  emits: [{node: {type: drupal.create_argument}}]
+  confidence: declared
+- &argument_edge
+  rule: create_argument_service_at_0
+  reads: file
+  in: [source]
+  match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\(\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}
+  values: *method_value
+  id: {template: '{psr4_class}::{method}|0'}
+  line: {capture: svc}
+  emits: [{edge: {kind: create_argument_service, from: this_node, to: {template: '{svc}', types: [drupal.container_service]}}}]
+  confidence: declared
+- {<<: *argument_node, rule: create_argument_at_1, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){1}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|1'}}
+- {<<: *argument_edge, rule: create_argument_service_at_1, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){1}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|1'}}
+- {<<: *argument_node, rule: create_argument_at_2, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){2}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|2'}}
+- {<<: *argument_edge, rule: create_argument_service_at_2, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){2}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|2'}}
+- {<<: *argument_node, rule: create_argument_at_3, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){3}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|3'}}
+- {<<: *argument_edge, rule: create_argument_service_at_3, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){3}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|3'}}
+- {<<: *argument_node, rule: create_argument_at_4, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){4}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|4'}}
+- {<<: *argument_edge, rule: create_argument_service_at_4, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){4}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|4'}}
+- {<<: *argument_node, rule: create_argument_at_5, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){5}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|5'}}
+- {<<: *argument_edge, rule: create_argument_service_at_5, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){5}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|5'}}
+- {<<: *argument_node, rule: create_argument_at_6, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){6}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|6'}}
+- {<<: *argument_edge, rule: create_argument_service_at_6, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){6}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|6'}}
+- {<<: *argument_node, rule: create_argument_at_7, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){7}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|7'}}
+- {<<: *argument_edge, rule: create_argument_service_at_7, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){7}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|7'}}
+- {<<: *argument_node, rule: create_argument_at_8, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){8}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|8'}}
+- {<<: *argument_edge, rule: create_argument_service_at_8, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){8}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|8'}}
+- {<<: *argument_node, rule: create_argument_at_9, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){9}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|9'}}
+- {<<: *argument_edge, rule: create_argument_service_at_9, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){9}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|9'}}
+- {<<: *argument_node, rule: create_argument_at_10, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){10}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|10'}}
+- {<<: *argument_edge, rule: create_argument_service_at_10, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){10}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|10'}}
+- {<<: *argument_node, rule: create_argument_at_11, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){11}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|11'}}
+- {<<: *argument_edge, rule: create_argument_service_at_11, match: {file: '**', filetype: drupal_php_text, text: '\bnew\s+(?:static|self)\s*\((?:(?:[^,()\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\((?:[^()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\))*\)|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\[(?:[^\[\]''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*")*\])*\])+,){11}\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*(?=[,)])'}, id: {template: '{psr4_class}::{method}|11'}}
+
+# The setter: $instance->p = $container->get('x');, the variable and service kept apart.
+- rule: create_property
+  reads: file
+  in: [source]
+  match: &setter {file: '**', filetype: drupal_php_text, text: '\$(?<var>\w+)\s*->\s*(?<prop>\w+)\s*=\s*(?:\$container\s*->\s*get|(?<![\w\\$>:])\\?Drupal::service)\(\s*[''"](?<svc>[\w.-]+)[''"]\s*\)\s*;'}
+  values: *method_value
+  id: &setter_id {template: '{psr4_class}::{method}|{prop}'}
+  line: {capture: svc}
+  emits: [{node: {type: drupal.create_property}}]
+  confidence: declared
+
+- rule: create_property_service
+  reads: file
+  in: [source]
+  match: *setter
+  values: *method_value
+  id: *setter_id
+  line: {capture: svc}
+  emits: [{edge: {kind: create_property_service, from: this_node, to: {template: '{var}|{svc}', types: [drupal.create_property_value]}}}]
+  confidence: declared
+
+# The joins. Each goes up inherits from the call's class to the nearest class that declares the
+# property, or that sets it in create().
+- rule: service_through_create_argument
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: &this_call '^php\.call_site::(?<site>(?<class>[^:]+)::[^:]+::\$this->(?<member>\w+)->\w+)$'}]
+    follow:
+    - &up_1 {node: 'php.type::{class}'}
+    - &up_2 {ancestors: [inherits]}
+    - &up_3 {id_matches: '^php\.type::(?<owner>.+)$'}
+    - &declared {node: 'php.property::{owner}::${member}'}
+    - &assignment {node: 'php.member_assignment::{owner}::$this->{member}'}
+    - {edge: assigned_value}
+    - {id_matches: '^php\.member_assignment_value::[^:]+::__construct::\$this->\w+=\$(?<parameter>\w+)$'}
+    - {node: 'drupal.constructor_parameter_position::{owner}::${parameter}'}
+    - &at_1 {edge: parameter_at_position}
+    - &at_2 {id_matches: '^drupal\.argument_position::(?<at>\d+)$'}
+    - &arg_1 {node: 'drupal.create_argument::{owner}::create|{at}'}
+    - &arg_2 {edge: create_argument_service}
+    - &arg_3 {id_matches: '^drupal\.container_service::(?<svc>.+)$'}
+    - &container_1 {node: 'php.parameter::{owner}::create::$container'}
+    - &container_2 {edge: parameter_typed_as}
+    - &container_3 {id_matches: '::\$container::(?:Symfony\\Component\\DependencyInjection|Psr\\Container)\\ContainerInterface$'}
+    - &site_1 {node: 'php.call_site::{site}'}
+    - &site_2 {edge: call_site_in}
+    unless_matched:
+    - [*assignment, {edge: assigned_value}, {id_matches: '^php\.member_assignment_value::[^:]+::(?!__construct::\$this->\w+=\${parameter}$)'}]
+    - &child_create [{node: 'php.method::{class}::create'}, {id_matches: '^php\.method::(?!{owner}::create$)'}]
+  emits: &to_service [{edge: {kind: calls_service, from: matched_node, to: {template: '{svc}', types: [drupal.service]}}}]
+  confidence: declared
+
+# A promoted parameter is the property: no plain parameter of that name, and no assignment.
+- rule: service_through_create_promoted_argument
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *this_call}]
+    follow:
+    - *up_1
+    - *up_2
+    - *up_3
+    - *declared
+    - {node: 'drupal.constructor_parameter_position::{owner}::${member}'}
+    - *at_1
+    - *at_2
+    - *arg_1
+    - *arg_2
+    - *arg_3
+    - *container_1
+    - *container_2
+    - *container_3
+    - *site_1
+    - *site_2
+    unless_matched:
+    - [{node: 'php.parameter::{owner}::__construct::${member}'}]
+    - [*assignment]
+    - *child_create
+  emits: *to_service
+  confidence: declared
+
+- rule: service_through_create_property
+  reads: map
+  match:
+    node_type: php.call_site
+    where: [{id_matches: *this_call}]
+    follow:
+    - *up_1
+    - *up_2
+    - *up_3
+    - {node: 'drupal.create_property::{owner}::create|{member}'}
+    - {edge: create_property_service}
+    - &setter_value {id_matches: '^drupal\.create_property_value::(?<var>\w+)\|(?<svc>.+)$'}
+    - &instance_1 {node: 'php.local_variable::{owner}::create::${var}'}
+    - &instance_2 {edge: local_assigned}
+    - &instance_3 {id_matches: '(?s)^php\.local_value::(?<value>[^:]+::\$\w+=(?:(?:parent|static|self)::create\s*\(|new\s+(?:static|self)\b).*)$'}
+    - *container_1
+    - *container_2
+    - *container_3
+    - *site_1
+    - *site_2
+    unless_matched:
+    - [{node: 'php.member_assignment::{owner}::$this->{member}'}]
+    - &other_instance [*instance_1, *instance_2, {id_matches: '(?s)^php\.local_value::(?!{value}$)'}]
+  emits: *to_service
+  confidence: declared
+
+# The class: each service its own create() hands to the new object.
+- rule: class_creates_with_argument
+  reads: map
+  match:
+    node_type: drupal.create_argument
+    where: [{id_matches: '^drupal\.create_argument::(?<owner>[^:]+)::create\|\d+$'}]
+    follow: [*arg_2, *arg_3, *container_1, *container_2, *container_3, &the_class {node: 'php.type::{owner}'}]
+  emits: &class_edge [{edge: {kind: creates_with_service, from: matched_node, to: {template: '{svc}', types: [drupal.service]}}}]
+  confidence: declared
+
+- rule: class_creates_with_property
+  reads: map
+  match:
+    node_type: drupal.create_property
+    where: [{id_matches: '^drupal\.create_property::(?<owner>[^:]+)::create\|\w+$'}]
+    follow: [{edge: create_property_service}, *setter_value, *instance_1, *instance_2, *instance_3, *container_1, *container_2, *container_3, *the_class]
+    unless_matched: [*other_instance]
+  emits: *class_edge
+  confidence: declared

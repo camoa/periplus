@@ -12,7 +12,7 @@ from typing import Any
 
 from periplus.engine.emit import TYPE_CONFLICT, _boundary_type, type_chain
 from periplus.engine.packload import (
-    _BOUNDARY_SHAPE,
+    PLACEHOLDER,
     RuleSet,
     declared_values,
     load_rules,
@@ -53,12 +53,18 @@ def checked(
         rule_set = load_rules(sound, values, origins)
     except HarnessError as error:
         return None, [*schema, error.problem()]
-    omitted = _omitted_values(sound, values or {}) if require_values else []
+    omitted = _omitted_values(sound, values or {}, rule_set) if require_values else []
     return rule_set, [*schema, *rule_set.conflicts, *check_packs(sound, rule_set), *omitted]
 
 
-def _omitted_values(packs: Sequence[LoadedPack], values: Mapping[str, str]) -> list[Problem]:
-    """Each settings value a pack declares that ``values`` does not give."""
+def _omitted_values(
+    packs: Sequence[LoadedPack], values: Mapping[str, str], rule_set: RuleSet
+) -> list[Problem]:
+    """Each settings value a pack declares that ``values`` does not give, but one that only a path
+    value's ``root_name`` names: without it the path is searched as it is. A ``{name}`` in any
+    text of a loaded pack's files reads the value too."""
+    roots = {v.root_name for info in rule_set.files.values() for v in info.path_values}
+    roots -= {None, *(name for pack in packs for name in _braced(pack))}
     return [
         Problem(
             ExitCode.RULE_NOT_EXECUTABLE,
@@ -68,8 +74,23 @@ def _omitted_values(packs: Sequence[LoadedPack], values: Mapping[str, str]) -> l
         )
         for pack in packs
         for name in declared_values(pack)
-        if name not in values
+        if name not in values and name not in roots
     ]
+
+
+def _braced(pack: LoadedPack) -> set[str]:
+    """Each name a ``{name}`` holds in any text of the pack's manifest and rule files."""
+    found: set[str] = set()
+    stack: list[object] = [document for _, document, _, _ in pack_files(pack)]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            found.update(PLACEHOLDER.findall(item))
+        elif isinstance(item, Mapping):
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+    return found
 
 
 def _schema_problems(packs: Sequence[LoadedPack]) -> tuple[list[Problem], set[str]]:
@@ -88,7 +109,7 @@ def _schema_problems(packs: Sequence[LoadedPack]) -> tuple[list[Problem], set[st
                 ExitCode.SCHEMA_INVALID,
                 f"{pack.name.pack}/{error.file} {error.pointer}: {error.message}"
                 + (f"; {error.best}" if error.best else "")
-                + (f"; write {_BOUNDARY_SHAPE}" if error.pointer.startswith("$.boundary") else ""),
+                + (f"; {error.hint}" if error.hint else ""),
                 {"pack": pack.name.pack, "file": error.file, "pointer": error.pointer},
             )
             for error in errors
@@ -187,6 +208,7 @@ def check_packs(packs: Sequence[LoadedPack], rule_set: RuleSet) -> list[Problem]
             problems.extend(_spreads_along(name, file, document, known_kinds))
             problems.extend(_unexecuted_keys(name, file, document, "file."))
             problems.extend(_illegal_ends(name, file, document, twins, rule_set))
+            problems.extend(_table_end_types(name, file, document, types, rule_set, packs))
         problems.extend(
             _unexecuted_keys(name, MANIFEST_FILENAME, pack.manifest.document, "manifest.")
         )
@@ -371,7 +393,10 @@ def _attribute_writes(
             (n, "this_node") for n, _ in (*rule.attributes, *rule.templates)
         ]
         for name, target in writes:
-            if name not in visible and (rule.matches_type or name in declared):
+            # The run-time mark is the engine's, written undeclared by any rule the loader keeps.
+            if name not in visible and name != "resolution" and (
+                rule.matches_type or name in declared
+            ):
                 problems.append(
                     Problem(
                         ExitCode.PACK_RULES_UNREADABLE,
@@ -617,7 +642,12 @@ def _illegal_ends(
             kind = rule_set.edge_kinds.get(str(edge.get("kind"))) if _has(edge, "kind") else None
             end = edge["to"] if isinstance(edge.get("to"), Mapping) else {}
             for named in [end["type"]] if end.get("type") else _strings(end.get("types")):
-                if not kind or set(kind.to_types) & set(type_chain(rule_set.types, named)):
+                # A map rule's type from a table value is checked row by row in _table_end_types.
+                if (
+                    not kind
+                    or (rule.get("reads") == "map" and PLACEHOLDER.fullmatch(named))
+                    or set(kind.to_types) & set(type_chain(rule_set.types, named))
+                ):
                     continue
                 problems.append(
                     Problem(
@@ -664,6 +694,82 @@ def _illegal_ends(
                         )
                     )
     return problems
+
+
+def _table_end_types(
+    pack: str,
+    file: str,
+    document: Mapping[str, Any],
+    types: set[str],
+    rule_set: RuleSet,
+    packs: Sequence[LoadedPack],
+) -> list[Problem]:
+    """A problem for each row of a table a map rule's end takes its type from, through the value
+    of an ``in_table`` follow step, whose value is no type in ``types``, those the pack may name,
+    or a type the edge kind does not allow at that end. The table is the one the pack sees, with
+    the rows the loaded ``packs`` add; a row one of them adds names that pack."""
+    problems: list[Problem] = []
+    tables = rule_set.tables.get(pack, {})
+    for rule in _rules(document):
+        found = rule.get("match")
+        match: Mapping[str, Any] = found if isinstance(found, Mapping) else {}
+        given = {
+            str(step["in_table"].get("value")): str(step["in_table"].get("table"))
+            for step in _steps(match.get("follow"))
+            if isinstance(step.get("in_table"), Mapping)
+        }
+        for edge in _emits(rule, "edge"):
+            kind = rule_set.edge_kinds.get(str(edge.get("kind"))) if _has(edge, "kind") else None
+            if kind is None:
+                continue
+            for side in ("from", "to"):
+                end = edge.get(side)
+                listed = _strings(end.get("types")) if isinstance(end, Mapping) else []
+                capture = PLACEHOLDER.fullmatch(listed[0]) if len(listed) == 1 else None
+                table = given.get(capture[1]) if capture else None
+                if table is None or table not in tables:
+                    continue
+                allowed = kind.to_types if side == "to" else kind.from_types
+                for key, value in sorted(tables[table].items()):
+                    adders = [p.name.pack for p in packs if _added_row(p, table, key, value)]
+                    row = f"{key}: {value}" + (
+                        f", added by {adders[0]} under add_table_rows," if adders else ""
+                    )
+                    said = (
+                        f"{pack}/{file}: the rule {rule.get('rule')} takes the type of its {side} "
+                        f"end from the table {table}, whose row {row}"
+                    )
+                    detail = {"pack": pack, "file": file, "rule": str(rule.get("rule"))}
+                    if value not in types:
+                        problems.append(
+                            Problem(
+                                ExitCode.UNDECLARED_TYPE,
+                                f"{said} names a type neither {pack} nor a pack it depends on "
+                                "declares",
+                                {**detail, "table": table, "key": key},
+                            )
+                        )
+                    elif not set(allowed) & set(type_chain(rule_set.types, value)):
+                        problems.append(
+                            Problem(
+                                ExitCode.EDGE_ILLEGAL,
+                                f"{said} is a type the edge {kind.name} does not allow there; it "
+                                f"allows {', '.join(allowed)}",
+                                {**detail, "table": table, "key": key},
+                            )
+                        )
+    return problems
+
+
+def _added_row(pack: LoadedPack, table: str, key: str, value: str) -> bool:
+    """Whether the pack's ``add_table_rows`` gives the key that value in a table of that name."""
+    found = pack.manifest.document.get("add_table_rows")
+    return any(
+        isinstance(tables, Mapping)
+        and isinstance(tables.get(table), Mapping)
+        and tables[table].get(key) == value
+        for tables in (found.values() if isinstance(found, Mapping) else ())
+    )
 
 
 def _intos(edge: object) -> list[Mapping[str, Any]]:

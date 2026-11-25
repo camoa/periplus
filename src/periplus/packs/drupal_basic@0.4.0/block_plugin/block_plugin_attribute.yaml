@@ -1,0 +1,61 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A block plugin declared by the Block attribute on its class. Two rules because a rule that emits
+# an edge emits no node. An id that is not a text literal, such as a constant, makes no plugin and
+# is listed under skipped in the map report.
+
+rules:
+- rule: block_plugin_from_attribute
+  reads: file
+  in:
+  - block_plugin_classes
+  match:
+    attribute: Drupal\Core\Block\Attribute\Block
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - node:
+      type: drupal.block_plugin
+  confidence: declared
+- rule: block_plugin_from_attribute_edges
+  reads: file
+  in:
+  - block_plugin_classes
+  match:
+    attribute: Drupal\Core\Block\Attribute\Block
+    filetype: php
+    where:
+    - applies_to: class_declaration
+  id:
+    from:
+      attribute_argument: id
+    must_be: string_literal
+  emits:
+  - edge:
+      kind: plugin_class
+      from: this_node
+      to: enclosing_class
+  confidence: declared
+
+# The block plugin's admin_label and category, each written as text or as new TranslatableMarkup('...'), as
+# attributes of the node the rule above makes. Read as text, since an attribute rule reads only a
+# text literal; the Block attribute is known by its name in this folder.
+# A value that is not text, such as a constant, gives nothing.
+- rule: block_plugin_words_from_attribute
+  reads: file
+  in: [block_plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?m)^#\[\s*(?:\\?Drupal\\Core\\Block\\Attribute\\)?Block\s*\((?=(?:(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])id\s*:\s*)[''\"](?<pid>[^''\"]+)[''\"])(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])(?:admin_label|category)\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?[''\"])(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])admin_label\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q0>[''\"])(?<admin_label>(?:(?!(?P=q0))[^\\]|\\.)*)(?P=q0)))?(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])category\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q1>[''\"])(?<category>(?:(?!(?P=q1))[^\\]|\\.)*)(?P=q1)))?'
+  id: {template: '{pid}'}
+  emits:
+  - node: {type: drupal.block_plugin}
+  - attribute: {name: admin_label, template: '{admin_label}'}
+  - attribute: {name: category, template: '{category}'}
+  confidence: declared

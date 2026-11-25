@@ -1,0 +1,63 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Drush command, named by its name, the method and class that run it, the service that registers
+# that class, each alias of the command, named by the alias, each option and argument it takes,
+# named <command>|<name>, and each hook method attached to it.
+
+node_types:
+- name: drush.command
+  description: "A Drush command, named by its name, from a Command attribute or an @command docblock tag on a method"
+  id_namespace: drush.command
+- name: drush.command_alias
+  description: "An alias of a Drush command, from the @aliases docblock tag or the Command attribute's aliases list of the method"
+  id_namespace: drush.command_alias
+- name: drush.command_option
+  description: "An option of a Drush command, named <command>|<option>, from an Option attribute or an @option docblock tag on its method"
+  id_namespace: drush.command_option
+- name: drush.command_argument
+  description: "An argument of a Drush command, named <command>|<argument>, from an Argument attribute or a @param docblock tag on its method"
+  id_namespace: drush.command_argument
+
+edge_kinds:
+- kind: command_method
+  description: "The Drush command runs that method"
+  from: drush.command
+  to: php.method
+  # realizes: to, the to end is the code that carries out the from end; a walk that
+  # reaches the from end adds the to end at the same hop.
+  realizes: to
+- kind: command_class
+  cause: none
+  description: "The Drush command is defined in that class"
+  from: drush.command
+  to: php.class
+- kind: alias_of_command
+  cause: from
+  description: "The alias is another name for that Drush command"
+  from: drush.command_alias
+  to: drush.command
+- kind: command_service
+  cause: none
+  description: "Inferred: the Drush command's class, or a class that directly inherits it, is registered as that service in a services file"
+  from: drush.command
+  to: drupal.service
+- kind: option_of_command
+  cause: none
+  description: "The option is one the Drush command takes, as its method's Option attribute or @option tag declares"
+  from: drush.command_option
+  to: drush.command
+- kind: argument_of_command
+  cause: none
+  description: "The argument is one the Drush command takes, as its method's Argument attribute or @param tag declares"
+  from: drush.command_argument
+  to: drush.command
+- kind: hooks_command
+  cause: to
+  description: "Drush runs the method as a hook of that command, as its Hook attribute or @hook tag says, by target or, with none, every command of its class"
+  from: php.method
+  to: drush.command
+
+edge_attributes:
+- name: hook_type
+  on: [hooks_command]
+  description: "the hook type as written: a HookManager constant such as HookManager::ARGUMENT_VALIDATOR, or a docblock word such as validate"

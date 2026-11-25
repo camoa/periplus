@@ -1,0 +1,68 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A Drush command class that uses Drush's own Drush\Commands\AutowireTrait, itself or through a
+# mapped ancestor, and declares no create() of its own or on a mapped ancestor. Drush's trait, like
+# core's, asks the container for each constructor parameter's type as a service id, or for the
+# service an #[Autowire] attribute names. The rules are drupal_basic's
+# service/class_autowire.yaml with Drush's trait in place of core's: the same internal
+# drupal.constructor_parameter nodes, the same autowires_service edge at the parameter's line and
+# the same autowired_by attribute; a service id or alias the map holds, inferred; else the type as
+# a service id, marked unresolved, inferred; an Autowire attribute's service, declared, at the
+# attribute's line.
+
+rules:
+- rule: drush_autowired_parameter_by_id
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: &parameter '^drupal\.constructor_parameter::(?<class>[^:]+)::__construct::\$(?<param>\w+)::(?<type>[^:]+)$'}]
+    unless: &not_autowired
+    - [{node: 'php.property::{class}::${param}'}, {edge: has_attribute}, {id_matches: &di_attribute '^php\.type::Symfony\\Component\\DependencyInjection\\Attribute\\'}]
+    - [{node: 'php.parameter::{class}::${param}'}, {edge: has_attribute}, {id_matches: *di_attribute}]
+    - &own_create [{node: 'php.type::{class}'}, {ancestors: [inherits]}, {id_matches: '^php\.type::(?<owner>.+)$'}, {node: 'php.method::{owner}::create'}]
+    follow:
+    - node: 'drupal.service::{type}'
+    - &trait_1 {node: 'php.type::{class}'}
+    - &trait_2 {ancestors: [inherits, mixes_in]}
+    - &trait_3 {id_matches: '^php\.type::Drush\\Commands\\AutowireTrait$'}
+    - &the_class {node: 'php.type::{class}'}
+  emits: [{edge: {kind: autowires_service, from: matched_node, to: {template: '{type}', types: [drupal.service]}, attributes: {autowired_by: {template: 'type is the service id or alias'}}}}]
+  confidence: inferred
+
+- rule: drush_autowired_parameter_unresolved
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: *not_autowired
+    follow: [*trait_1, *trait_2, *trait_3, *the_class]
+    unless_matched: [[{node: 'drupal.service::{type}'}]]
+  emits: [{edge: {kind: autowires_service, from: matched_node, to: {template: '{type}', types: [drupal.service], on_miss: unresolved}, attributes: {autowired_by: {template: 'type is the service id or alias'}}}}]
+  confidence: inferred
+
+- rule: drush_autowired_attribute_on_property
+  reads: map
+  match:
+    node_type: php.property
+    where: [{id_matches: '^php\.property::(?<class>[^:]+)::\$\w+$'}]
+    unless: [*own_create]
+    follow:
+    - &named {edge: autowire_names_service}
+    - &placed {place: edge}
+    - &named_id {id_matches: '^drupal\.service::(?<target>.+)$'}
+    - *trait_1
+    - *trait_2
+    - *trait_3
+    - *the_class
+  emits: &attribute_injection [{edge: {kind: autowires_service, from: matched_node, to: {template: '{target}', types: [drupal.service]}, attributes: {autowired_by: {template: 'Autowire attribute'}}}}]
+  confidence: declared
+
+- rule: drush_autowired_attribute_on_parameter
+  reads: map
+  match:
+    node_type: drupal.constructor_parameter
+    where: [{id_matches: *parameter}]
+    unless: [*own_create]
+    follow: [{node: 'php.parameter::{class}::${param}'}, *named, *placed, *named_id, *trait_1, *trait_2, *trait_3, *the_class]
+  emits: *attribute_injection
+  confidence: declared

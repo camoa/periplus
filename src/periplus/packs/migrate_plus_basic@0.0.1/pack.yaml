@@ -1,0 +1,28 @@
+$schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
+
+# The migrate_plus contributed module, beside core's migrations that drupal_basic reads from a
+# module's migrations folder (migration/migration.yaml):
+# - each migration kept as configuration, migrate_plus.migration.<id>, in the config folders, as
+#   drupal_basic's drupal.migration <id>, with a migration_kept_in_config edge to its config
+#   object and the same plugin, entity type, configuration, dependency and tag edges a migrations
+#   file gives (migration/migration_config.yaml);
+# - each migration group, migrate_plus.migration_group.<id>, as a migrate_plus.migration_group
+#   node with a group_kept_in_config edge to its config object, and the group each migration
+#   names under migration_group, in a config file or a migrations file, as migration_in_group
+#   (migration/migration_group.yaml).
+#
+# Not mapped yet:
+# - A group's shared_configuration, which its migrations inherit, gives nothing: a migration's
+#   edges come from its own file only.
+# - The migration id is read from the file name, not from the id key.
+pack: migrate_plus_basic
+version: 0.0.1
+depends: [drupal_basic]
+
+# Detected when the project requires the module, or the site's configuration enables it.
+detect:
+  any_of:
+    - path: composer.json
+      contains: "drupal/migrate_plus"
+    - path: "{config}/core.extension.yml"
+      contains: "\n  migrate_plus: "

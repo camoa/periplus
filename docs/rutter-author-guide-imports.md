@@ -97,7 +97,7 @@ Keys under `identity` say how the grammar writes a call's arguments. They are re
 
 `php_basic` wraps each argument and names it:
 
-```yaml php_basic@0.2.0/pack.yaml
+```yaml php_basic@0.3.0/pack.yaml
 # A call's arguments: their field, one argument and the field of its name, and the text
 # literals with the node of their text. view('a') holds 'a' at position 0.
 call_arguments: arguments

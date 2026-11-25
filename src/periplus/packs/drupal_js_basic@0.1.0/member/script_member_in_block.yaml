@@ -1,0 +1,35 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# Each function a script declares inside a block, such as the body of the usual wrapper
+# (function ($, Drupal) {...})(jQuery, Drupal) or ((Drupal) => {...})(Drupal), or another
+# function's body: the same claim member/script_member.yaml writes for a top-level function, so its
+# map rules give the function the js_function_in_module or js_function_in_theme edge to the
+# extension that holds the script. js_basic names a function by its script and its name wherever it
+# is declared, so the claim names the same js.function node. A function declaration, or a const,
+# let or var given an arrow function or a function expression, counts; a method of a class or of
+# an object literal does not.
+
+rules:
+- rule: js_function_declaration_in_block_claim
+  reads: file
+  in: [js_source]
+  match: {declaration: function_declaration, name_child: name, filetype: javascript, where: [{within: [statement_block]}]}
+  id: {from: [script_dir, qualified_name], template: '{script_dir}|js_function|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: js_function_from_arrow_in_block_claim
+  reads: file
+  in: [js_source]
+  match: {declaration: variable_declarator, name_child: name, filetype: javascript, where: [{has_child: arrow_function}, {within: [statement_block]}]}
+  id: {from: [script_dir, qualified_name], template: '{script_dir}|js_function|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared
+
+- rule: js_function_from_expression_in_block_claim
+  reads: file
+  in: [js_source]
+  match: {declaration: variable_declarator, name_child: name, filetype: javascript, where: [{has_child: function_expression}, {within: [statement_block]}]}
+  id: {from: [script_dir, qualified_name], template: '{script_dir}|js_function|{qualified_name}'}
+  emits: [{node: {type: drupal.member_claim}}]
+  confidence: declared

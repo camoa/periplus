@@ -13,7 +13,7 @@ A bundled path value that misreads a path is fixed in its own pack, never shadow
 `grammar` pins the parser exactly, because the rules name tree node types and those change across
 releases. `folders` names where the rules read. `files` claims the endings and excludes folders.
 
-```yaml php_basic@0.2.0/pack.yaml
+```yaml php_basic@0.3.0/pack.yaml
 grammar:
   provider: tree-sitter
   provider_version: "0.26.0"
@@ -30,7 +30,7 @@ name. `namespace` names the tree node that declares one. `written_names` lists t
 written name. `resolve` turns a written name into a full one. The next two keys, `attribute` and
 `comment`, name the tree nodes of an attribute and a docblock; the plugin rules below read them.
 
-```yaml php_basic@0.2.0/pack.yaml
+```yaml php_basic@0.3.0/pack.yaml
 identity:
   qualified_name:
     parts: [namespace, declared_name]
@@ -55,7 +55,7 @@ which must be a field of the clause, else by its path's last segment; a grouped 
 prefix; a function or const use binds nothing. Segments split on the `qualified_name` separator only, so with Go's dot
 separator `"a/b"` binds whole; [`path` and `normalize`](rutter-author-guide-imports.md) bind b.
 
-```yaml php_basic@0.2.0/imports/imports.yaml
+```yaml php_basic@0.3.0/imports/imports.yaml
 imports:
 - ast: namespace_use_declaration
   group_ast: namespace_use_group
@@ -73,7 +73,7 @@ imports:
 A declaration rule fires once per tree node of the named type. `name_child` holds the name and
 `body_child` the methods; the id is the full name.
 
-```yaml php_basic@0.2.0/types/find_declarations.yaml
+```yaml php_basic@0.3.0/types/find_declarations.yaml
 - rule: find_class
   reads: file
   in: [source]
@@ -86,7 +86,7 @@ A declaration rule fires once per tree node of the named type. `name_child` hold
 A structure rule makes one edge per name written in a clause, from the enclosing class to the
 name's full form.
 
-```yaml php_basic@0.2.0/edges/find_structure.yaml
+```yaml php_basic@0.3.0/edges/find_structure.yaml
 - rule: inherits_from_base_clause
   reads: file
   in: [source]
@@ -103,7 +103,7 @@ contrib. `custom_module` is `./web/modules/custom`; `module_root` is each folder
 below it. Each plugin kind reads its own folder below a module's `src`: `block_plugin_classes` is
 `{module_root}/src/Plugin/Block/**`. A class outside that folder is not a plugin.
 
-```yaml drupal_basic@0.3.0/pack.yaml
+```yaml drupal_basic@0.4.0/pack.yaml
 # php_basic's source, narrowed to the custom modules and themes at any depth.
 source:
 - "{custom_module}/**"
@@ -115,7 +115,7 @@ source:
 An attribute rule matches a PHP attribute by its class name, on a class. `must_be` refuses a
 constant id, which goes under `skipped`.
 
-```yaml drupal_basic@0.3.0/block_plugin/block_plugin_attribute.yaml
+```yaml drupal_basic@0.4.0/block_plugin/block_plugin_attribute.yaml
 - rule: block_plugin_from_attribute
   reads: file
   in:
@@ -136,7 +136,7 @@ differs from the attribute rule in its match and id: it takes the id from the `i
 records `admin_label` on the node. Probe `annotation_key` before reading a docblock key as text on
 the guess that the grammar cannot reach it.
 
-```yaml drupal_basic@0.3.0/block_plugin/block_plugin_annotation.yaml
+```yaml drupal_basic@0.4.0/block_plugin/block_plugin_annotation.yaml
 match:
   annotation: Block
   filetype: php
@@ -155,7 +155,7 @@ the key itself, the service's name. YAML read as text to reshape a value, or to 
 and second item, misreads this: `route_definition.yaml` reshapes a key's value with `pattern` and
 `template`, and `each` walks every item.
 
-```yaml drupal_basic@0.3.0/service/service_definition.yaml
+```yaml drupal_basic@0.4.0/service/service_definition.yaml
 - rule: service_alias_from_services_file
   reads: file
   in:
@@ -184,7 +184,7 @@ narrows a rule to the files of one ending, or of any in a list, written without 
 `ending`, every file the type claims passes. The rule for a theme's include files reads `.inc` and
 `.theme` files. The theme's own `.theme` file has no `theme_name`, so there it leaves one skipped row:
 
-```yaml drupal_basic@0.3.0/hook/hook_theme_include.yaml
+```yaml drupal_basic@0.4.0/hook/hook_theme_include.yaml
 - rule: hook_from_theme_include
   reads: file
   in:
@@ -237,17 +237,21 @@ meet at one node. A third party gets the same links from a project-local pack
 
 ## Configuration owners, theme hooks, stylesheets, forms, entity hooks and paths
 
-Each relation below is an edge kind `drupal_basic@0.3.0` or `drupal_js_basic@0.0.1` declares.
+Each relation below is an edge kind `drupal_basic@0.4.0` or `drupal_js_basic@0.1.0` declares.
 The pack's `pack.yaml` lists what each one misses and where it is wrong. The list is partial:
 `drupal_basic` also maps plugin types and their managers (`plugin_of_type`,
 `manages_plugin_type`), entity handlers (`has_access_handler` and its siblings), constraint
 validators (`validated_by`), route access checks (`access_checked_by_service`,
-`access_checked_by`), route alters (`alters_routes`), the views plugins a view uses
+`access_checked_by`), route alters (`alters_route`, and `alters_routes` for a subscriber that picks
+routes at run time), the views plugins a view uses
 (`view_uses_field_plugin` and its siblings) and `has_attribute`. [Bundled rutters](rutters.md)
 names each rutter's reach, and the head of its `pack.yaml` lists it in full.
-A `has_form_handler` or `has_route_provider` edge holds, in the edge attribute `entry`, the key
-under the handler group that names the class, as `edit` or `html`; a class named under two keys
-holds both, under `differs`. A `tagged_as` edge holds its own tag's `applies_to` and `priority`.
+Each entity handler edge sits at the line that names the class: an internal
+`drupal.entity_type_entry` node at that line has an `entry_names_class` edge to the class, and a
+map rule joins it to the entity type. A `has_form_handler`, `has_route_provider` or
+`has_entity_handler` edge holds, in the edge attribute `entry`, the key that names the class, as
+`edit`, `html` or `views_data`. A class named under two keys holds both, under `differs`. A
+`tagged_as` edge holds its own tag's `applies_to` and `priority`.
 A `subscribed_by` edge holds the listener's `priority` as written, as `100` or `self::LATE`, and
 `0` when none is written, the priority Symfony gives it: from a `getSubscribedEvents()` key, an
 `#[AsEventListener]` attribute or a `kernel.event_listener` tag. An exception handler holds the
@@ -322,9 +326,12 @@ two calls share holds each place's value under `differs`.
   code invokes or alters it by a quoted name, the deprecated and Drupal 7 forms included; or when
   a Hook attribute names it. Contributed modules and themes are read from the optional folders
   `contrib_module` and `contrib_theme`, for those hook names only, so a contributed module's hook
-  is known only when its code is on disk there. Any other hook keeps its `implements_hook` edge,
-  and the map rules `hook_by_name_only` and `function_implements_hook_by_name_only` write
-  `hook_known: no` on the hook and on each function that implements it by name. A rutter for a
+  is known from its `*.api.php` file only when its code is on disk there. The map also knows a
+  hook that an `invokes_hook`, `registers_alter_hook` or `documents_hook` edge reaches, and one
+  that a function's docblock names as `Implements hook_NAME().` Any other hook is no hook node:
+  the rule `hook_by_name_only` takes back its `implements_hook` edges, and the map rule
+  `function_named_like_hook` gives each function a `named_like_hook` edge to a referenced hook,
+  confidence `mentioned`, and writes `hook_known: no` on the function. A rutter for a
   tool whose hooks no project keeps on disk adds them to `hook_names` under `add_table_rows`, as
   `drush_basic` adds `deploy_NAME`.
 - `drupal.manager_call`, a node for each `getStorage`, `getViewBuilder`, `getListBuilder`,
@@ -356,9 +363,11 @@ two calls share holds each place's value under `differs`.
   `fetch`, `$.ajax`, `$.get`, `$.getJSON`, `$.post` or `Drupal.url` whose first argument is no
   quoted text, template literal or object: the URL is built at run time.
 - `links_to_route`, from the method or function around `Url::fromRoute('x')`,
-  `Link::createFromRoute('t', 'x')` or `$this->redirect('x')` to the route `x`: declared for the
-  two static calls, inferred for `$this->redirect`. A route name that is not a text literal goes
-  under skipped, a call in a trait or an enum links from its method, and
+  `Link::createFromRoute('t', 'x')`, `new Url('x')`, `$this->redirect('x')` or `->setRedirect('x')`
+  to the route `x`: declared for the two static calls and `new Url`, inferred for
+  `$this->redirect` and `->setRedirect`. A route name held in a variable in a method keeps the
+  call as a `php.call_site` marked `resolution: runtime`. Another name that is not a text literal
+  goes under skipped. A call in a trait or an enum links from its method, and
   `$other->redirect('x')` links nothing.
 - `drupal.event`, a node for each event constant of a class that descends from `Event` or is
   named `*Events`, made by map rules from an internal node per constant and named by the text the
@@ -522,7 +531,8 @@ two calls share holds each place's value under `differs`.
   `in_array(self::X, $roles)`, gives an inferred `checks_role` to the role the constant's text
   names; `self::X` is read from the nearest class or interface up the parents that declares it.
 - `mentions_role`, from a method, function or class that holds a string literal equal to a role's
-  name, through `mention/php_literal.yaml`'s internal literal, with confidence `mentioned`. A
+  name, through `mention/php_literal.yaml`'s internal literal site at the text's line, with
+  confidence `mentioned`. A
   literal the same method, function or class writes as an array key, `$x['k']` or `'k' => value`,
   is an internal `names_literal_key` edge and gives no mention.
 - `creates_entity_type`, inferred, from the method or function around `X::create([...])` on an
@@ -626,7 +636,8 @@ not listed. `skipped` names matches that made nothing. An `unresolved` node is a
 
 - A method call on an object, `$x->m()`, whose class no parameter type, `new`, return type or
   property states; plain and static calls are stated, and so are a call on `$this` and a call
-  through a variable or a property whose class the code states.
+  through a variable or a property whose class the code states. A call on a method parameter
+  that no code could type keeps its call site marked `resolution: runtime`.
   [Tree references](rutter-author-guide-references.md) lists the other calls not stated.
 - The tree layout. A rule names node types and fields; how the engine walks the tree, finds the
   enclosing class and nests namespace blocks is engine code. A text rule on PHP names its own

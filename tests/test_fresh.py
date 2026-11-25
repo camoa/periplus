@@ -134,7 +134,7 @@ def test_line_ends_that_change_a_tree_rule_s_map_make_it_stale(tmp_path: Path) -
     plant(
         tmp_path,
         {
-            ".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.2.0]\n",
+            ".periplus/settings.yml": "periplus_version: 0\npacks: [php_basic@0.3.0]\n",
             "src/Reminder.php": DOCBLOCK,
         },
     )

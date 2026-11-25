@@ -36,11 +36,11 @@ def test_a_matches_glob_keeps_exactly_the_keys_it_selects(tmp_path: Path) -> Non
     _plant(tmp_path)
     packs = tmp_path / ".periplus" / "packs"
     copy = packs / "js_copy@0.0.1"
-    shutil.copytree(Path(periplus.__file__).parent / "packs" / "drupal_js_basic@0.0.1", copy)
+    shutil.copytree(Path(periplus.__file__).parent / "packs" / "drupal_js_basic@0.1.0", copy)
     manifest = copy / "pack.yaml"
     manifest.write_text(manifest.read_text().replace("pack: drupal_js_basic", "pack: js_copy"))
     settings = tmp_path / ".periplus" / "settings.yml"
-    settings.write_text(settings.read_text().replace("drupal_js_basic@0.0.1", "js_copy@0.0.1"))
+    settings.write_text(settings.read_text().replace("drupal_js_basic@0.1.0", "js_copy@0.0.1"))
     rule = copy / "behavior" / "behavior.yaml"
     rule.write_text(NOT_MATCHES.sub(r"\1- matches: js/f*\n", rule.read_text()))
     edges = [e for e in _map(tmp_path)["edges"] if e["kind"] == "library_includes_script"]

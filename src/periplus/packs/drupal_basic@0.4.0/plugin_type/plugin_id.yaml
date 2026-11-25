@@ -1,0 +1,436 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A plugin of any type, named by its plugin type's short name and its plugin id, so a plugin can be
+# looked up by its id whatever its type: drupal.plugin_id::MigrateSource::d7_node for
+# #[MigrateSource('d7_node')] or @MigrateSource(id = "d7_node"), and
+# drupal.plugin_id::AliasType::canonical_entities for #[AliasType(id: 'canonical_entities')].
+# plugin_class joins it to the class the file holds, by Drupal's PSR-4 layout.
+#
+# Drupal discovers a plugin as a class below a module's src/Plugin folder that carries its plugin
+# type's attribute, or, read only when it carries none, the annotation of the same name. So:
+# - The short name is the attribute's class name as written, the last segment of a qualified
+#   name; an annotation is matched by its name alone, as Drupal's annotation reader does. Core's
+#   annotations @MigrateProcessPlugin and @SearchPlugin take the names of their attributes,
+#   MigrateProcess and Search, so one plugin declared both ways is one node.
+# - An attribute starts a line, as on a class; one on a method or a property is indented. The id
+#   is the attribute's argument id or its first argument, as every core plugin attribute declares
+#   it first. An annotation's id is its key id, or its value written alone, as
+#   @ViewsArgument("node_nid").
+# - A class that carries a plugin attribute gives no other plugin from its annotation: when the
+#   two ids differ, the map rule annotation_plugin_behind_attribute takes the annotation's record
+#   back, as Drupal reads the attribute and skips the annotation. With the same id, both are one
+#   node with a record from each.
+# - The plugin types this pack maps under their own kind, such as Block or QueueWorker, are left
+#   to those rules, so one plugin is never two nodes; Drupal's Hook and LegacyHook attributes
+#   name hooks, not plugins. An attribute is tested by the full class its name resolves to, so a
+#   contributed attribute class named as one of them stays a generic plugin. Each kind is
+#   discovered in its own folder below src/Plugin, as Field/FieldWidget, so the attribute or
+#   annotation of a kind's name on a class outside that folder gives a generic plugin: a
+#   contributed manager discovers it, as one may discover #[FieldFormatter] classes under
+#   src/Plugin/MyField/FieldFormatter. An annotation is known by its name alone, so only the
+#   folder tells a module's own @FieldWidget from core's.
+# - A class that any pack maps as a plugin of its own kind, a drupal.plugin.<kind> node joined to
+#   the class by plugin_class, as advancedqueue_basic's job types or a project rutter's kind, gives
+#   no generic plugin either: the map rules plugin_of_a_mapped_kind_* take it back at the class.
+# - An attribute imported under another name is named by the class it imports: the map rule
+#   plugin_from_aliased_attribute makes that node, and other map rules do not read it.
+# Declared: the attribute or annotation names the id.
+#
+# Limits: an id that is a constant or a concatenation gives nothing; a plugin type whose annotation and
+# attribute names differ, other than core's two above, gives two nodes for a class that carries
+# both. Two plugin types of one short name share their ids. A contributed plugin of a kind's name
+# that sits in that kind's own folder reads as core's kind, and one outside it gets no words
+# (label, description) from its annotation.
+
+node_types:
+- name: drupal.discovered_plugin
+  description: "a plugin of any type, named <short name of its attribute class>::<plugin id>, as AliasType::canonical_entities, from the attribute or annotation on its class below src/Plugin"
+  parent: drupal.plugin
+  id_namespace: drupal.plugin_id
+- name: drupal.plugin_attribute_site
+  description: "Internal: a class below src/Plugin that carries a plugin attribute, named by the class, and again as <class>::<short name>::<plugin id>"
+  id_namespace: drupal.plugin_attribute_site
+  internal: true
+- name: drupal.plugin_attribute_written
+  description: "Internal: a plugin attribute as written, <file>|<class>|<written name>|<plugin id>, at the id's line, for the map rules that read the class the name resolves to"
+  id_namespace: drupal.plugin_attribute_written
+  internal: true
+- name: drupal.plugin_annotation_site
+  description: "Internal: a plugin annotation on a class below src/Plugin, <class>::<short name>::<plugin id>, at the id's line"
+  id_namespace: drupal.plugin_annotation_site
+  internal: true
+
+rules:
+# #[AliasType(id: 'canonical_entities', ...)] and #[\Drupal\x\Attribute\AliasType(id: ...)]: the
+# argument named id, before the attribute closes.
+- rule: plugin_from_attribute_id
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: &attribute_id '(?m)^#\[\s*\\?(?:\w+\\)*(?<short>[A-Z]\w*)\s*\((?:(?!\)\s*\])[\s\S])*?\bid\s*:\s*[''"](?<pid>[^''"]+)[''"]'
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.discovered_plugin}}]
+  confidence: declared
+
+- rule: plugin_from_attribute_id_class
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, text: *attribute_id}
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - edge: {kind: plugin_class, from: this_node, to: {template: '{psr4_class}', types: [php.class]}}
+  confidence: declared
+
+# #[MigrateDestination('entity:comment')]: the first argument, quoted.
+- rule: plugin_from_attribute_first_argument
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: &attribute_first '(?m)^#\[\s*\\?(?:\w+\\)*(?<short>[A-Z]\w*)\s*\(\s*[''"](?<pid>[^''"]+)[''"]'
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.discovered_plugin}}]
+  confidence: declared
+
+- rule: plugin_from_attribute_first_argument_class
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, text: *attribute_first}
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - edge: {kind: plugin_class, from: this_node, to: {template: '{psr4_class}', types: [php.class]}}
+  confidence: declared
+
+# The class carries a plugin attribute, either way it names the id.
+- rule: plugin_attribute_site
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, text: '(?m)^#\[\s*\\?(?:\w+\\)*[A-Z]\w*\s*\((?:\s*[''"]|(?:(?!\)\s*\])[\s\S])*?\bid\s*:\s*[''"])'}
+  id: {template: '{psr4_class}'}
+  emits: [{node: {type: drupal.plugin_attribute_site}}]
+  confidence: declared
+
+# The same class with the plugin its attribute names, <class>::<short name>::<plugin id>.
+- rule: plugin_attribute_id_site
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, text: *attribute_id}
+  id: {template: '{psr4_class}::{short}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.plugin_attribute_site}}]
+  confidence: declared
+
+- rule: plugin_attribute_first_argument_site
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, text: *attribute_first}
+  id: {template: '{psr4_class}::{short}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.plugin_attribute_site}}]
+  confidence: declared
+
+# The attribute as written, with its file, for the map rules below.
+- rule: plugin_attribute_id_written
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, text: *attribute_id}
+  id: {template: '{file_path}|{psr4_class}|{short}|{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.plugin_attribute_written}}]
+  confidence: declared
+
+- rule: plugin_attribute_first_argument_written
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, text: *attribute_first}
+  id: {template: '{file_path}|{psr4_class}|{short}|{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.plugin_attribute_written}}]
+  confidence: declared
+
+# An attribute whose name resolves, through the file's imports, to the attribute class of a kind
+# this pack maps on its own, or to Drupal's Hook or LegacyHook: its generic plugin is taken back,
+# so the plugin is that kind's node only. The test is on the full class name, so a contributed
+# attribute class of the same short name stays a generic plugin. A kind's plugin is taken back only
+# in the folder core discovers that kind in, the folder its own rule reads, as src/Plugin/Block for
+# Block: a contributed plugin manager that names core's attribute class with another folder, as
+# #[FieldFormatter] under src/Plugin/MyField/FieldFormatter, keeps its generic plugin.
+- rule: attribute_plugin_of_own_kind
+  reads: map
+  match:
+    node_type: drupal.plugin_attribute_written
+    where:
+    - id_matches: '^drupal\.plugin_attribute_written::[^|]+\|(?<class>[^|]+)\|(?<short>\w+)\|(?<pid>.+)$'
+    - id_matches: '^drupal\.plugin_attribute_written::(?:[^|]*/src/Plugin/(?:Action/[^|]*\|[^|]+\|Action|Block/[^|]*\|[^|]+\|Block|Field/FieldFormatter/[^|]*\|[^|]+\|FieldFormatter|Field/FieldType/[^|]*\|[^|]+\|FieldType|Field/FieldWidget/[^|]*\|[^|]+\|FieldWidget|Mail/[^|]*\|[^|]+\|Mail|QueueWorker/[^|]*\|[^|]+\|QueueWorker|Validation/Constraint/[^|]*\|[^|]+\|Constraint|media/Source/[^|]*\|[^|]+\|(?:OEmbed)?MediaSource|rest/resource/[^|]*\|[^|]+\|RestResource|views/field/[^|]*\|[^|]+\|ViewsField|views/filter/[^|]*\|[^|]+\|ViewsFilter|views/style/[^|]*\|[^|]+\|ViewsStyle)|[^|]+\|[^|]+\|(?:Legacy)?Hook)\|'
+    follow:
+    - node: 'php.type::{class}'
+    - edge: has_attribute
+    - id_matches: '^php\.type::(?:Drupal\\Core\\(?:Action\\Attribute\\Action|Block\\Attribute\\Block|Field\\Attribute\\Field(?:Formatter|Type|Widget)|Hook\\Attribute\\(?:Legacy)?Hook|Mail\\Attribute\\Mail|Queue\\Attribute\\QueueWorker|Validation\\Attribute\\Constraint)|Drupal\\media\\Attribute\\(?:OEmbed)?MediaSource|Drupal\\rest\\Attribute\\RestResource|Drupal\\views\\Attribute\\Views(?:Field|Filter|Style))$'
+    - id_matches: '\\{short}$'
+    - node: 'drupal.plugin_id::{short}::{pid}'
+  emits: [{withhold: matched_node}]
+  confidence: declared
+
+# An attribute imported under another name, use Drupal\x\Attribute\AliasType as Type; #[Type(...)]:
+# the plugin is named by the short name of the class the alias imports, drupal.class_alias of the
+# form rules giving the import, and the record under the alias is taken back.
+- rule: aliased_attribute_plugin_renamed
+  reads: map
+  match:
+    node_type: drupal.plugin_attribute_written
+    where: [{id_matches: '^drupal\.plugin_attribute_written::(?<file>[^|]+)\|(?<class>[^|]+)\|(?<short>\w+)\|(?<pid>.+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: has_attribute
+    - id_matches: '^php\.type::(?<declarer>.+)$'
+    - node: 'drupal.class_alias::{file}|{short}|{declarer}'
+    - node: 'drupal.plugin_id::{short}::{pid}'
+  emits: [{withhold: matched_node}]
+  confidence: declared
+
+- rule: plugin_from_aliased_attribute
+  reads: map
+  match:
+    node_type: drupal.plugin_attribute_written
+    where: [{id_matches: '^drupal\.plugin_attribute_written::(?<file>[^|]+)\|(?<class>[^|]+)\|(?<short>\w+)\|(?<pid>.+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: has_attribute
+    - id_matches: '^php\.type::(?<declarer>(?!(?:Drupal\\Core\\(?:Action\\Attribute\\Action|Block\\Attribute\\Block|Field\\Attribute\\Field(?:Formatter|Type|Widget)|Hook\\Attribute\\(?:Legacy)?Hook|Mail\\Attribute\\Mail|Queue\\Attribute\\QueueWorker|Validation\\Attribute\\Constraint)|Drupal\\media\\Attribute\\(?:OEmbed)?MediaSource|Drupal\\rest\\Attribute\\RestResource|Drupal\\views\\Attribute\\Views(?:Field|Filter|Style))$)(?:[\w\\]*\\)?(?<real>\w+))$'
+    - node: 'drupal.class_alias::{file}|{short}|{declarer}'
+  id: {template: '{real}::{pid}'}
+  emits: [{node: {type: drupal.discovered_plugin}}]
+  confidence: declared
+
+- rule: plugin_from_aliased_attribute_class
+  reads: map
+  match:
+    node_type: drupal.plugin_attribute_written
+    where: [{id_matches: '^drupal\.plugin_attribute_written::(?<file>[^|]+)\|(?<class>[^|]+)\|(?<short>\w+)\|(?<pid>.+)$'}]
+    follow:
+    - node: 'php.type::{class}'
+    - edge: has_attribute
+    - id_matches: '^php\.type::(?<declarer>(?!(?:Drupal\\Core\\(?:Action\\Attribute\\Action|Block\\Attribute\\Block|Field\\Attribute\\Field(?:Formatter|Type|Widget)|Hook\\Attribute\\(?:Legacy)?Hook|Mail\\Attribute\\Mail|Queue\\Attribute\\QueueWorker|Validation\\Attribute\\Constraint)|Drupal\\media\\Attribute\\(?:OEmbed)?MediaSource|Drupal\\rest\\Attribute\\RestResource|Drupal\\views\\Attribute\\Views(?:Field|Filter|Style))$)(?:[\w\\]*\\)?(?<real>\w+))$'
+    - node: 'drupal.class_alias::{file}|{short}|{declarer}'
+    - node: 'php.type::{class}'
+  emits: [{edge: {kind: plugin_class, from: {template: '{real}::{pid}', types: [drupal.discovered_plugin]}, to: matched_node}}]
+  confidence: declared
+
+# @AliasType(id = "forum", ...) in a docblock: the key id, before the next annotation that starts a
+# line or the comment's end.
+- rule: plugin_from_annotation
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: &annotation_id '(?m)^[ \t]*\*[ \t]*@(?<short>(?!(?:Block|Action|Constraint|FieldFormatter|FieldType|FieldWidget|Mail|MediaSource|QueueWorker|RestResource|ViewsField|ViewsFilter|ViewsStyle|MigrateProcessPlugin|SearchPlugin)\()[A-Z]\w*)\((?:\s*(?=")|(?:(?!\*/|\n[ \t]*\*[ \t]*@[A-Z])[\s\S])*?(?<![\w$])id\s*=\s*(?="))"(?<pid>[^"]+)"'
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.discovered_plugin}}]
+  confidence: declared
+
+- rule: plugin_from_annotation_class
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, reads_sections: [block_comment], text: *annotation_id}
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - edge: {kind: plugin_class, from: this_node, to: {template: '{psr4_class}', types: [php.class]}}
+  confidence: declared
+
+- rule: plugin_annotation_site
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, reads_sections: [block_comment], text: *annotation_id}
+  id: {template: '{psr4_class}::{short}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.plugin_annotation_site}}]
+  confidence: declared
+
+# An annotation named as a kind this pack maps on its own, @FieldWidget(id = "x") and the others,
+# outside the folder core discovers that kind in, as src/Plugin/MyField/FieldWidget: core's
+# manager of that kind never finds the class, so it is a plugin of a contributed manager that
+# reuses the name, a generic plugin. The value own is the short name, emptied when the file sits in
+# the kind's folder, where the kind's own rule reads it, and an empty id makes nothing.
+- rule: plugin_from_kind_annotation_elsewhere
+  reads: file
+  in: [plugin_classes]
+  match: &kind_annotation_match
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@(?<short>(?:Block|Action|Constraint|FieldFormatter|FieldType|FieldWidget|Mail|MediaSource|QueueWorker|RestResource|ViewsField|ViewsFilter|ViewsStyle)(?=\())\((?:\s*(?=")|(?:(?!\*/|\n[ \t]*\*[ \t]*@[A-Z])[\s\S])*?(?<![\w$])id\s*=\s*(?="))"(?<pid>[^"]+)"'
+  values: &kind_annotation_own
+    own:
+      template: '{file_path}|{short}'
+      normalize:
+      - {replace: '^[^|]*/src/Plugin/(?:Action/[^|]*\|Action|Block/[^|]*\|Block|Field/FieldFormatter/[^|]*\|FieldFormatter|Field/FieldType/[^|]*\|FieldType|Field/FieldWidget/[^|]*\|FieldWidget|Mail/[^|]*\|Mail|QueueWorker/[^|]*\|QueueWorker|Validation/Constraint/[^|]*\|Constraint|media/Source/[^|]*\|MediaSource|rest/resource/[^|]*\|RestResource|views/field/[^|]*\|ViewsField|views/filter/[^|]*\|ViewsFilter|views/style/[^|]*\|ViewsStyle)$', with: ''}
+      - {replace: '^[^|]*\|', with: ''}
+  id: {template: '{own}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.discovered_plugin}}]
+  confidence: declared
+
+- rule: plugin_from_kind_annotation_elsewhere_class
+  reads: file
+  in: [plugin_classes]
+  match: *kind_annotation_match
+  values: *kind_annotation_own
+  id: {template: '{own}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - edge: {kind: plugin_class, from: this_node, to: {template: '{psr4_class}', types: [php.class]}}
+  confidence: declared
+
+- rule: plugin_kind_annotation_elsewhere_site
+  reads: file
+  in: [plugin_classes]
+  match: *kind_annotation_match
+  values: *kind_annotation_own
+  id: {template: '{psr4_class}::{own}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.plugin_annotation_site}}]
+  confidence: declared
+
+# Core's two annotations named otherwise than their attributes.
+- rule: plugin_from_renamed_annotation
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: &renamed_annotation '(?m)^[ \t]*\*[ \t]*@(?<short>MigrateProcess|Search)Plugin\((?:\s*(?=")|(?:(?!\*/|\n[ \t]*\*[ \t]*@[A-Z])[\s\S])*?(?<![\w$])id\s*=\s*(?="))"(?<pid>[^"]+)"'
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.discovered_plugin}}]
+  confidence: declared
+
+- rule: plugin_from_renamed_annotation_class
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, reads_sections: [block_comment], text: *renamed_annotation}
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - edge: {kind: plugin_class, from: this_node, to: {template: '{psr4_class}', types: [php.class]}}
+  confidence: declared
+
+- rule: plugin_renamed_annotation_site
+  reads: file
+  in: [plugin_classes]
+  match: {file: '**', filetype: drupal_php_text, reads_sections: [block_comment], text: *renamed_annotation}
+  id: {template: '{psr4_class}::{short}::{pid}'}
+  line: {capture: pid}
+  emits: [{node: {type: drupal.plugin_annotation_site}}]
+  confidence: declared
+
+# The words of a plugin's definition, label, admin_label, title, description and category, each
+# written as text or as a translatable, new TranslatableMarkup('...') in an attribute and
+# @Translation("...") in an annotation, as attributes of the plugin's node, at the id's line, so a
+# kind this pack maps on its own takes the record back with the plugin. A key inside a nested
+# value, such as the label of a context definition, is not the plugin's and gives nothing; so does
+# a value that is not text.
+- rule: plugin_words_from_attribute
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    text: '(?m)^#\[\s*\\?(?:\w+\\)*(?<short>[A-Z]\w*)\s*\((?=(?:\s*|(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])id\s*:\s*)[''\"](?<pid>[^''\"]+)[''\"])(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])(?:label|admin_label|title|description|category)\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?[''\"])(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])label\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q0>[''\"])(?<label>(?:(?!(?P=q0))[^\\]|\\.)*)(?P=q0)))?(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])admin_label\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q1>[''\"])(?<admin_label>(?:(?!(?P=q1))[^\\]|\\.)*)(?P=q1)))?(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])title\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q2>[''\"])(?<title>(?:(?!(?P=q2))[^\\]|\\.)*)(?P=q2)))?(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])description\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q3>[''\"])(?<description>(?:(?!(?P=q3))[^\\]|\\.)*)(?P=q3)))?(?:(?=(?:[^\[\]()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\((?:[^()''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\([^()]*\))*\)|\[(?:[^\[\]''\"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*\"|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])*?(?<![\w$])category\s*:\s*(?:new\s+\\?(?:\w+\\)*TranslatableMarkup\(\s*)?(?<q4>[''\"])(?<category>(?:(?!(?P=q4))[^\\]|\\.)*)(?P=q4)))?'
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - node: {type: drupal.discovered_plugin}
+  - attribute: {name: label, template: '{label}'}
+  - attribute: {name: admin_label, template: '{admin_label}'}
+  - attribute: {name: title, template: '{title}'}
+  - attribute: {name: description, template: '{description}'}
+  - attribute: {name: category, template: '{category}'}
+  confidence: declared
+
+- rule: plugin_words_from_annotation
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@(?<short>(?!(?:Block|Action|Constraint|FieldFormatter|FieldType|FieldWidget|Mail|MediaSource|QueueWorker|RestResource|ViewsField|ViewsFilter|ViewsStyle|MigrateProcessPlugin|SearchPlugin)\()[A-Z]\w*)\((?=(?:\s*|(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])id\s*=\s*)"(?<pid>[^"]+)")(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])(?:label|admin_label|title|description|category)\s*=\s*(?:@Translation\(\s*)?")(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])label\s*=\s*(?:@Translation\(\s*)?"(?<label>[^"]*)"))?(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])admin_label\s*=\s*(?:@Translation\(\s*)?"(?<admin_label>[^"]*)"))?(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])title\s*=\s*(?:@Translation\(\s*)?"(?<title>[^"]*)"))?(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])description\s*=\s*(?:@Translation\(\s*)?"(?<description>[^"]*)"))?(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])category\s*=\s*(?:@Translation\(\s*)?"(?<category>[^"]*)"))?'
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - node: {type: drupal.discovered_plugin}
+  - attribute: {name: label, template: '{label}'}
+  - attribute: {name: admin_label, template: '{admin_label}'}
+  - attribute: {name: title, template: '{title}'}
+  - attribute: {name: description, template: '{description}'}
+  - attribute: {name: category, template: '{category}'}
+  confidence: declared
+
+- rule: plugin_words_from_renamed_annotation
+  reads: file
+  in: [plugin_classes]
+  match:
+    file: '**'
+    filetype: drupal_php_text
+    reads_sections: [block_comment]
+    text: '(?m)^[ \t]*\*[ \t]*@(?<short>MigrateProcess|Search)Plugin\((?=(?:\s*|(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])id\s*=\s*)"(?<pid>[^"]+)")(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])(?:label|admin_label|title|description|category)\s*=\s*(?:@Translation\(\s*)?")(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])label\s*=\s*(?:@Translation\(\s*)?"(?<label>[^"]*)"))?(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])admin_label\s*=\s*(?:@Translation\(\s*)?"(?<admin_label>[^"]*)"))?(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])title\s*=\s*(?:@Translation\(\s*)?"(?<title>[^"]*)"))?(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])description\s*=\s*(?:@Translation\(\s*)?"(?<description>[^"]*)"))?(?:(?=(?:[^(){}"]|"[^"]*"|\((?:[^()"]|"[^"]*"|\([^()]*\))*\)|\{(?:[^{}"]|"[^"]*"|\{[^{}]*\})*\})*?(?<![\w$])category\s*=\s*(?:@Translation\(\s*)?"(?<category>[^"]*)"))?'
+  id: {template: '{short}::{pid}'}
+  line: {capture: pid}
+  emits:
+  - node: {type: drupal.discovered_plugin}
+  - attribute: {name: label, template: '{label}'}
+  - attribute: {name: admin_label, template: '{admin_label}'}
+  - attribute: {name: title, template: '{title}'}
+  - attribute: {name: description, template: '{description}'}
+  - attribute: {name: category, template: '{category}'}
+  confidence: declared
+
+# A class whose plugin attribute names another plugin than its annotation: the annotation's record
+# of its plugin is taken back. The same plugin both ways keeps both records.
+- rule: annotation_plugin_behind_attribute
+  reads: map
+  match:
+    node_type: drupal.plugin_annotation_site
+    where: [{id_matches: '^drupal\.plugin_annotation_site::(?<class>[^:]+)::(?<key>.+)$'}]
+    follow:
+    - node: 'drupal.plugin_attribute_site::{class}'
+    - node: 'drupal.plugin_id::{key}'
+    unless: [[{node: 'drupal.plugin_attribute_site::{class}::{key}'}]]
+  emits: [{withhold: matched_node}]
+  confidence: declared
+
+# A class that a pack's own plugin kind maps: a drupal.plugin.<kind> node with plugin_class to the
+# class. The generic plugin its attribute or annotation gave is taken back at that class.
+- rule: plugin_of_a_mapped_kind_attribute
+  reads: map
+  match:
+    node_type: drupal.plugin_attribute_site
+    where: [{id_matches: '^drupal\.plugin_attribute_site::(?<class>[^:]+)::(?<key>.+)$'}]
+    follow:
+    - &mapped_kind_class {node: 'php.type::{class}'}
+    - &mapped_kind {incoming_edge: plugin_class}
+    - &mapped_kind_node {id_matches: '^drupal\.plugin\.'}
+    - &generic_plugin {node: 'drupal.plugin_id::{key}'}
+  emits: [{withhold: matched_node}]
+  confidence: declared
+
+- rule: plugin_of_a_mapped_kind_annotation
+  reads: map
+  match:
+    node_type: drupal.plugin_annotation_site
+    where: [{id_matches: '^drupal\.plugin_annotation_site::(?<class>[^:]+)::(?<key>.+)$'}]
+    follow: [*mapped_kind_class, *mapped_kind, *mapped_kind_node, *generic_plugin]
+  emits: [{withhold: matched_node}]
+  confidence: declared

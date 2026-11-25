@@ -14,6 +14,11 @@ inside the project's code.
 Run `periplus --version`. If the command is missing, tell the user how to install it and stop:
 `uv tool install periplus-map`, or `pip install periplus-map`. Do not install it without asking.
 
+To get a newer Periplus, the order is: `periplus upgrade` first, which upgrades the tool and
+refreshes the installed skills, then `periplus update` in each project, which moves that
+project's pins to the new rutter versions. Then build the map again. Do not upgrade without
+asking.
+
 ## 2. Run init
 
 Run `periplus init` in the project root, the folder that holds the code and its manifests.
@@ -37,7 +42,7 @@ stack in a subfolder, such as a front end in `frontend/`, is not detected. When 
 init says so. So look at the project yourself: the manifests at the root and in subfolders, and
 the file endings that hold most of the code.
 
-[Bundled rutters](https://github.com/camoa/periplus/blob/v0.10.3/docs/rutters.md) says what each
+[Bundled rutters](https://github.com/camoa/periplus/blob/v0.11.0/docs/rutters.md) says what each
 rutter maps, what it depends on and what settings it needs. For each stack you find:
 
 - **Pinned.** Nothing to do.
@@ -49,12 +54,12 @@ rutter maps, what it depends on and what settings it needs. For each stack you f
 
 ```yaml
 packs:
-  - js_basic@0.0.1
+  - js_basic@0.0.2
 ```
 
 - **Present, and no rutter covers it.** Say so plainly, and name the files the map will not
   hold. A Python project is one: no bundled rutter reads Python. The
-  [example rutters](https://github.com/camoa/periplus/blob/v0.10.3/examples/second-stack/packs),
+  [example rutters](https://github.com/camoa/periplus/blob/v0.11.0/examples/second-stack/packs),
   one of them for Python, can be copied into `.periplus/packs`. A new rutter is the periplus-rutter skill's work. Never
   pin a rutter the project gives no evidence for.
 
@@ -77,6 +82,20 @@ The settings file names every key, with a comment on each. A first setup needs t
   `@/` import alias points at.
 
 Ask the user when the code alone cannot say, such as whether a folder of copied code is theirs.
+
+For Drupal, two more cases:
+
+- `drupal_basic` reads the `*.services.yml` files of Drupal core and of contributed modules, so a
+  service the code injects is a mapped thing. From core it reads nothing else. It finds core in
+  the folder `core`, by default `web/core`, and contributed modules in `contrib_module`, by
+  default `web/modules/contrib`. init writes `docroot/core` or `core` when it finds one. When the
+  site keeps them elsewhere, set `folders: {core: <path>, contrib_module: <path>}`.
+- A module, theme or install profile that is its own repository has its `*.info.yml` file at the
+  root. init detects it, but the rules name a module by the folder that holds it, so they need
+  its machine name. Run `periplus init` in the module's own folder, then add
+  `folders: {custom_module: .}`, or `custom_theme: .` for a theme, and
+  `values: {drupal_extension: <machine name>}`, the name of its `*.info.yml` file. Run
+  `periplus map` in that folder.
 
 ## 5. Build the map
 
@@ -104,8 +123,8 @@ in plain words:
 - any pinned rutter that found nothing, any skipped match and any file that did not parse;
 - that a map holds what its rutters look for, so a link no rule reads is not in it.
 
-[Reading the map report](https://github.com/camoa/periplus/blob/v0.10.3/docs/map-report-guide.md)
-explains each part, and [Judging a map](https://github.com/camoa/periplus/blob/v0.10.3/docs/mapping-quality.md)
+[Reading the map report](https://github.com/camoa/periplus/blob/v0.11.0/docs/map-report-guide.md)
+explains each part, and [Judging a map](https://github.com/camoa/periplus/blob/v0.11.0/docs/mapping-quality.md)
 says how far to trust it.
 
 ## 7. Say what to commit and what comes next

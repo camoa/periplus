@@ -89,7 +89,7 @@ CALLER, RUN = F + "App\\caller", M + "App\\Main::run"
 MAKE = M + "App\\Lib\\Util::make"
 
 
-def _plant(root: Path, settings: str = "  - php_basic@0.2.0\n") -> list[str]:
+def _plant(root: Path, settings: str = "  - php_basic@0.3.0\n") -> list[str]:
     (root / ".periplus").mkdir(exist_ok=True)
     (root / ".periplus" / "settings.yml").write_text("periplus_version: 0\npacks:\n" + settings)
     (root / "src" / "App").mkdir(parents=True, exist_ok=True)
@@ -284,7 +284,7 @@ def test_functions_php_reports_as_internal_make_no_node_and_a_declared_function_
 ) -> None:
     (tmp_path / ".periplus").mkdir()
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - php_basic@0.2.0\n"
+        "periplus_version: 0\npacks:\n  - php_basic@0.3.0\n"
     )
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "Main.php").write_text(BUILTINS)
@@ -326,7 +326,7 @@ def test_a_grouped_use_binds_each_class_member_and_no_function_or_const(tmp_path
     bind no class name, so f::m() stays in the file's namespace."""
     (tmp_path / ".periplus").mkdir()
     (tmp_path / ".periplus" / "settings.yml").write_text(
-        "periplus_version: 0\npacks:\n  - php_basic@0.2.0\n"
+        "periplus_version: 0\npacks:\n  - php_basic@0.3.0\n"
     )
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "User.php").write_text(GROUPED)

@@ -1,0 +1,168 @@
+$schema: "https://periplus.dev/schema/0/pack-file.schema.json"
+
+# A call that hook/hook_invoke.yaml reads a hook from, where a variable stands in the hook's
+# argument: invokeAll($hook), alter($type, $data), invoke($module, $hook) and the others on a
+# module handler or a theme manager known by its name. The hook is chosen at run time, so no
+# invokes_hook edge can name it. Each such call is kept as a php.call_site node marked resolution
+# runtime, with its edges to and from the method or function around it, as call/runtime_argument.yaml
+# keeps a route or a service built at run time. Its id is the method or function around it, the
+# object as written and the method called, ending in (runtime), so it stays apart from the node
+# php_basic gives the same call.
+#
+# The argument counts as a variable when it holds a $ before its comma, as $hook, 'x_' . $type
+# or $types; a list of quoted types is hook/hook_alter_list.yaml's. A constant in the argument
+# gives no node. Two such calls to one method on one object in one method or function share one
+# node with two locations. A method of a class kept in a module-family file is read by the method
+# rules only.
+
+rules:
+# invokeAll($hook), invokeAllWith($hook, ...) and alter($type, ...): the first argument.
+- rule: hook_runtime_first_argument
+  reads: file
+  in: [source]
+  match: &first_method
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &first_where
+    - name_matches: {child: object, pattern: &runner '(?s).*(?:[mM]oduleHandler|module_handler|[tT]hemeManager|theme_manager)(?:\(\))?|\\?Drupal::theme\(\)|(?:\$container|\$this->container|\\?Drupal::getContainer\(\))->get\(\s*[''"](?:module_handler|theme\.manager)[''"]\s*\)|\\?Drupal::service\(\s*[''"](?:module_handler|theme\.manager)[''"]\s*\)'}
+    - name_matches: {child: name, pattern: 'invokeAll|invokeAllWith|alter'}
+    - name_matches: {child: arguments, pattern: '(?s)\(\s*[^,$]*\$.*'}
+  id: &method_id
+    from: [enclosing_type, enclosing_method, declared_name, name]
+    template: "{enclosing_type}::{enclosing_method}::{declared_name}->{name}(runtime)"
+  emits: &runtime_node
+  - node: {type: php.call_site}
+  - attribute: {name: resolution, template: runtime}
+  confidence: declared
+
+- rule: hook_runtime_first_argument_in
+  reads: file
+  in: [source]
+  match: *first_method
+  id: *method_id
+  emits: &method_edges
+  - edge: {kind: has_call_site, from: enclosing_method, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_method}
+  confidence: declared
+
+# invoke($module, $hook), invokeAllDeprecated($message, $hook), alterDeprecated($message, $type)
+# and alterForTheme($theme, $type): the second argument.
+- rule: hook_runtime_second_argument
+  reads: file
+  in: [source]
+  match: &second_method
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &second_where
+    - name_matches: {child: object, pattern: *runner}
+    - name_matches: {child: name, pattern: 'invoke|invokeAllDeprecated|alterDeprecated|alterForTheme'}
+    - name_matches: {child: arguments, pattern: '(?s)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[^,$]*\$.*'}
+  id: *method_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: hook_runtime_second_argument_in
+  reads: file
+  in: [source]
+  match: *second_method
+  id: *method_id
+  emits: *method_edges
+  confidence: declared
+
+# invokeDeprecated($message, $module, $hook): the third argument.
+- rule: hook_runtime_third_argument
+  reads: file
+  in: [source]
+  match: &third_method
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    where: &third_where
+    - name_matches: {child: object, pattern: *runner}
+    - name_matches: {child: name, pattern: invokeDeprecated}
+    - name_matches: {child: arguments, pattern: '(?s)\((?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,(?:[^,()''"]|''(?:[^''\\]|\\.)*''|"(?:[^"\\]|\\.)*"|\([^()]*\))*,\s*[^,$]*\$.*'}
+  id: *method_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: hook_runtime_third_argument_in
+  reads: file
+  in: [source]
+  match: *third_method
+  id: *method_id
+  emits: *method_edges
+  confidence: declared
+
+# The same three in a function of a module-family file, such as a hook in a .module file. The
+# function holds what its body holds, as call/runtime_argument_in_function.yaml says.
+- rule: hook_runtime_first_argument_in_function
+  reads: file
+  in: [source]
+  match: &first_function
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: &module_endings [module, install, theme, inc, profile]
+    holder: function_definition
+    where: *first_where
+  id: &function_id
+    from: [enclosing_type, declared_name, name]
+    template: "{enclosing_type}::{declared_name}->{name}(runtime)"
+  emits: *runtime_node
+  confidence: declared
+
+- rule: hook_runtime_first_argument_in_function_in
+  reads: file
+  in: [source]
+  match: *first_function
+  id: *function_id
+  emits: &function_edges
+  - edge: {kind: has_call_site, from: enclosing_class, to: this_node}
+  - edge: {kind: call_site_in, from: this_node, to: enclosing_class}
+  confidence: declared
+
+- rule: hook_runtime_second_argument_in_function
+  reads: file
+  in: [source]
+  match: &second_function
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *second_where
+  id: *function_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: hook_runtime_second_argument_in_function_in
+  reads: file
+  in: [source]
+  match: *second_function
+  id: *function_id
+  emits: *function_edges
+  confidence: declared
+
+- rule: hook_runtime_third_argument_in_function
+  reads: file
+  in: [source]
+  match: &third_function
+    declaration: member_call_expression
+    name_child: object
+    filetype: php
+    ending: *module_endings
+    holder: function_definition
+    where: *third_where
+  id: *function_id
+  emits: *runtime_node
+  confidence: declared
+
+- rule: hook_runtime_third_argument_in_function_in
+  reads: file
+  in: [source]
+  match: *third_function
+  id: *function_id
+  emits: *function_edges
+  confidence: declared

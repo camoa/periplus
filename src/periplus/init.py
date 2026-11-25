@@ -123,6 +123,8 @@ class InitReport:
     detected: tuple[Detection, ...] = ()
     #: Each folder the detected packs list candidates for, and where it was found.
     placed: tuple[Placement, ...] = ()
+    #: Each settings value a detected pack reads as the project folder's name, and its description.
+    root_names: tuple[tuple[str, str], ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -141,6 +143,7 @@ def initialise_project(
     packs: Sequence[str] | None = None,
     detected: Sequence[Detection] = (),
     placed: Sequence[Placement] = (),
+    root_names: Sequence[tuple[str, str]] = (),
 ) -> InitReport:
     """Create ``.periplus/``, ``.periplus/packs/`` and the settings file under ``root``.
 
@@ -228,6 +231,7 @@ def initialise_project(
     settings = marker / SETTINGS_FILENAME
     found = tuple(detected)
     places = tuple(placed)
+    roots = tuple(root_names)
     pins = tuple(packs) if packs is not None else tuple(one.pin for one in found)
     try:
         _create(marker, settings, pins, places)
@@ -239,9 +243,16 @@ def initialise_project(
             problems=(error.problem(),),
             detected=found,
             placed=places,
+            root_names=roots,
         )
     return InitReport(
-        root=root, settings=settings, created=True, problems=(), detected=found, placed=places
+        root=root,
+        settings=settings,
+        created=True,
+        problems=(),
+        detected=found,
+        placed=places,
+        root_names=roots,
     )
 
 
@@ -364,7 +375,7 @@ def render_text(report: InitReport) -> str:
     **One ``detected`` line per detection, and none at all when nothing was detected.** The pin
     alone would be the wrong half to print: a pin that was written into the settings file is
     already visible in that file, and what the file cannot say is *why*. So the line carries the
-    evidence — ``drupal_basic@0.3.0 via composer.json`` — which is the only form in which the
+    evidence — ``drupal_basic@0.4.0 via composer.json`` — which is the only form in which the
     prefill is checkable by the person expected to edit it.
 
     Printed on the created path only. A refused run wrote nothing, so a detection it reports is a
@@ -392,6 +403,11 @@ def render_text(report: InitReport) -> str:
                 f"{PROJECT_MARKER}/{SETTINGS_FILENAME}"
             )
         lines += [_placement_line(one) for one in report.placed]
+        lines += [
+            f"  value     {_escape(name)}: {_escape(text)} Set it under values in "
+            f"{PROJECT_MARKER}/{SETTINGS_FILENAME} when this folder is that one unit."
+            for name, text in report.root_names
+        ]
     lines += [f"  {int(problem.code)}  {_escape(problem.message)}" for problem in report.problems]
     return "\n".join(lines) + "\n"
 
