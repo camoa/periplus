@@ -197,7 +197,10 @@ def run(
         empty = _empty_packs(root, rule_set, packs, pinned, folders, read, overrides, selection)
         directories = sorted({path for name in wanted for path in folders[name]})
         listed, unlisted = files_in(root, directories, selection)
-        unread = sorted(set(listed) - read)
+        # The settings, the rutters and the map under the marker are never code to map.
+        unread = sorted(
+            path for path in set(listed) - read if not path.startswith(f"{PROJECT_MARKER}/")
+        )
         if not read:
             message = (
                 "no file was selected, so no map was written and any existing map was left as it "

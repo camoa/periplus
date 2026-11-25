@@ -248,6 +248,9 @@ def _expand(pattern: str, root: Path, selection: Selection | None) -> tuple[str,
     normal = _inside(pattern)
     found = [""]
     for segment in normal.split("/"):
+        # `.` normalises to itself, and `./**` to `**`, whose root is the empty path: one spelling.
+        if segment == ".":
+            continue
         if segment == "**":
             found = [below for base in found for below in _below(root, base, selection)]
         elif segment == "*":

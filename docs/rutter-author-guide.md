@@ -302,8 +302,8 @@ the rutters it depends on;
 project matched, and from where; `periplus spec <pack>` prints the schemas and what the rutter's
 manifest declares and inherits. In the map report, `not_executed` lists the rules the engine cannot
 run and why, `problems` what the run could not do, `unlisted` the folders it could not list: each
-should be empty. `unread` lists the files in the rules' folders that no rule read; it holds `.git`,
-the settings and the rutters when a folder is the whole project, so it is never empty there. A
+should be empty. `unread` lists the files in the rules' folders that no rule read, except those
+under `.periplus`; it holds `.git` when a folder is the whole project, so it is rarely empty there. A
 rule holding a key the schemas accept and the engine does not run is not executed;
 [Tree references](rutter-author-guide-references.md) lists the keys. An unresolved end is a node in
 state `unresolved`, counted in `counts.nodes_by_state`.
