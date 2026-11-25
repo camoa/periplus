@@ -59,6 +59,8 @@ Look these up while you work.
   link to the page that holds the detail.
 - [Glossary](glossary.md): the words Periplus uses, each in one or two sentences, and the pairs
   that get confused.
+- [Size, time and memory](scalability.md): how long a map takes to build and to ask as a project
+  grows, from one set of runs, and what to do with a large map.
 - `periplus spec`: the contract, printed by the tool. The schemas, the rule format, the engine,
   and what the format cannot say yet.
 - [Changelog](../CHANGELOG.md): what each release added and changed.
