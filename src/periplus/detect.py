@@ -45,6 +45,7 @@ from pathlib import Path
 
 from periplus.engine.select import (
     FolderUnresolved,
+    Listings,
     folder_values,
     optional_folders,
     resolve_folders,
@@ -189,7 +190,7 @@ def _found(
     """Whether the folder resolves to at least one directory; a value that cannot resolve, or
     leaves the root, is not found."""
     try:
-        return bool(resolve_folders([name], packs, overrides, root)[name])
+        return bool(resolve_folders([name], packs, overrides, Listings(root))[name])
     except (FolderUnresolved, SourceUnreadable):
         return False
 
@@ -327,7 +328,7 @@ def _match_pattern(
     """
     folder, _, name = declared.rpartition("/")
     try:
-        directories = resolve_value(folder or ".", packs, _place(root, packs)[1], root)
+        directories = resolve_value(folder or ".", packs, _place(root, packs)[1], Listings(root))
     except (FolderUnresolved, SourceUnreadable):
         return None
     for directory in directories:

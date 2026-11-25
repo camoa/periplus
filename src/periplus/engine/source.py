@@ -22,6 +22,7 @@ __all__ = [
     "SourceUnreadable",
     "load_data",
     "load_text",
+    "read_file",
     "plain",
     "resolve_path",
     "split_item",
@@ -58,6 +59,16 @@ class Hit:
     key: str | None
 
 
+def read_file(path: Path, name: str) -> bytes:
+    """The file's bytes. ``name`` is the repository-relative path used in the message. A file that
+    cannot be read raises ``SourceUnreadable``."""
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        message = f"{name} cannot be read: {error.strerror or error}"
+        raise SourceUnreadable(message, {"file": name}) from error
+
+
 def load_data(path: Path, name: str) -> dict[str, Entry]:
     """The file's root mapping. ``name`` is the repository-relative path used in the message.
 
@@ -69,7 +80,7 @@ def load_data(path: Path, name: str) -> dict[str, Entry]:
     constructed, so no tag runs anything.
     """
     try:
-        root = compose(path.read_bytes().decode("utf-8"))
+        root = compose(read_file(path, name).decode("utf-8"))
     except (UnicodeDecodeError, YAMLError) as error:
         raise SourceUnreadable(f"{name} cannot be read: {error}", {"file": name}) from error
     if not isinstance(root, MappingNode):
@@ -89,7 +100,7 @@ def load_text(path: Path, name: str) -> str:
     """The file's text, each carriage return and line feed made one line feed, so a checkout with
     either line end gives one map. Raises ``SourceUnreadable`` for bytes that are not UTF-8."""
     try:
-        return path.read_bytes().decode("utf-8").replace("\r\n", "\n")
+        return read_file(path, name).decode("utf-8").replace("\r\n", "\n")
     except UnicodeDecodeError as error:
         raise SourceUnreadable(f"{name} cannot be read as text: {error}", {"file": name}) from error
 

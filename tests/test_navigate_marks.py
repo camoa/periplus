@@ -141,7 +141,7 @@ def test_find_mark_no_node_carries_warns_with_the_marks_the_map_holds(tmp_path: 
 def test_find_takes_mark_without_a_text() -> None:
     args = build_parser().parse_args(["find", "--mark", "not installed", "--mark", "other"])
 
-    assert (args.text, args.mark) == ("", ["not installed", "other"])
+    assert (args.text, args.mark) == ([], ["not installed", "other"])
 
 
 def test_show_prints_the_mark_on_the_node_header(tmp_path: Path) -> None:

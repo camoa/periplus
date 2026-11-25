@@ -10,7 +10,7 @@ the rest of what `init` does.
 declared in a pack manifest, never in engine code, so a third-party pack must be detected exactly
 as a bundled one is. Two tests exist only to make that falsifiable: one detects a fixture pack this
 package has never heard of, and one plants a repository full of PHP, YAML and Twig and asserts that
-the packs owning those languages -- which declare no detector -- fire nothing. An implementation
+only php_basic, the one of the three that declares a detector, fires. An implementation
 that hardcoded a framework table would pass every other test in this file.
 
 Fixture packs are written under `tmp_path`, never edits to the packs that ship, for the reason
@@ -290,18 +290,12 @@ def test_a_repository_matching_a_bundled_detector_is_recognised(tmp_path: Path) 
     )
 
 
-def test_a_php_repository_that_is_not_drupal_is_recognised_as_nothing(tmp_path: Path) -> None:
-    """The near miss, and the languages that declare no detector.
+def test_a_php_repository_that_is_not_drupal_is_recognised_as_php_only(tmp_path: Path) -> None:
+    """The near miss: PHP source pins php_basic, and nothing else fires.
 
-    This repository is PHP, YAML and Twig throughout, and the install ships a pack for each of the
-    three. None of them declares a detector, because "there is PHP here" is not a stack anybody
-    pins -- drupal_basic already reaches php_basic and yaml_basic through `depends`, and pinning
-    a language pack because a file with that extension exists would prefill noise into every
-    settings file.
-
-    So the empty result is the assertion, and it is the one an engine with a built-in framework
-    table fails. The `composer.json` requires Symfony rather than nothing, which is the case a
-    detector that tested existence alone gets wrong.
+    This repository is PHP, YAML and Twig throughout. php_basic detects PHP source in src;
+    yaml_basic and twig_basic hold no rules and declare no detector. The `composer.json` requires
+    Symfony rather than Drupal, which is the case a detector that tested existence alone gets wrong.
     """
     repo = _repo(
         tmp_path,
@@ -313,7 +307,11 @@ def test_a_php_repository_that_is_not_drupal_is_recognised_as_nothing(tmp_path: 
         },
     )
 
-    assert detect_packs(repo, _candidates(_bundled_root())) == ()
+    detected = detect_packs(repo, _candidates(_bundled_root()))
+
+    assert [(found.pin, found.path) for found in detected] == [
+        (_bundled_pin("php_basic"), "src/Kernel.php")
+    ]
 
 
 # -------------------------------------------------------------------------------------------

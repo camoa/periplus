@@ -9,8 +9,9 @@ follows one piece of knowledge from a first map to a rule or a description that 
 - **The engine** runs rules and writes the map. It knows no language and no framework.
 - **Rutters** hold the knowledge of one stack as small YAML rules. A rutter is one folder named
   `<pack>@<version>`, so file names and settings call it a *pack*.
-- **The map** is one JSON file, `.periplus/map.json`, of nodes and edges. Each one carries its file
-  and line.
+- **The map** is one JSON file, `.periplus/map.json`, of nodes and edges. Each link carries the
+  file and line where it was found, and each thing found in the code carries its own. A thing only
+  named by a link has none.
 - **Descriptions** say in plain words what a thing does. They live in
   `.periplus/descriptions.yaml`, beside the map.
 - **Skills** teach an AI agent to use the other four. `periplus skills install` copies them into
@@ -40,8 +41,9 @@ What passes between them:
 ```
 
 `periplus map` reads the settings, loads the pinned rutters and the rutters they depend on, and
-runs their rules over the project's files. It writes the map and prints a report on the run. Every
-other command reads the map. The commands that print a thing also print its description, and
+runs their rules over the project's files. It writes the map and prints a report on the run. It
+never reads the descriptions, so they are not an input of the map. Every other command reads the
+map. The commands that print a thing also print its description, and
 `periplus find` searches the descriptions too.
 
 ## What each part knows
@@ -51,18 +53,20 @@ Each part holds one kind of knowledge. None of them holds another's.
 | Part | Knows | Does not know |
 |---|---|---|
 | Rutters | How one stack's things look in real files: which folders, which file types, which patterns | Anything about one project, unless it is that project's own rutter |
-| The map | Which things exist and how they link, each with a file and line, a state and a confidence | What a thing is for, or what happens when it runs |
+| The map | Which things exist and how they link, with a state, a confidence and the place each was found | What a thing is for, or what happens when it runs |
 | Descriptions | What a thing does, in the words a person would search for | Which other code calls it: an entry speaks only of its own code |
 | Skills and people | How to ask, what to judge, when an answer looks wrong | Nothing by themselves: they work from the map and the code |
 
-**Facts and words stay in separate files.** The map holds only what rules found. Rules give the
-same result on every run, so the map is the same, byte for byte, for the same code. A description
-is written by a person or an agent, and it is a reading of the code, not a fact a rule can repeat.
-The map never reads the descriptions file, so a description can never change the map.
+**Facts and words stay in separate files.** The map holds only what rules found. The same code,
+settings and rutters, on the same version of Periplus, give the same map, byte for byte. A
+description is written by a person or an agent, and it is a reading of the code, not a fact a rule
+can repeat. The map never reads the descriptions file, so a description can never change the map.
 
-Each description is tied to the code it describes. `periplus stamp` writes a fingerprint of that
-code into the entry. When the code changes, `periplus stale` lists the entry, so a description of
-changed code shows as stale and is not trusted in silence.
+A description comes from one of two places. One written from a thing's code is tied to that code by
+`periplus stamp`, and `periplus stale` lists it when the code changes. A meaning a person gave, in a
+description or in a term with its `origin`, can change with no code change, and nothing marks
+that. Descriptions of links are not stamped. So "not stale" means the code did not change since
+the stamp, not that the words are right.
 
 ## How rutters work together
 
@@ -95,7 +99,11 @@ and [Map rules](rutter-author-guide-map-rules.md) gives the full rule language.
 ## The life of what you learn
 
 Knowledge about a code base gets into Periplus in one of two forms: a rule or a description. Both
-are files you commit. The loop below shows where each comes from.
+are files in the project's `.periplus` folder. The loop below shows where each comes from.
+
+A project's documentation is a third kind: how things fit together into features, flows and
+decisions. Periplus does not change for it. Rules in the project's own rutter read the pages and
+link each one to the code it names, as the `periplus-document` skill guides.
 
 1. **Map.** Run `periplus map`. It writes the map and prints the report.
 2. **Ask.** Ask the map with `periplus find`, `show`, `neighbors`, `affected`, `path` or `slice`.
@@ -115,7 +123,7 @@ are files you commit. The loop below shows where each comes from.
 6. **Map again.** Run `periplus map` again. `periplus diff OLD NEW` lists what the change added,
    removed or changed in the map. `periplus stale` lists the descriptions whose code changed.
 
-A gap you close with a rule does not come back. A meaning you write as a description is there for
+When you add a rule for a gap, the map holds that link from then on. A meaning you write as a description is there for
 the next session, and for the next person.
 
 ## What the design refuses
@@ -123,14 +131,16 @@ the next session, and for the next person.
 [Principles](principles.md) gives the reasons in full. In short:
 
 - **No server, no database, no viewer.** The map is a file, and the command line is the only
-  interface. You commit the map, compare two versions, and review the change in a pull request.
-  `periplus export` writes GraphML, DOT or Mermaid for other tools to draw.
-- **No guessing.** A thing no rule explains is in the map as a marked unknown, never as a guessed
-  link. Each rule declares its confidence, and the engine does not decide it at run time. No AI
-  takes part in making a map.
-- **No stack knowledge in the engine.** Everything about a language or a framework lives in a
-  rutter. A rutter written by anyone can do everything a bundled rutter does. When a rutter needs
-  more, the engine gains a general ability that every rutter can use.
+  interface. You commit the map and the inputs record beside it, compare two versions, and review
+  the change in a pull request. `periplus export` writes GraphML, DOT or Mermaid for other tools
+  to draw.
+- **No guessing.** A reference a rule found and could not resolve, or that is decided at run
+  time, is in the map and marked, never given a guessed target. A thing or link that no rule looks
+  for is not in the map, and nothing marks its absence. Each rule declares its confidence, and the
+  engine does not decide it at run time. No AI takes part in making a map.
+- **No stack knowledge in the engine.** Knowledge of a language or a framework belongs in rutters,
+  never in the engine. A rutter written by anyone can do everything a bundled rutter does. When
+  rules cannot express a pattern, the engine gains a general ability that every rutter can use.
 
 The cost is stated in the principles too: a map is only as good as its rutters. A convention no
 rule reads is not in the map.

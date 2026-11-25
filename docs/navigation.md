@@ -1,6 +1,6 @@
 # Navigating the map
 
-`periplus map` writes the map. Twenty-nine commands read it. Each one loads the map, prints its
+`periplus map` writes the map. The commands on this page read it. Each one loads the map, prints its
 output and stops. None of them changes the map or starts a server.
 
 The commands come in two layers:
@@ -36,7 +36,7 @@ you want several answers about the same items at once.
 
 | Command | Question it answers |
 |---|---|
-| `periplus find [TEXT]` | Which things hold these words in their id, attributes or description, and which edges in their description, attributes or code line? |
+| `periplus find [TEXT...]` | Which things hold these words in their id, attributes or description, and which edges in their description, attributes or code line? |
 | `periplus show ID...` | What is each of these nodes, and which edges leave and arrive at it? |
 | `periplus neighbors ID...` | What do these items set off, hop by hop? |
 | `periplus affected ID...` | What sets these items off, hop by hop? |
@@ -71,9 +71,10 @@ you want several answers about the same items at once.
 | `periplus undescribed [ID...]` | Which main things have no description yet, counted by file, type or container? |
 | `periplus order ID...` | In what order should these things be described, each after what it calls or uses? |
 | `periplus stamp` | Write into each node entry a fingerprint of the code it describes. |
-| `periplus stale` | Which node entries describe code that changed since they were stamped, or a node that is gone? |
+| `periplus stale` | Which node entries describe code that changed since they were stamped, or a node that is gone, and which term ids are gone? |
 
-A twenty-ninth command, `periplus check-map`, checks the whole map against the map schema. See
+Two more commands check the map itself: `periplus check-map` checks it against the map schema,
+and `periplus fresh` says whether it still matches the code. See
 [Checking the map](#checking-the-map).
 
 Six commands write a file: `stamp` writes the descriptions file; `extract` writes a map file;
@@ -100,7 +101,9 @@ letter, digit or underscore, compared without case. So `helper` and `tools.helpe
 
 - A short name that fits one node is used, with the warning
   `resolved 'helper' to python.function::shop.tools.helper`.
-- One that fits several nodes exits 31 and lists up to 20 of them, each with its type and
+- One that fits several nodes, all but one of them of a part type, names that one, with the
+  same warning. `slice` does so only for `--from`, and searches such a word.
+- Any other that fits several nodes exits 31 and lists up to 20 of them, each with its type and
   location. In JSON the problem's `detail` holds `id` (the text given), `total` (how many nodes
   fit) and `candidates`, up to 20 objects with `id`, `type` and `location` (`null` when the node
   has none).
@@ -346,11 +349,11 @@ periplus count ID... [--map PATH] [--format text|json]
 
 Counts what the `ID`s name: how many ids were given and how many things they name, then the things
 by type and by state, most first, and the edges both of whose ends are among them, by kind. An id
-that names no node, or a short name that fits several, is listed under `not in the map:`, with
-`(fits N nodes)` for a short name, and is not a problem: `count` exits 0. The first line also says
-how many ids named a thing an earlier id named (`repeated`) and how many were short names. In JSON:
-`command`, `given`, `things`, `repeated`, `short_names`, `by_type`, `by_state`, `edges`,
-`not_found` (each with `id` and `fits`) and `problems`.
+that names no node, or a short name that fits several and names none of them, is listed under
+`not in the map:`, with `(fits N nodes)` for a short name, and is not a problem: `count` exits 0.
+The first line also says how many ids named a thing an earlier id named (`repeated`) and how many
+were short names. In JSON: `command`, `given`, `things`, `repeated`, `short_names`, `by_type`,
+`by_state`, `edges`, `not_found` (each with `id` and `fits`) and `problems`.
 
 ### pieces
 
@@ -398,12 +401,12 @@ a hub: name, type, `hop N` and `fan N`, the edges it would follow. In JSON: `com
 ### find
 
 ```
-periplus find [TEXT] [--any] [--type T]... [--path P]... [--mark TEXT]... [--parts] [--edges|--no-edges] [--kinds] [--source|--no-source] [--limit N] [--ids] [--map PATH] [--format text|json]
+periplus find [TEXT ...] [--any] [--type T]... [--path P]... [--mark TEXT]... [--parts] [--edges|--no-edges] [--kinds] [--source|--no-source] [--limit N] [--ids] [--map PATH] [--format text|json]
 ```
 
-Lists the things that hold the words of `TEXT`, then the edges that hold them. `TEXT` is one
-argument, so quote several words, as `periplus find 'two words'`: unquoted, the second word is
-refused with exit 2. `TEXT` is split at spaces. Each word must match a thing, in its id, a string
+Lists the things that hold the words of `TEXT`, then the edges that hold them. Several words
+need no quotes: `periplus find two words` and `periplus find 'two words'` print the same.
+`TEXT` is split at spaces. Each word must match a thing, in its id, a string
 attribute value or its description; `--any` keeps a thing that matches any one word. Matching ignores case, and a word matches inside
 a longer one. A string item of a list attribute counts; numbers, booleans and nested objects do
 not.
@@ -516,6 +519,20 @@ attribute's name, or null), `attributes` and `description` (the entry's text, or
 of the node's mark texts, empty when it has none, and `group` (`main`, `part`, `unplaced` or
 `supporting`).
 
+**Terms.** The `terms` section of the descriptions file says what a word of the project means and
+names the things it covers; see the `periplus-describe` skill. When the words of `TEXT` hold one
+of a term's `words` or `old` names, as whole words in that order, ignoring case, a block after the
+count lines prints the term: its name and text, then the words that matched, its `origin` when the
+file gives one, and its ids. A word that two terms hold has two meanings, and a line names each.
+`bill` matches the old name `bill`, but `billing` does not. The things a matching term names join
+the results, after those the words found, and each row a matching term names ends with
+`[term NAME]`. A term id the map does not hold is skipped; `stale` lists it. `--type`, `--path`,
+`--mark` and `--parts` narrow the joined things as they narrow the rest, and `--ids` prints them.
+In JSON, an item that only a term brought has `matched` set to `term`, an item a matching term
+names has `terms`, the names of those terms, and the report adds
+`terms`, each with `name`, `text`, `words`, `old`, `ids`, `origin` (or null) and `matched_words`.
+A search that no term matches prints no block and no `terms` key, as before terms.
+
 ### show
 
 ```
@@ -560,7 +577,9 @@ of a row has an entry, `other description: <text> (<file>:<line>)` follows, so o
 each linked thing does; in JSON the row holds it, or `null`, in `other_description`. JSON puts the entry, or `null`, in
 a `description` key. A descriptions file that is not YAML, or not the shape the `periplus-map`
 skill's `descriptions.schema.json` states, is a problem with exit 30, and `show` still prints the
-node and its edges.
+node and its edges. A top-level key the schema does not name is not refused, by `show` or any
+other command: one line on standard error names it, and the rest of the file loads, so a file
+written for a newer Periplus still works.
 
 ### neighbors
 
@@ -1107,9 +1126,11 @@ Compares each stamped node entry's fingerprint with its code now, as `stamp` rea
 under `edges` are skipped. The first
 line counts the node entries: fresh, changed, gone (the map holds no node of that id), unreadable
 (the code cannot be read) and not stamped. Then it lists the changed, the gone and the unreadable
-entries under a heading each. `--ids` prints the changed, then the gone, then the unreadable ids.
+entries under a heading each. Under `terms with gone ids:` it lists each term with an id the map
+no longer holds, and that id; a rename or a move changes an id. `--ids` prints the changed, then
+the gone, then the unreadable ids, then the gone term ids, each once.
 In JSON: `command`, `found`, `entries`, `fresh`, `changed`, `gone`, `unreadable`, `unstamped` and
-`problems`.
+`problems`, and `terms_gone`, each with `term` and `id`, when a term id is gone.
 
 ## Exit codes
 
@@ -1118,11 +1139,13 @@ In JSON: `command`, `found`, `entries`, `fresh`, `changed`, `gone`, `unreadable`
 | 0 | The report printed. An empty result is still 0. |
 | 2 | A bad option, such as `--depth 0` outside `slice`, `--raw` with `--touch` or with several `ID`s, `--ids` with `--format json`, `-` that reads no id, `slice` with no start, `slice --direction out` or `in`, `slice --ids` with `--out`, `slice --from` with `WORDS`, `depth --ids` without `--entrances`, `at` with no line number of 1 or more, or `diff --change` without `--ids`. `join`, `common` or `minus` with one map, or `join`, `common`, `minus` or `diff` with maps of different versions. A walk on a map with no cause list from several `ID`s. |
 | 17 | The map file that `slice --out`, `extract`, `join`, `common` or `minus` would write does not pass the map schema, because a map it was made from does not. Nothing is written. Run `periplus check-map` on that map. |
+| 20 | `fresh` meets a file or folder in the project that cannot be read, as `map` does. Fix the file's permissions. |
 | 27 | `slice --out` or `extract --out` names the map being read, `--out` of `join`, `common` or `minus` names one of its inputs, or the file cannot be written even after its missing folders are created; or `stamp` cannot write the descriptions file. |
 | 29 | No map to read: no project above the working directory, a missing file at the path, or an unreadable file. Run `periplus map`, or fix the file's permissions. |
 | 30 | The file is not a map: not JSON, missing the outline (`periplus_map_version`, `nodes`, `edges`), or damaged below the outline, a node or edge row malformed. Also a descriptions file a command reads that is not YAML or does not match the descriptions schema, or one `stamp` cannot change without changing other text. |
 | 31 | An id names no node in the map, or a short name fits more than one node; or `slice --out` has no start, as when its words match nothing. |
 | 32 | `slice --out` holds more things than `--limit` allows. |
+| 34 | `fresh` found the map stale, or could not tell: no inputs record beside the map, a record of another map, or a map built with another settings file. Run `periplus map`, or give `fresh` that `--settings PATH`. |
 | 141 | Standard output was closed before the report was written, as when the output is piped into `head`. Nothing more is printed. |
 
 ## Checking the map
@@ -1139,6 +1162,37 @@ periplus check-map [--map PATH] [--format text|json]
 
 It runs the full map schema check on the map the other commands would read. It exits 0 on a
 valid map, 30 with the path and the first error on a failing one, and 29 with no map.
+
+### fresh
+
+```
+periplus fresh [--map PATH] [--settings PATH] [--format text|json]
+```
+
+Says whether `periplus map` run now would write the map as it is. `periplus map` writes an inputs
+record beside the map: `.periplus/map.inputs.json` beside the default map, and `NAME.inputs.json`
+beside a map written with `--output NAME.json`. The record names each file a rule matches, with a
+digest of its bytes when a rule reads them. It also holds a digest of the effective settings and of
+each loaded rutter's files, the tool version, the map's own digest, and the settings file used, as
+a path from the project root. Commit it with the map. For a
+map built with `periplus map --settings PATH`, give `fresh` the same `--settings PATH`; without it,
+`fresh` says which settings file the map was built with and what to run. `fresh` selects the files
+as `map` does, runs no rule, and compares. It names the files changed, added and removed, and says
+whether the settings, a rutter or the tool differ. A file in a rule's folder that no rule's file
+pattern matches, or a file a rule takes by its name alone, does not make the map stale when its
+content changes. A comment in the settings file changes nothing.
+The record holds each file's bytes as they are, so a checkout that rewrites line endings reads as
+changed.
+
+It exits 0 when the map is fresh and 34 when it is stale or it cannot tell: no record, as for a map
+built by a Periplus older than this command, a record of another map, or a map built with another
+settings file. A slice and the files
+`extract`, `join`, `common` and `minus` write carry no record; run `fresh` on the map they came
+from. A settings or rutter problem keeps the code `map` gives it, a file or folder that cannot be
+read exits 20 as it does for `map`, and 29 means no map. In JSON:
+`command`, `state` (`fresh`, `stale` or `unknown`), `reason`, `map`, `made_by`, `tool` (`then` and
+`now`), `settings` (`same` or `changed`), `packs` and `files` (each `changed`, `added` and
+`removed`), and `problems`.
 
 ## A worked example
 
@@ -1172,7 +1226,8 @@ def greet():
 ```
 
 The descriptions file describes two things. The first carries a fingerprint that does not match
-its code, so `stale` has something to show:
+its code, so `stale` has something to show. Its one term says what people call the hello
+command, and names an id the map does not hold:
 
 <!-- nav-file: .periplus/descriptions.yaml -->
 ```yaml
@@ -1186,6 +1241,13 @@ nodes:
     text: The hello command; it runs greet.
     file: shop/cli.py
     line: 7
+terms:
+  greeting:
+    text: What the shop says to a person who asks for it.
+    words: [greeting]
+    old: [salute]
+    ids: ['typer.command::shop.cli.app:hello', 'python.function::shop.cli.salute']
+    origin: person
 ```
 
 Then map it. `periplus map` writes `.periplus/map.json` by default, which is where the commands
@@ -1233,6 +1295,22 @@ edges:
       | helper()
   contains  tools -> helper  shop/tools.py:1  [source]
       | def helper():
+```
+
+A term's old name finds the thing it names, though no id holds the word:
+
+<!-- nav-run -->
+```console
+$ periplus find salute
+periplus find: 1 thing (1 main), 0 edges
+main by type: typer.command 1
+terms matching the words: 1
+  greeting: What the shop says to a person who asks for it.
+    old name: salute; origin: person; ids: typer.command::shop.cli.app:hello, python.function::shop.cli.salute
+
+typer.command::shop.cli.app:hello  typer.command  mapped  shop/cli.py:7  [term greeting]
+      | @app.command("hello")
+      # The hello command; it runs greet.
 ```
 
 <!-- nav-run -->
@@ -1657,8 +1735,8 @@ warning: resolved 'hello' to typer.command::shop.cli.app:hello
 warning: resolved 'app' to typer.app::shop.cli.app
 ```
 
-Check the descriptions against the code. The app's fingerprint does not match, and the command's
-entry has none yet:
+Check the descriptions against the code. The app's fingerprint does not match, the command's
+entry has none yet, and one id of the term is gone:
 
 <!-- nav-run -->
 ```console
@@ -1667,6 +1745,8 @@ periplus stale
 2 node entries: 0 fresh, 1 changed, 0 gone, 0 unreadable, 1 not stamped
 changed:
   app  typer.app  mapped  shop/cli.py:4
+terms with gone ids:
+  greeting  python.function::shop.cli.salute
 ```
 
 Stamp the entry that has no fingerprint. The app keeps its own until its description is checked
@@ -1789,4 +1869,14 @@ Last, check the whole map. The path printed is the project's:
 ```console
 $ periplus check-map
 /path/to/project/.periplus/map.json matches the map schema
+```
+
+And check that the map still matches the code, the settings, the rutters and the tool:
+
+<!-- nav-run -->
+```console
+$ periplus fresh
+periplus fresh
+map: /path/to/project/.periplus/map.json
+fresh: 2 files, the settings, 3 rutters and the tool match the map
 ```

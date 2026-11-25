@@ -1,0 +1,29 @@
+{
+  "skill_name": "periplus-document",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "This project has a Periplus map. Connect our docs to the code, so the map can tell us which pages talk about a class and which pages name things that no longer exist.",
+      "expected_output": "The agent lists the ways the pages already name code, each with a real example, agrees the habits with the user, records them in .periplus/documentation.md with the rule file for each, adds one small rule per habit and per name form to the project's own rutter, and checks the answers with periplus show and periplus find after the map is rebuilt.",
+      "expectations": [
+        "Reads the existing pages and lists each way they name code with one real example before it writes any rule",
+        "Asks the user which habits to keep and records only the agreed ones",
+        "Writes .periplus/documentation.md and names the rule file that reads each habit",
+        "Writes one small rule per habit and per name form in the project's rutter under .periplus/packs, and runs periplus validate on it",
+        "Gates the missing-name rule so it fires after the joins, and says that a mapped link shows only that a page names the thing",
+        "Changes no file outside .periplus/"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "This project has a Periplus map, and its rutter already reads our docs. We removed a method and renamed a class. Which docs are now out of date?",
+      "expected_output": "The agent keeps the old map, maps again, and compares the two maps with periplus diff. It names each page section that lost its link to the code beside the missing-name mark that took its place, with the page's file and line.",
+      "expectations": [
+        "Keeps a copy of the old map before it runs periplus map",
+        "Runs periplus diff on the old and new maps and reads the lost links from pages",
+        "Lists the names that match nothing with periplus find on the missing-name type, each with its page and line",
+        "Does not edit the pages unless the user asks"
+      ]
+    }
+  ]
+}

@@ -165,3 +165,28 @@ def test_main_prints_the_json_listing_and_two_runs_agree(
         "php.type::Cache::Zed",
     ]
     assert document["truncated"] is False
+
+
+def test_several_unquoted_words_print_what_the_quoted_words_print(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _map(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    printed = []
+    for words in (["foo cache"], ["foo", "cache"]):
+        for form in ("text", "json"):
+            code = main(["find", *words, "--map", str(path), "--format", form])
+            printed.append((code, capsys.readouterr().out))
+
+    assert printed[2:] == printed[:2]
+    assert [row["id"] for row in json.loads(printed[1][1])["items"]] == ["php.method::Foo::cache"]
+
+
+def test_the_help_says_ids_prints_the_ends_of_each_edge_too() -> None:
+    parser = build_parser()
+    subcommands = next(
+        action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+    )
+    text = " ".join(subcommands.choices["find"].format_help().split())
+
+    assert "With --ids it prints the ids of the things, then both ends of each edge" in text

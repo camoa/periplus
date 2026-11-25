@@ -8,22 +8,24 @@ page with the detail. The [glossary](glossary.md) defines each term.
 ### What is Periplus?
 
 A command-line tool that reads a code base and writes a map: the things its rules look for, such
-as classes, routes, hooks, templates and settings, and the links between them, each with its file
-and line. A person or an AI agent then asks the map, and does not search the code again.
-See the [README](../README.md) and [the architecture](architecture.md).
+as classes, routes, hooks, templates and settings, and the links between them, each link with the
+file and line where it was found. A person or an AI agent asks the map first, to find where to
+look, and reads the code there to confirm. See the [README](../README.md) and
+[How Periplus fits together](architecture.md).
 
 ### What is a rutter?
 
 A folder of small YAML rules that holds the knowledge of one stack, such as PHP, Drupal or Go.
 Each rule finds one thing, and rules build on what other rules found. File names and settings call
-a rutter a *pack*. See [How rules work together](rule-composition.md) and [Bundled
+a rutter a *pack*. See [Rule composition](rule-composition.md) and [Bundled
 rutters](rutters.md).
 
 ### Does making the map use AI?
 
-No. The engine runs the rules and writes the map. The same code gives the same map, byte for
-byte. AI comes in only after that, when an agent uses the skills to ask the map, describe code or
-write a rule. See [principles](principles.md).
+No. The engine runs the rules and writes the map. The same code, settings and rutters, on the
+same version of Periplus, give the same map, byte for byte. AI comes in only after that, when an
+agent uses the skills to ask the map, describe code or write a rule.
+See [principles](principles.md).
 
 ### Does it need a server or a database?
 
@@ -32,15 +34,37 @@ Nothing runs in the background. See [principles](principles.md).
 
 ### Which languages and frameworks does it read today?
 
-The bundled rutters read PHP, JavaScript, TypeScript, React, Next.js, Go, Drupal with several
-contributed modules, and Laravel. Most rutters open their `pack.yaml` with a list of what they do
-not map yet. `examples/second-stack` holds three more rutters to copy, one of them for Python.
-See [Bundled rutters](rutters.md).
+The rutters that ship with the package read PHP, JavaScript, TypeScript, React, Next.js, Go,
+Drupal with several contributed modules, and Laravel. Python is not one of them:
+`examples/second-stack/packs` holds example rutters for Python, Typer and spec-kitty, which you
+copy into a project. Any other stack needs a rutter you write. See [Bundled rutters](rutters.md).
+
+### How do I set it up with an AI agent?
+
+Install Periplus and its skills, then ask the agent to set Periplus up in the project and make a
+map. The setup skill pins the rutters, sets where the code is, builds the map and says what it
+holds. See [Using the map with an AI agent](using-the-map-with-an-agent.md#things-you-can-ask).
+
+### How does it know which rutters my project needs?
+
+`periplus init` pins each bundled rutter whose detector matches a file in the project, and prints
+the file. A stack kept in a subfolder, such as a front end in `frontend/`, is not detected: pin
+it by hand under `packs` in `.periplus/settings.yml`. When nothing matches, `init` says so. When no rutter covers a
+stack, its files are not in the map until someone writes one. See [Get started](../README.md#2-pin-a-rutter).
+
+### Can I add or remove a rutter myself?
+
+Yes. The rutters a project uses are the lines under `packs` in `.periplus/settings.yml`. Add a
+line to use a rutter, delete a line to stop using it, then run `periplus map` again. What
+`periplus init` writes there is a starting point, and the list is yours. An AI agent can make the
+change for you. Some rutters need a value under `values` before they map, such as the Go module
+path. See [Bundled rutters](rutters.md).
 
 ### Is it only for Drupal?
 
-No. The engine knows no language and no framework. Drupal has the most rules, and the docs use it
-as the example, not the target. A new stack is a new rutter, never a change to the engine.
+No. Knowledge of a language or a framework belongs in rutters, never in the engine. Drupal has
+the most rules, and the docs use it as the example, not the target. When rules cannot express a
+pattern, the engine gains a general ability that every rutter can use.
 See [Extending Periplus](extending-periplus.md).
 
 ### How is a map different from searching the code?
@@ -60,13 +84,13 @@ that draws graphs. Periplus has no viewer of its own. See [Visualize the map](vi
 ### Is the map complete?
 
 No. The map holds what its rutters look for. A link that no rule reads is not in the map. When
-an answer looks incomplete, the cause is often a missing rule. See [Mapping
-quality](mapping-quality.md).
+an answer looks incomplete, the cause is often a missing rule. See [Judging a
+map](mapping-quality.md).
 
 ### If the map shows no link, does that mean there is none?
 
 No. It means no rule found one. Check the code before you rely on "none", and turn what you find
-into a rule. See [Mapping quality](mapping-quality.md).
+into a rule. See [Judging a map](mapping-quality.md).
 
 ### Does it know what happens at run time?
 
@@ -79,7 +103,7 @@ See [the README](../README.md#what-the-map-holds).
 Not always. The project's own runs, on one large code base, show steadier work with the map: the
 same job cost about the same each time, and the answers changed less. A map improved by new rules
 helped more. Without a map, results varied from run to run. On the map as first built, the side
-without a map reported more likely problems, and some runs with the map took longer.
+without a map reported more likely problems, and the first job took longer with the map.
 See [the evals page](evals.md).
 
 ### Do I still need to read the code?
@@ -92,13 +116,14 @@ confirm a line or judge it. See [Using the map with an AI agent](using-the-map-w
 
 Read its marks: things in state `referenced` or `unresolved`, rule matches the map report lists
 as skipped, and files no rule read. Each is a gap a rule could close. Then use the map on real
-questions, and compare its answers with the code. See [Mapping quality](mapping-quality.md).
+questions, and compare its answers with the code. See [Judging a map](mapping-quality.md).
 
 ### What happens when the code changes?
 
-The map does not change by itself. Run `periplus map` again. `periplus diff OLD NEW` lists what
-the change added, removed and changed, and `periplus stale` lists the descriptions whose code
-changed. See [Navigating the map](navigation.md#diff).
+The map does not change by itself. `periplus fresh` says whether the code, the settings, the
+rutters or the tool changed since the map was built, and names the files. Run `periplus map` again
+to rebuild. `periplus diff OLD NEW` lists what the change added, removed and changed, and `periplus
+stale` lists the descriptions whose code changed. See [Navigating the map](navigation.md#fresh).
 
 ## Can the map tell me…
 
@@ -188,17 +213,28 @@ an AI agent](using-the-map-with-an-agent.md).
 ### …where one word means two things?
 
 Yes, as far as the code tells them apart. The map lists each thing with its type and place. A
-person settles what the code cannot say, and descriptions keep the answer. Prompt: "This project
+person settles what the code cannot say, and descriptions keep the answer. A term names each
+meaning of the word, and `periplus find` prints them all. Prompt: "This project
 has a Periplus map. 'Account' seems to mean two things here. Tell me how they differ."
 See [One word, several things](disambiguation.md).
 
 ### …whether what I wrote down about the code is still true?
 
 Partly. `periplus stamp` writes a fingerprint of each described thing's code into its entry.
-`periplus stale` then lists the entries whose code changed and those whose thing is gone. It
-checks node entries only, not link entries, and it cannot tell whether the words were right.
+`periplus stale` then lists the entries whose code changed, those whose thing is gone, and each
+term with an id the map no longer holds. It checks node entries only, not link entries, and it cannot tell whether the words were right.
 Prompt: "This project has a Periplus map. Which descriptions are out of date? Rewrite them."
 See [Navigating the map](navigation.md#stale).
+
+### …which docs talk about this, and which are out of date?
+
+Yes, once the project's own rutter has rules for its docs. The rules link each page and section
+to the code it names, and mark a name that matches nothing in the code. After a code change,
+`periplus diff OLD NEW` lists each link a page lost. The link shows that a page names the thing,
+not that the page is right. The `periplus-document` skill guides the agent through the rules,
+built on the habits the docs already have. Prompt: "This project has a Periplus map. Connect our
+docs to the code, and tell me which pages name things that no longer exist."
+See [Using the map with an AI agent](using-the-map-with-an-agent.md#things-you-can-ask).
 
 ### …which paths no test reaches?
 
@@ -214,7 +250,7 @@ or further out?" See [Navigating the map](navigation.md#affected).
 
 Ask the agent: "This project has a Periplus map. What is the map missing?" The periplus-gaps skill
 reads the map's marks, opens the code at each one, and says which rule would close each gap.
-See [Mapping quality](mapping-quality.md) and the [map report guide](map-report-guide.md).
+See [Judging a map](mapping-quality.md) and the [map report guide](map-report-guide.md).
 
 ### Do I have to change Periplus to map something new?
 
@@ -237,7 +273,8 @@ See [the map report guide](map-report-guide.md#when-a-gap-is-the-engines).
 ### Can an AI write the rule?
 
 Yes. The periplus-rutter skill guides an agent through writing a rule, validating it and mapping
-again. Periplus then runs the rule with no AI, and the map stays the same on every run.
+again. Periplus then runs the rule with no AI. The same code, settings and rutters, on the same version
+of Periplus, give the same map on every run.
 See [Writing a rutter](rutter-author-guide.md).
 
 ### How do I share a rule that others would want?

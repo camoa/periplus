@@ -6,8 +6,8 @@ commands. For each check, it says what the result means and what to do next.
 
 ## A map is not the code
 
-A map holds the things its rules found and the links between them, each with a file and line. It
-says that A reaches B, and where. Three limits follow:
+A map holds the things its rules found and the links between them, each link with the file and
+line where it was found. It says that A reaches B, and where. Three limits follow:
 
 - **A map can have gaps.** A link the code has and no rule reads is not in the map, and nothing
   marks its absence. So a missing link does not show that the code has none.
@@ -134,7 +134,8 @@ changed:
 ```
 
 `periplus undescribed` counts the main things with no description. `periplus stale` lists the
-entries whose code changed since `periplus stamp`, and those whose node is gone. Read the code
+entries whose code changed since `periplus stamp`, those whose node is gone, and each term with an
+id the map no longer holds. Read the code
 again and rewrite each listed entry. An entry that is not stamped was never checked against its
 code.
 
@@ -164,8 +165,29 @@ that follow data through the code.
 
 ## Freshness
 
-A map describes the code it was built from. After the code changes, run `periplus map` again. Every
-run is a full run.
+A map describes the code it was built from. `periplus map` writes an inputs record beside the map,
+`.periplus/map.inputs.json`: a digest of each file a rule reads, of the settings and of each
+rutter, and the tool version. Commit it with the map. `periplus fresh` selects the files again,
+runs no rule, and compares. After `Invoice` gained a method, a file `Tax.php` was added and a file
+`Legacy.php` was deleted:
+
+```text
+$ periplus fresh
+periplus fresh
+map: /path/to/invoicing/.periplus/map.json
+stale: 1 file changed, 1 added, 1 removed; settings same; rutters same; tool same
+files changed:
+  src/Billing/Invoice.php
+files added:
+  src/Billing/Tax.php
+files removed:
+  src/Billing/Legacy.php
+run periplus map to rebuild
+```
+
+It exits 0 when the map is fresh and 34 when it is not. A changed settings value, a changed rule
+in a rutter and another Periplus version each make the map stale too, and the line says which.
+Run `periplus map` again to rebuild. Every run is a full run.
 
 `periplus diff OLD NEW` compares two maps. After a new method `Invoice::tax` was added:
 

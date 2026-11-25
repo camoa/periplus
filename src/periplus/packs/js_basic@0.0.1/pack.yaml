@@ -67,6 +67,15 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: js_basic
 version: 0.0.1
 depends: []
+
+# Detected by a script at the usual entry places, not by package.json: a TypeScript project holds
+# one too, and a config script at the project folder is not the project's code.
+detect:
+  any_of:
+    - path: "index.js"
+    - path: "src/*.js"
+    - path: "lib/*.js"
+
 grammar:
   provider: tree-sitter
   provider_version: "0.26.0"

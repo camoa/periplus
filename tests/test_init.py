@@ -308,6 +308,9 @@ def test_the_render_escapes_a_control_character_in_every_value_it_prints() -> No
         "periplus init created\n"
         f"  settings  {escaped_root / PROJECT_MARKER / SETTINGS_FILENAME}\n"
         f"  packs     {escaped_root / PROJECT_MARKER / 'packs'}\n"
+        "  matched   no rutter, so no pack is pinned\n"
+        "  next      periplus status shows the bundled rutters; list one under packs in "
+        f"{PROJECT_MARKER}/{SETTINGS_FILENAME}\n"
     )
 
     refusal = TargetExists(

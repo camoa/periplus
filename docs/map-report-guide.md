@@ -220,8 +220,8 @@ read, which shows the first 20 and says how many more the JSON report lists. Eac
 the rules' folders that no rule read. The map knows nothing about it. When it is not empty, look at
 the endings first: a whole family of files is a rule to write, and a single file may be one to
 exclude. Here the `greet` module's `README.md` is listed, since no rule reads Markdown. A file
-outside every rule's folder is not counted, nor is a file under `.periplus`, even when a rule's
-folder is the whole project.
+outside every rule's folder is not counted. No rule reads a file under `.periplus`, even when a
+rule's folder is the whole project, so such a file is never mapped and never counted here.
 
 ### `unlisted`
 

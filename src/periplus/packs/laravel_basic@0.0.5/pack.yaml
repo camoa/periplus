@@ -147,6 +147,12 @@ pack: laravel_basic
 version: 0.0.5
 depends: [php_basic]
 
+# Detected when the project's composer.json requires the framework.
+detect:
+  any_of:
+    - path: composer.json
+      contains: '"laravel/framework"'
+
 # Laravel's default layout, relative to the project folder; a project's settings move each one.
 folders:
   routes: ./routes

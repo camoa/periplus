@@ -385,6 +385,12 @@ def render_text(report: InitReport) -> str:
             f"  detected  {_escape(found.pin)} via {_escape(found.path)}"
             for found in report.detected
         ]
+        if not report.detected:
+            lines.append("  matched   no rutter, so no pack is pinned")
+            lines.append(
+                "  next      periplus status shows the bundled rutters; list one under packs in "
+                f"{PROJECT_MARKER}/{SETTINGS_FILENAME}"
+            )
         lines += [_placement_line(one) for one in report.placed]
     lines += [f"  {int(problem.code)}  {_escape(problem.message)}" for problem in report.problems]
     return "\n".join(lines) + "\n"

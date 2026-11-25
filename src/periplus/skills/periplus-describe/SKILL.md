@@ -19,6 +19,9 @@ them after `#`, so a plain-word question reaches a thing whose id lacks those wo
   called", no installed or on/off state. Marks and config values carry those. An entry that
   speaks only of its own code stays true until that code changes, so `periplus stale` can find
   the entries to redo.
+- An entry is about one thing or one link. How a feature works as a whole, how its parts fit and
+  why, belongs on a documentation page, and the periplus-document skill connects pages to the
+  map. A page that names the thing is not the source of its entry: the code is.
 - One or two plain sentences, with the words a person would search for: the feature, the
   business term, the effect a user sees. Never restate the id, the type or the source line.
 - Where a thing shares its name with another, use the words that set it apart, and do not name
@@ -27,8 +30,8 @@ them after `#`, so a plain-word question reaches a thing whose id lacks those wo
   an alter, a redirect, a read or a write. Say what happens, by its meaning. Write them while the
   node's code is open. They carry no fingerprint, and `periplus stale` does not list them: when
   you rewrite a node's entry, read its edge entries again.
-- Keep an entry that exists, unless `periplus stale` lists it; then read the code again and
-  rewrite it.
+- Keep an entry that exists, unless `periplus stale` lists it or you have read its code and found
+  the words wrong; then read the code again and rewrite it.
 - An entry with no fingerprint was never checked against its code. `periplus stale` counts these
   as not stamped and does not list them. Read the code again and rewrite such an entry too.
 - `periplus stamp` stamps every entry that has no fingerprint, in or out of your working set.
@@ -36,8 +39,21 @@ them after `#`, so a plain-word question reaches a thing whose id lacks those wo
 - A thing with several locations, such as a hook that several modules implement, is described
   from the code at its own locations, not from other files.
 - Skip a thing with no location, or whose line holds nothing that fits it, and report it. When
-  several lines in one file miss, the map is stale: tell the person to run `periplus map`.
+  several lines in one file miss, run `periplus fresh`; on exit 34, tell the person the map is
+  older than the code and to run `periplus map`.
 - Write only the descriptions file. Never edit the map or a map file made from it.
+
+## Terms
+
+A term says what a word of the project means, and names the things it covers. Write one when:
+- one word names two things: one term for each meaning, each holding the word;
+- people use a word the code does not hold, such as "customer" for a class named `Account`;
+- an old name is still in use, such as "bill" for an invoice: put it under `old`.
+
+Take the meaning from the code, or ask the person. Never invent a business meaning. Set `origin`
+to `person` when a person told you, `code` when you read it from the code. Do not say what a
+thing is not, in a term or an entry; give the other meaning its own term. `periplus find` prints
+the terms its words match, and `periplus stale` lists a term id the map no longer holds.
 
 Good: `Sends the payment reminder email to a customer whose invoice is overdue.`
 
@@ -94,13 +110,13 @@ When several writers share the work:
 - `periplus show ID` prints, under each link, the entry of the thing at the other end: what each
   thing it calls does, once that thing is described.
 - `periplus stamp` writes a fingerprint of each entry's code into the entry.
-- `periplus stale` lists the entries whose code changed since the stamp, and those whose node is
-  gone.
+- `periplus stale` lists the entries whose code changed since the stamp, those whose node is
+  gone, and the term ids the map no longer holds.
 - `periplus find` with an entry's words checks that the entry is reachable.
 
 Each takes `--map PATH`, so a file written by `periplus slice`, `extract`, `join`, `common` or
 `minus` works as the map. Options and output are in
-[Navigation](https://github.com/camoa/periplus/blob/v0.10.2/docs/navigation.md#undescribed).
+[Navigation](https://github.com/camoa/periplus/blob/v0.10.3/docs/navigation.md#undescribed).
 
 ## Tips
 
@@ -115,12 +131,14 @@ periplus in FILE --ids | periplus undescribed -
 
 ## The file
 
-Two top-level keys. `nodes` maps a node id to its entry. `edges` is a list of entries, each with
-`from`, `kind` and `to` exactly as the map writes them, since an edge has no id. Every entry
-carries `text`, and `file` and `line`: where you read the code. `fingerprint` is written by
+Three top-level keys. `nodes` maps a node id to its entry. `edges` is a list of entries, each with
+`from`, `kind` and `to` exactly as the map writes them, since an edge has no id. Every node and
+edge entry carries `text`, and `file` and `line`: where you read the code. `terms` maps a term
+name to its `text`, its `words`, optional `old` names, the node `ids` it names, and an optional
+`origin`. `fingerprint` is written by
 `periplus stamp`; do not write it by hand. Keep `nodes` sorted by id and `edges` by `from`,
 `kind`, `to`, so a new pass adds lines without moving old ones. The exact shape is in
-[the descriptions schema](https://github.com/camoa/periplus/blob/v0.10.2/src/periplus/skills/periplus-map/references/descriptions.schema.json).
+[the descriptions schema](https://github.com/camoa/periplus/blob/v0.10.3/src/periplus/skills/periplus-map/references/descriptions.schema.json).
 
 - Quote a `text` that holds `: ` or ` #`; unquoted, YAML misreads it.
 - Write ids with single backslashes, as `--ids` prints them. Text rows and raw JSON print each
@@ -142,4 +160,11 @@ edges:
     text: hands the reminder to the mailer
     file: src/Mail/Reminder.php
     line: 31
+terms:
+  invoice:
+    text: A request for payment sent to a customer.
+    words: [invoice]
+    old: [bill]
+    ids: ['php.type::Shop\Billing\Invoice']
+    origin: person
 ```

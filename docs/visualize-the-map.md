@@ -16,9 +16,10 @@ want, write it to its own map file, and export that file. This slice holds every
 under `shop/`:
 
 ```
-periplus slice --path shop/ --out billing.map.json
-wrote billing.map.json: 7 nodes, 8 edges
-periplus export --format graphml --map billing.map.json > billing.graphml
+$ periplus slice --path shop/ --out billing.map.json
+periplus slice
+wrote /path/to/project/billing.map.json: 8 nodes, 7 edges
+$ periplus export --format graphml --map billing.map.json > billing.graphml
 ```
 
 Other ways to cut: start from words or ids (`periplus slice login --out FILE`), keep only some
@@ -46,8 +47,8 @@ confidence, use `periplus show ID`.
 ## Open it in Gephi
 
 These steps follow Gephi's own [quickstart](https://gephi.org/quickstart/) and
-[FAQ](https://gephi.org/faq/). Menu names can differ a little between Gephi versions. I could not
-run Gephi while writing this page, so the steps say what to click and do not promise how the
+[FAQ](https://gephi.org/faq/). Menu names can differ a little between Gephi versions. This page
+was written without running Gephi, so the steps say what to click and do not promise how the
 picture looks.
 
 1. Open `billing.graphml` from the Welcome window, or with File > Open. An Import report shows the
@@ -62,7 +63,7 @@ picture looks.
    colors", press Generate, then OK. Do the same with `state` to see which things are
    `unresolved` or `unknown_boundary`.
 4. Look at the links. The `kind` column is in the Edges table of the Data Laboratory (step 8).
-   You can filter on it, as step 7 says. I could not source menu steps for colouring edges.
+   You can filter on it, as step 7 says. This page gives no menu steps for colouring edges.
 5. Find the hubs. In Appearance choose Nodes, click the Size icon, choose Ranking, pick `Degree`,
    set a minimum and a maximum size (the quickstart uses 10 and 50) and press Apply. A bigger dot
    has more links.
@@ -111,7 +112,7 @@ digraph periplus {
 ```
 
 Render it with Graphviz as you would any DOT file, for example `dot -Tsvg billing.dot -o
-billing.svg`. I did not run Graphviz while writing this page.
+billing.svg`. This page was written without running Graphviz.
 
 ## How large a slice to draw
 

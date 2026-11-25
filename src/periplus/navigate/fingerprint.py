@@ -67,7 +67,8 @@ class StampReport:
 class StaleReport:
     """The node entries: how many, how many match their code, those whose code changed, the ids
     the map no longer holds, those whose code cannot be read, and how many have no fingerprint.
-    ``found`` is false when there is no descriptions file."""
+    ``terms_gone`` holds each term and an id of it the map no longer holds. ``found`` is false
+    when there is no descriptions file."""
 
     found: bool = True
     entries: int = 0
@@ -78,6 +79,7 @@ class StaleReport:
     unstamped: int = 0
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
+    terms_gone: tuple[tuple[str, str], ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
@@ -206,7 +208,8 @@ def _problem(error: Exception, path: Path) -> Problem:
 
 
 def stale(start: Path, env: Mapping[str, str], map_path: Path | None) -> StaleReport:
-    """Compare each node entry's fingerprint with its code now."""
+    """Compare each node entry's fingerprint with its code now, and find each term id the map no
+    longer holds."""
     try:
         index, path, document, problems, places, source = _setup(start, env, map_path)
         if problems:
@@ -236,8 +239,17 @@ def stale(start: Path, env: Mapping[str, str], map_path: Path | None) -> StaleRe
                     changed.append(thing(index, places.names, node_id))
     except HarnessError as error:
         return StaleReport(problems=(error.problem(),))
+    terms = document.get("terms") or {}
+    gone_ids = {(n, i) for n, term in terms.items() for i in term["ids"] if i not in index.nodes}
     return StaleReport(
-        True, len(entries), fresh, tuple(changed), tuple(gone), tuple(unreadable), unstamped
+        True,
+        len(entries),
+        fresh,
+        tuple(changed),
+        tuple(gone),
+        tuple(unreadable),
+        unstamped,
+        terms_gone=tuple(sorted(gone_ids)),
     )
 
 
@@ -293,33 +305,44 @@ def render_stale_text(report: StaleReport) -> str:
             if heading == "changed" and report.gone:
                 lines.append("gone:")
                 lines += [f"  {_escape(i)}" for i in report.gone]
+        if report.terms_gone:
+            lines.append("terms with gone ids:")
+            lines += [f"  {_escape(term)}  {_escape(i)}" for term, i in report.terms_gone]
     lines += problem_lines(report.problems)
     return "\n".join(lines) + "\n"
 
 
 def render_stale_json(report: StaleReport) -> str:
-    """The report as one JSON document, keys sorted, ``ensure_ascii=True``."""
-    return as_json(
-        {
-            "command": "stale",
-            "found": report.found,
-            "entries": report.entries,
-            "fresh": report.fresh,
-            "changed": [json_thing(row) for row in report.changed],
-            "gone": list(report.gone),
-            "unreadable": [json_thing(row) for row in report.unreadable],
-            "unstamped": report.unstamped,
-            "problems": [_json_problem(p) for p in report.problems],
-        }
-    )
+    """The report as one JSON document, keys sorted, ``ensure_ascii=True``; ``terms_gone`` only
+    when a term id is gone."""
+    document = {
+        "command": "stale",
+        "found": report.found,
+        "entries": report.entries,
+        "fresh": report.fresh,
+        "changed": [json_thing(row) for row in report.changed],
+        "gone": list(report.gone),
+        "unreadable": [json_thing(row) for row in report.unreadable],
+        "unstamped": report.unstamped,
+        "problems": [_json_problem(p) for p in report.problems],
+    }
+    if report.terms_gone:
+        document["terms_gone"] = [{"term": term, "id": i} for term, i in report.terms_gone]
+    return as_json(document)
 
 
 def listed(report: StaleReport) -> tuple[str, ...]:
-    """The ids ``--ids`` prints: the changed entries, then the gone ones, then the unreadable."""
-    return (
-        *(row.id for row in report.changed),
-        *report.gone,
-        *(row.id for row in report.unreadable),
+    """The ids ``--ids`` prints: the changed entries, then the gone ones, then the unreadable,
+    then the gone term ids, each once."""
+    return tuple(
+        dict.fromkeys(
+            (
+                *(row.id for row in report.changed),
+                *report.gone,
+                *(row.id for row in report.unreadable),
+                *(i for _, i in report.terms_gone),
+            )
+        )
     )
 
 

@@ -8,7 +8,7 @@ A saved slice for the feature, read with `--map FILE`, is work you do not repeat
 ## Starts: few calls, widened words
 
 The user's word may not be the code's. Put the word and its likely forms in one call with `--any`,
-and read only the counts: `periplus find "invoice billing payment" --any --limit 1`. The counts by
+and read only the counts: `periplus find invoice billing payment --any --limit 1`. The counts by
 type show where the words land. Then fetch rows for the types that matter with `--type`, or for one
 folder with `--path`. One wide count and a few narrow fetches cost less than a call per word.
 Drop what the words bring that is not the feature.
@@ -126,7 +126,7 @@ hides the source line under a `find` row. Read those rows; they are short.
 ## Worked example: an invoice feature
 
 ```
-periplus find "invoice billing" --any --limit 1
+periplus find invoice billing --any --limit 1
 periplus find invoice --type route
 periplus affected InvoiceMailer::send --depth all
 periplus affected InvoiceRepository::save --depth all

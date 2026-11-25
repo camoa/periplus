@@ -52,6 +52,7 @@ __all__ = [
     "FindReport",
     "FindRow",
     "Match",
+    "TermMatch",
     "found_row",
     "json_row",
     "listed",
@@ -89,6 +90,8 @@ class FindRow:
     descriptions entry. An attribute match names the attribute and holds the string that matched.
     ``supporting`` marks a node in supporting code, by the map's ``supporting_paths``, and
     ``marks`` holds its mark texts, by ``MapIndex.marks``. ``group`` is one of ``_GROUPS``.
+    ``matched`` is ``term`` for a thing only a matching term names, and ``terms`` names each
+    matching term that names it.
     """
 
     id: str
@@ -103,6 +106,21 @@ class FindRow:
     supporting: bool = False
     marks: tuple[str, ...] = ()
     group: str = "main"
+    terms: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TermMatch:
+    """A term of the descriptions file one of whose words or old names the searched words hold:
+    its entry, and the words and old names that matched, as the file writes them."""
+
+    name: str
+    text: str
+    words: tuple[str, ...]
+    old: tuple[str, ...]
+    ids: tuple[str, ...]
+    origin: str | None
+    matched: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,11 +161,36 @@ class FindReport:
     map_args: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     problems: tuple[Problem, ...] = ()
+    terms: tuple[TermMatch, ...] = ()
 
     @property
     def exit_code(self) -> ExitCode:
         """The lowest code among the problems, or ``OK`` when there were none."""
         return min((problem.code for problem in self.problems), default=ExitCode.OK)
+
+
+def _terms(told: Mapping[str, Any], text: str) -> tuple[TermMatch, ...]:
+    """The terms, by name, one of whose words or old names the words of ``text`` hold whole and
+    in order, case folded."""
+    said = text.casefold().split()
+
+    def holds(phrase: str) -> bool:
+        wanted = phrase.casefold().split()
+        return bool(wanted) and any(
+            said[n : n + len(wanted)] == wanted for n in range(len(said) - len(wanted) + 1)
+        )
+
+    found = []
+    for name, entry in sorted((told.get("terms") or {}).items()):
+        words = tuple(dict.fromkeys(entry["words"]))
+        old = tuple(dict.fromkeys(entry.get("old", ())))
+        matched = tuple(word for word in (*words, *old) if holds(word))
+        if matched:
+            ids = tuple(dict.fromkeys(entry["ids"]))
+            found.append(
+                TermMatch(name, entry["text"], words, old, ids, entry.get("origin"), matched)
+            )
+    return tuple(found)
 
 
 def _rank(node_id: str, text: str) -> int | None:
@@ -250,7 +293,10 @@ def run(
             lines = SourceLines(start, map_path)
             names = Names(index)
             places = Places(index, names)
-            report = _things(index, places, words, any_word, types, paths, marks, told, parts)
+            terms = _terms(told, text)
+            report = _things(
+                index, places, words, any_word, types, paths, marks, told, parts, terms
+            )
             rows = tuple(replace(r, source=lines.at(r.location)) for r in report.matches.items)
             report = replace(report, matches=cut(rows, 0))
             if edges and text.strip():
@@ -279,6 +325,7 @@ def run(
         again=tuple(again),
         map_args=("--map", str(map_path)) if map_path is not None else (),
         problems=problems,
+        terms=terms,
     )
 
 
@@ -309,10 +356,11 @@ def _things(
     marks: Collection[str],
     told: Mapping[str, Any],
     parts: bool,
+    terms: Sequence[TermMatch],
 ) -> FindReport:
     """The matching things in print order: by group, then for each word from the rarest, the
     one that matches fewest things, a name before a description alone, then ``search``'s rank,
-    then the id."""
+    then the id. A thing a matching term names joins them, after those the words found."""
     wanted, prefixes, warnings = narrowing(index, types, paths)
     held = sorted(set(index.mark_texts.values()))
     for mark in sorted(set(marks) - set(held)):
@@ -323,16 +371,29 @@ def _things(
     rarest = sorted(words, key=lambda w: (len(found[w]), w))
     hits = [set(found[w]) for w in rarest]
     ids = set.union(*hits) if any_word else set.intersection(*hits)
+    named: dict[str, list[str]] = {}
+    for term in terms:
+        for node_id in term.ids:
+            named.setdefault(node_id, []).append(term.name)
+    joined: dict[str, Match] = {
+        node_id: (_MISSING, node_id, index.nodes[node_id], None)
+        for node_id in set(named) - ids
+        if node_id in index.nodes and _kept(index, node_id, wanted, prefixes, ())
+    }
     keyed = []
-    for node_id in ids:
-        ranks = tuple(found[w][node_id][0] if node_id in found[w] else _MISSING for w in rarest)
-        first = next(found[w][node_id] for w in rarest if node_id in found[w])
+    for node_id in ids | set(joined):
+        if node_id in joined:
+            ranks, first = (_MISSING,) * len(rarest), joined[node_id]
+        else:
+            ranks = tuple(found[w][node_id][0] if node_id in found[w] else _MISSING for w in rarest)
+            first = next(found[w][node_id] for w in rarest if node_id in found[w])
         group = places.why_not_main(node_id) or "main"
         row = replace(
             found_row(first, described),
             supporting=index.supporting(node_id) is not None,
             marks=index.marks(node_id),
             group=group,
+            terms=tuple(named.get(node_id, ())),
         )
         if (marks and not set(marks) & set(row.marks)) or (parts and group == "main"):
             continue
@@ -457,8 +518,8 @@ def narrowing(
     return wanted, prefixes, warnings
 
 
-#: One match: its rank (0 to 4 by id, 5 attribute, 6 description), id, node, and the attribute
-#: name and value that matched.
+#: One match: its rank (0 to 4 by id, 5 attribute, 6 description, ``_MISSING`` only a term names
+#: it), id, node, and the attribute name and value that matched.
 Match = tuple[int, str, Mapping[str, Any], tuple[str, str] | None]
 
 
@@ -498,7 +559,7 @@ def found_row(match: Match, described: Mapping[str, str]) -> FindRow:
         as_text(node["type"]),
         as_text(node["state"]),
         _location(node),
-        matched={5: "attribute", 6: "description"}.get(rank, "id"),
+        matched={5: "attribute", 6: "description", _MISSING: "term"}.get(rank, "id"),
         description=described.get(node_id),
         matched_attribute=attribute[0] if attribute else None,
         attribute_value=attribute[1] if attribute else None,
@@ -513,6 +574,7 @@ def row_lines(row: FindRow) -> list[str]:
         "attribute": f"  [attribute {_escape(row.matched_attribute or '')}]",
         "description": "  [description]",
     }.get(row.matched, "")
+    marked += "".join(f"  [term {_escape(name)}]" for name in row.terms)
     marked += mark_text(row.marks)
     marked += "  [supporting code]" if row.supporting else ""
     lines = [
@@ -523,6 +585,34 @@ def row_lines(row: FindRow) -> list[str]:
         value = row.attribute_value.strip().partition("\n")[0].strip()[:SOURCE_WIDTH]
         lines.append(f"      @ {_escape(row.matched_attribute or '')}: {_escape(value)}")
     return lines + description_line(row.description)
+
+
+def _term_lines(terms: Sequence[TermMatch]) -> list[str]:
+    """Each matching term with its text, then the words it matched, its origin and its ids, then
+    each matched word that more than one of them holds, with its meanings."""
+    if not terms:
+        return []
+    lines = [f"terms matching the words: {len(terms)}"]
+    meanings: dict[str, list[str]] = {}
+    for term in terms:
+        said = [word for word in term.matched if word in term.words]
+        old = [word for word in term.matched if word not in term.words]
+        parts = [f"word{'s' if len(said) > 1 else ''}: {', '.join(said)}"] if said else []
+        parts += [f"old name{'s' if len(old) > 1 else ''}: {', '.join(old)}"] if old else []
+        parts += [f"origin: {term.origin}"] if term.origin else []
+        parts.append(f"ids: {', '.join(term.ids)}")
+        lines += [
+            f"  {_escape(term.name)}: {_escape(term.text)}",
+            f"    {_escape('; '.join(parts))}",
+        ]
+        for word in dict.fromkeys(word.casefold() for word in term.matched):
+            meanings.setdefault(word, []).append(term.name)
+    for word, names in sorted(meanings.items()):
+        if len(names) > 1:
+            lines.append(
+                f"  {_escape(repr(word))} has {len(names)} meanings: {_escape(', '.join(names))}"
+            )
+    return lines
 
 
 def _edge_lines(edge: EdgeMatch) -> list[str]:
@@ -613,6 +703,7 @@ def _text(report: FindReport, fold: bool, fold_edges: bool, keep: int | None) ->
             f"{_escape(_command(report, '--limit', '0'))}"
         )
         listed = listed[:keep]
+    head += _term_lines(report.terms)
     body: list[str] = []
     for n, row in enumerate(listed):
         if row.group != "main" and n and listed[n - 1].group == "main":
@@ -676,6 +767,18 @@ def json_row(row: FindRow) -> dict[str, Any]:
     }
 
 
+def _json_term(term: TermMatch) -> dict[str, Any]:
+    return {
+        "name": term.name,
+        "text": term.text,
+        "words": list(term.words),
+        "old": list(term.old),
+        "ids": list(term.ids),
+        "origin": term.origin,
+        "matched_words": list(term.matched),
+    }
+
+
 def _json_edge(edge: EdgeMatch) -> dict[str, Any]:
     return {
         "kind": edge.kind,
@@ -691,14 +794,25 @@ def _json_edge(edge: EdgeMatch) -> dict[str, Any]:
 
 
 def render_json(report: FindReport) -> str:
-    """The report as one JSON document, every match and edge, keys sorted, ``ensure_ascii=True``."""
+    """The report as one JSON document, every match and edge, keys sorted, ``ensure_ascii=True``.
+    ``terms`` is there only when a term matched, so a search no term matches prints what it
+    printed before terms."""
     document = {
-        **payload(report.matches, lambda row: {**json_row(row), "group": row.group}),
+        **payload(
+            report.matches,
+            lambda row: {
+                **json_row(row),
+                "group": row.group,
+                **({"terms": list(row.terms)} if row.terms else {}),
+            },
+        ),
         "by_type": dict(report.by_type or {}),
         "edges": [_json_edge(edge) for edge in report.edges],
         "warnings": list(report.warnings),
         "problems": [_json_problem(p) for p in report.problems],
     }
+    if report.terms:
+        document["terms"] = [_json_term(term) for term in report.terms]
     return as_json(document)
 
 

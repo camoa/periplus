@@ -166,7 +166,8 @@
               "state": {"type": "string"},
               "location": {"type": ["string", "null"]},
               "source": {"$ref": "#/$defs/source"},
-              "matched": {"description": "id when the node id holds the text, attribute when a string attribute value or list item does, description when only its description does.", "enum": ["id", "attribute", "description"]},
+              "matched": {"description": "id when the node id holds the text, attribute when a string attribute value or list item does, description when only its description does, term when only a matching term names it.", "enum": ["id", "attribute", "description", "term"]},
+              "terms": {"description": "The names of the matching terms that name the thing; absent when none does.", "type": "array", "items": {"type": "string"}},
               "supporting": {"description": "true when the node is in supporting code, by the map's supporting_paths.", "type": "boolean"},
               "marks": {"$ref": "#/$defs/marks"},
               "matched_attribute": {"description": "The name of the attribute that matched, the first in sorted order when several do; null unless matched is attribute.", "type": ["string", "null"]},
@@ -193,6 +194,22 @@
               "matched_attribute": {"description": "The name of the attribute whose value held the words when matched is attribute, else null.", "type": ["string", "null"]},
               "attributes": {"$ref": "#/$defs/edge_attributes"},
               "description": {"description": "The edge's descriptions.yaml text, or null when it has none.", "type": ["string", "null"]}
+            }
+          }
+        },
+        "terms": {
+          "description": "The terms of the descriptions file whose words or old names the searched words hold as whole words, by name. Absent when none does.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["name", "text", "words", "old", "ids", "origin", "matched_words"],
+            "properties": {
+              "name": {"type": "string"},
+              "text": {"type": "string"},
+              "words": {"type": "array", "items": {"type": "string"}},
+              "old": {"description": "Old names still in use.", "type": "array", "items": {"type": "string"}},
+              "ids": {"type": "array", "items": {"type": "string"}},
+              "origin": {"description": "person or code as the file says, or null when it does not.", "enum": ["person", "code", null]},
+              "matched_words": {"description": "The words and old names the searched words hold, as the file writes them.", "type": "array", "items": {"type": "string"}}
             }
           }
         },
@@ -1019,6 +1036,14 @@
         "gone": {"description": "Entry ids no node of the map has.", "type": "array", "items": {"type": "string"}},
         "unreadable": {"type": "array", "items": {"$ref": "#/$defs/set_thing"}},
         "unstamped": {"description": "Entries with no fingerprint.", "type": "integer", "minimum": 0},
+        "terms_gone": {
+          "description": "Each term id no node of the map has, with its term, by term and then id. Absent when none is gone.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["term", "id"],
+            "properties": {"term": {"type": "string"}, "id": {"type": "string"}}
+          }
+        },
         "problems": {"$ref": "#/$defs/problems"}
       }
     },

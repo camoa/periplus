@@ -55,8 +55,10 @@ gains a fact about one language or one framework.
 
 1. **Declared.** A rutter declares each node type and each edge kind. The engine refuses an
    edge that no rutter declared.
-2. **Deterministic.** The same input always gives the same map, byte for byte.
-3. **A file.** The map is JSON that you can commit, compare and review.
+2. **Deterministic.** The same code, settings and rutters, on the same version of Periplus, give
+   the same map, byte for byte.
+3. **A file.** The map is JSON that you can commit, compare and review. Commit the inputs record
+   beside it too, so that `periplus fresh` can tell whether the map still matches the code.
 4. **No infrastructure.** No server, no database and no viewer. The command line is the only
    interface.
 5. **Extensible by configuration.** A new stack is a new rutter.
@@ -75,8 +77,9 @@ Each node states how it was found. `mapped` means a rule found its definition. `
 it is outside the mapped files, and a rule identified what it is. `unknown_boundary` means the map
 could not make it known: a call whose target is built at run time, or an end that leaves the
 mapped files with no rule identifying it yet. `unresolved` means a rule searched the mapped files
-for it and found nothing. `referenced` means the code names it, and no rule marked it. A thing that no rule explains is marked. It is never
-filled with a guess.
+for it and found nothing. `referenced` means the code names it, and no rule marked it. A
+reference that a rule found is marked, never filled with a guess. A thing or link that no rule
+looks for is not in the map, and nothing marks its absence.
 
 ## What this design costs
 

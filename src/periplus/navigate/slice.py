@@ -458,7 +458,7 @@ def _piece(
     several = len(_WORD.findall(" ".join(given))) > 1
     for text in given:
         try:
-            node_id, said = resolve(index, text)
+            node_id, said = resolve(index, text, prefer_main=not searching)
         except NodeNotFound:
             if not searching:
                 raise

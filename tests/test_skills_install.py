@@ -17,6 +17,8 @@ SKILLS = (
     "periplus-gaps",
     "periplus-describe",
     "periplus-analyze",
+    "periplus-setup",
+    "periplus-document",
 )
 
 

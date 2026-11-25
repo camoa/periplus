@@ -132,6 +132,10 @@ Problems:
 The same edge with `from: this_node` runs, and the map holds it. That gap was a rule written the
 wrong way, not the engine's.
 
+Rules also build on each other in passes. A map rule joins what file rules and earlier map rules
+put in the map, within the limits that
+[What a map rule can and cannot read](rule-composition.md#what-a-map-rule-can-and-cannot-read) lists.
+
 The engine changes only for an operation that any rutter can reuse and that no small rule can
 state. It never learns a fact about one language or one framework, as
 [Principles](principles.md) says. A request for an engine change holds:

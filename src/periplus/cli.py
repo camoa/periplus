@@ -170,7 +170,7 @@ def add_ids(parser: argparse.ArgumentParser) -> None:
 CATALOGUE: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "set up and build",
-        ("init", "status", "spec", "validate", "update", "map", "check-map", "skills"),
+        ("init", "status", "spec", "validate", "update", "map", "check-map", "fresh", "skills"),
     ),
     ("learn the map's words", ("types", "legend")),
     ("cheap counts: ask these before pulling rows", ("depth", "count", "pieces", "files", "hubs")),
@@ -413,18 +413,43 @@ def build_parser() -> argparse.ArgumentParser:
         help="how to print the report (default: text)",
     )
     add_map(check, "the map file to check")
+    fresh = subcommands.add_parser(
+        "fresh",
+        help="say whether the map still matches the code, the settings, the rutters and the tool",
+        description=(
+            "Compare the inputs record beside the map with the project as it is now, and stop."
+        ),
+    )
+    fresh.add_argument(
+        "--format",
+        # A literal for the reason `map`'s is: `periplus.fresh` imports `periplus.map`. A test
+        # asserts these names equal `tuple(fresh.RENDERERS)`.
+        choices=("text", "json"),
+        default="text",
+        help="how to print the report (default: text)",
+    )
+    add_map(fresh, "the map file to check")
+    fresh.add_argument(
+        "--settings",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="the project settings file to read, instead of the one the project root implies",
+    )
     find = subcommands.add_parser(
         "find",
         help="find the things and edges that hold some words",
         description="Count, then list, the things whose id, string attributes or description "
         "hold each word of TEXT, main things first, then the edges whose description, kind "
-        "meaning or code line holds them, and stop.",
+        "meaning or code line holds them, and stop. A term of the descriptions file whose words "
+        "TEXT holds prints first, and its things join the list. With --ids it prints the ids of "
+        "the things, then both ends of each edge, each once.",
     )
     find.add_argument(
         "text",
         metavar="TEXT",
-        nargs="?",
-        default="",
+        nargs="*",
+        default=[],
         help="the words to look for, split at spaces; each must match a thing's id, attributes "
         "or description; left out, every node matches, as with --mark alone",
     )
@@ -802,7 +827,8 @@ def build_parser() -> argparse.ArgumentParser:
         "stale",
         help="list the node entries whose code changed or whose node is gone",
         description="Compare each stamped node entry's fingerprint with its code now, list the "
-        "entries that differ and those whose node the map no longer holds, and stop.",
+        "entries that differ and those whose node the map no longer holds, and the term ids the "
+        "map no longer holds, and stop.",
     )
     add_ids(stale)
     add_map(stale, "the map file to read")
@@ -1312,6 +1338,20 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
         sys.stdout.write(CHECK_RENDERERS[args.format](checked))
         return checked.exit_code
 
+    if args.command == "fresh":
+        from periplus.fresh import RENDERERS as FRESH_RENDERERS
+        from periplus.fresh import run as run_fresh
+
+        freshness = run_fresh(
+            start=Path.cwd(),
+            env=os.environ,
+            dependencies=dependencies,
+            map_path=args.map,
+            settings_path=args.settings,
+        )
+        sys.stdout.write(FRESH_RENDERERS[args.format](freshness))
+        return freshness.exit_code
+
     if args.command == "find":
         from periplus.navigate.find import RENDERERS as FIND_RENDERERS
         from periplus.navigate.find import listed as find_listed
@@ -1320,7 +1360,7 @@ def _dispatch(argv: Sequence[str] | None = None) -> int:
         found = run_find(
             start=Path.cwd(),
             env=os.environ,
-            text=args.text,
+            text=" ".join(args.text),
             types=args.type,
             limit=0 if args.ids else args.limit,
             map_path=args.map,

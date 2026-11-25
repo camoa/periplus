@@ -183,6 +183,23 @@ def test_the_check_map_format_choices_and_default_are_exactly_the_check_map_rend
     assert fmt.default == next(iter(RENDERERS))
 
 
+def test_the_fresh_format_choices_and_default_are_exactly_the_fresh_renderers() -> None:
+    """``fresh --format`` names the formats ``fresh.RENDERERS`` holds, as ``map``'s does."""
+    from periplus.cli import build_parser
+    from periplus.fresh import RENDERERS
+
+    parser = build_parser()
+    subcommands = next(
+        action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+    )
+    fmt = next(
+        action for action in subcommands.choices["fresh"]._actions if action.dest == "format"
+    )
+
+    assert tuple(fmt.choices or ()) == tuple(RENDERERS)
+    assert fmt.default == next(iter(RENDERERS))
+
+
 def test_main_returns_the_reports_exit_code_for_a_run_it_completed(tmp_path: Path) -> None:
     """``main(["status", ...])`` returns an integer, and it is the report's own code.
 
@@ -282,6 +299,7 @@ def test_the_subcommands_are_exactly_the_set_listed_below() -> None:
         "types",
         "legend",
         "check-map",
+        "fresh",
         "find",
         "show",
         "neighbors",

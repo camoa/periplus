@@ -57,6 +57,12 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: go_basic
 version: 0.0.3
 depends: []
+
+# Detected by the go.mod at the project folder.
+detect:
+  any_of:
+    - path: go.mod
+
 values:
   module: The Go module path, as the module line of go.mod gives it.
 grammar:

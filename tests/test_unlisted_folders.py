@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from periplus.engine.select import Selection, files_in
+from periplus.engine.select import Listings, Selection, files_in
 
 
 @pytest.fixture
@@ -28,6 +28,6 @@ def test_a_mode_444_folder_is_unlisted_and_none_of_its_files_are_listed(
 ) -> None:
     selection = Selection.build([], {}, [], [], [], [])
 
-    listed, unlisted = files_in(shut_folder, ["drawer"], selection)
+    listed, unlisted = files_in(Listings(shut_folder), ["drawer"], selection)
 
     assert (listed, unlisted) == (["drawer/open.sock"], ["drawer/closed"])

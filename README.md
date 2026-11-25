@@ -11,7 +11,7 @@ A deterministic, framework-aware semantic code graph, for people and AI agents.
 [![Latest tag](https://img.shields.io/github/v/tag/camoa/periplus)](https://github.com/camoa/periplus/tags)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
 
-Status: **beta**, version 0.10.2.
+Status: **beta**, version 0.10.3.
 
 </div>
 
@@ -25,10 +25,12 @@ sessions that start from nothing every time. Periplus turns that understanding i
 keep.
 
 Periplus reads a code base and writes a map: the classes, routes, hooks, templates and settings
-it was told to look for, and the links between them, each with its file and line. The same code
-always gives the same map, byte for byte. Making it needs no AI and no server. A person or an AI
-agent then asks the map, and does not search the code again: what calls this, what breaks if
-this changes, every way a request reaches this method.
+it was told to look for, and the links between them, each with the file and line where it was
+found. The same code, settings and rutters, on the same version of Periplus, give the same map,
+byte for byte. Making it needs no AI and no server. A person or an AI agent asks the map first, to
+find where to look: what calls this, what breaks if this changes, every way a request reaches
+this method. They read the code there to confirm what it does, and where the map has no answer.
+What they learn is kept as rules and descriptions.
 
 ### Without a map, and with one
 
@@ -36,38 +38,70 @@ this changes, every way a request reaches this method.
 |---|---|
 | Search the code for a word | Ask the map what is linked to a thing |
 | Read files to find what depends on what | Follow the links, each with its file and line |
-| Work it out again in the next session | The map and the descriptions are still there |
-| A different route through the code each time | The same map and the same commands each time |
+| Work it out again in the next session | Start from the map and the descriptions, and read the code they point to |
+| A different route through the code each time | The same map each time, from the same code, settings, rutters and version |
 | What you learned stays in the chat | What you learned becomes a rule or a description |
 | One word with several meanings, found out late | Each thing listed with its type and place, so the meanings show first |
 
-This table shows how the work changes. The numbers from our own runs are in
-[the evals page](docs/evals.md).
-
 ### Five things to know
 
-- **The engine** runs rules and writes the map. It knows no language and no framework.
-- **Rutters** hold the knowledge of one stack, such as PHP, Drupal or Python, as small YAML
-  rules. Each rule finds one thing, and rules build on what other rules found. A new stack is a
-  new rutter, never a change to the engine. File names and settings call a rutter a *pack*: it
-  lives in a folder named `<pack>@<version>`.
-- **The map** is one JSON file of nodes and edges. Every node and edge carries its file and
-  line. A thing no rule explains is in the map as a marked unknown, never as a guess.
+- **The engine** runs rules and writes the map. Knowledge of a language or a framework belongs in
+  rutters, never in the engine. When rules cannot express a pattern, the engine gains a general
+  ability that every rutter can use.
+- **Rutters** hold the knowledge of one stack, such as PHP, Drupal or Laravel, as small YAML
+  rules. Each rule finds one thing, and rules build on what other rules found. File names and
+  settings call a rutter a *pack*: it lives in a folder named `<pack>@<version>`.
+- **The map** is one JSON file of nodes and edges. Each link carries the file and line where it
+  was found, and each thing found in the code carries its own. A thing only named by a link has
+  none. A reference a rule found and could not resolve, or that is decided at run time, is in the
+  map and marked. A thing or link that no rule looks for is not in the map, and nothing marks its
+  absence.
 - **Descriptions** say in plain words what a thing does. They sit beside the map in their own
   file, so facts and words stay apart. `periplus stamp` ties a description of a thing to that
   thing's code, so a stamped description shows as stale once the code changes. Descriptions of
   links are not stamped.
-- **Skills** teach an AI agent to use all of this: to answer from the map, to analyse code with
-  it, to describe what it reads, to find what the map lacks, and to write the rule that fills
-  the gap.
+- **Skills** teach an AI agent to use all of this: to set a project up, to answer from the map, to
+  analyse code with it, to describe what it reads, to connect the docs to the code, to find what
+  the map lacks, and to write the rule that fills the gap.
+
+The routes of [`examples/rule-composition`](examples/rule-composition) and what handles them, cut
+by `periplus slice --path config/ --out routes.map.json` and drawn by
+`periplus export --format mermaid --map routes.map.json`:
+
+```mermaid
+flowchart LR
+  n0["inv.route::DELETE /invoices/:id (inv.route)"]
+  n1["inv.route::GET /invoices/:id (inv.route)"]
+  n2["inv.route::POST /invoices (inv.route)"]
+  n3["inv.route::POST /invoices/:id/send (inv.route)"]
+  n4["js.function::src/invoices.js:createInvoice (js.function)"]
+  n5["js.function::src/invoices.js:deliver (js.function)"]
+  n6["js.function::src/invoices.js:load (js.function)"]
+  n7["js.function::src/invoices.js:save (js.function)"]
+  n8["js.function::src/invoices.js:sendInvoice (js.function)"]
+  n9["js.function::src/invoices.js:showInvoice (js.function)"]
+  n1 -- "handled_by" --> n9
+  n2 -- "handled_by" --> n4
+  n3 -- "handled_by" --> n8
+  n4 -- "js_calls" --> n7
+  n8 -- "js_calls" --> n5
+  n8 -- "js_calls" --> n6
+  n9 -- "js_calls" --> n6
+```
 
 ### What to expect
 
 A map is not the code, and Periplus is not magic. The map holds what its rutters look for. A
 link that no rule reads is not in the map, so a missing link does not show that the code has
 none. The map also holds no run-time behaviour. What it gives is a steady base: the same answer
-to the same question, and a place where each gap you find becomes a rule that closes it for
-good.
+to the same question, and a place where each gap you find becomes a rule. The map holds that link
+from then on.
+
+In the project's own runs on one code base, the work with a map was steadier from run to run. A
+map improved with new rules and descriptions helped more than the map as first built. On the map
+as first built, the side without a map reported more likely problems, and the first job took
+longer with the map. The likely problems were counted, not tested. See
+[the evals page](docs/evals.md).
 
 ### Where to go next
 
@@ -76,10 +110,10 @@ good.
 | Make a first map | [Get started](#get-started), below |
 | Ask the map questions yourself | [Navigating the map](docs/navigation.md) |
 | Have an AI agent use the map | [Using the map with an AI agent](docs/using-the-map-with-an-agent.md) |
-| Understand how the parts fit | [Architecture](docs/architecture.md) and [Principles](docs/principles.md) |
+| Understand how the parts fit | [How Periplus fits together](docs/architecture.md) and [Principles](docs/principles.md) |
 | Make the map hold more | [Write a rutter](#write-a-rutter), below, and [Extending Periplus](docs/extending-periplus.md) |
 | Read what `periplus map` reports | [Reading the map report](docs/map-report-guide.md) |
-| Judge how complete a map is | [Mapping quality](docs/mapping-quality.md) |
+| Judge how complete a map is | [Judging a map](docs/mapping-quality.md) |
 | Find a quick answer | [Questions and answers](docs/faq.md) |
 | Look up a word | [Glossary](docs/glossary.md) |
 | See every page | [The docs index](docs/README.md) |
@@ -104,6 +138,9 @@ An AI agent that works in this repository, or uses Periplus in another one, star
 
 Periplus needs Python 3.11 or later. It declares support for 3.11 to 3.14.
 
+If you work through an AI agent, do step 1, then ask the agent to set the project up, as in
+[Using the map with an AI agent](docs/using-the-map-with-an-agent.md#things-you-can-ask).
+
 ### 1. Install Periplus
 
 Install it from PyPI:
@@ -116,7 +153,7 @@ periplus --version
 To install a tagged version from the repository:
 
 ```
-uv tool install git+https://github.com/camoa/periplus@v0.10.2
+uv tool install git+https://github.com/camoa/periplus@v0.10.3
 ```
 
 To install from a local copy of this repository:
@@ -131,8 +168,9 @@ ships into `~/.claude/skills`. Run it again after an update to replace the older
 #### Use the skills with other agents
 
 The skills follow the [Agent Skills](https://agentskills.io) format: a folder with a `SKILL.md`
-file. After `periplus skills install`, the folders `periplus-analyze`, `periplus-describe`,
-`periplus-gaps`, `periplus-map` and `periplus-rutter` are in `~/.claude/skills`. Copy them to the folder the agent reads, and copy them
+file. After `periplus skills install`, the folders `periplus-setup`, `periplus-map`,
+`periplus-analyze`, `periplus-describe`, `periplus-document`, `periplus-gaps` and
+`periplus-rutter` are in `~/.claude/skills`. Copy them to the folder the agent reads, and copy them
 again after each update. The folder `~/.agents/skills` serves four agents at once:
 
 ```
@@ -206,14 +244,23 @@ printed as `unplaced`; declare it under `folders` yourself. The rutters that `dr
 depends on load without a pin of their own. After you update Periplus, run `periplus update` to
 bring the pins to the installed versions.
 
+Outside Drupal, `init` pins `laravel_basic` when `composer.json` requires `laravel/framework`, and
+`go_basic` for a `go.mod`. It pins `nextjs` when `package.json` names `next` or a `next.config`
+file exists, `typescript` for a `tsconfig.json`, and `react` for a `.tsx` file in `src`. It pins
+`php_basic` for PHP files in the project folder or `src`, and `js_basic` for `index.js` or scripts
+in `src` or `lib`. A stack in a subfolder is not detected. When nothing matches, `init` says so.
+`go_basic` needs `module` and `typescript` needs `typescript_alias_root` under `values`; without
+them `periplus map` stops at exit 26.
+
 ### 3. Map the project
 
 ```
 periplus map
 ```
 
-`periplus map` writes the map to `.periplus/map.json`, where the other commands look for it. It
-also prints a run report. It names each rule and how often it fired, and the files
+`periplus map` writes the map to `.periplus/map.json`, where the other commands look for it.
+Beside it, it writes `.periplus/map.inputs.json`, the record that `periplus fresh` reads to say
+whether the map still matches the code; commit both. It also prints a run report. It names each rule and how often it fired, and the files
 no rule read. A pinned rutter that selected no file is listed first, under `Packs that selected no
 file`, with the folders it looked in. Exit 33 means no rutter selected any file: `map` writes no
 map, leaves an existing one as it was, and asks you to declare where the code is under `folders`
@@ -236,27 +283,23 @@ agent](docs/using-the-map-with-an-agent.md) gives requests to copy that make it 
 
 ## Why Periplus
 
-**You stop working out the same thing twice.** You ask the map, and the answer lists each link
+**What you work out is kept.** You ask the map, and the answer lists each link
 with its file and line. The next question, the next session and the next person start from the
 same map and from the descriptions already written. When the map lacks a link, you write the rule
 once, and every later map holds it.
 
 How the work changes:
 
-- **Steadier answers.** The same code gives the same map, and the same command gives the same
-  answer. A person or an AI agent starts from that base, not from a new word search.
 - **Framework code is in the map.** Rutters read configuration, templates and settings files as
   they read source files. A route, a service or a hook is in the map with the code that uses it.
 - **A new stack does not wait for a release.** You teach Periplus a stack it does not know with a
-  rutter of YAML rules, in your own project. The engine does not change.
-- **What you learn stays.** A gap you find becomes a rule. What a thing does becomes a
-  description. Once stamped, it shows as stale when the thing's code changes.
+  rutter of YAML rules, in your own project.
 
 The map helps as much as its rutters hold, and each rule you add makes it help more. Installing
-Periplus alone is not enough. [The evals page](docs/evals.md) shows two jobs, each done
-with a map and without one, and what each side cost.
+Periplus alone is not enough.
 
-The map is one file you commit. It is the same on every run, and nothing serves it.
+The map is one file you commit, with the inputs record beside it that `periplus fresh` reads.
+Nothing serves it.
 [`docs/principles.md`](docs/principles.md) gives the reasons for this design: why a new mapper,
 and why rutters and not built-in support for each stack. The table compares Periplus with the
 kinds of tool that page describes.
@@ -266,14 +309,15 @@ kinds of tool that page describes.
 | Framework configuration and templates | Read by rutter rules, as the source files are | Little or nothing | Little or nothing | What the model happens to read |
 | What you get | One JSON file to commit, compare and review | An index for the tool's own queries | A database behind a server or viewer | Ranked text made for one prompt, never saved |
 | What it needs to run | The command line | The tool | A database, a server or a viewer | A model |
-| A new stack | A new rutter, with no engine change | Code in the tool | Code in the tool | A new prompt |
+| A new stack | A new rutter | Code in the tool | Code in the tool | A new prompt |
 
 ## What the map holds
 
 The map is one JSON file, `.periplus/map.json`. Its nodes are the things the rutters found, and its
-edges are the links between them. Each node and edge carries its file and line, the rutter and
-rule that found it, and the rule's declared confidence: `declared`, `inferred` or `mentioned`,
-strongest first.
+edges are the links between them. Each edge carries the file and line where it was found, and
+each node found in the code carries its own. A node only named by an edge has none. Each carries
+the rutter and rule that found it, and the rule's declared confidence: `declared`, `inferred` or
+`mentioned`, strongest first.
 
 The engine writes five states:
 
@@ -296,10 +340,8 @@ which no mapped file declares.
    "searched_for": "my_module_format", "types_tried": ["php.function"]}}
 ```
 
-**Determinism.** `scripts/demo.d/99s-map-determinism.sh` maps one project in separate processes
-under different hash seeds and locales, and the maps are byte-identical. This ran on one Linux
-machine. The design aims for identical maps across machines, but no test has
-compared two machines or two operating systems yet.
+**Determinism.** The same code, settings and rutters, on the same version of Periplus, give the
+same map, byte for byte. The design aims for identical maps on every machine.
 
 <details>
 <summary><strong>The map file, field by field</strong></summary>
@@ -307,15 +349,13 @@ compared two machines or two operating systems yet.
 The map holds the nodes, the edges, counts by type and by kind, the packs
 loaded and the settings file used. When it holds an edge of a kind its rutter declares grouping
 (`groups: true`: the edge's `from` end belongs to the container at its `to` end), it lists those
-kinds, sorted, under `grouping_kinds`. When its rutters describe a node type or edge kind it holds,
-it carries those one-line texts under `legend`, as `edge_kinds` and `node_types` maps from name to
-text, keys sorted; a map whose rutters describe none has no `legend`. It lists each edge kind it
-holds under its cause, the end that sets off the other: `cause_from_kinds`, `cause_to_kinds`,
-`cause_none_kinds` or `cause_touch_kinds`; a kind in none of them is undeclared. When a node holds
+kinds, sorted, under `grouping_kinds`. `legend` holds the texts its rutters give its node types
+and edge kinds, and the four `cause_..._kinds` lists sort its edge kinds by cause, as
+[`periplus legend`](docs/navigation.md#legend) prints them. When a node holds
 an attribute its rutter gives a mark, `marks` names the mark of each such attribute.
 `part_types` names each type whose things are mostly parts of what holds them, as parameters,
 with its share in percent, counted over the whole map; a slice carries it. Each node has an `id`, a `type`, a `state` and its `locations`
-(file and line). Its `provenance` names the pack, the rule and the rule's declared confidence: `declared`,
+(file and line, empty for a node only named by an edge). Its `provenance` names the pack, the rule and the rule's declared confidence: `declared`,
 `inferred` or `mentioned`, strongest first. Rules that reach one node or edge at different
 confidences each keep their own row.
 
@@ -336,20 +376,19 @@ found at several places with different values keeps each place's value.
 
 ### The rutters provided
 
-What the map holds depends on the rutters loaded. Bundled rutters load by name. Example rutters
-are copied into a project's `.periplus/packs`. [Bundled rutters](docs/rutters.md) says what each
-bundled rutter maps and what it depends on.
+What the map holds depends on the rutters loaded. A rutter is one of three kinds.
+[Bundled rutters](docs/rutters.md) says what each maps and what it depends on.
 
-- **Languages and file types:** `php_basic`, `js_basic`, `go_basic`, `typescript`, `react`,
-  `nextjs`, `yaml_basic` and `twig_basic`.
-- **Drupal:** `drupal_basic`, `drupal_js_basic` and `drupal_more`, plus 14 rutters for contributed
-  modules, each pinned beside `drupal_basic` when the site uses that module.
-- **Laravel:** `laravel_basic`.
-
-The example rutters `python_text`, `typer_text` and `speckitty` are in
-`examples/second-stack/packs`. [Bundled rutters](docs/rutters.md) also lists them, says where each
-rutter's list of what it does not map yet is, and gives the settings a Go module and a Laravel
-application need.
+- **Ships with the package**, and loads by its pin alone:
+  - Languages and file types: `php_basic`, `js_basic`, `go_basic`, `typescript`, `react`,
+    `nextjs`, `yaml_basic` and `twig_basic`.
+  - Drupal: `drupal_basic`, `drupal_js_basic` and `drupal_more`, plus 14 rutters for contributed
+    modules, each pinned beside `drupal_basic` when the site uses that module.
+  - Laravel: `laravel_basic`.
+- **An example in the repository:** `python_text`, `typer_text` and `speckitty`, in
+  `examples/second-stack/packs`. Copy one into `.periplus/packs`, or name its folder under
+  `pack_paths`, then pin it. Python is not read out of the box.
+- **Any other stack:** write a rutter, as [Write a rutter](#write-a-rutter) shows.
 
 What each release added is in the [changelog](CHANGELOG.md). Run `periplus skills install` after
 upgrading.
@@ -386,7 +425,8 @@ A project's own rutters sit in `.periplus/packs/`, one folder per rutter, named
 `<pack>@<version>`. Each holds a manifest, `pack.yaml`, and pack files: every other `.yaml` or
 `.yml` file, in any subfolder.
 
-The settings file, `.periplus/settings.yml`, names:
+The settings file, `.periplus/settings.yml`, holds these keys, among others. The file that
+`periplus init` writes names every key Periplus reads, each with a comment.
 
 - `packs`: the rutters to load, each pinned as `<pack>@<version>`. A pinned rutter's dependencies
   load without a pin of their own.
@@ -483,8 +523,7 @@ edge chores.chore::floors   waits_for  chores.chore::sweeping  lists/home.chores
 ```
 
 `sweeping` is `referenced`: line 4 names it, and no rule maps it. That is the kind of unknown
-that step 3 of the loop finds. The check `scripts/demo.d/99j-readme-example.sh` runs this example
-from this file and compares the map with the lines above.
+that step 3 of the loop finds.
 
 ### What to read next
 
@@ -497,27 +536,17 @@ from this file and compares the map with the lines above.
   rutter and an engine change.
 - `examples/second-stack/packs` holds three working rutters to copy.
 
-A parse-tree rutter pins its grammar under `grammar` in `pack.yaml`, as `php_basic` does.
-Periplus installs the PHP, Go and JavaScript grammars. Another language needs its
-`tree-sitter-<language>` package installed beside Periplus, or the map stops at exit 28.
-
-An AI that writes a rutter reads `periplus spec` first, then the guide pages in the order the
-docs index gives. Then it runs the loop. The map's `referenced` and `unresolved` nodes say which
-rule to write next.
-
 ## Read the map
 
-Twenty-nine commands read a written map, and stop. They read the map, the descriptions file and
+The commands after the set-up group in `periplus --help` read a written map, and stop. They read the map, the descriptions file and
 the source line under each row, and nothing more. Most are small commands that do one job each:
 count, list or fetch one kind of answer. Two macros, `reach` and `slice`, combine them in one
 reply. `periplus --help` lists them all, grouped by job, and `periplus <command> --help` gives the
 options of one.
 
-A command that lists things takes `--ids` and prints one full id a line; a command that takes ids
-reads them from standard input when given `-`, so `periplus neighbors ID --depth all --ids |
-periplus count -` joins two. `periplus check-map` runs the full schema check that the other
-commands skip. The [navigation guide](docs/navigation.md) says which command answers which
-question, and gives each command's options, output and exit codes, with an example you can run.
+`periplus check-map` runs the full schema check that the other commands skip. The
+[navigation guide](docs/navigation.md) says which command answers which question, how `--ids` and
+`-` join two commands, and each command's options, output and exit codes.
 
 ### Draw part of the map
 
@@ -531,12 +560,6 @@ periplus export --format graphml --map billing.map.json > billing.graphml   # op
 periplus export --format dot --map billing.map.json > billing.dot           # render with Graphviz
 periplus export --format mermaid --map billing.map.json > billing.mmd       # wrap in a mermaid code fence in a pull request
 ```
-
-`export` prints to standard output and its warnings to standard error. GraphML names each node by
-a generated token, labels it with the id less its type prefix, each `::` part cut to what follows
-its last backslash, and carries the map id as its `id` data, with the
-node type and state, the edge kind as the edge label, and the file and line where there is one.
-DOT and Mermaid label each node with its id and type.
 
 Gephi Lite handles light graphs; use Gephi for more than about 10,000 nodes. Mermaid on GitHub may
 not draw a graph above 500 edges or 50,000 characters, and the export warns when it passes either.
@@ -556,12 +579,13 @@ periplus validate PACK             # check one rutter against the schemas and wh
 periplus update                    # move each pin to the installed version of that rutter
 periplus map                       # map this project and write .periplus/map.json, with a run report
 periplus check-map                 # check every node and edge of the map against the map schema
+periplus fresh                     # say whether the map still matches the code, settings, rutters and tool
 periplus skills install            # copy the Claude skills Periplus ships into ~/.claude/skills
 ```
 
 `periplus validate` takes a bare `name`, or `name@version` to pick one of several copies.
 `periplus update` leaves project-local and unknown pins as they are. Every command but `init`, `skills`
-and `export` takes `--format json`. The twenty-five commands that read one map take `--map PATH`.
+and `export` takes `--format json`. Every command that reads one map takes `--map PATH`.
 `periplus --version` prints the installed version, and `periplus <command> --help` gives each
 command's options.
 
@@ -586,26 +610,19 @@ command's options.
 
 ## Tests and checks
 
-The pytest suite tests the engine and the bundled rutters. `scripts/demo.sh` runs the acceptance
-scripts in `scripts/demo.d` and stops at the first failure. They cover the set-up commands, each
-bundled stack family, the navigation guide, and the README and guide examples. Each script maps a
-small project and compares the result with what it expects. A person runs them at the end of a
-task.
-
-The CI workflow behind the checks badge, `.github/workflows/checks.yml`, installs the package with
-its `dev` extra. It runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates every bundled
-pack. It does not run the acceptance scripts, and it never maps a Go project.
-
-To propose a change, read [`CONTRIBUTING.md`](CONTRIBUTING.md).
+The pytest suite tests the engine and the bundled rutters. The acceptance scripts in
+`scripts/demo.d` each map a small project and compare the result with what it expects. The CI
+workflow behind the checks badge runs pytest on Python 3.11 to 3.14, ruff and mypy, and validates
+every bundled pack. It does not run the acceptance scripts, and it never maps a Go project.
+`scripts/demo.d/99s-map-determinism.sh` maps one project in separate processes under different
+hash seeds and locales, and compares the bytes of the maps. No check compares maps built on two
+machines.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) says how to run each, and how to propose a change.
 
 ## How Periplus behaves
 
-A shape the map does not hold is a rule not written yet. The map marks what it could not resolve:
-unresolved names, run-time marks, call sites with no edge, and skipped rows in the map report. Each
-rutter's `pack.yaml` header says what it does not map yet, and the `periplus-gaps` skill reads a map
-and says which rule is missing.
-
-The engine and the map format work as follows.
+The engine and the map format work as follows. Each rutter's `pack.yaml` header says what it does
+not map yet.
 
 - **Keys accepted but not executed.** The schemas accept more than the engine runs, for example
   `resolution` and `excluded_tokens`. A rule with such a key does

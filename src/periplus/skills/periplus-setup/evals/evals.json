@@ -1,0 +1,27 @@
+{
+  "skill_name": "periplus-setup",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Set Periplus up in this project and make a map. It is a Laravel application.",
+      "expected_output": "Periplus is initialised, init pins laravel_basic from composer.json and php_basic loads with it, the map is built once, and the answer says what was mapped and which files no rule read.",
+      "expectations": [
+        "Runs periplus --version first and does not install the tool without asking",
+        "Runs periplus init and periplus status before it edits the settings",
+        "Keeps the laravel_basic pin init wrote and pins no Laravel rutter by hand",
+        "Runs periplus map once and reports the counts from periplus types and the files no rule read",
+        "Changes no file outside .periplus/"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Which rutters does this project need? It has a pyproject.toml and Python code, and no .periplus folder.",
+      "expected_output": "The answer says that no bundled rutter reads Python, pins nothing for it, and points to the example rutter and the periplus-rutter skill.",
+      "expectations": [
+        "Says plainly that no bundled rutter covers Python",
+        "Does not pin a bundled rutter the project gives no evidence for",
+        "Names the example rutters or the periplus-rutter skill as the way to map Python"
+      ]
+    }
+  ]
+}

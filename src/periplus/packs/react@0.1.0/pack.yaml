@@ -6,3 +6,9 @@ $schema: "https://periplus.dev/schema/0/pack-manifest.schema.json"
 pack: react
 version: 0.1.0
 depends: [typescript]
+
+# Detected by a .tsx file in src, as a React app on TypeScript keeps one; this rutter reads no
+# .js or .jsx file, so a package.json naming react is not enough.
+detect:
+  any_of:
+    - path: "src/*.tsx"

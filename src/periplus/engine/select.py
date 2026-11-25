@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from periplus.engine.source import SHORT_FORM_FORMAT, SourceUnreadable
 from periplus.errors import ExitCode, HarnessError, Problem
+from periplus.layout import PROJECT_MARKER
 from periplus.manifest import LoadedPack
 
 if TYPE_CHECKING:
@@ -22,6 +23,7 @@ __all__ = [
     "FileType",
     "FileTypes",
     "FolderUnresolved",
+    "Listings",
     "Selection",
     "base_folders",
     "extended",
@@ -49,7 +51,7 @@ def resolve_folders(
     names: Sequence[str],
     packs: Sequence[LoadedPack],
     overrides: Mapping[str, str | Sequence[str]],
-    root: Path,
+    listings: Listings,
     selection: Selection | None = None,
 ) -> dict[str, tuple[str, ...]]:
     """Each folder name as the sorted repository-relative directories it stands for.
@@ -70,7 +72,7 @@ def resolve_folders(
                 {
                     directory
                     for pattern in _patterns(name, settled, overrides, ())
-                    for directory in _expand(pattern, root, selection)
+                    for directory in _expand(pattern, listings, selection)
                 }
             )
         )
@@ -82,7 +84,7 @@ def resolve_value(
     value: str,
     packs: Sequence[LoadedPack],
     overrides: Mapping[str, str | Sequence[str]],
-    root: Path,
+    listings: Listings,
 ) -> tuple[str, ...]:
     """A value written as a folder value is, as the sorted directories it stands for. Raises as
     ``resolve_folders`` does."""
@@ -91,7 +93,7 @@ def resolve_value(
     for place, part in enumerate(_REFERENCE.split(value)):
         options = _patterns(part, settled, overrides, ()) if place % 2 else [part]
         combined = [done + option for done in combined for option in options]
-    return tuple(sorted({d for pattern in combined for d in _expand(pattern, root, None)}))
+    return tuple(sorted({d for pattern in combined for d in _expand(pattern, listings, None)}))
 
 
 def base_folders(
@@ -244,7 +246,7 @@ def _inside(pattern: str) -> str:
     return normal
 
 
-def _expand(pattern: str, root: Path, selection: Selection | None) -> tuple[str, ...]:
+def _expand(pattern: str, listings: Listings, selection: Selection | None) -> tuple[str, ...]:
     normal = _inside(pattern)
     found = [""]
     for segment in normal.split("/"):
@@ -252,20 +254,20 @@ def _expand(pattern: str, root: Path, selection: Selection | None) -> tuple[str,
         if segment == ".":
             continue
         if segment == "**":
-            found = [below for base in found for below in _below(root, base, selection)]
+            found = [below for base in found for below in _below(listings, base, selection)]
         elif segment == "*":
             found = [
-                posixpath.join(base, child.name)
+                path
                 for base in found
-                for child in sorted(_listing(root, base) if (root / base).is_dir() else [])
-                if child.is_dir()
+                for child in sorted(listings.held(base) if listings.is_dir(base) else [])
+                if listings.is_dir(path := posixpath.join(base, child.name))
             ]
         else:
             found = [posixpath.join(base, segment) for base in found]
-    return tuple(sorted({path for path in found if (root / path).is_dir()}))
+    return tuple(sorted({path for path in found if listings.is_dir(path)}))
 
 
-def _below(root: Path, base: str, selection: Selection | None) -> list[str]:
+def _below(listings: Listings, base: str, selection: Selection | None) -> list[str]:
     """The directory and every directory below it, links followed.
 
     A link whose real folder is the real folder of the directory holding it, or of one of that
@@ -273,21 +275,20 @@ def _below(root: Path, base: str, selection: Selection | None) -> list[str]:
     the selection skips. A folder that cannot be listed raises ``SourceUnreadable``.
     """
     found: list[str] = []
-    above = {*(root / base).resolve().parents}
-    above.update((root / up).resolve() for up in PurePosixPath(base).parents)
+    above = {*listings.real(base).parents}
+    above.update(listings.real(str(up)) for up in PurePosixPath(base).parents)
     pending: list[tuple[str, frozenset[Path]]] = [(base, frozenset(above))]
     while pending:
         path, parents = pending.pop()
-        folder = root / path
-        if folder.resolve() in parents or (selection is not None and selection.skips(path)):
+        if listings.real(path) in parents or (selection is not None and selection.skips(path)):
             continue
         found.append(path)
-        if folder.is_dir():
-            inside = parents | {folder.resolve()}
+        if listings.is_dir(path):
+            inside = parents | {listings.real(path)}
             pending.extend(
-                (posixpath.join(path, child.name), inside)
-                for child in _listing(root, path)
-                if child.is_dir()
+                (child, inside)
+                for child in (posixpath.join(path, c.name) for c in listings.held(path))
+                if listings.is_dir(child)
             )
     return found
 
@@ -299,6 +300,44 @@ def _listing(root: Path, path: str) -> list[Path]:
     except OSError as error:
         message = f"folder {path} cannot be read: {error.strerror or error}"
         raise SourceUnreadable(message, {"folder": path}) from error
+
+
+class Listings:
+    """What each folder below one project root holds, whether a path is a folder, and where it
+    really is, each found once and kept: one run shares one, so the tree is walked once however
+    many rules and folder patterns reach a folder. A folder that cannot be listed is not kept."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self._held: dict[str, list[Path]] = {}
+        self._dirs: dict[str, bool] = {}
+        self._real: dict[str, Path] = {}
+
+    def held(self, path: str) -> list[Path]:
+        """What the folder holds; a folder that cannot be listed raises ``SourceUnreadable``."""
+        if path not in self._held:
+            self._held[path] = _listing(self.root, path)
+        return self._held[path]
+
+    def is_dir(self, path: str) -> bool:
+        """Whether the path is a folder, links followed."""
+        if path not in self._dirs:
+            self._dirs[path] = (self.root / path).is_dir()
+        return self._dirs[path]
+
+    def real(self, path: str) -> Path:
+        """Where the path really is, links resolved. A path whose links lead in a loop, or that
+        cannot be resolved, raises ``SourceUnreadable``."""
+        if path not in self._real:
+            try:
+                self._real[path] = (self.root / path).resolve()
+            except RuntimeError as error:
+                message = f"folder {path} cannot be read: its links lead in a loop"
+                raise SourceUnreadable(message, {"folder": path}) from error
+            except OSError as error:
+                message = f"folder {path} cannot be read: {error.strerror or error}"
+                raise SourceUnreadable(message, {"folder": path}) from error
+        return self._real[path]
 
 
 @dataclass(frozen=True, slots=True)
@@ -505,6 +544,13 @@ def _any(patterns: Sequence[re.Pattern[str]], path: str) -> bool:
     return any(pattern.fullmatch(path) for pattern in patterns)
 
 
+def _own(path: str) -> bool:
+    """Whether the path is the project's own ``.periplus`` folder or under it. No rule reads a
+    file there, whatever the folders or the settings say: the map written there would otherwise
+    be read by the next run. The project's own rutters there are read by the pack loader."""
+    return path == PROJECT_MARKER or path.startswith(f"{PROJECT_MARKER}/")
+
+
 def _followed_mode(link: Path) -> int:
     """The mode of the file a link leads to, or 0 when it leads nowhere, as 3.11 ``Path.is_file``
     decides; any other fault raises."""
@@ -517,19 +563,20 @@ def _followed_mode(link: Path) -> int:
 
 
 def files_in(
-    root: Path, directories: Sequence[str], selection: Selection
+    listings: Listings, directories: Sequence[str], selection: Selection
 ) -> tuple[list[str], list[str]]:
     """Every file at any depth below the directories that the selection reads, of any type, sorted,
     and the folders that could not be listed, sorted.
 
-    A folder is listed once; a linked folder, or one whose every file is excluded, is not entered.
+    A folder is listed once; a linked folder, the project's own folder, or one whose every file is
+    excluded, is not entered.
     This walk only reports, so a folder it cannot list, or whose children it cannot examine, is
     recorded rather than raised, and none of its children are taken; selection
     for rules lists through ``_listing`` alone and still raises.
     """
     found: set[str] = set()
     unlisted: set[str] = set()
-    pending = [directory for directory in directories if (root / directory).is_dir()]
+    pending = [d for d in directories if listings.is_dir(d) and not _own(d)]
     walked: set[str] = set()
     while pending:
         directory = pending.pop()
@@ -539,7 +586,7 @@ def files_in(
         try:
             # From 3.13 is_file, is_dir and is_symlink return False on any OSError; lstat and
             # stat still raise for a child of a folder that cannot be searched.
-            modes = [(child, child.lstat().st_mode) for child in _listing(root, directory)]
+            modes = [(child, child.lstat().st_mode) for child in listings.held(directory)]
             children = [
                 (
                     posixpath.join(directory, child.name),
@@ -553,6 +600,8 @@ def files_in(
             unlisted.add(directory)
             continue
         for path, is_file, is_dir, is_link in children:
+            if _own(path):
+                continue
             if is_file:
                 found.add(path)
             elif is_dir and not is_link and not selection.skips(path):
@@ -561,7 +610,7 @@ def files_in(
 
 
 def select_files(
-    root: Path,
+    listings: Listings,
     directories: Sequence[str],
     filetype: str,
     types: FileTypes,
@@ -569,16 +618,16 @@ def select_files(
 ) -> tuple[list[str], list[str]]:
     """The candidates inside the directories, sorted: those read, then those the patterns removed.
 
-    A candidate is a file directly inside a directory that a type of the name ``filetype`` claims.
+    A candidate is a file directly inside a directory that a type of the name ``filetype`` claims,
+    and never one under the project's own folder.
     """
     candidates: set[str] = set()
     for directory in directories:
-        folder = root / directory
-        if not folder.is_dir():
+        if not listings.is_dir(directory) or _own(directory):
             continue
         candidates.update(
             posixpath.join(directory, child.name)
-            for child in _listing(root, directory)
+            for child in listings.held(directory)
             if child.is_file() and filetype in types.names_of(child.name)
         )
     read = sorted(path for path in candidates if selection.reads(path))

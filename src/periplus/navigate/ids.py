@@ -9,6 +9,8 @@ from typing import TextIO
 from periplus.errors import Problem
 from periplus.navigate.listing import first_location, place, problem_lines
 from periplus.navigate.mapfile import MapIndex, NodeNotFound, as_text, map_flag
+from periplus.navigate.names import Names
+from periplus.navigate.nesting import Places
 from periplus.report import _escape
 
 _ESCAPE = re.compile(r"\\(?:(\\)|n|r|t|x([0-9a-f]{2})|u([0-9a-f]{4}))")
@@ -46,12 +48,17 @@ def _short(node_id: str, text: str) -> bool:
     return not (name[before].isalnum() or name[before] == "_")
 
 
-def resolve(index: MapIndex, text: str, close: bool = True) -> tuple[str, tuple[str, ...]]:
+def resolve(
+    index: MapIndex, text: str, close: bool = True, prefer_main: bool = True
+) -> tuple[str, tuple[str, ...]]:
     """The id ``text`` names, and a warning when it named it by a short name.
 
     A full id or its escaped form is taken as it is. Otherwise ``text`` is matched, ignoring case,
-    against each id's short names: one match is used, several or none is ``NodeNotFound``. Without
+    against each id's short names: one match is used; of several, the only one whose type is not
+    a part type (``Places.part_types``) is used; else several or none is ``NodeNotFound``. Without
     ``close``, a text that names nothing is not compared with every id for the closest ones.
+    Without ``prefer_main``, several matches are refused whatever their types, so ``slice``
+    searches such a word as it did.
     """
     unescaped = _unescape(text)
     for given in (text, unescaped):
@@ -63,11 +70,15 @@ def resolve(index: MapIndex, text: str, close: bool = True) -> tuple[str, tuple[
         matches = sorted(i for i in index.nodes if folded and _short(as_text(i), folded))
         if matches:
             break
+    if prefer_main and len(matches) > 1:
+        parts = Places(index, Names(index)).part_types()
+        main = [i for i in matches if as_text(index.nodes[i]["type"]) not in parts]
+        matches = main if len(main) == 1 else matches
     if len(matches) == 1:
-        return matches[0], (f"resolved {text!r} to {matches[0]}",)
+        return matches[0], (f"resolved '{text}' to {matches[0]}",)
     if matches:
         raise NodeNotFound(
-            f"{text!r} matches {len(matches)} nodes; give one of these ids",
+            f"'{text}' matches {len(matches)} nodes; give one of these ids",
             {
                 "id": text,
                 "candidates": tuple(_candidate(index, i) for i in matches[:_SHOWN]),

@@ -56,6 +56,7 @@ __all__ = [
     "PackRoot",
     "bundled_digest",
     "discover_candidates",
+    "folder_digest",
     "match_pins",
     "resolve_pack_roots",
 ]
@@ -224,14 +225,19 @@ def _bundled_root() -> Traversable:
 
 
 def bundled_digest() -> str:
-    """The sha256 of every file under the bundled packs, in sorted path order.
+    """The sha256 of every file under the bundled packs, as ``folder_digest`` gives it. Two
+    installs carry the same rutters exactly when this string is equal."""
+    return folder_digest(_bundled_root())
 
-    Each file contributes its path relative to the bundled root, then its bytes, so a renamed file
-    changes the digest as a changed one does. Two installs carry the same rutters exactly when this
-    string is equal.
+
+def folder_digest(root: Traversable) -> str:
+    """The sha256 of every file under the folder, in sorted path order.
+
+    Each file contributes its path relative to the folder, then its bytes, so a renamed file
+    changes the digest as a changed one does.
     """
     files: dict[str, Traversable] = {}
-    pending: list[tuple[str, Traversable]] = [("", _bundled_root())]
+    pending: list[tuple[str, Traversable]] = [("", root)]
     while pending:
         prefix, folder = pending.pop()
         try:

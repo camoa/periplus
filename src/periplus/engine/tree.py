@@ -13,7 +13,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
 from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path
 
 from tree_sitter import Language, Node, Parser
 
@@ -294,7 +293,7 @@ def line_of(node: Node) -> int:
 
 
 def parse_file(
-    path: Path,
+    source: bytes,
     grammar: Grammar,
     values: Mapping[str, str],
     constants: Mapping[tuple[str, str], str],
@@ -302,7 +301,7 @@ def parse_file(
     """The file parsed with the grammar, indexed by node type, with its namespaces, imports and
     value table, and the run's constants. With ``namespace_value``, the value of that name is one
     namespace over the whole file, and the file has none when the value is absent."""
-    tree = _parser(grammar.language).parse(path.read_bytes())
+    tree = _parser(grammar.language).parse(source)
     by_type: dict[str, list[Node]] = {}
     pending = [tree.root_node]
     while pending:

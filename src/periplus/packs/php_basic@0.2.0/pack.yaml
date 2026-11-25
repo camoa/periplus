@@ -86,6 +86,14 @@ pack: php_basic
 version: 0.2.0
 depends: []
 
+# Detected by PHP source at the project folder or in src, never by composer.json alone: a framework
+# project holds one too, and its rutter loads this one through depends.
+detect:
+  any_of:
+    - path: "*.php"
+    - path: "src/*.php"
+    - path: "src/*/*.php"
+
 # Pinned exactly: the rules name tree node types, and those can change across grammar releases.
 grammar:
   provider: tree-sitter

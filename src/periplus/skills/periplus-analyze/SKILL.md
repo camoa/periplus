@@ -25,7 +25,7 @@ So the map says where to read, and the code is what you judge.
 
 The periplus-map skill says how to use the map: the commands, what each shows, and how to follow
 nodes and edges. This skill names no commands; take them from there, and every option from
-[Navigation](https://github.com/camoa/periplus/blob/v0.10.2/docs/navigation.md). Use the map to
+[Navigation](https://github.com/camoa/periplus/blob/v0.10.3/docs/navigation.md). Use the map to
 name, before you open any code:
 
 - the target, the thing the question is about;
@@ -34,6 +34,10 @@ name, before you open any code:
 
 Then read the code the map named. A review that reads first covers what the reader happened to
 find. A review that identifies first covers what takes part.
+
+When documentation pages name the things you identified, read them for how the feature is meant
+to fit together. A page shows what someone wrote, not what the code does. Where the two differ,
+that is a finding.
 
 ## Look around each line
 

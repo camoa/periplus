@@ -21,6 +21,8 @@ SKILLS = (
     "periplus-gaps",
     "periplus-describe",
     "periplus-analyze",
+    "periplus-setup",
+    "periplus-document",
 )
 RAW = {
     s: (ROOT / "src/periplus/skills" / s / "SKILL.md").read_text(encoding="utf-8") for s in SKILLS
@@ -35,7 +37,8 @@ _PATH = re.compile(
     r"|[\w-]+\.(?:md|toml|lock))"
 )
 _ANCHOR = re.compile(r"(?<![\w./-])((?:docs/)?[\w./-]+\.md)#([\w-]+)")
-_MD = re.compile(r"(?<![\w./-])((?:docs/)?[\w./-]+\.md)\b")
+# A page under .periplus/ belongs to the project the skill works in, not to this repository.
+_MD = re.compile(r"(?<![\w./-])(?!\.periplus/)((?:docs/)?[\w./-]+\.md)\b")
 _OPTION = re.compile(r"(?<![\w-])(--[a-z][\w-]*)")
 _QUOTED = re.compile(r"[\"“]([^\"”\n]+)[\"”]")
 

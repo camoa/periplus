@@ -29,7 +29,8 @@ names the files that no rule read, and each pinned rutter that selected no file.
 
 A sentence or two in plain words that says what one thing does. Descriptions live in
 `.periplus/descriptions.yaml`, beside the map. `periplus find` searches them, and command rows
-print them after `#`.
+print them after `#`. Use the words that set a thing apart, and do not name the other meaning:
+`periplus find` matches every word.
 
 ### edge
 
@@ -43,8 +44,9 @@ the node types its ends may have. The engine refuses an edge of a kind that no r
 
 ### engine
 
-The program that reads the files, runs the rules and writes the map. It knows no language and
-no framework. All of that comes from rutters.
+The program that reads the files, runs the rules and writes the map. Knowledge of a language or
+a framework belongs in rutters, never in the engine. When rules cannot express a pattern, the
+engine gains a general ability that every rutter can use.
 
 ### entrance
 
@@ -52,14 +54,21 @@ A thing that sets something off, while nothing in the map sets it off. `periplus
 
 ### evidence
 
-What lets you check a node or an edge against the code. Each one carries its `locations`, the
-file and line, and its `provenance`, the rutter, rule and confidence that made it.
+What lets you check a node or an edge against the code. Each carries its `provenance`, the
+rutter, rule and confidence that made it, and its `locations`: for an edge, the file and line where
+it was found; for a node found in the code, its own. A node only named by an edge has none.
 `periplus show` also prints the source line under each edge.
 
 ### fingerprint
 
 A short hash of the code that a description entry describes. `periplus stamp` writes it into
 each node entry. Edge entries get none.
+
+### fresh
+
+A map is fresh when `periplus map` run now would write it as it is: the files the rules read, the
+settings, the rutters and the tool are the ones it was built from. `periplus fresh` checks this
+against the inputs record that `map` writes beside the map, `.periplus/map.inputs.json`.
 
 ### gap
 
@@ -76,12 +85,14 @@ to the topic.
 ### map
 
 The JSON file that `periplus map` writes, `.periplus/map.json`. It holds the nodes and edges
-that the rules found, and the same code always gives the same map.
+that the rules found. The same code, settings and rutters, on the same version of Periplus, give
+the same map, byte for byte.
 
 ### node
 
 One thing in the map, such as a class, a route, a template or a setting. Each node has an id,
-a type, a state, its file and line, and the rule that found it.
+a type, a state and the rule that found it. A node found in the code has its file and line, and a
+node only named by an edge has none.
 
 ### node type
 
@@ -114,8 +125,8 @@ config value or a global. Writers and readers both point at it, so a walk off en
 ### skill
 
 A folder of instructions that tells an AI agent how to use Periplus for one kind of work.
-Periplus ships five: `periplus-map`, `periplus-analyze`, `periplus-describe`, `periplus-gaps`
-and `periplus-rutter`.
+Periplus ships seven: `periplus-setup`, `periplus-map`, `periplus-analyze`, `periplus-describe`,
+`periplus-document`, `periplus-gaps` and `periplus-rutter`.
 
 ### slice
 
@@ -125,7 +136,8 @@ A map file that holds a part of the map, written by `periplus slice --out FILE`,
 ### stale
 
 A description entry whose code changed since `periplus stamp` wrote its fingerprint, or whose
-node is gone. `periplus stale` lists them, so you know which entries to write again.
+node is gone. `periplus stale` lists them, and each term with an id the map no longer holds, so
+you know which entries to write again.
 
 ### state
 
@@ -134,6 +146,11 @@ How the map knows a node, one of five. `mapped`: a rule found the thing in the p
 leaves the mapped code and no rule says what it is, or it is a call whose target is built at
 run time. `unresolved`: a rule searched the mapped code for the name and found nothing.
 `referenced`: a file names the thing, but no rule read where it is defined.
+
+### term
+
+What a word of the project means, and the things it names, written under `terms:` in the
+descriptions file. `periplus find` prints the terms its words match, each meaning of a word.
 
 ### walk
 
@@ -151,9 +168,13 @@ you judge.
 read the place that defines it. A `mapped` node is one whose definition a rule found. A
 reference to code outside the mapped folders, such as a framework's own code, stays `referenced`.
 
-**A description and a fact in the map.** A rule makes each fact in the map, and the same code
-gives the same fact on every run. A person or an agent writes a description, in its own file,
+**A description and a fact in the map.** A rule makes each fact in the map, and it gives the
+same fact on every run. A person or an agent writes a description, in its own file,
 and it can go stale when the code changes. The map never reads the descriptions file.
+
+**Fresh and stale.** `fresh` is about the map: whether the code, the settings, the rutters or the
+tool changed since `periplus map` built it. `stale` is about a description: whether the code that
+one entry describes changed since `periplus stamp`. A fresh map can hold stale descriptions.
 
 **A gap in coverage and a limit of the engine.** A gap is almost always a rule that is not
 written yet, and you close it in a rutter. A gap is the engine's only when no rule can state the

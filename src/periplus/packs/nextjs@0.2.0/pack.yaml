@@ -10,6 +10,13 @@ pack: nextjs
 version: 0.2.0
 depends: [react]
 
+# Detected when the project's package.json names next, or by a Next.js config file.
+detect:
+  any_of:
+    - path: package.json
+      contains: '"next":'
+    - path: "next.config.*"
+
 folders:
   nextjs_app:
   - ./app/**

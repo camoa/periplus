@@ -1,6 +1,6 @@
 # Periplus
 
-> Periplus reads a code base and writes a map: one JSON file of the things it found and the links between them, each with its file and line. Rules written as YAML, grouped in rutters, say what to find for each stack, and the engine that runs them knows no language and no framework. The same code always gives the same map. People and AI agents ask the map with the `periplus` command, and keep what they learn as rules and descriptions. A map holds only what its rules look for, so a missing link does not show that the code has none.
+> Periplus reads a code base and writes a map: one JSON file of the things it found and the links between them, each link with the file and line where it was found. Rules written as YAML, grouped in rutters, say what to find for each stack, and the engine that runs them knows no language and no framework. The same code, settings and rutters, on the same version of Periplus, give the same map, byte for byte. People and AI agents ask the map first to find where to look, read the code there to confirm, and keep what they learn as rules and descriptions. A map holds only what its rules look for, so a missing link does not show that the code has none.
 
 Install with `uv tool install periplus-map` or `pip install periplus-map`. Run `periplus init`, then `periplus map`, in the project folder. `periplus skills install` copies the skills that teach an agent to use the map.
 
@@ -18,10 +18,13 @@ Install with `uv tool install periplus-map` or `pip install periplus-map`. Run `
 - [Using the map with an AI agent](https://github.com/camoa/periplus/blob/main/docs/using-the-map-with-an-agent.md): requests that make an agent use the map
 - [Reading the map report](https://github.com/camoa/periplus/blob/main/docs/map-report-guide.md): what `periplus map` reports, and where the rule for a gap belongs
 - [Judging a map](https://github.com/camoa/periplus/blob/main/docs/mapping-quality.md): how far to trust a map, and what it cannot tell you
+- [One word, several things](https://github.com/camoa/periplus/blob/main/docs/disambiguation.md): tell apart the things one word names, and keep the answer as descriptions and terms
+- [Visualize the map](https://github.com/camoa/periplus/blob/main/docs/visualize-the-map.md): export a slice as GraphML, DOT or Mermaid to draw it
 
 ## Extend the map
 
 - [Writing a rutter](https://github.com/camoa/periplus/blob/main/docs/rutter-author-guide.md): the files of a rutter, one rule of each shape, and how to check a rutter
+- [Rule composition](https://github.com/camoa/periplus/blob/main/docs/rule-composition.md): small rules that build on each other across files, worked through one example
 - [Extending Periplus](https://github.com/camoa/periplus/blob/main/docs/extending-periplus.md): choose between a new rule, a new rutter and an engine change
 - [Bundled rutters](https://github.com/camoa/periplus/blob/main/docs/rutters.md): every rutter that ships with Periplus and what it maps
 

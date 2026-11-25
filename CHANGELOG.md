@@ -5,23 +5,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-11-25
+
 ### Added
 
+- Terms: a `terms:` section in `.periplus/descriptions.yaml` says what a word of the project means and names the things it covers, with the words people use, old names still in use, and who gave the meaning. `periplus find` prints the terms its words match as whole words, names each meaning of a word that two terms hold, and adds each term's things to the results, marked `[term NAME]`; the JSON adds `terms`. `periplus stale` lists a term whose id the map no longer holds. See [One word, several things](docs/disambiguation.md).
 - New pages: [how Periplus fits together](docs/architecture.md), [rule composition](docs/rule-composition.md) with a runnable example in `examples/rule-composition`, [extending Periplus](docs/extending-periplus.md), [judging a map](docs/mapping-quality.md), [seeing the map as a graph](docs/visualize-the-map.md) with Gephi, [telling apart things that share a name](docs/disambiguation.md), [questions and answers](docs/faq.md), a [glossary](docs/glossary.md) and a [docs index](docs/README.md).
 - `AGENTS.md` and `llms.txt`, entry points for an AI agent.
+- A skill, `periplus-document`, connects a project's existing docs to the map with small rules in the project's own rutter: which pages and sections name a piece of code, which names match nothing in the code, and how pages link to each other. It records the agreed conventions in `.periplus/documentation.md`, and its reference holds a worked example of the rules. Periplus itself does not change.
 - The map, analyze and describe skills say what to do when several things share a name.
+- The `periplus-setup` skill sets a project up: it pins the rutters `periplus init` did not detect, sets folders, exclusions and values, builds the first map and says what it holds. The usage page and the FAQ start from a project with no map.
+- `periplus init` recognises more stacks: `laravel_basic`, `go_basic`, `nextjs`, `typescript`, `react`, `php_basic` and `js_basic` declare detectors, read from the project folder and its `src` or `lib`. Before, only the Drupal rutters had one, so `init` pinned nothing elsewhere and `periplus map` stopped at exit 17. When no rutter matches, `init` now says so in two lines and still exits 0.
+- `periplus fresh` says whether `periplus map` run now would write the map as it is. `periplus map` now also writes an inputs record beside the map, `.periplus/map.inputs.json`, or `NAME.inputs.json` beside a map written with `--output NAME.json`: each file a rule matches, with a digest of its bytes when a rule reads them, and a digest of the effective settings, of each loaded rutter's files, the tool version and the map's own digest. `fresh` selects the files as `map` does, runs no rule, and names the files changed, added and removed, and whether the settings, a rutter or the tool differ. It exits 0 when the map is fresh, and 34, a new exit code, when it is stale or when there is no record, as for a map built by an older Periplus. Commit the record with the map. The record holds each file's bytes as they are, so a checkout that rewrites line endings reads as changed. The map's own bytes do not change. The map skill runs `fresh` before set work. `periplus fresh --settings PATH` reads the same named settings file that `periplus map --settings PATH` read. The inputs record names the settings file used, as a path from the project root, so `fresh` run with another settings file says which file the map was built with and what to run, and exits 34. A file or folder that `fresh` cannot read ends the run with exit 20, as it does for `map`.
 
 ### Changed
 
+- A top-level key of the descriptions file that this version does not know is ignored with one warning line on standard error. Before, the whole file was refused with exit 30, so a file written for a newer Periplus did not load.
+- The describe skill says when to write a term; the map skill says to pick a word's meaning from the terms before going on.
 - The README opens with what Periplus is for, and its long tables moved to the pages that hold them. `docs/rutters.md` now lists what each bundled rutter reads and the example rutters.
-- [Using the map with an AI agent](docs/using-the-map-with-an-agent.md) gives ten everyday uses, each with a prompt to copy.
+- [Using the map with an AI agent](docs/using-the-map-with-an-agent.md) gives everyday uses, each with a prompt to copy.
 - `docs/evals.md`: the second job is now three runs per side, run by a script.
+- `periplus find` takes several words without quotes: `periplus find two words` prints what `periplus find 'two words'` prints. Before, the second word was refused with exit 2.
+- `periplus map` lists each project folder once per run, however many rules and folder patterns reach it; before, each folder pattern with `**` walked the tree again. Measured on one large project on one machine (2,763 files selected, 18 rutters): choosing the files took 9.3 to 10.9 s before and 2.6 to 2.8 s after; the whole map took 167 s before and 158 s after, one run each. The files each rule selects, and the map, are unchanged.
 
 ### Fixed
 
 - The map report's list of files no rule read named a file twice, as `x` and `./x`, and named files that rules had read, when one rutter's folder was `.` and another's was `./**`. A folder written as `.` now gives the same paths as `./**`, so a map built with such a folder writes `x` where it wrote `./x`.
-- The same list no longer names files under `.periplus`.
-- `docs/navigation.md`: several words given to `periplus find` need quotes, and the GraphML label keeps a dotted name whole.
+- No rule reads a file under `.periplus`, even when a rule's folder is the whole project, whatever the folders, `exclude` and `re_include` say. A rule for JSON, YAML or Markdown over the whole project used to read `.periplus/map.json` and the other files there, so each map depended on the one before it. A map that held things found in files under `.periplus` loses them on its next build. The project's own rutters in `.periplus/packs` are still read as rutters. The map report's list of files no rule read does not name these files either.
+- `periplus map` printed a Python traceback for a folder value that names a loop of links, and for a file it may not read. Both now end the run with one line and exit 20, as a file that is not UTF-8 does.
+- A name that fits one main thing and some parts, such as `Acme\Billing\Account` beside a parameter typed with it, now names the main thing, in every command that takes a name, and `slice` with `--from`. Before, it was refused with exit 31. A name that fits several main things, or only parts, is refused as before; `slice` still searches such a word.
+- The exit 31 message for a name that several ids end in, and the `resolved` warning, printed each backslash four times, as `'Acme\\\\Billing\\\\Account'`. They now print it as rows print an id, as `'Acme\\Billing\\Account'`.
+- `periplus find --help` now says that `--ids` prints the things, then both ends of each matching edge, as `docs/navigation.md` says. `--no-edges` prints the things alone.
+- `docs/navigation.md`: the GraphML label keeps a dotted name whole.
 
 ## [0.10.2] - 2026-11-24
 

@@ -8,7 +8,14 @@ from pathlib import Path
 import pytest
 
 SKILLS_SRC = Path(__file__).resolve().parent.parent / "src" / "periplus" / "skills"
-OTHER_SKILLS = ("periplus-map", "periplus-gaps", "periplus-describe", "periplus-analyze")
+OTHER_SKILLS = (
+    "periplus-map",
+    "periplus-gaps",
+    "periplus-describe",
+    "periplus-analyze",
+    "periplus-setup",
+    "periplus-document",
+)
 PHRASES = (
     "split by rule file inside one rutter, never by adding rutters",
     "passes by depth",

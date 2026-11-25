@@ -1,9 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Periplus descriptions file",
-  "description": "The hand-written .periplus/descriptions.yaml beside the map: what a node or edge does, and where the reader read it.",
+  "description": "The hand-written .periplus/descriptions.yaml beside the map: what a node or edge does, and where the reader read it, and what the project's words mean. A top-level key not named here is ignored with a warning, so a file written for a newer Periplus still loads.",
   "type": "object",
-  "additionalProperties": false,
   "properties": {
     "nodes": {
       "description": "Node id, as the map writes it, to its entry.",
@@ -27,14 +26,52 @@
           }
         ]
       }
+    },
+    "terms": {
+      "description": "Term name to its entry: what a word of the project means, and the things it names. periplus find prints a term whose words or old names the searched words hold as whole words, and adds its things to the results. A word in two entries has two meanings. periplus stale lists a term id the map no longer holds.",
+      "type": "object",
+      "propertyNames": { "type": "string" },
+      "additionalProperties": { "$ref": "#/$defs/term" }
     }
   },
   "$defs": {
+    "term": {
+      "type": "object",
+      "required": ["text", "words", "ids"],
+      "properties": {
+        "text": { "description": "What the term means, in plain words.", "type": "string", "minLength": 1 },
+        "words": {
+          "description": "The words people use for it; a phrase of several words matches when the searched words hold it in order.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "\\S" }
+        },
+        "old": {
+          "description": "Old names still in use.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "\\S" }
+        },
+        "ids": {
+          "description": "The node ids the term names, as the map writes them.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "origin": {
+          "description": "Who said what the term means: person when a person said it, code when it was read from the code.",
+          "enum": ["person", "code"]
+        }
+      }
+    },
     "entry": {
       "type": "object",
       "required": ["text", "file", "line"],
       "properties": {
-        "text": { "type": "string", "minLength": 1 },
+        "text": {
+          "description": "What the thing does, in plain words. Use the words that set it apart, and do not name the other meaning: periplus find matches every word.",
+          "type": "string",
+          "minLength": 1
+        },
         "file": { "type": "string", "minLength": 1 },
         "line": { "type": "integer", "minimum": 1 },
         "fingerprint": {

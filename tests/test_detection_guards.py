@@ -394,13 +394,18 @@ def test_the_report_names_the_evidence_for_every_pack_it_detected() -> None:
     )
 
 
-def test_a_run_that_detected_nothing_prints_no_detected_line(tmp_path: Path) -> None:
-    """Detecting nothing is a state, and a report says nothing about it rather than saying "none".
+#: What a created run that detected nothing prints after the packs line, and only such a run.
+NO_MATCH = (
+    "  matched   no rutter, so no pack is pinned\n"
+    "  next      periplus status shows the bundled rutters; list one under packs in "
+    f"{PROJECT_MARKER}/{SETTINGS_FILENAME}\n"
+)
 
-    The ordinary outcome for most repositories. A renderer that printed a header with no rows under
-    it, or a `detected  (none)` line, would turn the ordinary case into something that looks like a
-    finding -- and `init`'s two existing render assertions compare whole strings, so this is also
-    what keeps the new line from leaking into every run's output.
+
+def test_a_run_that_detected_nothing_says_so_and_prints_no_detected_line(tmp_path: Path) -> None:
+    """A run that matched no rutter says so, since the next command, map, stops without a pin.
+
+    No `detected` line either: a header with no rows would read like a finding.
     """
     rendered = render_text(initialise_project(tmp_path))
 
@@ -408,7 +413,21 @@ def test_a_run_that_detected_nothing_prints_no_detected_line(tmp_path: Path) -> 
     # for it, so the word is already in the two paths this report prints and a substring search
     # answers about the fixture rather than about the renderer.
     assert [line for line in rendered.splitlines() if line.startswith("  detected")] == []
-    assert rendered.endswith(f"  packs     {tmp_path / PROJECT_MARKER / 'packs'}\n")
+    assert rendered.endswith(f"  packs     {tmp_path / PROJECT_MARKER / 'packs'}\n{NO_MATCH}")
+
+
+def test_a_run_that_detected_a_rutter_or_was_refused_prints_no_no_match_lines(
+    tmp_path: Path,
+) -> None:
+    """The no-match lines appear exactly when a created run detected nothing."""
+    found = Detection(pack="acme", pin="acme@1.0.0", path="acme.toml")
+    detected = render_text(initialise_project(tmp_path, detected=(found,)))
+    refused = render_text(initialise_project(tmp_path))
+
+    for rendered in (detected, refused):
+        assert NO_MATCH not in rendered
+        assert [line for line in rendered.splitlines() if line.startswith("  matched")] == []
+    assert "  detected  acme@1.0.0 via acme.toml\n" in detected
 
 
 def test_the_command_prints_the_evidence_for_the_pack_it_detected(tmp_path: Path) -> None:

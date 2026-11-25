@@ -6,8 +6,9 @@ answer names files and lines. What the agent learns stays in files, so the next 
 from it.
 
 This page gives requests to copy, the jobs they suit, and how to tell that the agent used the map.
-It assumes the project has a map and the skills are installed: see [Get
-started](../README.md#get-started). Short answers to common questions are in the [FAQ](faq.md).
+It starts from a project with no map: the first use below makes one. Every use needs Periplus and
+its skills installed: see [Get started](../README.md#get-started). Short answers to common
+questions are in the [FAQ](faq.md).
 
 ## What to expect
 
@@ -18,8 +19,8 @@ that no rule reads is not in the map, so a missing link does not show that the c
   does, and where the map has no answer.
 - When an answer looks wrong or incomplete, the cause is often a gap in the map. A gap becomes a
   rule, and the next question starts with the link the rule adds.
-- The map makes the work steadier, and a better map helps more. The numbers from real runs are in
-  [How Periplus is evaluated](evals.md).
+- In the project's own runs on one code base, the work with a map was steadier, and a better map
+  helped more. The numbers are on [the evals page](evals.md).
 
 You do not need to know the commands. The skills give the agent Periplus's options and its way of
 working. You say what you want to know.
@@ -38,6 +39,17 @@ before it searches.
 
 Each use below gives the situation, a request to copy, what the agent does with the map, and what
 you get back. Change the names to your own.
+
+**Set this project up.**
+
+```
+Set Periplus up in this project and make a map. Tell me what the map holds and what it misses.
+```
+
+The agent pins the rutters that fit the project, checks for stacks the automatic setup did not
+see, and sets where the code is and what is not yours. It then builds the map once. You get the
+settings file, the map, what each part of the project became in the map, and the files no rule
+read.
 
 **Learn how a feature works before you touch it.**
 
@@ -107,8 +119,21 @@ and save the descriptions.
 ```
 
 The agent reads the code of each thing and writes one or two plain sentences for it in
-`.periplus/descriptions.yaml`. You then find each thing by plain words, and the next session reads
+`.periplus/descriptions.yaml`, and a term where one word names two things. You then find each thing by plain words, and the next session reads
 the descriptions with each answer.
+
+**Connect your docs to the code.**
+
+```
+This project has a Periplus map. Connect our docs to the code: find how our pages name the code,
+agree the conventions with me, and tell me which pages name things that no longer exist.
+```
+
+The agent reads the pages you already have and lists each way they name code. Once you agree
+which habits to keep, it records them in `.periplus/documentation.md` and writes one small rule
+for each in the project's own rutter. You get the pages and sections that name each piece of
+code, and the names that match nothing. After a code change, `periplus diff OLD NEW` on a kept
+copy of the old map and the new one lists the pages that lost their link.
 
 **Check whether something is still used.**
 
@@ -134,12 +159,13 @@ rule, rebuilds the map, and checks that the link is there. You get the new rule 
 **Keep the map current after the code changes.**
 
 ```
-This project has a Periplus map. The code changed since it was built. Keep a copy of the old map,
-map the project again, and tell me what changed. Then list the descriptions whose code changed
-and rewrite them.
+This project has a Periplus map. Check whether it still matches the code. If it does not, keep a
+copy of the old map, map the project again, and tell me what changed. Then list the descriptions
+whose code changed and rewrite them.
 ```
 
-The agent builds the map again, compares the old map with the new one, and lists the
+The agent runs `periplus fresh`, which names the files changed since the map was built. If the
+map is stale, the agent builds it again, compares the old map with the new one, and lists the
 descriptions whose code no longer matches. You get the things and links added, removed and
 changed, and the rewritten descriptions.
 
@@ -172,14 +198,16 @@ This project has a Periplus map and a saved slice of sending invoice reminders a
 Describe what each thing in the slice does, and save the descriptions. Start at the entrances of the slice, follow what each one sets off, and describe each file as the walk reaches it.
 ```
 
-When a slice already exists, say so in the request and give its path. The agent then reads it and
-does not search again. A saved slice and saved descriptions are paid for once. Every later
+When a slice already exists, say so in the request and give its path. The agent then asks the slice
+first, and reads the code to confirm and where the slice has no answer. A saved slice and saved descriptions are paid for once. Every later
 question uses them.
 
 ## Working as a team
 
-The map is one JSON file that you commit, compare and review. The same code always gives the same
-map, byte for byte. Between two builds, `periplus diff OLD NEW` lists the change a pull request
+The map is one JSON file that you commit, compare and review. The same code, settings and
+rutters, on the same version of Periplus, give the same map, byte for byte. Commit the inputs
+record beside it, `.periplus/map.inputs.json`, too, so that `periplus fresh` can tell in any clone
+whether the map still matches the code. Between two builds, `periplus diff OLD NEW` lists the change a pull request
 makes to the map: the things and links added, removed and changed.
 
 The descriptions sit in their own file beside the map, `.periplus/descriptions.yaml`. Each entry

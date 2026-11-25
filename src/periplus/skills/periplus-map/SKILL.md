@@ -40,7 +40,7 @@ references/find-a-feature.md: what the work holds, a worked example, and how to 
 ## The tools
 
 `periplus --help` prints this list; `periplus find --help` prints one command's options. Every
-option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.10.2/docs/navigation.md).
+option, output and exit code is in [Navigation](https://github.com/camoa/periplus/blob/v0.10.3/docs/navigation.md).
 
 <!-- periplus-help -->
 ```text
@@ -52,6 +52,7 @@ set up and build:
   update       move this project's pins to the rutter versions that are installed
   map          extract the map of this project and write it
   check-map    check the written map against the map schema
+  fresh        say whether the map still matches the code, the settings, the rutters and the tool
   skills       manage the Claude skills this package ships
 
 learn the map's words:
@@ -127,6 +128,8 @@ Defaults that bound a result:
 
 - Ask the map first: it holds links no text search finds. A thing missing from it is a missing
   rule, not proof the code lacks it.
+- Before set work, run `periplus fresh`. On exit 34, tell the user the map is older than the
+  code and name the files it lists; rebuild only when asked.
 - Set work always goes through a slice. Ask the user whether a saved slice for it exists, and
   read it with `--map FILE`. If none does, make one with `periplus slice --out FILE`. The tool
   names no folder for slices: put it beside the map and tell the user where.
@@ -140,8 +143,12 @@ Defaults that bound a result:
 - Widen loose words yourself (login: authentication, sign in, session); drop what does not fit.
 - When the words land on several things that share a name, say which one you mean before you go
   on. Ask the user when the map and the code cannot tell.
+- `periplus find` prints the terms its words match before the rows, and a line for a word with
+  several meanings. Rows a term names end `[term NAME]`. Pick the meaning by the term text before
+  you go on; an old name leads to the thing its term names.
 - Run from the folder that holds `.periplus/`, and run `periplus map` only when asked. A short
-  name that fits several things exits 31 and lists their ids; paste one as printed.
+  name that fits several things exits 31 and lists their ids, unless all but one are parts, such
+  as parameters; paste one as printed.
 - When the map and the code disagree, say so. It is a map gap; the periplus-gaps skill records it.
 
 ## Ways that tend to work
@@ -174,4 +181,8 @@ periplus minus rim.map.json login.map.json
 - A set that should be one flow but falls into pieces may lack a start, or a link in the map.
 - The periplus-describe skill describes a thing whose code you read, and a saved set (`--map`).
 - The periplus-analyze skill guides a review of the code the map named: what can go wrong.
+- The periplus-document skill connects the project's docs to the map: which pages name a thing.
+  For a feature as a whole, read the pages that name its things. A description says what one
+  thing does; a page says how they fit. A page shows what someone wrote, not what the code does.
+- When the project has no map, the periplus-setup skill makes one.
 - When the map has no answer, or to confirm a line, see references/code-search.md.

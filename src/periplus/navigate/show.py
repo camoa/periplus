@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from importlib.resources import files
@@ -313,7 +314,8 @@ def _shown(rows: list[EdgeRow], limit: int, lines: SourceLines) -> Listing[EdgeR
 def _descriptions(map_file: Path) -> tuple[Mapping[str, Any], tuple[Problem, ...]]:
     """The project's descriptions file: empty when absent, a problem when unreadable.
 
-    Found as ``descriptions_path`` finds it.
+    Found as ``descriptions_path`` finds it. A top-level key the schema does not name stays in the
+    document, so ``stamp`` writes it back, and one line on standard error names it.
     """
     path = descriptions_path(map_file)
     if not path.is_file():
@@ -329,6 +331,8 @@ def _descriptions(map_file: Path) -> tuple[Mapping[str, Any], tuple[Problem, ...
     schema = json.loads(node.read_text(encoding="utf-8"))
     invalid = first_error(Draft202012Validator(schema).iter_errors(document))
     if invalid is None:
+        for key in sorted(str(k) for k in document if k not in schema["properties"]):
+            sys.stderr.write(f"periplus: warning: {path}: ignored the top-level key {key!r}\n")
         return document, ()
     message = f"{path} does not match the descriptions schema: {invalid.message}"
     return {}, (Problem(ExitCode.NOT_A_MAP, message, {"path": str(path)}),)

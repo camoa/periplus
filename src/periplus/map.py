@@ -9,12 +9,13 @@ It names no stack. Every folder, type and rule comes from a loaded pack.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import posixpath
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -24,9 +25,16 @@ import periplus
 from periplus.engine.check import checked
 from periplus.engine.emit import LeftOut, build_document, render
 from periplus.engine.packload import RuleSet
-from periplus.engine.rules import MapPass, run_file_rules, run_map_rules, withhold_found
+from periplus.engine.rules import (
+    MapPass,
+    file_rule_matches,
+    run_file_rules,
+    run_map_rules,
+    withhold_found,
+)
 from periplus.engine.select import (
     FileTypes,
+    Listings,
     Selection,
     base_folders,
     files_in,
@@ -35,6 +43,7 @@ from periplus.engine.select import (
     resolve_folders,
 )
 from periplus.engine.slow import DEFAULT_SLOW_AFTER, SlowWatch
+from periplus.engine.source import read_file
 from periplus.errors import ExitCode, HarnessError, Problem
 from periplus.layout import PROJECT_MARKER, SETTINGS_FILENAME
 from periplus.manifest import LoadedPack, resolve_pack_order
@@ -45,13 +54,26 @@ from periplus.mapshared import first_error
 from periplus.navigate.mapfile import MapIndex
 from periplus.navigate.names import Names
 from periplus.navigate.nesting import Places
+from periplus.packs import folder_digest
 from periplus.preflight import DependencyStatus
-from periplus.report import _escape, _json_problem, amount
+from periplus.report import _escape, _json_problem, _json_value, amount
 from periplus.resolution import folder_overrides, resolve, settings_values
 from periplus.settings import ResolvedSettings
 from periplus.validate import _schema
 
-__all__ = ["RENDERERS", "MapReport", "render_json", "render_text", "run", "write_document"]
+__all__ = [
+    "RENDERERS",
+    "MapReport",
+    "Prepared",
+    "inputs_of",
+    "inputs_path",
+    "prepare",
+    "render_json",
+    "render_text",
+    "run",
+    "short_digest",
+    "write_document",
+]
 
 
 def write_document(document: Mapping[str, object], target: Path) -> tuple[Problem, ...]:
@@ -69,6 +91,83 @@ def write_document(document: Mapping[str, object], target: Path) -> tuple[Proble
         reason = f"{blocked} is not a folder" if blocked else error.strerror or error
         message = f"the map cannot be written to {target}: {reason}"
         return (Problem(ExitCode.OUTPUT_UNWRITABLE, message, {"path": str(target)}),)
+    return ()
+
+
+def inputs_path(map_path: Path) -> Path:
+    """The inputs record of the map at ``map_path``: beside it, named as the map with a last
+    ``.json`` replaced by ``.inputs.json``, or with ``.inputs.json`` added."""
+    return map_path.with_name(map_path.name.removesuffix(".json") + ".inputs.json")
+
+
+def short_digest(data: bytes) -> str:
+    """The first 16 hex digits of the SHA-256 of ``data``."""
+    return hashlib.sha256(data).hexdigest()[:16]
+
+
+def inputs_of(prepared: Prepared, files: Mapping[str, bool]) -> dict[str, Any]:
+    """What a map is built from: each file a rule matches, the effective settings, each loaded
+    rutter's files and the tool version, each as a digest, and the settings file used; every path
+    relative to the project.
+
+    ``files`` holds each file a rule matches and whether a rule reads its content. A file read is
+    hashed as its bytes are, line ends included, because a tree rule reads the raw bytes; a file
+    matched by its path alone is ``not read``. A file that cannot be read raises
+    ``SourceUnreadable``, as it does when a rule reads it.
+    ``pack_paths`` is left out of the settings: it says where rutters are found, which differs
+    between machines, and each rutter's own files are recorded.
+    """
+    found: dict[str, str] = {}
+    for file in sorted(files):
+        if not files[file]:
+            found[file] = "not read"
+            continue
+        found[file] = short_digest(read_file(prepared.root / file, file))
+    settings = {}
+    for field in fields(prepared.settings):
+        value = getattr(prepared.settings, field.name)
+        if field.name == "pack_paths" or value is None:
+            continue
+        settings[field.name] = (
+            {name: _json_value(entry.value) for name, entry in value.items()}
+            if isinstance(value, Mapping)
+            else _json_value(value.value)
+        )
+    return {
+        "files": found,
+        "generated_by": f"periplus {periplus.__version__}",
+        "packs": {
+            f"{pack.name.pack}@{pack.name.version}": folder_digest(pack.directory)[:16]
+            for pack in prepared.packs
+        },
+        "periplus_inputs_version": 0,
+        "settings": short_digest(json.dumps(settings, sort_keys=True).encode("utf-8")),
+        "settings_file": prepared.settings_file,
+    }
+
+
+def write_inputs(target: Path, prepared: Prepared) -> tuple[Problem, ...]:
+    """Write the inputs record of the map written at ``target`` beside it, with the digest of the
+    map's own bytes; the problem, if it cannot be written or an input cannot be read."""
+    record = inputs_path(target)
+    try:
+        files = file_rule_matches(
+            prepared.listings,
+            prepared.rule_set,
+            prepared.packs,
+            prepared.folders,
+            prepared.selection,
+        )
+        written = {**inputs_of(prepared, files), "map": short_digest(target.read_bytes())}
+        record.write_text(
+            json.dumps(written, sort_keys=True, indent=2, ensure_ascii=True) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as error:
+        message = f"the inputs record cannot be written to {record}: {error.strerror or error}"
+        return (Problem(ExitCode.OUTPUT_UNWRITABLE, message, {"path": str(record)}),)
+    except HarnessError as error:
+        return (error.problem(),)
     return ()
 
 
@@ -118,21 +217,45 @@ class MapReport:
         return tuple((pack, rule) for pack, rule, fires in self.executed if fires == 0)
 
 
-def run(
+@dataclass(frozen=True, slots=True)
+class Prepared:
+    """A project made ready for its rules: everything ``map`` works out before it reads a file.
+
+    ``folders`` holds each folder name the rules read in, and each a path value is relative to,
+    as its directories; ``wanted`` the names the rules read in. ``listings`` is the run's one
+    walk of the tree.
+    """
+
+    root: Path
+    settings_path: Path
+    settings: ResolvedSettings
+    pinned: frozenset[str]
+    packs: tuple[LoadedPack, ...]
+    rule_set: RuleSet
+    overrides: Mapping[str, str | Sequence[str]]
+    selection: Selection
+    listings: Listings
+    folders: Mapping[str, tuple[str, ...]]
+    wanted: tuple[str, ...]
+
+    @property
+    def settings_file(self) -> str:
+        """The settings file used, as a path from the project root, as the map's header names it."""
+        return Path(os.path.relpath(self.settings_path, self.root)).as_posix()
+
+
+def prepare(
     start: Path,
     env: Mapping[str, str],
     dependencies: tuple[DependencyStatus, ...],
     settings_path: Path | None = None,
-    output: Path | None = None,
-    slow_after: float = DEFAULT_SLOW_AFTER,
-) -> MapReport:
-    """Resolve the project, run its rules, validate the document and write it.
+) -> Prepared | tuple[Problem, ...]:
+    """Resolve the project, load and check its rules, and find the folders they read; or the
+    problems that stop ``map`` before it reads a file.
 
-    A problem the resolution already carries ends the run with its code before any file is
-    selected. A project with no settings file is ``NO_SETTINGS``. A pack that fails its schema
-    does not hide the problems of the packs that do not depend on it. Nothing is written on any
-    failure. A rule or span that runs longer than ``slow_after`` seconds on one file is named on
-    standard error, and never in the report.
+    A problem the resolution already carries comes first. A project with no settings file is
+    ``NO_SETTINGS``. A pack that fails its schema does not hide the problems of the packs that do
+    not depend on it.
     """
     resolution = resolve(
         start=start, env=env, dependencies=dependencies, settings_path=settings_path
@@ -151,56 +274,96 @@ def run(
             )
         )
     if problems or project is None or resolution.settings is None:
-        return _failed(problems)
+        return tuple(problems)
     if not resolution.packs:
         message = (
             f"no rutter is pinned: list one under packs in {PROJECT_MARKER}/{SETTINGS_FILENAME}; "
             "periplus status shows the bundled rutters"
         )
-        return _failed([Problem(ExitCode.MAP_INVALID, message, {"setting": "packs"})])
+        return (Problem(ExitCode.MAP_INVALID, message, {"setting": "packs"}),)
 
     packs, pack_problems = resolve_pack_order(resolution.packs, resolution.candidates)
     if pack_problems:
-        return _failed(pack_problems)
+        return pack_problems
     root = project.root
     values, origins = settings_values(resolution.settings)
     rule_set, refused = checked(packs, values, origins)
+    if rule_set is None or refused:
+        return tuple(refused)
+    wanted = sorted({name for rule in rule_set.rules if rule.supported for name in rule.folders})
+    # A path value relative to a folder needs its directories; the unread walk stays on rules.
+    relative = {v.relative_to for i in rule_set.files.values() for v in i.path_values}
+    overrides = folder_overrides(resolution.settings)
+    settings = resolution.settings
+    first_party = settings.first_party.value if settings.first_party else None
+    selection = Selection.build(
+        packs,
+        {name: setting.value for name, setting in settings.extensions.items()},
+        first_party.include if first_party else (),
+        first_party.exclude if first_party else (),
+        settings.exclude.value if settings.exclude else (),
+        settings.re_include.value if settings.re_include else (),
+    )
+    folder_refused = folder_problems(rule_set, packs, overrides)
+    if folder_refused:
+        return folder_refused
+    listings = Listings(root)
     try:
-        if rule_set is None or refused:
-            return _failed(refused)
-        wanted = sorted(
-            {name for rule in rule_set.rules if rule.supported for name in rule.folders}
-        )
-        # A path value relative to a folder needs its directories; the unread walk stays on rules.
-        relative = {v.relative_to for i in rule_set.files.values() for v in i.path_values}
-        overrides = folder_overrides(resolution.settings)
-        settings = resolution.settings
-        first_party = settings.first_party.value if settings.first_party else None
-        selection = Selection.build(
-            packs,
-            {name: setting.value for name, setting in settings.extensions.items()},
-            first_party.include if first_party else (),
-            first_party.exclude if first_party else (),
-            settings.exclude.value if settings.exclude else (),
-            settings.re_include.value if settings.re_include else (),
-        )
-        refused = list(folder_problems(rule_set, packs, overrides))
-        if refused:
-            return _failed(refused)
         folders = resolve_folders(
-            sorted({*wanted, *relative} - {""}), packs, overrides, root, selection
+            sorted({*wanted, *relative} - {""}), packs, overrides, listings, selection
         )
+    except HarnessError as error:
+        return (error.problem(),)
+    return Prepared(
+        root,
+        project.path,
+        settings,
+        frozenset(matched.name.pack for matched in resolution.packs),
+        packs,
+        rule_set,
+        overrides,
+        selection,
+        listings,
+        folders,
+        tuple(wanted),
+    )
+
+
+def run(
+    start: Path,
+    env: Mapping[str, str],
+    dependencies: tuple[DependencyStatus, ...],
+    settings_path: Path | None = None,
+    output: Path | None = None,
+    slow_after: float = DEFAULT_SLOW_AFTER,
+) -> MapReport:
+    """Resolve the project, run its rules, validate the document and write it, with the inputs
+    record beside it.
+
+    A problem ``prepare`` finds ends the run with its code before any file is selected. Nothing is
+    written on any failure before the map is; a record that cannot be written is a problem of a
+    written map. A rule or span that runs longer than ``slow_after`` seconds on one file
+    is named on standard error, and never in the report.
+    """
+    prepared = prepare(start, env, dependencies, settings_path)
+    if not isinstance(prepared, Prepared):
+        return _failed(prepared)
+    root, packs, rule_set, settings = (
+        prepared.root,
+        prepared.packs,
+        prepared.rule_set,
+        prepared.settings,
+    )
+    overrides, selection, folders = prepared.overrides, prepared.selection, prepared.folders
+    try:
         with SlowWatch(slow_after) as watch:
-            found = run_file_rules(root, rule_set, packs, folders, selection, watch)
+            found = run_file_rules(prepared.listings, rule_set, packs, folders, selection, watch)
         found_nodes, found_edges, fires, opened, read, removed, broken, skipped = found
-        pinned = {matched.name.pack for matched in resolution.packs}
-        empty = _empty_packs(root, rule_set, packs, pinned, folders, read, overrides, selection)
-        directories = sorted({path for name in wanted for path in folders[name]})
-        listed, unlisted = files_in(root, directories, selection)
-        # The settings, the rutters and the map under the marker are never code to map.
-        unread = sorted(
-            path for path in set(listed) - read if not path.startswith(f"{PROJECT_MARKER}/")
-        )
+        listings, pinned = prepared.listings, prepared.pinned
+        empty = _empty_packs(listings, rule_set, packs, pinned, folders, read, overrides, selection)
+        directories = sorted({path for name in prepared.wanted for path in folders[name]})
+        listed, unlisted = files_in(listings, directories, selection)
+        unread = sorted(set(listed) - read)
         if not read:
             message = (
                 "no file was selected, so no map was written and any existing map was left as it "
@@ -229,7 +392,7 @@ def run(
             rule_set.edge_kinds,
             packs,
             periplus.__version__,
-            Path(os.path.relpath(project.path, root)).as_posix(),
+            prepared.settings_file,
             boundary=rule_set.boundary,
             skipped=skipped,
             supporting=_supporting_paths(packs, settings),
@@ -255,6 +418,7 @@ def run(
     unwritten = write_document(document, target)
     if unwritten:
         return _failed(unwritten)
+    unrecorded = write_inputs(target, prepared)
     return MapReport(
         map_path=str(target),
         nodes=len(document["nodes"]),
@@ -266,7 +430,7 @@ def run(
                 (rule.pack, rule.name, rule.reason) for rule in rule_set.rules if not rule.supported
             )
         ),
-        problems=(),
+        problems=unrecorded,
         opened=tuple(opened),
         differing=_differing(document),
         selected=len(read),
@@ -289,10 +453,10 @@ def run(
 
 
 def _empty_packs(
-    root: Path,
+    listings: Listings,
     rule_set: RuleSet,
     packs: Sequence[LoadedPack],
-    pinned: set[str],
+    pinned: frozenset[str],
     folders: Mapping[str, tuple[str, ...]],
     read: set[str],
     overrides: Mapping[str, str | Sequence[str]],
@@ -315,7 +479,9 @@ def _empty_packs(
         ):
             continue
         bases = base_folders(sorted({n for rule in rules for n in rule.folders}), packs, overrides)
-        resolved = resolve_folders([name for name, _ in bases], packs, overrides, root, selection)
+        resolved = resolve_folders(
+            [name for name, _ in bases], packs, overrides, listings, selection
+        )
         listed = tuple(
             (name, value, len(resolved[name]))
             for name, value in bases

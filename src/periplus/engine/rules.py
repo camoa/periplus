@@ -10,7 +10,6 @@ from dataclasses import dataclass, replace
 from fnmatch import fnmatchcase
 from functools import partial
 from itertools import chain, islice, product
-from pathlib import Path
 from typing import Any
 
 from tree_sitter import Node
@@ -35,7 +34,7 @@ from periplus.engine.packload import (
 )
 from periplus.engine.pattern import compile_pattern, compile_unfilled, filled_pattern, value_names
 from periplus.engine.pattern import reshape as _reshape
-from periplus.engine.select import FileTypes, Selection, select_files
+from periplus.engine.select import FileTypes, Listings, Selection, select_files
 from periplus.engine.slow import SlowWatch
 from periplus.engine.source import (
     DATA_READERS,
@@ -44,6 +43,7 @@ from periplus.engine.source import (
     Hit,
     load_text,
     plain,
+    read_file,
     resolve_path,
     split_item,
 )
@@ -64,6 +64,7 @@ __all__ = [
     "FoundNode",
     "MapPass",
     "Skipped",
+    "file_rule_matches",
     "run_file_rules",
     "run_map_rules",
     "withhold_found",
@@ -147,7 +148,7 @@ class FoundEdge:
 
 
 def run_file_rules(
-    root: Path,
+    listings: Listings,
     rule_set: RuleSet,
     packs: Sequence[LoadedPack],
     folders: Mapping[str, tuple[str, ...]],
@@ -183,6 +184,7 @@ def run_file_rules(
 
     ``watch`` times each rule on each file, and a file's sections and each of its spans apart.
     """
+    root = listings.root
     nodes: list[FoundNode] = []
     edges: list[FoundEdge] = []
     fires: dict[tuple[str, str], int] = {}
@@ -213,12 +215,14 @@ def run_file_rules(
             continue
         info = rule_set.files.get(rule.filetype, FileInfo())
         holders = _holder_rules(rule_set, rule.filetype, frozenset(p.name.pack for p in packs))
-        for file, _, _ in _matches(root, rule, *picking):
+        for file, _, _ in _matches(listings, rule, *picking):
             own = (file, rule.filetype)
             if own not in paths:
                 paths[own] = {**rule_set.values, **_path_values(file, info, rule_set, folders)}
             if file not in trees:
-                trees[file] = parse_file(root / file, grammar, paths[own], constants)
+                trees[file] = parse_file(
+                    read_file(root / file, file), grammar, paths[own], constants
+                )
                 _collect(trees[file], grammar, holders, rule_set, constants)
     for rule in sorted(rule_set.rules, key=lambda one: not one.bindings):
         if not rule.supported or rule.matches_type:
@@ -230,7 +234,7 @@ def run_file_rules(
         enclosing: list[tuple[Rule, bool]] | None = None
         within = _within(rule.pack, packs)
         timed = f"rule {rule.name} of rutter {rule.pack}"
-        for file, stem, _ in _matches(root, rule, *picking):
+        for file, stem, _ in _matches(listings, rule, *picking):
             watch.begin(timed, file)
             own = (file, rule.filetype)
             if own not in paths:
@@ -262,13 +266,14 @@ def run_file_rules(
             if rule.declaration or rule.attribute or rule.annotation or rule.reference:
                 grammar = rule_set.grammars[rule.filetype]
                 if file not in trees:
-                    trees[file] = parse_file(root / file, grammar, paths[own], constants)
+                    source = read_file(root / file, file)
+                    trees[file] = parse_file(source, grammar, paths[own], constants)
                 tree = (grammar, file, trees[file], within)
                 if rule.reference:
                     for other in rule_set.rules:
                         owner = (other.pack, other.name)
                         if other.supported and other.declaration and owner not in selected:
-                            hits = _matches(root, other, *picking)
+                            hits = _matches(listings, other, *picking)
                             selected[owner] = {found[0] for found in hits}
                     if enclosing is None:
                         enclosing = _enclosers(rule, rule_set, packs)
@@ -2715,13 +2720,48 @@ def _id_pattern(rule: Rule, values: Mapping[str, str]) -> re.Pattern[str] | None
     return filled_pattern(rule.id_pattern, values)
 
 
+def file_rule_matches(
+    listings: Listings,
+    rule_set: RuleSet,
+    packs: Sequence[LoadedPack],
+    folders: Mapping[str, tuple[str, ...]],
+    selection: Selection,
+) -> dict[str, bool]:
+    """Each file a file rule of ``run_file_rules`` matches, chosen as it chooses them with no rule
+    run, and whether a rule that matches it reads its content.
+
+    A rule reads content when it searches text, reads the tree, or reads the data for ``where``,
+    ``attributes``, ``edges`` or ``each``; any other rule takes the file's path alone.
+    """
+    matched: dict[str, bool] = {}
+    picked: dict[_PickKey, _Picked] = {}
+    types = FileTypes.build(packs, selection.extensions)
+    for rule in rule_set.rules:
+        if not rule.supported or rule.matches_type:
+            continue
+        reads = bool(
+            rule.text is not None
+            or rule.declaration
+            or rule.attribute
+            or rule.annotation
+            or rule.reference
+            or rule.where
+            or rule.attributes
+            or rule.edges
+            or rule.each is not None
+        )
+        for file, _, _ in _matches(listings, rule, types, folders, selection, set(), set(), picked):
+            matched[file] = matched.get(file, False) or reads
+    return matched
+
+
 _PickKey = tuple[tuple[str, ...], str]
 #: The files read, the files removed, and each file read with its stem, its types and ending.
 _Picked = tuple[list[str], list[str], list[tuple[str, str, frozenset[str], str]]]
 
 
 def _matches(
-    root: Path,
+    listings: Listings,
     rule: Rule,
     types: FileTypes,
     folders: Mapping[str, tuple[str, ...]],
@@ -2737,7 +2777,7 @@ def _matches(
     """
     directories = tuple(sorted({path for name in rule.folders for path in folders[name]}))
     if (directories, rule.filetype) not in picked:
-        kept, dropped = select_files(root, directories, rule.filetype, types, selection)
+        kept, dropped = select_files(listings, directories, rule.filetype, types, selection)
         claims = []
         for file in kept:
             claimed = types.claim(posixpath.basename(file))

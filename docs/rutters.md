@@ -1,8 +1,16 @@
 # Bundled rutters
 
-A rutter is a folder of YAML files that tells Periplus how to find one stack's things in real files. To pin one, name it as `<name>@<version>` under `packs:` in `.periplus/settings.yml`; the README's [Pin a rutter](../README.md#2-pin-a-rutter) section shows how.
+A rutter is a folder of YAML files that tells Periplus how to find one stack's things in real files. To pin one, name it as `<name>@<version>` under `packs:` in `.periplus/settings.yml`; the README's [Pin a rutter](../README.md#2-pin-a-rutter) section shows how. To stop using one, delete its line. The list is yours to change, whatever `periplus init` wrote.
 
 Each entry below gives the rutter, its version, what it maps and the rutters it depends on. A pinned rutter loads its dependencies too, so you pin only the one you want.
+
+A rutter is one of three kinds:
+
+- **Ships with the package.** It loads by its pin alone. These are the tables down to Laravel.
+  Each language rutter's entry says whether it reads a parse tree or text.
+- **An example in the repository.** It is not in the package. You copy it into a project, as
+  [Example rutters](#example-rutters) says. Python is one of these.
+- **Any other stack.** You write a rutter, as [Write a new rutter](#write-a-new-rutter) says.
 
 The bundled rutters are in `src/periplus/packs`. The manifest of each, except `yaml_basic`,
 `twig_basic`, `typescript`, `react`, `nextjs`, `drupal_more` and `drupal_next`, opens with a list of
@@ -67,14 +75,17 @@ Pin one of these beside `drupal_basic` when the site uses the module.
 |---|---|---|
 | `laravel_basic@0.0.5` | Routes with the prefixes and names of `Route::prefix()->name()->group()` groups, each joined to its controller method, its resource controller or the view it renders. Controllers, models, migrations, Blade views with their includes, extends and component tags, and configuration files with the text keys of the array each returns. The views and configuration keys that PHP code names in `view()` and `config()` calls, and that views name in `config()`. It reads the standard Laravel folders. Reads text, and a parse tree for the calls. | `php_basic` |
 
-To map a Laravel application, pin `php_basic@0.2.0` and `laravel_basic@0.0.5` and run Periplus
-at the application's root. The default Laravel folders need no settings. To move the templates,
+To map a Laravel application, run Periplus at the application's root. `periplus init` pins
+`laravel_basic@0.0.5` when `composer.json` requires `laravel/framework`, and `php_basic` loads
+with it. The default Laravel folders need no settings. To move the templates,
 set `views_root` under `folders`; a template is named by its path below `views_root`.
 
 ## Example rutters
 
-These rutters are in `examples/second-stack/packs`, not in the package. Copy them into a
-project's `.periplus/packs` to use them; [Writing a rutter](rutter-author-guide.md) shows how.
+These rutters are in `examples/second-stack/packs`, not in the package. To use one, copy its
+folder into the project's `.periplus/packs`, or name the folder that holds it under `pack_paths`
+in `.periplus/settings.yml`, then pin it. [Writing a rutter](rutter-author-guide.md) shows the
+copy.
 
 | Rutter | What it maps | Depends on |
 |---|---|---|

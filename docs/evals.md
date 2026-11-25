@@ -118,7 +118,7 @@ added.
 So run 2 uses the map that run 1 improved, and run 3 the map that run 2 improved. The no-map
 side has nothing to carry over.
 
-### The map makes the work steady
+### With the map, the work was steadier
 
 The list, in output tokens:
 

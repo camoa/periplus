@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# The map is the same bytes under two hash seeds and two locales. A hash seed and a locale differ
-# only between processes, so each map is a run of its own. The project has many nodes and edges of
-# one kind, so a set iterated in place of a sorted list orders them one way under one seed and
-# another under the next. C and C.UTF-8 are on a plain machine; a missing one fails the run.
+# The map and its inputs record are the same bytes under two hash seeds and two locales. A hash
+# seed and a locale differ only between processes, so each map is a run of its own. The project
+# has many nodes and edges of one kind, so a set iterated in place of a sorted list orders them one
+# way under one seed and another under the next. C and C.UTF-8 are on a plain machine; a missing
+# one fails the run.
 set -euo pipefail
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -72,5 +73,7 @@ methods="$(grep -o '"php.method::[^"]*"' "$work/map-0-C.json" | sort -u | wc -l)
 for other in 2-C 0-C.UTF-8 2-C.UTF-8; do
     cmp "$work/map-0-C.json" "$work/map-$other.json" \
         || { echo "the map under $other differs from the map under 0-C"; exit 1; }
+    cmp "$work/map-0-C.inputs.json" "$work/map-$other.inputs.json" \
+        || { echo "the inputs record under $other differs from the one under 0-C"; exit 1; }
 done
 echo "map determinism ok"
