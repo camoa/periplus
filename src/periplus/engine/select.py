@@ -331,6 +331,12 @@ class Listings:
         if path not in self._real:
             try:
                 self._real[path] = (self.root / path).resolve()
+                # From 3.13 resolve() returns a looping path as it is, so ask the system.
+                try:
+                    (self.root / path).stat()
+                except OSError as error:
+                    if error.errno == ELOOP:
+                        raise RuntimeError("Symlink loop") from error
             except RuntimeError as error:
                 message = f"folder {path} cannot be read: its links lead in a loop"
                 raise SourceUnreadable(message, {"folder": path}) from error
